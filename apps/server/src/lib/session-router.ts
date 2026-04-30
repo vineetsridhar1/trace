@@ -1,7 +1,7 @@
 import type WebSocket from "ws";
+import type { EventType } from "@trace/gql";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
-import type { CloudMachineService } from "./cloud-machine-service.js";
 import type {
   BridgeTerminalCreateCommand,
   BridgeTerminalInputCommand,
@@ -19,8 +19,18 @@ import type {
   BridgeSessionGitSyncStatus,
 } from "@trace/shared";
 import { prisma } from "./db.js";
-import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
+import {
+  ProvisionedLauncherError,
+  runtimeAdapterRegistry,
+} from "./runtime-adapters.js";
+import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
+import {
+  RuntimeAdapterRegistry,
+  type RuntimeAdapter,
+  type RuntimeAdapterType,
+  type RuntimeEnvironment,
+} from "./runtime-adapter-registry.js";
 
 interface BaseSessionCommand {
   type:
@@ -90,9 +100,6 @@ export interface StaleRuntimeEvictionResult {
   affectedSessions: string[];
 }
 
-// --- SessionAdapter interface ---
-// Each hosting mode implements this. The router dispatches through it.
-
 export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
@@ -109,223 +116,141 @@ export interface SessionAdapterCreateOptions {
   createdById: string;
   organizationId: string;
   readOnly?: boolean;
+  adapterType?: RuntimeAdapterType;
+  runtimeToken?: string;
+  bridgeUrl?: string;
+  environment?: {
+    id: string;
+    name: string;
+    adapterType: RuntimeAdapterType;
+    config: Prisma.JsonValue;
+  } | null;
 }
 
-export interface SessionAdapterDestroyOptions {
-  sessionId: string;
-  workdir?: string | null;
-  repoId?: string | null;
-  connection?: unknown;
-}
-
-interface SessionAdapterCreateCtx {
-  send: (cmd: SessionCommand) => DeliveryResult;
-  onFailed: (error: string) => void;
-  onWorkspaceReady: (workdir: string) => void;
-  waitForBridge: (sessionId: string, timeoutMs?: number, runtimeId?: string) => Promise<void>;
-}
-
-interface SessionAdapter {
-  create(options: SessionAdapterCreateOptions, ctx: SessionAdapterCreateCtx): void;
-  destroy(
-    options: SessionAdapterDestroyOptions,
-    ctx: { send: (cmd: SessionCommand) => DeliveryResult },
-  ): Promise<void>;
-  transition(
-    sessionId: string,
-    command: "pause" | "resume" | "terminate",
-    ctx: {
-      send: (cmd: SessionCommand) => DeliveryResult;
-      waitForBridge: (sessionId: string, timeoutMs?: number, runtimeId?: string) => Promise<void>;
-    },
-  ): Promise<DeliveryResult>;
-}
-
-// --- Cloud adapter factory ---
-
-function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAdapter {
-  return {
-    create(options, ctx) {
-      apiTokenService.getDecryptedTokens(options.createdById).then(async (userTokens) => {
-        try {
-          const machine = await cloudMachineService.getOrCreateMachine({
-            userId: options.createdById,
-            orgId: options.organizationId,
-            defaultTool: options.tool,
-            userTokens: userTokens as Record<string, string>,
-          });
-
-          // Store cloudMachineId and runtimeInstanceId in session connection
-          const updatedSession = await prisma.session.update({
-            where: { id: options.sessionId },
-            data: {
-              connection: {
-                state: "connected",
-                retryCount: 0,
-                canRetry: true,
-                canMove: true,
-                cloudMachineId: machine.id,
-                runtimeInstanceId: machine.runtimeInstanceId,
-              } satisfies Prisma.InputJsonValue,
-            },
-            select: { sessionGroupId: true, connection: true },
-          });
-          if (updatedSession.sessionGroupId) {
-            await prisma.sessionGroup.update({
-              where: { id: updatedSession.sessionGroupId },
-              data: {
-                connection: updatedSession.connection ?? Prisma.DbNull,
-                worktreeDeleted: false,
-              },
-            });
-          }
-
-          // Wait for bridge to connect. Pass runtimeId so if the bridge already
-          // connected (race: restoreSessionsForRuntime ran before we wrote connection),
-          // we immediately bind and proceed.
-          await ctx.waitForBridge(options.sessionId, 120_000, machine.runtimeInstanceId);
-
-          // Send prepare if there's a repo to set up
-          if (options.repo) {
-            ctx.send({
-              type: "prepare",
-              sessionId: options.sessionId,
-              sessionGroupId: options.sessionGroupId,
-              slug: options.slug,
-              preserveBranchName: options.preserveBranchName,
-              repoId: options.repo.id,
-              repoName: options.repo.name,
-              repoRemoteUrl: options.repo.remoteUrl,
-              defaultBranch: options.repo.defaultBranch,
-              branch: options.branch,
-              checkpointSha: options.checkpointSha,
-              readOnly: options.readOnly,
-            });
-          } else {
-            // No repo — signal workspace_ready with home directory so session transitions to pending
-            // Must match USER in apps/container-bridge/Dockerfile (currently "coder")
-            ctx.onWorkspaceReady("/home/coder");
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`[cloud-adapter] failed to provision for ${options.sessionId}:`, message);
-          ctx.onFailed(`Cloud machine failed: ${message}`);
-        }
-      });
-    },
-
-    async destroy(options, ctx) {
-      // Send delete to bridge — cleans up worktree + adapter for this session only
-      ctx.send({
-        type: "delete",
-        sessionId: options.sessionId,
-        workdir: options.workdir,
-        repoId: options.repoId,
-      });
-
-      // Notify cloud machine service that a session ended (schedules idle check)
-      const conn = options.connection as Record<string, unknown> | null;
-      const cloudMachineId = conn?.cloudMachineId as string | undefined;
-      if (cloudMachineId) {
-        await cloudMachineService.sessionEnded(cloudMachineId).catch((err: Error) => {
-          console.warn(
-            `[cloud-adapter] sessionEnded failed for machine ${cloudMachineId}:`,
-            err.message,
-          );
-        });
-      }
-    },
-
-    async transition(sessionId, command, ctx) {
-      switch (command) {
-        case "pause":
-        case "terminate":
-          // Send command to bridge for this session only — don't stop/destroy the machine
-          ctx.send({ type: command, sessionId });
-          break;
-        case "resume": {
-          // Look up machine from session connection — restart if stopped
-          const session = await prisma.session.findUnique({
-            where: { id: sessionId },
-            select: { connection: true, createdById: true, organizationId: true, tool: true },
-          });
-          const conn = session?.connection as Record<string, unknown> | null;
-          const cloudMachineId = conn?.cloudMachineId as string | undefined;
-
-          if (cloudMachineId && session) {
-            const userTokens = await apiTokenService.getDecryptedTokens(session.createdById);
-            // getOrCreateMachine handles stopped→restart transparently
-            await cloudMachineService.getOrCreateMachine({
-              userId: session.createdById,
-              orgId: session.organizationId,
-              defaultTool: session.tool,
-              userTokens: userTokens as Record<string, string>,
-            });
-            const runtimeId = conn?.runtimeInstanceId as string | undefined;
-            await ctx.waitForBridge(sessionId, 120_000, runtimeId);
-          }
-          ctx.send({ type: "resume", sessionId });
-          break;
-        }
-      }
-      return "delivered";
-    },
-  };
-}
-
-// --- Local adapter (Electron bridge via WebSocket) ---
-
-const localAdapter: SessionAdapter = {
-  create(options, ctx) {
-    if (!options.repo) return;
-    const result = ctx.send({
-      type: "prepare",
-      sessionId: options.sessionId,
-      sessionGroupId: options.sessionGroupId,
-      slug: options.slug,
-      preserveBranchName: options.preserveBranchName,
-      repoId: options.repo.id,
-      repoName: options.repo.name,
-      repoRemoteUrl: options.repo.remoteUrl,
-      defaultBranch: options.repo.defaultBranch,
-      branch: options.branch,
-      checkpointSha: options.checkpointSha,
-      readOnly: options.readOnly,
-    });
-    if (result !== "delivered") {
-      ctx.onFailed(`prepare: ${result}`);
-    }
-  },
-
-  async destroy(options, ctx) {
-    const result = ctx.send({
-      type: "delete",
-      sessionId: options.sessionId,
-      workdir: options.workdir,
-      repoId: options.repoId,
-    });
-    if (result !== "delivered") {
-      console.warn(
-        `[local-adapter] bridge did not receive delete for ${options.sessionId}: ${result}`,
-      );
-    }
-  },
-
-  async transition(sessionId, command, ctx) {
-    return ctx.send({ type: command, sessionId });
-  },
+export type RuntimeLifecycleUpdate = {
+  runtimeInstanceId?: string;
+  runtimeLabel?: string;
+  providerRuntimeId?: string;
+  providerRuntimeUrl?: string;
+  providerStatus?: string;
+  error?: string;
+  /**
+   * Set on `session_runtime_deprovision_failed` to mark the runtime
+   * permanently abandoned (cap exhausted). Suppresses retry flags so the
+   * reconciler stops touching the session and lets operator alerts fire.
+   */
+  abandoned?: boolean;
+  /** Reconcile attempt count at the moment of abandonment. */
+  reconcileAttempts?: number;
 };
+
+export type RuntimeLifecycleEventType = Extract<
+  EventType,
+  | "session_runtime_start_requested"
+  | "session_runtime_provisioning"
+  | "session_runtime_connecting"
+  | "session_runtime_connected"
+  | "session_runtime_start_failed"
+  | "session_runtime_start_timed_out"
+  | "session_runtime_stopping"
+  | "session_runtime_stopped"
+  | "session_runtime_deprovision_failed"
+>;
+
+function adapterTypeFromHosting(
+  hosting: string,
+  runtimeAdapters: RuntimeAdapterRegistry,
+): RuntimeAdapterType {
+  if (hosting === "cloud") return "provisioned";
+  if (hosting === "local") return "local";
+  return runtimeAdapters.get(hosting).type;
+}
+
+function connectionRecord(connection: unknown): Record<string, unknown> | null {
+  if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
+  return connection as Record<string, unknown>;
+}
+
+function connectionEnvironmentId(connection: Record<string, unknown> | null): string | null {
+  const environmentId = connection?.environmentId;
+  return typeof environmentId === "string" && environmentId.trim() ? environmentId : null;
+}
+
+function environmentConfigRecord(environment?: RuntimeEnvironment | null): Record<string, unknown> {
+  const config = environment?.config;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return {};
+  return config as Record<string, unknown>;
+}
+
+function optionalConnectionString(
+  connection: Record<string, unknown> | null,
+  key: string,
+): string | undefined {
+  const value = connection?.[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function lifecycleSnapshotFromConnection(
+  connection: Record<string, unknown> | null,
+): RuntimeLifecycleUpdate {
+  const snapshot: RuntimeLifecycleUpdate = {};
+  const runtimeInstanceId = optionalConnectionString(connection, "runtimeInstanceId");
+  if (runtimeInstanceId) snapshot.runtimeInstanceId = runtimeInstanceId;
+  const runtimeLabel = optionalConnectionString(connection, "runtimeLabel");
+  if (runtimeLabel) snapshot.runtimeLabel = runtimeLabel;
+  const providerRuntimeId =
+    optionalConnectionString(connection, "providerRuntimeId") ??
+    optionalConnectionString(connection, "cloudMachineId");
+  if (providerRuntimeId) snapshot.providerRuntimeId = providerRuntimeId;
+  const providerRuntimeUrl = optionalConnectionString(connection, "providerRuntimeUrl");
+  if (providerRuntimeUrl) snapshot.providerRuntimeUrl = providerRuntimeUrl;
+  return snapshot;
+}
+
+function startupTimeoutMs(environment?: RuntimeEnvironment | null): number {
+  const rawSeconds = environmentConfigRecord(environment).startupTimeoutSeconds;
+  if (typeof rawSeconds === "number" && Number.isInteger(rawSeconds) && rawSeconds > 0) {
+    return rawSeconds * 1000;
+  }
+  return 120_000;
+}
+
+function deprovisionPolicy(environment?: RuntimeEnvironment | null): string | null {
+  const policy = environmentConfigRecord(environment).deprovisionPolicy;
+  return typeof policy === "string" && policy.trim() ? policy : null;
+}
+
+function shouldSkipProvisionedStopForPolicy(
+  adapter: RuntimeAdapter,
+  environment: RuntimeEnvironment | null,
+  reason: string,
+): boolean {
+  if (adapter.type !== "provisioned") return false;
+  if (deprovisionPolicy(environment) !== "manual") return false;
+  return reason !== "deprovision_reconciliation";
+}
 
 /**
  * Runtime-aware registry that tracks runtime instances, their capabilities,
  * and which sessions they own. Replaces the old bridge-only socket map.
  */
 export class SessionRouter {
+  constructor(private readonly runtimeAdapters = runtimeAdapterRegistry) {}
+
   private runtimes = new Map<string, RuntimeInstance>();
   /** Maps sessionId → runtimeId */
   private sessionRuntime = new Map<string, string>();
   /** Pending waitForBridge promises for cloud sessions */
-  private pendingWaits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
+  private pendingWaits = new Map<
+    string,
+    {
+      waitId: string;
+      expectedRuntimeId?: string;
+      startedAt: number;
+      resolve: () => void;
+      reject: (err: Error) => void;
+    }
+  >();
   /** Pending branch list requests: requestId → resolve/reject */
   private pendingBranchRequests = new Map<
     string,
@@ -358,7 +283,11 @@ export class SessionRouter {
   /** Pending skills list requests: requestId → resolve/reject */
   private pendingSkillsRequests = new Map<
     string,
-    { runtimeId: string; resolve: (skills: BridgeSkillInfo[]) => void; reject: (err: Error) => void }
+    {
+      runtimeId: string;
+      resolve: (skills: BridgeSkillInfo[]) => void;
+      reject: (err: Error) => void;
+    }
   >();
   /** Pending linked-checkout status requests: requestId → resolve/reject */
   private pendingLinkedCheckoutStatusRequests = new Map<
@@ -388,16 +317,8 @@ export class SessionRouter {
     }
   >();
 
-  /** Cloud adapter instance, initialized once CloudMachineService is available */
-  private cloudAdapter: SessionAdapter | null = null;
-
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
-
-  /** Inject the CloudMachineService to create the cloud adapter. Call once at startup. */
-  setCloudMachineService(service: CloudMachineService): void {
-    this.cloudAdapter = createCloudAdapter(service);
-  }
 
   registerRuntime(runtime: {
     id: string;
@@ -493,8 +414,14 @@ export class SessionRouter {
    * connected before the session's connection data was written to DB).
    */
   waitForBridge(sessionId: string, timeoutMs = 60_000, runtimeId?: string): Promise<void> {
-    // Already bound
-    if (this.sessionRuntime.has(sessionId)) return Promise.resolve();
+    // Already bound to a connected runtime.
+    const boundRuntimeId = this.sessionRuntime.get(sessionId);
+    if (boundRuntimeId && (!runtimeId || boundRuntimeId === runtimeId)) {
+      const boundRuntime = this.runtimes.get(boundRuntimeId);
+      if (boundRuntime && boundRuntime.ws.readyState === boundRuntime.ws.OPEN) {
+        return Promise.resolve();
+      }
+    }
 
     // If runtime is already connected, bind immediately (fixes race condition)
     if (runtimeId) {
@@ -506,12 +433,26 @@ export class SessionRouter {
     }
 
     return new Promise<void>((resolve, reject) => {
+      const waitId = randomUUID();
+      const startedAt = Date.now();
       const timer = setTimeout(() => {
-        this.pendingWaits.delete(sessionId);
+        const pending = this.pendingWaits.get(sessionId);
+        if (pending?.waitId === waitId) {
+          this.pendingWaits.delete(sessionId);
+        }
+        logAgentEnvironmentTelemetry("bridge.connection_timeout", {
+          sessionId,
+          runtimeInstanceId: runtimeId,
+          timeoutMs,
+          latencyMs: Date.now() - startedAt,
+        });
         reject(new Error(`Bridge for session ${sessionId} did not connect within ${timeoutMs}ms`));
       }, timeoutMs);
 
       this.pendingWaits.set(sessionId, {
+        waitId,
+        expectedRuntimeId: runtimeId,
+        startedAt,
         resolve: () => {
           clearTimeout(timer);
           resolve();
@@ -575,7 +516,21 @@ export class SessionRouter {
     // Resolve any pending waitForBridge promise
     const pending = this.pendingWaits.get(sessionId);
     if (pending) {
+      if (pending.expectedRuntimeId && pending.expectedRuntimeId !== runtimeId) {
+        runtimeDebug("pending bridge wait ignored mismatched runtime", {
+          sessionId,
+          expectedRuntimeId: pending.expectedRuntimeId,
+          receivedRuntimeId: runtimeId,
+        });
+        return;
+      }
       this.pendingWaits.delete(sessionId);
+      logAgentEnvironmentTelemetry("bridge.connected", {
+        sessionId,
+        runtimeInstanceId: runtimeId,
+        expectedRuntimeId: pending.expectedRuntimeId,
+        latencyMs: Date.now() - pending.startedAt,
+      });
       pending.resolve();
     }
   }
@@ -757,6 +712,27 @@ export class SessionRouter {
       lastHeartbeatAgeMs: now - runtime.lastHeartbeat,
       boundSessions: [...runtime.boundSessions],
     }));
+  }
+
+  private async resolveRuntimeEnvironment(
+    connection: Record<string, unknown> | null,
+  ): Promise<RuntimeEnvironment | null> {
+    const environmentId = connectionEnvironmentId(connection);
+    if (!environmentId) return null;
+
+    const environment = await prisma.agentEnvironment.findFirst({
+      where: { id: environmentId },
+      select: { id: true, name: true, adapterType: true, config: true },
+    });
+    if (!environment) return null;
+
+    const adapterType = this.runtimeAdapters.get(environment.adapterType).type;
+    return {
+      id: environment.id,
+      name: environment.name,
+      adapterType,
+      config: environment.config,
+    };
   }
 
   /** Send a command directly to a runtime (not session-scoped). */
@@ -1396,60 +1372,338 @@ export class SessionRouter {
 
   // --- Adapter-dispatched lifecycle methods ---
 
-  private getAdapter(hosting: string): SessionAdapter {
-    if (hosting === "cloud") {
-      if (!this.cloudAdapter)
-        throw new Error(
-          "CloudMachineService not initialized — call setCloudMachineService() first",
-        );
-      return this.cloudAdapter;
-    }
-    return localAdapter;
-  }
-
   /**
-   * Provision the runtime for a session. Delegates to the correct adapter.
+   * Provision/select compute for a session through the runtime adapter registry,
+   * then keep bridge command delivery centralized here.
    */
   createRuntime(
     options: SessionAdapterCreateOptions & {
       hosting: string;
       onFailed: (error: string) => void;
       onWorkspaceReady?: (workdir: string) => void;
+      onLifecycle?: (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => Promise<void> | void;
     },
   ): void {
-    const { hosting, onFailed, onWorkspaceReady, ...adapterOptions } = options;
-    const adapter = this.getAdapter(hosting);
-    adapter.create(adapterOptions, {
-      send: (cmd) => this.send(options.sessionId, cmd),
-      onFailed,
-      onWorkspaceReady: onWorkspaceReady ?? (() => {}),
-      waitForBridge: (sid, timeoutMs?, runtimeId?) => this.waitForBridge(sid, timeoutMs, runtimeId),
-    });
+    const adapterType =
+      options.adapterType ?? adapterTypeFromHosting(options.hosting, this.runtimeAdapters);
+    const adapter = this.runtimeAdapters.get(adapterType);
+
+    void (async () => {
+      try {
+        const provisionedRuntimeInstanceId =
+          adapterType === "provisioned" ? `runtime_${randomUUID()}` : undefined;
+
+        if (adapterType === "provisioned") {
+          await options.onLifecycle?.("session_runtime_start_requested", {
+            runtimeInstanceId: provisionedRuntimeInstanceId,
+          });
+        }
+
+        const startResult = await adapter.startSession({
+          sessionId: options.sessionId,
+          sessionGroupId: options.sessionGroupId,
+          slug: options.slug,
+          preserveBranchName: options.preserveBranchName,
+          organizationId: options.organizationId,
+          actorId: options.createdById,
+          environment: options.environment,
+          tool: options.tool,
+          model: options.model,
+          repo: options.repo,
+          branch: options.branch,
+          checkpointSha: options.checkpointSha,
+          readOnly: options.readOnly,
+          runtimeInstanceId: provisionedRuntimeInstanceId,
+          runtimeToken: options.runtimeToken,
+          bridgeUrl: options.bridgeUrl,
+        });
+
+        if (startResult.runtimeInstanceId && adapterType !== "provisioned") {
+          this.bindSession(options.sessionId, startResult.runtimeInstanceId);
+        }
+
+        if (adapterType === "provisioned" && startResult.runtimeInstanceId) {
+          const lifecycleUpdate = {
+            runtimeInstanceId: startResult.runtimeInstanceId,
+            ...(startResult.runtimeLabel && { runtimeLabel: startResult.runtimeLabel }),
+            ...(startResult.providerRuntimeId && {
+              providerRuntimeId: startResult.providerRuntimeId,
+            }),
+            ...(startResult.providerRuntimeUrl && {
+              providerRuntimeUrl: startResult.providerRuntimeUrl,
+            }),
+            providerStatus: startResult.status,
+          } satisfies RuntimeLifecycleUpdate;
+          if (startResult.status !== "selected") {
+            await options.onLifecycle?.("session_runtime_provisioning", lifecycleUpdate);
+          }
+          if (startResult.status === "connecting" || startResult.status === "connected") {
+            await options.onLifecycle?.("session_runtime_connecting", lifecycleUpdate);
+          }
+
+          try {
+            const bridgeWaitStartedAt = Date.now();
+            await this.waitForBridge(
+              options.sessionId,
+              startupTimeoutMs(options.environment),
+              startResult.runtimeInstanceId,
+            );
+            logAgentEnvironmentTelemetry("provisioned.bridge_ready", {
+              organizationId: options.organizationId,
+              sessionId: options.sessionId,
+              environmentId: options.environment?.id,
+              runtimeInstanceId: startResult.runtimeInstanceId,
+              latencyMs: Date.now() - bridgeWaitStartedAt,
+            });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logAgentEnvironmentTelemetry("provisioned.startup_timeout", {
+              organizationId: options.organizationId,
+              sessionId: options.sessionId,
+              environmentId: options.environment?.id,
+              runtimeInstanceId: startResult.runtimeInstanceId,
+              error: message,
+            });
+            await options.onLifecycle?.("session_runtime_start_timed_out", {
+              ...lifecycleUpdate,
+              error: message,
+            });
+            await this.cleanupFailedProvisionedStart(adapter, {
+              sessionId: options.sessionId,
+              organizationId: options.organizationId,
+              environment: options.environment ?? null,
+              lifecycleUpdate,
+              onLifecycle: options.onLifecycle,
+            });
+            options.onFailed(`${adapterType} runtime timed out: ${message}`);
+            return;
+          }
+
+          await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
+        }
+
+        if (options.repo) {
+          const result = this.send(
+            options.sessionId,
+            {
+              type: "prepare",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+              slug: options.slug,
+              preserveBranchName: options.preserveBranchName,
+              repoId: options.repo.id,
+              repoName: options.repo.name,
+              repoRemoteUrl: options.repo.remoteUrl,
+              defaultBranch: options.repo.defaultBranch,
+              branch: options.branch,
+              checkpointSha: options.checkpointSha,
+              readOnly: options.readOnly,
+            },
+            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+          );
+          if (result !== "delivered") {
+            options.onFailed(`prepare: ${result}`);
+          }
+          return;
+        }
+
+        if (adapterType === "provisioned") {
+          options.onWorkspaceReady?.("/home/coder");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[runtime-adapter] failed to start ${options.sessionId}:`, message);
+        if (adapterType === "provisioned") {
+          await options.onLifecycle?.("session_runtime_start_failed", { error: message });
+        }
+        options.onFailed(`${adapterType} runtime failed: ${message}`);
+      }
+    })();
+  }
+
+  private async cleanupFailedProvisionedStart(
+    adapter: RuntimeAdapter,
+    input: {
+      sessionId: string;
+      organizationId: string;
+      environment: RuntimeEnvironment | null;
+      lifecycleUpdate: RuntimeLifecycleUpdate;
+      onLifecycle?: (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => Promise<void> | void;
+    },
+  ): Promise<void> {
+    if (adapter.type !== "provisioned") return;
+    if (!input.lifecycleUpdate.providerRuntimeId) return;
+    if (shouldSkipProvisionedStopForPolicy(adapter, input.environment, "startup_timeout")) return;
+
+    await input.onLifecycle?.("session_runtime_stopping", input.lifecycleUpdate);
+    try {
+      const stopResult = await this.attemptStopSession(
+        adapter,
+        {
+          sessionId: input.sessionId,
+          organizationId: input.organizationId,
+          environment: input.environment,
+          connection: input.lifecycleUpdate as Record<string, unknown>,
+          reason: "startup_timeout",
+        },
+        1,
+      );
+      if (stopResult.status === "stopped" || stopResult.status === "not_found") {
+        await input.onLifecycle?.("session_runtime_stopped", {
+          ...input.lifecycleUpdate,
+          providerStatus: stopResult.status,
+        });
+      } else if (stopResult.status === "unsupported") {
+        await input.onLifecycle?.("session_runtime_deprovision_failed", {
+          ...input.lifecycleUpdate,
+          error: stopResult.message ?? "Runtime adapter cannot stop timed-out startup",
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await input.onLifecycle?.("session_runtime_deprovision_failed", {
+        ...input.lifecycleUpdate,
+        error: message,
+      });
+    }
   }
 
   /**
    * Destroy a session's runtime. Delegates to the correct adapter.
+   *
+   * Lifecycle (provisioned): stopping → deprovisioned (or deprovision_failed).
+   * Lifecycle (local): stopping → stopped. Local stop cleans only
+   * Trace-created session resources and never deprovisions the desktop
+   * bridge.
+   *
+   * If the launcher returns `status: "stopping"` (async cleanup pending), the
+   * connection stays in `stopping` and the reconciler retries via the
+   * idempotent stopUrl call.
    */
   async destroyRuntime(
     sessionId: string,
     session: {
       hosting: string;
+      organizationId?: string;
       workdir?: string | null;
       repoId?: string | null;
       connection?: unknown;
     },
+    options?: {
+      reason?: string;
+      onLifecycle?: (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => Promise<void> | void;
+      maxStopAttempts?: number;
+    },
   ): Promise<void> {
-    const adapter = this.getAdapter(session.hosting);
-    await adapter.destroy(
-      {
+    const adapterType =
+      typeof connectionRecord(session.connection)?.adapterType === "string"
+        ? (connectionRecord(session.connection)?.adapterType as string)
+        : adapterTypeFromHosting(session.hosting, this.runtimeAdapters);
+    const adapter = this.runtimeAdapters.get(adapterType);
+    const connection = connectionRecord(session.connection);
+    const environment = await this.resolveRuntimeEnvironment(connection);
+    const reason = options?.reason ?? "session_deleted";
+    const lifecycleSnapshot = lifecycleSnapshotFromConnection(connection);
+    const skipProviderStop = shouldSkipProvisionedStopForPolicy(adapter, environment, reason);
+
+    const deliveryResult = this.send(sessionId, {
+      type: "delete",
+      sessionId,
+      workdir: session.workdir,
+      repoId: session.repoId,
+    });
+    if (deliveryResult !== "delivered" && adapter.type === "local") {
+      console.warn(
+        `[local-adapter] bridge did not receive delete for ${sessionId}: ${deliveryResult}`,
+      );
+    }
+
+    if (skipProviderStop) {
+      this.unbindSession(sessionId);
+      runtimeDebug("skipped provisioned runtime stop due to manual deprovision policy", {
         sessionId,
-        workdir: session.workdir,
-        repoId: session.repoId,
-        connection: session.connection,
-      },
-      { send: (cmd) => this.send(sessionId, cmd) },
-    );
-    this.unbindSession(sessionId);
+        reason,
+        environmentId: environment?.id ?? null,
+      });
+      return;
+    }
+
+    await options?.onLifecycle?.("session_runtime_stopping", lifecycleSnapshot);
+
+    try {
+      const stopResult = await this.attemptStopSession(
+        adapter,
+        {
+          sessionId,
+          organizationId: session.organizationId,
+          environment,
+          connection,
+          reason,
+        },
+        options?.maxStopAttempts ?? 3,
+      );
+      // status=stopping means the launcher kicked off async cleanup; the
+      // compute is not yet gone. Leave the connection in `stopping` so the
+      // reconciler picks it up and re-checks via the idempotent stopUrl.
+      // Only emit `stopped` when compute is actually gone (or never existed).
+      if (stopResult.status === "stopped" || stopResult.status === "not_found") {
+        await options?.onLifecycle?.("session_runtime_stopped", {
+          ...lifecycleSnapshot,
+          providerStatus: stopResult.status,
+        });
+      } else if (stopResult.status === "unsupported") {
+        // Adapter cannot stop (e.g., environment metadata missing). Treat as a
+        // deprovision failure so it surfaces to the operator instead of silently
+        // looping.
+        await options?.onLifecycle?.("session_runtime_deprovision_failed", {
+          ...lifecycleSnapshot,
+          error: stopResult.message ?? "Runtime adapter cannot stop this session",
+        });
+      }
+      // status=stopping → leave in stopping; reconciler retries.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[runtime-adapter] stop failed for ${sessionId}: ${message}`);
+      await options?.onLifecycle?.("session_runtime_deprovision_failed", {
+        ...lifecycleSnapshot,
+        error: message,
+      });
+    } finally {
+      this.unbindSession(sessionId);
+    }
+  }
+
+  private async attemptStopSession(
+    adapter: { stopSession: RuntimeAdapter["stopSession"] },
+    input: Parameters<RuntimeAdapter["stopSession"]>[0],
+    maxAttempts: number,
+  ): Promise<Awaited<ReturnType<RuntimeAdapter["stopSession"]>>> {
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await adapter.stopSession(input);
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        // Permanent failures (4xx auth/validation, malformed config) won't be
+        // fixed by retrying — short-circuit to surface them immediately.
+        if (err instanceof ProvisionedLauncherError && !err.retryable) {
+          throw lastError;
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+        }
+      }
+    }
+    throw lastError ?? new Error("stopSession failed");
   }
 
   /**
@@ -1460,11 +1714,37 @@ export class SessionRouter {
     hosting: string,
     command: "pause" | "resume" | "terminate",
   ): Promise<DeliveryResult> {
-    const adapter = this.getAdapter(hosting);
-    return adapter.transition(sessionId, command, {
-      send: (cmd) => this.send(sessionId, cmd),
-      waitForBridge: (sid, timeoutMs?, runtimeId?) => this.waitForBridge(sid, timeoutMs, runtimeId),
-    });
+    const adapterType = adapterTypeFromHosting(hosting, this.runtimeAdapters);
+    const adapter = this.runtimeAdapters.get(adapterType);
+
+    if (command === "resume" && adapter.type === "provisioned") {
+      const session = await prisma.session.findUniqueOrThrow({
+        where: { id: sessionId },
+        select: {
+          connection: true,
+          createdById: true,
+          organizationId: true,
+          tool: true,
+          model: true,
+        },
+      });
+      const conn = connectionRecord(session.connection);
+      const environment = await this.resolveRuntimeEnvironment(conn);
+      const startResult = await adapter.startSession({
+        sessionId,
+        organizationId: session.organizationId,
+        actorId: session.createdById,
+        environment,
+        tool: session.tool,
+        model: session.model ?? undefined,
+      });
+      const runtimeId =
+        startResult.runtimeInstanceId ??
+        (typeof conn?.runtimeInstanceId === "string" ? conn.runtimeInstanceId : undefined);
+      await this.waitForBridge(sessionId, 120_000, runtimeId);
+    }
+
+    return this.send(sessionId, { type: command, sessionId });
   }
 }
 

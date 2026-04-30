@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { resolveMobileSessionHosting } from "./session-hosting";
+import { canUseMobileCloudHosting } from "./session-hosting";
 
-describe("resolveMobileSessionHosting", () => {
-  it("defaults hosted mobile sessions to cloud", () => {
-    expect(resolveMobileSessionHosting("hosted")).toBe("cloud");
+describe("canUseMobileCloudHosting", () => {
+  it("allows cloud sessions against hosted Trace", () => {
+    expect(canUseMobileCloudHosting("hosted")).toBe(true);
   });
 
-  it("keeps paired local mobile sessions on local runtimes", () => {
-    expect(resolveMobileSessionHosting("paired_local")).toBe("local");
+  it("disables cloud sessions against paired local servers", () => {
+    expect(canUseMobileCloudHosting("paired_local")).toBe(false);
   });
 });

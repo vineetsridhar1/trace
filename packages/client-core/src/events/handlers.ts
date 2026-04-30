@@ -2,6 +2,7 @@ import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
 import type {
   AgentStatus,
+  AgentEnvironment,
   Channel,
   ChannelGroup,
   Chat,
@@ -41,10 +42,46 @@ const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
   "session_pr_merged",
 ]);
 
+const SESSION_RUNTIME_EVENTS: Set<EventType> = new Set([
+  "session_runtime_start_requested",
+  "session_runtime_provisioning",
+  "session_runtime_connecting",
+  "session_runtime_connected",
+  "session_runtime_start_failed",
+  "session_runtime_start_timed_out",
+  "session_runtime_stopping",
+  "session_runtime_stopped",
+  "session_runtime_deprovision_failed",
+  "session_runtime_disconnected",
+  "session_runtime_reconnected",
+]);
+
 /** PR lifecycle events update the group PR URL; review state is derived from that. */
 const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
+
+function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const environments = payload.agentEnvironments;
+  if (Array.isArray(environments)) {
+    for (const item of environments) {
+      const environment = asJsonObject(item);
+      if (environment && typeof environment.id === "string") {
+        batch.upsert(
+          "agentEnvironments",
+          environment.id,
+          environment as unknown as AgentEnvironment,
+        );
+      }
+    }
+    return;
+  }
+
+  const environment = asJsonObject(payload.agentEnvironment);
+  if (environment && typeof environment.id === "string") {
+    batch.upsert("agentEnvironments", environment.id, environment as unknown as AgentEnvironment);
+  }
+}
 
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
@@ -167,6 +204,26 @@ export function handleOrgEvent(event: Event): void {
     const sid = payload.sessionId as string | undefined;
     if (qmId && sid) {
       batch.removeQueuedMessage(sid, qmId);
+    }
+  }
+
+  // Agent environment events
+  if (
+    event.eventType === "agent_environment_created" ||
+    event.eventType === "agent_environment_updated"
+  ) {
+    upsertAgentEnvironmentFromPayload(batch, payload);
+  }
+  if (event.eventType === "agent_environment_deleted") {
+    const environment = asJsonObject(payload.agentEnvironment);
+    const environmentId =
+      typeof payload.agentEnvironmentId === "string"
+        ? payload.agentEnvironmentId
+        : typeof environment?.id === "string"
+          ? environment.id
+          : null;
+    if (environmentId) {
+      batch.remove("agentEnvironments", environmentId);
     }
   }
 
@@ -433,6 +490,24 @@ export function handleOrgEvent(event: Event): void {
         }
       }
     }
+  }
+
+  // Route runtime lifecycle events
+  if (
+    SESSION_RUNTIME_EVENTS.has(event.eventType) &&
+    event.scopeType === ("session" satisfies ScopeType)
+  ) {
+    upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: false });
+    const connection = asJsonObject(payload.connection);
+    const agentStatus = payload.agentStatus as AgentStatus | undefined;
+    const sessionStatus = payload.sessionStatus as SessionStatus | undefined;
+    const sessionPatch: Partial<SessionEntity> = {
+      updatedAt: event.timestamp,
+      ...(connection ? { connection: connection as SessionEntity["connection"] } : {}),
+      ...(agentStatus ? { agentStatus } : {}),
+      ...(sessionStatus ? { sessionStatus } : {}),
+    };
+    batch.patch("sessions", event.scopeId, sessionPatch);
   }
 
   // Route PR lifecycle events

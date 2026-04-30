@@ -14,6 +14,10 @@ import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
+import {
+  CloudRuntimeNotice,
+  getCloudRuntimeLifecycleState,
+} from "@/components/sessions/CloudRuntimeNotice";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
 import { QueuedMessagesStrip } from "@/components/sessions/QueuedMessagesStrip";
 import { SessionErrorCard } from "@/components/sessions/SessionErrorCard";
@@ -86,12 +90,13 @@ export function SessionSurface({
     | string
     | null
     | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
   const sessionConnection = useEntityField("sessions", sessionId, "connection") as
-    | { runtimeInstanceId?: string | null }
+    | { runtimeInstanceId?: string | null; state?: string | null }
     | null
     | undefined;
   const groupConnection = useEntityField("sessionGroups", groupId ?? "", "connection") as
-    | { runtimeInstanceId?: string | null }
+    | { runtimeInstanceId?: string | null; state?: string | null }
     | null
     | undefined;
   const pendingInput = useSessionPendingInput(sessionId, {
@@ -103,7 +108,11 @@ export function SessionSurface({
     runtimeInstanceId,
     groupId ?? null,
   );
-  const bridgeLocked = !isBridgeInteractionAllowed(bridgeAccess);
+  const runtimeLifecycleState = getCloudRuntimeLifecycleState({
+    hosting,
+    connection: sessionConnection ?? groupConnection,
+  });
+  const bridgeLocked = !runtimeLifecycleState && !isBridgeInteractionAllowed(bridgeAccess);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
@@ -222,12 +231,19 @@ export function SessionSurface({
                 tabBarHeight,
                 bottomInset: insets.bottom,
                 spacingMd: theme.spacing.md,
-                bridgeLocked,
+                bridgeLocked: bridgeLocked || !!runtimeLifecycleState,
               }),
             },
           ]}
         >
-          {bridgeLocked ? (
+          {runtimeLifecycleState ? (
+            <>
+              <SessionErrorCard sessionId={sessionId} />
+              <View style={[styles.accessNoticeWrap, { paddingHorizontal: theme.spacing.md }]}>
+                <CloudRuntimeNotice connectionState={runtimeLifecycleState} />
+              </View>
+            </>
+          ) : bridgeLocked ? (
             <>
               <SessionErrorCard sessionId={sessionId} />
               <View style={[styles.accessNoticeWrap, { paddingHorizontal: theme.spacing.md }]}>

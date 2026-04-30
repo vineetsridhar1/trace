@@ -55,9 +55,20 @@ enum HostingMode {
 }
 
 enum SessionConnectionState {
+  pending
+  requested
+  provisioning
+  booting
+  connecting
   connected
   degraded
   disconnected
+  deprovision_failed
+  deprovisioned
+  failed
+  timed_out
+  stopping
+  stopped
 }
 
 enum DeliveryResult {
@@ -158,6 +169,11 @@ enum OrgAgentStatus {
   disabled
 }
 
+enum AgentEnvironmentAdapterType {
+  local
+  provisioned
+}
+
 enum AutonomyMode {
   observe
   suggest
@@ -255,6 +271,20 @@ enum EventType {
   queued_message_removed
   queued_messages_cleared
   queued_messages_drained
+  agent_environment_created
+  agent_environment_updated
+  agent_environment_deleted
+  session_runtime_start_requested
+  session_runtime_provisioning
+  session_runtime_connecting
+  session_runtime_connected
+  session_runtime_start_failed
+  session_runtime_start_timed_out
+  session_runtime_stopping
+  session_runtime_stopped
+  session_runtime_deprovision_failed
+  session_runtime_disconnected
+  session_runtime_reconnected
 }
 
 # --- Core Types ---
@@ -266,6 +296,32 @@ type Organization {
   repos: [Repo!]!
   projects: [Project!]!
   channels: [Channel!]!
+  agentEnvironments: [AgentEnvironment!]!
+}
+
+type AgentEnvironment {
+  id: ID!
+  orgId: ID!
+  name: String!
+  adapterType: AgentEnvironmentAdapterType!
+  config: JSON!
+  enabled: Boolean!
+  isDefault: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type AgentEnvironmentTestResult {
+  ok: Boolean!
+  message: String
+}
+
+type OrgSecret {
+  id: ID!
+  orgId: ID!
+  name: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type OrgMember {
@@ -689,8 +745,22 @@ type SessionEndpoints {
 
 type SessionConnection {
   state: SessionConnectionState!
+  environmentId: String
+  adapterType: String
   runtimeInstanceId: String
   runtimeLabel: String
+  providerRuntimeId: String
+  providerRuntimeUrl: String
+  requestedAt: DateTime
+  provisioningAt: DateTime
+  connectingAt: DateTime
+  connectedAt: DateTime
+  failedAt: DateTime
+  timedOutAt: DateTime
+  stoppingAt: DateTime
+  stoppedAt: DateTime
+  disconnectedAt: DateTime
+  reconnectedAt: DateTime
   lastSeen: DateTime
   lastError: String
   lastDeliveryFailureAt: DateTime
@@ -915,8 +985,10 @@ input ReorderChannelsInput {
 input StartSessionInput {
   tool: CodingTool!
   model: String
+  environmentId: ID
   hosting: HostingMode
   runtimeInstanceId: ID
+  deferRuntimeSelection: Boolean
   repoId: ID
   branch: String
   ticketId: ID
@@ -1012,6 +1084,30 @@ input CreateAiConversationInput {
   visibility: AiConversationVisibility
 }
 
+input CreateAgentEnvironmentInput {
+  orgId: ID!
+  name: String!
+  adapterType: AgentEnvironmentAdapterType!
+  config: JSON!
+  enabled: Boolean
+  isDefault: Boolean
+}
+
+input UpdateAgentEnvironmentInput {
+  id: ID!
+  name: String
+  adapterType: AgentEnvironmentAdapterType
+  config: JSON
+  enabled: Boolean
+  isDefault: Boolean
+}
+
+input SetOrgSecretInput {
+  orgId: ID!
+  name: String!
+  value: String!
+}
+
 input CreateOrganizationInput {
   name: String!
 }
@@ -1021,6 +1117,8 @@ input CreateOrganizationInput {
 type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
+  agentEnvironments(orgId: ID!): [AgentEnvironment!]!
+  orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!
@@ -1127,6 +1225,12 @@ enum LinkedCheckoutErrorCode {
 
 type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
+  createAgentEnvironment(input: CreateAgentEnvironmentInput!): AgentEnvironment!
+  updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
+  deleteAgentEnvironment(id: ID!): Boolean!
+  testAgentEnvironment(id: ID!): AgentEnvironmentTestResult!
+  setOrgSecret(input: SetOrgSecretInput!): OrgSecret!
+  deleteOrgSecret(orgId: ID!, id: ID!): Boolean!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
   deleteChannel(id: ID!): Boolean!

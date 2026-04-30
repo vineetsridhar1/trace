@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
+import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import {
   useEntityStore,
@@ -20,19 +21,36 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
+import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { client } from "../../lib/urql";
 import {
   DISMISS_SESSION_MUTATION,
+  MOVE_SESSION_TO_CLOUD_MUTATION,
+  RETRY_SESSION_CONNECTION_MUTATION,
   RETRY_SESSION_GROUP_SETUP_MUTATION,
   SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+
+const RUNTIME_BOOTING_STATES = new Set([
+  "pending",
+  "requested",
+  "provisioning",
+  "booting",
+  "connecting",
+]);
+const RUNTIME_FAILURE_STATES = new Set(["failed", "timed_out", "deprovision_failed"]);
+
+function getConnectionState(connection: Record<string, unknown> | null | undefined): string | null {
+  const state = connection?.state;
+  return typeof state === "string" ? state : null;
+}
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -171,6 +189,7 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -182,14 +201,18 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
+  const sessionRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(connection);
+  const groupRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(groupConnection);
   const runtimeInstanceId =
-    getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
-    getLinkedCheckoutRuntimeInstanceId(connection);
+    hosting === "cloud"
+      ? sessionRuntimeInstanceId
+      : groupRuntimeInstanceId ?? sessionRuntimeInstanceId;
   const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
     runtimeInstanceId,
     sessionGroupId ?? null,
   );
-  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed =
+    agentStatus === "not_started" || hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
@@ -313,6 +336,21 @@ export function SessionDetailView({
     [eventIds, events],
   );
   const initialEventsLoading = loading && eventIds.length === 0;
+  const connectionState = getConnectionState(connection);
+  const groupConnectionState = getConnectionState(groupConnection);
+  const groupRuntimeConnected = groupConnectionState === "connected";
+  const suppressSharedCloudStartupNotice =
+    groupRuntimeConnected &&
+    connectionState !== null &&
+    RUNTIME_BOOTING_STATES.has(connectionState);
+  const runtimeLifecycleState =
+    hosting === "cloud" &&
+    connectionState !== null &&
+    connectionState !== "connected" &&
+    !suppressSharedCloudStartupNotice &&
+    (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
+      ? connectionState
+      : null;
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -462,7 +500,13 @@ export function SessionDetailView({
           )}
         </div>
 
-        {!bridgeInteractionAllowed ? (
+        {runtimeLifecycleState ? (
+          <RuntimeLifecycleNotice
+            sessionId={sessionId}
+            connection={connection}
+            connectionState={runtimeLifecycleState}
+          />
+        ) : !bridgeInteractionAllowed ? (
           <div className="border-t p-4">
             <BridgeAccessNotice
               access={bridgeAccess}
@@ -507,5 +551,129 @@ export function SessionDetailView({
         )}
       </div>
     </EventScopeContext.Provider>
+  );
+}
+
+function RuntimeLifecycleNotice({
+  sessionId,
+  connection,
+  connectionState,
+}: {
+  sessionId: string;
+  connection: Record<string, unknown> | null | undefined;
+  connectionState: string;
+}) {
+  const [action, setAction] = useState<"retry" | "cloud" | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const failed = RUNTIME_FAILURE_STATES.has(connectionState);
+  const providerStatus =
+    typeof connection?.providerStatus === "string" ? connection.providerStatus : null;
+  const label = failed
+    ? connectionState === "timed_out"
+      ? "Cloud runtime timed out"
+      : "Cloud runtime failed"
+    : connectionState === "requested"
+      ? "Cloud recovery requested"
+    : connectionState === "provisioning"
+      ? providerStatus === "booting"
+        ? "Cloud runtime booting"
+        : "Cloud runtime provisioning"
+      : connectionState === "connecting"
+        ? "Waiting for cloud bridge"
+        : "Starting cloud runtime";
+  const body = failed
+    ? "Trace could not finish starting the cloud runtime."
+    : connectionState === "requested"
+      ? "Trace sent the recovery request and is waiting for the provider to report progress."
+      : connectionState === "connecting"
+        ? "The provider accepted the runtime request. Trace is waiting for the bridge to connect."
+        : "Your message is queued while Trace waits for the runtime provider.";
+  const bannerTone = failed
+    ? "border-destructive/30 bg-destructive/5"
+    : "border-yellow-500/30 bg-yellow-500/5";
+  const iconTone = failed ? "text-destructive" : "text-yellow-500";
+
+  const handleRetry = useCallback(async () => {
+    setAction("retry");
+    try {
+      const result = await client
+        .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
+        .toPromise();
+      if (result.error) {
+        toast.error("Failed to retry cloud runtime", { description: result.error.message });
+      }
+    } finally {
+      setAction(null);
+    }
+  }, [sessionId]);
+
+  const handleNewCloud = useCallback(async () => {
+    setAction("cloud");
+    try {
+      const result = await client
+        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
+        .toPromise();
+      if (result.error) {
+        toast.error("Failed to start cloud runtime", { description: result.error.message });
+      }
+    } finally {
+      setAction(null);
+    }
+  }, [sessionId]);
+
+  return (
+    <div className="shrink-0 border-t border-border px-4 py-3">
+      <div
+        className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${bannerTone}`}
+      >
+        {failed ? (
+          <AlertCircle size={16} className={`shrink-0 ${iconTone}`} />
+        ) : (
+          <Cloud size={16} className={`shrink-0 ${iconTone}`} />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{body}</p>
+        </div>
+        {failed && (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={action !== null}
+              onClick={handleRetry}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={12} className={action === "retry" ? "animate-spin" : ""} />
+              Retry
+            </button>
+            <button
+              type="button"
+              disabled={action !== null}
+              onClick={() => setShowPicker((open) => !open)}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
+            >
+              <ArrowRightLeft size={12} />
+              Move
+            </button>
+            <button
+              type="button"
+              disabled={action !== null}
+              onClick={handleNewCloud}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
+            >
+              {action === "cloud" ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Cloud size={12} />
+              )}
+              New cloud container
+            </button>
+          </div>
+        )}
+      </div>
+      {failed && showPicker && (
+        <SessionRuntimePicker sessionId={sessionId} onClose={() => setShowPicker(false)} />
+      )}
+    </div>
   );
 }

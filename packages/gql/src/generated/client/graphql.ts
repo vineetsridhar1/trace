@@ -2,7 +2,7 @@
 import { JsonValue } from "../../json";
 import { TypedDocumentNode as DocumentNode } from "@graphql-typed-document-node/core";
 export type Maybe<T> = T | null;
-export type InputMaybe<T> = Maybe<T>;
+export type InputMaybe<T> = T | null | undefined;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
@@ -64,6 +64,27 @@ export type AgentCostSummary = {
   __typename?: "AgentCostSummary";
   budget: AgentBudgetStatus;
   dailyCosts: Array<AgentCostEntry>;
+};
+
+export type AgentEnvironment = {
+  __typename?: "AgentEnvironment";
+  adapterType: AgentEnvironmentAdapterType;
+  config: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  id: Scalars["ID"]["output"];
+  isDefault: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type AgentEnvironmentAdapterType = "local" | "provisioned";
+
+export type AgentEnvironmentTestResult = {
+  __typename?: "AgentEnvironmentTestResult";
+  message?: Maybe<Scalars["String"]["output"]>;
+  ok: Scalars["Boolean"]["output"];
 };
 
 export type AgentExecutionLog = {
@@ -374,6 +395,15 @@ export type CostBudget = {
   dailyLimitCents: Scalars["Int"]["output"];
 };
 
+export type CreateAgentEnvironmentInput = {
+  adapterType: AgentEnvironmentAdapterType;
+  config: Scalars["JSON"]["input"];
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  isDefault?: InputMaybe<Scalars["Boolean"]["input"]>;
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+};
+
 export type CreateAiConversationInput = {
   title?: InputMaybe<Scalars["String"]["input"]>;
   visibility?: InputMaybe<AiConversationVisibility>;
@@ -452,6 +482,9 @@ export type Event = {
 };
 
 export type EventType =
+  | "agent_environment_created"
+  | "agent_environment_deleted"
+  | "agent_environment_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -491,6 +524,17 @@ export type EventType =
   | "session_pr_merged"
   | "session_pr_opened"
   | "session_resumed"
+  | "session_runtime_connected"
+  | "session_runtime_connecting"
+  | "session_runtime_deprovision_failed"
+  | "session_runtime_disconnected"
+  | "session_runtime_provisioning"
+  | "session_runtime_reconnected"
+  | "session_runtime_start_failed"
+  | "session_runtime_start_requested"
+  | "session_runtime_start_timed_out"
+  | "session_runtime_stopped"
+  | "session_runtime_stopping"
   | "session_started"
   | "session_terminated"
   | "ticket_assigned"
@@ -635,6 +679,7 @@ export type Mutation = {
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
+  createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
@@ -645,11 +690,13 @@ export type Mutation = {
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
+  deleteAgentEnvironment: Scalars["Boolean"]["output"];
   deleteApiToken: Scalars["Boolean"]["output"];
   deleteChannel: Scalars["Boolean"]["output"];
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -690,16 +737,19 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
+  setOrgSecret: OrgSecret;
   startSession: Session;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
+  testAgentEnvironment: AgentEnvironmentTestResult;
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
   unmuteScope: Participant;
   unregisterPushToken: Scalars["Boolean"]["output"];
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars["Boolean"]["output"];
+  updateAgentEnvironment: AgentEnvironment;
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
   updateBridgeAccessGrant: BridgeAccessGrant;
@@ -759,6 +809,10 @@ export type MutationCommitLinkedCheckoutChangesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationCreateAgentEnvironmentArgs = {
+  input: CreateAgentEnvironmentInput;
+};
+
 export type MutationCreateAiConversationArgs = {
   input: CreateAiConversationInput;
   organizationId: Scalars["ID"]["input"];
@@ -805,6 +859,10 @@ export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
 
+export type MutationDeleteAgentEnvironmentArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationDeleteApiTokenArgs = {
   provider: ApiTokenProvider;
 };
@@ -823,6 +881,11 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteOrgSecretArgs = {
+  id: Scalars["ID"]["input"];
+  orgId: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -1024,6 +1087,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSetOrgSecretArgs = {
+  input: SetOrgSecretInput;
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1044,6 +1111,10 @@ export type MutationSyncLinkedCheckoutArgs = {
 };
 
 export type MutationTerminateSessionArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type MutationTestAgentEnvironmentArgs = {
   id: Scalars["ID"]["input"];
 };
 
@@ -1074,6 +1145,10 @@ export type MutationUnregisterRepoWebhookArgs = {
 export type MutationUnsubscribeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationUpdateAgentEnvironmentArgs = {
+  input: UpdateAgentEnvironmentInput;
 };
 
 export type MutationUpdateAgentSettingsArgs = {
@@ -1150,8 +1225,18 @@ export type OrgMember = {
   user: User;
 };
 
+export type OrgSecret = {
+  __typename?: "OrgSecret";
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type Organization = {
   __typename?: "Organization";
+  agentEnvironments: Array<AgentEnvironment>;
   channels: Array<Channel>;
   id: Scalars["ID"]["output"];
   members: Array<OrgMember>;
@@ -1197,6 +1282,7 @@ export type Query = {
   __typename?: "Query";
   agentAggregationWindows: Array<AggregationWindowInfo>;
   agentCostSummary: AgentCostSummary;
+  agentEnvironments: Array<AgentEnvironment>;
   agentExecutionLog?: Maybe<AgentExecutionLog>;
   agentExecutionLogs: AgentExecutionLogConnection;
   agentIdentity?: Maybe<AgentIdentity>;
@@ -1223,6 +1309,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
@@ -1257,6 +1344,10 @@ export type QueryAgentCostSummaryArgs = {
   endDate: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
   startDate: Scalars["String"]["input"];
+};
+
+export type QueryAgentEnvironmentsArgs = {
+  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryAgentExecutionLogArgs = {
@@ -1366,6 +1457,10 @@ export type QueryMySessionsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrgSecretsArgs = {
+  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryOrganizationArgs = {
@@ -1552,6 +1647,7 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: "SessionConnection";
+  adapterType?: Maybe<Scalars["String"]["output"]>;
   /**
    * When false, the frontend should not auto-retry the connection — only manual
    * Retry/Move can unblock. Used for non-transient failures like the home bridge
@@ -1560,16 +1656,43 @@ export type SessionConnection = {
   autoRetryable?: Maybe<Scalars["Boolean"]["output"]>;
   canMove: Scalars["Boolean"]["output"];
   canRetry: Scalars["Boolean"]["output"];
+  connectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  connectingAt?: Maybe<Scalars["DateTime"]["output"]>;
+  disconnectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  environmentId?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastDeliveryFailureAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastError?: Maybe<Scalars["String"]["output"]>;
   lastSeen?: Maybe<Scalars["DateTime"]["output"]>;
+  providerRuntimeId?: Maybe<Scalars["String"]["output"]>;
+  providerRuntimeUrl?: Maybe<Scalars["String"]["output"]>;
+  provisioningAt?: Maybe<Scalars["DateTime"]["output"]>;
+  reconnectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  requestedAt?: Maybe<Scalars["DateTime"]["output"]>;
   retryCount: Scalars["Int"]["output"];
   runtimeInstanceId?: Maybe<Scalars["String"]["output"]>;
   runtimeLabel?: Maybe<Scalars["String"]["output"]>;
   state: SessionConnectionState;
+  stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  stoppingAt?: Maybe<Scalars["DateTime"]["output"]>;
+  timedOutAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
-export type SessionConnectionState = "connected" | "degraded" | "disconnected";
+export type SessionConnectionState =
+  | "booting"
+  | "connected"
+  | "connecting"
+  | "degraded"
+  | "deprovision_failed"
+  | "deprovisioned"
+  | "disconnected"
+  | "failed"
+  | "pending"
+  | "provisioning"
+  | "requested"
+  | "stopped"
+  | "stopping"
+  | "timed_out";
 
 export type SessionEndpoints = {
   __typename?: "SessionEndpoints";
@@ -1640,6 +1763,12 @@ export type SetApiTokenInput = {
   token: Scalars["String"]["input"];
 };
 
+export type SetOrgSecretInput = {
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+  value: Scalars["String"]["input"];
+};
+
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
 
 export type SlashCommand = {
@@ -1657,6 +1786,8 @@ export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   model?: InputMaybe<Scalars["String"]["input"]>;
@@ -1803,6 +1934,15 @@ export type Turn = {
 };
 
 export type TurnRole = "ASSISTANT" | "USER";
+
+export type UpdateAgentEnvironmentInput = {
+  adapterType?: InputMaybe<AgentEnvironmentAdapterType>;
+  config?: InputMaybe<Scalars["JSON"]["input"]>;
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  id: Scalars["ID"]["input"];
+  isDefault?: InputMaybe<Scalars["Boolean"]["input"]>;
+  name?: InputMaybe<Scalars["String"]["input"]>;
+};
 
 export type UpdateAgentSettingsInput = {
   autonomyMode?: InputMaybe<AutonomyMode>;
@@ -2590,6 +2730,143 @@ export type SettingsReposQuery = {
     webhookActive: boolean;
   }>;
 };
+
+export type AgentEnvironmentsSettingsQueryVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type AgentEnvironmentsSettingsQuery = {
+  __typename?: "Query";
+  agentEnvironments: Array<{
+    __typename?: "AgentEnvironment";
+    id: string;
+    orgId: string;
+    name: string;
+    adapterType: AgentEnvironmentAdapterType;
+    config: JsonValue;
+    enabled: boolean;
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  repos: Array<{
+    __typename?: "Repo";
+    id: string;
+    name: string;
+    remoteUrl: string;
+    defaultBranch: string;
+    webhookActive: boolean;
+  }>;
+  orgSecrets: Array<{
+    __typename?: "OrgSecret";
+    id: string;
+    orgId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  myConnections: Array<{
+    __typename?: "ConnectionsBridge";
+    bridge: {
+      __typename?: "BridgeRuntime";
+      id: string;
+      instanceId: string;
+      label: string;
+      hostingMode: HostingMode;
+      connected: boolean;
+    };
+    repos: Array<{
+      __typename?: "ConnectionsRepoEntry";
+      repo: { __typename?: "Repo"; id: string; name: string };
+    }>;
+  }>;
+};
+
+export type CreateAgentEnvironmentMutationVariables = Exact<{
+  input: CreateAgentEnvironmentInput;
+}>;
+
+export type CreateAgentEnvironmentMutation = {
+  __typename?: "Mutation";
+  createAgentEnvironment: {
+    __typename?: "AgentEnvironment";
+    id: string;
+    orgId: string;
+    name: string;
+    adapterType: AgentEnvironmentAdapterType;
+    config: JsonValue;
+    enabled: boolean;
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+
+export type UpdateAgentEnvironmentMutationVariables = Exact<{
+  input: UpdateAgentEnvironmentInput;
+}>;
+
+export type UpdateAgentEnvironmentMutation = {
+  __typename?: "Mutation";
+  updateAgentEnvironment: {
+    __typename?: "AgentEnvironment";
+    id: string;
+    orgId: string;
+    name: string;
+    adapterType: AgentEnvironmentAdapterType;
+    config: JsonValue;
+    enabled: boolean;
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+
+export type DeleteAgentEnvironmentMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type DeleteAgentEnvironmentMutation = {
+  __typename?: "Mutation";
+  deleteAgentEnvironment: boolean;
+};
+
+export type TestAgentEnvironmentMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type TestAgentEnvironmentMutation = {
+  __typename?: "Mutation";
+  testAgentEnvironment: {
+    __typename?: "AgentEnvironmentTestResult";
+    ok: boolean;
+    message?: string | null;
+  };
+};
+
+export type SetOrgSecretMutationVariables = Exact<{
+  input: SetOrgSecretInput;
+}>;
+
+export type SetOrgSecretMutation = {
+  __typename?: "Mutation";
+  setOrgSecret: {
+    __typename?: "OrgSecret";
+    id: string;
+    orgId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+
+export type DeleteOrgSecretMutationVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+  id: Scalars["ID"]["input"];
+}>;
+
+export type DeleteOrgSecretMutation = { __typename?: "Mutation"; deleteOrgSecret: boolean };
 
 export type CreateDmMutationVariables = Exact<{
   input: CreateChatInput;
@@ -5322,6 +5599,441 @@ export const SettingsReposDocument = {
     },
   ],
 } as unknown as DocumentNode<SettingsReposQuery, SettingsReposQueryVariables>;
+export const AgentEnvironmentsSettingsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "AgentEnvironmentsSettings" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "agentEnvironments" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "adapterType" } },
+                { kind: "Field", name: { kind: "Name", value: "config" } },
+                { kind: "Field", name: { kind: "Name", value: "enabled" } },
+                { kind: "Field", name: { kind: "Name", value: "isDefault" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repos" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
+                { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "orgSecrets" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "myConnections" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "bridge" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "instanceId" } },
+                      { kind: "Field", name: { kind: "Name", value: "label" } },
+                      { kind: "Field", name: { kind: "Name", value: "hostingMode" } },
+                      { kind: "Field", name: { kind: "Name", value: "connected" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repos" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "repo" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  AgentEnvironmentsSettingsQuery,
+  AgentEnvironmentsSettingsQueryVariables
+>;
+export const CreateAgentEnvironmentDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateAgentEnvironment" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "CreateAgentEnvironmentInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createAgentEnvironment" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "adapterType" } },
+                { kind: "Field", name: { kind: "Name", value: "config" } },
+                { kind: "Field", name: { kind: "Name", value: "enabled" } },
+                { kind: "Field", name: { kind: "Name", value: "isDefault" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateAgentEnvironmentMutation,
+  CreateAgentEnvironmentMutationVariables
+>;
+export const UpdateAgentEnvironmentDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdateAgentEnvironment" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "UpdateAgentEnvironmentInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateAgentEnvironment" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "adapterType" } },
+                { kind: "Field", name: { kind: "Name", value: "config" } },
+                { kind: "Field", name: { kind: "Name", value: "enabled" } },
+                { kind: "Field", name: { kind: "Name", value: "isDefault" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpdateAgentEnvironmentMutation,
+  UpdateAgentEnvironmentMutationVariables
+>;
+export const DeleteAgentEnvironmentDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteAgentEnvironment" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "deleteAgentEnvironment" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DeleteAgentEnvironmentMutation,
+  DeleteAgentEnvironmentMutationVariables
+>;
+export const TestAgentEnvironmentDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "TestAgentEnvironment" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "testAgentEnvironment" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
+                { kind: "Field", name: { kind: "Name", value: "message" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<TestAgentEnvironmentMutation, TestAgentEnvironmentMutationVariables>;
+export const SetOrgSecretDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SetOrgSecret" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SetOrgSecretInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "setOrgSecret" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SetOrgSecretMutation, SetOrgSecretMutationVariables>;
+export const DeleteOrgSecretDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteOrgSecret" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "deleteOrgSecret" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DeleteOrgSecretMutation, DeleteOrgSecretMutationVariables>;
 export const CreateDmDocument = {
   kind: "Document",
   definitions: [

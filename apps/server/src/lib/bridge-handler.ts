@@ -1,5 +1,6 @@
 import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
+import type { CodingTool } from "@trace/gql";
 import type {
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
@@ -10,6 +11,7 @@ import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import { agentEnvironmentService } from "../services/agent-environment.js";
 import { prisma } from "./db.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
@@ -17,6 +19,8 @@ const DISCONNECT_GRACE_MS = 10_000;
 
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
+const BRIDGE_PROTOCOL_VERSION = 1;
+const CODING_TOOLS = new Set<CodingTool>(["claude_code", "codex", "custom"]);
 
 type LocalBridgeAuth = {
   kind: "local";
@@ -30,6 +34,10 @@ type CloudBridgeAuth = {
   userId: string;
   organizationId: string;
   instanceId: string;
+  sessionId?: string;
+  environmentId?: string;
+  allowedScope?: "session";
+  tool?: string;
 };
 
 type BridgeAuth = CloudBridgeAuth | LocalBridgeAuth;
@@ -37,6 +45,48 @@ type BridgeAuth = CloudBridgeAuth | LocalBridgeAuth;
 export type BridgeConnectionRequest = {
   bridgeAuth?: BridgeAuth;
 };
+
+function stringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || !item.trim()) return null;
+    result.push(item);
+  }
+  return result;
+}
+
+function parseSupportedTools(value: unknown): CodingTool[] | null {
+  const tools = stringArray(value);
+  if (!tools) return null;
+  const result: CodingTool[] = [];
+  for (const tool of tools) {
+    if (!CODING_TOOLS.has(tool as CodingTool)) return null;
+    result.push(tool as CodingTool);
+  }
+  return result;
+}
+
+function isCompatibleProtocolVersion(value: unknown): boolean {
+  return value === BRIDGE_PROTOCOL_VERSION;
+}
+
+function jsonRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function isTerminalConnectionState(connection: unknown): boolean {
+  const state = jsonRecord(connection)?.state;
+  return state === "failed" || state === "timed_out" || state === "stopped";
+}
+
+function connectionRuntimeInstanceId(connection: unknown): string | null {
+  const runtimeInstanceId = jsonRecord(connection)?.runtimeInstanceId;
+  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+    ? runtimeInstanceId
+    : null;
+}
 
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
@@ -93,11 +143,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     const persisted = await prisma.session.findFirst({
       where: {
         id: sessionId,
+        agentStatus: { notIn: ["failed", "stopped"] },
+        sessionStatus: { not: "merged" },
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
-      select: { id: true },
+      select: { id: true, connection: true },
     });
-    if (!persisted) {
+    if (!persisted || isTerminalConnectionState(persisted.connection)) {
       runtimeDebug("bridge ignored message for unbound session", {
         runtimeId,
         sessionId,
@@ -131,12 +183,12 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           const oldId = runtimeId;
           const newId = (msg.instanceId as string) ?? runtimeId;
           const hostingMode = (msg.hostingMode as "cloud" | "local") ?? "local";
-          const supportedTools = (msg.supportedTools as string[]) ?? [
+          const supportedTools = parseSupportedTools(msg.supportedTools) ?? [
             "claude_code",
             "codex",
             "custom",
           ];
-          const registeredRepoIds = (msg.registeredRepoIds as string[]) ?? [];
+          const registeredRepoIds = stringArray(msg.registeredRepoIds) ?? [];
 
           runtimeDebug("received runtime_hello", {
             oldId,
@@ -177,6 +229,20 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 registeredRepoIds,
               },
             });
+            await agentEnvironmentService
+              .ensureLocalBridgeEnvironment(
+                {
+                  organizationId: bridgeAuth.organizationId,
+                  runtimeInstanceId: newId,
+                  runtimeLabel: bridgeRuntime.label,
+                  supportedTools,
+                },
+                "user",
+                bridgeAuth.userId,
+              )
+              .catch((err: unknown) => {
+                console.error("[bridge] error ensuring local agent environment:", err);
+              });
 
             if (registered && oldId !== newId) {
               sessionRouter.unregisterRuntime(oldId, ws);
@@ -214,6 +280,38 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               ws.close(1008, "Bridge auth mismatch");
               return;
             }
+            if (bridgeAuth.allowedScope === "session") {
+              if (
+                !isCompatibleProtocolVersion(msg.protocolVersion) ||
+                typeof msg.agentVersion !== "string" ||
+                !msg.agentVersion.trim()
+              ) {
+                runtimeDebug("cloud bridge auth rejected incompatible runtime metadata", {
+                  runtimeId: newId,
+                  protocolVersion: msg.protocolVersion,
+                  agentVersion: msg.agentVersion,
+                });
+                ws.close(1008, "Incompatible bridge protocol");
+                return;
+              }
+              if (!parseSupportedTools(msg.supportedTools)) {
+                runtimeDebug("cloud bridge auth rejected invalid supported tools", {
+                  runtimeId: newId,
+                  supportedTools: msg.supportedTools,
+                });
+                ws.close(1008, "Invalid bridge capabilities");
+                return;
+              }
+              if (bridgeAuth.tool && !supportedTools.includes(bridgeAuth.tool as CodingTool)) {
+                runtimeDebug("cloud bridge auth rejected missing requested tool", {
+                  runtimeId: newId,
+                  requestedTool: bridgeAuth.tool,
+                  supportedTools,
+                });
+                ws.close(1008, "Runtime does not support requested tool");
+                return;
+              }
+            }
 
             if (registered && oldId !== newId) {
               sessionRouter.unregisterRuntime(oldId, ws);
@@ -231,6 +329,34 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               supportedTools,
               registeredRepoIds,
             });
+            if (bridgeAuth.sessionId) {
+              const scopedSession = await prisma.session.findFirst({
+                where: {
+                  id: bridgeAuth.sessionId,
+                  organizationId: bridgeAuth.organizationId,
+                  agentStatus: { notIn: ["failed", "stopped"] },
+                  sessionStatus: { not: "merged" },
+                },
+                select: { id: true, connection: true },
+              });
+              const connectionRuntimeId = scopedSession
+                ? connectionRuntimeInstanceId(scopedSession.connection)
+                : null;
+              if (
+                !scopedSession ||
+                isTerminalConnectionState(scopedSession.connection) ||
+                (connectionRuntimeId && connectionRuntimeId !== runtimeId)
+              ) {
+                runtimeDebug("cloud bridge auth rejected inactive scoped session", {
+                  runtimeId,
+                  sessionId: bridgeAuth.sessionId,
+                  connectionRuntimeId,
+                });
+                ws.close(1008, "Session is not waiting for this runtime");
+                return;
+              }
+              sessionRouter.bindSession(bridgeAuth.sessionId, runtimeId);
+            }
 
             if (existingRuntime && existingRuntime.ws !== ws) {
               runtimeDebug("closing superseded websocket for runtime", {
@@ -341,6 +467,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 upstreamCommitSha: string | null;
                 aheadCount: number;
                 behindCount: number;
+                remoteBranch: string | null;
+                remoteCommitSha: string | null;
+                remoteAheadCount: number;
+                remoteBehindCount: number;
                 hasUncommittedChanges: boolean;
               })
             : undefined,
@@ -471,10 +601,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.workspaceFailed(
-            sessionId,
-            (msg.error as string) ?? "Unknown error",
-          );
+          await sessionService.workspaceFailed(sessionId, (msg.error as string) ?? "Unknown error");
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         void (async () => {

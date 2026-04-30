@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useConnectionStore, type ConnectionState } from "../stores/connection";
 import { CircleDot } from "lucide-react";
+import { useConnections } from "../hooks/useConnections";
 
 type DesktopBridgeStatus = Awaited<ReturnType<NonNullable<Window["trace"]>["getBridgeStatus"]>>;
 
@@ -10,6 +11,13 @@ const isElectron = typeof window.trace?.getBridgeStatus === "function";
 export function ConnectionStatus() {
   const [status, setStatus] = useState<DesktopBridgeStatus | null>(null);
   const connected = useConnectionStore((s: ConnectionState) => s.connected);
+  const { connections } = useConnections();
+  const localConnections = connections.filter(
+    (connection) => connection.bridge.hostingMode === "local",
+  );
+  const connectedLocalConnections = localConnections.filter(
+    (connection) => connection.bridge.connected,
+  );
 
   useEffect(() => {
     if (!isElectron || !window.trace?.getBridgeStatus || !window.trace?.onBridgeStatus) return;
@@ -76,6 +84,23 @@ export function ConnectionStatus() {
             <span>{bridgeStatus}</span>
           </div>
         )}
+        {localConnections.length > 0 && (
+          <div className="flex w-full items-center justify-between gap-4">
+            <span>Local runtimes</span>
+            <span>
+              {connectedLocalConnections.length}/{localConnections.length} online
+            </span>
+          </div>
+        )}
+        {localConnections.slice(0, 3).map((connection) => (
+          <div
+            key={connection.bridge.id}
+            className="flex w-full items-center justify-between gap-4 text-xs text-muted-foreground"
+          >
+            <span className="max-w-36 truncate">{connection.bridge.label}</span>
+            <span>{connection.bridge.connected ? "online" : "offline"}</span>
+          </div>
+        ))}
       </TooltipContent>
     </Tooltip>
   );

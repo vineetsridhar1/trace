@@ -21,9 +21,9 @@ import webhookRouter from "./routes/webhook.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
+import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
-import { CloudMachineService } from "./lib/cloud-machine-service.js";
-import { flyProvider } from "./lib/fly-provider.js";
+import { createLegacyCloudMachineCompatibilityService } from "./lib/cloud-machine-compatibility.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis } from "./lib/redis.js";
@@ -39,6 +39,7 @@ import {
   shouldRejectCredentialedBrowserUpgrade,
 } from "./lib/cors.js";
 import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.js";
+import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -50,6 +51,14 @@ function requestHasSessionCookie(req: Pick<express.Request, "headers">): boolean
 
 function requestHasBearerToken(req: Pick<express.Request, "headers">): boolean {
   return readHeaderValue(req.headers, "authorization")?.startsWith("Bearer ") ?? false;
+}
+
+function readBearerToken(req: Pick<IncomingMessage, "headers">): string | null {
+  const authorization = readHeaderValue(req.headers, "authorization");
+  if (!authorization) return null;
+  const [scheme, ...rest] = authorization.split(" ");
+  if (scheme.toLowerCase() !== "bearer" || rest.length !== 1) return null;
+  return rest[0]?.trim() || null;
 }
 
 async function main() {
@@ -83,11 +92,7 @@ async function main() {
   app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
   app.get("/apple-app-site-association", sendAppleAppSiteAssociation);
 
-  // Initialize cloud machine service and inject into session router
-  const cloudMachineService = localMode ? null : new CloudMachineService(flyProvider, "fly");
-  if (cloudMachineService) {
-    sessionRouter.setCloudMachineService(cloudMachineService);
-  }
+  const cloudMachineService = createLegacyCloudMachineCompatibilityService({ localMode });
 
   app.use(
     cors({
@@ -178,6 +183,12 @@ async function main() {
       if (!eviction.evicted) {
         continue;
       }
+      logAgentEnvironmentTelemetry("runtime.heartbeat_stale", {
+        runtimeId: stale.runtimeId,
+        sessionIds: stale.sessionIds,
+        lastHeartbeat: stale.lastHeartbeat,
+        freshnessMs: Date.now() - stale.lastHeartbeat,
+      });
       if (stale.runtimeId) {
         void runtimeAccessService.markRuntimeDisconnected(stale.runtimeId);
       }
@@ -194,6 +205,27 @@ async function main() {
       }
     }
   }, 5_000);
+
+  const deprovisionReconciler = setInterval(() => {
+    const startedAt = Date.now();
+    void sessionService
+      .reconcileStuckDeprovisions()
+      .then((result) => {
+        logAgentEnvironmentTelemetry("deprovision.reconciler_iteration", {
+          reconciledCount: result.reconciled.length,
+          abandonedCount: result.abandoned.length,
+          durationMs: Date.now() - startedAt,
+        });
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[deprovision-reconciler] iteration failed: ${message}`);
+        logAgentEnvironmentTelemetry("deprovision.reconciler_iteration_failed", {
+          durationMs: Date.now() - startedAt,
+          error: message,
+        });
+      });
+  }, 30_000);
 
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -216,27 +248,43 @@ async function main() {
       });
     } else if (pathname === "/bridge") {
       const url = new URL(req.url ?? "", "http://localhost");
-      const cloudToken = url.searchParams.get("token");
+      const cloudToken = readBearerToken(req) ?? url.searchParams.get("token");
       const bridgeAuthToken = url.searchParams.get("bridgeAuthToken");
 
       const validateAndUpgrade = async () => {
         const bridgeReq = req as IncomingMessage & BridgeConnectionRequest;
 
         if (cloudToken) {
-          if (!cloudMachineService) {
-            rejectUpgrade(401, "Unauthorized");
-            return;
-          }
-          const cloudBridge = await cloudMachineService.authenticateBridgeToken(cloudToken);
-          if (!cloudBridge) {
+          const provisionedBridge = authenticateProvisionedRuntimeToken(cloudToken);
+          const cloudBridge = provisionedBridge
+            ? null
+            : await cloudMachineService?.authenticateBridgeToken(cloudToken);
+          const bridge = provisionedBridge
+            ? provisionedBridge
+            : cloudBridge
+              ? {
+                  instanceId: cloudBridge.runtimeInstanceId,
+                  organizationId: cloudBridge.organizationId,
+                  userId: cloudBridge.userId,
+                }
+              : null;
+          if (!bridge) {
             rejectUpgrade(401, "Unauthorized");
             return;
           }
           bridgeReq.bridgeAuth = {
             kind: "cloud",
-            instanceId: cloudBridge.runtimeInstanceId,
-            organizationId: cloudBridge.organizationId,
-            userId: cloudBridge.userId,
+            instanceId: bridge.instanceId,
+            organizationId: bridge.organizationId,
+            userId: bridge.userId,
+            ...(provisionedBridge
+              ? {
+                  sessionId: provisionedBridge.sessionId,
+                  environmentId: provisionedBridge.environmentId,
+                  allowedScope: provisionedBridge.allowedScope,
+                  tool: provisionedBridge.tool,
+                }
+              : {}),
           };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
@@ -280,6 +328,7 @@ async function main() {
             async drainServer() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
+              clearInterval(deprovisionReconciler);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();

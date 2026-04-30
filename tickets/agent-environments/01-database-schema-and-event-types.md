@@ -60,12 +60,13 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `AgentEnvironment` is org-scoped and persisted.
-- [ ] Existing sessions can continue to read their current `connection` JSON.
-- [ ] New runtime lifecycle event types are available server-side and in generated types.
-- [ ] One default environment per org is enforced.
-- [ ] Raw provider tokens are not stored in `AgentEnvironment.config`.
+- [x] `AgentEnvironment` is org-scoped and persisted.
+- [x] Existing sessions can continue to read their current `connection` JSON.
+- [x] New runtime lifecycle event types are available server-side and in generated types.
+- [x] One default environment per org is enforced.
+- [x] Raw provider tokens are not stored in `AgentEnvironment.config`.
 - [ ] Migration runs cleanly on an existing local database.
+  - Review note: `pnpm db:migrate` could not be verified in the current workspace because `DATABASE_URL` is unset.
 
 ## Implementation notes
 

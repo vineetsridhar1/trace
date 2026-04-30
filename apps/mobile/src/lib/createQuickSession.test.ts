@@ -99,14 +99,6 @@ vi.mock("@/lib/haptics", () => ({
   },
 }));
 
-vi.mock("@/lib/connection-target", () => ({
-  getConnectionMode: vi.fn(() => "hosted"),
-}));
-
-vi.mock("@/lib/session-hosting", () => ({
-  resolveMobileSessionHosting: vi.fn(() => "cloud"),
-}));
-
 vi.mock("@/lib/sessionPlayer", () => ({
   closeSessionPlayer: closeSessionPlayerMock,
   tryOpenSessionPlayer: tryOpenSessionPlayerMock,
@@ -145,6 +137,15 @@ describe("createQuickSession", () => {
     const { createQuickSession } = await import("./createQuickSession");
     await createQuickSession("channel_1");
 
+    expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
+      input: {
+        tool: "claude_code",
+        model: expect.any(String),
+        deferRuntimeSelection: true,
+        channelId: "channel_1",
+        repoId: "repo_channel",
+      },
+    });
     expect(insertOptimisticSessionPairMock).not.toHaveBeenCalled();
     expect(reconcileOptimisticSessionPairMock).not.toHaveBeenCalled();
     expect(rollbackOptimisticSessionPairMock).not.toHaveBeenCalled();

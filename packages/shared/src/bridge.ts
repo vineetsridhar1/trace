@@ -254,6 +254,10 @@ export interface BridgeRuntimeHello {
   instanceId: string;
   label: string;
   hostingMode: "cloud" | "local";
+  /** Required for provisioned cloud runtimes. */
+  protocolVersion?: number;
+  /** Required for provisioned cloud runtimes. */
+  agentVersion?: string;
   supportedTools: string[];
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];
@@ -370,6 +374,10 @@ export interface BridgeSessionGitSyncStatus {
   upstreamCommitSha: string | null;
   aheadCount: number;
   behindCount: number;
+  remoteBranch: string | null;
+  remoteCommitSha: string | null;
+  remoteAheadCount: number;
+  remoteBehindCount: number;
   hasUncommittedChanges: boolean;
 }
 

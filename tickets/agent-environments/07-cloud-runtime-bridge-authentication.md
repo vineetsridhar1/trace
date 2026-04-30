@@ -44,21 +44,21 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Provisioned runtime cannot register without a valid token.
-- [ ] Runtime cannot claim a different `runtimeInstanceId`.
-- [ ] Runtime cannot register for a different org/session/environment.
-- [ ] Expired tokens are rejected.
-- [ ] Cloud runtime registration supports empty registered repo IDs.
-- [ ] Incompatible cloud runtime protocol versions are rejected clearly.
-- [ ] Runtime tool capabilities are checked before marking the runtime ready.
-- [ ] Cloud runtime heartbeats update runtime connection state.
-- [ ] Stale cloud runtime connections are detected.
-- [ ] Local desktop bridge auth still works unchanged.
-- [ ] Bridge registration emits or triggers runtime-connected state.
+- [x] Provisioned runtime cannot register without a valid token.
+- [x] Runtime cannot claim a different `runtimeInstanceId`.
+- [x] Runtime cannot register for a different org/session/environment.
+- [x] Expired tokens are rejected.
+- [x] Cloud runtime registration supports empty registered repo IDs.
+- [x] Incompatible cloud runtime protocol versions are rejected clearly.
+- [x] Runtime tool capabilities are checked before marking the runtime ready.
+- [x] Cloud runtime heartbeats update runtime connection state.
+- [x] Stale cloud runtime connections are detected.
+- [x] Local desktop bridge auth still works unchanged.
+- [x] Bridge registration emits or triggers runtime-connected state.
 
 ## Implementation notes
 
-- Token can be JWT or opaque DB-backed token; decide before implementation.
+- Token can be JWT or opaque DB-backed token; decide before implementation. The implementation uses signed JWT runtime tokens so validation is not tied to a single server process.
 - Prefer short expiry plus one runtime registration scope.
 - Do not let the launcher endpoint authenticate the bridge by itself; Trace must verify the runtime when it connects back.
 

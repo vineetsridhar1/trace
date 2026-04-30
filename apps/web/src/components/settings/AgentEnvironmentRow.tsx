@@ -1,0 +1,97 @@
+import { Loader2, MoreHorizontal, PlugZap, Trash2 } from "lucide-react";
+import type { AgentEnvironment } from "@trace/gql";
+import { cn } from "../../lib/utils";
+import { Button } from "../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { environmentConfig, formatAdapterType } from "./agent-environment-utils";
+
+type TestResult = {
+  ok: boolean;
+  message?: string | null;
+};
+
+type Props = {
+  environment: AgentEnvironment;
+  pendingActionId: string | null;
+  testResult?: TestResult;
+  onEdit: () => void;
+  onTest: () => void;
+  onDelete: () => void;
+};
+
+export function AgentEnvironmentRow({
+  environment,
+  pendingActionId,
+  testResult,
+  onEdit,
+  onTest,
+  onDelete,
+}: Props) {
+  const config = environmentConfig(environment);
+  const pending = pendingActionId === environment.id;
+  const testStatusClass = testResult
+    ? testResult.ok
+      ? "text-green-600 dark:text-green-400"
+      : "text-destructive"
+    : "text-muted-foreground";
+  const testStatusMessage = testResult
+    ? (testResult.message ?? (testResult.ok ? "Connection test passed" : "Connection test failed"))
+    : "Last test: not run";
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-deep p-4">
+      <div className="flex items-start gap-3">
+        <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-sm font-medium text-foreground">{environment.name}</h3>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>{formatAdapterType(environment.adapterType)}</span>
+            {environment.adapterType === "local" && config.runtimeInstanceId ? (
+              <span>{config.runtimeInstanceId}</span>
+            ) : null}
+            {environment.adapterType === "provisioned" && config.statusUrl ? (
+              <span className="truncate">{config.statusUrl}</span>
+            ) : null}
+          </div>
+          <p className={cn("mt-2 text-xs", testStatusClass)}>{testStatusMessage}</p>
+        </button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          onClick={onTest}
+          className="shrink-0"
+        >
+          {pending ? (
+            <Loader2 size={14} className="mr-1.5 animate-spin" />
+          ) : (
+            <PlugZap size={14} className="mr-1.5" />
+          )}
+          Test
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground">
+            <MoreHorizontal size={16} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>
+            {environment.adapterType === "provisioned" ? (
+              <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                <Trash2 size={14} />
+                Delete
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}

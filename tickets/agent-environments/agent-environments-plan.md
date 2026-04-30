@@ -128,6 +128,20 @@ It carries:
 
 Local and cloud runtimes should both use the same bridge protocol once connected.
 
+### Terminal Multiplexing
+
+The environment refactor must preserve multiple terminal sessions per Trace session/runtime.
+
+Requirements:
+
+- A Trace session/runtime can have zero, one, or many active terminal sessions.
+- Every terminal command and runtime terminal event must carry a `terminalId`.
+- Terminal lifecycle is owned by the runtime bridge path, not the lifecycle adapter.
+- Runtime adapters must not assume a single shell, terminal, or PTY per session.
+- Terminal input, output, resize, ready, exit, error, and destroy flows must remain isolated by `terminalId`.
+- Session cleanup must destroy all active terminals for the session/runtime.
+- Provisioned runtimes must support the same terminal multiplexing behavior as local desktop runtimes once their bridge is connected.
+
 ## Target Architecture
 
 ```txt
@@ -389,6 +403,8 @@ interface RuntimeAdapter {
 }
 ```
 
+The adapter interface starts/selects compute only. It must not expose a single terminal endpoint or terminal stream; terminal creation and I/O continue to flow through bridge commands keyed by `terminalId`.
+
 Inputs:
 
 ```ts
@@ -419,6 +435,13 @@ type RuntimeStartResult = {
   metadata?: Record<string, unknown>;
 };
 ```
+
+Stop and status inputs must also carry enough environment context for the adapter to resolve
+adapter config and launcher auth without bypassing the registry contract. For provisioned
+runtimes, that means `environment` or an equivalent validated environment/config reference plus
+the persisted provider runtime ID.
+<!-- Updated after ticket 04 review/fix: stopSession/getStatus inputs now carry environment
+context so ticket 06 can call stopUrl/statusUrl with auth through the adapter contract. -->
 
 The existing `SessionAdapter` can be evolved in place or replaced with this interface.
 
@@ -703,9 +726,14 @@ The cloud container starts `trace-agent-runtime`, which connects to the server b
 
 Cloud runtimes use an empty `registeredRepoIds` list because they can clone on demand.
 
+After the bridge connects, cloud runtimes must handle multiple concurrent `terminal_create` commands for the same session/runtime and route all terminal traffic by `terminalId`, matching local desktop behavior.
+
 ## Runtime Tokens
 
 Cloud bridge authentication needs a short-lived runtime token.
+
+<!-- Resolved in ticket 07: runtime tokens use signed JWT validation, avoiding
+process-local token state for server restarts and multi-instance deployments. -->
 
 The token should encode:
 
@@ -808,6 +836,28 @@ Provisioned cleanup:
 - poll `statusUrl` until stopped or timeout
 - retry stop if needed
 
+<!-- Clarified after ticket 09: V1 reconciliation re-issues the idempotent
+     stopUrl call instead of polling statusUrl directly. Launchers MUST
+     respect `Trace-Idempotency-Key: session:{sessionId}:stop` so a repeat
+     stop request returns the latest known state without starting new work.
+     A statusUrl poll path can be added later if a launcher cannot meet that
+     idempotency contract. -->
+<!-- Capped after ticket 09: the reconciler bumps
+     `connection.reconcileAttempts` on every pickup and abandons the runtime
+     after 10 retries (`autoRetryable: false`, `abandonedAt` set, terminal
+     `session_runtime_deprovision_failed` event with `abandoned: true`). A
+     fresh user-initiated stop clears that bookkeeping. Ticket 13 owns the
+     telemetry and operator alert that surface abandoned runtimes. -->
+<!-- Simplified after ticket 09 review: collapsed the original five-state
+     stop machine (`stopping`/`stopped`/`deprovisioning`/`deprovisioned`/
+     `deprovision_failed`) down to four. The `deprovisioning` state had no
+     event boundary — the brief window between bridge `delete` and the
+     launcher confirming stop is now represented by `stopping`. Local
+     terminates as `stopped`; provisioned terminates as `deprovisioned`.
+     Connection writes on the deprovision path use optimistic locking via
+     `connection.version` to keep concurrent reconciler / user / bridge
+     writes from stomping each other. -->
+
 ### Deprovision Policies
 
 Support environment-level policy:
@@ -873,18 +923,23 @@ The page should support:
 - enable/disable
 - set default
 - test connection
-- show last error/status
+- show latest in-page test status/error
 
 Initial forms:
 
+<!-- Updated after ticket 10 review: local environments are now auto-created
+     from connected desktop bridges by the service layer. The settings UI is
+     provisioned-focused for V1; local bridge/repo visibility belongs either in
+     Bridge Access or the session environment selector. If local environments
+     are shown in Agent Environments later, they should be read-only unless a
+     separate product decision reintroduces manual local environment editing. -->
+
 ### Local
 
-Fields:
-
-- name
-- default local runtime selection
-
-The UI should show connected local bridges and registered repos.
+Local environments are created automatically when local desktop bridges connect.
+Manual create/edit is not part of the V1 settings UI. The product should still
+surface connected local bridges and registered repos in an operator-visible
+place before session selection depends on them.
 
 ### Provisioned
 

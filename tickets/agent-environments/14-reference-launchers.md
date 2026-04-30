@@ -15,22 +15,22 @@ Owns plan lines:
 
 ## What needs to happen
 
-- Add reference launcher documentation and/or example apps for:
+- Add an executable reference launcher for at least one provider and deployment documentation for:
   - AWS ECS Fargate
   - Fly
   - Kubernetes Job
-- Each launcher should implement:
+- Executable launcher examples should implement:
   - `POST /trace/start-session`
   - `POST /trace/stop-session`
-  - `GET /trace/session-status/:runtimeId`
-- Each launcher should verify Trace authentication.
-- Each launcher should honor idempotency keys for duplicate start/stop requests.
-- Bearer launchers should:
+  - `POST /trace/session-status`
+- Executable launcher examples should verify Trace authentication.
+- Executable launcher examples should honor idempotency keys for duplicate start/stop requests.
+- Bearer launcher examples should:
   - require HTTPS
   - compare bearer tokens in constant time
   - avoid logging tokens
-- HMAC launchers should reject old timestamps and replayed request IDs.
-- Each launcher should inject runtime env vars:
+- HMAC launcher examples should reject old timestamps and replayed request IDs.
+- Executable launcher examples should inject runtime env vars:
   - `TRACE_SESSION_ID`
   - `TRACE_ORG_ID`
   - `TRACE_RUNTIME_INSTANCE_ID`
@@ -46,12 +46,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] At least one reference launcher demonstrates the provisioned lifecycle contract.
-- [ ] Launcher verifies configured auth mode.
-- [ ] Launcher starts compute and causes runtime bridge connection.
-- [ ] Launcher stops compute.
-- [ ] Launcher handles duplicate start/stop calls idempotently.
-- [ ] Docs clearly separate launcher code from Trace core.
+- [x] At least one reference launcher demonstrates the provisioned lifecycle contract.
+- [x] Launcher verifies configured auth mode.
+- [x] Launcher starts compute and causes runtime bridge connection.
+- [x] Launcher stops compute.
+- [x] Launcher handles duplicate start/stop calls idempotently.
+- [x] Docs clearly separate launcher code from Trace core.
 
 ## Implementation notes
 

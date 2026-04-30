@@ -251,6 +251,20 @@ enum EventType {
   queued_message_removed
   queued_messages_cleared
   queued_messages_drained
+  agent_environment_created
+  agent_environment_updated
+  agent_environment_deleted
+  session_runtime_start_requested
+  session_runtime_provisioning
+  session_runtime_connecting
+  session_runtime_connected
+  session_runtime_start_failed
+  session_runtime_start_timed_out
+  session_runtime_stopping
+  session_runtime_stopped
+  session_runtime_deprovision_failed
+  session_runtime_disconnected
+  session_runtime_reconnected
 }
 
 model Organization {
@@ -272,6 +286,8 @@ model Organization {
   tickets  Ticket[]
   events        Event[]
   inboxItems    InboxItem[]
+  agentEnvironments AgentEnvironment[]
+  orgSecrets    OrgSecret[]
   cloudMachines CloudMachine[]
   agentIdentity    AgentIdentity?
   executionLogs    AgentExecutionLog[]
@@ -400,6 +416,38 @@ model AgentCostTracker {
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, date])
+}
+
+model AgentEnvironment {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  adapterType    String
+  config         Json         @default("{}")
+  enabled        Boolean      @default(true)
+  isDefault      Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([organizationId, adapterType])
+}
+
+model OrgSecret {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  encryptedValue String
+  iv             String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model EntitySummary {

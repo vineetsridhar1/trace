@@ -43,6 +43,8 @@ import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
 const execFileAsync = promisify(execFile);
+const BRIDGE_PROTOCOL_VERSION = 1;
+const AGENT_VERSION = "0.1.0";
 
 async function inspectGitCheckpoint(
   cwd: string,
@@ -89,27 +91,39 @@ async function inspectSessionGitSyncStatus(repoPath: string) {
   const upstreamCommitSha = upstreamBranch
     ? await maybeReadGitRef(repoPath, ["rev-parse", `${upstreamBranch}^{commit}`])
     : null;
+  const remoteBranch = branch ? `origin/${branch}` : null;
+  const remoteCommitSha = remoteBranch
+    ? await maybeReadGitRef(repoPath, ["rev-parse", `${remoteBranch}^{commit}`])
+    : null;
 
-  let aheadCount = 0;
-  let behindCount = 0;
-  if (upstreamBranch) {
+  const countDivergence = async (ref: string | null) => {
+    if (!ref) return { aheadCount: 0, behindCount: 0 };
     const { stdout } = await execFileAsync(
       "git",
-      ["rev-list", "--left-right", "--count", `HEAD...${upstreamBranch}`],
+      ["rev-list", "--left-right", "--count", `HEAD...${ref}`],
       { cwd: repoPath, maxBuffer: 1024 * 1024 },
     );
     const [aheadRaw = "0", behindRaw = "0"] = stdout.trim().split(/\s+/);
-    aheadCount = Number.parseInt(aheadRaw, 10) || 0;
-    behindCount = Number.parseInt(behindRaw, 10) || 0;
-  }
+    return {
+      aheadCount: Number.parseInt(aheadRaw, 10) || 0,
+      behindCount: Number.parseInt(behindRaw, 10) || 0,
+    };
+  };
+
+  const upstreamDivergence = await countDivergence(upstreamBranch);
+  const remoteDivergence = await countDivergence(remoteCommitSha ? remoteBranch : null);
 
   return {
     branch,
     headCommitSha: headStdout.trim() || null,
     upstreamBranch,
     upstreamCommitSha,
-    aheadCount,
-    behindCount,
+    aheadCount: upstreamDivergence.aheadCount,
+    behindCount: upstreamDivergence.behindCount,
+    remoteBranch: remoteCommitSha ? remoteBranch : null,
+    remoteCommitSha,
+    remoteAheadCount: remoteDivergence.aheadCount,
+    remoteBehindCount: remoteDivergence.behindCount,
     hasUncommittedChanges: statusStdout.trim().length > 0,
   };
 }
@@ -151,7 +165,10 @@ export class ContainerBridge implements IBridgeClient {
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
-  private pendingWorktrees = new Map<string, Promise<{ workdir: string; slug: string }>>();
+  private pendingWorktrees = new Map<
+    string,
+    Promise<{ workdir: string; branch: string; slug: string }>
+  >();
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
   private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
@@ -192,20 +209,29 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   connect(): void {
-    const url = `${this.serverUrl}?token=${encodeURIComponent(this.token)}`;
-    this.ws = new WebSocket(url);
+    this.ws = new WebSocket(this.serverUrl, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+    });
 
     this.ws.on("open", () => {
       console.log("[container-bridge] connected to server");
       this.consecutiveFailures = 0;
-      // Announce as a cloud runtime — machineId is the stable instanceId
+      const provisionedRuntimeInstanceId = process.env.TRACE_RUNTIME_INSTANCE_ID?.trim();
+      const instanceId = provisionedRuntimeInstanceId ?? `cloud-machine-${this.machineId}`;
+      const registeredRepoIds = provisionedRuntimeInstanceId ? [] : listClonedRepoIds();
+      // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
+      // they intentionally register no pre-existing repos.
       this.send({
         type: "runtime_hello",
-        instanceId: `cloud-machine-${this.machineId}`,
-        label: `cloud-machine-${this.machineId}`,
+        instanceId,
+        label: instanceId,
         hostingMode: "cloud",
+        protocolVersion: BRIDGE_PROTOCOL_VERSION,
+        agentVersion: AGENT_VERSION,
         supportedTools: ["claude_code", "codex"],
-        registeredRepoIds: listClonedRepoIds(),
+        registeredRepoIds,
         activeTerminals: this.terminalManager.getActiveTerminals(),
       });
 
@@ -390,6 +416,7 @@ export class ContainerBridge implements IBridgeClient {
           repoRemoteUrl,
           defaultBranch,
           branch,
+          preserveBranchName,
           checkpointSha,
           readOnly,
         } = cmd;
@@ -417,6 +444,7 @@ export class ContainerBridge implements IBridgeClient {
                   sessionId,
                   defaultBranch,
                   branch,
+                  preserveBranchName,
                   checkpointSha,
                   sessionGroupId,
                   slug,
@@ -424,10 +452,16 @@ export class ContainerBridge implements IBridgeClient {
                 this.pendingWorktrees.set(worktreeKey, worktreePromise);
                 worktreePromise.finally(() => this.pendingWorktrees.delete(worktreeKey));
               }
-              const { workdir, slug: worktreeSlug } = await worktreePromise;
+              const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await worktreePromise;
               this.sessionWorkdirs.set(sessionId, workdir);
               this.send({ type: "register_session", sessionId });
-              this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
+              this.send({
+                type: "workspace_ready",
+                sessionId,
+                workdir,
+                branch: worktreeBranch,
+                slug: worktreeSlug,
+              });
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -439,24 +473,39 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "upgrade_workspace": {
-        const { sessionId, sessionGroupId, slug, repoId, repoRemoteUrl, defaultBranch, branch } =
-          cmd;
+        const {
+          sessionId,
+          sessionGroupId,
+          slug,
+          repoId,
+          repoRemoteUrl,
+          defaultBranch,
+          branch,
+          preserveBranchName,
+        } = cmd;
 
         (async () => {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
             this.send({ type: "repo_linked", repoId });
-            const { workdir, slug: worktreeSlug } = await createWorktree({
+            const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await createWorktree({
               repoId,
               sessionId,
               defaultBranch,
               branch,
+              preserveBranchName,
               sessionGroupId,
               slug,
             });
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
-            this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
+            this.send({
+              type: "workspace_ready",
+              sessionId,
+              workdir,
+              branch: worktreeBranch,
+              slug: worktreeSlug,
+            });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);

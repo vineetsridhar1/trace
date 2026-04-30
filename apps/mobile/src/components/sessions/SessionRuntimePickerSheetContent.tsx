@@ -9,11 +9,15 @@ import {
 } from "@trace/client-core";
 import type { BridgeAccessCapability, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
+import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
+import { canUseMobileCloudHosting } from "@/lib/session-hosting";
 import { getClient } from "@/lib/urql";
 import { subscribeBridgeAccessEvents } from "@/lib/bridge-access-events";
+import { useCloudAgentEnvironmentAvailable } from "@/hooks/useCloudAgentEnvironmentAvailable";
 import { alpha, useTheme } from "@/theme";
+import { CLOUD_RUNTIME_ID } from "./session-input-composer/constants";
 
 interface SessionRuntimePickerSheetContentProps {
   sessionId: string;
@@ -29,7 +33,7 @@ interface RuntimeRow {
   selected: boolean;
   disabled: boolean;
   value: string;
-  runtime: SessionRuntimeInstance;
+  runtime?: SessionRuntimeInstance;
   requestPending: boolean;
   canRequestAccess: boolean;
   accessAllowed: boolean;
@@ -92,6 +96,7 @@ export function SessionRuntimePickerSheetContent({
     | null
     | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
     | string
     | null
@@ -100,7 +105,11 @@ export function SessionRuntimePickerSheetContent({
 
   const canChangeBridge = agentStatus === "not_started" && !isOptimistic;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
-  const currentRuntimeValue = runtimeInstanceId;
+  const currentRuntimeValue = hosting === "cloud" ? CLOUD_RUNTIME_ID : runtimeInstanceId;
+  const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
+  const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(
+    canChangeBridge && canUseCloudRuntime,
+  );
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [requestingRuntimeId, setRequestingRuntimeId] = useState<string | null>(null);
@@ -154,6 +163,27 @@ export function SessionRuntimePickerSheetContent({
   const rows = useMemo<RuntimeRow[]>(() => {
     const nextRows: RuntimeRow[] = [];
 
+    if (
+      canUseCloudRuntime &&
+      (cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID)
+    ) {
+      nextRows.push({
+        key: "runtime:cloud",
+        title: "Cloud",
+        subtitle: cloudEnvironmentAvailable
+          ? "Start this session in a cloud container."
+          : "Cloud is not configured for this organization.",
+        icon: "cloud",
+        selected: currentRuntimeValue === CLOUD_RUNTIME_ID,
+        disabled: !canChangeBridge || !cloudEnvironmentAvailable,
+        value: CLOUD_RUNTIME_ID,
+        requestPending: false,
+        canRequestAccess: false,
+        accessAllowed: cloudEnvironmentAvailable,
+        lacksRepo: false,
+      });
+    }
+
     for (const runtime of runtimes) {
       if (runtime.hostingMode !== "local" || !runtime.connected) continue;
       const lacksRepo = repo?.id ? !runtime.registeredRepoIds.includes(repo.id) : false;
@@ -171,7 +201,7 @@ export function SessionRuntimePickerSheetContent({
               ? "Request pending."
               : `Request access from ${ownerName}.`,
         icon: "laptopcomputer",
-        selected: runtimeInstanceId === runtime.id,
+        selected: currentRuntimeValue === runtime.id,
         disabled: !canChangeBridge || lacksRepo || !accessAllowed,
         value: runtime.id,
         runtime,
@@ -183,7 +213,14 @@ export function SessionRuntimePickerSheetContent({
     }
 
     return nextRows;
-  }, [canChangeBridge, repo?.id, runtimeInstanceId, runtimes]);
+  }, [
+    canChangeBridge,
+    canUseCloudRuntime,
+    cloudEnvironmentAvailable,
+    currentRuntimeValue,
+    repo?.id,
+    runtimes,
+  ]);
 
   const accessibleRows = useMemo(() => rows.filter((row) => row.accessAllowed), [rows]);
   const requestableRows = useMemo(() => rows.filter((row) => row.canRequestAccess), [rows]);
@@ -232,7 +269,14 @@ export function SessionRuntimePickerSheetContent({
         await onSelectRuntime?.();
         return;
       }
-      const runtime = runtimes.find((entry) => entry.id === value);
+      const selectingCloud = value === CLOUD_RUNTIME_ID;
+      if (selectingCloud && !cloudEnvironmentAvailable) {
+        Alert.alert("Cloud unavailable", "Cloud is not configured for this organization.");
+        return;
+      }
+      const runtime = selectingCloud ? null : runtimes.find((entry) => entry.id === value);
+      if (!selectingCloud && !runtime) return;
+
       const nextConnection: SessionConnection = {
         __typename: connection?.__typename ?? "SessionConnection",
         autoRetryable: connection?.autoRetryable ?? null,
@@ -242,23 +286,22 @@ export function SessionRuntimePickerSheetContent({
         lastError: connection?.lastError ?? null,
         lastSeen: connection?.lastSeen ?? null,
         retryCount: connection?.retryCount ?? 0,
-        runtimeInstanceId: value,
+        runtimeInstanceId: selectingCloud ? null : value,
         runtimeLabel: runtime?.label ?? null,
-        state: connection?.state ?? "disconnected",
+        state: connection?.state ?? "connected",
       };
       const rollback = applyOptimisticPatch("sessions", sessionId, {
-        hosting: runtime?.hostingMode ?? "local",
+        hosting: selectingCloud ? "cloud" : "local",
         connection: nextConnection,
       });
 
       void haptic.light();
       try {
+        const variables = selectingCloud
+          ? { sessionId, hosting: "cloud" as const }
+          : { sessionId, hosting: "local" as const, runtimeInstanceId: value };
         const result = await getClient()
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
-            sessionId,
-            hosting: "local",
-            runtimeInstanceId: value,
-          })
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, variables)
           .toPromise();
         if (result.error) throw result.error;
         onClose?.();
@@ -273,6 +316,7 @@ export function SessionRuntimePickerSheetContent({
       canChangeBridge,
       connection,
       currentRuntimeValue,
+      cloudEnvironmentAvailable,
       onSelectRuntime,
       onClose,
       runtimes,
@@ -314,12 +358,14 @@ export function SessionRuntimePickerSheetContent({
             trailing={
               row.selected ? (
                 <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
-              ) : row.canRequestAccess ? (
+              ) : row.canRequestAccess && row.runtime ? (
                 <RuntimeRequestPill
                   title={row.requestPending ? "Pending" : "Request"}
                   disabled={row.requestPending}
                   loading={requestingRuntimeId === row.runtime.id}
-                  onPress={() => void handleRequestAccess(row.runtime)}
+                  onPress={() => {
+                    if (row.runtime) void handleRequestAccess(row.runtime);
+                  }}
                 />
               ) : undefined
             }

@@ -42,15 +42,15 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Starting a session with explicit local environment works.
-- [ ] Starting a session with explicit provisioned environment works against a mock launcher.
-- [ ] Omitting environment uses org default.
-- [ ] Missing environment/default/fallback produces an actionable validation error.
-- [ ] Unsupported tool requests fail before provisioning.
-- [ ] Existing callers using `hosting` still work during migration.
-- [ ] Disabled environments cannot be selected.
-- [ ] Session UI shows startup state for provisioned sessions.
-- [ ] Session UI shows stopping/deprovision status when relevant.
+- [x] Starting a session with explicit local environment works.
+- [x] Starting a session with explicit provisioned environment works against a mock launcher.
+- [x] Omitting environment uses org default.
+- [x] Missing environment/default/fallback produces an actionable validation error.
+- [x] Unsupported tool requests fail before provisioning.
+- [x] Existing callers using `hosting` still work during migration.
+- [x] Disabled environments cannot be selected.
+- [x] Session UI shows startup state for provisioned sessions.
+- [x] Session UI shows stopping/deprovision status when relevant.
 
 ## Implementation notes
 
@@ -64,3 +64,9 @@ Owns plan lines:
 2. Create a provisioned environment and start a session explicitly against it.
 3. Disable the provisioned environment and verify session creation rejects it.
 4. Start a session through old `hosting` input and verify compatibility.
+
+## Review follow-ups
+
+- [x] Reject or normalize requests that provide both `environmentId` and a conflicting `runtimeInstanceId`; explicit environment selection should remain the source of truth.
+- [x] Make the session creation repo-link precheck validate the selected local environment's bound runtime, not just any connected local runtime.
+- [x] Resolve the initial selector/loading mismatch where the session creation selector can visually show Cloud while `selectedTarget === null` still submits "use server default" before environment options finish loading.

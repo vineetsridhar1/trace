@@ -9,13 +9,14 @@ Add the generic provisioned adapter that calls an org-owned authenticated lifecy
 Owns plan lines:
 
 - 7-11: generic provisioned runtimes and reference-launcher path
-- 76-92: authenticated provisioned endpoints, admission constraints, and launcher examples outside core
-- 483-672: provisioned adapter purpose, config, start/stop/status contracts, auth, idempotency, and replay expectations
-- 673-685: runtime bootstrap values passed to the launcher
-- 910-937: launcher auth secret references and adapter-time secret resolution
-- 965-972: phase 4 provisioned adapter work
-- 1047: open decision on provisioned status polling scope
-- 1060-1061: V1 authenticated provisioned start/stop/status and idempotency requirements
+- 76-96: authenticated provisioned endpoints, admission constraints, and launcher examples outside core
+- 131-143: provisioned runtime terminal multiplexing parity with local runtimes
+- 503-689: provisioned adapter purpose, config, start/stop/status contracts, auth, idempotency, and replay expectations
+- 691-722: runtime bootstrap values passed to the launcher and bridge terminal parity
+- 930-957: launcher auth secret references and adapter-time secret resolution
+- 985-992: phase 4 provisioned adapter work
+- 1067: open decision on provisioned status polling scope
+- 1080-1081: V1 authenticated provisioned start/stop/status and idempotency requirements
 
 ## What needs to happen
 
@@ -59,10 +60,17 @@ Owns plan lines:
     - `TRACE_RUNTIME_TOKEN`
     - `TRACE_BRIDGE_URL`
   - persist returned provider runtime ID and label
+- Ensure provisioned runtime startup does not create a one-terminal contract:
+  - the lifecycle endpoint starts compute only
+  - terminal creation and I/O flow over the runtime bridge
+  - the connected runtime must accept multiple `terminal_create` commands for the same session/runtime
+  - terminal traffic must remain keyed and isolated by `terminalId`
 - Implement `stopSession`:
+  - consume the selected environment config through `RuntimeStopInput` or a typed environment reference
   - call `stopUrl` with `sessionId`, provider runtime ID, and reason
   - reuse the stop idempotency key on retries
 - Implement `getStatus`:
+  - consume the selected environment config through `RuntimeStatusInput` or a typed environment reference
   - call `statusUrl` and map launcher status to Trace status
 - Add request/response validation with `unknown` narrowing.
 
@@ -83,15 +91,24 @@ Owns plan lines:
 - [ ] Webhook contract documents bearer handling and optional HMAC timestamp/replay protection.
 - [ ] Start payload contains all values needed for the launcher to boot `trace-agent-runtime`.
 - [ ] Adapter stores provider runtime ID in session connection state.
+- [ ] Provisioned adapter lifecycle contracts do not expose a single terminal stream.
+- [ ] Provisioned runtimes can support multiple bridge-created terminals per session/runtime.
 - [ ] Provider response parsing does not use `any`.
 - [ ] AI messages are never sent to lifecycle endpoints.
 - [ ] The launcher bearer token is never passed to the runtime bridge or agent container.
 
 ## Implementation notes
 
+- Replace the ticket 04 `LegacyCloudMachineProvisionedRuntimeAdapter` compatibility shim with the
+  generic lifecycle endpoint implementation. The shim exists only to keep current cloud sessions
+  working while the registry boundary lands.
+- Ticket 04 now passes environment context through runtime stop/status inputs. Use that contract
+  for authenticated `stopUrl` and `statusUrl`; the adapter should not query around the registry
+  boundary for config.
 - This is the only Trace-core cloud adapter in V1.
 - AWS, Fly, Kubernetes, and internal platforms all sit behind this lifecycle contract.
 - Keep the launcher payload stable before building reference launchers.
+- The lifecycle endpoint is not a terminal API. Once the runtime connects, terminal behavior must match local bridge behavior and remain multiplexed by `terminalId`.
 
 ## How to test
 
@@ -102,3 +119,4 @@ Owns plan lines:
 5. Unit test status mapping.
 6. Integration test against a local mock HTTP launcher.
 7. Verify bad auth or malformed responses produce clear session runtime failures.
+8. In the mock launcher scenario, create two terminals for one provisioned session and verify output, resize, and exit events stay isolated by `terminalId`.

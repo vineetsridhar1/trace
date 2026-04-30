@@ -99,34 +99,34 @@ Every line of [agent-environments-plan.md](agent-environments-plan.md) has an ow
 | --- | --- | --- |
 | 1-29 | Goal, local/provisioned/reference launcher direction, no first-class Fly core adapter | 01, 04, 05, 06, 12, 14 |
 | 30-42 | Current baseline and existing bridge/session-router shape | 04, 05, 12 |
-| 43-92 | Agent environment concept, fields, adapter types, compatibility constraints, advanced admission follow-up, provisioned endpoints, reference launchers | 01, 02, 03, 06, 14, 16 |
-| 93-105 | Runtime adapter responsibilities and separation from message handling | 04, 06, 08 |
-| 106-126 | Runtime bridge command traffic, heartbeats, output, workspace events, shared local/cloud protocol | 05, 07, 08, 09 |
-| 127-144 | Target architecture and adapter/bridge split | 03, 04, 05, 06, 07 |
-| 137-163 | `AgentEnvironment` Prisma model, indexes, default enforcement | 01, 03 |
-| 164-190 | Normalized `Session.connection` runtime state | 01, 08, 09, 11 |
-| 191-216 | Deferred `SessionRuntime` table | 15 |
-| 217-292 | GraphQL environment types, query/mutations, `environmentId`, compatibility inputs, codegen | 02 |
-| 293-340 | `AgentEnvironmentService`, CRUD/default/validation/auth/events, thin resolvers | 03 |
-| 341-362 | `SessionService` environment resolution, admission checks, and `hosting` compatibility | 11, 12 |
-| 363-420 | Runtime adapter interface and start result contracts | 04 |
-| 421-438 | Runtime adapter registry and no direct cloud branching | 04, 12 |
-| 439-482 | Local adapter config, start flow, stop flow, no host deprovisioning | 05, 09 |
-| 483-564 | Provisioned adapter purpose, generic provider contract, config, start request/response, readiness | 06, 08, 12 |
-| 565-612 | Provisioned stop/status requests and provider-status mapping | 06, 09 |
-| 613-672 | Lifecycle request auth, bearer mode, idempotency, optional HMAC mode, replay/timestamp rejection | 06, 14 |
-| 673-703 | Cloud runtime bridge bootstrap env vars, `runtime_hello`, protocol metadata, empty registered repos | 06, 07 |
-| 704-727 | Runtime token claims and bridge validation, preserve local auth | 07 |
-| 728-762 | Startup lifecycle states and bridge-readiness rule | 08 |
-| 763-781 | Pending message delivery, bridge-only AI message channel, provisioned adapter does not receive AI messages | 08 |
-| 782-831 | Local/provisioned deprovisioning and environment deprovision policies | 09 |
-| 832-856 | Provider-neutral runtime lifecycle events | 01, 08, 09, 12 |
-| 857-909 | Org settings UI, local/provisioned forms, session environment selector | 10, 11 |
-| 910-938 | Secret storage, encrypted values, config secret references, service-layer resolution | 01, 03, 06, 10 |
-| 939-1001 | Migration phases from model through compatibility cleanup | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
-| 1002-1041 | Unit, service, and integration tests | 13 plus each implementation ticket's test section |
-| 1042-1051 | Open decisions | 05, 06, 07, 12, 15 |
-| 1052-1079 | Recommended V1 scope and AWS VPC shape through provisioned adapter | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
+| 43-96 | Agent environment concept, fields, adapter types, compatibility constraints, advanced admission follow-up, provisioned endpoints, reference launchers | 01, 02, 03, 06, 14, 16 |
+| 97-109 | Runtime adapter responsibilities and separation from message handling | 04, 06, 08 |
+| 110-129 | Runtime bridge command traffic, heartbeats, output, workspace events, shared local/cloud protocol | 05, 07, 08, 09 |
+| 131-143 | Multiple terminal sessions per Trace session/runtime, keyed by `terminalId` over the bridge | 04, 06, 09, 13 |
+| 145-162 | Target architecture and adapter/bridge split | 03, 04, 05, 06, 07 |
+| 163-188 | `AgentEnvironment` Prisma model, indexes, default enforcement | 01, 03 |
+| 190-215 | Normalized `Session.connection` runtime state | 01, 08, 09, 11 |
+| 217-241 | Deferred `SessionRuntime` table | 15 |
+| 243-318 | GraphQL environment types, query/mutations, `environmentId`, compatibility inputs, codegen | 02 |
+| 319-379 | `AgentEnvironmentService`, CRUD/default/validation/auth/events, thin resolvers, session environment resolution | 03, 11, 12 |
+| 381-439 | Runtime adapter interface and start result contracts | 04 |
+| 441-457 | Runtime adapter registry and no direct cloud branching | 04, 12 |
+| 459-501 | Local adapter config, start flow, stop flow, no host deprovisioning | 05, 09 |
+| 503-581 | Provisioned adapter purpose, generic provider contract, config, start request/response, readiness | 06, 08, 12 |
+| 583-629 | Provisioned stop/status requests and provider-status mapping | 06, 09 |
+| 631-689 | Lifecycle request auth, bearer mode, idempotency, optional HMAC mode, replay/timestamp rejection | 06, 14 |
+| 691-722 | Cloud runtime bridge bootstrap env vars, `runtime_hello`, protocol metadata, empty registered repos, terminal multiplexing parity | 06, 07 |
+| 724-746 | Runtime token claims and bridge validation, preserve local auth | 07 |
+| 748-781 | Startup lifecycle states and bridge-readiness rule | 08 |
+| 783-800 | Pending message delivery, bridge-only AI message channel, provisioned adapter does not receive AI messages | 08 |
+| 802-850 | Local/provisioned deprovisioning and environment deprovision policies | 09 |
+| 852-875 | Provider-neutral runtime lifecycle events | 01, 08, 09, 12 |
+| 877-928 | Org settings UI, provisioned form, local bridge/repo visibility, session environment selector | 10, 11 |
+| 930-957 | Secret storage, encrypted values, config secret references, service-layer resolution | 01, 03, 06, 10 |
+| 959-1020 | Migration phases from model through compatibility cleanup | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
+| 1022-1060 | Unit, service, and integration tests | 13 plus each implementation ticket's test section |
+| 1062-1070 | Open decisions | 05, 06, 07, 12, 15 |
+| 1072-1097 | Recommended V1 scope and AWS VPC shape through provisioned adapter | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
 
 If the plan gains a new actionable requirement, add or update its owning ticket in the same change and keep this coverage matrix in sync.
 

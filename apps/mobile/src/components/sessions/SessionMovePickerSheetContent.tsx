@@ -3,14 +3,19 @@ import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
   AVAILABLE_SESSION_RUNTIMES_QUERY,
+  MOVE_SESSION_TO_CLOUD_MUTATION,
   MOVE_SESSION_TO_RUNTIME_MUTATION,
   useEntityField,
 } from "@trace/client-core";
 import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
+import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
+import { canUseMobileCloudHosting } from "@/lib/session-hosting";
 import { getClient } from "@/lib/urql";
+import { useCloudAgentEnvironmentAvailable } from "@/hooks/useCloudAgentEnvironmentAvailable";
 import { useTheme } from "@/theme";
+import { CLOUD_RUNTIME_ID } from "./session-input-composer/constants";
 
 interface SessionMovePickerSheetContentProps {
   sessionId: string;
@@ -33,6 +38,7 @@ export function SessionMovePickerSheetContent({
   const theme = useTheme();
 
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | null
@@ -55,6 +61,10 @@ export function SessionMovePickerSheetContent({
     connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
   const canMoveSession =
     sessionStatus !== "merged" && !isOptimistic && (connection?.canMove ?? true);
+  const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
+  const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(
+    canMoveSession && canUseCloudRuntime,
+  );
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +98,17 @@ export function SessionMovePickerSheetContent({
   const rows = useMemo<RuntimeRow[]>(() => {
     const nextRows: RuntimeRow[] = [];
 
+    if (canUseCloudRuntime && cloudEnvironmentAvailable && hosting !== "cloud") {
+      nextRows.push({
+        key: "runtime:cloud",
+        title: "Cloud",
+        subtitle: "Provision a cloud container for this session.",
+        icon: "cloud",
+        value: CLOUD_RUNTIME_ID,
+        disabled: !canMoveSession,
+      });
+    }
+
     for (const runtime of runtimes) {
       if (runtime.hostingMode !== "local") continue;
       if (runtime.id === currentRuntimeInstanceId) continue;
@@ -106,12 +127,20 @@ export function SessionMovePickerSheetContent({
             : undefined,
         icon: "laptopcomputer",
         value: runtime.id,
-        disabled: !runtime.connected || lacksRepo,
+        disabled: !canMoveSession || !runtime.connected || lacksRepo,
       });
     }
 
     return nextRows;
-  }, [currentRuntimeInstanceId, repo?.id, runtimes]);
+  }, [
+    canMoveSession,
+    canUseCloudRuntime,
+    cloudEnvironmentAvailable,
+    currentRuntimeInstanceId,
+    hosting,
+    repo?.id,
+    runtimes,
+  ]);
 
   const handleMoveToRuntime = useCallback(
     async (runtimeInstanceId: string) => {
@@ -119,10 +148,20 @@ export function SessionMovePickerSheetContent({
       setMoving(runtimeInstanceId);
       void haptic.light();
       try {
-        const result = await getClient()
-          .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, { sessionId, runtimeInstanceId })
-          .toPromise();
-        if (result.error || !result.data?.moveSessionToRuntime?.id) {
+        if (runtimeInstanceId === CLOUD_RUNTIME_ID && !cloudEnvironmentAvailable) {
+          throw new Error("Cloud is not configured for this organization.");
+        }
+        const result =
+          runtimeInstanceId === CLOUD_RUNTIME_ID
+            ? await getClient().mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId }).toPromise()
+            : await getClient()
+                .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, { sessionId, runtimeInstanceId })
+                .toPromise();
+        const movedSession =
+          runtimeInstanceId === CLOUD_RUNTIME_ID
+            ? result.data?.moveSessionToCloud
+            : result.data?.moveSessionToRuntime;
+        if (result.error || !movedSession?.id) {
           throw result.error ?? new Error("No session returned");
         }
         void haptic.success();
@@ -135,7 +174,7 @@ export function SessionMovePickerSheetContent({
         setMoving(null);
       }
     },
-    [canMoveSession, onClose, sessionId],
+    [canMoveSession, cloudEnvironmentAvailable, onClose, sessionId],
   );
 
   return (

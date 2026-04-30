@@ -198,6 +198,7 @@ export const sessionDispatchers: Record<string, ActionDispatcher> = {
       prompt: args.prompt as string | undefined,
       organizationId: ctx.organizationId,
       createdById: ctx.agentId,
+      actorType: "agent",
     });
   },
 
