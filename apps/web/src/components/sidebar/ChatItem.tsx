@@ -34,7 +34,7 @@ export const ChatItem = memo(function ChatItem({
         isActive={isActive}
         onClick={onClick}
         tooltip={displayName}
-        className="cursor-pointer hover:bg-white/10 data-[active=true]:bg-white/10"
+        className="cursor-pointer text-muted-foreground hover:bg-white/10 hover:text-foreground data-[active=true]:bg-white/10 data-[active=true]:text-foreground"
       >
         <div className="relative">
           <MessageCircle size={16} className="opacity-50" />
