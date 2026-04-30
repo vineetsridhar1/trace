@@ -85,7 +85,6 @@ export function AgentEnvironmentSecretsPanel({ organizationId, orgSecrets, onSav
             <div key={secret.id} className="flex items-center justify-between gap-3 px-3 py-2">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-foreground">{secret.name}</div>
-                <div className="truncate font-mono text-xs text-muted-foreground">{secret.id}</div>
               </div>
               <Button
                 type="button"
