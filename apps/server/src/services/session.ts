@@ -2654,7 +2654,12 @@ export class SessionService {
         terminalRelay.destroyAllForSession(id);
       }
       await this.resetReconcileState(id);
-      await sessionRouter.destroyRuntime(id, session, this.destroyRuntimeOptions(id, "session_deleted"));
+      const runtimeSession = await this.withGroupRuntimeState(session);
+      await sessionRouter.destroyRuntime(
+        id,
+        runtimeSession,
+        this.destroyRuntimeOptions(id, "session_deleted"),
+      );
     } else {
       terminalRelay.destroyAllForSession(id);
       try {
@@ -6205,16 +6210,7 @@ export class SessionService {
     await this.resetReconcileState(sessionId);
 
     if (isGroupUnload && session.sessionGroupId) {
-      const groupRuntime = await prisma.sessionGroup.findUnique({
-        where: { id: session.sessionGroupId },
-        select: { workdir: true, repoId: true, connection: true },
-      });
-      const runtimeSession = {
-        ...session,
-        workdir: groupRuntime?.workdir ?? session.workdir,
-        repoId: groupRuntime?.repoId ?? session.repoId,
-        connection: groupRuntime?.connection ?? session.connection,
-      };
+      const runtimeSession = await this.withGroupRuntimeState(session);
 
       // Group-level unload: destroy all terminals and the shared runtime
       terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
@@ -6250,8 +6246,9 @@ export class SessionService {
 
       if (activeSiblingCount === 0) {
         // Last session in the group — tear down the shared runtime
+        const runtimeSession = await this.withGroupRuntimeState(session);
         try {
-          await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
+          await sessionRouter.destroyRuntime(sessionId, runtimeSession, destroyOptions);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
@@ -6275,6 +6272,31 @@ export class SessionService {
       }
       return true;
     }
+  }
+
+  private async withGroupRuntimeState<
+    T extends {
+      sessionGroupId?: string | null;
+      workdir?: string | null;
+      repoId?: string | null;
+      connection?: unknown;
+    },
+  >(session: T): Promise<T> {
+    if (!session.sessionGroupId) return session;
+
+    const groupRuntime = await prisma.sessionGroup.findUnique({
+      where: { id: session.sessionGroupId },
+      select: { workdir: true, repoId: true, connection: true },
+    });
+
+    if (!groupRuntime) return session;
+
+    return {
+      ...session,
+      workdir: groupRuntime.workdir ?? session.workdir,
+      repoId: groupRuntime.repoId ?? session.repoId,
+      connection: groupRuntime.connection ?? session.connection,
+    };
   }
 
   /** Set prUrl on the active session group when a PR is opened for its current branch. */

@@ -2841,10 +2841,22 @@ describe("SessionService", () => {
     });
 
     it("deletes groups whose sessions never had messages", async () => {
+      const groupConnection = {
+        state: "connected",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
         makeSessionGroup({
           id: "group-no-messages",
           organizationId: "org-1",
+          workdir: "/workspace/group-no-messages",
+          connection: groupConnection,
           sessions: [{ id: "session-1", lastMessageAt: null }],
         }),
       );
@@ -2854,9 +2866,22 @@ describe("SessionService", () => {
           id: "session-1",
           sessionGroupId: "group-no-messages",
           organizationId: "org-1",
+          workdir: null,
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
         }),
       );
       prismaMock.session.count.mockResolvedValueOnce(0);
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        workdir: "/workspace/group-no-messages",
+        repoId: "repo-1",
+        connection: groupConnection,
+      });
 
       const result = await service.archiveGroup("group-no-messages", "org-1");
 
@@ -2866,6 +2891,15 @@ describe("SessionService", () => {
       expect(prismaMock.sessionGroup.delete).toHaveBeenCalledWith({
         where: { id: "group-no-messages" },
       });
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          workdir: "/workspace/group-no-messages",
+          repoId: "repo-1",
+          connection: groupConnection,
+        }),
+        expect.objectContaining({ reason: "session_deleted" }),
+      );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_deleted",
