@@ -45,6 +45,18 @@ export const AGENT_ENVIRONMENTS_SETTINGS_QUERY = gql`
   }
 `;
 
+export const ORG_SECRETS_QUERY = gql`
+  query OrgSecrets($orgId: ID!) {
+    orgSecrets(orgId: $orgId) {
+      id
+      orgId
+      name
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 export const CREATE_AGENT_ENVIRONMENT_MUTATION = gql`
   mutation CreateAgentEnvironment($input: CreateAgentEnvironmentInput!) {
     createAgentEnvironment(input: $input) {
