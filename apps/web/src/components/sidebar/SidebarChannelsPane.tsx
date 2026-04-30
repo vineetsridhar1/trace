@@ -50,14 +50,14 @@ export function SidebarChannelsPane({
         <OrgSwitcher large />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        <div className="space-y-1 pb-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <div className="space-y-0.5 pb-1">
           <HomeButton />
           <InboxButton />
           {features.tickets && <TicketsButton />}
         </div>
 
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between px-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-white/35">
             Projects
           </span>

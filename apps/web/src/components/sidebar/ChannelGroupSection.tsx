@@ -86,7 +86,7 @@ export function ChannelGroupSection({
   const sortableIds = groupSortableIds(channelIds);
 
   return (
-    <div ref={setSortableRef} style={style} className="rounded-md py-1 transition-colors">
+    <div ref={setSortableRef} style={style} className="rounded-md transition-colors">
       <div
         className="flex items-center justify-between pr-1 group/group-header"
         {...attributes}
