@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   authenticateProvisionedRuntimeToken,
   ProvisionedRuntimeAdapter,
@@ -39,6 +39,10 @@ describe("ProvisionedRuntimeAdapter", () => {
     delete process.env.TRACE_SERVER_PUBLIC_URL;
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("rejects incomplete provisioned config", async () => {
     const adapter = new ProvisionedRuntimeAdapter();
 
@@ -62,6 +66,32 @@ describe("ProvisionedRuntimeAdapter", () => {
         startupTimeoutSeconds: 0,
       }),
     ).rejects.toThrow("startupTimeoutSeconds must be a positive integer");
+  });
+
+  it("allows loopback HTTP provisioned URLs outside production", async () => {
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        startUrl: "http://127.0.0.1:4567/start",
+        stopUrl: "http://localhost:4567/stop",
+        statusUrl: "http://127.0.0.1:4567/status",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects loopback HTTP provisioned URLs in production mode", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRACE_LOCAL_MODE", "");
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        statusUrl: "http://127.0.0.1:4567/status",
+      }),
+    ).rejects.toThrow("statusUrl must use HTTPS");
   });
 
   it("starts with bearer auth, stable idempotency, and separate runtime bridge token", async () => {
