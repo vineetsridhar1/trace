@@ -5,6 +5,7 @@ import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { runtimeAdapterRegistry } from "../lib/runtime-adapters.js";
 import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
+import { logAgentEnvironmentTelemetry } from "../lib/agent-environment-telemetry.js";
 
 const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
 const RAW_SECRET_KEY_PATTERNS = ["apikey", "authorization", "password", "secret", "token"];
@@ -249,6 +250,14 @@ export class AgentEnvironmentService {
       return created;
     });
 
+    logAgentEnvironmentTelemetry("environment.create", {
+      organizationId: environment.organizationId,
+      environmentId: environment.id,
+      adapterType: environment.adapterType,
+      enabled: environment.enabled,
+      isDefault: environment.isDefault,
+    });
+
     return environment;
   }
 
@@ -318,6 +327,15 @@ export class AgentEnvironmentService {
           tx,
         );
 
+        logAgentEnvironmentTelemetry("environment.update", {
+          organizationId: updated.organizationId,
+          environmentId: updated.id,
+          adapterType: updated.adapterType,
+          enabled: updated.enabled,
+          isDefault: updated.isDefault,
+          source: "local_bridge",
+        });
+
         return updated;
       }
 
@@ -351,6 +369,15 @@ export class AgentEnvironmentService {
         },
         tx,
       );
+
+      logAgentEnvironmentTelemetry("environment.create", {
+        organizationId: created.organizationId,
+        environmentId: created.id,
+        adapterType: created.adapterType,
+        enabled: created.enabled,
+        isDefault: created.isDefault,
+        source: "local_bridge",
+      });
 
       return created;
     });
@@ -440,6 +467,14 @@ export class AgentEnvironmentService {
       return updated;
     });
 
+    logAgentEnvironmentTelemetry("environment.update", {
+      organizationId: environment.organizationId,
+      environmentId: environment.id,
+      adapterType: environment.adapterType,
+      enabled: environment.enabled,
+      isDefault: environment.isDefault,
+    });
+
     return environment;
   }
 
@@ -492,16 +527,32 @@ export class AgentEnvironmentService {
     });
 
     if (!environment.enabled) {
+      logAgentEnvironmentTelemetry("environment.test", {
+        organizationId: environment.organizationId,
+        environmentId: environment.id,
+        adapterType: environment.adapterType,
+        ok: false,
+        reason: "disabled",
+      });
       return {
         ok: false,
         message: "Agent environment is disabled",
       };
     }
 
-    return runtimeAdapterRegistry.get(environment.adapterType).testConfig({
+    const startedAt = Date.now();
+    const result = await runtimeAdapterRegistry.get(environment.adapterType).testConfig({
       organizationId: environment.organizationId,
       config: asConfigRecord(environment.config),
     });
+    logAgentEnvironmentTelemetry("environment.test", {
+      organizationId: environment.organizationId,
+      environmentId: environment.id,
+      adapterType: environment.adapterType,
+      ok: result.ok,
+      latencyMs: Date.now() - startedAt,
+    });
+    return result;
   }
 
   async setDefault(id: string, actorType: ActorType, actorId: string) {

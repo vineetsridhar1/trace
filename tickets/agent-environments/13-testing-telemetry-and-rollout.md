@@ -63,21 +63,58 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Critical service and adapter paths have automated coverage.
-- [ ] Mock provisioned launcher test covers start, bridge connect, message delivery, and stop.
-- [ ] Local and provisioned runtime tests cover multiple terminal sessions for one Trace session.
-- [ ] Startup failures produce actionable user-visible errors.
-- [ ] Deprovision failures are visible and retryable.
+- [x] Critical service and adapter paths have automated coverage.
+- [x] Mock provisioned launcher test covers start, bridge connect, message delivery, and stop.
+- [x] Local and provisioned runtime tests cover multiple terminal sessions for one Trace session.
+- [x] Startup failures produce actionable user-visible errors.
+- [x] Deprovision failures are visible and retryable.
   - Reconciliation/retry already shipped with ticket 09; this ticket should
     add the operator-facing surface (telemetry + alert when a runtime stays
     in `deprovision_failed` / `deprovisioning` past a cap).
-- [ ] Rollout path is documented.
+- [x] Rollout path is documented.
+
+## Review follow-ups
+
+- [x] Add a deterministic mock provisioned launcher integration test that
+  covers start, bridge connect, pending message delivery, duplicate start/stop
+  idempotency keys, and stop.
+- [x] Add provisioned terminal multiplexing coverage for two concurrent
+  terminals on one Trace session/runtime, including output, resize, and exit
+  isolation by `terminalId`.
+- [x] Make abandoned runtime alerting event-driven or otherwise queryable so
+  every `session_runtime_deprovision_failed` event with `abandoned: true` is
+  surfaced, not only the in-process `markRuntimeAbandoned` call path.
+- [x] Add an assertion that abandoned runtime alerts include `providerRuntimeId`
+  alongside `sessionId` and `reconcileAttempts`.
+- [x] Add negative log assertions for network/error paths that may include
+  launcher bearer tokens or runtime bridge tokens in exception messages.
 
 ## Implementation notes
 
 - Prefer deterministic mock launchers over real cloud provider tests in CI.
 - Provider-specific reference launcher tests belong with the launcher, not Trace core.
 - Keep telemetry provider-neutral.
+
+## Rollout path
+
+1. Keep all provisioned environments disabled by default until their `/status`
+   test passes from org settings.
+2. Enable one non-default provisioned environment for an internal org and start
+   sessions by explicitly selecting that environment.
+3. Watch provider-neutral telemetry for:
+   - `environment.create`, `environment.update`, and `environment.test`
+   - `launcher.request` and `provisioned.start`
+   - `bridge.connected`, `provisioned.bridge_ready`, and `provisioned.startup_timeout`
+   - `runtime.heartbeat_stale`
+   - `deprovision.reconciler_iteration`, `deprovision.failed`, and
+     `deprovision.abandoned_runtime`
+4. Promote the environment to org default only after explicit sessions show
+   stable startup, bridge connection, terminal multiplexing, and deprovision.
+5. Roll back by clearing `isDefault` or disabling the environment; existing
+   local bridge environments remain available as the fallback path.
+
+Telemetry payloads must stay provider-neutral and must not include launcher
+bearer tokens, runtime bridge tokens, HMAC secrets, or HMAC signatures.
 
 ## How to test
 

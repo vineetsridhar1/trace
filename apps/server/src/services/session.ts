@@ -30,6 +30,10 @@ import { storage } from "../lib/storage/index.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { agentEnvironmentService } from "./agent-environment.js";
 import {
+  alertAgentEnvironmentOperator,
+  logAgentEnvironmentTelemetry,
+} from "../lib/agent-environment-telemetry.js";
+import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
   type SessionGroupStatusSource,
@@ -283,6 +287,14 @@ function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
 /** Cast connection data to Prisma-compatible JSON */
 function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
+}
+
+function elapsedMs(start: string | undefined, end: string | undefined): number | undefined {
+  if (!start || !end) return undefined;
+  const startMs = Date.parse(start);
+  const endMs = Date.parse(end);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return undefined;
+  return Math.max(0, endMs - startMs);
 }
 
 function configRecord(config: Prisma.JsonValue | null | undefined): Record<string, unknown> {
@@ -908,6 +920,43 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
+    if (eventType === "session_runtime_stopped" && adapterType === "provisioned") {
+      logAgentEnvironmentTelemetry("deprovision.completed", {
+        organizationId: session.organizationId,
+        sessionId,
+        providerRuntimeId: result.updated.providerRuntimeId,
+        timeToDeprovisionedMs: elapsedMs(result.updated.stoppingAt, result.updated.deprovisionedAt),
+      });
+    }
+
+    if (eventType === "session_runtime_start_failed") {
+      logAgentEnvironmentTelemetry("provisioned.start_failed", {
+        organizationId: session.organizationId,
+        sessionId,
+        providerRuntimeId: update.providerRuntimeId,
+        error: update.error,
+      });
+    }
+
+    if (eventType === "session_runtime_deprovision_failed") {
+      logAgentEnvironmentTelemetry("deprovision.failed", {
+        organizationId: session.organizationId,
+        sessionId,
+        providerRuntimeId: update.providerRuntimeId ?? result.updated.providerRuntimeId,
+        abandoned: update.abandoned === true,
+        reconcileAttempts: update.reconcileAttempts,
+        error: update.error,
+      });
+      if (update.abandoned === true) {
+        alertAgentEnvironmentOperator("deprovision.abandoned_runtime", {
+          organizationId: session.organizationId,
+          sessionId,
+          providerRuntimeId: update.providerRuntimeId ?? result.updated.providerRuntimeId,
+          reconcileAttempts: update.reconcileAttempts,
+        });
+      }
+    }
   }
 
   /**

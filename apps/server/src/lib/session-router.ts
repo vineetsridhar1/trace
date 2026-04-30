@@ -24,6 +24,7 @@ import {
   ProvisionedLauncherError,
   runtimeAdapterRegistry,
 } from "./runtime-adapters.js";
+import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import {
   RuntimeAdapterRegistry,
   type RuntimeAdapter,
@@ -230,6 +231,7 @@ export class SessionRouter {
     {
       waitId: string;
       expectedRuntimeId?: string;
+      startedAt: number;
       resolve: () => void;
       reject: (err: Error) => void;
     }
@@ -417,17 +419,25 @@ export class SessionRouter {
 
     return new Promise<void>((resolve, reject) => {
       const waitId = randomUUID();
+      const startedAt = Date.now();
       const timer = setTimeout(() => {
         const pending = this.pendingWaits.get(sessionId);
         if (pending?.waitId === waitId) {
           this.pendingWaits.delete(sessionId);
         }
+        logAgentEnvironmentTelemetry("bridge.connection_timeout", {
+          sessionId,
+          runtimeInstanceId: runtimeId,
+          timeoutMs,
+          latencyMs: Date.now() - startedAt,
+        });
         reject(new Error(`Bridge for session ${sessionId} did not connect within ${timeoutMs}ms`));
       }, timeoutMs);
 
       this.pendingWaits.set(sessionId, {
         waitId,
         expectedRuntimeId: runtimeId,
+        startedAt,
         resolve: () => {
           clearTimeout(timer);
           resolve();
@@ -500,6 +510,12 @@ export class SessionRouter {
         return;
       }
       this.pendingWaits.delete(sessionId);
+      logAgentEnvironmentTelemetry("bridge.connected", {
+        sessionId,
+        runtimeInstanceId: runtimeId,
+        expectedRuntimeId: pending.expectedRuntimeId,
+        latencyMs: Date.now() - pending.startedAt,
+      });
       pending.resolve();
     }
   }
@@ -1410,13 +1426,28 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connecting", lifecycleUpdate);
 
           try {
+            const bridgeWaitStartedAt = Date.now();
             await this.waitForBridge(
               options.sessionId,
               startupTimeoutMs(options.environment),
               startResult.runtimeInstanceId,
             );
+            logAgentEnvironmentTelemetry("provisioned.bridge_ready", {
+              organizationId: options.organizationId,
+              sessionId: options.sessionId,
+              environmentId: options.environment?.id,
+              runtimeInstanceId: startResult.runtimeInstanceId,
+              latencyMs: Date.now() - bridgeWaitStartedAt,
+            });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
+            logAgentEnvironmentTelemetry("provisioned.startup_timeout", {
+              organizationId: options.organizationId,
+              sessionId: options.sessionId,
+              environmentId: options.environment?.id,
+              runtimeInstanceId: startResult.runtimeInstanceId,
+              error: message,
+            });
             await options.onLifecycle?.("session_runtime_start_timed_out", {
               ...lifecycleUpdate,
               error: message,

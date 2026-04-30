@@ -95,81 +95,89 @@ describe("ProvisionedRuntimeAdapter", () => {
   });
 
   it("starts with bearer auth, stable idempotency, and separate runtime bridge token", async () => {
-    fetchMock().mockResolvedValueOnce(
-      makeResponse({
-        runtimeId: "provider-runtime-1",
-        status: "provisioning",
-        label: "Launcher task 1",
-      }),
-    );
-    const adapter = new ProvisionedRuntimeAdapter();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      fetchMock().mockResolvedValueOnce(
+        makeResponse({
+          runtimeId: "provider-runtime-1",
+          status: "provisioning",
+          label: "Launcher task 1",
+        }),
+      );
+      const adapter = new ProvisionedRuntimeAdapter();
 
-    const result = await adapter.startSession({
-      sessionId: "session-1",
-      sessionGroupId: "group-1",
-      organizationId: "org-1",
-      actorId: "user-1",
-      environment: {
-        id: "env-1",
-        name: "Company Launcher",
-        adapterType: "provisioned",
-        config: provisionedConfig,
-      },
-      tool: "codex",
-      model: "gpt-test",
-      repo: {
-        id: "repo-1",
-        name: "app",
-        remoteUrl: "https://github.com/acme/app",
-        defaultBranch: "main",
-      },
-      branch: "feature",
-      runtimeInstanceId: "runtime_preallocated_1",
-      runtimeToken: "runtime-token",
-      bridgeUrl: "wss://trace.example/bridge",
-    });
+      const result = await adapter.startSession({
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: provisionedConfig,
+        },
+        tool: "codex",
+        model: "gpt-test",
+        repo: {
+          id: "repo-1",
+          name: "app",
+          remoteUrl: "https://github.com/acme/app",
+          defaultBranch: "main",
+        },
+        branch: "feature",
+        runtimeInstanceId: "runtime_preallocated_1",
+        runtimeToken: "runtime-token",
+        bridgeUrl: "wss://trace.example/bridge",
+      });
 
-    expect(result).toEqual(
-      expect.objectContaining({
-        runtimeLabel: "Launcher task 1",
-        providerRuntimeId: "provider-runtime-1",
-        status: "provisioning",
-      }),
-    );
-    expect(result.runtimeInstanceId).toBe("runtime_preallocated_1");
+      expect(result).toEqual(
+        expect.objectContaining({
+          runtimeLabel: "Launcher task 1",
+          providerRuntimeId: "provider-runtime-1",
+          status: "provisioning",
+        }),
+      );
+      expect(result.runtimeInstanceId).toBe("runtime_preallocated_1");
 
-    const call = fetchMock().mock.calls[0];
-    const url = call[0] as string;
-    const init = call[1] as RequestInit;
-    const headers = init.headers as Record<string, string>;
-    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      const call = fetchMock().mock.calls[0];
+      const url = call[0] as string;
+      const init = call[1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
 
-    expect(url).toBe("https://launcher.example/start");
-    expect(headers.Authorization).toBe("Bearer launcher-secret");
-    expect(headers["Trace-Idempotency-Key"]).toBe("session:session-1:start");
-    expect(typeof body.runtimeToken).toBe("string");
-    expect(body.runtimeToken).not.toBe("runtime-token");
-    expect(body.runtimeTokenScope).toBe("session");
-    expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(body.bootstrapEnv).toEqual(
-      expect.objectContaining({
-        TRACE_SESSION_ID: "session-1",
-        TRACE_ORG_ID: "org-1",
-        TRACE_RUNTIME_INSTANCE_ID: result.runtimeInstanceId,
-        TRACE_RUNTIME_TOKEN: body.runtimeToken,
-        TRACE_BRIDGE_URL: "wss://trace.example/bridge",
-      }),
-    );
+      expect(url).toBe("https://launcher.example/start");
+      expect(headers.Authorization).toBe("Bearer launcher-secret");
+      expect(headers["Trace-Idempotency-Key"]).toBe("session:session-1:start");
+      expect(typeof body.runtimeToken).toBe("string");
+      expect(body.runtimeToken).not.toBe("runtime-token");
+      expect(body.runtimeTokenScope).toBe("session");
+      expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(body.bootstrapEnv).toEqual(
+        expect.objectContaining({
+          TRACE_SESSION_ID: "session-1",
+          TRACE_ORG_ID: "org-1",
+          TRACE_RUNTIME_INSTANCE_ID: result.runtimeInstanceId,
+          TRACE_RUNTIME_TOKEN: body.runtimeToken,
+          TRACE_BRIDGE_URL: "wss://trace.example/bridge",
+        }),
+      );
 
-    expect(authenticateProvisionedRuntimeToken(body.runtimeToken as string)).toEqual({
-      instanceId: result.runtimeInstanceId,
-      organizationId: "org-1",
-      userId: "user-1",
-      sessionId: "session-1",
-      environmentId: "env-1",
-      allowedScope: "session",
-      tool: "codex",
-    });
+      expect(authenticateProvisionedRuntimeToken(body.runtimeToken as string)).toEqual({
+        instanceId: result.runtimeInstanceId,
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      });
+      const logged = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+      expect(logged).not.toContain("launcher-secret");
+      expect(logged).not.toContain(body.runtimeToken as string);
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   it("rejects expired runtime bridge tokens", async () => {
@@ -206,38 +214,45 @@ describe("ProvisionedRuntimeAdapter", () => {
   });
 
   it("signs HMAC lifecycle requests without bearer auth", async () => {
-    fetchMock().mockResolvedValueOnce(
-      makeResponse({
-        runtimeId: "provider-runtime-1",
-        status: "booting",
-      }),
-    );
-    const adapter = new ProvisionedRuntimeAdapter();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      fetchMock().mockResolvedValueOnce(
+        makeResponse({
+          runtimeId: "provider-runtime-1",
+          status: "booting",
+        }),
+      );
+      const adapter = new ProvisionedRuntimeAdapter();
 
-    await adapter.startSession({
-      sessionId: "session-1",
-      organizationId: "org-1",
-      actorId: "user-1",
-      environment: {
-        id: "env-1",
-        name: "Company Launcher",
-        adapterType: "provisioned",
-        config: {
-          ...provisionedConfig,
-          auth: { type: "hmac", secretId: "secret-1" },
+      await adapter.startSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: {
+            ...provisionedConfig,
+            auth: { type: "hmac", secretId: "secret-1" },
+          },
         },
-      },
-      tool: "codex",
-      runtimeToken: "runtime-token",
-      bridgeUrl: "wss://trace.example/bridge",
-    });
+        tool: "codex",
+        runtimeToken: "runtime-token",
+        bridgeUrl: "wss://trace.example/bridge",
+      });
 
-    const init = fetchMock().mock.calls[0][1] as RequestInit;
-    const headers = init.headers as Record<string, string>;
-    expect(headers.Authorization).toBeUndefined();
-    expect(headers["Trace-Timestamp"]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(headers["Trace-Request-Id"]).toBeTruthy();
-    expect(headers["Trace-Signature"]).toMatch(/^v1=[0-9a-f]{64}$/);
+      const init = fetchMock().mock.calls[0][1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Authorization).toBeUndefined();
+      expect(headers["Trace-Timestamp"]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(headers["Trace-Request-Id"]).toBeTruthy();
+      expect(headers["Trace-Signature"]).toMatch(/^v1=[0-9a-f]{64}$/);
+      const logged = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+      expect(logged).not.toContain(headers["Trace-Signature"]);
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   it("stops and checks status through authenticated launcher endpoints", async () => {
@@ -280,5 +295,53 @@ describe("ProvisionedRuntimeAdapter", () => {
       runtimeId: "provider-runtime-1",
       reason: "session_deleted",
     });
+  });
+
+  it("reuses idempotency keys for duplicate start and stop calls", async () => {
+    fetchMock()
+      .mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }))
+      .mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }))
+      .mockResolvedValueOnce(makeResponse({ ok: true, status: "stopped" }))
+      .mockResolvedValueOnce(makeResponse({ ok: true, status: "stopped" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+    const environment = {
+      id: "env-1",
+      name: "Company Launcher",
+      adapterType: "provisioned" as const,
+      config: provisionedConfig,
+    };
+    const startInput = {
+      sessionId: "session-duplicate",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment,
+      tool: "codex",
+      runtimeInstanceId: "runtime-duplicate",
+      bridgeUrl: "wss://trace.example/bridge",
+    };
+    const stopInput = {
+      sessionId: "session-duplicate",
+      organizationId: "org-1",
+      environment,
+      connection: { providerRuntimeId: "provider-runtime-1" },
+      reason: "session_deleted",
+    };
+
+    await adapter.startSession(startInput);
+    await adapter.startSession(startInput);
+    await adapter.stopSession(stopInput);
+    await adapter.stopSession(stopInput);
+
+    const idempotencyKeys = fetchMock().mock.calls.map((call) => {
+      const init = call[1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      return headers["Trace-Idempotency-Key"];
+    });
+    expect(idempotencyKeys).toEqual([
+      "session:session-duplicate:start",
+      "session:session-duplicate:start",
+      "session:session-duplicate:stop",
+      "session:session-duplicate:stop",
+    ]);
   });
 });
