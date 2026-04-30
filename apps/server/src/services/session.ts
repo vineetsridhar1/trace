@@ -5035,6 +5035,7 @@ export class SessionService {
 
     const bootstrapPrompt = buildMigrationPrompt();
     const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
+    const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
     const nextConnection = connJson(
       targetHosting === "local"
@@ -5055,6 +5056,7 @@ export class SessionService {
         sessionStatus: "in_progress",
         createdById: actorId,
         hosting: targetHosting,
+        branch: sourceBranch,
         workdir: null,
         pendingRun: {
           type: "run",
@@ -5070,6 +5072,7 @@ export class SessionService {
     const sessionGroup = await this.syncGroupWorkspaceState(movedSession.sessionGroupId, {
       workdir: null,
       connection: nextConnection,
+      branch: sourceBranch,
       worktreeDeleted: false,
     });
 
