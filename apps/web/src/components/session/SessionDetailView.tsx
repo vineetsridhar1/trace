@@ -336,10 +336,17 @@ export function SessionDetailView({
   );
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
+  const groupConnectionState = getConnectionState(groupConnection);
+  const groupRuntimeConnected = groupConnectionState === "connected";
+  const suppressSharedCloudStartupNotice =
+    groupRuntimeConnected &&
+    connectionState !== null &&
+    RUNTIME_BOOTING_STATES.has(connectionState);
   const runtimeLifecycleState =
     hosting === "cloud" &&
     connectionState !== null &&
     connectionState !== "connected" &&
+    !suppressSharedCloudStartupNotice &&
     (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
       ? connectionState
       : null;
