@@ -193,7 +193,8 @@ export function SessionDetailView({
     runtimeInstanceId,
     sessionGroupId ?? null,
   );
-  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed =
+    agentStatus === "not_started" || isBridgeInteractionAllowed(bridgeAccess);
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
