@@ -74,7 +74,8 @@ export function SessionInput({
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
-  const bridgeInteractionAllowed = isNotStarted || isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed =
+    isNotStarted || hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&

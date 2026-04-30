@@ -202,7 +202,7 @@ export function SessionDetailView({
     sessionGroupId ?? null,
   );
   const bridgeInteractionAllowed =
-    agentStatus === "not_started" || isBridgeInteractionAllowed(bridgeAccess);
+    agentStatus === "not_started" || hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
