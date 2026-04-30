@@ -21,7 +21,7 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { Loader2, AlertCircle, Cloud } from "lucide-react";
+import { Loader2, AlertCircle, Cloud, RefreshCw } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
@@ -591,14 +591,12 @@ function RuntimeLifecycleNotice({
         border: "border-destructive/30",
         bg: "bg-destructive/10",
         text: "text-destructive",
-        iconBg: "bg-destructive/20",
         body: "text-destructive/80",
       }
     : {
         border: "border-sky-500/30",
         bg: "bg-sky-500/10",
         text: "text-sky-100",
-        iconBg: "bg-sky-500/20",
         body: "text-sky-100/80",
       };
 
@@ -632,45 +630,44 @@ function RuntimeLifecycleNotice({
 
   return (
     <div className="border-t px-4 py-3">
-      <div className={`flex items-start gap-3 rounded-lg border ${tone.border} ${tone.bg} p-3 text-sm`}>
-        <div className={`mt-0.5 rounded-md ${tone.iconBg} p-1.5 ${tone.text}`}>
-          {failed ? <AlertCircle size={14} /> : <Cloud size={14} />}
-        </div>
+      <div
+        className={`flex items-start gap-3 rounded-lg border ${tone.border} ${tone.bg} p-3 text-sm`}
+      >
+        {failed ? (
+          <AlertCircle size={16} className={`mt-0.5 shrink-0 ${tone.text}`} />
+        ) : (
+          <Cloud size={16} className={`mt-0.5 shrink-0 ${tone.text}`} />
+        )}
         <div className="min-w-0 flex-1">
-          <div className={`flex items-center gap-2 font-medium ${tone.text}`}>
-            {failed ? <AlertCircle size={14} /> : <Loader2 size={14} className="animate-spin" />}
-            {label}
-          </div>
-          <p className={`mt-1 text-xs leading-5 ${tone.body}`}>
-            {body}
-          </p>
-          {failed && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={action !== null}
-                onClick={handleRetry}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
-              >
-                {action === "retry" && <Loader2 size={12} className="animate-spin" />}
-                Retry
-              </button>
-              <button
-                type="button"
-                disabled={action !== null}
-                onClick={handleNewCloud}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
-              >
-                {action === "cloud" ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <Cloud size={12} />
-                )}
-                New cloud container
-              </button>
-            </div>
-          )}
+          <div className={`font-medium ${tone.text}`}>{label}</div>
+          <p className={`mt-1 text-xs leading-5 ${tone.body}`}>{body}</p>
         </div>
+        {failed && (
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={action !== null}
+              onClick={handleRetry}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
+            >
+              <RefreshCw size={12} className={action === "retry" ? "animate-spin" : ""} />
+              Retry
+            </button>
+            <button
+              type="button"
+              disabled={action !== null}
+              onClick={handleNewCloud}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
+            >
+              {action === "cloud" ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Cloud size={12} />
+              )}
+              New cloud container
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
