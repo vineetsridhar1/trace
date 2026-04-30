@@ -69,13 +69,13 @@ export const ChannelItem = memo(function ChannelItem({
                 isActive={isActive}
                 onClick={onClick}
                 tooltip={name ?? ""}
-                className="h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-white/65 hover:bg-white/10 hover:text-white data-[active=true]:bg-white/10 data-[active=true]:text-white"
+                className="h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground data-[active=true]:bg-white/10 data-[active=true]:text-foreground"
               >
                 {canExpand && (
                   <span
                     role="button"
                     tabIndex={0}
-                    className="flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-white/35 transition-colors hover:text-white/80"
+                    className="flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-current opacity-60 transition-opacity hover:opacity-100"
                     title={isExpanded ? "Collapse channel sessions" : "Expand channel sessions"}
                     onClick={(event: MouseEvent<HTMLSpanElement>) => {
                       event.stopPropagation();
@@ -100,7 +100,7 @@ export const ChannelItem = memo(function ChannelItem({
                   </span>
                 )}
                 <div className="relative">
-                  <ChannelIcon type={type} className="text-white/50" />
+                  <ChannelIcon type={type} className="text-current opacity-50" />
                   {hasDoneBadge && (
                     <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-foreground opacity-75" />
