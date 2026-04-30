@@ -3530,22 +3530,25 @@ export class SessionService {
     // Attempt delivery before marking active. Pinning to the session's home
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
-    const deliveryResult = sessionRouter.send(
+    const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
+    const deliveryCommand = {
+      type: "send" as const,
       sessionId,
-      {
-        type: "send",
-        sessionId,
-        prompt,
-        tool: session.tool,
-        model: session.model ?? undefined,
-        interactionMode,
-        cwd: session.workdir ?? undefined,
-        toolSessionId: session.toolSessionId ?? undefined,
-        checkpointContext,
-        imageUrls,
-      },
-      { expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId },
-    );
+      prompt,
+      tool: session.tool,
+      model: session.model ?? undefined,
+      interactionMode,
+      cwd: session.workdir ?? undefined,
+      toolSessionId: session.toolSessionId ?? undefined,
+      checkpointContext,
+      imageUrls,
+    };
+    const deliveryResult: DeliveryResult =
+      session.hosting === "cloud" && !expectedRuntimeId
+        ? "no_runtime"
+        : sessionRouter.send(sessionId, deliveryCommand, {
+            expectedHomeRuntimeId: expectedRuntimeId ?? undefined,
+          });
 
     if (deliveryResult !== "delivered") {
       await this.storePendingCommand(
