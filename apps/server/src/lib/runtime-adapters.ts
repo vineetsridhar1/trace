@@ -28,14 +28,9 @@ const PROVISIONED_STATUS_VALUES = new Set([
   "stopped",
   "failed",
 ]);
-const PROVISIONED_STOP_STATUS_VALUES = new Set([
-  "stopping",
-  "stopped",
-  "not_found",
-  "unsupported",
-]);
+const PROVISIONED_STOP_STATUS_VALUES = new Set(["stopping", "stopped", "not_found", "unsupported"]);
 const RUNTIME_TOKEN_TTL_SECONDS = 15 * 60;
-const RUNTIME_TOKEN_TTL_MS = RUNTIME_TOKEN_TTL_SECONDS * 1000;
+const RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS = 60;
 const JWT_SECRET = resolveJwtSecret();
 const LAUNCHER_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -102,18 +97,21 @@ export function authenticateProvisionedRuntimeToken(
   }
 }
 
-function createProvisionedRuntimeToken(auth: ProvisionedRuntimeTokenAuth): {
+function createProvisionedRuntimeToken(
+  auth: ProvisionedRuntimeTokenAuth,
+  ttlSeconds = RUNTIME_TOKEN_TTL_SECONDS,
+): {
   token: string;
   expiresAt: Date;
 } {
-  const expiresAt = new Date(Date.now() + RUNTIME_TOKEN_TTL_MS);
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
   const token = jwt.sign(
     {
       ...auth,
       tokenType: "provisioned_runtime",
     } satisfies ProvisionedRuntimeTokenPayload,
     JWT_SECRET,
-    { expiresIn: RUNTIME_TOKEN_TTL_SECONDS },
+    { expiresIn: ttlSeconds },
   );
   return { token, expiresAt };
 }
@@ -198,7 +196,9 @@ function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedCon
     !Number.isInteger(startupTimeoutSeconds) ||
     startupTimeoutSeconds < 1
   ) {
-    throw new Error("Provisioned agent environment startupTimeoutSeconds must be a positive integer");
+    throw new Error(
+      "Provisioned agent environment startupTimeoutSeconds must be a positive integer",
+    );
   }
 
   const deprovisionPolicy = config.deprovisionPolicy;
@@ -322,7 +322,7 @@ async function readJsonResponse(response: Response, endpointName: string): Promi
   const text = await response.text();
   if (!response.ok) {
     throw new ProvisionedLauncherError(
-      `Provisioned ${endpointName} request failed (${response.status}): ${text.slice(0, 500)}`,
+      `Provisioned ${endpointName} request failed with HTTP ${response.status}`,
       response.status,
     );
   }
@@ -330,9 +330,7 @@ async function readJsonResponse(response: Response, endpointName: string): Promi
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new ProvisionedLauncherError(
-      `Provisioned ${endpointName} response was not valid JSON`,
-    );
+    throw new ProvisionedLauncherError(`Provisioned ${endpointName} response was not valid JSON`);
   }
 }
 
@@ -493,15 +491,22 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
     }
     const config = parseProvisionedConfig(configRecord(input.environment.config));
     const runtimeInstanceId = input.runtimeInstanceId ?? `runtime_${randomUUID()}`;
-    const runtimeToken = createProvisionedRuntimeToken({
-      instanceId: runtimeInstanceId,
-      organizationId: input.organizationId,
-      userId: input.actorId,
-      sessionId: input.sessionId,
-      environmentId: input.environment.id,
-      allowedScope: "session",
-      tool: input.tool,
-    });
+    const runtimeTokenTtlSeconds = Math.max(
+      RUNTIME_TOKEN_TTL_SECONDS,
+      config.startupTimeoutSeconds + RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS,
+    );
+    const runtimeToken = createProvisionedRuntimeToken(
+      {
+        instanceId: runtimeInstanceId,
+        organizationId: input.organizationId,
+        userId: input.actorId,
+        sessionId: input.sessionId,
+        environmentId: input.environment.id,
+        allowedScope: "session",
+        tool: input.tool,
+      },
+      runtimeTokenTtlSeconds,
+    );
     const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
 
     const body = {

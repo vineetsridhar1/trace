@@ -53,6 +53,14 @@ function requestHasBearerToken(req: Pick<express.Request, "headers">): boolean {
   return readHeaderValue(req.headers, "authorization")?.startsWith("Bearer ") ?? false;
 }
 
+function readBearerToken(req: Pick<IncomingMessage, "headers">): string | null {
+  const authorization = readHeaderValue(req.headers, "authorization");
+  if (!authorization) return null;
+  const [scheme, ...rest] = authorization.split(" ");
+  if (scheme.toLowerCase() !== "bearer" || rest.length !== 1) return null;
+  return rest[0]?.trim() || null;
+}
+
 async function main() {
   const app = express();
   const httpServer = createServer(app);
@@ -240,7 +248,7 @@ async function main() {
       });
     } else if (pathname === "/bridge") {
       const url = new URL(req.url ?? "", "http://localhost");
-      const cloudToken = url.searchParams.get("token");
+      const cloudToken = readBearerToken(req) ?? url.searchParams.get("token");
       const bridgeAuthToken = url.searchParams.get("bridgeAuthToken");
 
       const validateAndUpgrade = async () => {

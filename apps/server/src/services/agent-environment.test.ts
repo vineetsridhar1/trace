@@ -13,7 +13,7 @@ vi.mock("./event.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
-import { AgentEnvironmentService } from "./agent-environment.js";
+import { AgentEnvironmentService, publicAgentEnvironmentConfig } from "./agent-environment.js";
 import type { createPrismaMock } from "../../test/helpers.js";
 
 const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
@@ -133,10 +133,6 @@ describe("AgentEnvironmentService", () => {
             name: "Company Launcher",
             adapterType: "provisioned",
             config: {
-              startUrl: "https://launcher.example/start",
-              stopUrl: "https://launcher.example/stop",
-              statusUrl: "https://launcher.example/status",
-              auth: { type: "bearer", secretId: "secret-1" },
               startupTimeoutSeconds: 120,
               deprovisionPolicy: "on_session_end",
             },
@@ -153,10 +149,6 @@ describe("AgentEnvironmentService", () => {
               name: "Company Launcher",
               adapterType: "provisioned",
               config: {
-                startUrl: "https://launcher.example/start",
-                stopUrl: "https://launcher.example/stop",
-                statusUrl: "https://launcher.example/status",
-                auth: { type: "bearer", secretId: "secret-1" },
                 startupTimeoutSeconds: 120,
                 deprovisionPolicy: "on_session_end",
               },
@@ -172,6 +164,25 @@ describe("AgentEnvironmentService", () => {
       },
       prismaMock,
     );
+  });
+
+  it("redacts provisioned launcher config for public payloads", () => {
+    expect(
+      publicAgentEnvironmentConfig({
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { type: "bearer", secretId: "secret-1" },
+        startupTimeoutSeconds: 120,
+        deprovisionPolicy: "on_session_end",
+        launcherMetadata: { subnetIds: ["subnet-1"] },
+        capabilities: { supportedTools: ["codex"] },
+      }),
+    ).toEqual({
+      startupTimeoutSeconds: 120,
+      deprovisionPolicy: "on_session_end",
+      capabilities: { supportedTools: ["codex"] },
+    });
   });
 
   it("does not store raw provider tokens in config", async () => {
@@ -194,9 +205,7 @@ describe("AgentEnvironmentService", () => {
   });
 
   it("creates a default local environment for a newly connected bridge", async () => {
-    prismaMock.agentEnvironment.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     prismaMock.agentEnvironment.create.mockResolvedValueOnce({
       id: "env-local-1",
       organizationId: "org-1",

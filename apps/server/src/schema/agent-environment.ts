@@ -1,7 +1,10 @@
 import type { Context } from "../context.js";
 import type { CreateAgentEnvironmentInput, UpdateAgentEnvironmentInput } from "@trace/gql";
 import { Prisma } from "@prisma/client";
-import { agentEnvironmentService } from "../services/agent-environment.js";
+import {
+  agentEnvironmentService,
+  publicAgentEnvironmentConfig,
+} from "../services/agent-environment.js";
 
 function requiredConfig(value: CreateAgentEnvironmentInput["config"]): Prisma.InputJsonValue {
   if (value === null) throw new Error("Agent environment config is required");
@@ -74,5 +77,16 @@ export const agentEnvironmentMutations = {
 export const agentEnvironmentTypeResolvers = {
   AgentEnvironment: {
     orgId: (environment: { organizationId: string }) => environment.organizationId,
+    config: (
+      environment: { organizationId: string; config: Prisma.JsonValue },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (ctx.actorType === "system") return environment.config;
+      if (ctx.organizationId === environment.organizationId && ctx.role === "admin") {
+        return environment.config;
+      }
+      return publicAgentEnvironmentConfig(environment.config);
+    },
   },
 };

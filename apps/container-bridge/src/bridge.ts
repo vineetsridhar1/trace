@@ -194,8 +194,11 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   connect(): void {
-    const url = `${this.serverUrl}?token=${encodeURIComponent(this.token)}`;
-    this.ws = new WebSocket(url);
+    this.ws = new WebSocket(this.serverUrl, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+    });
 
     this.ws.on("open", () => {
       console.log("[container-bridge] connected to server");

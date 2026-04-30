@@ -15,24 +15,34 @@ export class OrgSecretService {
     });
   }
 
-  async set(organizationId: string, name: string, plaintext: string) {
+  async set(
+    organizationId: string,
+    name: string,
+    plaintext: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const normalizedName = name.trim();
     if (!normalizedName) throw new Error("Secret name is required");
+    if (!plaintext) throw new Error("Secret value is required");
 
     const { encrypted, iv } = encryptSecret(plaintext);
-    return prisma.orgSecret.upsert({
-      where: { organizationId_name: { organizationId, name: normalizedName } },
-      create: {
-        organizationId,
-        name: normalizedName,
-        encryptedValue: encrypted,
-        iv,
-      },
-      update: {
-        encryptedValue: encrypted,
-        iv,
-      },
-      select: { id: true, organizationId: true, name: true, updatedAt: true },
+    return prisma.$transaction(async (tx) => {
+      await assertActorOrgAdmin(tx, organizationId, actorType, actorId);
+      return tx.orgSecret.upsert({
+        where: { organizationId_name: { organizationId, name: normalizedName } },
+        create: {
+          organizationId,
+          name: normalizedName,
+          encryptedValue: encrypted,
+          iv,
+        },
+        update: {
+          encryptedValue: encrypted,
+          iv,
+        },
+        select: { id: true, organizationId: true, name: true, createdAt: true, updatedAt: true },
+      });
     });
   }
 
@@ -44,15 +54,23 @@ export class OrgSecretService {
     return decryptSecret(secret.encryptedValue, secret.iv);
   }
 
-  async delete(organizationId: string, id: string): Promise<boolean> {
-    const existing = await prisma.orgSecret.findFirst({
-      where: { id, organizationId },
-      select: { id: true },
-    });
-    if (!existing) return false;
+  async delete(
+    organizationId: string,
+    id: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<boolean> {
+    return prisma.$transaction(async (tx) => {
+      await assertActorOrgAdmin(tx, organizationId, actorType, actorId);
+      const existing = await tx.orgSecret.findFirst({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+      if (!existing) return false;
 
-    await prisma.orgSecret.delete({ where: { id } });
-    return true;
+      await tx.orgSecret.delete({ where: { id } });
+      return true;
+    });
   }
 }
 

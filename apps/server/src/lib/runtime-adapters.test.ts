@@ -181,6 +181,38 @@ describe("ProvisionedRuntimeAdapter", () => {
     }
   });
 
+  it("extends runtime token lifetime to cover long startup timeouts", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-30T12:00:00.000Z"));
+    try {
+      fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+      const adapter = new ProvisionedRuntimeAdapter();
+
+      await adapter.startSession({
+        sessionId: "session-slow-start",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Slow Launcher",
+          adapterType: "provisioned",
+          config: {
+            ...provisionedConfig,
+            startupTimeoutSeconds: 1_800,
+          },
+        },
+        tool: "codex",
+        bridgeUrl: "wss://trace.example/bridge",
+      });
+
+      const init = fetchMock().mock.calls[0][1] as RequestInit;
+      const body = JSON.parse(init.body as string) as { runtimeTokenExpiresAt: string };
+      expect(body.runtimeTokenExpiresAt).toBe("2026-04-30T12:31:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects expired runtime bridge tokens", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-29T12:00:00Z"));

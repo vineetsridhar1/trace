@@ -697,6 +697,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -737,6 +738,7 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
+  setOrgSecret: OrgSecret;
   startSession: Session;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
@@ -880,6 +882,11 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteOrgSecretArgs = {
+  id: Scalars["ID"]["input"];
+  orgId: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -1079,6 +1086,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
   enabled: Scalars["Boolean"]["input"];
   repoId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSetOrgSecretArgs = {
+  input: SetOrgSecretInput;
 };
 
 export type MutationStartSessionArgs = {
@@ -1753,6 +1764,12 @@ export type SetApiTokenInput = {
   token: Scalars["String"]["input"];
 };
 
+export type SetOrgSecretInput = {
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+  value: Scalars["String"]["input"];
+};
+
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
 
 export type SlashCommand = {
@@ -2165,6 +2182,7 @@ export type ResolversTypes = ResolversObject<{
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
   SessionStatus: SessionStatus;
   SetApiTokenInput: SetApiTokenInput;
+  SetOrgSecretInput: SetOrgSecretInput;
   SetupStatus: SetupStatus;
   SlashCommand: ResolverTypeWrapper<SlashCommand>;
   SlashCommandCategory: SlashCommandCategory;
@@ -2268,6 +2286,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
   SetApiTokenInput: SetApiTokenInput;
+  SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
@@ -3023,6 +3042,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationDeleteChatMessageArgs, "messageId">
   >;
+  deleteOrgSecret?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDeleteOrgSecretArgs, "id" | "orgId">
+  >;
   deleteSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -3262,6 +3287,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationSetLinkedCheckoutAutoSyncArgs, "enabled" | "repoId" | "sessionGroupId">
+  >;
+  setOrgSecret?: Resolver<
+    ResolversTypes["OrgSecret"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSetOrgSecretArgs, "input">
   >;
   startSession?: Resolver<
     ResolversTypes["Session"],

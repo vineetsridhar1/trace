@@ -91,3 +91,21 @@ export const TEST_AGENT_ENVIRONMENT_MUTATION = gql`
     }
   }
 `;
+
+export const SET_ORG_SECRET_MUTATION = gql`
+  mutation SetOrgSecret($input: SetOrgSecretInput!) {
+    setOrgSecret(input: $input) {
+      id
+      orgId
+      name
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_ORG_SECRET_MUTATION = gql`
+  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {
+    deleteOrgSecret(orgId: $orgId, id: $id)
+  }
+`;

@@ -1101,6 +1101,12 @@ input UpdateAgentEnvironmentInput {
   isDefault: Boolean
 }
 
+input SetOrgSecretInput {
+  orgId: ID!
+  name: String!
+  value: String!
+}
+
 input CreateOrganizationInput {
   name: String!
 }
@@ -1222,6 +1228,8 @@ type Mutation {
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
   deleteAgentEnvironment(id: ID!): Boolean!
   testAgentEnvironment(id: ID!): AgentEnvironmentTestResult!
+  setOrgSecret(input: SetOrgSecretInput!): OrgSecret!
+  deleteOrgSecret(orgId: ID!, id: ID!): Boolean!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
   deleteChannel(id: ID!): Boolean!

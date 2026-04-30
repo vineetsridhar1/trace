@@ -9,6 +9,11 @@ import { logAgentEnvironmentTelemetry } from "../lib/agent-environment-telemetry
 
 const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
 const RAW_SECRET_KEY_PATTERNS = ["apikey", "authorization", "password", "secret", "token"];
+const PUBLIC_PROVISIONED_CONFIG_KEYS = new Set([
+  "capabilities",
+  "startupTimeoutSeconds",
+  "deprovisionPolicy",
+]);
 
 type TxClient = Prisma.TransactionClient;
 
@@ -121,14 +126,32 @@ function assertSupportsTool(environment: AgentEnvironmentRecord, tool: CodingToo
   }
 }
 
-function environmentPayload(environment: AgentEnvironmentRecord): Prisma.InputJsonObject {
+export function publicAgentEnvironmentConfig(
+  config: Prisma.InputJsonValue | Prisma.JsonValue | undefined,
+): Prisma.InputJsonObject {
+  const record = asConfigRecord(config);
+  if (record.runtimeInstanceId || record.runtimeSelection) {
+    return record as Prisma.InputJsonObject;
+  }
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => PUBLIC_PROVISIONED_CONFIG_KEYS.has(key)),
+  ) as Prisma.InputJsonObject;
+}
+
+function environmentPayload(
+  environment: AgentEnvironmentRecord,
+  options?: { includeSensitiveConfig?: boolean },
+): Prisma.InputJsonObject {
   return {
     id: environment.id,
     orgId: environment.organizationId,
     organizationId: environment.organizationId,
     name: environment.name,
     adapterType: environment.adapterType,
-    config: environment.config as Prisma.InputJsonValue,
+    config:
+      options?.includeSensitiveConfig === true
+        ? (environment.config as Prisma.InputJsonValue)
+        : publicAgentEnvironmentConfig(environment.config),
     enabled: environment.enabled,
     isDefault: environment.isDefault,
     createdAt: environment.createdAt.toISOString(),
@@ -180,7 +203,7 @@ async function affectedEnvironmentPayloads(
     where: { organizationId },
     orderBy: [{ isDefault: "desc" }, { name: "asc" }],
   });
-  return environments.map(environmentPayload);
+  return environments.map((environment) => environmentPayload(environment));
 }
 
 export class AgentEnvironmentService {
