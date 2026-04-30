@@ -1,10 +1,9 @@
-import type { AgentEnvironmentAdapterType } from "@trace/gql";
 import { Input } from "../ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import type {
   AgentEnvironmentDraft,
   UpdateAgentEnvironmentDraft,
 } from "./agent-environment-form-types";
+import { formatAdapterType } from "./agent-environment-utils";
 
 type Props = {
   draft: AgentEnvironmentDraft;
@@ -25,18 +24,7 @@ export function AgentEnvironmentBasicsFields({ draft, update }: Props) {
         </label>
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">Adapter</span>
-          <Select
-            value={draft.adapterType}
-            onValueChange={(value) => update("adapterType", value as AgentEnvironmentAdapterType)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="local">Local</SelectItem>
-              <SelectItem value="provisioned">Provisioned</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input value={formatAdapterType(draft.adapterType)} disabled />
         </label>
       </div>
 

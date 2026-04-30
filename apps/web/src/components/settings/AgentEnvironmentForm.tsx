@@ -44,7 +44,7 @@ function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraf
 
   return {
     name: environment?.name ?? "",
-    adapterType: environment?.adapterType ?? "local",
+    adapterType: environment?.adapterType ?? "provisioned",
     enabled: environment?.enabled ?? true,
     isDefault: environment?.isDefault ?? false,
     supportedTools: supportedToolsFromConfig(config),
@@ -107,7 +107,7 @@ export function AgentEnvironmentForm({
     }
   }, [environment, open]);
 
-  const title = environment ? "Edit Agent Environment" : "Create Agent Environment";
+  const title = environment ? "Edit Agent Environment" : "Create Provisioned Environment";
 
   function update<K extends keyof AgentEnvironmentDraft>(key: K, value: AgentEnvironmentDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -188,7 +188,6 @@ export function AgentEnvironmentForm({
             <AgentEnvironmentLocalFields
               draft={draft}
               localBridges={localBridges}
-              update={update}
             />
           ) : (
             <AgentEnvironmentProvisionedFields

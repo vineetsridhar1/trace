@@ -155,6 +155,19 @@ function localBridgeEnvironmentConfig(input: {
   };
 }
 
+function localRuntimeBinding(config: Prisma.InputJsonValue | Prisma.JsonValue): string | null {
+  const record = asConfigRecord(config);
+  const runtimeInstanceId = record.runtimeInstanceId;
+  if (typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()) {
+    return `runtime:${runtimeInstanceId.trim()}`;
+  }
+  const runtimeSelection = record.runtimeSelection;
+  if (typeof runtimeSelection === "string" && runtimeSelection.trim()) {
+    return `selection:${runtimeSelection.trim()}`;
+  }
+  return null;
+}
+
 async function affectedEnvironmentPayloads(
   tx: TxClient,
   organizationId: string,
@@ -183,6 +196,9 @@ export class AgentEnvironmentService {
   async create(input: AgentEnvironmentInput, actorType: ActorType, actorId: string) {
     const name = normalizeName(input.name);
     assertSupportedAdapter(input.adapterType);
+    if (input.adapterType === "local") {
+      throw new Error("Local agent environments are created automatically by connected bridges");
+    }
     const config = asConfigRecord(input.config);
     assertConfigStoresOnlySecretReferences(input.config);
     await runtimeAdapterRegistry.get(input.adapterType).validateConfig(config);
@@ -355,6 +371,19 @@ export class AgentEnvironmentService {
         where: { id },
       });
       await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      if (
+        (existing.adapterType === "local" && input.adapterType && input.adapterType !== "local") ||
+        (existing.adapterType !== "local" && input.adapterType === "local")
+      ) {
+        throw new Error("Local agent environments are managed by connected bridges");
+      }
+      if (
+        existing.adapterType === "local" &&
+        input.config !== undefined &&
+        localRuntimeBinding(input.config) !== localRuntimeBinding(existing.config)
+      ) {
+        throw new Error("Local agent environment bridge binding cannot be changed manually");
+      }
       const adapterType = input.adapterType ?? existing.adapterType;
       assertSupportedAdapter(adapterType);
       const config =

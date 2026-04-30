@@ -23,7 +23,7 @@ export function AgentEnvironmentsSection() {
           </Button>
           <Button size="sm" onClick={settings.createEnvironment} disabled={!settings.activeOrgId}>
             <Plus size={14} className="mr-1.5" />
-            New
+            New provisioned
           </Button>
         </div>
       </div>
