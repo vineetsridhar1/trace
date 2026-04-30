@@ -132,7 +132,7 @@ export function BrowseChannelsDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {!hideTrigger && (
         <DialogTrigger
-          className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+          className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10"
           title="Browse channels"
         >
           <Search size={16} />

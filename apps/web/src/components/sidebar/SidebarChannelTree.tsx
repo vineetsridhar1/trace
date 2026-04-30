@@ -151,7 +151,7 @@ export function SidebarChannelTree({
       </DndContext>
 
       {allChannelIds.length === 0 && groupIds.length === 0 && (
-        <p className="px-2 py-4 text-center text-xs text-muted-foreground">No channels yet</p>
+        <p className="px-2 py-4 text-center text-xs text-foreground">No channels yet</p>
       )}
     </>
   );

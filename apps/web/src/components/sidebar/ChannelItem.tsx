@@ -69,7 +69,7 @@ export const ChannelItem = memo(function ChannelItem({
                 isActive={isActive}
                 onClick={onClick}
                 tooltip={name ?? ""}
-                className="h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground data-[active=true]:bg-white/10 data-[active=true]:text-foreground"
+                className="h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-foreground hover:bg-white/10 data-[active=true]:bg-white/10 data-[active=true]:text-foreground"
               >
                 {canExpand && (
                   <span
