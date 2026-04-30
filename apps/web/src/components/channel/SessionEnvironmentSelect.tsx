@@ -18,7 +18,7 @@ interface SessionEnvironmentsQueryResult {
 type Props = {
   tool: string;
   selectedTarget: string | null;
-  onSelectionChange: (target: string | null) => void;
+  onSelectionChange: (target: string | null, environment?: SessionEnvironmentOption | null) => void;
 };
 
 export const CLOUD_SESSION_TARGET = "__cloud__";
@@ -48,7 +48,7 @@ export function SessionEnvironmentSelect({
     let cancelled = false;
     if (!activeOrgId) {
       setEnvironments([]);
-      onSelectionChange(CLOUD_SESSION_TARGET);
+      onSelectionChange(CLOUD_SESSION_TARGET, null);
       return () => {
         cancelled = true;
       };
@@ -68,12 +68,18 @@ export function SessionEnvironmentSelect({
           .filter((environment) => environmentSupportsTool(environment, tool))
           .sort(compareEnvironments);
         setEnvironments(enabled);
-        onSelectionChange(resolveSelectedTarget(enabled, selectedTarget));
+        const target = resolveSelectedTarget(enabled, selectedTarget);
+        onSelectionChange(
+          target,
+          target && target !== CLOUD_SESSION_TARGET
+            ? (enabled.find((environment) => environment.id === target) ?? null)
+            : null,
+        );
       })
       .catch(() => {
         if (!cancelled) {
           setEnvironments([]);
-          onSelectionChange(CLOUD_SESSION_TARGET);
+          onSelectionChange(CLOUD_SESSION_TARGET, null);
         }
       });
 
@@ -86,12 +92,24 @@ export function SessionEnvironmentSelect({
     selectedTarget === CLOUD_SESSION_TARGET
       ? undefined
       : environments.find((environment) => environment.id === selectedTarget);
-  const localEnvironments = environments.filter(
-    (environment) => environment.adapterType === "local",
+  const explicitEnvironments = environments.filter(
+    (environment) =>
+      environment.adapterType === "local" ||
+      (environment.adapterType === "provisioned" && !environment.isDefault),
   );
 
   return (
-    <Select value={selectedTarget ?? CLOUD_SESSION_TARGET} onValueChange={onSelectionChange}>
+    <Select
+      value={selectedTarget ?? CLOUD_SESSION_TARGET}
+      onValueChange={(target) =>
+        onSelectionChange(
+          target,
+          target !== CLOUD_SESSION_TARGET
+            ? (environments.find((environment) => environment.id === target) ?? null)
+            : null,
+        )
+      }
+    >
       <SelectTrigger className="h-7 w-auto max-w-48 gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
         <SelectValue>
           {selectedTarget === CLOUD_SESSION_TARGET ? (
@@ -105,7 +123,7 @@ export function SessionEnvironmentSelect({
         <SelectItem value={CLOUD_SESSION_TARGET}>
           <CloudLabel />
         </SelectItem>
-        {localEnvironments.map((environment) => (
+        {explicitEnvironments.map((environment) => (
           <SelectItem key={environment.id} value={environment.id}>
             <EnvironmentLabel environment={environment} />
           </SelectItem>
