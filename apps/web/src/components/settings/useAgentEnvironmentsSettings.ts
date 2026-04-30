@@ -31,7 +31,8 @@ export function useAgentEnvironmentsSettings() {
 
   const environmentIds = useEntityIds(
     "agentEnvironments",
-    (environment: EntityTableMap["agentEnvironments"]) => environment.orgId === activeOrgId,
+    (environment: EntityTableMap["agentEnvironments"]) =>
+      environment.orgId === activeOrgId && environment.adapterType === "provisioned",
     compareEnvironments,
   );
   const editingEnvironment = editingEnvironmentId

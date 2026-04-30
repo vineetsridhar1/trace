@@ -11,9 +11,9 @@ export function AgentEnvironmentsSection() {
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Agent Environments</h2>
+          <h2 className="text-base font-semibold text-foreground">Provisioned Environments</h2>
           <p className="text-sm text-muted-foreground">
-            Manage local and provisioned runtimes for this organization.
+            Manage launcher-backed runtimes for this organization.
           </p>
         </div>
         <div className="flex gap-2">
@@ -35,7 +35,7 @@ export function AgentEnvironmentsSection() {
       ) : settings.environmentIds.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-surface-deep p-8 text-center">
           <Bot className="mx-auto mb-3 text-muted-foreground" size={28} />
-          <p className="text-sm text-muted-foreground">No agent environments configured.</p>
+          <p className="text-sm text-muted-foreground">No provisioned environments configured.</p>
         </div>
       ) : (
         <div className="space-y-3">
