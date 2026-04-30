@@ -6,7 +6,7 @@ import { client } from "../../lib/urql";
 import { createQuickSession, quickSessionUnavailableMessage } from "../../lib/create-quick-session";
 import { cn } from "../../lib/utils";
 import { usePreferencesStore } from "../../stores/preferences";
-import { SessionEnvironmentSelect } from "./SessionEnvironmentSelect";
+import { CLOUD_SESSION_TARGET, SessionEnvironmentSelect } from "./SessionEnvironmentSelect";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 interface AvailableRuntimesQueryResult {
@@ -22,11 +22,11 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const defaultTool = usePreferencesStore((s) => s.defaultTool ?? "claude_code");
   const [repoNotLinked, setRepoNotLinked] = useState(false);
   const [checkingRepoLink, setCheckingRepoLink] = useState(false);
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (selectedEnvironmentId) {
+    if (selectedTarget === null || selectedTarget === CLOUD_SESSION_TARGET) {
       setRepoNotLinked(false);
       setCheckingRepoLink(false);
       return () => {
@@ -75,14 +75,19 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [channelRepoId, defaultTool, selectedEnvironmentId]);
+  }, [channelRepoId, defaultTool, selectedTarget]);
 
   const disabled = checkingRepoLink || repoNotLinked;
 
   const handleClick = useCallback(() => {
     if (disabled) return;
-    createQuickSession(channelId, { environmentId: selectedEnvironmentId });
-  }, [channelId, disabled, selectedEnvironmentId]);
+    createQuickSession(
+      channelId,
+      selectedTarget === null || selectedTarget === CLOUD_SESSION_TARGET
+        ? { hosting: "cloud" }
+        : { environmentId: selectedTarget },
+    );
+  }, [channelId, disabled, selectedTarget]);
 
   const tooltip = checkingRepoLink
     ? "Checking repo link..."
@@ -94,8 +99,8 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     <div className="flex items-center gap-1">
       <SessionEnvironmentSelect
         tool={defaultTool}
-        selectedEnvironmentId={selectedEnvironmentId}
-        onSelectionChange={setSelectedEnvironmentId}
+        selectedTarget={selectedTarget}
+        onSelectionChange={setSelectedTarget}
       />
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex" />}>
