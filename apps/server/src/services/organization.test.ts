@@ -13,6 +13,7 @@ vi.mock("./event.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { OrganizationService } from "./organization.js";
 
 const prismaMock = prisma as any;
@@ -26,6 +27,11 @@ describe("OrganizationService", () => {
 
   it("creates organizations with the creator as admin and emits organization_created", async () => {
     prismaMock.user.findUniqueOrThrow.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.user.upsert.mockResolvedValueOnce({
+      id: TRACE_AI_USER_ID,
+      email: TRACE_AI_EMAIL,
+      name: TRACE_AI_NAME,
+    });
     prismaMock.organization.create.mockResolvedValueOnce({ id: "org-1", name: "Acme" });
     prismaMock.orgMember.create
       .mockResolvedValueOnce({
@@ -53,9 +59,23 @@ describe("OrganizationService", () => {
       data: { name: "Acme" },
       select: { id: true, name: true },
     });
+    expect(prismaMock.user.upsert).toHaveBeenCalledWith({
+      where: { id: TRACE_AI_USER_ID },
+      update: {
+        email: TRACE_AI_EMAIL,
+        name: TRACE_AI_NAME,
+        avatarUrl: null,
+        githubId: null,
+      },
+      create: {
+        id: TRACE_AI_USER_ID,
+        email: TRACE_AI_EMAIL,
+        name: TRACE_AI_NAME,
+      },
+    });
     expect(prismaMock.orgMember.create).toHaveBeenNthCalledWith(2, {
       data: {
-        userId: "00000000-0000-4000-a000-000000000001",
+        userId: TRACE_AI_USER_ID,
         organizationId: "org-1",
         role: "member",
       },
