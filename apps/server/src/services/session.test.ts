@@ -1204,7 +1204,7 @@ describe("SessionService", () => {
 
       const result = await service.recordGitCheckpoint("session-1", {
         trigger: "push",
-        command: "git push origin HEAD",
+        command: "git push -u origin HEAD",
         observedAt: "2024-01-02T00:00:02.000Z",
         commitSha: "abcdef1234567890",
         parentShas: ["1234567890abcdef"],
