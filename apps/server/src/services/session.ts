@@ -2861,31 +2861,6 @@ export class SessionService {
       );
       data.workdir = null;
       data.pendingRun = Prisma.DbNull;
-
-      // Provision the new runtime (repo already included in initial select)
-      const needsProvisioning = !!prev.repoId || newHosting === "cloud";
-      if (needsProvisioning) {
-        const previousAdapterType = this.parseConnection(prev.connection).adapterType;
-        const adapterType =
-          requestedEnvironment?.adapterType ??
-          (newHosting === prev.hosting ? previousAdapterType : undefined);
-        this.provisionRuntime({
-          sessionId,
-          sessionGroupId: prev.sessionGroupId,
-          slug: prev.sessionGroup?.slug,
-          preserveBranchName: true,
-          hosting: newHosting,
-          tool: nextTool,
-          model: nextModel !== undefined ? nextModel : prev.model,
-          repo: prev.repo,
-          branch: prev.branch,
-          createdById: actorId,
-          organizationId,
-          readOnly: prev.readOnlyWorkspace,
-          environment: requestedEnvironment,
-          ...(adapterType && { adapterType }),
-        });
-      }
     }
 
     const session = await prisma.session.update({
