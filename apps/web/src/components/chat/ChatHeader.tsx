@@ -5,7 +5,6 @@ import { client } from "../../lib/urql";
 import { useEntityField } from "@trace/client-core";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
-import { SidebarTrigger } from "../ui/sidebar";
 import { AddMemberDialog } from "./AddMemberDialog";
 
 const RENAME_CHAT_MUTATION = gql`
@@ -74,7 +73,6 @@ export function ChatHeader({ chatId }: { chatId: string }) {
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-      <SidebarTrigger />
       {type === "dm" ? (
         <>
           {otherMember?.user.avatarUrl ? (

@@ -4,7 +4,6 @@ import { useEntityIds } from "@trace/client-core";
 import type { InboxItemStatus } from "@trace/gql";
 import { InboxItemRow } from "./InboxItemRow";
 import { Inbox } from "lucide-react";
-import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
 
 const MAX_RESOLVED = 20;
@@ -69,7 +68,6 @@ export function InboxView() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <SidebarTrigger />
         <Inbox size={18} className="text-muted-foreground" />
         <h2 className="text-lg font-semibold text-foreground">Inbox</h2>
         {activeIds.length > 0 && (

@@ -8,7 +8,6 @@ import { ChatMessageList } from "../chat/ChatMessageList";
 import { ChannelWelcome } from "./ChannelWelcome";
 import { ChannelComposer } from "./ChannelComposer";
 import { ThreadPanel } from "../chat/ThreadPanel";
-import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
 
 const THREAD_WIDTH_KEY = "trace_channel_thread_width";
@@ -25,7 +24,6 @@ export function TextChannelView({ channelId }: { channelId: string }) {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <SidebarTrigger />
         <MessageSquare size={16} className="text-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         <ConnectionStatus />
