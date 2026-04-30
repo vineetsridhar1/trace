@@ -67,5 +67,5 @@ Owns plan lines:
 
 ## Review follow-ups
 
-- [ ] Reject or normalize requests that provide both `environmentId` and a conflicting `runtimeInstanceId`; explicit environment selection should remain the source of truth.
-- [ ] Make the session creation repo-link precheck validate the selected local environment's bound runtime, not just any connected local runtime.
+- [x] Reject or normalize requests that provide both `environmentId` and a conflicting `runtimeInstanceId`; explicit environment selection should remain the source of truth.
+- [x] Make the session creation repo-link precheck validate the selected local environment's bound runtime, not just any connected local runtime.

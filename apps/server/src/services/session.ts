@@ -2054,6 +2054,23 @@ export class SessionService {
     }
     let runtimeLabel: string | undefined;
     const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
+    if (
+      input.environmentId &&
+      input.runtimeInstanceId &&
+      requestedEnvironment?.adapterType !== "local"
+    ) {
+      throw new ValidationError("runtimeInstanceId can only be combined with a local environment");
+    }
+    if (
+      input.environmentId &&
+      input.runtimeInstanceId &&
+      environmentRuntimeInstanceId &&
+      input.runtimeInstanceId !== environmentRuntimeInstanceId
+    ) {
+      throw new ValidationError(
+        "runtimeInstanceId does not match the selected local environment",
+      );
+    }
     const shouldUseEnvironmentRuntime =
       !input.runtimeInstanceId &&
       !sharedRuntimeInstanceId &&

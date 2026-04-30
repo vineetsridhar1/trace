@@ -12,7 +12,7 @@ import { getDefaultModel } from "../components/session/modelOptions";
 
 const pendingQuickSessionChannels = new Set<string>();
 
-type RuntimeUnavailableReason = "no_local_runtime" | "repo_not_linked";
+export type RuntimeUnavailableReason = "no_local_runtime" | "repo_not_linked";
 
 interface AvailableRuntimesQueryResult {
   availableRuntimes?: SessionRuntimeInstance[];
