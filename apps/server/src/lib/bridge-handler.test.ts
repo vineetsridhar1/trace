@@ -269,6 +269,74 @@ describe("bridge handler auth", () => {
     );
   });
 
+  it("binds a scoped provisioned bridge before lifecycle state records the runtime id", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "requested" },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+
+    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "cloud-machine-owned");
+    expect(ws.close).not.toHaveBeenCalledWith(1008, "Session is not waiting for this runtime");
+  });
+
+  it("rejects a scoped provisioned bridge bound to a different runtime id", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "connecting", runtimeInstanceId: "other-runtime" },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+
+    expect(ws.close).toHaveBeenCalledWith(1008, "Session is not waiting for this runtime");
+    expect(mocks.bindSession).not.toHaveBeenCalled();
+  });
+
   it("rejects a scoped cloud bridge after startup timeout", async () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
