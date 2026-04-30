@@ -69,13 +69,13 @@ export const ChannelItem = memo(function ChannelItem({
                 isActive={isActive}
                 onClick={onClick}
                 tooltip={name ?? ""}
-                className="h-8 gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-white/65 hover:bg-transparent hover:text-white data-[active=true]:bg-transparent data-[active=true]:text-white"
+                className="h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-white/65 hover:bg-white/10 hover:text-white data-[active=true]:bg-white/10 data-[active=true]:text-white"
               >
                 {canExpand && (
                   <span
                     role="button"
                     tabIndex={0}
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-white/35 transition-colors hover:text-white/80"
+                    className="flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-white/35 transition-colors hover:text-white/80"
                     title={isExpanded ? "Collapse channel sessions" : "Expand channel sessions"}
                     onClick={(event: MouseEvent<HTMLSpanElement>) => {
                       event.stopPropagation();

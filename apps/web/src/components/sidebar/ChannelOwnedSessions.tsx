@@ -104,18 +104,18 @@ function OwnedSessionItem({
     <button
       type="button"
       className={cn(
-        "flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm leading-none transition-colors",
+        "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm leading-none transition-colors",
         isActive
           ? "bg-white/10 text-white shadow-[inset_0_1px_0_rgb(255_255_255_/_0.06)]"
-          : "text-white/75 hover:bg-white/5 hover:text-white",
+          : "text-white/75 hover:bg-white/10 hover:text-white",
       )}
       title={name ?? "Untitled session"}
       onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}
     >
       <span
-        className={cn("relative inline-flex h-3 w-3 shrink-0 items-center justify-center", color)}
+        className={cn("relative inline-flex h-1.5 w-1.5 shrink-0 items-center justify-center", color)}
       >
-        <AgentStatusIcon agentStatus={displayAgentStatus} size={12} />
+        <AgentStatusIcon agentStatus={displayAgentStatus} size={6} />
         {hasDoneBadge && (
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
         )}

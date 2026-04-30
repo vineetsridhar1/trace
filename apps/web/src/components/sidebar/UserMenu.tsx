@@ -13,7 +13,7 @@ export function UserMenu() {
 
   return (
     <Popover>
-      <PopoverTrigger className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-surface-elevated">
+      <PopoverTrigger className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-white/10">
         <motion.div
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.97 }}
@@ -37,7 +37,7 @@ export function UserMenu() {
         </div>
         <button
           onClick={() => setActivePage("settings")}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-white/10"
         >
           <Settings size={16} className="text-muted-foreground" />
           Settings
@@ -45,7 +45,7 @@ export function UserMenu() {
         {features.agentDebug && (
           <button
             onClick={() => setActivePage("agent-debug")}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-white/10"
           >
             <Bot size={16} className="text-muted-foreground" />
             Agent Debug
@@ -53,7 +53,7 @@ export function UserMenu() {
         )}
         <button
           onClick={() => void logout()}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-surface-hover"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-white/10"
         >
           <LogOut size={16} />
           Log out

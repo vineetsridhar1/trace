@@ -11,10 +11,10 @@ export function ConnectionsButton() {
       type="button"
       onClick={() => setActivePage("connections")}
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
         activePage === "connections"
           ? "bg-accent/15 text-accent"
-          : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+          : "text-muted-foreground hover:bg-white/10 hover:text-foreground",
       )}
     >
       <Plug size={16} />

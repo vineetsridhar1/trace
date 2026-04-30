@@ -100,7 +100,7 @@ export function CreateChatDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+        className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
         title="New message"
       >
         <Plus size={16} />
