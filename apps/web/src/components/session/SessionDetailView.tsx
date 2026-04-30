@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
-import { asJsonObject } from "@trace/shared";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import {
   useEntityStore,
@@ -35,7 +34,14 @@ import {
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 
-const RUNTIME_BOOTING_STATES = new Set(["pending", "requested", "provisioning", "booting", "connecting"]);
+const RUNTIME_BOOTING_STATES = new Set([
+  "pending",
+  "requested",
+  "provisioning",
+  "booting",
+  "connecting",
+]);
+const RUNTIME_FAILURE_STATES = new Set(["failed", "timed_out", "deprovision_failed"]);
 
 function getConnectionState(connection: Record<string, unknown> | null | undefined): string | null {
   const state = connection?.state;
@@ -326,20 +332,14 @@ export function SessionDetailView({
     [eventIds, events],
   );
   const initialEventsLoading = loading && eventIds.length === 0;
-  const hasPendingRuntimeMessage = useMemo(
-    () =>
-      eventIds.some((eventId) => {
-        const event = events[eventId];
-        if (event?.eventType !== "message_sent") return false;
-        return asJsonObject(event.payload)?.deliveryStatus === "pending_runtime";
-      }),
-    [eventIds, events],
-  );
   const connectionState = getConnectionState(connection);
-  const runtimeBooting =
-    agentStatus === "active" &&
-    ((hasPendingRuntimeMessage && connectionState !== "connected") ||
-      (connectionState !== null && RUNTIME_BOOTING_STATES.has(connectionState)));
+  const runtimeLifecycleState =
+    hosting === "cloud" &&
+    connectionState !== null &&
+    connectionState !== "connected" &&
+    (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
+      ? connectionState
+      : null;
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -489,8 +489,8 @@ export function SessionDetailView({
           )}
         </div>
 
-        {runtimeBooting ? (
-          <RuntimeBootingNotice connectionState={connectionState} />
+        {runtimeLifecycleState ? (
+          <RuntimeLifecycleNotice connectionState={runtimeLifecycleState} />
         ) : !bridgeInteractionAllowed ? (
           <div className="border-t p-4">
             <BridgeAccessNotice
@@ -539,27 +539,48 @@ export function SessionDetailView({
   );
 }
 
-function RuntimeBootingNotice({ connectionState }: { connectionState: string | null }) {
-  const label =
-    connectionState === "provisioning"
+function RuntimeLifecycleNotice({ connectionState }: { connectionState: string }) {
+  const failed = RUNTIME_FAILURE_STATES.has(connectionState);
+  const label = failed
+    ? connectionState === "timed_out"
+      ? "Cloud runtime timed out"
+      : "Cloud runtime failed"
+    : connectionState === "provisioning"
       ? "Provisioning cloud runtime"
       : connectionState === "connecting"
         ? "Connecting to cloud runtime"
         : "Booting cloud runtime";
+  const tone = failed
+    ? {
+        border: "border-destructive/30",
+        bg: "bg-destructive/10",
+        text: "text-destructive",
+        iconBg: "bg-destructive/20",
+        body: "text-destructive/80",
+      }
+    : {
+        border: "border-sky-500/30",
+        bg: "bg-sky-500/10",
+        text: "text-sky-100",
+        iconBg: "bg-sky-500/20",
+        body: "text-sky-100/80",
+      };
 
   return (
     <div className="border-t px-4 py-3">
-      <div className="flex items-start gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-50">
-        <div className="mt-0.5 rounded-md bg-sky-500/20 p-1.5 text-sky-200">
-          <Cloud size={14} />
+      <div className={`flex items-start gap-3 rounded-lg border ${tone.border} ${tone.bg} p-3 text-sm`}>
+        <div className={`mt-0.5 rounded-md ${tone.iconBg} p-1.5 ${tone.text}`}>
+          {failed ? <AlertCircle size={14} /> : <Cloud size={14} />}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 font-medium text-sky-100">
-            <Loader2 size={14} className="animate-spin" />
+          <div className={`flex items-center gap-2 font-medium ${tone.text}`}>
+            {failed ? <AlertCircle size={14} /> : <Loader2 size={14} className="animate-spin" />}
             {label}
           </div>
-          <p className="mt-1 text-xs leading-5 text-sky-100/80">
-            Your message is queued and will run as soon as the machine is ready.
+          <p className={`mt-1 text-xs leading-5 ${tone.body}`}>
+            {failed
+              ? "Trace could not finish starting the cloud runtime."
+              : "Your message is queued and will run as soon as the machine is ready."}
           </p>
         </div>
       </div>
