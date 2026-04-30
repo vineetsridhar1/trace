@@ -11,6 +11,12 @@ type SessionEnvironmentOption = Pick<
   "id" | "name" | "adapterType" | "config" | "enabled" | "isDefault"
 >;
 
+export type SessionEnvironmentSelection = {
+  adapterType: AgentEnvironment["adapterType"];
+  runtimeInstanceId: string | null;
+  runtimeSelection: string | null;
+};
+
 interface SessionEnvironmentsQueryResult {
   agentEnvironments?: SessionEnvironmentOption[];
 }
@@ -18,7 +24,7 @@ interface SessionEnvironmentsQueryResult {
 type Props = {
   tool: string;
   selectedTarget: string | null;
-  onSelectionChange: (target: string | null, environment?: SessionEnvironmentOption | null) => void;
+  onSelectionChange: (target: string | null, selection?: SessionEnvironmentSelection | null) => void;
 };
 
 export const CLOUD_SESSION_TARGET = "__cloud__";
@@ -72,7 +78,7 @@ export function SessionEnvironmentSelect({
         onSelectionChange(
           target,
           target && target !== CLOUD_SESSION_TARGET
-            ? (enabled.find((environment) => environment.id === target) ?? null)
+            ? environmentSelection(enabled.find((environment) => environment.id === target))
             : null,
         );
       })
@@ -105,7 +111,7 @@ export function SessionEnvironmentSelect({
         onSelectionChange(
           target,
           target !== CLOUD_SESSION_TARGET
-            ? (environments.find((environment) => environment.id === target) ?? null)
+            ? environmentSelection(environments.find((environment) => environment.id === target))
             : null,
         )
       }
@@ -162,6 +168,28 @@ function environmentSupportsTool(environment: SessionEnvironmentOption, tool: st
     supportedTools.length === 0 ||
     supportedTools.includes(tool as CodingTool)
   );
+}
+
+function environmentSelection(
+  environment: SessionEnvironmentOption | undefined,
+): SessionEnvironmentSelection | null {
+  if (!environment) return null;
+  const config = configRecord(environment);
+  return {
+    adapterType: environment.adapterType,
+    runtimeInstanceId: stringField(config.runtimeInstanceId),
+    runtimeSelection: stringField(config.runtimeSelection),
+  };
+}
+
+function configRecord(environment: SessionEnvironmentOption): Record<string, unknown> {
+  const config = environment.config;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return {};
+  return config as Record<string, unknown>;
+}
+
+function stringField(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function EnvironmentLabel({ environment }: { environment?: SessionEnvironmentOption }) {

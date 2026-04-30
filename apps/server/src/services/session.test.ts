@@ -703,6 +703,43 @@ describe("SessionService", () => {
       );
     });
 
+    it("rejects a runtime override that conflicts with the selected local environment", async () => {
+      prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+        id: "env-1",
+        organizationId: "org-1",
+        name: "Local Laptop",
+        adapterType: "local",
+        config: { runtimeInstanceId: "runtime-env" },
+        enabled: true,
+        isDefault: false,
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          channelId: "channel-1",
+          environmentId: "env-1",
+          runtimeInstanceId: "runtime-other",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("runtimeInstanceId does not match the selected local environment");
+
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalledWith(
+        expect.objectContaining({ runtimeInstanceId: "runtime-other" }),
+      );
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
     it("uses the org default environment when no environment or hosting is specified", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup, hosting: "cloud" });
