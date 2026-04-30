@@ -1,13 +1,12 @@
-import { Info } from "lucide-react";
 import type { OrgSecret } from "@trace/gql";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import type {
   AgentEnvironmentDraft,
   UpdateAgentEnvironmentDraft,
 } from "./agent-environment-form-types";
+import { AgentEnvironmentFieldLabel } from "./AgentEnvironmentFieldLabel";
 
 type Props = {
   draft: AgentEnvironmentDraft;
@@ -22,21 +21,27 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-3">
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Start URL</span>
+          <AgentEnvironmentFieldLabel tooltip="Trace calls this endpoint to provision a new cloud runtime for a session.">
+            Start URL
+          </AgentEnvironmentFieldLabel>
           <Input
             value={draft.startUrl}
             onChange={(event) => update("startUrl", event.target.value)}
           />
         </label>
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Stop URL</span>
+          <AgentEnvironmentFieldLabel tooltip="Trace calls this endpoint when the session ends so the launcher can stop and clean up the runtime.">
+            Stop URL
+          </AgentEnvironmentFieldLabel>
           <Input
             value={draft.stopUrl}
             onChange={(event) => update("stopUrl", event.target.value)}
           />
         </label>
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Status URL</span>
+          <AgentEnvironmentFieldLabel tooltip="Trace polls this endpoint while the runtime is starting to learn when it is ready.">
+            Status URL
+          </AgentEnvironmentFieldLabel>
           <Input
             value={draft.statusUrl}
             onChange={(event) => update("statusUrl", event.target.value)}
@@ -44,17 +49,9 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
         </label>
       </div>
       <label className="space-y-1.5">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <AgentEnvironmentFieldLabel tooltip="Select the organization secret used as the bearer token for launcher requests. Configure secrets in Settings, Launcher Secrets.">
           Bearer secret
-          <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex" />}>
-              <Info size={13} className="text-muted-foreground" />
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              Configure organization secrets in Settings, Launcher Secrets.
-            </TooltipContent>
-          </Tooltip>
-        </span>
+        </AgentEnvironmentFieldLabel>
         <Select
           value={selectedSecret?.id}
           disabled={!orgSecrets.length}
@@ -75,7 +72,9 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
         </Select>
       </label>
       <label className="space-y-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Startup timeout seconds</span>
+        <AgentEnvironmentFieldLabel tooltip="How long Trace waits for the provisioned runtime to connect before treating startup as failed.">
+          Startup timeout seconds
+        </AgentEnvironmentFieldLabel>
         <Input
           type="number"
           min={1}
@@ -84,7 +83,9 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
         />
       </label>
       <label className="space-y-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Launcher metadata JSON</span>
+        <AgentEnvironmentFieldLabel tooltip="Optional JSON sent to the launcher with each start request for provider-specific settings.">
+          Launcher metadata JSON
+        </AgentEnvironmentFieldLabel>
         <Textarea
           value={draft.launcherMetadata}
           onChange={(event) => update("launcherMetadata", event.target.value)}

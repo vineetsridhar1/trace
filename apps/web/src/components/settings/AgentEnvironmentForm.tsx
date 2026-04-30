@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Save } from "lucide-react";
+import { Info, Loader2, Plus, Save } from "lucide-react";
 import type { AgentEnvironment, OrgSecret } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
@@ -10,6 +10,7 @@ import {
   ResponsiveDialogHeader as DialogHeader,
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { environmentConfig, type LocalBridgeSummary } from "./agent-environment-utils";
 import {
   CREATE_AGENT_ENVIRONMENT_MUTATION,
@@ -151,7 +152,18 @@ export function AgentEnvironmentForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            {title}
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Info size={14} className="text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-72">
+                Provisioned environments let Trace call your launcher to start a cloud runtime, wait
+                for it to connect back, and stop it when the session ends.
+              </TooltipContent>
+            </Tooltip>
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
