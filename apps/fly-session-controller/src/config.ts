@@ -9,6 +9,7 @@ export type ControllerConfig = {
   flyMachineCpus: number;
   flyMachineMemoryMb: number;
   deleteAfterStop: boolean;
+  runtimePassthroughEnv: Record<string, string>;
 };
 
 const DEFAULT_PORT = 8787;
@@ -43,7 +44,29 @@ export function loadConfig(env: NodeJS.ProcessEnv): ControllerConfig {
       "FLY_MACHINE_MEMORY_MB",
     ),
     deleteAfterStop: env.FLY_DELETE_AFTER_STOP !== "false",
+    runtimePassthroughEnv: readRuntimePassthroughEnv(env),
   };
+}
+
+function readRuntimePassthroughEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const names = (env.TRACE_RUNTIME_PASSTHROUGH_ENV ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const output: Record<string, string> = {};
+
+  for (const name of names) {
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+      throw new Error(`TRACE_RUNTIME_PASSTHROUGH_ENV contains invalid env var name: ${name}`);
+    }
+
+    const value = env[name];
+    if (value) {
+      output[name] = value;
+    }
+  }
+
+  return output;
 }
 
 function requireEnv(env: NodeJS.ProcessEnv, key: string): string {
