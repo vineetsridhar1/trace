@@ -93,7 +93,7 @@ export function ChannelGroupSection({
         {...listeners}
       >
         <button
-          className="flex flex-1 items-center gap-1 px-0 py-1 text-xs font-semibold uppercase tracking-wider text-white/35 transition-colors hover:text-white/70"
+          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 text-xs font-semibold uppercase tracking-wider text-white/35 transition-colors hover:bg-white/10 hover:text-white/70"
           onClick={toggleCollapse}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
@@ -109,14 +109,14 @@ export function ChannelGroupSection({
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
           <button
-            className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
             title="Add channel to group"
             onClick={() => onAddChannel(id)}
           >
             <Plus size={14} />
           </button>
           <button
-            className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-destructive"
+            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-destructive"
             title="Delete group"
             onClick={() => onDeleteGroup(id)}
           >

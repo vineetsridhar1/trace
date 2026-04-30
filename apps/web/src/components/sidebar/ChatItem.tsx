@@ -30,7 +30,12 @@ export const ChatItem = memo(function ChatItem({
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={displayName}>
+      <SidebarMenuButton
+        isActive={isActive}
+        onClick={onClick}
+        tooltip={displayName}
+        className="cursor-pointer hover:bg-white/10 data-[active=true]:bg-white/10"
+      >
         <div className="relative">
           <MessageCircle size={16} className="opacity-50" />
           {isUnread && (

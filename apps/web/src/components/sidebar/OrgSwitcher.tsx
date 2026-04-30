@@ -13,7 +13,7 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
     (m: OrgMembership) => m.organizationId === activeOrgId,
   )?.organization;
   const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
-  const triggerClassName = `flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-surface-elevated ${large ? "py-2.5" : ""}`;
+  const triggerClassName = `flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-white/10 ${large ? "py-2.5" : ""}`;
 
   return (
     <Popover>
@@ -43,8 +43,8 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
           <button
             key={org.id}
             onClick={() => switchActiveOrganization(org.id)}
-            className={`flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-surface-hover ${
-              org.id === activeOrgId ? "bg-surface-hover text-foreground" : "text-muted-foreground"
+            className={`flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-white/10 ${
+              org.id === activeOrgId ? "bg-white/10 text-foreground" : "text-muted-foreground"
             }`}
           >
             <div
@@ -67,7 +67,7 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
           trigger={
             <button
               type="button"
-              className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
             >
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
                 <Plus size={13} />
