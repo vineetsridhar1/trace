@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import { Alert } from "react-native";
 import {
-  AVAILABLE_RUNTIMES_QUERY,
   getSessionChannelId,
   getSessionGroupChannelId,
   RUN_SESSION_MUTATION,
@@ -11,51 +10,23 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
-import type { CodingTool, HostingMode, SessionRuntimeInstance } from "@trace/gql";
-import { getConnectionMode } from "@/lib/connection-target";
+import type { CodingTool } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
-import { canUseMobileCloudHosting, resolveMobileSessionHosting } from "@/lib/session-hosting";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
 const pendingQuickSessionChannels = new Set<string>();
 
-async function resolveDefaultRuntime(
-  tool: CodingTool,
-  channelRepoId: string | undefined,
-): Promise<string | undefined> {
-  try {
-    const result = await getClient().query(AVAILABLE_RUNTIMES_QUERY, { tool }).toPromise();
-    const runtimes = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
-    const connected = runtimes.filter(
-      (runtime) => runtime.connected && runtime.hostingMode === "local",
-    );
-    const eligible = channelRepoId
-      ? connected.filter((runtime) => runtime.registeredRepoIds.includes(channelRepoId))
-      : connected;
-    return eligible[0]?.id;
-  } catch {
-    return undefined;
-  }
-}
-
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
-}
-
-interface CreateQuickSessionOptions {
-  hosting?: HostingMode;
 }
 
 /**
  * Start the session, prefetch its workspace, then open the session page.
  */
-export async function createQuickSession(
-  channelId: string,
-  options: CreateQuickSessionOptions = {},
-): Promise<void> {
+export async function createQuickSession(channelId: string): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
@@ -64,29 +35,15 @@ export async function createQuickSession(
 
   const tool = DEFAULT_TOOL;
   const model = getDefaultModel(tool);
-  const connectionMode = getConnectionMode();
-  const hosting = options.hosting ?? resolveMobileSessionHosting(connectionMode);
 
   void haptic.light();
 
   try {
-    if (hosting === "cloud" && !canUseMobileCloudHosting(connectionMode)) {
-      throw new Error("Cloud sessions are only available when connected to Trace Cloud.");
-    }
-
-    const runtimeInstanceId =
-      hosting === "local" ? await resolveDefaultRuntime(tool, channelRepoId) : undefined;
-    if (hosting === "local" && !runtimeInstanceId) {
-      throw new Error("No connected local runtime available");
-    }
-
     const result = await getClient()
       .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
         input: {
           tool,
           model,
-          hosting,
-          runtimeInstanceId,
           channelId,
           repoId: channelRepoId,
         },

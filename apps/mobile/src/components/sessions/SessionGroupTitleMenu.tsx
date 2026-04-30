@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { BlurView } from "expo-blur";
-import { SymbolView, type SFSymbol } from "expo-symbols";
+import { SymbolView } from "expo-symbols";
 import Animated, {
   interpolate,
   runOnJS,
@@ -20,7 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
-import type { SessionConnection, SessionGroupStatus } from "@trace/gql";
+import type { SessionGroupStatus } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
@@ -287,17 +287,6 @@ function TitleRow({
     | string
     | null
     | undefined;
-  const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
-    | string
-    | null
-    | undefined;
-  const connection = useEntityField("sessions", sessionId ?? "", "connection") as
-    | SessionConnection
-    | null
-    | undefined;
-  const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
-  const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
-  const showBridge = !!sessionId && !!hosting;
 
   return (
     <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
@@ -324,26 +313,6 @@ function TitleRow({
         ) : (
           <Spinner size="small" color="mutedForeground" />
         )}
-        {showBridge ? (
-          <View style={styles.bridgeRow}>
-            <SymbolView
-              name={bridgeIcon}
-              size={11}
-              tintColor={theme.colors.mutedForeground}
-              weight="medium"
-              resizeMode="scaleAspectFit"
-              style={styles.bridgeIcon}
-            />
-            <Text
-              variant="caption1"
-              numberOfLines={1}
-              color="mutedForeground"
-              style={styles.bridgeLabel}
-            >
-              {bridgeLabel}
-            </Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -504,14 +473,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  bridgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-    gap: 4,
-  },
-  bridgeIcon: { width: 11, height: 11 },
-  bridgeLabel: {},
   branchRow: {
     flexDirection: "row",
     alignItems: "center",

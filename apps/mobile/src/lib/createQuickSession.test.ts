@@ -14,7 +14,6 @@ const reconcileOptimisticSessionPairMock = vi.fn();
 const rollbackOptimisticSessionPairMock = vi.fn();
 const tryOpenSessionPlayerMock = vi.fn();
 const closeSessionPlayerMock = vi.fn();
-const canUseMobileCloudHostingMock = vi.fn(() => true);
 
 const START_SESSION_MUTATION = "START_SESSION_MUTATION";
 const RUN_SESSION_MUTATION = "RUN_SESSION_MUTATION";
@@ -100,15 +99,6 @@ vi.mock("@/lib/haptics", () => ({
   },
 }));
 
-vi.mock("@/lib/connection-target", () => ({
-  getConnectionMode: vi.fn(() => "hosted"),
-}));
-
-vi.mock("@/lib/session-hosting", () => ({
-  canUseMobileCloudHosting: canUseMobileCloudHostingMock,
-  resolveMobileSessionHosting: vi.fn(() => "cloud"),
-}));
-
 vi.mock("@/lib/sessionPlayer", () => ({
   closeSessionPlayer: closeSessionPlayerMock,
   tryOpenSessionPlayer: tryOpenSessionPlayerMock,
@@ -129,8 +119,6 @@ describe("createQuickSession", () => {
     rollbackOptimisticSessionPairMock.mockReset();
     tryOpenSessionPlayerMock.mockReset();
     closeSessionPlayerMock.mockReset();
-    canUseMobileCloudHostingMock.mockReset();
-    canUseMobileCloudHostingMock.mockReturnValue(true);
   });
 
   it("opens only the real session after it is created and hydrated", async () => {
@@ -149,6 +137,14 @@ describe("createQuickSession", () => {
     const { createQuickSession } = await import("./createQuickSession");
     await createQuickSession("channel_1");
 
+    expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
+      input: {
+        tool: "claude_code",
+        model: expect.any(String),
+        channelId: "channel_1",
+        repoId: "repo_channel",
+      },
+    });
     expect(insertOptimisticSessionPairMock).not.toHaveBeenCalled();
     expect(reconcileOptimisticSessionPairMock).not.toHaveBeenCalled();
     expect(rollbackOptimisticSessionPairMock).not.toHaveBeenCalled();
@@ -211,19 +207,6 @@ describe("createQuickSession", () => {
 
     expect(pushMock).toHaveBeenCalledTimes(1);
   });
-
-  it("does not start explicit cloud sessions while paired to a local server", async () => {
-    canUseMobileCloudHostingMock.mockReturnValue(false);
-
-    const { createQuickSession } = await import("./createQuickSession");
-    await createQuickSession("channel_1", { hosting: "cloud" });
-
-    expect(mutationMock).not.toHaveBeenCalled();
-    expect(alertMock).toHaveBeenCalledWith(
-      "Couldn't start session",
-      "Cloud sessions are only available when connected to Trace Cloud.",
-    );
-  });
 });
 
 describe("startPlanImplementationSession", () => {
@@ -242,8 +225,6 @@ describe("startPlanImplementationSession", () => {
     rollbackOptimisticSessionPairMock.mockReset();
     tryOpenSessionPlayerMock.mockReset();
     closeSessionPlayerMock.mockReset();
-    canUseMobileCloudHostingMock.mockReset();
-    canUseMobileCloudHostingMock.mockReturnValue(true);
   });
 
   it("starts, runs, navigates, and terminates the source session", async () => {
