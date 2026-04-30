@@ -4931,6 +4931,15 @@ export class SessionService {
       return status;
     }
 
+    if (status.remoteBranch && status.remoteCommitSha) {
+      if (status.remoteAheadCount > 0 || status.remoteBehindCount > 0) {
+        throw new Error(
+          "Cannot move session: local branch must match its remote branch before moving.",
+        );
+      }
+      return status;
+    }
+
     if (!status.upstreamBranch || !status.upstreamCommitSha) {
       throw new Error(
         "Cannot move session: push this branch to origin before moving to another bridge.",
