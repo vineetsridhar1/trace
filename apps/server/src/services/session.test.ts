@@ -2979,6 +2979,16 @@ describe("SessionService", () => {
         where: { id: "group-1" },
         data: { archivedAt: expect.any(Date) },
       });
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-2",
+        expect.objectContaining({
+          organizationId: "org-1",
+          workdir: "/workspace/group-1",
+          repoId: "repo-1",
+          connection: groupConnection,
+        }),
+        expect.objectContaining({ reason: "session_unloaded" }),
+      );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_group_archived",

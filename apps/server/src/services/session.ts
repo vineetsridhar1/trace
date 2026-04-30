@@ -6230,6 +6230,7 @@ export class SessionService {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
+        organizationId: true,
         hosting: true,
         workdir: true,
         repoId: true,
