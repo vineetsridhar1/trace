@@ -79,6 +79,27 @@ Owns plan lines:
 - Provider-specific reference launcher tests belong with the launcher, not Trace core.
 - Keep telemetry provider-neutral.
 
+## Rollout path
+
+1. Keep all provisioned environments disabled by default until their `/status`
+   test passes from org settings.
+2. Enable one non-default provisioned environment for an internal org and start
+   sessions by explicitly selecting that environment.
+3. Watch provider-neutral telemetry for:
+   - `environment.create`, `environment.update`, and `environment.test`
+   - `launcher.request` and `provisioned.start`
+   - `bridge.connected`, `provisioned.bridge_ready`, and `provisioned.startup_timeout`
+   - `runtime.heartbeat_stale`
+   - `deprovision.reconciler_iteration`, `deprovision.failed`, and
+     `deprovision.abandoned_runtime`
+4. Promote the environment to org default only after explicit sessions show
+   stable startup, bridge connection, terminal multiplexing, and deprovision.
+5. Roll back by clearing `isDefault` or disabling the environment; existing
+   local bridge environments remain available as the fallback path.
+
+Telemetry payloads must stay provider-neutral and must not include launcher
+bearer tokens, runtime bridge tokens, HMAC secrets, or HMAC signatures.
+
 ## How to test
 
 1. Run the server test suite.

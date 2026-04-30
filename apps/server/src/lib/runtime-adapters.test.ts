@@ -95,6 +95,7 @@ describe("ProvisionedRuntimeAdapter", () => {
   });
 
   it("starts with bearer auth, stable idempotency, and separate runtime bridge token", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     fetchMock().mockResolvedValueOnce(
       makeResponse({
         runtimeId: "provider-runtime-1",
@@ -170,6 +171,10 @@ describe("ProvisionedRuntimeAdapter", () => {
       allowedScope: "session",
       tool: "codex",
     });
+    const logged = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(logged).not.toContain("launcher-secret");
+    expect(logged).not.toContain(body.runtimeToken as string);
+    logSpy.mockRestore();
   });
 
   it("rejects expired runtime bridge tokens", async () => {
@@ -206,6 +211,7 @@ describe("ProvisionedRuntimeAdapter", () => {
   });
 
   it("signs HMAC lifecycle requests without bearer auth", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     fetchMock().mockResolvedValueOnce(
       makeResponse({
         runtimeId: "provider-runtime-1",
@@ -238,6 +244,9 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(headers["Trace-Timestamp"]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(headers["Trace-Request-Id"]).toBeTruthy();
     expect(headers["Trace-Signature"]).toMatch(/^v1=[0-9a-f]{64}$/);
+    const logged = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(logged).not.toContain(headers["Trace-Signature"]);
+    logSpy.mockRestore();
   });
 
   it("stops and checks status through authenticated launcher endpoints", async () => {

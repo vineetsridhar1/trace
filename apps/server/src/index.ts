@@ -39,6 +39,7 @@ import {
   shouldRejectCredentialedBrowserUpgrade,
 } from "./lib/cors.js";
 import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.js";
+import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -174,6 +175,12 @@ async function main() {
       if (!eviction.evicted) {
         continue;
       }
+      logAgentEnvironmentTelemetry("runtime.heartbeat_stale", {
+        runtimeId: stale.runtimeId,
+        sessionIds: stale.sessionIds,
+        lastHeartbeat: stale.lastHeartbeat,
+        freshnessMs: Date.now() - stale.lastHeartbeat,
+      });
       if (stale.runtimeId) {
         void runtimeAccessService.markRuntimeDisconnected(stale.runtimeId);
       }
@@ -192,10 +199,24 @@ async function main() {
   }, 5_000);
 
   const deprovisionReconciler = setInterval(() => {
-    void sessionService.reconcileStuckDeprovisions().catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`[deprovision-reconciler] iteration failed: ${message}`);
-    });
+    const startedAt = Date.now();
+    void sessionService
+      .reconcileStuckDeprovisions()
+      .then((result) => {
+        logAgentEnvironmentTelemetry("deprovision.reconciler_iteration", {
+          reconciledCount: result.reconciled.length,
+          abandonedCount: result.abandoned.length,
+          durationMs: Date.now() - startedAt,
+        });
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[deprovision-reconciler] iteration failed: ${message}`);
+        logAgentEnvironmentTelemetry("deprovision.reconciler_iteration_failed", {
+          durationMs: Date.now() - startedAt,
+          error: message,
+        });
+      });
   }, 30_000);
 
   // Route WebSocket upgrades by path
