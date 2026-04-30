@@ -17,9 +17,11 @@ interface SessionEnvironmentsQueryResult {
 
 type Props = {
   tool: string;
-  selectedEnvironmentId: string | null;
-  onSelectionChange: (environmentId: string | null) => void;
+  selectedTarget: string | null;
+  onSelectionChange: (target: string | null) => void;
 };
+
+export const CLOUD_SESSION_TARGET = "__cloud__";
 
 const SESSION_ENVIRONMENTS_QUERY = gql`
   query SessionEnvironmentOptions($orgId: ID!) {
@@ -36,7 +38,7 @@ const SESSION_ENVIRONMENTS_QUERY = gql`
 
 export function SessionEnvironmentSelect({
   tool,
-  selectedEnvironmentId,
+  selectedTarget,
   onSelectionChange,
 }: Props) {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
@@ -46,7 +48,7 @@ export function SessionEnvironmentSelect({
     let cancelled = false;
     if (!activeOrgId) {
       setEnvironments([]);
-      onSelectionChange(null);
+      onSelectionChange(CLOUD_SESSION_TARGET);
       return () => {
         cancelled = true;
       };
@@ -66,35 +68,44 @@ export function SessionEnvironmentSelect({
           .filter((environment) => environmentSupportsTool(environment, tool))
           .sort(compareEnvironments);
         setEnvironments(enabled);
-        onSelectionChange(resolveSelectedEnvironmentId(enabled, selectedEnvironmentId));
+        onSelectionChange(resolveSelectedTarget(enabled, selectedTarget));
       })
       .catch(() => {
         if (!cancelled) {
           setEnvironments([]);
-          onSelectionChange(null);
+          onSelectionChange(CLOUD_SESSION_TARGET);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [activeOrgId, onSelectionChange, selectedEnvironmentId, tool]);
+  }, [activeOrgId, onSelectionChange, tool]);
 
-  if (environments.length === 0) return null;
-
-  const selectedEnvironment = environments.find(
-    (environment) => environment.id === selectedEnvironmentId,
+  const selectedEnvironment =
+    selectedTarget === CLOUD_SESSION_TARGET
+      ? undefined
+      : environments.find((environment) => environment.id === selectedTarget);
+  const localEnvironments = environments.filter(
+    (environment) => environment.adapterType === "local",
   );
 
   return (
-    <Select value={selectedEnvironmentId ?? ""} onValueChange={onSelectionChange}>
+    <Select value={selectedTarget ?? CLOUD_SESSION_TARGET} onValueChange={onSelectionChange}>
       <SelectTrigger className="h-7 w-auto max-w-48 gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
         <SelectValue>
-          <EnvironmentLabel environment={selectedEnvironment} />
+          {selectedTarget === CLOUD_SESSION_TARGET ? (
+            <CloudLabel />
+          ) : (
+            <EnvironmentLabel environment={selectedEnvironment} />
+          )}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {environments.map((environment) => (
+        <SelectItem value={CLOUD_SESSION_TARGET}>
+          <CloudLabel />
+        </SelectItem>
+        {localEnvironments.map((environment) => (
           <SelectItem key={environment.id} value={environment.id}>
             <EnvironmentLabel environment={environment} />
           </SelectItem>
@@ -104,12 +115,17 @@ export function SessionEnvironmentSelect({
   );
 }
 
-function resolveSelectedEnvironmentId(
+function resolveSelectedTarget(
   environments: SessionEnvironmentOption[],
   current: string | null,
 ): string | null {
+  if (current === CLOUD_SESSION_TARGET) return current;
   if (current && environments.some((environment) => environment.id === current)) return current;
-  return environments.find((environment) => environment.isDefault)?.id ?? environments[0]?.id ?? null;
+  const defaultEnvironment = environments.find((environment) => environment.isDefault);
+  if (!defaultEnvironment) return CLOUD_SESSION_TARGET;
+  return defaultEnvironment.adapterType === "provisioned"
+    ? CLOUD_SESSION_TARGET
+    : defaultEnvironment.id;
 }
 
 function compareEnvironments(a: SessionEnvironmentOption, b: SessionEnvironmentOption): number {
@@ -131,7 +147,7 @@ function environmentSupportsTool(environment: SessionEnvironmentOption, tool: st
 }
 
 function EnvironmentLabel({ environment }: { environment?: SessionEnvironmentOption }) {
-  if (!environment) return <span>Org default</span>;
+  if (!environment) return <CloudLabel />;
   const Icon = environment.adapterType === "local" ? Monitor : Cloud;
   return (
     <span className="flex min-w-0 items-center gap-1.5">
@@ -139,6 +155,15 @@ function EnvironmentLabel({ environment }: { environment?: SessionEnvironmentOpt
       <span className="truncate">
         {environment.isDefault ? `Default: ${environment.name}` : environment.name}
       </span>
+    </span>
+  );
+}
+
+function CloudLabel() {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <Cloud size={12} className="shrink-0 text-sky-400" />
+      <span className="truncate">Cloud</span>
     </span>
   );
 }
