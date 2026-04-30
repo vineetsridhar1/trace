@@ -171,6 +171,7 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -182,9 +183,12 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
+  const sessionRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(connection);
+  const groupRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(groupConnection);
   const runtimeInstanceId =
-    getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
-    getLinkedCheckoutRuntimeInstanceId(connection);
+    hosting === "cloud"
+      ? sessionRuntimeInstanceId
+      : groupRuntimeInstanceId ?? sessionRuntimeInstanceId;
   const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
     runtimeInstanceId,
     sessionGroupId ?? null,
