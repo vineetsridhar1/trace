@@ -5,7 +5,7 @@ import { getInitials } from "../../lib/utils";
 import { CreateOrganizationDialog } from "./CreateOrganizationDialog";
 import { switchActiveOrganization } from "../../lib/org-switch";
 
-export function OrgSwitcher({ large }: { large?: boolean }) {
+export function OrgSwitcher({ compact, large }: { compact?: boolean; large?: boolean }) {
   const orgMemberships = useAuthStore((s: { orgMemberships: OrgMembership[] }) => s.orgMemberships);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
 
@@ -13,22 +13,28 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
     (m: OrgMembership) => m.organizationId === activeOrgId,
   )?.organization;
   const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
-  const triggerClassName = `flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-white/10 ${large ? "py-2.5" : ""}`;
+  const triggerClassName = compact
+    ? "flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm transition-colors hover:bg-white/10"
+    : `flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-white/10 ${large ? "py-2.5" : ""}`;
+  const avatarClassName = compact
+    ? "h-5 w-5 rounded-md text-[9px]"
+    : `${large ? "h-7.5 w-7.5 text-xs" : "h-7 w-7 text-xs"} rounded-lg`;
+  const chevronSize = compact ? 12 : large ? 15 : 14;
 
   return (
     <Popover>
       <PopoverTrigger className={triggerClassName}>
         <div
-          className={`flex shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground ${large ? "h-7.5 w-7.5 text-xs" : "h-7 w-7 text-xs"}`}
+          className={`flex shrink-0 items-center justify-center bg-accent font-bold text-accent-foreground ${avatarClassName}`}
         >
           {getInitials(activeOrg?.name ?? "")}
         </div>
         <span
-          className="flex-1 truncate text-left text-sm font-semibold text-foreground"
+          className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-foreground"
         >
           {activeOrg?.name ?? "Workspace"}
         </span>
-        <ChevronDown size={large ? 15 : 14} className="text-muted-foreground" />
+        <ChevronDown size={chevronSize} className="shrink-0 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent
         side="bottom"

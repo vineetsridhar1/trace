@@ -1,5 +1,4 @@
 import { Plug } from "lucide-react";
-import { SidebarTrigger } from "../ui/sidebar";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 import { ConnectionStatus } from "../ConnectionStatus";
@@ -12,7 +11,6 @@ export function ConnectionsView() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <SidebarTrigger />
         <Plug size={16} className="text-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">Connections</h2>
         <ConnectionStatus />

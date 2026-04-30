@@ -14,7 +14,6 @@ import {
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
-import { SidebarTrigger } from "../ui/sidebar";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
 import { NotificationsSection } from "./NotificationsSection";
@@ -98,7 +97,6 @@ export function SettingsPage() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <SidebarTrigger />
         <Button
           variant="ghost"
           size="icon"
