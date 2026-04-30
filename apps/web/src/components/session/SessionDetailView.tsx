@@ -493,7 +493,11 @@ export function SessionDetailView({
         </div>
 
         {runtimeLifecycleState ? (
-          <RuntimeLifecycleNotice sessionId={sessionId} connectionState={runtimeLifecycleState} />
+          <RuntimeLifecycleNotice
+            sessionId={sessionId}
+            connection={connection}
+            connectionState={runtimeLifecycleState}
+          />
         ) : !bridgeInteractionAllowed ? (
           <div className="border-t p-4">
             <BridgeAccessNotice
@@ -544,22 +548,37 @@ export function SessionDetailView({
 
 function RuntimeLifecycleNotice({
   sessionId,
+  connection,
   connectionState,
 }: {
   sessionId: string;
+  connection: Record<string, unknown> | null | undefined;
   connectionState: string;
 }) {
   const [action, setAction] = useState<"retry" | "cloud" | null>(null);
   const failed = RUNTIME_FAILURE_STATES.has(connectionState);
+  const providerStatus =
+    typeof connection?.providerStatus === "string" ? connection.providerStatus : null;
   const label = failed
     ? connectionState === "timed_out"
       ? "Cloud runtime timed out"
       : "Cloud runtime failed"
+    : connectionState === "requested"
+      ? "Cloud recovery requested"
     : connectionState === "provisioning"
-      ? "Provisioning cloud runtime"
+      ? providerStatus === "booting"
+        ? "Cloud runtime booting"
+        : "Cloud runtime provisioning"
       : connectionState === "connecting"
-        ? "Connecting to cloud runtime"
-        : "Booting cloud runtime";
+        ? "Waiting for cloud bridge"
+        : "Starting cloud runtime";
+  const body = failed
+    ? "Trace could not finish starting the cloud runtime."
+    : connectionState === "requested"
+      ? "Trace sent the recovery request and is waiting for the provider to report progress."
+      : connectionState === "connecting"
+        ? "The provider accepted the runtime request. Trace is waiting for the bridge to connect."
+        : "Your message is queued while Trace waits for the runtime provider.";
   const tone = failed
     ? {
         border: "border-destructive/30",
@@ -616,9 +635,7 @@ function RuntimeLifecycleNotice({
             {label}
           </div>
           <p className={`mt-1 text-xs leading-5 ${tone.body}`}>
-            {failed
-              ? "Trace could not finish starting the cloud runtime."
-              : "Your message is queued and will run as soon as the machine is ready."}
+            {body}
           </p>
           {failed && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
