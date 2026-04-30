@@ -14,6 +14,7 @@ import {
 import { orgSecretService } from "../services/org-secret.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
+import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 
 const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
 const PROVISIONED_DEPROVISION_POLICIES = new Set(["on_session_end", "manual"]);
@@ -370,6 +371,7 @@ async function authenticatedLauncherRequest(params: {
   }
 
   let response: Response;
+  const startedAt = Date.now();
   try {
     response = await fetch(params.url, {
       method: "POST",
@@ -384,6 +386,14 @@ async function authenticatedLauncherRequest(params: {
       `Provisioned ${params.endpointName} request failed: ${message}`,
     );
   }
+  logAgentEnvironmentTelemetry("launcher.request", {
+    organizationId: params.organizationId,
+    endpointName: params.endpointName,
+    status: response.status,
+    ok: response.ok,
+    latencyMs: Date.now() - startedAt,
+    idempotencyKey: params.idempotencyKey,
+  });
   return readJsonResponse(response, params.endpointName);
 }
 
@@ -512,6 +522,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       },
     };
 
+    const startedAt = Date.now();
     const json = await authenticatedLauncherRequest({
       organizationId: input.organizationId,
       url: config.startUrl,
@@ -525,6 +536,16 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
     if (!providerRuntimeId) {
       throw new Error("Provisioned start response requires runtimeId");
     }
+
+    logAgentEnvironmentTelemetry("provisioned.start", {
+      organizationId: input.organizationId,
+      sessionId: input.sessionId,
+      environmentId: input.environment.id,
+      runtimeInstanceId,
+      providerRuntimeId,
+      providerStatus: startStatus(record.status),
+      latencyMs: Date.now() - startedAt,
+    });
 
     return {
       runtimeInstanceId,
