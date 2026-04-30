@@ -24,7 +24,7 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
           {getInitials(activeOrg?.name ?? "")}
         </div>
         <span
-          className={`flex-1 truncate text-left font-semibold text-foreground ${large ? "text-[15px]" : "text-sm"}`}
+          className="flex-1 truncate text-left text-sm font-semibold text-foreground"
         >
           {activeOrg?.name ?? "Workspace"}
         </span>
