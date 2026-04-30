@@ -43,6 +43,15 @@ export function AgentEnvironmentRow({
   const config = environmentConfig(environment);
   const tools = supportedToolsFromConfig(config);
   const pending = pendingActionId === environment.id;
+  const testStatusClass = testResult
+    ? testResult.ok
+      ? "text-green-600 dark:text-green-400"
+      : "text-destructive"
+    : "text-muted-foreground";
+  const testStatusMessage = testResult
+    ? (testResult.message ??
+      (testResult.ok ? "Connection test passed" : "Connection test failed"))
+    : "Last test: not run";
 
   return (
     <div className="rounded-lg border border-border bg-surface-deep p-4">
@@ -77,17 +86,7 @@ export function AgentEnvironmentRow({
               <span className="truncate">{config.statusUrl}</span>
             ) : null}
           </div>
-          {testResult ? (
-            <p
-              className={cn(
-                "mt-2 text-xs",
-                testResult.ok ? "text-green-600 dark:text-green-400" : "text-destructive",
-              )}
-            >
-              {testResult.message ??
-                (testResult.ok ? "Connection test passed" : "Connection test failed")}
-            </p>
-          ) : null}
+          <p className={cn("mt-2 text-xs", testStatusClass)}>{testStatusMessage}</p>
         </button>
 
         <Button

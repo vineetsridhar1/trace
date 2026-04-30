@@ -923,7 +923,7 @@ The page should support:
 - enable/disable
 - set default
 - test connection
-- show last error/status
+- show latest in-page test status/error
 
 Initial forms:
 

@@ -1,6 +1,7 @@
 import { Bot, Plus, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
 import { AgentEnvironmentForm } from "./AgentEnvironmentForm";
+import { AgentEnvironmentLocalBridgeList } from "./AgentEnvironmentLocalBridgeList";
 import { AgentEnvironmentRow } from "./AgentEnvironmentRow";
 import { useAgentEnvironmentsSettings } from "./useAgentEnvironmentsSettings";
 
@@ -32,38 +33,46 @@ export function AgentEnvironmentsSection() {
         <div className="rounded-lg border border-border bg-surface-deep p-4 text-sm text-muted-foreground">
           Loading agent environments...
         </div>
-      ) : settings.environmentIds.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-surface-deep p-8 text-center">
-          <Bot className="mx-auto mb-3 text-muted-foreground" size={28} />
-          <p className="text-sm text-muted-foreground">No provisioned environments configured.</p>
-        </div>
       ) : (
-        <div className="space-y-3">
-          {settings.environmentIds.map((id) => {
-            const environment = settings.environmentsById[id];
-            if (!environment) return null;
-            return (
-              <AgentEnvironmentRow
-                key={id}
-                environment={environment}
-                pendingActionId={settings.pendingActionId}
-                testResult={settings.testResults[id]}
-                onEdit={() => settings.editEnvironment(id)}
-                onSetDefault={() =>
-                  void settings.updateEnvironment(environment, { isDefault: true })
-                }
-                onToggleEnabled={() =>
-                  void settings.updateEnvironment(environment, {
-                    enabled: !environment.enabled,
-                    isDefault: environment.enabled ? false : environment.isDefault,
-                  })
-                }
-                onTest={() => void settings.testEnvironment(environment)}
-                onDelete={() => void settings.deleteEnvironment(environment)}
-              />
-            );
-          })}
-        </div>
+        <>
+          <AgentEnvironmentLocalBridgeList localBridges={settings.localBridges} />
+
+          {settings.environmentIds.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-surface-deep p-8 text-center">
+              <Bot className="mx-auto mb-3 text-muted-foreground" size={28} />
+              <p className="text-sm text-muted-foreground">
+                No provisioned environments configured.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {settings.environmentIds.map((id) => {
+                const environment = settings.environmentsById[id];
+                if (!environment) return null;
+                return (
+                  <AgentEnvironmentRow
+                    key={id}
+                    environment={environment}
+                    pendingActionId={settings.pendingActionId}
+                    testResult={settings.testResults[id]}
+                    onEdit={() => settings.editEnvironment(id)}
+                    onSetDefault={() =>
+                      void settings.updateEnvironment(environment, { isDefault: true })
+                    }
+                    onToggleEnabled={() =>
+                      void settings.updateEnvironment(environment, {
+                        enabled: !environment.enabled,
+                        isDefault: environment.enabled ? false : environment.isDefault,
+                      })
+                    }
+                    onTest={() => void settings.testEnvironment(environment)}
+                    onDelete={() => void settings.deleteEnvironment(environment)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {settings.activeOrgId ? (
