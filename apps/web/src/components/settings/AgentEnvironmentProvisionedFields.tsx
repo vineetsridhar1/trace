@@ -19,7 +19,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
   const selectedSecret = orgSecrets.find((secret) => secret.id === draft.authSecretId);
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-surface-deep p-3">
+    <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-3">
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">Start URL</span>
