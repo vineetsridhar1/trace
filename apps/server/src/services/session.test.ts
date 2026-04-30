@@ -29,6 +29,8 @@ vi.mock("./runtime-access.js", () => ({
 }));
 
 vi.mock("./ultraplan-controller-run.js", () => ({
+  serializeRun: vi.fn((run: Record<string, unknown>) => run),
+  serializeUltraplan: vi.fn((ultraplan: Record<string, unknown>) => ultraplan),
   ultraplanControllerRunService: {
     failRun: vi.fn().mockResolvedValue(undefined),
     markStarted: vi.fn().mockResolvedValue(undefined),
@@ -101,6 +103,7 @@ import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { inboxService } from "./inbox.js";
 import { ultraplanControllerRunService } from "./ultraplan-controller-run.js";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
@@ -117,6 +120,7 @@ const prismaMock = prisma as unknown as MockedDeep<typeof prisma>;
 const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
 const sessionRouterMock = sessionRouter as unknown as MockedDeep<typeof sessionRouter>;
 const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminalRelay>;
+const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
 const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
   typeof runtimeAccessService
 >;
@@ -1343,6 +1347,102 @@ describe("SessionService", () => {
         data: { sessionStatus: "needs_input" },
       });
     });
+
+    it("turns controller-run plan output into an Ultraplan gate instead of a generic plan item", async () => {
+      const data = {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "plan",
+              content: "Plan the work, then ask for approval.",
+            },
+          ],
+        },
+      };
+
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        role: "ultraplan_controller_run",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup(),
+        sessions: [{ agentStatus: "active", sessionStatus: "needs_input" }],
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        createdById: "user-1",
+        name: "Controller plan",
+      });
+      prismaMock.ultraplanControllerRun.findFirst.mockResolvedValueOnce({
+        id: "run-1",
+        ultraplanId: "ultra-1",
+        sessionGroupId: "group-1",
+        sessionId: "session-1",
+        organizationId: "org-1",
+        completedAt: null,
+        ultraplan: { id: "ultra-1" },
+      });
+      prismaMock.inboxItem.findMany.mockResolvedValueOnce([]);
+      inboxServiceMock.createItem.mockResolvedValueOnce({
+        id: "inbox-1",
+        organizationId: "org-1",
+        userId: "user-1",
+        sourceType: "ultraplan",
+        sourceId: "ultra-1",
+        itemType: "ultraplan_plan_approval",
+        status: "active",
+      });
+      prismaMock.ultraplanControllerRun.update.mockResolvedValueOnce({
+        id: "run-1",
+        ultraplanId: "ultra-1",
+        sessionGroupId: "group-1",
+        sessionId: "session-1",
+        status: "completed",
+      });
+      prismaMock.ultraplan.update.mockResolvedValueOnce({
+        id: "ultra-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        status: "needs_human",
+      });
+
+      await service.recordOutput("session-1", data as Record<string, unknown>);
+
+      expect(inboxServiceMock.createItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          itemType: "ultraplan_plan_approval",
+          sourceType: "ultraplan",
+          sourceId: "ultra-1",
+          payload: expect.objectContaining({
+            ultraplanId: "ultra-1",
+            sessionGroupId: "group-1",
+            controllerRunId: "run-1",
+            controllerRunSessionId: "session-1",
+            planContent: "Plan the work, then ask for approval.",
+          }),
+        }),
+        expect.anything(),
+      );
+      expect(prismaMock.ultraplanControllerRun.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "run-1" },
+          data: expect.objectContaining({ status: "completed" }),
+        }),
+      );
+      expect(prismaMock.ultraplan.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "ultra-1" },
+          data: expect.objectContaining({
+            status: "needs_human",
+            activeInboxItemId: "inbox-1",
+          }),
+        }),
+      );
+    });
   });
 
   describe("complete", () => {
@@ -1364,7 +1464,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
         data: { agentStatus: "done", sessionStatus: "in_progress" },
-        select: { organizationId: true, createdById: true, name: true },
+        select: { organizationId: true, createdById: true, name: true, role: true },
       });
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({

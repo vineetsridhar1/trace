@@ -24,7 +24,11 @@ import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
 import { runtimeAccessService } from "./runtime-access.js";
-import { ultraplanControllerRunService } from "./ultraplan-controller-run.js";
+import {
+  serializeRun,
+  serializeUltraplan,
+  ultraplanControllerRunService,
+} from "./ultraplan-controller-run.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -2327,6 +2331,7 @@ export class SessionService {
           userId: fullSession.createdById,
           sessionName: fullSession.name,
           sessionId,
+          sessionRole: session.role,
           data,
         });
       }
@@ -2509,7 +2514,7 @@ export class SessionService {
     const session = await prisma.session.update({
       where: { id },
       data: { agentStatus: newAgentStatus, sessionStatus: newSessionStatus },
-      select: { organizationId: true, createdById: true, name: true },
+      select: { organizationId: true, createdById: true, name: true, role: true },
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
@@ -2545,6 +2550,7 @@ export class SessionService {
           userId: session.createdById,
           sessionName: session.name,
           sessionId: id,
+          sessionRole: session.role,
           data: triggerPayload,
         });
       }
@@ -4876,9 +4882,10 @@ export class SessionService {
     userId: string;
     sessionName: string;
     sessionId: string;
+    sessionRole?: string | null;
     data: Record<string, unknown>;
   }) {
-    const { orgId, userId, sessionName, sessionId, data } = params;
+    const { orgId, userId, sessionName, sessionId, sessionRole, data } = params;
     const messageContent = (data.message as Record<string, unknown> | undefined)?.content as
       | Array<Record<string, unknown>>
       | undefined;
@@ -4900,6 +4907,20 @@ export class SessionService {
       ? (questionBlock?.questions?.[0]?.question as string | undefined)
       : planText?.slice(0, 200);
 
+    if (sessionRole === "ultraplan_controller_run") {
+      await this.createUltraplanGateFromControllerOutput({
+        orgId,
+        userId,
+        sessionName,
+        sessionId,
+        isQuestion,
+        summary,
+        planText,
+        questions: questionBlock?.questions ?? null,
+      });
+      return;
+    }
+
     await inboxService.createItem({
       orgId,
       userId,
@@ -4912,6 +4933,137 @@ export class SessionService {
       } as unknown as Prisma.InputJsonValue,
       sourceType: "session",
       sourceId: sessionId,
+    });
+  }
+
+  private async createUltraplanGateFromControllerOutput(params: {
+    orgId: string;
+    userId: string;
+    sessionName: string;
+    sessionId: string;
+    isQuestion: boolean;
+    summary: string | undefined;
+    planText: string | undefined;
+    questions: Array<Record<string, unknown>> | null;
+  }) {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const run = await tx.ultraplanControllerRun.findFirst({
+        where: {
+          sessionId: params.sessionId,
+          organizationId: params.orgId,
+        },
+        include: { ultraplan: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!run) return;
+
+      const itemType = params.isQuestion
+        ? "ultraplan_validation_request"
+        : "ultraplan_plan_approval";
+      const gateReason = params.isQuestion ? "controller_question" : "controller_plan_approval";
+      const existingGate = await tx.inboxItem.findMany({
+        where: {
+          organizationId: params.orgId,
+          sourceType: "ultraplan",
+          sourceId: run.ultraplanId,
+          itemType,
+          status: "active",
+          AND: [{ payload: { path: ["controllerRunId"], equals: run.id } }],
+        },
+        take: 1,
+      });
+      if (existingGate[0]) return;
+
+      const payload = {
+        ultraplanId: run.ultraplanId,
+        sessionGroupId: run.sessionGroupId,
+        gateReason,
+        controllerRunId: run.id,
+        controllerRunSessionId: params.sessionId,
+        summary: params.summary ?? null,
+        planContent: params.planText ?? null,
+        questions: params.questions,
+        recommendedAction: params.isQuestion ? "Answer the controller question" : "Approve plan",
+        qaChecklist: [],
+        links: {
+          controllerRunUrl: null,
+          workerSessionUrl: null,
+          diffUrl: null,
+          prUrl: null,
+        },
+      };
+
+      const inboxItem = await inboxService.createItem(
+        {
+          orgId: params.orgId,
+          userId: params.userId,
+          itemType,
+          title: params.sessionName,
+          summary: params.summary,
+          payload: payload as unknown as Prisma.InputJsonValue,
+          sourceType: "ultraplan",
+          sourceId: run.ultraplanId,
+          actorType: "system",
+          actorId: "system",
+        },
+        tx,
+      );
+
+      const updatedRun = await tx.ultraplanControllerRun.update({
+        where: { id: run.id },
+        data: {
+          status: "completed",
+          completedAt: run.completedAt ?? new Date(),
+          summaryTitle: params.sessionName,
+          summary: params.summary,
+          summaryPayload: payload as unknown as Prisma.InputJsonValue,
+          error: null,
+        },
+        include: { session: true, generatedTickets: true },
+      });
+
+      const updatedUltraplan = await tx.ultraplan.update({
+        where: { id: run.ultraplanId },
+        data: {
+          status: "needs_human",
+          activeInboxItemId: inboxItem.id,
+          lastControllerRunId: run.id,
+          lastControllerSummary: params.summary ?? null,
+        },
+      });
+
+      await eventService.create(
+        {
+          organizationId: params.orgId,
+          scopeType: "ultraplan",
+          scopeId: run.ultraplanId,
+          eventType: "ultraplan_controller_run_completed",
+          payload: {
+            ultraplanId: run.ultraplanId,
+            controllerRun: serializeRun(updatedRun as unknown as Record<string, unknown>),
+          } as unknown as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        },
+        tx,
+      );
+
+      await eventService.create(
+        {
+          organizationId: params.orgId,
+          scopeType: "ultraplan",
+          scopeId: run.ultraplanId,
+          eventType: "ultraplan_updated",
+          payload: {
+            ultraplanId: updatedUltraplan.id,
+            sessionGroupId: updatedUltraplan.sessionGroupId,
+            ultraplan: serializeUltraplan(updatedUltraplan as unknown as Record<string, unknown>),
+          } as unknown as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        },
+        tx,
+      );
     });
   }
 

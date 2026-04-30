@@ -144,7 +144,7 @@ function defaultConnection(runtime?: { id: string; label: string | null }): Pris
   };
 }
 
-function serializeRun(run: Record<string, unknown>) {
+export function serializeRun(run: Record<string, unknown>) {
   return {
     id: run.id,
     organizationId: run.organizationId,
@@ -165,7 +165,7 @@ function serializeRun(run: Record<string, unknown>) {
   };
 }
 
-function serializeUltraplan(ultraplan: Record<string, unknown>) {
+export function serializeUltraplan(ultraplan: Record<string, unknown>) {
   return {
     id: ultraplan.id,
     organizationId: ultraplan.organizationId,
