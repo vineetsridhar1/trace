@@ -2378,6 +2378,8 @@ export class SessionService {
         where: { id },
         data: {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
+          agentStatus: "active",
+          sessionStatus: "in_progress",
           ...(markLocalPreparing && {
             connection: this.mergeConnection(session.connection, {
               state: "connecting",
@@ -3364,6 +3366,8 @@ export class SessionService {
           sessionId,
           pendingCommand,
           {
+            agentStatus: "active",
+            sessionStatus: "in_progress",
             lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
             ...(markLocalPreparing && {
@@ -3412,6 +3416,8 @@ export class SessionService {
             text,
             clientSource: normalizeClientSource(clientSource),
             deliveryStatus: "pending_runtime",
+            agentStatus: "active",
+            sessionStatus: "in_progress",
             ...(imageKeys?.length ? { imageKeys } : {}),
             ...(clientMutationId ? { clientMutationId } : {}),
           },
