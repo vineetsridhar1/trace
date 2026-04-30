@@ -87,6 +87,7 @@ function createWindow() {
     ...(process.platform === "darwin"
       ? {
           vibrancy: "fullscreen-ui" as const,
+          visualEffectState: "active" as const,
           titleBarStyle: "hiddenInset" as const,
         }
       : {}),
