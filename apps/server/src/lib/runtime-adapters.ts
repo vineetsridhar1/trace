@@ -241,10 +241,66 @@ function configRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function isPrivateBridgeHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  if (
+    normalized === "localhost" ||
+    normalized === "0.0.0.0" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local")
+  ) {
+    return true;
+  }
+  if (normalized.startsWith("127.")) return true;
+  if (normalized.startsWith("10.")) return true;
+  if (normalized.startsWith("192.168.")) return true;
+  const parts = normalized.split(".");
+  if (parts.length === 4 && parts[0] === "172") {
+    const second = Number(parts[1]);
+    return Number.isInteger(second) && second >= 16 && second <= 31;
+  }
+  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
+  return false;
+}
+
+function assertPublicBridgeUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Provisioned runtime bridge URL must be a valid URL");
+  }
+  if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+    throw new Error("Provisioned runtime bridge URL must use ws:// or wss://");
+  }
+  if (isPrivateBridgeHost(parsed.hostname)) {
+    throw new Error(
+      "Provisioned runtime bridge URL must be publicly reachable; set TRACE_CLOUD_BRIDGE_URL or TRACE_SERVER_PUBLIC_URL to a public HTTPS/WSS endpoint",
+    );
+  }
+  return parsed.toString();
+}
+
 function defaultBridgeUrl(): string {
+  const explicitBridgeUrl = process.env.TRACE_CLOUD_BRIDGE_URL?.trim();
+  if (explicitBridgeUrl) return assertPublicBridgeUrl(explicitBridgeUrl);
+
   const publicUrl = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
   if (!publicUrl) throw new Error("TRACE_SERVER_PUBLIC_URL is required for provisioned runtimes");
-  return publicUrl.replace(/^http/, "ws") + "/bridge";
+  let parsed: URL;
+  try {
+    parsed = new URL(publicUrl);
+  } catch {
+    throw new Error("TRACE_SERVER_PUBLIC_URL must be a valid URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("TRACE_SERVER_PUBLIC_URL must use http:// or https://");
+  }
+  parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+  parsed.pathname = `${parsed.pathname.replace(/\/$/, "")}/bridge`;
+  parsed.search = "";
+  parsed.hash = "";
+  return assertPublicBridgeUrl(parsed.toString());
 }
 
 function responseRecord(value: unknown, endpointName: string): Record<string, unknown> {

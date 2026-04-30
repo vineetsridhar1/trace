@@ -37,6 +37,7 @@ describe("ProvisionedRuntimeAdapter", () => {
     vi.mocked(orgSecretService.getDecryptedValue).mockResolvedValue("launcher-secret");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeResponse({ status: "unknown" })));
     delete process.env.TRACE_SERVER_PUBLIC_URL;
+    delete process.env.TRACE_CLOUD_BRIDGE_URL;
   });
 
   afterEach(() => {
@@ -179,6 +180,56 @@ describe("ProvisionedRuntimeAdapter", () => {
     } finally {
       logSpy.mockRestore();
     }
+  });
+
+  it("rejects private bridge URLs for provisioned runtimes", async () => {
+    vi.stubEnv("TRACE_SERVER_PUBLIC_URL", "http://192.168.1.14:4000");
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.startSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: provisionedConfig,
+        },
+        tool: "codex",
+      }),
+    ).rejects.toThrow("Provisioned runtime bridge URL must be publicly reachable");
+
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("allows an explicit public cloud bridge URL override", async () => {
+    vi.stubEnv("TRACE_SERVER_PUBLIC_URL", "http://192.168.1.14:4000");
+    vi.stubEnv("TRACE_CLOUD_BRIDGE_URL", "wss://trace-tunnel.example/bridge");
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "codex",
+    });
+
+    const init = fetchMock().mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string) as {
+      bridgeUrl: string;
+      bootstrapEnv: Record<string, string>;
+    };
+    expect(body.bridgeUrl).toBe("wss://trace-tunnel.example/bridge");
+    expect(body.bootstrapEnv.TRACE_BRIDGE_URL).toBe("wss://trace-tunnel.example/bridge");
   });
 
   it("extends runtime token lifetime to cover long startup timeouts", async () => {
