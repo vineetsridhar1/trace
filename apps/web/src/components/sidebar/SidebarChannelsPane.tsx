@@ -52,7 +52,7 @@ export function SidebarChannelsPane({
           {features.tickets && <TicketsButton />}
         </div>
 
-        <div className="mb-1 flex items-center justify-between px-2">
+        <div className="flex items-center justify-between px-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
             Projects
           </span>
