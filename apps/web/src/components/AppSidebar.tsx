@@ -96,13 +96,10 @@ export function AppSidebar() {
   useLayoutEffect(() => {
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
-      document.documentElement.style.setProperty(
-        "--trace-shell-bg",
-        `color-mix(in srgb, var(--th-surface-deep) ${tabProgress * 100}%, var(--sidebar-dm))`,
-      );
+      document.documentElement.style.setProperty("--trace-shell-bg", "transparent");
     });
     return () => cancelAnimationFrame(rafRef.current);
-  }, [tabProgress]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -114,9 +111,9 @@ export function AppSidebar() {
     <>
       <Sidebar collapsible="offcanvas" className="border-none">
         <div
-          className="flex size-full flex-col"
+          className="flex size-full flex-col border-r border-white/10 bg-black/25 text-sidebar-foreground shadow-2xl shadow-black/30 backdrop-blur-2xl"
           style={{
-            backgroundColor: `color-mix(in srgb, var(--sidebar) ${tabProgress * 100}%, var(--sidebar-dm))`,
+            backgroundColor: `color-mix(in srgb, rgb(12 12 12 / 0.82) ${tabProgress * 100}%, rgb(22 34 80 / 0.62))`,
           }}
         >
           <SidebarContent className="overflow-hidden">
@@ -173,7 +170,7 @@ export function AppSidebar() {
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
               </div>
             )}
-            <div className="border-t border-border/70">
+            <div className="border-t border-white/10">
               <div className="px-2 py-1.5">
                 <ConnectionsButton />
               </div>

@@ -46,20 +46,20 @@ export function SidebarChannelsPane({
 
   return (
     <section className="flex h-full min-w-full max-w-full shrink-0 snap-start snap-always flex-col overflow-hidden">
-      <div className="mt-2 h-[49px] shrink-0 border-b border-border/70">
+      <div className="mt-2 h-[49px] shrink-0 border-b border-white/10">
         <OrgSwitcher large />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        <div className="space-y-0.5 pt-0.5 pb-1">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="space-y-1 pb-6">
           <HomeButton />
           <InboxButton />
           {features.tickets && <TicketsButton />}
         </div>
 
-        <div className="mb-1 flex items-center justify-between px-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Channels
+        <div className="mb-4 flex items-center justify-between">
+          <span className="text-[15px] font-medium text-white/35">
+            Projects
           </span>
           <div className="flex items-center gap-0.5">
             <BrowseChannelsDialog />
