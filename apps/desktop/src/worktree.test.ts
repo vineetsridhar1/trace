@@ -36,18 +36,35 @@ describe("createWorktree", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns the current checked out branch when reusing an existing worktree", async () => {
+  it("resets an existing worktree to the resolved base ref", async () => {
     existsSyncMock.mockReturnValue(true);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
     execFileMock.mockImplementation(
       (
         _command: string,
-        _args: string[],
+        args: string[],
         _options: Record<string, unknown>,
         callback: (error: Error | null, stdout: string) => void,
       ) => {
-        callback(null, "feature/reconnected\n");
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/trace/gibbon" ? null : new Error("missing ref"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "trace/gibbon\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
         return {} as ReturnType<typeof execFileMock>;
       },
     );
@@ -57,17 +74,25 @@ describe("createWorktree", () => {
       repoPath: "/tmp/repo",
       repoId: "repo-1",
       sessionId: "session-1",
-      slug: "otter",
+      slug: "gibbon",
       defaultBranch: "main",
+      startBranch: "trace/gibbon",
+      preserveBranchName: true,
     });
 
-    expect(result.branch).toBe("feature/reconnected");
+    expect(result.branch).toBe("trace/gibbon");
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
-      ["symbolic-ref", "--short", "-q", "HEAD"],
+      ["reset", "--hard", "origin/trace/gibbon"],
       expect.objectContaining({
-        cwd: expect.stringContaining("/trace/sessions/repo-1/otter"),
+        cwd: expect.stringContaining("/trace/sessions/repo-1/gibbon"),
       }),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["branch", "--set-upstream-to", "origin/trace/gibbon", "trace/gibbon"],
+      expect.objectContaining({ cwd: "/tmp/repo" }),
       expect.any(Function),
     );
   });
@@ -98,6 +123,10 @@ describe("createWorktree", () => {
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args[0] === "worktree" && args[1] === "add") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
           callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }
@@ -154,6 +183,10 @@ describe("createWorktree", () => {
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args[0] === "worktree" && args[1] === "add") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
           callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }

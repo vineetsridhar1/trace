@@ -65,6 +65,7 @@ export async function createWorktree({
   sessionId: _sessionId,
   defaultBranch,
   branch,
+  preserveBranchName,
   checkpointSha,
   sessionGroupId: _sessionGroupId,
   slug,
@@ -73,6 +74,8 @@ export async function createWorktree({
   sessionId: string;
   defaultBranch: string;
   branch?: string;
+  /** Reuse the persisted branch name instead of generating trace/{slug}. */
+  preserveBranchName?: boolean;
   checkpointSha?: string;
   /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
   sessionGroupId?: string;
@@ -87,7 +90,7 @@ export async function createWorktree({
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
-  const branchName = `trace/${worktreeSlug}`;
+  const branchName = resolveWorktreeBranch(worktreeSlug, branch, preserveBranchName);
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
@@ -103,7 +106,9 @@ export async function createWorktree({
   }
 
   if (fs.existsSync(worktreePath)) {
+    const currentBranch = await getCurrentBranch(worktreePath);
     await resetWorktreeToRef(worktreePath, baseRef);
+    await setUpstreamIfRemote(repoPath, currentBranch ?? branchName, baseRef);
     return { workdir: worktreePath, slug: worktreeSlug };
   }
 
@@ -123,8 +128,33 @@ export async function createWorktree({
     });
   }
   await resetWorktreeToRef(worktreePath, baseRef);
+  await setUpstreamIfRemote(repoPath, branchName, baseRef);
 
   return { workdir: worktreePath, slug: worktreeSlug };
+}
+
+async function getCurrentBranch(worktreePath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["symbolic-ref", "--short", "-q", "HEAD"], {
+      cwd: worktreePath,
+    });
+    const branch = stdout.trim();
+    return branch.length > 0 ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveWorktreeBranch(
+  slug: string,
+  startBranch: string | undefined,
+  preserveBranchName: boolean | undefined,
+): string {
+  const generatedBranch = `trace/${slug}`;
+  if (preserveBranchName && startBranch && startBranch !== generatedBranch) {
+    return startBranch;
+  }
+  return generatedBranch;
 }
 
 async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
@@ -133,6 +163,15 @@ async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<vo
   // reprovisioned or a container is reused.
   await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
   await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
+}
+
+async function setUpstreamIfRemote(
+  repoPath: string,
+  branch: string | null,
+  baseRef: string,
+): Promise<void> {
+  if (!branch || !baseRef.startsWith("origin/")) return;
+  await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
 }
 
 /**

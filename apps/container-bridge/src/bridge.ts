@@ -398,6 +398,7 @@ export class ContainerBridge implements IBridgeClient {
           repoRemoteUrl,
           defaultBranch,
           branch,
+          preserveBranchName,
           checkpointSha,
           readOnly,
         } = cmd;
@@ -425,6 +426,7 @@ export class ContainerBridge implements IBridgeClient {
                   sessionId,
                   defaultBranch,
                   branch,
+                  preserveBranchName,
                   checkpointSha,
                   sessionGroupId,
                   slug,
@@ -447,8 +449,16 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "upgrade_workspace": {
-        const { sessionId, sessionGroupId, slug, repoId, repoRemoteUrl, defaultBranch, branch } =
-          cmd;
+        const {
+          sessionId,
+          sessionGroupId,
+          slug,
+          repoId,
+          repoRemoteUrl,
+          defaultBranch,
+          branch,
+          preserveBranchName,
+        } = cmd;
 
         (async () => {
           try {
@@ -459,6 +469,7 @@ export class ContainerBridge implements IBridgeClient {
               sessionId,
               defaultBranch,
               branch,
+              preserveBranchName,
               sessionGroupId,
               slug,
             });
