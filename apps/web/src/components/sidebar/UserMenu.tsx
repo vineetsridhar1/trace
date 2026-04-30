@@ -1,8 +1,9 @@
-import { Settings, LogOut } from "lucide-react";
+import { Settings, LogOut, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { features } from "../../lib/features";
 import { getInitials } from "../../lib/utils";
 
 export function UserMenu() {
@@ -12,7 +13,7 @@ export function UserMenu() {
 
   return (
     <Popover>
-      <PopoverTrigger className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-surface-elevated">
+      <PopoverTrigger className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-white/10">
         <motion.div
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.97 }}
@@ -36,14 +37,23 @@ export function UserMenu() {
         </div>
         <button
           onClick={() => setActivePage("settings")}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-white/10"
         >
           <Settings size={16} className="text-muted-foreground" />
           Settings
         </button>
+        {features.agentDebug && (
+          <button
+            onClick={() => setActivePage("agent-debug")}
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-white/10"
+          >
+            <Bot size={16} className="text-muted-foreground" />
+            Agent Debug
+          </button>
+        )}
         <button
           onClick={() => void logout()}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-surface-hover"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-white/10"
         >
           <LogOut size={16} />
           Log out
