@@ -121,6 +121,7 @@
   }
   html {
     @apply font-sans;
+    font-size: 18px;
   }
   html,
   body,
