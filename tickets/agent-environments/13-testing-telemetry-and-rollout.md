@@ -71,7 +71,23 @@ Owns plan lines:
   - Reconciliation/retry already shipped with ticket 09; this ticket should
     add the operator-facing surface (telemetry + alert when a runtime stays
     in `deprovision_failed` / `deprovisioning` past a cap).
-- [ ] Rollout path is documented.
+- [x] Rollout path is documented.
+
+## Review follow-ups
+
+- [ ] Add a deterministic mock provisioned launcher integration test that
+  covers start, bridge connect, pending message delivery, duplicate start/stop
+  idempotency keys, and stop.
+- [ ] Add provisioned terminal multiplexing coverage for two concurrent
+  terminals on one Trace session/runtime, including output, resize, and exit
+  isolation by `terminalId`.
+- [ ] Make abandoned runtime alerting event-driven or otherwise queryable so
+  every `session_runtime_deprovision_failed` event with `abandoned: true` is
+  surfaced, not only the in-process `markRuntimeAbandoned` call path.
+- [ ] Add an assertion that abandoned runtime alerts include `providerRuntimeId`
+  alongside `sessionId` and `reconcileAttempts`.
+- [ ] Add negative log assertions for network/error paths that may include
+  launcher bearer tokens or runtime bridge tokens in exception messages.
 
 ## Implementation notes
 
