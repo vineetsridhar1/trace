@@ -18,8 +18,8 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
   const selectedSecret = orgSecrets.find((secret) => secret.id === draft.authSecretId);
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-3">
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <label className="space-y-1.5">
           <AgentEnvironmentFieldLabel tooltip="Trace calls this endpoint to provision a new cloud runtime for a session.">
             Start URL
