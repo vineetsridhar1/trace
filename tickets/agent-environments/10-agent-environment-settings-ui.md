@@ -21,7 +21,7 @@ Owns plan lines:
   - adapter type
   - default marker
   - enabled state
-  - last status/error if available
+  - latest in-page test status/error
 - Local environments are auto-created from connected desktop bridges; do not add manual local create/edit in V1.
 - Show connected local bridges and registered repos in an operator-visible surface where available.
 - Add create/edit flows for provisioned environments.
@@ -41,7 +41,7 @@ Owns plan lines:
 
 - [x] Admin can list provisioned org environments.
 - [x] Local environments are service-managed and not manually editable in settings.
-- [ ] Connected local bridges and registered repos are visible in a ticket-10-owned or clearly linked operator surface.
+- [x] Connected local bridges and registered repos are visible in a ticket-10-owned or clearly linked operator surface.
 - [x] Admin can create/edit provisioned environment.
 - [x] Provisioned environment form can display/edit supported-tool compatibility constraints.
 - [x] Admin can set an org default.
@@ -76,5 +76,5 @@ Owns plan lines:
 - [x] Use a tool-agnostic connected bridge source for the local environment form. The settings UI now reads connected local bridges through `myConnections`.
 - [x] Reconcile default environment changes through service-layer events instead of client-side mutation-result upserts/refetches. Default-changing events now include all affected environments.
 - [x] Add an org secret selector/listing flow for provisioned launcher auth when the API exposes secret metadata.
-- [ ] Reconcile the UI copy and implementation with the local-environment product decision: local environments are auto-created and hidden from Agent Environments, but bridge/repo visibility still needs to be discoverable outside the provisioned-only list.
-- [ ] Add persisted or queryable last status/error fields, or explicitly scope the list requirement to the latest in-dialog test result.
+- [x] Reconcile the UI copy and implementation with the local-environment product decision: local environments are auto-created and hidden from Agent Environments, but bridge/repo visibility still needs to be discoverable outside the provisioned-only list.
+- [x] Add persisted or queryable last status/error fields, or explicitly scope the list requirement to the latest in-dialog test result.
