@@ -74,7 +74,7 @@ export function SessionInput({
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
-  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed = isNotStarted || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
@@ -247,7 +247,7 @@ export function SessionInput({
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
 
-  if (!bridgeInteractionAllowed) {
+  if (!bridgeInteractionAllowed && !isNotStarted) {
     return (
       <div className="border-t px-4 py-3">
         <BridgeAccessNotice
