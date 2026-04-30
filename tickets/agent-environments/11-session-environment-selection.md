@@ -69,3 +69,4 @@ Owns plan lines:
 
 - [x] Reject or normalize requests that provide both `environmentId` and a conflicting `runtimeInstanceId`; explicit environment selection should remain the source of truth.
 - [x] Make the session creation repo-link precheck validate the selected local environment's bound runtime, not just any connected local runtime.
+- [ ] Resolve the initial selector/loading mismatch where the session creation selector can visually show Cloud while `selectedTarget === null` still submits "use server default" before environment options finish loading.
