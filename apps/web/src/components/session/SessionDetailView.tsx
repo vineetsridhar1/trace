@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
+import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import {
   useEntityStore,
@@ -29,6 +30,8 @@ import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
 import {
   DISMISS_SESSION_MUTATION,
+  MOVE_SESSION_TO_CLOUD_MUTATION,
+  RETRY_SESSION_CONNECTION_MUTATION,
   RETRY_SESSION_GROUP_SETUP_MUTATION,
   SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
@@ -490,7 +493,7 @@ export function SessionDetailView({
         </div>
 
         {runtimeLifecycleState ? (
-          <RuntimeLifecycleNotice connectionState={runtimeLifecycleState} />
+          <RuntimeLifecycleNotice sessionId={sessionId} connectionState={runtimeLifecycleState} />
         ) : !bridgeInteractionAllowed ? (
           <div className="border-t p-4">
             <BridgeAccessNotice
@@ -539,7 +542,14 @@ export function SessionDetailView({
   );
 }
 
-function RuntimeLifecycleNotice({ connectionState }: { connectionState: string }) {
+function RuntimeLifecycleNotice({
+  sessionId,
+  connectionState,
+}: {
+  sessionId: string;
+  connectionState: string;
+}) {
+  const [action, setAction] = useState<"retry" | "cloud" | null>(null);
   const failed = RUNTIME_FAILURE_STATES.has(connectionState);
   const label = failed
     ? connectionState === "timed_out"
@@ -566,6 +576,34 @@ function RuntimeLifecycleNotice({ connectionState }: { connectionState: string }
         body: "text-sky-100/80",
       };
 
+  const handleRetry = useCallback(async () => {
+    setAction("retry");
+    try {
+      const result = await client
+        .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
+        .toPromise();
+      if (result.error) {
+        toast.error("Failed to retry cloud runtime", { description: result.error.message });
+      }
+    } finally {
+      setAction(null);
+    }
+  }, [sessionId]);
+
+  const handleNewCloud = useCallback(async () => {
+    setAction("cloud");
+    try {
+      const result = await client
+        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
+        .toPromise();
+      if (result.error) {
+        toast.error("Failed to start cloud runtime", { description: result.error.message });
+      }
+    } finally {
+      setAction(null);
+    }
+  }, [sessionId]);
+
   return (
     <div className="border-t px-4 py-3">
       <div className={`flex items-start gap-3 rounded-lg border ${tone.border} ${tone.bg} p-3 text-sm`}>
@@ -582,6 +620,32 @@ function RuntimeLifecycleNotice({ connectionState }: { connectionState: string }
               ? "Trace could not finish starting the cloud runtime."
               : "Your message is queued and will run as soon as the machine is ready."}
           </p>
+          {failed && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={action !== null}
+                onClick={handleRetry}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
+              >
+                {action === "retry" && <Loader2 size={12} className="animate-spin" />}
+                Retry
+              </button>
+              <button
+                type="button"
+                disabled={action !== null}
+                onClick={handleNewCloud}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
+              >
+                {action === "cloud" ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Cloud size={12} />
+                )}
+                New cloud container
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

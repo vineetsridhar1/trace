@@ -2260,6 +2260,7 @@ describe("SessionService", () => {
       );
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(
         makeSession({
+          hosting: "local",
           connection: {
             state: "disconnected",
             runtimeInstanceId: "runtime-a",
@@ -2276,6 +2277,7 @@ describe("SessionService", () => {
       );
 
       await service.retryConnection("session-1", "org-1", "user", "user-1");
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
       expect(sessionRouterMock.send).not.toHaveBeenCalled();
@@ -2300,6 +2302,63 @@ describe("SessionService", () => {
       // Non-transient failure — frontend must stop auto-retrying.
       expect(failurePayload.connection.autoRetryable).toBe(false);
       expect(failurePayload.connection.lastError).toContain("Laptop A");
+    });
+
+    it("reprovisions cloud sessions when the previous runtime is unavailable", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          connection: {
+            state: "timed_out",
+            adapterType: "provisioned",
+            environmentId: "env-1",
+            runtimeInstanceId: "runtime-old",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          agentStatus: "not_started",
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            environmentId: "env-1",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          hosting: "cloud",
+          preserveBranchName: true,
+          branch: "main",
+          adapterType: "provisioned",
+        }),
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "cloud",
+            pendingRun: expect.objectContaining({ type: "run" }),
+            connection: expect.objectContaining({
+              adapterType: "provisioned",
+              environmentId: "env-1",
+            }),
+          }),
+        }),
+      );
     });
 
     it("re-prepares read-only sessions without upgrading them", async () => {
