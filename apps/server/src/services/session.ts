@@ -2772,6 +2772,9 @@ export class SessionService {
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeInstanceId: string | undefined;
       let runtimeLabel: string | undefined;
+      let requestedEnvironment:
+        | Awaited<ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>>
+        | null = null;
       if (config.runtimeInstanceId) {
         await this.assertRuntimeAccess({
           userId: actorId,
@@ -2785,6 +2788,17 @@ export class SessionService {
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
         sessionRouter.bindSession(sessionId, runtime.id);
+      } else if (newHosting === "cloud") {
+        requestedEnvironment = await agentEnvironmentService.resolveForSessionRequest({
+          organizationId,
+          adapterType: "provisioned",
+          tool: nextTool,
+          actorType,
+          actorId,
+        });
+        if (!requestedEnvironment) {
+          throw new Error("No enabled provisioned agent environment available");
+        }
       } else if (newHosting === "local") {
         const runtime = await this.resolveDefaultAccessibleLocalRuntime({
           userId: actorId,
@@ -2803,6 +2817,10 @@ export class SessionService {
       data.hosting = newHosting;
       data.connection = connJson(
         defaultConnection({
+          ...(requestedEnvironment && {
+            environmentId: requestedEnvironment.id,
+            adapterType: requestedEnvironment.adapterType,
+          }),
           ...(runtimeInstanceId && { runtimeInstanceId }),
           ...(runtimeLabel && { runtimeLabel }),
         }),
@@ -2814,6 +2832,9 @@ export class SessionService {
       const needsProvisioning = !!prev.repoId || newHosting === "cloud";
       if (needsProvisioning) {
         const previousAdapterType = this.parseConnection(prev.connection).adapterType;
+        const adapterType =
+          requestedEnvironment?.adapterType ??
+          (newHosting === prev.hosting ? previousAdapterType : undefined);
         this.provisionRuntime({
           sessionId,
           sessionGroupId: prev.sessionGroupId,
@@ -2827,8 +2848,8 @@ export class SessionService {
           createdById: actorId,
           organizationId,
           readOnly: prev.readOnlyWorkspace,
-          ...(newHosting === prev.hosting &&
-            previousAdapterType && { adapterType: previousAdapterType }),
+          environment: requestedEnvironment,
+          ...(adapterType && { adapterType }),
         });
       }
     }
