@@ -1,17 +1,28 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
   return { prisma: createPrismaMock() };
 });
 
+vi.mock("../services/org-secret.js", () => ({
+  orgSecretService: {
+    getDecryptedValue: vi.fn().mockResolvedValue("launcher-secret"),
+  },
+}));
+
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
 import { SessionRouter } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
+import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
+import { orgSecretService } from "../services/org-secret.js";
 import type { createPrismaMock } from "../../test/helpers.js";
 
 const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
+const orgSecretServiceMock = orgSecretService as unknown as {
+  getDecryptedValue: ReturnType<typeof vi.fn>;
+};
 
 function makeWs() {
   return {
@@ -21,13 +32,31 @@ function makeWs() {
   } as unknown as WebSocket;
 }
 
+function makeResponse(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function fetchMock(): ReturnType<typeof vi.fn> {
+  return global.fetch as unknown as ReturnType<typeof vi.fn>;
+}
+
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  orgSecretServiceMock.getDecryptedValue.mockResolvedValue("launcher-secret");
+});
+
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("SessionRouter stale runtime eviction", () => {
@@ -475,6 +504,152 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
+  it("runs a provisioned launcher start, bridge delivery, and stop with stable idempotency", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeResponse({
+            runtimeId: "provider-runtime-1",
+            status: "provisioning",
+            label: "Launcher runtime",
+          }),
+        )
+        .mockResolvedValueOnce(makeResponse({ ok: true, status: "stopped" })),
+    );
+    const environment = {
+      id: "env-1",
+      name: "Provisioned",
+      adapterType: "provisioned" as const,
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { type: "bearer", secretId: "secret-1" },
+        startupTimeoutSeconds: 5,
+        deprovisionPolicy: "on_session_end",
+      },
+    };
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(environment);
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, new ProvisionedRuntimeAdapter()]),
+    );
+    const lifecycleEvents: Array<{ eventType: string; runtimeInstanceId?: string }> = [];
+    const workspaceReady = vi.fn();
+    const onFailed = vi.fn();
+
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      environment,
+      tool: "codex",
+      model: "gpt-test",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      bridgeUrl: "wss://trace.example/bridge",
+      onLifecycle: (eventType, update) => {
+        lifecycleEvents.push({ eventType, runtimeInstanceId: update?.runtimeInstanceId });
+      },
+      onWorkspaceReady: workspaceReady,
+      onFailed,
+    });
+
+    await vi.waitFor(() => {
+      expect(fetchMock()).toHaveBeenCalledTimes(1);
+    });
+    const startInit = fetchMock().mock.calls[0]?.[1] as RequestInit;
+    const startHeaders = startInit.headers as Record<string, string>;
+    const startBody = JSON.parse(startInit.body as string) as Record<string, unknown>;
+    expect(startHeaders["Trace-Idempotency-Key"]).toBe("session:session-1:start");
+    expect(startBody).toEqual(
+      expect.objectContaining({
+        sessionId: "session-1",
+        runtimeInstanceId: expect.stringMatching(/^runtime_/),
+        runtimeTokenScope: "session",
+      }),
+    );
+    const runtimeInstanceId = startBody.runtimeInstanceId as string;
+
+    const ws = makeWs();
+    router.registerRuntime({
+      id: runtimeInstanceId,
+      label: "Launcher runtime",
+      ws,
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    router.bindSession("session-1", runtimeInstanceId);
+
+    await vi.waitFor(() => {
+      expect(workspaceReady).toHaveBeenCalledWith("/home/coder");
+    });
+    expect(onFailed).not.toHaveBeenCalled();
+    expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
+      "session_runtime_start_requested",
+      "session_runtime_provisioning",
+      "session_runtime_connecting",
+      "session_runtime_connected",
+    ]);
+
+    expect(
+      router.send("session-1", {
+        type: "send",
+        sessionId: "session-1",
+        prompt: "continue",
+      }),
+    ).toBe("delivered");
+    expect(
+      (ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls.some((call) =>
+        String(call[0]).includes('"type":"send"'),
+      ),
+    ).toBe(true);
+
+    await router.destroyRuntime(
+      "session-1",
+      {
+        hosting: "cloud",
+        organizationId: "org-1",
+        connection: {
+          adapterType: "provisioned",
+          environmentId: "env-1",
+          runtimeInstanceId,
+          providerRuntimeId: "provider-runtime-1",
+        },
+      },
+      { maxStopAttempts: 1 },
+    );
+
+    const stopInit = fetchMock().mock.calls[1]?.[1] as RequestInit;
+    const stopHeaders = stopInit.headers as Record<string, string>;
+    expect(stopHeaders["Trace-Idempotency-Key"]).toBe("session:session-1:stop");
+    expect(JSON.parse(stopInit.body as string)).toEqual({
+      sessionId: "session-1",
+      runtimeId: "provider-runtime-1",
+      reason: "session_deleted",
+    });
+  });
+
   it("times out startup using environment config and emits timed_out", async () => {
     vi.useFakeTimers();
     const provisionedAdapter: RuntimeAdapter = {
@@ -623,6 +798,66 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(commands).toEqual([
       expect.objectContaining({ type: "terminal_create", terminalId: "term-1" }),
       expect.objectContaining({ type: "terminal_create", terminalId: "term-2" }),
+    ]);
+  });
+
+  it("keeps multiple provisioned terminal commands isolated by terminalId", () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+
+    router.registerRuntime({
+      id: "runtime-cloud-1",
+      label: "Provisioned runtime",
+      ws,
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    router.bindSession("session-1", "runtime-cloud-1");
+
+    expect(
+      router.send("session-1", {
+        type: "terminal_create",
+        terminalId: "term-a",
+        sessionId: "session-1",
+        cols: 80,
+        rows: 24,
+      }),
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
+        type: "terminal_create",
+        terminalId: "term-b",
+        sessionId: "session-1",
+        cols: 120,
+        rows: 32,
+      }),
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
+        type: "terminal_resize",
+        terminalId: "term-a",
+        sessionId: "session-1",
+        cols: 100,
+        rows: 28,
+      }),
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
+        type: "terminal_input",
+        terminalId: "term-b",
+        sessionId: "session-1",
+        data: "pwd\n",
+      }),
+    ).toBe("delivered");
+
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    const commands = send.mock.calls.map((call) => JSON.parse(call[0] as string));
+    expect(commands).toEqual([
+      expect.objectContaining({ type: "terminal_create", terminalId: "term-a", cols: 80 }),
+      expect.objectContaining({ type: "terminal_create", terminalId: "term-b", cols: 120 }),
+      expect.objectContaining({ type: "terminal_resize", terminalId: "term-a", cols: 100 }),
+      expect.objectContaining({ type: "terminal_input", terminalId: "term-b", data: "pwd\n" }),
     ]);
   });
 

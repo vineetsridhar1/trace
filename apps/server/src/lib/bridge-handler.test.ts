@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   recordOutput: vi.fn(() => Promise.resolve()),
   registerLocalRuntimeConnection: vi.fn(),
   restoreTerminals: vi.fn(() => Promise.resolve()),
+  relayFromBridge: vi.fn(),
   sessionFindFirst: vi.fn(() => Promise.resolve(null)),
 }));
 
@@ -39,7 +40,7 @@ vi.mock("./runtime-debug.js", () => ({
 vi.mock("./terminal-relay.js", () => ({
   terminalRelay: {
     restoreTerminals: mocks.restoreTerminals,
-    relayFromBridge: vi.fn(),
+    relayFromBridge: mocks.relayFromBridge,
   },
 }));
 
@@ -436,5 +437,68 @@ describe("bridge handler auth", () => {
       });
     });
     expect(mocks.registerRuntime).toHaveBeenCalled();
+  });
+
+  it("relays provisioned terminal output and exit by terminalId from the source runtime", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "connecting", runtimeInstanceId: "cloud-machine-owned" },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
+    ws.emitMessage({
+      type: "terminal_output",
+      terminalId: "term-1",
+      data: "one",
+    });
+    ws.emitMessage({
+      type: "terminal_output",
+      terminalId: "term-2",
+      data: "two",
+    });
+    ws.emitMessage({
+      type: "terminal_exit",
+      terminalId: "term-1",
+      exitCode: 0,
+    });
+    await Promise.resolve();
+
+    expect(mocks.relayFromBridge).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "terminal_output", terminalId: "term-1", data: "one" }),
+      "cloud-machine-owned",
+    );
+    expect(mocks.relayFromBridge).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "terminal_output", terminalId: "term-2", data: "two" }),
+      "cloud-machine-owned",
+    );
+    expect(mocks.relayFromBridge).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "terminal_exit", terminalId: "term-1", exitCode: 0 }),
+      "cloud-machine-owned",
+    );
   });
 });
