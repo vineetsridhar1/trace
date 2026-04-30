@@ -120,10 +120,12 @@ export function AgentEnvironmentRow({
             <DropdownMenuItem onClick={onToggleEnabled}>
               {environment.enabled ? "Disable" : "Enable"}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onDelete} className="text-destructive">
-              <Trash2 size={14} />
-              Delete
-            </DropdownMenuItem>
+            {environment.adapterType === "provisioned" ? (
+              <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                <Trash2 size={14} />
+                Delete
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
