@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { features } from "../lib/features";
@@ -92,26 +92,11 @@ export function AppSidebar() {
         ? peekTabProgress
         : getTabIndex(currentTab);
 
-  const rafRef = useRef<number>(0);
-  useLayoutEffect(() => {
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => {
-      document.documentElement.style.setProperty("--trace-shell-bg", "transparent");
-    });
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      document.documentElement.style.removeProperty("--trace-shell-bg");
-    };
-  }, []);
-
   return (
     <>
       <Sidebar collapsible="offcanvas" className="border-none">
         <div
-          className="flex size-full flex-col bg-transparent text-sidebar-foreground shadow-2xl shadow-black/30"
+          className="flex size-full flex-col bg-transparent text-sidebar-foreground"
           style={{ backgroundColor: "transparent" }}
         >
           <div className="app-region-drag h-10 shrink-0" />

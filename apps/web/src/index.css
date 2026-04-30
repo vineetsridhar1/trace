@@ -61,6 +61,7 @@
   --th-accent-tint: #3b82f622;
   --th-hover-rgb: 38, 38, 38;
   --th-code-bg: #0a0a0a;
+  --trace-window-bg: rgb(10 10 10 / 0.68);
 }
 
 @theme inline {
