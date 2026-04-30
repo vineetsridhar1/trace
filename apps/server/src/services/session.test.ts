@@ -255,6 +255,7 @@ describe("SessionService", () => {
       allowed: true,
       isOwner: true,
     });
+    prismaMock.agentEnvironment.findFirst.mockResolvedValue(makeAgentEnvironment());
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
@@ -3530,6 +3531,7 @@ describe("SessionService", () => {
           sessionId: "session-1",
           hosting: "cloud",
           createdById: "user-1",
+          environment: expect.objectContaining({ id: "env-default" }),
         }),
       );
       expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
@@ -3538,6 +3540,67 @@ describe("SessionService", () => {
         "terminate",
       );
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+    });
+
+    it("resolves a provisioned environment before moving a local session to cloud", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "cloud",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            environmentId: "env-default",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+
+      await service.moveToCloud("session-1", "org-1", "user", "user-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              adapterType: "provisioned",
+              environmentId: "env-default",
+            }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          hosting: "cloud",
+          environment: expect.objectContaining({ id: "env-default" }),
+        }),
+      );
+      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
+        "session-1",
+        "local",
+        "terminate",
+      );
     });
 
     it("rejects moving a merged session to cloud", async () => {

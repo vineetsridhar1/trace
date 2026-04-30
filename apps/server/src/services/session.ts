@@ -828,20 +828,45 @@ export class SessionService {
       select: { connection: true },
     });
     const environmentId = this.parseConnection(session?.connection ?? null).environmentId;
-    if (!environmentId) return null;
-    const environment = await prisma.agentEnvironment.findFirst({
-      where: { id: environmentId, organizationId: params.organizationId },
-      select: { id: true, name: true, adapterType: true, config: true },
-    });
-    if (!environment) return null;
-    if (environment.adapterType !== "local" && environment.adapterType !== "provisioned") {
+    const environment = environmentId
+      ? await prisma.agentEnvironment.findFirst({
+          where: { id: environmentId, organizationId: params.organizationId },
+          select: { id: true, name: true, adapterType: true, config: true },
+        })
+      : await prisma.agentEnvironment.findFirst({
+          where: {
+            organizationId: params.organizationId,
+            adapterType: "provisioned",
+            enabled: true,
+            isDefault: true,
+          },
+          select: { id: true, name: true, adapterType: true, config: true },
+        });
+    const fallbackEnvironment =
+      environment ??
+      (environmentId
+        ? null
+        : await prisma.agentEnvironment.findFirst({
+            where: {
+              organizationId: params.organizationId,
+              adapterType: "provisioned",
+              enabled: true,
+            },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true, adapterType: true, config: true },
+          }));
+    if (!fallbackEnvironment) return null;
+    if (
+      fallbackEnvironment.adapterType !== "local" &&
+      fallbackEnvironment.adapterType !== "provisioned"
+    ) {
       return null;
     }
     return {
-      id: environment.id,
-      name: environment.name,
-      adapterType: environment.adapterType,
-      config: environment.config,
+      id: fallbackEnvironment.id,
+      name: fallbackEnvironment.name,
+      adapterType: fallbackEnvironment.adapterType,
+      config: fallbackEnvironment.config,
     };
   }
 
@@ -4965,6 +4990,17 @@ export class SessionService {
       null;
     const inspectableSourceRuntimeId =
       sourceRuntimeId && sessionRouter.isRuntimeAvailable(sourceRuntimeId) ? sourceRuntimeId : null;
+    const targetEnvironment =
+      targetHosting === "cloud"
+        ? await this.resolveProvisioningEnvironment({
+            sessionId: session.id,
+            organizationId: session.organizationId,
+            adapterType: "provisioned",
+          })
+        : null;
+    if (targetHosting === "cloud" && !targetEnvironment) {
+      throw new Error("No provisioned cloud agent environment is available");
+    }
 
     const sourceGitStatus = await this.inspectSessionMoveSource({
       sessionId: session.id,
@@ -4999,7 +5035,7 @@ export class SessionService {
           })
         : defaultConnection({
             adapterType: "provisioned",
-            environmentId: sourceConnection.environmentId,
+            environmentId: targetEnvironment?.id ?? sourceConnection.environmentId,
           }),
     );
 
@@ -5069,6 +5105,7 @@ export class SessionService {
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
         adapterType: this.parseConnection(movedSession.connection).adapterType,
+        environment: targetEnvironment,
       });
     } else {
       const deliveryResult = await this.deliverPendingCommand(
