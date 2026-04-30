@@ -106,8 +106,8 @@ function OwnedSessionItem({
       className={cn(
         "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm leading-none transition-colors",
         isActive
-          ? "bg-white/10 text-white"
-          : "text-white/75 hover:bg-white/10 hover:text-white",
+          ? "bg-white/10 text-foreground"
+          : "text-muted-foreground hover:bg-white/10 hover:text-foreground",
       )}
       title={name ?? "Untitled session"}
       onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}
