@@ -69,7 +69,7 @@ export class FlyMachinesClient {
         method: "POST",
         body: JSON.stringify({
           signal: "SIGTERM",
-          timeout: "30",
+          timeout: "30s",
         }),
       },
     );

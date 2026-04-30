@@ -87,7 +87,7 @@ export class FlyProvider implements CloudMachineProvider {
     await flyFetch(`${machineUrl(providerMachineId)}/stop`, { method: "POST" }).catch(() => {
       // May already be stopped
     });
-    await flyFetch(`${machineUrl(providerMachineId)}/wait?state=stopped&timeout=30`, {
+    await flyFetch(`${machineUrl(providerMachineId)}/wait?state=stopped&timeout=30s`, {
       method: "GET",
     }).catch(() => {
       // Timeout or already stopped — proceed with delete
