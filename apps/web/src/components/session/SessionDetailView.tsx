@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
+import { asJsonObject } from "@trace/shared";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import {
   useEntityStore,
@@ -20,7 +21,7 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Cloud } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
@@ -33,6 +34,13 @@ import {
   SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+
+const RUNTIME_BOOTING_STATES = new Set(["pending", "requested", "provisioning", "booting", "connecting"]);
+
+function getConnectionState(connection: Record<string, unknown> | null | undefined): string | null {
+  const state = connection?.state;
+  return typeof state === "string" ? state : null;
+}
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -318,6 +326,20 @@ export function SessionDetailView({
     [eventIds, events],
   );
   const initialEventsLoading = loading && eventIds.length === 0;
+  const hasPendingRuntimeMessage = useMemo(
+    () =>
+      eventIds.some((eventId) => {
+        const event = events[eventId];
+        if (event?.eventType !== "message_sent") return false;
+        return asJsonObject(event.payload)?.deliveryStatus === "pending_runtime";
+      }),
+    [eventIds, events],
+  );
+  const connectionState = getConnectionState(connection);
+  const runtimeBooting =
+    agentStatus === "active" &&
+    (hasPendingRuntimeMessage ||
+      (connectionState !== null && RUNTIME_BOOTING_STATES.has(connectionState)));
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -467,7 +489,9 @@ export function SessionDetailView({
           )}
         </div>
 
-        {!bridgeInteractionAllowed ? (
+        {runtimeBooting ? (
+          <RuntimeBootingNotice connectionState={connectionState} />
+        ) : !bridgeInteractionAllowed ? (
           <div className="border-t p-4">
             <BridgeAccessNotice
               access={bridgeAccess}
@@ -512,5 +536,33 @@ export function SessionDetailView({
         )}
       </div>
     </EventScopeContext.Provider>
+  );
+}
+
+function RuntimeBootingNotice({ connectionState }: { connectionState: string | null }) {
+  const label =
+    connectionState === "provisioning"
+      ? "Provisioning cloud runtime"
+      : connectionState === "connecting"
+        ? "Connecting to cloud runtime"
+        : "Booting cloud runtime";
+
+  return (
+    <div className="border-t px-4 py-3">
+      <div className="flex items-start gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-50">
+        <div className="mt-0.5 rounded-md bg-sky-500/20 p-1.5 text-sky-200">
+          <Cloud size={14} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 font-medium text-sky-100">
+            <Loader2 size={14} className="animate-spin" />
+            {label}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-sky-100/80">
+            Your message is queued and will run as soon as the machine is ready.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
