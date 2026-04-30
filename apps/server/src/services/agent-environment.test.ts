@@ -166,6 +166,35 @@ describe("AgentEnvironmentService", () => {
     );
   });
 
+  it("rejects creating a second enabled provisioned environment", async () => {
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({ id: "existing-env" });
+
+    const service = new AgentEnvironmentService();
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "Second Launcher",
+          adapterType: "provisioned",
+          config: {
+            startUrl: "https://launcher.example/start",
+            stopUrl: "https://launcher.example/stop",
+            statusUrl: "https://launcher.example/status",
+            auth: { type: "bearer", secretId: "secret-1" },
+            startupTimeoutSeconds: 120,
+            deprovisionPolicy: "on_session_end",
+          },
+          enabled: true,
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Only one cloud environment can be enabled per organization");
+
+    expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
+  });
+
   it("redacts provisioned launcher config for public payloads", () => {
     expect(
       publicAgentEnvironmentConfig({
@@ -413,6 +442,36 @@ describe("AgentEnvironmentService", () => {
         isDefault: false,
       },
     });
+  });
+
+  it("rejects enabling a provisioned environment when another cloud is enabled", async () => {
+    prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+      id: "env-2",
+      organizationId: "org-1",
+      name: "Second Launcher",
+      adapterType: "provisioned",
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { type: "bearer", secretId: "secret-1" },
+        startupTimeoutSeconds: 120,
+        deprovisionPolicy: "on_session_end",
+      },
+      enabled: false,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({ id: "env-1" });
+
+    const service = new AgentEnvironmentService();
+
+    await expect(service.update("env-2", { enabled: true }, "user", "user-1")).rejects.toThrow(
+      "Only one cloud environment can be enabled per organization",
+    );
+
+    expect(prismaMock.agentEnvironment.update).not.toHaveBeenCalled();
   });
 
   it("rejects manual changes to a local environment bridge binding", async () => {

@@ -7,6 +7,9 @@ import { useAgentEnvironmentsSettings } from "./useAgentEnvironmentsSettings";
 
 export function AgentEnvironmentsSection() {
   const settings = useAgentEnvironmentsSettings();
+  const hasEnabledProvisionedEnvironment = settings.environmentIds.some(
+    (id) => settings.environmentsById[id]?.enabled,
+  );
 
   return (
     <div>
@@ -22,7 +25,16 @@ export function AgentEnvironmentsSection() {
             <RefreshCw size={14} className="mr-1.5" />
             Refresh
           </Button>
-          <Button size="sm" onClick={settings.createEnvironment} disabled={!settings.activeOrgId}>
+          <Button
+            size="sm"
+            onClick={settings.createEnvironment}
+            disabled={!settings.activeOrgId || hasEnabledProvisionedEnvironment}
+            title={
+              hasEnabledProvisionedEnvironment
+                ? "Only one cloud environment can be enabled per organization"
+                : undefined
+            }
+          >
             <Plus size={14} className="mr-1.5" />
             New provisioned
           </Button>

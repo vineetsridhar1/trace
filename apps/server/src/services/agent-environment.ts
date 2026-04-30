@@ -126,6 +126,25 @@ function assertSupportsTool(environment: AgentEnvironmentRecord, tool: CodingToo
   }
 }
 
+async function assertSingleEnabledProvisionedEnvironment(
+  tx: TxClient,
+  organizationId: string,
+  currentEnvironmentId?: string,
+): Promise<void> {
+  const existing = await tx.agentEnvironment.findFirst({
+    where: {
+      organizationId,
+      adapterType: "provisioned",
+      enabled: true,
+      ...(currentEnvironmentId ? { id: { not: currentEnvironmentId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new Error("Only one cloud environment can be enabled per organization");
+  }
+}
+
 export function publicAgentEnvironmentConfig(
   config: Prisma.InputJsonValue | Prisma.JsonValue | undefined,
 ): Prisma.InputJsonObject {
@@ -231,6 +250,9 @@ export class AgentEnvironmentService {
       await assertActorOrgAdmin(tx, input.organizationId, actorType, actorId);
       await this.lockOrganizationDefaults(tx, input.organizationId);
       const enabled = input.enabled ?? true;
+      if (input.adapterType === "provisioned" && enabled) {
+        await assertSingleEnabledProvisionedEnvironment(tx, input.organizationId);
+      }
       const isDefault = enabled && input.isDefault === true;
       if (isDefault) {
         await tx.agentEnvironment.updateMany({
@@ -442,6 +464,9 @@ export class AgentEnvironmentService {
       await this.lockOrganizationDefaults(tx, existing.organizationId);
 
       const enabled = input.enabled ?? existing.enabled;
+      if (adapterType === "provisioned" && enabled) {
+        await assertSingleEnabledProvisionedEnvironment(tx, existing.organizationId, id);
+      }
       const isDefault = enabled && (input.isDefault ?? existing.isDefault);
 
       if (isDefault) {
