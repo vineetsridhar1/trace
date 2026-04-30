@@ -56,15 +56,6 @@ export function AgentEnvironmentsSection() {
                     pendingActionId={settings.pendingActionId}
                     testResult={settings.testResults[id]}
                     onEdit={() => settings.editEnvironment(id)}
-                    onSetDefault={() =>
-                      void settings.updateEnvironment(environment, { isDefault: true })
-                    }
-                    onToggleEnabled={() =>
-                      void settings.updateEnvironment(environment, {
-                        enabled: !environment.enabled,
-                        isDefault: environment.enabled ? false : environment.isDefault,
-                      })
-                    }
                     onTest={() => void settings.testEnvironment(environment)}
                     onDelete={() => void settings.deleteEnvironment(environment)}
                   />

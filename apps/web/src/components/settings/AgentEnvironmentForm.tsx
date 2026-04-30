@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Save } from "lucide-react";
-import type { AgentEnvironment, CodingTool, OrgSecret } from "@trace/gql";
+import type { AgentEnvironment, OrgSecret } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
 import {
@@ -10,11 +10,7 @@ import {
   ResponsiveDialogHeader as DialogHeader,
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
-import {
-  environmentConfig,
-  type LocalBridgeSummary,
-  supportedToolsFromConfig,
-} from "./agent-environment-utils";
+import { environmentConfig, type LocalBridgeSummary } from "./agent-environment-utils";
 import {
   CREATE_AGENT_ENVIRONMENT_MUTATION,
   UPDATE_AGENT_ENVIRONMENT_MUTATION,
@@ -22,7 +18,6 @@ import {
 import { AgentEnvironmentBasicsFields } from "./AgentEnvironmentBasicsFields";
 import { AgentEnvironmentLocalFields } from "./AgentEnvironmentLocalFields";
 import { AgentEnvironmentProvisionedFields } from "./AgentEnvironmentProvisionedFields";
-import { AgentEnvironmentSupportedToolsField } from "./AgentEnvironmentSupportedToolsField";
 import { ANY_LOCAL_RUNTIME, type AgentEnvironmentDraft } from "./agent-environment-form-types";
 
 type Props = {
@@ -47,30 +42,22 @@ function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraf
     adapterType: environment?.adapterType ?? "provisioned",
     enabled: environment?.enabled ?? true,
     isDefault: environment?.isDefault ?? false,
-    supportedTools: supportedToolsFromConfig(config),
     runtimeSelection: runtimeInstanceId ?? ANY_LOCAL_RUNTIME,
     startUrl: config.startUrl ?? "",
     stopUrl: config.stopUrl ?? "",
     statusUrl: config.statusUrl ?? "",
     authSecretId: config.auth?.secretId ?? "",
     startupTimeoutSeconds: String(config.startupTimeoutSeconds ?? 180),
-    deprovisionPolicy: config.deprovisionPolicy ?? "on_session_end",
     launcherMetadata,
   };
 }
 
-function buildCapabilities(tools: CodingTool[]): Record<string, unknown> | undefined {
-  return tools.length ? { supportedTools: tools } : undefined;
-}
-
 function buildConfig(draft: AgentEnvironmentDraft): Record<string, unknown> {
-  const capabilities = buildCapabilities(draft.supportedTools);
   if (draft.adapterType === "local") {
     return {
       ...(draft.runtimeSelection === ANY_LOCAL_RUNTIME
         ? { runtimeSelection: "any_accessible_local" }
         : { runtimeInstanceId: draft.runtimeSelection }),
-      ...(capabilities ? { capabilities } : {}),
     };
   }
 
@@ -81,8 +68,7 @@ function buildConfig(draft: AgentEnvironmentDraft): Record<string, unknown> {
     statusUrl: draft.statusUrl.trim(),
     auth: { type: "bearer", secretId: draft.authSecretId.trim() },
     startupTimeoutSeconds: Number(draft.startupTimeoutSeconds),
-    deprovisionPolicy: draft.deprovisionPolicy,
-    ...(capabilities ? { capabilities } : {}),
+    deprovisionPolicy: "on_session_end",
     ...(metadata ? { launcherMetadata: JSON.parse(metadata) as Record<string, unknown> } : {}),
   };
 }
@@ -113,18 +99,6 @@ export function AgentEnvironmentForm({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  function toggleTool(tool: CodingTool) {
-    setDraft((current) => {
-      const hasTool = current.supportedTools.includes(tool);
-      return {
-        ...current,
-        supportedTools: hasTool
-          ? current.supportedTools.filter((candidate) => candidate !== tool)
-          : [...current.supportedTools, tool],
-      };
-    });
-  }
-
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -140,8 +114,8 @@ export function AgentEnvironmentForm({
                 name: draft.name.trim(),
                 adapterType: draft.adapterType,
                 config,
-                enabled: draft.enabled,
-                isDefault: draft.isDefault,
+                enabled: draft.adapterType === "provisioned" ? true : draft.enabled,
+                isDefault: draft.adapterType === "provisioned" ? false : draft.isDefault,
               },
             })
             .toPromise()
@@ -152,8 +126,8 @@ export function AgentEnvironmentForm({
                 name: draft.name.trim(),
                 adapterType: draft.adapterType,
                 config,
-                enabled: draft.enabled,
-                isDefault: draft.isDefault,
+                enabled: draft.adapterType === "provisioned" ? true : draft.enabled,
+                isDefault: draft.adapterType === "provisioned" ? false : draft.isDefault,
               },
             })
             .toPromise();
@@ -167,6 +141,11 @@ export function AgentEnvironmentForm({
       setSaving(false);
     }
   }
+
+  const canSubmit =
+    !saving &&
+    !!draft.name.trim() &&
+    (draft.adapterType !== "provisioned" || !!draft.authSecretId.trim());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,10 +164,7 @@ export function AgentEnvironmentForm({
           <AgentEnvironmentBasicsFields draft={draft} update={update} />
 
           {draft.adapterType === "local" ? (
-            <AgentEnvironmentLocalFields
-              draft={draft}
-              localBridges={localBridges}
-            />
+            <AgentEnvironmentLocalFields draft={draft} localBridges={localBridges} />
           ) : (
             <AgentEnvironmentProvisionedFields
               draft={draft}
@@ -197,13 +173,8 @@ export function AgentEnvironmentForm({
             />
           )}
 
-          <AgentEnvironmentSupportedToolsField
-            supportedTools={draft.supportedTools}
-            onToggle={toggleTool}
-          />
-
           <DialogFooter>
-            <Button type="submit" disabled={saving || !draft.name.trim()}>
+            <Button type="submit" disabled={!canSubmit}>
               {saving ? (
                 <Loader2 size={14} className="mr-1.5 animate-spin" />
               ) : environment ? (

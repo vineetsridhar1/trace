@@ -8,7 +8,6 @@ import {
   AGENT_ENVIRONMENTS_SETTINGS_QUERY,
   DELETE_AGENT_ENVIRONMENT_MUTATION,
   TEST_AGENT_ENVIRONMENT_MUTATION,
-  UPDATE_AGENT_ENVIRONMENT_MUTATION,
 } from "./agent-environment-queries";
 import type { LocalBridgeSummary } from "./agent-environment-utils";
 
@@ -81,25 +80,6 @@ export function useAgentEnvironmentsSettings() {
     setFormOpen(true);
   }
 
-  async function updateEnvironment(
-    environment: AgentEnvironment,
-    input: Partial<AgentEnvironment>,
-  ) {
-    setPendingActionId(environment.id);
-    try {
-      const result = await client
-        .mutation(UPDATE_AGENT_ENVIRONMENT_MUTATION, {
-          input: { id: environment.id, enabled: input.enabled, isDefault: input.isDefault },
-        })
-        .toPromise();
-      if (result.error) throw result.error;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update environment");
-    } finally {
-      setPendingActionId(null);
-    }
-  }
-
   async function deleteEnvironment(environment: AgentEnvironment) {
     if (!window.confirm(`Delete ${environment.name}?`)) return;
     setPendingActionId(environment.id);
@@ -154,7 +134,6 @@ export function useAgentEnvironmentsSettings() {
     deleteEnvironment,
     editEnvironment,
     testEnvironment,
-    updateEnvironment,
   };
 }
 
