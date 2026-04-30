@@ -129,7 +129,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         <InstallBanner />
         <SidebarProvider className="min-h-0 flex-1 pt-2">
           <AppSidebar />
-          <AppTitleBar />
 
           <div className="app-region-drag flex w-full flex-1 overflow-hidden pt-10 pr-2 md:peer-data-[state=collapsed]:pl-2">
             <div className="app-region-no-drag flex min-w-0 flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border border-border/80 bg-background/95">
@@ -159,6 +158,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               </SidebarInset>
             </div>
           </div>
+          <AppTitleBar />
         </SidebarProvider>
       </div>
     </TooltipProvider>
