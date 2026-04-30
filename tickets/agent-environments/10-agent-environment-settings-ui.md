@@ -2,13 +2,13 @@
 
 ## Summary
 
-Add org settings UI for managing local and provisioned agent environments.
+Add org settings UI for managing provisioned agent environments.
 
 ## Plan coverage
 
 Owns plan lines:
 
-- 857-900: org settings environment list, local form, provisioned form, connected bridges/repos, and status display
+- 857-900: org settings environment list, provisioned form, connected bridges/repos visibility, and status display
 - 910-937: secret selector/reference UI for environment config
 - 989-994: phase 7 org settings environment management and session-status display dependency
 - 1066: V1 basic org settings UI requirement
@@ -16,15 +16,14 @@ Owns plan lines:
 ## What needs to happen
 
 - Add `Org Settings -> Agent Environments`.
-- List environments with:
+- List provisioned environments with:
   - name
   - adapter type
   - default marker
   - enabled state
   - last status/error if available
-- Add create/edit flows for local environments.
-  - Show connected local bridges.
-  - Show registered repos for each local bridge where available.
+- Local environments are auto-created from connected desktop bridges; do not add manual local create/edit in V1.
+- Show connected local bridges and registered repos in an operator-visible surface where available.
 - Add create/edit flows for provisioned environments.
   - Show supported-tool compatibility fields when available.
 - Add enable/disable.
@@ -40,9 +39,9 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [x] Admin can list org environments.
-- [x] Admin can create/edit local environment.
-- [x] Local environment form shows connected local bridges and registered repos.
+- [x] Admin can list provisioned org environments.
+- [x] Local environments are service-managed and not manually editable in settings.
+- [ ] Connected local bridges and registered repos are visible in a ticket-10-owned or clearly linked operator surface.
 - [x] Admin can create/edit provisioned environment.
 - [x] Provisioned environment form can display/edit supported-tool compatibility constraints.
 - [x] Admin can set an org default.
@@ -77,3 +76,5 @@ Owns plan lines:
 - [x] Use a tool-agnostic connected bridge source for the local environment form. The settings UI now reads connected local bridges through `myConnections`.
 - [x] Reconcile default environment changes through service-layer events instead of client-side mutation-result upserts/refetches. Default-changing events now include all affected environments.
 - [x] Add an org secret selector/listing flow for provisioned launcher auth when the API exposes secret metadata.
+- [ ] Reconcile the UI copy and implementation with the local-environment product decision: local environments are auto-created and hidden from Agent Environments, but bridge/repo visibility still needs to be discoverable outside the provisioned-only list.
+- [ ] Add persisted or queryable last status/error fields, or explicitly scope the list requirement to the latest in-dialog test result.
