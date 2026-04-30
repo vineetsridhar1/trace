@@ -91,27 +91,39 @@ async function inspectSessionGitSyncStatus(repoPath: string) {
   const upstreamCommitSha = upstreamBranch
     ? await maybeReadGitRef(repoPath, ["rev-parse", `${upstreamBranch}^{commit}`])
     : null;
+  const remoteBranch = branch ? `origin/${branch}` : null;
+  const remoteCommitSha = remoteBranch
+    ? await maybeReadGitRef(repoPath, ["rev-parse", `${remoteBranch}^{commit}`])
+    : null;
 
-  let aheadCount = 0;
-  let behindCount = 0;
-  if (upstreamBranch) {
+  const countDivergence = async (ref: string | null) => {
+    if (!ref) return { aheadCount: 0, behindCount: 0 };
     const { stdout } = await execFileAsync(
       "git",
-      ["rev-list", "--left-right", "--count", `HEAD...${upstreamBranch}`],
+      ["rev-list", "--left-right", "--count", `HEAD...${ref}`],
       { cwd: repoPath, maxBuffer: 1024 * 1024 },
     );
     const [aheadRaw = "0", behindRaw = "0"] = stdout.trim().split(/\s+/);
-    aheadCount = Number.parseInt(aheadRaw, 10) || 0;
-    behindCount = Number.parseInt(behindRaw, 10) || 0;
-  }
+    return {
+      aheadCount: Number.parseInt(aheadRaw, 10) || 0,
+      behindCount: Number.parseInt(behindRaw, 10) || 0,
+    };
+  };
+
+  const upstreamDivergence = await countDivergence(upstreamBranch);
+  const remoteDivergence = await countDivergence(remoteCommitSha ? remoteBranch : null);
 
   return {
     branch,
     headCommitSha: headStdout.trim() || null,
     upstreamBranch,
     upstreamCommitSha,
-    aheadCount,
-    behindCount,
+    aheadCount: upstreamDivergence.aheadCount,
+    behindCount: upstreamDivergence.behindCount,
+    remoteBranch: remoteCommitSha ? remoteBranch : null,
+    remoteCommitSha,
+    remoteAheadCount: remoteDivergence.aheadCount,
+    remoteBehindCount: remoteDivergence.behindCount,
     hasUncommittedChanges: statusStdout.trim().length > 0,
   };
 }

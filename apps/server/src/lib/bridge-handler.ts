@@ -467,6 +467,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 upstreamCommitSha: string | null;
                 aheadCount: number;
                 behindCount: number;
+                remoteBranch: string | null;
+                remoteCommitSha: string | null;
+                remoteAheadCount: number;
+                remoteBehindCount: number;
                 hasUncommittedChanges: boolean;
               })
             : undefined,
