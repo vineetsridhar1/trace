@@ -83,11 +83,6 @@ export async function createWorktree({
   const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
   const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
 
-  // If worktree already exists, reuse it
-  if (fs.existsSync(worktreePath)) {
-    return { workdir: worktreePath, slug: worktreeSlug };
-  }
-
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
@@ -107,6 +102,11 @@ export async function createWorktree({
     }
   }
 
+  if (fs.existsSync(worktreePath)) {
+    await resetWorktreeToRef(worktreePath, baseRef);
+    return { workdir: worktreePath, slug: worktreeSlug };
+  }
+
   // Check if the branch already exists
   const branchExists = await execFileAsync("git", ["rev-parse", "--verify", branchName], {
     cwd: repoPath,
@@ -122,8 +122,17 @@ export async function createWorktree({
       cwd: repoPath,
     });
   }
+  await resetWorktreeToRef(worktreePath, baseRef);
 
   return { workdir: worktreePath, slug: worktreeSlug };
+}
+
+async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
+  // Provisioned containers are treated as recoverable from Trace state plus
+  // origin/checkpoint state. Do not trust stale disk contents when a runtime is
+  // reprovisioned or a container is reused.
+  await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
+  await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
 }
 
 /**

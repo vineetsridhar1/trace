@@ -24,6 +24,7 @@ describe("Fly machine helpers", () => {
       TRACE_RUNTIME_TOKEN: "runtime-token",
       TRACE_BRIDGE_URL: "wss://trace.example/bridge",
       TRACE_TOOL: "codex",
+      TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
       TRACE_MODEL: "gpt-5",
       TRACE_REPO_URL: "https://github.com/example/repo.git",
       TRACE_REPO_BRANCH: "feature/test",
