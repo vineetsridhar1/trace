@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from "react";
-import { MessageSquare, Code, Trash2 } from "lucide-react";
+import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
+import { ChevronRight, MessageSquare, Code, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "@trace/client-core";
@@ -23,11 +24,17 @@ export const ChannelItem = memo(function ChannelItem({
   isActive,
   onClick,
   groupId,
+  canExpand = false,
+  isExpanded = false,
+  onToggleExpanded,
 }: {
   id: string;
   isActive: boolean;
   onClick: () => void;
   groupId?: string | null;
+  canExpand?: boolean;
+  isExpanded?: boolean;
+  onToggleExpanded?: () => void;
 }) {
   const name = useEntityField("channels", id, "name");
   const type = useEntityField("channels", id, "type");
@@ -59,6 +66,34 @@ export const ChannelItem = memo(function ChannelItem({
           <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
             <SidebarMenuItem>
               <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
+                {canExpand && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                    title={isExpanded ? "Collapse channel sessions" : "Expand channel sessions"}
+                    onClick={(event: MouseEvent<HTMLSpanElement>) => {
+                      event.stopPropagation();
+                      onToggleExpanded?.();
+                    }}
+                    onKeyDown={(event: KeyboardEvent<HTMLSpanElement>) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleExpanded?.();
+                    }}
+                    onPointerDown={(event: PointerEvent<HTMLSpanElement>) =>
+                      event.stopPropagation()
+                    }
+                  >
+                    <ChevronRight
+                      size={13}
+                      className={
+                        isExpanded ? "rotate-90 transition-transform" : "transition-transform"
+                      }
+                    />
+                  </span>
+                )}
                 <div className="relative">
                   <ChannelIcon type={type} className="opacity-50" />
                   {hasDoneBadge && (

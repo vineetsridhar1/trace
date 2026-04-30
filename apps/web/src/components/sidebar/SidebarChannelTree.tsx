@@ -7,7 +7,7 @@ import { useChannelDnd, topLevelSortableIds } from "../../hooks/useChannelDnd";
 import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { client } from "../../lib/urql";
 import { ChannelGroupSection } from "./ChannelGroupSection";
-import { ChannelItem } from "./ChannelItem";
+import { SidebarChannelSection } from "./SidebarChannelSection";
 import { Skeleton } from "../ui/skeleton";
 import { SidebarMenu, SidebarMenuItem } from "../ui/sidebar";
 
@@ -19,6 +19,7 @@ const DELETE_GROUP_MUTATION = gql`
 
 export interface SidebarChannelTreeProps {
   activeChannelId: string | null;
+  activeSessionGroupId: string | null;
   activeOrgId: string | null;
   allChannelIds: string[];
   channelGroupsById: Record<string, ChannelGroup>;
@@ -28,12 +29,14 @@ export interface SidebarChannelTreeProps {
   groupIds: string[];
   onAddChannel: (groupId: string) => void;
   onChannelClick: (id: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
   onDragActiveChange?: (active: boolean) => void;
   topLevelItems: TopLevelItem[];
 }
 
 export function SidebarChannelTree({
   activeChannelId,
+  activeSessionGroupId,
   activeOrgId,
   allChannelIds,
   channelGroupsById,
@@ -43,6 +46,7 @@ export function SidebarChannelTree({
   groupIds,
   onAddChannel,
   onChannelClick,
+  onSessionClick,
   onDragActiveChange,
   topLevelItems,
 }: SidebarChannelTreeProps) {
@@ -104,22 +108,25 @@ export function SidebarChannelTree({
           <div className="py-2">
             {currentTopLevel.map((item: TopLevelItem) =>
               item.kind === "channel" ? (
-                <SidebarMenu key={`channel:${item.id}`}>
-                  <ChannelItem
-                    id={item.id}
-                    isActive={item.id === activeChannelId}
-                    onClick={() => onChannelClick(item.id)}
-                    groupId={null}
-                  />
-                </SidebarMenu>
+                <SidebarChannelSection
+                  key={`channel:${item.id}`}
+                  channelId={item.id}
+                  groupId={null}
+                  isChannelActive={item.id === activeChannelId}
+                  hasActiveSession={activeSessionGroupId !== null}
+                  onChannelClick={onChannelClick}
+                  onSessionClick={onSessionClick}
+                />
               ) : (
                 <ChannelGroupSection
                   key={`group:${item.id}`}
                   id={item.id}
                   channelIds={currentGroupChannels[item.id] ?? []}
                   activeChannelId={activeChannelId}
+                  activeSessionGroupId={activeSessionGroupId}
                   onAddChannel={onAddChannel}
                   onChannelClick={onChannelClick}
+                  onSessionClick={onSessionClick}
                   onDeleteGroup={(groupId) =>
                     client.mutation(DELETE_GROUP_MUTATION, { id: groupId }).toPromise()
                   }
