@@ -44,6 +44,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
         input: {
           tool,
           model,
+          deferRuntimeSelection: true,
           channelId,
           repoId: channelRepoId,
         },

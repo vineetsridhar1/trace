@@ -812,6 +812,41 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
+    it("defers runtime selection without resolving the org default environment", async () => {
+      const sessionGroup = makeSessionGroup({ connection: { state: "pending" } });
+      const session = makeSession({ sessionGroup, hosting: "local" });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+        deferRuntimeSelection: true,
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(sessionRouterMock.getRuntime).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "local",
+            connection: expect.not.objectContaining({
+              environmentId: expect.any(String),
+              runtimeInstanceId: expect.any(String),
+            }),
+          }),
+        }),
+      );
+    });
+
     it("falls back to an accessible bridge for any-accessible local environments", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup, hosting: "local" });
@@ -4621,8 +4656,7 @@ describe("SessionService", () => {
         prismaMock.session.updateMany as unknown as ReturnType<typeof vi.fn>
       ).mock.calls.map((call) => call[0] as { data: { connection: unknown } });
       const bumpCall = updateManyCalls.find(
-        (call) =>
-          (call.data.connection as { reconcileAttempts?: number }).reconcileAttempts === 4,
+        (call) => (call.data.connection as { reconcileAttempts?: number }).reconcileAttempts === 4,
       );
       expect(bumpCall).toBeDefined();
     });

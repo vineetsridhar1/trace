@@ -251,7 +251,10 @@ const MAX_CONNECTION_UPDATE_ATTEMPTS = 5;
  * backfills `version: 0` on existing rows, so we don't need to special-case
  * a missing key here.
  */
-function connectionVersionWhere(sessionId: string, expectedVersion: number): Prisma.SessionWhereInput {
+function connectionVersionWhere(
+  sessionId: string,
+  expectedVersion: number,
+): Prisma.SessionWhereInput {
   return {
     id: sessionId,
     connection: { path: ["version"], equals: expectedVersion },
@@ -269,10 +272,7 @@ function isRuntimeStartupState(state: SessionConnectionData["state"]): boolean {
 
 function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean {
   return (
-    state === "failed" ||
-    state === "timed_out" ||
-    state === "stopped" ||
-    state === "deprovisioned"
+    state === "failed" || state === "timed_out" || state === "stopped" || state === "deprovisioned"
   );
 }
 
@@ -775,8 +775,7 @@ export class SessionService {
     } | null;
   }): void {
     void (async () => {
-      const environment =
-        params.environment ?? (await this.resolveProvisioningEnvironment(params));
+      const environment = params.environment ?? (await this.resolveProvisioningEnvironment(params));
 
       sessionRouter.createRuntime({
         sessionId: params.sessionId,
@@ -1233,13 +1232,10 @@ export class SessionService {
    * race with concurrent writes that have already advanced the state.
    */
   private async resetReconcileState(sessionId: string): Promise<void> {
-    await this.updateConnectionConditional(
-      sessionId,
-      (conn) => {
-        if (!conn.abandonedAt && (conn.reconcileAttempts ?? 0) === 0) return null;
-        return { ...conn, reconcileAttempts: 0, abandonedAt: undefined };
-      },
-    );
+    await this.updateConnectionConditional(sessionId, (conn) => {
+      if (!conn.abandonedAt && (conn.reconcileAttempts ?? 0) === 0) return null;
+      return { ...conn, reconcileAttempts: 0, abandonedAt: undefined };
+    });
   }
 
   /**
@@ -1339,20 +1335,14 @@ export class SessionService {
   }
 
   private async bumpReconcileAttempts(sessionId: string, nextValue: number): Promise<boolean> {
-    const result = await this.updateConnectionConditional(
-      sessionId,
-      (conn) => {
-        // Only bump while the runtime is still in a deprovision-pending state.
-        // If state has moved (user retried, manual reset), abandon the bump.
-        if (
-          conn.state !== "stopping" &&
-          conn.state !== "deprovision_failed"
-        ) {
-          return null;
-        }
-        return { ...conn, reconcileAttempts: nextValue };
-      },
-    );
+    const result = await this.updateConnectionConditional(sessionId, (conn) => {
+      // Only bump while the runtime is still in a deprovision-pending state.
+      // If state has moved (user retried, manual reset), abandon the bump.
+      if (conn.state !== "stopping" && conn.state !== "deprovision_failed") {
+        return null;
+      }
+      return { ...conn, reconcileAttempts: nextValue };
+    });
     return result !== null;
   }
 
@@ -2096,16 +2086,29 @@ export class SessionService {
       throw new Error("Cloud sessions are disabled in local mode");
     }
 
-    const requestedEnvironment = await agentEnvironmentService.resolveForSessionRequest({
-      organizationId: input.organizationId,
-      environmentId: input.environmentId ?? null,
-      adapterType:
-        input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
-      tool: input.tool,
-      actorType: input.actorType ?? "user",
-      actorId: input.createdById,
-    });
+    const deferRuntimeSelection = input.deferRuntimeSelection === true;
+    if (
+      deferRuntimeSelection &&
+      (input.environmentId || input.hosting || input.runtimeInstanceId)
+    ) {
+      throw new ValidationError(
+        "deferRuntimeSelection cannot be combined with an explicit environment or runtime",
+      );
+    }
+
+    const requestedEnvironment = deferRuntimeSelection
+      ? null
+      : await agentEnvironmentService.resolveForSessionRequest({
+          organizationId: input.organizationId,
+          environmentId: input.environmentId ?? null,
+          adapterType:
+            input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
+          tool: input.tool,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+        });
     const hasCompatibilityRuntimeFallback =
+      deferRuntimeSelection ||
       !!input.hosting ||
       !!input.runtimeInstanceId ||
       !!sharedRuntimeInstanceId ||
@@ -2124,7 +2127,7 @@ export class SessionService {
           : null;
 
     let hosting =
-      environmentHosting ??
+      (deferRuntimeSelection ? "local" : environmentHosting) ??
       input.hosting ??
       sourceSession?.hosting ??
       (isLocalMode() ? "local" : "cloud");
@@ -2146,9 +2149,7 @@ export class SessionService {
       environmentRuntimeInstanceId &&
       input.runtimeInstanceId !== environmentRuntimeInstanceId
     ) {
-      throw new ValidationError(
-        "runtimeInstanceId does not match the selected local environment",
-      );
+      throw new ValidationError("runtimeInstanceId does not match the selected local environment");
     }
     const shouldUseEnvironmentRuntime =
       !input.runtimeInstanceId &&
@@ -2190,7 +2191,7 @@ export class SessionService {
       requestedRuntimeInstanceId = runtime.id;
     }
 
-    if (!requestedRuntimeInstanceId && hosting === "local") {
+    if (!requestedRuntimeInstanceId && hosting === "local" && !deferRuntimeSelection) {
       const defaultLocalRuntime = await this.resolveDefaultAccessibleLocalRuntime({
         userId: input.createdById,
         organizationId: input.organizationId,
@@ -2900,9 +2901,9 @@ export class SessionService {
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeInstanceId: string | undefined;
       let runtimeLabel: string | undefined;
-      let requestedEnvironment:
-        | Awaited<ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>>
-        | null = null;
+      let requestedEnvironment: Awaited<
+        ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
+      > | null = null;
       if (config.runtimeInstanceId) {
         await this.assertRuntimeAccess({
           userId: actorId,

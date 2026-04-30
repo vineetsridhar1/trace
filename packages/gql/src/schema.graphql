@@ -988,6 +988,7 @@ input StartSessionInput {
   environmentId: ID
   hosting: HostingMode
   runtimeInstanceId: ID
+  deferRuntimeSelection: Boolean
   repoId: ID
   branch: String
   ticketId: ID

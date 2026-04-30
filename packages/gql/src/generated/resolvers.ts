@@ -1787,6 +1787,7 @@ export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
