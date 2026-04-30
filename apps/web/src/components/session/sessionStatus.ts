@@ -69,6 +69,10 @@ export const connectionColor: Record<string, string> = {
   disconnected: "text-destructive",
   failed: "text-destructive",
   timed_out: "text-destructive",
+  stopping: "text-amber-400",
+  stopped: "text-muted-foreground",
+  deprovisioned: "text-muted-foreground",
+  deprovision_failed: "text-destructive",
 };
 
 export const connectionLabel: Record<string, string> = {
@@ -82,6 +86,10 @@ export const connectionLabel: Record<string, string> = {
   disconnected: "Connection Lost",
   failed: "Connection Failed",
   timed_out: "Startup Timed Out",
+  stopping: "Cleaning Up",
+  stopped: "Stopped",
+  deprovisioned: "Deprovisioned",
+  deprovision_failed: "Cleanup Failed",
 };
 
 // ─── Derived helpers ───

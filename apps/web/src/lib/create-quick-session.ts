@@ -77,7 +77,10 @@ async function resolveDefaultRuntime(
  *
  * Starts the session, then navigates once the service returns the real IDs.
  */
-export async function createQuickSession(channelId: string): Promise<void> {
+export async function createQuickSession(
+  channelId: string,
+  options: { environmentId?: string | null } = {},
+): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
@@ -87,11 +90,11 @@ export async function createQuickSession(channelId: string): Promise<void> {
   const channelRepoId = getChannelRepoId(channelId);
 
   try {
-    const { runtimeInstanceId, unavailableReason } = await resolveDefaultRuntime(
-      prefTool,
-      channelRepoId,
-    );
-    if (!runtimeInstanceId) {
+    const usesEnvironment = !!options.environmentId;
+    const { runtimeInstanceId, unavailableReason } = usesEnvironment
+      ? { runtimeInstanceId: undefined, unavailableReason: undefined }
+      : await resolveDefaultRuntime(prefTool, channelRepoId);
+    if (!usesEnvironment && !runtimeInstanceId) {
       throw new Error(quickSessionUnavailableMessage(unavailableReason));
     }
 
@@ -100,8 +103,9 @@ export async function createQuickSession(channelId: string): Promise<void> {
         input: {
           tool: prefTool,
           model: prefModel ?? undefined,
-          hosting: "local",
-          runtimeInstanceId,
+          ...(usesEnvironment
+            ? { environmentId: options.environmentId }
+            : { hosting: "local", runtimeInstanceId }),
           channelId,
           repoId: channelRepoId ?? undefined,
         },

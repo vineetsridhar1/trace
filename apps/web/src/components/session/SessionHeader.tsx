@@ -20,6 +20,8 @@ import {
   getDisplayAgentStatus,
   getDisplaySessionStatus,
   sessionStatusLabel,
+  connectionColor,
+  connectionLabel,
   isDisconnected,
 } from "./sessionStatus";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
@@ -104,6 +106,13 @@ export function SessionHeader({
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
+  const connectionState = typeof connection?.state === "string" ? connection.state : undefined;
+  const runtimeStatusLabel =
+    connectionState && connectionState !== "connected" ? connectionLabel[connectionState] : null;
+  const runtimeStatusColor =
+    connectionState && connectionState !== "connected"
+      ? (connectionColor[connectionState] ?? "text-muted-foreground")
+      : null;
   const displaySessionStatus = getDisplaySessionStatus(
     sessionStatus,
     prUrl,
@@ -169,6 +178,19 @@ export function SessionHeader({
             Reconnecting…
           </span>
         )
+      ) : runtimeStatusLabel ? (
+        <span className={`flex shrink-0 items-center gap-1.5 text-xs ${runtimeStatusColor}`}>
+          {connectionState === "failed" ||
+          connectionState === "timed_out" ||
+          connectionState === "deprovision_failed" ? (
+            <WifiOff size={12} />
+          ) : connectionState === "stopped" || connectionState === "deprovisioned" ? (
+            <AgentStatusIcon agentStatus="stopped" size={10} />
+          ) : (
+            <Loader2 size={12} className="animate-spin" />
+          )}
+          {runtimeStatusLabel}
+        </span>
       ) : (
         <span
           className={`flex shrink-0 items-center gap-1.5 text-xs ${agentStatusColor[displayAgentStatus]}`}
