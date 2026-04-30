@@ -127,9 +127,10 @@ export function useBridgeRuntimeAccess(
     void refresh();
   }, [refresh, runtimeInstanceId, refreshTick]);
 
+  const matchingAccess = access?.runtimeInstanceId === runtimeInstanceId ? access : null;
   const effectiveAccess =
-    access && access.hostingMode !== null
-      ? access
+    matchingAccess && matchingAccess.hostingMode !== null
+      ? matchingAccess
       : loadState === "failed" || loadState === "loaded"
         ? fallbackAccess
         : null;
@@ -139,7 +140,7 @@ export function useBridgeRuntimeAccess(
     loading: loadState === "loading",
     // True only when the initial fetch failed and no cached access is available.
     // On a later refetch failure we keep the last successful access silently.
-    unreachable: loadState === "failed" && access === null,
+    unreachable: loadState === "failed" && matchingAccess === null,
     refresh,
   };
 }
