@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
+import { toast } from "sonner";
 import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
@@ -157,6 +158,9 @@ export function SessionInputOptions({
           if (result.error) throw result.error;
         } catch (error) {
           rollback();
+          toast.error("Failed to update session runtime", {
+            description: error instanceof Error ? error.message : undefined,
+          });
           console.error("Failed to update session runtime:", error);
         }
         return;
@@ -192,6 +196,9 @@ export function SessionInputOptions({
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
+        toast.error("Failed to update session runtime", {
+          description: error instanceof Error ? error.message : undefined,
+        });
         console.error("Failed to update session runtime:", error);
       }
     },

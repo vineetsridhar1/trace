@@ -532,7 +532,12 @@ export class AgentEnvironmentService {
             where: { id: params.environmentId, organizationId: params.organizationId },
           })
         : ((await tx.agentEnvironment.findFirst({
-            where: { organizationId: params.organizationId, enabled: true, isDefault: true },
+            where: {
+              organizationId: params.organizationId,
+              enabled: true,
+              isDefault: true,
+              ...(params.adapterType && { adapterType: params.adapterType }),
+            },
           })) ??
           (params.adapterType
             ? await tx.agentEnvironment.findFirst({
