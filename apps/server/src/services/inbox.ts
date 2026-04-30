@@ -60,6 +60,11 @@ export class InboxService {
   }
 
   async resolveItem(input: ResolveInboxItemInput, tx: TxClient = prisma) {
+    const { item } = await this.resolveItemWithEvent(input, tx);
+    return item;
+  }
+
+  async resolveItemWithEvent(input: ResolveInboxItemInput, tx: TxClient = prisma) {
     const updated = await tx.inboxItem.update({
       where: { id: input.id },
       data: {
@@ -69,7 +74,7 @@ export class InboxService {
       },
     });
 
-    await eventService.create(
+    const event = await eventService.create(
       {
         organizationId: input.organizationId,
         scopeType: "system",
@@ -85,7 +90,7 @@ export class InboxService {
       tx,
     );
 
-    return updated;
+    return { item: updated, event };
   }
 
   async resolveBySource({

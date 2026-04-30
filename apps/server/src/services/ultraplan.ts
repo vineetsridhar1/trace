@@ -475,7 +475,7 @@ export class UltraplanService {
         response: input.response ?? null,
       };
 
-      const updatedItem = await inboxService.resolveItem(
+      const { item: updatedItem, event: resolvedEvent } = await inboxService.resolveItemWithEvent(
         {
           id: item.id,
           organizationId: input.organizationId,
@@ -568,7 +568,19 @@ export class UltraplanService {
       return {
         inboxItem: updatedItem,
         ultraplanId: updatedUltraplan.id,
+        resolvedEventId: resolvedEvent.id,
+        resolution: input.resolution,
+        title: item.title,
       };
+    });
+
+    await this.runControllerForEvent({
+      id: result.ultraplanId,
+      actorType: "system",
+      actorId: "system",
+      triggerEventId: result.resolvedEventId,
+      triggerType: "ultraplan_gate_resolved",
+      inputSummary: `Human gate ${result.resolution}: ${result.title}`,
     });
 
     return result.inboxItem;

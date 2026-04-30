@@ -761,7 +761,25 @@ describe("UltraplanService", () => {
       }),
       prismaMock,
     );
-    expect(prismaMock.ultraplanControllerRun.create).not.toHaveBeenCalled();
-    expect(sessionServiceMock.run).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplanControllerRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ultraplanId: "ultra-1",
+          triggerEventId: "event-1",
+          triggerType: "ultraplan_gate_resolved",
+          inputSummary: "Human gate approved: Validate ticket",
+        }),
+      }),
+    );
+    expect(sessionServiceMock.run).toHaveBeenCalledWith(
+      "session-1",
+      expect.stringContaining("Controller run id: run-1"),
+      "plan",
+      expect.objectContaining({
+        clientSource: "ultraplan_controller",
+        organizationId: "org-1",
+        userId: "system",
+      }),
+    );
   });
 });
