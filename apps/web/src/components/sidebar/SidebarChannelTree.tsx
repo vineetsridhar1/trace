@@ -105,7 +105,7 @@ export function SidebarChannelTree({
         }}
       >
         <SortableContext items={topLevelIds} strategy={verticalListSortingStrategy}>
-          <div className="py-1">
+          <div className="py-2">
             {currentTopLevel.map((item: TopLevelItem) =>
               item.kind === "channel" ? (
                 <SidebarChannelSection

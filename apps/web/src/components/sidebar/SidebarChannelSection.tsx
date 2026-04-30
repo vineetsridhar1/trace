@@ -39,7 +39,7 @@ export function SidebarChannelSection({
   }, [channelId]);
 
   return (
-    <div className="py-1.5">
+    <div className="py-0.5">
       <SidebarMenu>
         <ChannelItem
           id={channelId}
