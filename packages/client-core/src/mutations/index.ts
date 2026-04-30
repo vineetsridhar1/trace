@@ -244,6 +244,16 @@ export const AVAILABLE_RUNTIMES_QUERY = gql`
   }
 `;
 
+export const CLOUD_AGENT_ENVIRONMENT_QUERY = gql`
+  query CloudAgentEnvironment($orgId: ID!) {
+    agentEnvironments(orgId: $orgId) {
+      id
+      adapterType
+      enabled
+    }
+  }
+`;
+
 export const BRIDGE_RUNTIME_ACCESS_QUERY = gql`
   query BridgeRuntimeAccess($runtimeInstanceId: ID!, $sessionGroupId: ID) {
     bridgeRuntimeAccess(runtimeInstanceId: $runtimeInstanceId, sessionGroupId: $sessionGroupId) {

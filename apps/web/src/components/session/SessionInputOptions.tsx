@@ -12,6 +12,7 @@ import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
+import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
@@ -64,7 +65,10 @@ export function SessionInputOptions({
   const isCloudRuntime = hosting === "cloud";
   const currentRuntimeValue = isCloudRuntime
     ? CLOUD_RUNTIME_ID
-    : runtimeInstanceId ?? UNBOUND_LOCAL_RUNTIME_ID;
+    : (runtimeInstanceId ?? UNBOUND_LOCAL_RUNTIME_ID);
+  const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(isNotStarted);
+  const showCloudRuntimeOption =
+    cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
@@ -133,6 +137,10 @@ export function SessionInputOptions({
       if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
 
       if (value === CLOUD_RUNTIME_ID) {
+        if (!cloudEnvironmentAvailable) {
+          toast.error("Cloud is not configured for this organization");
+          return;
+        }
         const nextConnection: SessionConnection = {
           __typename: connection?.__typename ?? "SessionConnection",
           canMove: connection?.canMove ?? true,
@@ -202,7 +210,7 @@ export function SessionInputOptions({
         console.error("Failed to update session runtime:", error);
       }
     },
-    [isOptimistic, sessionId, currentRuntimeValue, runtimes, connection],
+    [isOptimistic, sessionId, currentRuntimeValue, runtimes, connection, cloudEnvironmentAvailable],
   );
 
   const modeConfig = MODE_CONFIG[mode];
@@ -307,11 +315,13 @@ export function SessionInputOptions({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={CLOUD_RUNTIME_ID}>
-              <span className="flex items-center gap-1.5">
-                <Cloud size={12} className="text-sky-400" /> Cloud
-              </span>
-            </SelectItem>
+            {showCloudRuntimeOption ? (
+              <SelectItem value={CLOUD_RUNTIME_ID} disabled={!cloudEnvironmentAvailable}>
+                <span className="flex items-center gap-1.5">
+                  <Cloud size={12} className="text-sky-400" /> Cloud
+                </span>
+              </SelectItem>
+            ) : null}
             {(currentRuntimeValue === UNBOUND_LOCAL_RUNTIME_ID ||
               connectedLocalRuntimes.length === 0) && (
               <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>

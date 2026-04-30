@@ -15,6 +15,7 @@ import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { canUseMobileCloudHosting } from "@/lib/session-hosting";
 import { getClient } from "@/lib/urql";
 import { subscribeBridgeAccessEvents } from "@/lib/bridge-access-events";
+import { useCloudAgentEnvironmentAvailable } from "@/hooks/useCloudAgentEnvironmentAvailable";
 import { alpha, useTheme } from "@/theme";
 import { CLOUD_RUNTIME_ID } from "./session-input-composer/constants";
 
@@ -106,6 +107,9 @@ export function SessionRuntimePickerSheetContent({
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
   const currentRuntimeValue = hosting === "cloud" ? CLOUD_RUNTIME_ID : runtimeInstanceId;
   const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
+  const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(
+    canChangeBridge && canUseCloudRuntime,
+  );
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [requestingRuntimeId, setRequestingRuntimeId] = useState<string | null>(null);
@@ -159,18 +163,23 @@ export function SessionRuntimePickerSheetContent({
   const rows = useMemo<RuntimeRow[]>(() => {
     const nextRows: RuntimeRow[] = [];
 
-    if (canUseCloudRuntime) {
+    if (
+      canUseCloudRuntime &&
+      (cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID)
+    ) {
       nextRows.push({
         key: "runtime:cloud",
         title: "Cloud",
-        subtitle: "Start this session in a cloud container.",
+        subtitle: cloudEnvironmentAvailable
+          ? "Start this session in a cloud container."
+          : "Cloud is not configured for this organization.",
         icon: "cloud",
         selected: currentRuntimeValue === CLOUD_RUNTIME_ID,
-        disabled: !canChangeBridge,
+        disabled: !canChangeBridge || !cloudEnvironmentAvailable,
         value: CLOUD_RUNTIME_ID,
         requestPending: false,
         canRequestAccess: false,
-        accessAllowed: true,
+        accessAllowed: cloudEnvironmentAvailable,
         lacksRepo: false,
       });
     }
@@ -204,7 +213,14 @@ export function SessionRuntimePickerSheetContent({
     }
 
     return nextRows;
-  }, [canChangeBridge, canUseCloudRuntime, currentRuntimeValue, repo?.id, runtimes]);
+  }, [
+    canChangeBridge,
+    canUseCloudRuntime,
+    cloudEnvironmentAvailable,
+    currentRuntimeValue,
+    repo?.id,
+    runtimes,
+  ]);
 
   const accessibleRows = useMemo(() => rows.filter((row) => row.accessAllowed), [rows]);
   const requestableRows = useMemo(() => rows.filter((row) => row.canRequestAccess), [rows]);
@@ -254,6 +270,10 @@ export function SessionRuntimePickerSheetContent({
         return;
       }
       const selectingCloud = value === CLOUD_RUNTIME_ID;
+      if (selectingCloud && !cloudEnvironmentAvailable) {
+        Alert.alert("Cloud unavailable", "Cloud is not configured for this organization.");
+        return;
+      }
       const runtime = selectingCloud ? null : runtimes.find((entry) => entry.id === value);
       if (!selectingCloud && !runtime) return;
 
@@ -296,6 +316,7 @@ export function SessionRuntimePickerSheetContent({
       canChangeBridge,
       connection,
       currentRuntimeValue,
+      cloudEnvironmentAvailable,
       onSelectRuntime,
       onClose,
       runtimes,

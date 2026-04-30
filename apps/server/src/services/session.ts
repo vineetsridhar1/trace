@@ -2134,6 +2134,9 @@ export class SessionService {
     if (isLocalMode() && hosting === "cloud") {
       hosting = "local";
     }
+    if (hosting === "cloud" && !requestedEnvironment) {
+      throw new Error("No enabled cloud agent environment is configured");
+    }
     let runtimeLabel: string | undefined;
     const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
     if (
@@ -2926,7 +2929,7 @@ export class SessionService {
           actorId,
         });
         if (!requestedEnvironment) {
-          throw new Error("No enabled provisioned agent environment available");
+          throw new Error("No enabled cloud agent environment is configured");
         }
       } else if (newHosting === "local") {
         const runtime = await this.resolveDefaultAccessibleLocalRuntime({
@@ -5009,7 +5012,7 @@ export class SessionService {
           })
         : null;
     if (targetHosting === "cloud" && !targetEnvironment) {
-      throw new Error("No provisioned cloud agent environment is available");
+      throw new Error("No enabled cloud agent environment is configured");
     }
 
     const sourceGitStatus = await this.inspectSessionMoveSource({

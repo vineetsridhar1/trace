@@ -9,6 +9,7 @@ import {
 } from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
+import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 
 interface RuntimeInstance {
   id: string;
@@ -47,6 +48,7 @@ export function SessionRuntimePicker({
     | undefined;
   const currentRuntimeInstanceId =
     connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
+  const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable();
 
   useEffect(() => {
     client
@@ -88,6 +90,10 @@ export function SessionRuntimePicker({
   );
 
   const handleMoveToCloud = useCallback(async () => {
+    if (!cloudEnvironmentAvailable) {
+      toast.error("Cloud is not configured for this organization");
+      return;
+    }
     setMoving("cloud");
     try {
       const result = await client
@@ -109,7 +115,7 @@ export function SessionRuntimePicker({
     } finally {
       setMoving(null);
     }
-  }, [onClose, sessionId]);
+  }, [cloudEnvironmentAvailable, onClose, sessionId]);
 
   const localRuntimes = runtimes.filter(
     (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,
@@ -130,20 +136,22 @@ export function SessionRuntimePicker({
         </div>
       ) : (
         <div className="space-y-1">
-          <button
-            onClick={handleMoveToCloud}
-            disabled={moving !== null}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-elevated disabled:opacity-50"
-          >
-            <Cloud size={14} className="shrink-0 text-sky-400" />
-            <div className="min-w-0 flex-1">
-              <span className="text-foreground">New cloud container</span>
-              <span className="ml-2 text-xs text-muted-foreground">pulls current branch</span>
-            </div>
-            {moving === "cloud" && (
-              <Loader2 size={12} className="animate-spin text-muted-foreground" />
-            )}
-          </button>
+          {cloudEnvironmentAvailable ? (
+            <button
+              onClick={handleMoveToCloud}
+              disabled={moving !== null}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-elevated disabled:opacity-50"
+            >
+              <Cloud size={14} className="shrink-0 text-sky-400" />
+              <div className="min-w-0 flex-1">
+                <span className="text-foreground">New cloud container</span>
+                <span className="ml-2 text-xs text-muted-foreground">pulls current branch</span>
+              </div>
+              {moving === "cloud" && (
+                <Loader2 size={12} className="animate-spin text-muted-foreground" />
+              )}
+            </button>
+          ) : null}
 
           {localRuntimes.map((rt: RuntimeInstance) => {
             const lacksRepo =
