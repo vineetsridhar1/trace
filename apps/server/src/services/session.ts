@@ -828,20 +828,45 @@ export class SessionService {
       select: { connection: true },
     });
     const environmentId = this.parseConnection(session?.connection ?? null).environmentId;
-    if (!environmentId) return null;
-    const environment = await prisma.agentEnvironment.findFirst({
-      where: { id: environmentId, organizationId: params.organizationId },
-      select: { id: true, name: true, adapterType: true, config: true },
-    });
-    if (!environment) return null;
-    if (environment.adapterType !== "local" && environment.adapterType !== "provisioned") {
+    const environment = environmentId
+      ? await prisma.agentEnvironment.findFirst({
+          where: { id: environmentId, organizationId: params.organizationId },
+          select: { id: true, name: true, adapterType: true, config: true },
+        })
+      : await prisma.agentEnvironment.findFirst({
+          where: {
+            organizationId: params.organizationId,
+            adapterType: "provisioned",
+            enabled: true,
+            isDefault: true,
+          },
+          select: { id: true, name: true, adapterType: true, config: true },
+        });
+    const fallbackEnvironment =
+      environment ??
+      (environmentId
+        ? null
+        : await prisma.agentEnvironment.findFirst({
+            where: {
+              organizationId: params.organizationId,
+              adapterType: "provisioned",
+              enabled: true,
+            },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true, adapterType: true, config: true },
+          }));
+    if (!fallbackEnvironment) return null;
+    if (
+      fallbackEnvironment.adapterType !== "local" &&
+      fallbackEnvironment.adapterType !== "provisioned"
+    ) {
       return null;
     }
     return {
-      id: environment.id,
-      name: environment.name,
-      adapterType: environment.adapterType,
-      config: environment.config,
+      id: fallbackEnvironment.id,
+      name: fallbackEnvironment.name,
+      adapterType: fallbackEnvironment.adapterType,
+      config: fallbackEnvironment.config,
     };
   }
 
@@ -1089,7 +1114,7 @@ export class SessionService {
           lastError: update.error ?? "Runtime deprovisioning failed",
           canRetry: !abandoned,
           canMove: false,
-          autoRetryable: !abandoned,
+          autoRetryable: false,
           ...(abandoned && { abandonedAt: now }),
         };
       }
@@ -2668,7 +2693,12 @@ export class SessionService {
         terminalRelay.destroyAllForSession(id);
       }
       await this.resetReconcileState(id);
-      await sessionRouter.destroyRuntime(id, session, this.destroyRuntimeOptions(id, "session_deleted"));
+      const runtimeSession = await this.withGroupRuntimeState(session);
+      await sessionRouter.destroyRuntime(
+        id,
+        runtimeSession,
+        this.destroyRuntimeOptions(id, "session_deleted"),
+      );
     } else {
       terminalRelay.destroyAllForSession(id);
       try {
@@ -3545,22 +3575,25 @@ export class SessionService {
     // Attempt delivery before marking active. Pinning to the session's home
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
-    const deliveryResult = sessionRouter.send(
+    const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
+    const deliveryCommand = {
+      type: "send" as const,
       sessionId,
-      {
-        type: "send",
-        sessionId,
-        prompt,
-        tool: session.tool,
-        model: session.model ?? undefined,
-        interactionMode,
-        cwd: session.workdir ?? undefined,
-        toolSessionId: session.toolSessionId ?? undefined,
-        checkpointContext,
-        imageUrls,
-      },
-      { expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId },
-    );
+      prompt,
+      tool: session.tool,
+      model: session.model ?? undefined,
+      interactionMode,
+      cwd: session.workdir ?? undefined,
+      toolSessionId: session.toolSessionId ?? undefined,
+      checkpointContext,
+      imageUrls,
+    };
+    const deliveryResult: DeliveryResult =
+      session.hosting === "cloud" && !expectedRuntimeId
+        ? "no_runtime"
+        : sessionRouter.send(sessionId, deliveryCommand, {
+            expectedHomeRuntimeId: expectedRuntimeId ?? undefined,
+          });
 
     if (deliveryResult !== "delivered") {
       await this.storePendingCommand(
@@ -4176,6 +4209,7 @@ export class SessionService {
         organizationId: true,
         agentStatus: true,
         sessionStatus: true,
+        hosting: true,
         connection: true,
         sessionGroupId: true,
       },
@@ -4193,6 +4227,7 @@ export class SessionService {
       runtimeInstanceId: runtimeInstanceId ?? conn.runtimeInstanceId,
       canRetry: true,
       canMove: true,
+      autoRetryable: session.hosting !== "cloud",
     };
 
     // Preserve agent/session status — the session may still be running on the
@@ -4574,7 +4609,7 @@ export class SessionService {
   ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      include: SESSION_INCLUDE,
+      include: { ...SESSION_INCLUDE, projects: true },
     });
 
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
@@ -4607,6 +4642,20 @@ export class SessionService {
         sessionGroupId: session.sessionGroupId,
       });
     }
+    if (
+      session.hosting === "cloud" &&
+      (!homeRuntimeId || !sessionRouter.isRuntimeAvailable(homeRuntimeId))
+    ) {
+      return this.moveSessionInPlace({
+        session,
+        targetHosting: "cloud",
+        targetRuntimeInstanceId: null,
+        targetRuntimeLabel: null,
+        actorType,
+        actorId,
+      });
+    }
+
     const runtime = homeRuntimeId
       ? sessionRouter.isRuntimeAvailable(homeRuntimeId)
         ? sessionRouter.getRuntime(homeRuntimeId)
@@ -4906,6 +4955,15 @@ export class SessionService {
       return status;
     }
 
+    if (status.remoteBranch && status.remoteCommitSha) {
+      if (status.remoteAheadCount > 0 || status.remoteBehindCount > 0) {
+        throw new Error(
+          "Cannot move session: local branch must match its remote branch before moving.",
+        );
+      }
+      return status;
+    }
+
     if (!status.upstreamBranch || !status.upstreamCommitSha) {
       throw new Error(
         "Cannot move session: push this branch to origin before moving to another bridge.",
@@ -4941,6 +4999,17 @@ export class SessionService {
       null;
     const inspectableSourceRuntimeId =
       sourceRuntimeId && sessionRouter.isRuntimeAvailable(sourceRuntimeId) ? sourceRuntimeId : null;
+    const targetEnvironment =
+      targetHosting === "cloud"
+        ? await this.resolveProvisioningEnvironment({
+            sessionId: session.id,
+            organizationId: session.organizationId,
+            adapterType: "provisioned",
+          })
+        : null;
+    if (targetHosting === "cloud" && !targetEnvironment) {
+      throw new Error("No provisioned cloud agent environment is available");
+    }
 
     const sourceGitStatus = await this.inspectSessionMoveSource({
       sessionId: session.id,
@@ -4966,13 +5035,18 @@ export class SessionService {
 
     const bootstrapPrompt = buildMigrationPrompt();
     const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
+    const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
+    const sourceConnection = this.parseConnection(session.connection);
     const nextConnection = connJson(
       targetHosting === "local"
         ? defaultConnection({
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
             runtimeLabel: targetRuntimeLabel ?? undefined,
           })
-        : defaultConnection(),
+        : defaultConnection({
+            adapterType: "provisioned",
+            environmentId: targetEnvironment?.id ?? sourceConnection.environmentId,
+          }),
     );
 
     const movedSession = await prisma.session.update({
@@ -4982,6 +5056,7 @@ export class SessionService {
         sessionStatus: "in_progress",
         createdById: actorId,
         hosting: targetHosting,
+        branch: sourceBranch,
         workdir: null,
         pendingRun: {
           type: "run",
@@ -4997,6 +5072,7 @@ export class SessionService {
     const sessionGroup = await this.syncGroupWorkspaceState(movedSession.sessionGroupId, {
       workdir: null,
       connection: nextConnection,
+      branch: sourceBranch,
       worktreeDeleted: false,
     });
 
@@ -5041,6 +5117,7 @@ export class SessionService {
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
         adapterType: this.parseConnection(movedSession.connection).adapterType,
+        environment: targetEnvironment,
       });
     } else {
       const deliveryResult = await this.deliverPendingCommand(
@@ -6141,7 +6218,13 @@ export class SessionService {
   ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { agentStatus: true, sessionStatus: true, connection: true, sessionGroupId: true },
+      select: {
+        agentStatus: true,
+        sessionStatus: true,
+        hosting: true,
+        connection: true,
+        sessionGroupId: true,
+      },
     });
     if (session && isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
     const conn = this.parseConnection(session?.connection);
@@ -6161,7 +6244,7 @@ export class SessionService {
       canRetry: true,
       canMove: true,
       // Don't spin the auto-retry loop for a non-transient failure.
-      autoRetryable: !homeOffline,
+      autoRetryable: session?.hosting !== "cloud" && !homeOffline,
     };
 
     await prisma.session.update({
@@ -6199,6 +6282,7 @@ export class SessionService {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
+        organizationId: true,
         hosting: true,
         workdir: true,
         repoId: true,
@@ -6212,10 +6296,12 @@ export class SessionService {
     await this.resetReconcileState(sessionId);
 
     if (isGroupUnload && session.sessionGroupId) {
+      const runtimeSession = await this.withGroupRuntimeState(session);
+
       // Group-level unload: destroy all terminals and the shared runtime
       terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
       try {
-        await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
+        await sessionRouter.destroyRuntime(sessionId, runtimeSession, destroyOptions);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(
@@ -6246,8 +6332,9 @@ export class SessionService {
 
       if (activeSiblingCount === 0) {
         // Last session in the group — tear down the shared runtime
+        const runtimeSession = await this.withGroupRuntimeState(session);
         try {
-          await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
+          await sessionRouter.destroyRuntime(sessionId, runtimeSession, destroyOptions);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
@@ -6271,6 +6358,31 @@ export class SessionService {
       }
       return true;
     }
+  }
+
+  private async withGroupRuntimeState<
+    T extends {
+      sessionGroupId?: string | null;
+      workdir?: string | null;
+      repoId?: string | null;
+      connection?: unknown;
+    },
+  >(session: T): Promise<T> {
+    if (!session.sessionGroupId) return session;
+
+    const groupRuntime = await prisma.sessionGroup.findUnique({
+      where: { id: session.sessionGroupId },
+      select: { workdir: true, repoId: true, connection: true },
+    });
+
+    if (!groupRuntime) return session;
+
+    return {
+      ...session,
+      workdir: groupRuntime.workdir ?? session.workdir,
+      repoId: groupRuntime.repoId ?? session.repoId,
+      connection: groupRuntime.connection ?? session.connection,
+    };
   }
 
   /** Set prUrl on the active session group when a PR is opened for its current branch. */

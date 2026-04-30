@@ -474,7 +474,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
         "session_runtime_start_requested",
         "session_runtime_provisioning",
-        "session_runtime_connecting",
       ]);
     });
     expect(callOrder.slice(0, 2)).toEqual(["session_runtime_start_requested", "adapter_start"]);
@@ -482,7 +481,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
     if (!runtimeInstanceId) throw new Error("Expected runtime instance ID");
     expect(runtimeInstanceId).toMatch(/^runtime_/);
     expect(lifecycleEvents[1]?.runtimeInstanceId).toBe(runtimeInstanceId);
-    expect(lifecycleEvents[2]?.runtimeInstanceId).toBe(runtimeInstanceId);
     expect(router.getRuntimeForSession("session-1")).toBeUndefined();
 
     router.registerRuntime({
@@ -498,7 +496,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
       expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
         "session_runtime_start_requested",
         "session_runtime_provisioning",
-        "session_runtime_connecting",
         "session_runtime_connected",
       ]);
     });
@@ -608,7 +605,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
       "session_runtime_start_requested",
       "session_runtime_provisioning",
-      "session_runtime_connecting",
       "session_runtime_connected",
     ]);
 
@@ -725,7 +721,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
       "session_runtime_start_requested",
       "session_runtime_provisioning",
-      "session_runtime_connecting",
     ]);
 
     await vi.advanceTimersByTimeAsync(999);
@@ -737,11 +732,10 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
       "session_runtime_start_requested",
       "session_runtime_provisioning",
-      "session_runtime_connecting",
       "session_runtime_start_timed_out",
     ]);
-    expect(lifecycleEvents[3]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
-    expect(lifecycleEvents[3]?.error).toContain("1000ms");
+    expect(lifecycleEvents[2]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
+    expect(lifecycleEvents[2]?.error).toContain("1000ms");
     expect(onFailed).toHaveBeenCalledWith(expect.stringContaining("timed out"));
   });
 

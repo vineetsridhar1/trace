@@ -59,6 +59,20 @@ async function getCurrentBranch(worktreePath: string): Promise<string | null> {
   }
 }
 
+async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
+  await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
+  await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
+}
+
+async function setUpstreamIfRemote(
+  repoPath: string,
+  branch: string | null,
+  baseRef: string,
+): Promise<void> {
+  if (!branch || !baseRef.startsWith("origin/")) return;
+  await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
+}
+
 function resolveWorktreeBranch(
   slug: string,
   startBranch: string | undefined,
@@ -105,12 +119,6 @@ export async function createWorktree({
   const branch = resolveWorktreeBranch(worktreeSlug, startBranch, preserveBranchName);
   const targetPath = path.join(sessionsDir, worktreeSlug);
 
-  // If the worktree directory already exists, reuse it
-  if (fs.existsSync(targetPath)) {
-    const currentBranch = await getCurrentBranch(targetPath);
-    return { workdir: targetPath, branch: currentBranch ?? branch, slug: worktreeSlug };
-  }
-
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 
@@ -134,6 +142,17 @@ export async function createWorktree({
   // Resolve base branch with fallback chain (remote → local → default)
   const baseRef = checkpointSha ?? (await resolveBaseBranch(repoPath, startBranch, defaultBranch));
 
+  // If the worktree directory already exists, reuse its branch name but reset
+  // Trace-owned contents to the requested remote/checkpoint state. A moved
+  // session may land on a stale local worktree whose branch tracks origin/main
+  // while the durable session branch exists at origin/trace/{slug}.
+  if (fs.existsSync(targetPath)) {
+    const currentBranch = await getCurrentBranch(targetPath);
+    await resetWorktreeToRef(targetPath, baseRef);
+    await setUpstreamIfRemote(repoPath, currentBranch, baseRef);
+    return { workdir: targetPath, branch: currentBranch ?? branch, slug: worktreeSlug };
+  }
+
   // Check if the branch already exists (e.g. worktree was removed but branch remains)
   const branchExists = await refExists(repoPath, branch);
 
@@ -145,6 +164,8 @@ export async function createWorktree({
       cwd: repoPath,
     });
   }
+  await resetWorktreeToRef(targetPath, baseRef);
+  await setUpstreamIfRemote(repoPath, branch, baseRef);
 
   if (gitHooksEnabled) {
     await installOrRepairRepoHooks(targetPath);

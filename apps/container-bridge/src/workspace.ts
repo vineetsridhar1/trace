@@ -65,6 +65,7 @@ export async function createWorktree({
   sessionId: _sessionId,
   defaultBranch,
   branch,
+  preserveBranchName,
   checkpointSha,
   sessionGroupId: _sessionGroupId,
   slug,
@@ -73,26 +74,23 @@ export async function createWorktree({
   sessionId: string;
   defaultBranch: string;
   branch?: string;
+  /** Reuse the persisted branch name instead of generating trace/{slug}. */
+  preserveBranchName?: boolean;
   checkpointSha?: string;
   /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
   sessionGroupId?: string;
   /** Pre-assigned animal slug. If absent, one is generated. */
   slug?: string;
-}): Promise<{ workdir: string; slug: string }> {
+}): Promise<{ workdir: string; branch: string; slug: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
   const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
   const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
-
-  // If worktree already exists, reuse it
-  if (fs.existsSync(worktreePath)) {
-    return { workdir: worktreePath, slug: worktreeSlug };
-  }
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
-  const branchName = `trace/${worktreeSlug}`;
+  const branchName = resolveWorktreeBranch(worktreeSlug, branch, preserveBranchName);
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
@@ -105,6 +103,13 @@ export async function createWorktree({
     if (!reachable) {
       await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
     }
+  }
+
+  if (fs.existsSync(worktreePath)) {
+    const currentBranch = await getCurrentBranch(worktreePath);
+    await resetWorktreeToRef(worktreePath, baseRef);
+    await setUpstreamIfRemote(repoPath, currentBranch ?? branchName, baseRef);
+    return { workdir: worktreePath, branch: currentBranch ?? branchName, slug: worktreeSlug };
   }
 
   // Check if the branch already exists
@@ -122,8 +127,51 @@ export async function createWorktree({
       cwd: repoPath,
     });
   }
+  await resetWorktreeToRef(worktreePath, baseRef);
+  await setUpstreamIfRemote(repoPath, branchName, baseRef);
 
-  return { workdir: worktreePath, slug: worktreeSlug };
+  return { workdir: worktreePath, branch: branchName, slug: worktreeSlug };
+}
+
+async function getCurrentBranch(worktreePath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["symbolic-ref", "--short", "-q", "HEAD"], {
+      cwd: worktreePath,
+    });
+    const branch = stdout.trim();
+    return branch.length > 0 ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveWorktreeBranch(
+  slug: string,
+  startBranch: string | undefined,
+  preserveBranchName: boolean | undefined,
+): string {
+  const generatedBranch = `trace/${slug}`;
+  if (preserveBranchName && startBranch && startBranch !== generatedBranch) {
+    return startBranch;
+  }
+  return generatedBranch;
+}
+
+async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<void> {
+  // Provisioned containers are treated as recoverable from Trace state plus
+  // origin/checkpoint state. Do not trust stale disk contents when a runtime is
+  // reprovisioned or a container is reused.
+  await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
+  await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
+}
+
+async function setUpstreamIfRemote(
+  repoPath: string,
+  branch: string | null,
+  baseRef: string,
+): Promise<void> {
+  if (!branch || !baseRef.startsWith("origin/")) return;
+  await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
 }
 
 /**

@@ -275,6 +275,14 @@ function stopStatus(value: unknown): RuntimeStopResult["status"] {
 }
 
 function startStatus(value: unknown): RuntimeStartResult["status"] {
+  if (
+    value === "selected" ||
+    value === "requested" ||
+    value === "reconnecting" ||
+    value === "reconnect_requested"
+  ) {
+    return "selected";
+  }
   const status = traceStatus(value);
   if (
     status === "booting" ||

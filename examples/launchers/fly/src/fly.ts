@@ -69,7 +69,7 @@ export class FlyMachinesClient {
         method: "POST",
         body: JSON.stringify({
           signal: "SIGTERM",
-          timeout: "30",
+          timeout: "30s",
         }),
       },
     );
@@ -133,6 +133,7 @@ export function buildMachineEnv(
     ...passthroughEnv,
     ...request.bootstrapEnv,
     TRACE_TOOL: request.tool,
+    TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
     ...(request.model ? { TRACE_MODEL: request.model } : {}),
     ...(request.repo
       ? {
@@ -152,6 +153,8 @@ function buildMachineMetadata(
     trace_org_id: request.orgId,
     trace_runtime_instance_id: request.runtimeInstanceId,
     trace_environment_id: request.metadata.environmentId,
+    trace_requested_by: request.metadata.requestedBy,
+    trace_workspace_isolation: "per_session_runtime",
     ...(idempotencyKey ? { trace_idempotency_key: idempotencyKey } : {}),
   };
 }
