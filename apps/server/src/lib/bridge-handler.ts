@@ -81,6 +81,13 @@ function isTerminalConnectionState(connection: unknown): boolean {
   return state === "failed" || state === "timed_out" || state === "stopped";
 }
 
+function connectionRuntimeInstanceId(connection: unknown): string | null {
+  const runtimeInstanceId = jsonRecord(connection)?.runtimeInstanceId;
+  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+    ? runtimeInstanceId
+    : null;
+}
+
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
@@ -329,14 +336,21 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                   organizationId: bridgeAuth.organizationId,
                   agentStatus: { notIn: ["failed", "stopped"] },
                   sessionStatus: { not: "merged" },
-                  connection: { path: ["runtimeInstanceId"], equals: runtimeId },
                 },
                 select: { id: true, connection: true },
               });
-              if (!scopedSession || isTerminalConnectionState(scopedSession.connection)) {
+              const connectionRuntimeId = scopedSession
+                ? connectionRuntimeInstanceId(scopedSession.connection)
+                : null;
+              if (
+                !scopedSession ||
+                isTerminalConnectionState(scopedSession.connection) ||
+                (connectionRuntimeId && connectionRuntimeId !== runtimeId)
+              ) {
                 runtimeDebug("cloud bridge auth rejected inactive scoped session", {
                   runtimeId,
                   sessionId: bridgeAuth.sessionId,
+                  connectionRuntimeId,
                 });
                 ws.close(1008, "Session is not waiting for this runtime");
                 return;
