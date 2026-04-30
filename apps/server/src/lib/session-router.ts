@@ -1422,8 +1422,12 @@ export class SessionRouter {
             }),
             providerStatus: startResult.status,
           } satisfies RuntimeLifecycleUpdate;
-          await options.onLifecycle?.("session_runtime_provisioning", lifecycleUpdate);
-          await options.onLifecycle?.("session_runtime_connecting", lifecycleUpdate);
+          if (startResult.status !== "selected") {
+            await options.onLifecycle?.("session_runtime_provisioning", lifecycleUpdate);
+          }
+          if (startResult.status === "connecting" || startResult.status === "connected") {
+            await options.onLifecycle?.("session_runtime_connecting", lifecycleUpdate);
+          }
 
           try {
             const bridgeWaitStartedAt = Date.now();
