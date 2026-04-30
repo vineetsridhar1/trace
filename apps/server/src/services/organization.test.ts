@@ -22,6 +22,7 @@ describe("OrganizationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.count.mockResolvedValue(1);
   });
 
   it("creates organizations with the creator as admin and emits organization_created", async () => {
@@ -94,6 +95,19 @@ describe("OrganizationService", () => {
       },
       prismaMock,
     );
+  });
+
+  it("rejects organization creation for users without an existing organization", async () => {
+    prismaMock.orgMember.count.mockResolvedValueOnce(0);
+
+    const service = new OrganizationService();
+    await expect(service.createOrganization({ name: "Acme" }, "user-1")).rejects.toThrow(
+      "You must be invited to an organization before creating one.",
+    );
+
+    expect(prismaMock.organization.create).not.toHaveBeenCalled();
+    expect(prismaMock.orgMember.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
   it("deduplicates repos by remote url within an org", async () => {

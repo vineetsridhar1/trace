@@ -116,6 +116,13 @@ export class OrganizationService {
       throw new Error("Organization name is required");
     }
 
+    const existingMemberships = await prisma.orgMember.count({
+      where: { userId: actorId },
+    });
+    if (existingMemberships === 0) {
+      throw new Error("You must be invited to an organization before creating one.");
+    }
+
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.user.findUniqueOrThrow({
         where: { id: actorId },

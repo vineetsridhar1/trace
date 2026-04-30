@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Copy, LogOut, RefreshCw, Check } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button } from "../ui/button";
-import { CreateOrganizationDialog } from "../sidebar/CreateOrganizationDialog";
 
 export function NoOrgWelcome() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -45,8 +44,8 @@ export function NoOrgWelcome() {
         </div>
         <h1 className="mt-5 text-2xl font-semibold text-foreground">Welcome to Trace</h1>
         <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          Create an organization to start your own workspace, or ask an admin to invite you and
-          share the email below.
+          Trace is invite-only right now. Ask an admin to add you to an organization and share the
+          email below.
         </p>
 
         <div className="mt-6">
@@ -65,7 +64,6 @@ export function NoOrgWelcome() {
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          <CreateOrganizationDialog />
           <Button onClick={handleCheckAgain} disabled={checking} className="gap-2">
             <RefreshCw size={14} className={checking ? "animate-spin" : undefined} />
             {checking ? "Checking..." : "Check again"}
