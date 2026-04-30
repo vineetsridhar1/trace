@@ -9,4 +9,8 @@ describe("isMissingToolSessionError", () => {
       ),
     ).toBe(true);
   });
+
+  it("recognizes generic provider resume failures", () => {
+    expect(isMissingToolSessionError("Error: thread/resume failed")).toBe(true);
+  });
 });
