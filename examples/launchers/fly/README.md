@@ -65,6 +65,7 @@ Create a Trace Agent Environment with:
 - Bearer secret ID: the Trace org secret ID whose plaintext value equals `TRACE_LAUNCHER_BEARER_TOKEN`
 
 For a deployed controller, replace `localhost:8787` with the controller's public URL.
+Use HTTPS for deployed bearer-token launchers.
 
 ## Idempotency
 

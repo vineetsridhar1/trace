@@ -46,12 +46,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] At least one reference launcher demonstrates the provisioned lifecycle contract.
-- [ ] Launcher verifies configured auth mode.
-- [ ] Launcher starts compute and causes runtime bridge connection.
-- [ ] Launcher stops compute.
-- [ ] Launcher handles duplicate start/stop calls idempotently.
-- [ ] Docs clearly separate launcher code from Trace core.
+- [x] At least one reference launcher demonstrates the provisioned lifecycle contract.
+- [x] Launcher verifies configured auth mode.
+- [x] Launcher starts compute and causes runtime bridge connection.
+- [x] Launcher stops compute.
+- [x] Launcher handles duplicate start/stop calls idempotently.
+- [x] Docs clearly separate launcher code from Trace core.
 
 ## Implementation notes
 
