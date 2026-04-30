@@ -4166,6 +4166,7 @@ describe("SessionService", () => {
     });
 
     it("abandons candidates that have exceeded MAX_RECONCILE_ATTEMPTS", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const now = Date.now();
       const ancient = new Date(now - 5 * 60_000).toISOString();
       const conn = provisionedConn({
@@ -4209,6 +4210,14 @@ describe("SessionService", () => {
           payload: expect.objectContaining({ abandoned: true, reconcileAttempts: 10 }),
         }),
       );
+      const abandonedAlert = warnSpy.mock.calls.find((call) =>
+        String(call[0]).includes("deprovision.abandoned_runtime"),
+      );
+      expect(abandonedAlert).toBeTruthy();
+      expect(abandonedAlert?.[1]).toContain('"sessionId":"session-exhausted"');
+      expect(abandonedAlert?.[1]).toContain('"providerRuntimeId":"provider-1"');
+      expect(abandonedAlert?.[1]).toContain('"reconcileAttempts":10');
+      warnSpy.mockRestore();
     });
 
     it("skips already-abandoned candidates without re-emitting the event", async () => {

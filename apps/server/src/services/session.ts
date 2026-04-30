@@ -948,6 +948,14 @@ export class SessionService {
         reconcileAttempts: update.reconcileAttempts,
         error: update.error,
       });
+      if (update.abandoned === true) {
+        alertAgentEnvironmentOperator("deprovision.abandoned_runtime", {
+          organizationId: session.organizationId,
+          sessionId,
+          providerRuntimeId: update.providerRuntimeId ?? result.updated.providerRuntimeId,
+          reconcileAttempts: update.reconcileAttempts,
+        });
+      }
     }
   }
 
@@ -1318,17 +1326,6 @@ export class SessionService {
       abandoned: true,
       reconcileAttempts: attempts,
       error: `Runtime deprovision abandoned after ${attempts} reconcile attempts`,
-    });
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { organizationId: true, connection: true },
-    });
-    const conn = this.parseConnection(session?.connection);
-    alertAgentEnvironmentOperator("deprovision.abandoned_runtime", {
-      organizationId: session?.organizationId,
-      sessionId,
-      providerRuntimeId: conn.providerRuntimeId,
-      reconcileAttempts: attempts,
     });
     console.warn(
       `[session-service] runtime deprovision abandoned after ${attempts} reconcile attempts for ${sessionId}`,

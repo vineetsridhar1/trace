@@ -1,6 +1,7 @@
 const SENSITIVE_KEY_PATTERNS = ["authorization", "secret", "token", "signature"];
 const BEARER_TOKEN_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]+/gi;
 const SIGNATURE_PATTERN = /v1=[0-9a-f]{32,}/gi;
+const JWT_PATTERN = /\b[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g;
 
 export type AgentEnvironmentTelemetryData = Record<string, unknown>;
 
@@ -12,7 +13,8 @@ function isSensitiveKey(key: string): boolean {
 function redactString(value: string): string {
   return value
     .replace(BEARER_TOKEN_PATTERN, "Bearer [redacted]")
-    .replace(SIGNATURE_PATTERN, "v1=[redacted]");
+    .replace(SIGNATURE_PATTERN, "v1=[redacted]")
+    .replace(JWT_PATTERN, "[redacted]");
 }
 
 export function redactTelemetryData(value: unknown): unknown {
