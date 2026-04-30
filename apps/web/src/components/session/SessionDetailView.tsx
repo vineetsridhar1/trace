@@ -21,12 +21,13 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { Loader2, AlertCircle, Cloud, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
+import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { client } from "../../lib/urql";
 import {
   DISMISS_SESSION_MUTATION,
@@ -563,6 +564,7 @@ function RuntimeLifecycleNotice({
   connectionState: string;
 }) {
   const [action, setAction] = useState<"retry" | "cloud" | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
   const failed = RUNTIME_FAILURE_STATES.has(connectionState);
   const providerStatus =
     typeof connection?.providerStatus === "string" ? connection.providerStatus : null;
@@ -647,6 +649,15 @@ function RuntimeLifecycleNotice({
             <button
               type="button"
               disabled={action !== null}
+              onClick={() => setShowPicker((open) => !open)}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
+            >
+              <ArrowRightLeft size={12} />
+              Move
+            </button>
+            <button
+              type="button"
+              disabled={action !== null}
               onClick={handleNewCloud}
               className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
             >
@@ -660,6 +671,9 @@ function RuntimeLifecycleNotice({
           </div>
         )}
       </div>
+      {failed && showPicker && (
+        <SessionRuntimePicker sessionId={sessionId} onClose={() => setShowPicker(false)} />
+      )}
     </div>
   );
 }
