@@ -2021,6 +2021,62 @@ describe("SessionService", () => {
       expect(connectionLostCalls.length).toBeGreaterThan(0);
     });
 
+    it("does not deliver cloud sends to an in-memory binding without a persisted cloud runtime", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          workdir: "/workspace/session-1",
+          toolSessionId: "tool-sess-1",
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "cloud",
+        connection: {
+          state: "connected",
+          adapterType: "provisioned",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroupId: "group-1",
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "local-runtime",
+        label: "Laptop",
+      });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "hello from stale binding",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({
+              type: "send",
+              prompt: expect.stringContaining("hello from stale binding"),
+            }),
+          }),
+        }),
+      );
+    });
+
     it("prepares a deferred local workspace even when the session is already bound to its bridge", async () => {
       const session = makeSession({
         agentStatus: "not_started",
