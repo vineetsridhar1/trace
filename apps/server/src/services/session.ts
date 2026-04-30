@@ -6179,10 +6179,21 @@ export class SessionService {
     await this.resetReconcileState(sessionId);
 
     if (isGroupUnload && session.sessionGroupId) {
+      const groupRuntime = await prisma.sessionGroup.findUnique({
+        where: { id: session.sessionGroupId },
+        select: { workdir: true, repoId: true, connection: true },
+      });
+      const runtimeSession = {
+        ...session,
+        workdir: groupRuntime?.workdir ?? session.workdir,
+        repoId: groupRuntime?.repoId ?? session.repoId,
+        connection: groupRuntime?.connection ?? session.connection,
+      };
+
       // Group-level unload: destroy all terminals and the shared runtime
       terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
       try {
-        await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
+        await sessionRouter.destroyRuntime(sessionId, runtimeSession, destroyOptions);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(

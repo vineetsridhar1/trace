@@ -2821,10 +2821,22 @@ describe("SessionService", () => {
     });
 
     it("archives groups that have message history", async () => {
+      const groupConnection = {
+        state: "connected",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
         makeSessionGroup({
           id: "group-1",
           organizationId: "org-1",
+          workdir: "/workspace/group-1",
+          connection: groupConnection,
           sessions: [
             { id: "session-2", lastMessageAt: new Date("2024-01-02T00:00:00.000Z") },
             { id: "session-1", lastMessageAt: null },
@@ -2837,7 +2849,26 @@ describe("SessionService", () => {
           archivedAt: new Date("2024-01-02T00:00:00.000Z"),
         }),
       );
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          sessionGroupId: "group-1",
+          workdir: null,
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        workdir: "/workspace/group-1",
+        repoId: "repo-1",
+        connection: groupConnection,
+      });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
         makeSessionGroup({
           id: "group-1",
           archivedAt: new Date("2024-01-02T00:00:00.000Z"),
@@ -2857,6 +2888,15 @@ describe("SessionService", () => {
         where: { id: "group-1" },
         data: { archivedAt: expect.any(Date) },
       });
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-2",
+        expect.objectContaining({
+          workdir: "/workspace/group-1",
+          repoId: "repo-1",
+          connection: groupConnection,
+        }),
+        expect.objectContaining({ reason: "session_unloaded" }),
+      );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_group_archived",
