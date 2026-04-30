@@ -31,6 +31,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [localUnavailableReason, setLocalUnavailableReason] =
     useState<RuntimeUnavailableReason | null>(null);
   const [checkingRepoLink, setCheckingRepoLink] = useState(false);
+  const [environmentOptionsLoaded, setEnvironmentOptionsLoaded] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [selectedEnvironment, setSelectedEnvironment] =
     useState<SessionEnvironmentSelection | null>(null);
@@ -99,7 +100,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     };
   }, [channelRepoId, defaultTool, selectedEnvironment, selectedTarget]);
 
-  const disabled = checkingRepoLink || !!localUnavailableReason;
+  const disabled = !environmentOptionsLoaded || checkingRepoLink || !!localUnavailableReason;
 
   const handleTargetChange = useCallback(
     (target: string | null, environment?: SessionEnvironmentSelection | null) => {
@@ -123,7 +124,9 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
 
   const tooltip = checkingRepoLink
     ? "Checking repo link..."
-    : localUnavailableReason
+    : !environmentOptionsLoaded
+      ? "Loading environments..."
+      : localUnavailableReason
       ? quickSessionUnavailableMessage(localUnavailableReason)
       : "New session (⌘N)";
 
@@ -133,6 +136,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
         tool={defaultTool}
         selectedTarget={selectedTarget}
         onSelectionChange={handleTargetChange}
+        onOptionsLoadedChange={setEnvironmentOptionsLoaded}
       />
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex" />}>
