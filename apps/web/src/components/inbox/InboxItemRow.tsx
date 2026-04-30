@@ -3,6 +3,7 @@ import { MessageCircleQuestion, Map, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { UltraplanHumanGateResolution } from "@trace/gql";
 import { client } from "../../lib/urql";
+import { gql } from "@urql/core";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
   START_SESSION_MUTATION,
@@ -22,6 +23,38 @@ import { InboxQuestionBody } from "./InboxQuestionBody";
 import { InboxSuggestionBody } from "./InboxSuggestionBody";
 import { InboxUltraplanGateBody } from "./InboxUltraplanGateBody";
 import type { QuestionData } from "./InboxQuestionBody";
+
+const INBOX_SOURCE_SESSION_QUERY = gql`
+  query InboxSourceSession($id: ID!) {
+    session(id: $id) {
+      id
+      sessionGroupId
+      channel {
+        id
+      }
+    }
+  }
+`;
+
+type InboxSourceSessionResult = {
+  session?: {
+    id: string;
+    sessionGroupId?: string | null;
+    channel?: { id: string } | null;
+  } | null;
+};
+
+async function fetchSourceSessionTarget(
+  sourceId: string,
+): Promise<{ sessionGroupId: string; channelId: string | null } | null> {
+  const result = await client.query(INBOX_SOURCE_SESSION_QUERY, { id: sourceId }).toPromise();
+  const session = (result.data as InboxSourceSessionResult | undefined)?.session;
+  if (!session?.sessionGroupId) return null;
+  return {
+    sessionGroupId: session.sessionGroupId,
+    channelId: session.channel?.id ?? null,
+  };
+}
 
 const SUGGESTION_TYPES = new Set([
   "ticket_suggestion",
@@ -109,9 +142,16 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
   const resolution = (payload?.resolution as string) ?? "";
 
-  const handleNavigate = useCallback(() => {
-    if (!sourceId || !sessionGroupId) return;
-    navigateToSession(sessionChannel?.id ?? null, sessionGroupId, sourceId);
+  const handleNavigate = useCallback(async () => {
+    if (!sourceId) return;
+    if (sessionGroupId) {
+      navigateToSession(sessionChannel?.id ?? null, sessionGroupId, sourceId);
+      return;
+    }
+    const target = await fetchSourceSessionTarget(sourceId);
+    if (target) {
+      navigateToSession(target.channelId, target.sessionGroupId, sourceId);
+    }
   }, [sourceId, sessionChannel?.id, sessionGroupId]);
 
   const handleApproveNewSession = useCallback(async () => {
