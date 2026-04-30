@@ -22,7 +22,7 @@ Owns plan lines:
 - Each launcher should implement:
   - `POST /trace/start-session`
   - `POST /trace/stop-session`
-  - `GET /trace/session-status/:runtimeId`
+  - `POST /trace/session-status`
 - Each launcher should verify Trace authentication.
 - Each launcher should honor idempotency keys for duplicate start/stop requests.
 - Bearer launchers should:
