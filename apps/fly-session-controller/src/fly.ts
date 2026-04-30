@@ -34,7 +34,7 @@ export class FlyMachinesClient {
       skip_service_registration: true,
       config: {
         image: this.config.traceRuntimeImage,
-        env: buildMachineEnv(request),
+        env: buildMachineEnv(request, this.config.runtimePassthroughEnv),
         guest: {
           cpu_kind: this.config.flyMachineCpuKind,
           cpus: this.config.flyMachineCpus,
@@ -125,8 +125,12 @@ export function buildMachineName(sessionId: string, runtimeInstanceId: string): 
   return `trace-${shortId(sessionId, "session")}-${shortId(runtimeInstanceId, "runtime")}`.toLowerCase();
 }
 
-export function buildMachineEnv(request: StartSessionRequest): Record<string, string> {
+export function buildMachineEnv(
+  request: StartSessionRequest,
+  passthroughEnv: Record<string, string> = {},
+): Record<string, string> {
   return {
+    ...passthroughEnv,
     ...request.bootstrapEnv,
     TRACE_TOOL: request.tool,
     ...(request.model ? { TRACE_MODEL: request.model } : {}),

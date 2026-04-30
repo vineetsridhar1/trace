@@ -10,7 +10,14 @@ describe("Fly machine helpers", () => {
   });
 
   it("injects Trace and repo environment variables", () => {
-    expect(buildMachineEnv(startRequest())).toMatchObject({
+    expect(
+      buildMachineEnv(startRequest(), {
+        GITHUB_TOKEN: "github-token",
+        OPENAI_API_KEY: "openai-key",
+      }),
+    ).toMatchObject({
+      GITHUB_TOKEN: "github-token",
+      OPENAI_API_KEY: "openai-key",
       TRACE_SESSION_ID: "session-1",
       TRACE_ORG_ID: "org-1",
       TRACE_RUNTIME_INSTANCE_ID: "runtime-1",

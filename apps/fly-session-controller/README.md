@@ -38,9 +38,22 @@ FLY_MACHINE_CPU_KIND=shared
 FLY_MACHINE_CPUS=1
 FLY_MACHINE_MEMORY_MB=1024
 FLY_DELETE_AFTER_STOP=true
+TRACE_RUNTIME_PASSTHROUGH_ENV=GITHUB_TOKEN,OPENAI_API_KEY,ANTHROPIC_API_KEY,SSH_PRIVATE_KEY
 ```
 
 Do not hardcode secrets. Fly API calls use `Authorization: Bearer $FLY_API_TOKEN`.
+
+For private GitHub repos and coding-tool auth, set only the env vars you want copied into each
+runtime Machine and list them in `TRACE_RUNTIME_PASSTHROUGH_ENV`. Common values:
+
+```bash
+GITHUB_TOKEN=<GitHub token with repo read access>
+OPENAI_API_KEY=<required for codex>
+ANTHROPIC_API_KEY=<required for claude_code>
+SSH_PRIVATE_KEY=<base64-encoded SSH private key>
+```
+
+The controller injects only the named variables that are present in its environment.
 
 ## Trace Agent Environment
 
