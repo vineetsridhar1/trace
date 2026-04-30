@@ -2264,6 +2264,23 @@ export type FilteredSessionGroupsQuery = {
   }>;
 };
 
+export type SessionEnvironmentOptionsQueryVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+}>;
+
+export type SessionEnvironmentOptionsQuery = {
+  __typename?: "Query";
+  agentEnvironments: Array<{
+    __typename?: "AgentEnvironment";
+    id: string;
+    name: string;
+    adapterType: AgentEnvironmentAdapterType;
+    config: JsonValue;
+    enabled: boolean;
+    isDefault: boolean;
+  }>;
+};
+
 export type AddChatMemberMutationVariables = Exact<{
   input: AddChatMemberInput;
 }>;
@@ -4119,6 +4136,56 @@ export const FilteredSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<FilteredSessionGroupsQuery, FilteredSessionGroupsQueryVariables>;
+export const SessionEnvironmentOptionsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionEnvironmentOptions" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "agentEnvironments" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "adapterType" } },
+                { kind: "Field", name: { kind: "Name", value: "config" } },
+                { kind: "Field", name: { kind: "Name", value: "enabled" } },
+                { kind: "Field", name: { kind: "Name", value: "isDefault" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionEnvironmentOptionsQuery,
+  SessionEnvironmentOptionsQueryVariables
+>;
 export const AddChatMemberDocument = {
   kind: "Document",
   definitions: [

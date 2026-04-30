@@ -13,7 +13,7 @@ import {
   type BridgeSessionGitSyncStatus,
 } from "@trace/shared";
 import { prisma } from "../lib/db.js";
-import { AuthorizationError } from "../lib/errors.js";
+import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import {
   sessionRouter,
@@ -862,7 +862,11 @@ export class SessionService {
 
       const adapterType = this.lifecycleAdapterType(conn, update);
       const nextState = this.lifecycleConnectionState(eventType, adapterType);
-      if (conn.state === "connected" && isRuntimeStartupState(nextState)) {
+      if (
+        conn.state === "connected" &&
+        isRuntimeStartupState(nextState) &&
+        (conn.runtimeInstanceId || conn.providerRuntimeId || conn.connectedAt)
+      ) {
         return null;
       }
 
@@ -2013,6 +2017,17 @@ export class SessionService {
       actorType: input.actorType ?? "user",
       actorId: input.createdById,
     });
+    const hasCompatibilityRuntimeFallback =
+      !!input.hosting ||
+      !!input.runtimeInstanceId ||
+      !!sharedRuntimeInstanceId ||
+      !!restoreGroupRuntimeInstanceId ||
+      !!sourceSession?.hosting;
+    if (!requestedEnvironment && !hasCompatibilityRuntimeFallback) {
+      throw new ValidationError(
+        "No default agent environment is configured. Choose an environment or set an org default in Agent Environments.",
+      );
+    }
     const environmentHosting =
       requestedEnvironment?.adapterType === "local"
         ? "local"
@@ -2030,6 +2045,23 @@ export class SessionService {
     }
     let runtimeLabel: string | undefined;
     const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
+    if (
+      input.environmentId &&
+      input.runtimeInstanceId &&
+      requestedEnvironment?.adapterType !== "local"
+    ) {
+      throw new ValidationError("runtimeInstanceId can only be combined with a local environment");
+    }
+    if (
+      input.environmentId &&
+      input.runtimeInstanceId &&
+      environmentRuntimeInstanceId &&
+      input.runtimeInstanceId !== environmentRuntimeInstanceId
+    ) {
+      throw new ValidationError(
+        "runtimeInstanceId does not match the selected local environment",
+      );
+    }
     const shouldUseEnvironmentRuntime =
       !input.runtimeInstanceId &&
       !sharedRuntimeInstanceId &&
@@ -2333,6 +2365,8 @@ export class SessionService {
         where: { id },
         data: {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
+          agentStatus: "active",
+          sessionStatus: "in_progress",
           ...(markLocalPreparing && {
             connection: this.mergeConnection(session.connection, {
               state: "connecting",
@@ -2827,31 +2861,6 @@ export class SessionService {
       );
       data.workdir = null;
       data.pendingRun = Prisma.DbNull;
-
-      // Provision the new runtime (repo already included in initial select)
-      const needsProvisioning = !!prev.repoId || newHosting === "cloud";
-      if (needsProvisioning) {
-        const previousAdapterType = this.parseConnection(prev.connection).adapterType;
-        const adapterType =
-          requestedEnvironment?.adapterType ??
-          (newHosting === prev.hosting ? previousAdapterType : undefined);
-        this.provisionRuntime({
-          sessionId,
-          sessionGroupId: prev.sessionGroupId,
-          slug: prev.sessionGroup?.slug,
-          preserveBranchName: true,
-          hosting: newHosting,
-          tool: nextTool,
-          model: nextModel !== undefined ? nextModel : prev.model,
-          repo: prev.repo,
-          branch: prev.branch,
-          createdById: actorId,
-          organizationId,
-          readOnly: prev.readOnlyWorkspace,
-          environment: requestedEnvironment,
-          ...(adapterType && { adapterType }),
-        });
-      }
     }
 
     const session = await prisma.session.update({
@@ -3313,6 +3322,8 @@ export class SessionService {
           sessionId,
           pendingCommand,
           {
+            agentStatus: "active",
+            sessionStatus: "in_progress",
             lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
             ...(markLocalPreparing && {
@@ -3357,6 +3368,8 @@ export class SessionService {
             text,
             clientSource: normalizeClientSource(clientSource),
             deliveryStatus: "pending_runtime",
+            agentStatus: "active",
+            sessionStatus: "in_progress",
             ...(imageKeys?.length ? { imageKeys } : {}),
             ...(clientMutationId ? { clientMutationId } : {}),
           },

@@ -12,7 +12,7 @@ import { getDefaultModel } from "../components/session/modelOptions";
 
 const pendingQuickSessionChannels = new Set<string>();
 
-type RuntimeUnavailableReason = "no_local_runtime" | "repo_not_linked";
+export type RuntimeUnavailableReason = "no_local_runtime" | "repo_not_linked";
 
 interface AvailableRuntimesQueryResult {
   availableRuntimes?: SessionRuntimeInstance[];
@@ -92,17 +92,21 @@ export async function createQuickSession(
   try {
     const usesEnvironment = !!options.environmentId;
     const usesCloud = options.hosting === "cloud";
-    const { runtimeInstanceId, unavailableReason } = usesEnvironment || usesCloud
-      ? { runtimeInstanceId: undefined, unavailableReason: undefined }
-      : await resolveDefaultRuntime(prefTool, channelRepoId);
-    if (!usesEnvironment && !usesCloud && !runtimeInstanceId) {
+    const usesImplicitDefault = !usesEnvironment && options.hosting == null;
+    const { runtimeInstanceId, unavailableReason } =
+      usesEnvironment || usesCloud || usesImplicitDefault
+        ? { runtimeInstanceId: undefined, unavailableReason: undefined }
+        : await resolveDefaultRuntime(prefTool, channelRepoId);
+    if (!usesEnvironment && !usesCloud && !usesImplicitDefault && !runtimeInstanceId) {
       throw new Error(quickSessionUnavailableMessage(unavailableReason));
     }
-    const runtimeInput = usesEnvironment
-      ? { environmentId: options.environmentId }
-      : usesCloud
-        ? { hosting: "cloud" as const }
-        : { hosting: "local" as const, runtimeInstanceId };
+    const runtimeInput = usesImplicitDefault
+      ? {}
+      : usesEnvironment
+        ? { environmentId: options.environmentId }
+        : usesCloud
+          ? { hosting: "cloud" as const }
+          : { hosting: "local" as const, runtimeInstanceId };
 
     const result = await client
       .mutation(START_SESSION_MUTATION, {

@@ -20,7 +20,7 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Cloud } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
@@ -33,6 +33,20 @@ import {
   SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+
+const RUNTIME_BOOTING_STATES = new Set([
+  "pending",
+  "requested",
+  "provisioning",
+  "booting",
+  "connecting",
+]);
+const RUNTIME_FAILURE_STATES = new Set(["failed", "timed_out", "deprovision_failed"]);
+
+function getConnectionState(connection: Record<string, unknown> | null | undefined): string | null {
+  const state = connection?.state;
+  return typeof state === "string" ? state : null;
+}
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -171,6 +185,7 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -182,14 +197,18 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
+  const sessionRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(connection);
+  const groupRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(groupConnection);
   const runtimeInstanceId =
-    getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
-    getLinkedCheckoutRuntimeInstanceId(connection);
+    hosting === "cloud"
+      ? sessionRuntimeInstanceId
+      : groupRuntimeInstanceId ?? sessionRuntimeInstanceId;
   const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
     runtimeInstanceId,
     sessionGroupId ?? null,
   );
-  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed =
+    agentStatus === "not_started" || hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
@@ -313,6 +332,14 @@ export function SessionDetailView({
     [eventIds, events],
   );
   const initialEventsLoading = loading && eventIds.length === 0;
+  const connectionState = getConnectionState(connection);
+  const runtimeLifecycleState =
+    hosting === "cloud" &&
+    connectionState !== null &&
+    connectionState !== "connected" &&
+    (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
+      ? connectionState
+      : null;
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -462,7 +489,9 @@ export function SessionDetailView({
           )}
         </div>
 
-        {!bridgeInteractionAllowed ? (
+        {runtimeLifecycleState ? (
+          <RuntimeLifecycleNotice connectionState={runtimeLifecycleState} />
+        ) : !bridgeInteractionAllowed ? (
           <div className="border-t p-4">
             <BridgeAccessNotice
               access={bridgeAccess}
@@ -507,5 +536,54 @@ export function SessionDetailView({
         )}
       </div>
     </EventScopeContext.Provider>
+  );
+}
+
+function RuntimeLifecycleNotice({ connectionState }: { connectionState: string }) {
+  const failed = RUNTIME_FAILURE_STATES.has(connectionState);
+  const label = failed
+    ? connectionState === "timed_out"
+      ? "Cloud runtime timed out"
+      : "Cloud runtime failed"
+    : connectionState === "provisioning"
+      ? "Provisioning cloud runtime"
+      : connectionState === "connecting"
+        ? "Connecting to cloud runtime"
+        : "Booting cloud runtime";
+  const tone = failed
+    ? {
+        border: "border-destructive/30",
+        bg: "bg-destructive/10",
+        text: "text-destructive",
+        iconBg: "bg-destructive/20",
+        body: "text-destructive/80",
+      }
+    : {
+        border: "border-sky-500/30",
+        bg: "bg-sky-500/10",
+        text: "text-sky-100",
+        iconBg: "bg-sky-500/20",
+        body: "text-sky-100/80",
+      };
+
+  return (
+    <div className="border-t px-4 py-3">
+      <div className={`flex items-start gap-3 rounded-lg border ${tone.border} ${tone.bg} p-3 text-sm`}>
+        <div className={`mt-0.5 rounded-md ${tone.iconBg} p-1.5 ${tone.text}`}>
+          {failed ? <AlertCircle size={14} /> : <Cloud size={14} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className={`flex items-center gap-2 font-medium ${tone.text}`}>
+            {failed ? <AlertCircle size={14} /> : <Loader2 size={14} className="animate-spin" />}
+            {label}
+          </div>
+          <p className={`mt-1 text-xs leading-5 ${tone.body}`}>
+            {failed
+              ? "Trace could not finish starting the cloud runtime."
+              : "Your message is queued and will run as soon as the machine is ready."}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

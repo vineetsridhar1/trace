@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
-import { useEntityField } from "@trace/client-core";
+import { useEntityField, useEntityStore, type SessionEntity } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
@@ -74,7 +74,8 @@ export function SessionInput({
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
-  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed =
+    isNotStarted || hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
@@ -192,10 +193,37 @@ export function SessionInput({
           return;
         }
 
+        let rollbackStartupPatch: (() => void) | null = null;
+        const startsDeferredRuntime = isNotStarted && hosting === "cloud";
+        if (startsDeferredRuntime) {
+          const previous = useEntityStore.getState().sessions[sessionId];
+          useEntityStore.getState().patch("sessions", sessionId, {
+            agentStatus: "active",
+            sessionStatus: "in_progress",
+            connection: {
+              ...(connection ?? {}),
+              state: "requested",
+            } as SessionEntity["connection"],
+          });
+          rollbackStartupPatch = () => {
+            if (!previous) return;
+            useEntityStore.getState().patch("sessions", sessionId, {
+              agentStatus: previous.agentStatus,
+              sessionStatus: previous.sessionStatus,
+              connection: previous.connection,
+            });
+          };
+        }
+
         const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
           sessionId,
           wrappedText,
-          imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
+          imageKeys.length > 0 || startsDeferredRuntime
+            ? {
+                ...(startsDeferredRuntime ? { deliveryStatus: "pending_runtime" as const } : {}),
+                ...(imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : {}),
+              }
+            : undefined,
         );
 
         setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
@@ -224,6 +252,7 @@ export function SessionInput({
           for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
         } catch (error) {
           removeOptimisticSessionMessage(sessionId, tempEventId);
+          rollbackStartupPatch?.();
           setDraftImages(sessionId, (prev) => [
             ...savedImages.map((img) => ({ ...img, uploading: false })),
             ...prev,
@@ -236,7 +265,7 @@ export function SessionInput({
         setIsSending(false);
       }
     },
-    [sessionId, mode, canSend, canQueue, images],
+    [sessionId, mode, canSend, canQueue, images, isNotStarted, hosting, connection],
   );
 
   // If the user has bridge access (owner or granted), a disconnected session
@@ -247,7 +276,7 @@ export function SessionInput({
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
 
-  if (!bridgeInteractionAllowed) {
+  if (!bridgeInteractionAllowed && !isNotStarted) {
     return (
       <div className="border-t px-4 py-3">
         <BridgeAccessNotice
