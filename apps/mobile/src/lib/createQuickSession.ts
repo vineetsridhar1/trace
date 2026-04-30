@@ -11,7 +11,7 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
-import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
+import type { CodingTool, HostingMode, SessionRuntimeInstance } from "@trace/gql";
 import { getConnectionMode } from "@/lib/connection-target";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
@@ -45,10 +45,17 @@ interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
 }
 
+interface CreateQuickSessionOptions {
+  hosting?: HostingMode;
+}
+
 /**
  * Start the session, prefetch its workspace, then open the session page.
  */
-export async function createQuickSession(channelId: string): Promise<void> {
+export async function createQuickSession(
+  channelId: string,
+  options: CreateQuickSessionOptions = {},
+): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
@@ -57,7 +64,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
 
   const tool = DEFAULT_TOOL;
   const model = getDefaultModel(tool);
-  const hosting = resolveMobileSessionHosting(getConnectionMode());
+  const hosting = options.hosting ?? resolveMobileSessionHosting(getConnectionMode());
 
   void haptic.light();
 

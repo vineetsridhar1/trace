@@ -21,6 +21,7 @@ import {
 import { fetchChannelSessionGroups } from "@/hooks/useChannelSessionGroupsQuery";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { handleUnauthorized } from "@/lib/auth";
+import { getConnectionMode } from "@/lib/connection-target";
 import { createQuickSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
@@ -59,6 +60,7 @@ export default function ChannelDetail() {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const channelName = useEntityField("channels", channelId, "name");
   const sections = useChannelSessionGroupSections(channelId, scope, userId);
+  const showCloudCreateButton = getConnectionMode() === "paired_local";
 
   useEffect(() => {
     if (!channelId) return;
@@ -96,6 +98,10 @@ export default function ChannelDetail() {
 
   const handleCreateSession = useCallback(() => {
     void createQuickSession(channelId);
+  }, [channelId]);
+
+  const handleCreateCloudSession = useCallback(() => {
+    void createQuickSession(channelId, { hosting: "cloud" });
   }, [channelId]);
 
   const handleToggleSection = useCallback((status: SessionGroupSectionStatus) => {
@@ -160,6 +166,15 @@ export default function ChannelDetail() {
                 onPress={handleCreateSession}
                 accessibilityLabel="New session"
               />
+              {showCloudCreateButton ? (
+                <IconButton
+                  symbol="cloud"
+                  size="sm"
+                  color="foreground"
+                  onPress={handleCreateCloudSession}
+                  accessibilityLabel="New cloud session"
+                />
+              ) : null}
               <IconButton
                 symbol="archivebox"
                 size="sm"
