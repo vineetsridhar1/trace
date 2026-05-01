@@ -2159,6 +2159,7 @@ export class SessionService {
       !sharedRuntimeInstanceId &&
       !restoreGroupRuntimeInstanceId &&
       !!environmentRuntimeInstanceId;
+    let selectedRuntimeAccessAllowed = true;
     let requestedRuntimeInstanceId =
       input.runtimeInstanceId ??
       sharedRuntimeInstanceId ??
@@ -2176,12 +2177,24 @@ export class SessionService {
       if (!runtime) {
         throw new Error("Requested runtime not found");
       }
-      await this.assertRuntimeAccess({
-        userId: input.createdById,
-        organizationId: input.organizationId,
-        runtimeInstanceId: runtimeId,
-        sessionGroupId: existingGroup?.id ?? null,
-      });
+      if (runtime.hostingMode === "local") {
+        if (existingGroup?.id) {
+          await this.assertRuntimeAccess({
+            userId: input.createdById,
+            organizationId: input.organizationId,
+            runtimeInstanceId: runtimeId,
+            sessionGroupId: existingGroup.id,
+          });
+        } else {
+          const access = await runtimeAccessService.getAccessState({
+            userId: input.createdById,
+            organizationId: input.organizationId,
+            runtimeInstanceId: runtimeId,
+            sessionGroupId: null,
+          });
+          selectedRuntimeAccessAllowed = access.hostingMode !== "local" || access.allowed;
+        }
+      }
       if (
         runtime.hostingMode === "local" &&
         resolvedRepoId &&
@@ -2356,7 +2369,7 @@ export class SessionService {
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
-    if (needsRuntimeProvisioning && input.prompt) {
+    if (needsRuntimeProvisioning && input.prompt && selectedRuntimeAccessAllowed) {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
