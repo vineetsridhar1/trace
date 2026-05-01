@@ -130,8 +130,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         <SidebarProvider className="min-h-0 flex-1 pt-2">
           <AppSidebar />
 
-          <div className="app-region-drag flex w-full flex-1 overflow-hidden pt-10 pr-2 md:peer-data-[state=collapsed]:pl-2">
-            <div className="app-region-no-drag flex min-w-0 flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border border-border/80 bg-background/95">
+          <div className="app-region-drag flex w-full flex-1 overflow-hidden pt-10 md:peer-data-[state=collapsed]:pl-2">
+            <div className="app-region-no-drag flex min-w-0 flex-1 overflow-hidden rounded-tl-lg border border-border/80 bg-background/95">
               <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {activePage === "settings" ? (
                   <SettingsPage />
