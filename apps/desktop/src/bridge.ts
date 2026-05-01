@@ -58,6 +58,7 @@ const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
 const LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS = 15_000;
 const LOCAL_PR_POLL_INTERVAL_MS = 60_000;
+const LOCAL_PR_POLL_TIMEOUT_MS = 15_000;
 const execFileAsync = promisify(execFile);
 
 async function inspectGitCheckpoint(
@@ -122,15 +123,22 @@ function parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | n
   return { owner: match[1], repo: match[2] };
 }
 
-async function inspectLocalPrStatus(workdir: string): Promise<BridgePrObservation | null> {
+async function inspectLocalPrStatus(workdir: string): Promise<{
+  branch: string | null;
+  pr: BridgePrObservation | null;
+}> {
   const [branch, remoteUrl] = await Promise.all([
     maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]),
     maybeReadGitRef(workdir, ["remote", "get-url", "origin"]),
   ]);
-  if (!branch || !remoteUrl) return null;
+  if (!branch || !remoteUrl) {
+    return { branch, pr: null };
+  }
 
   const parsedRepo = parseGitHubRepo(remoteUrl);
-  if (!parsedRepo) return null;
+  if (!parsedRepo) {
+    return { branch, pr: null };
+  }
 
   const query = `
 query($owner: String!, $name: String!, $head: String!) {
@@ -167,7 +175,12 @@ query($owner: String!, $name: String!, $head: String!) {
     ],
     {
       cwd: workdir,
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: "1",
+      },
       maxBuffer: 1024 * 1024,
+      timeout: LOCAL_PR_POLL_TIMEOUT_MS,
     },
   );
 
@@ -186,19 +199,24 @@ query($owner: String!, $name: String!, $head: String!) {
   };
 
   const node = parsed.data?.repository?.pullRequests?.nodes?.[0];
-  if (!node) return null;
+  if (!node) {
+    return { branch, pr: null };
+  }
   if (
     typeof node.url !== "string" ||
     (node.state !== "OPEN" && node.state !== "CLOSED" && node.state !== "MERGED") ||
     typeof node.merged !== "boolean"
   ) {
-    return null;
+    return { branch, pr: null };
   }
 
   return {
-    url: node.url,
-    state: node.state,
-    merged: node.merged,
+    branch,
+    pr: {
+      url: node.url,
+      state: node.state,
+      merged: node.merged,
+    },
   };
 }
 
@@ -305,7 +323,6 @@ export class BridgeClient implements IBridgeClient {
   private connectAttempt = 0;
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
-  private lastReportedLocalPrs = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<
     string,
@@ -702,7 +719,6 @@ export class BridgeClient implements IBridgeClient {
 
   private startLocalPrPolling() {
     this.stopLocalPrPolling();
-    this.lastReportedLocalPrs.clear();
     this.localPrPollTimer = setInterval(() => {
       void this.pollLocalPrStatuses();
     }, LOCAL_PR_POLL_INTERVAL_MS);
@@ -724,27 +740,34 @@ export class BridgeClient implements IBridgeClient {
     this.isPollingLocalPrs = true;
 
     try {
-      const activeSessionIds = new Set(this.sessionWorkdirs.keys());
-      for (const cachedSessionId of this.lastReportedLocalPrs.keys()) {
-        if (!activeSessionIds.has(cachedSessionId)) {
-          this.lastReportedLocalPrs.delete(cachedSessionId);
-        }
-      }
+      await Promise.all(
+        Array.from(this.sessionWorkdirs.entries(), async ([sessionId, workdir]) => {
+          const observedAt = new Date().toISOString();
 
-      for (const [sessionId, workdir] of this.sessionWorkdirs.entries()) {
-        try {
-          const pr = await inspectLocalPrStatus(workdir);
-          const serialized = JSON.stringify(pr);
-          if (this.lastReportedLocalPrs.get(sessionId) === serialized) {
-            continue;
+          try {
+            const { branch, pr } = await inspectLocalPrStatus(workdir);
+            this.send({
+              type: "session_pr_status",
+              sessionId,
+              branch,
+              observedAt,
+              pr,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`[bridge] failed to inspect local PR status for ${workdir}: ${message}`);
+            const branch = await maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]);
+            this.send({
+              type: "session_pr_status",
+              sessionId,
+              branch,
+              observedAt,
+              pr: null,
+              error: message,
+            });
           }
-          this.lastReportedLocalPrs.set(sessionId, serialized);
-          this.send({ type: "session_pr_status", sessionId, pr });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.warn(`[bridge] failed to inspect local PR status for ${workdir}: ${message}`);
-        }
-      }
+        }),
+      );
     } finally {
       this.isPollingLocalPrs = false;
     }
@@ -1180,7 +1203,6 @@ export class BridgeClient implements IBridgeClient {
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
-        this.lastReportedLocalPrs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 

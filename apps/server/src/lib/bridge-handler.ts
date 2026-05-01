@@ -496,6 +496,15 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       }
 
       if (msg.type === "session_pr_status" && msg.sessionId) {
+        if (bridgeAuth?.kind !== "local") {
+          runtimeDebug("ignoring session_pr_status from non-local bridge", {
+            runtimeId,
+            sessionId: msg.sessionId,
+            authKind: bridgeAuth?.kind ?? "unknown",
+          });
+          return;
+        }
+
         const pr =
           msg.pr &&
           typeof msg.pr === "object" &&
@@ -510,11 +519,23 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 merged: (msg.pr as Record<string, unknown>).merged as boolean,
               }
             : null;
+        const branch = typeof msg.branch === "string" ? msg.branch : null;
+        const observedAt =
+          typeof msg.observedAt === "string" && !Number.isNaN(Date.parse(msg.observedAt))
+            ? msg.observedAt
+            : new Date().toISOString();
+        const error = typeof msg.error === "string" && msg.error.trim() ? msg.error : null;
 
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.syncPrObservation({
             sessionId: msg.sessionId as string,
+            runtimeInstanceId: runtimeId,
+            organizationId: bridgeAuth.organizationId,
+            ownerUserId: bridgeAuth.userId,
+            branch,
+            observedAt,
             pr,
+            error,
             actorId: "github-bridge-poll",
           });
         });

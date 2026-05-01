@@ -4851,13 +4851,28 @@ describe("SessionService", () => {
         id: "session-1",
         hosting: "local",
         organizationId: "org-1",
+        connection: { runtimeInstanceId: "runtime-home" },
         sessionGroupId: "group-1",
-        sessionGroup: { id: "group-1", prUrl: null },
+        sessionGroup: {
+          id: "group-1",
+          branch: "trace/branch",
+          connection: null,
+          prUrl: null,
+        },
       });
       const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValue(undefined);
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-home",
+        ownerUserId: "user-1",
+      });
 
       await service.syncPrObservation({
         sessionId: "session-1",
+        runtimeInstanceId: "runtime-home",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        branch: "trace/branch",
+        observedAt: "2026-05-01T00:00:00.000Z",
         pr: {
           url: "https://github.com/trace/trace/pull/100",
           state: "OPEN",
@@ -4872,6 +4887,15 @@ describe("SessionService", () => {
         organizationId: "org-1",
         actorId: "github-bridge-poll",
       });
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "group-1" },
+          data: expect.objectContaining({
+            prSyncObservedAt: new Date("2026-05-01T00:00:00.000Z"),
+            prSyncError: null,
+          }),
+        }),
+      );
     });
 
     it("routes tracked local bridge PR observations through close and merge handlers", async () => {
@@ -4880,9 +4904,12 @@ describe("SessionService", () => {
           id: "session-1",
           hosting: "local",
           organizationId: "org-1",
+          connection: { runtimeInstanceId: "runtime-home" },
           sessionGroupId: "group-1",
           sessionGroup: {
             id: "group-1",
+            branch: "trace/branch",
+            connection: null,
             prUrl: "https://github.com/trace/trace/pull/100",
           },
         })
@@ -4890,17 +4917,29 @@ describe("SessionService", () => {
           id: "session-1",
           hosting: "local",
           organizationId: "org-1",
+          connection: { runtimeInstanceId: "runtime-home" },
           sessionGroupId: "group-1",
           sessionGroup: {
             id: "group-1",
+            branch: "trace/branch",
+            connection: null,
             prUrl: "https://github.com/trace/trace/pull/100",
           },
         });
       const markPrClosedSpy = vi.spyOn(service, "markPrClosed").mockResolvedValue(undefined);
       const markPrMergedSpy = vi.spyOn(service, "markPrMerged").mockResolvedValue(undefined);
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-home",
+        ownerUserId: "user-1",
+      });
 
       await service.syncPrObservation({
         sessionId: "session-1",
+        runtimeInstanceId: "runtime-home",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        branch: "trace/branch",
+        observedAt: "2026-05-01T00:00:00.000Z",
         pr: {
           url: "https://github.com/trace/trace/pull/100",
           state: "CLOSED",
@@ -4910,6 +4949,11 @@ describe("SessionService", () => {
 
       await service.syncPrObservation({
         sessionId: "session-1",
+        runtimeInstanceId: "runtime-home",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        branch: "trace/branch",
+        observedAt: "2026-05-01T00:01:00.000Z",
         pr: {
           url: "https://github.com/trace/trace/pull/100",
           state: "MERGED",
@@ -4931,6 +4975,87 @@ describe("SessionService", () => {
         organizationId: "org-1",
         actorId: "github-bridge-poll",
       });
+    });
+
+    it("ignores PR observations from the wrong runtime", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        hosting: "local",
+        organizationId: "org-1",
+        connection: { runtimeInstanceId: "runtime-home" },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          branch: "trace/branch",
+          connection: null,
+          prUrl: null,
+        },
+      });
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValue(undefined);
+
+      await service.syncPrObservation({
+        sessionId: "session-1",
+        runtimeInstanceId: "runtime-other",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        branch: "trace/branch",
+        observedAt: "2026-05-01T00:00:00.000Z",
+        pr: {
+          url: "https://github.com/trace/trace/pull/100",
+          state: "OPEN",
+          merged: false,
+        },
+      });
+
+      expect(markPrOpenedSpy).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+    });
+
+    it("records branch mismatch errors without mutating PR state", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        hosting: "local",
+        organizationId: "org-1",
+        connection: { runtimeInstanceId: "runtime-home" },
+        sessionGroupId: "group-1",
+        sessionGroup: {
+          id: "group-1",
+          branch: "trace/expected",
+          connection: null,
+          prUrl: null,
+        },
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-home",
+        ownerUserId: "user-1",
+      });
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValue(undefined);
+
+      await service.syncPrObservation({
+        sessionId: "session-1",
+        runtimeInstanceId: "runtime-home",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        branch: "trace/actual",
+        observedAt: "2026-05-01T00:00:00.000Z",
+        pr: {
+          url: "https://github.com/trace/trace/pull/100",
+          state: "OPEN",
+          merged: false,
+        },
+      });
+
+      expect(markPrOpenedSpy).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "group-1" },
+          data: expect.objectContaining({
+            prSyncObservedAt: new Date("2026-05-01T00:00:00.000Z"),
+            prSyncError:
+              "Observed branch trace/actual does not match tracked branch trace/expected",
+          }),
+        }),
+      );
     });
 
     it("ignores stale PR close events from an old session in the group", async () => {

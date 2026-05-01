@@ -6635,31 +6635,83 @@ export class SessionService {
 
   async syncPrObservation(params: {
     sessionId: string;
+    runtimeInstanceId: string;
+    organizationId: string;
+    ownerUserId: string;
+    branch: string | null;
+    observedAt: string;
     pr: { url: string; state: "OPEN" | "CLOSED" | "MERGED"; merged: boolean } | null;
+    error?: string | null;
     actorId?: string;
   }) {
-    const { sessionId, pr, actorId = "github-bridge-poll" } = params;
+    const {
+      sessionId,
+      runtimeInstanceId,
+      organizationId,
+      ownerUserId,
+      branch,
+      observedAt,
+      pr,
+      error,
+      actorId = "github-bridge-poll",
+    } = params;
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
         id: true,
         hosting: true,
         organizationId: true,
+        connection: true,
         sessionGroupId: true,
         sessionGroup: {
           select: {
             id: true,
+            branch: true,
+            connection: true,
             prUrl: true,
           },
         },
       },
     });
 
-    if (!session || session.hosting !== "local" || !session.sessionGroupId || !session.sessionGroup) {
+    if (
+      !session ||
+      session.hosting !== "local" ||
+      session.organizationId !== organizationId ||
+      !session.sessionGroupId ||
+      !session.sessionGroup
+    ) {
       return;
     }
 
-    if (!pr) return;
+    const boundRuntimeId =
+      this.getConnectionRuntimeInstanceId(session.connection) ??
+      this.getConnectionRuntimeInstanceId(session.sessionGroup.connection);
+    if (!boundRuntimeId || boundRuntimeId !== runtimeInstanceId) {
+      return;
+    }
+
+    const runtime = sessionRouter.getRuntime(runtimeInstanceId);
+    if (runtime?.ownerUserId && runtime.ownerUserId !== ownerUserId) {
+      return;
+    }
+
+    const branchMismatch =
+      branch &&
+      session.sessionGroup.branch &&
+      branch !== session.sessionGroup.branch
+        ? `Observed branch ${branch} does not match tracked branch ${session.sessionGroup.branch}`
+        : null;
+
+    await prisma.sessionGroup.update({
+      where: { id: session.sessionGroupId },
+      data: {
+        prSyncObservedAt: new Date(observedAt),
+        prSyncError: error ?? branchMismatch,
+      },
+    });
+
+    if (error || branchMismatch || !pr) return;
 
     if (pr.state === "OPEN") {
       await this.markPrOpened({

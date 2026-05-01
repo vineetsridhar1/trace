@@ -630,6 +630,8 @@ model SessionGroup {
   workdir        String?
   connection     Json?
   prUrl          String?
+  prSyncObservedAt DateTime?
+  prSyncError      String?
   worktreeDeleted Boolean     @default(false)
   archivedAt      DateTime?
   setupStatus     String      @default("idle")

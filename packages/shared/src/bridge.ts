@@ -397,7 +397,10 @@ export interface BridgePrObservation {
 export interface BridgeSessionPrStatus {
   type: "session_pr_status";
   sessionId: string;
+  branch: string | null;
+  observedAt: string;
   pr: BridgePrObservation | null;
+  error?: string;
 }
 
 export interface BridgeBranchesResult {
