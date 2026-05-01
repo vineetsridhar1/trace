@@ -9,6 +9,7 @@ import {
 import { usePreferencesStore } from "../stores/preferences";
 import { navigateToSession } from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
+import { isAccessibleLocalRuntime } from "./bridge-access";
 
 const pendingQuickSessionChannels = new Set<string>();
 
@@ -53,12 +54,7 @@ async function resolveDefaultRuntime(
       .query<AvailableRuntimesQueryResult>(AVAILABLE_RUNTIMES_QUERY, { tool })
       .toPromise();
     const runtimes = result.data?.availableRuntimes ?? [];
-    const connected = runtimes.filter(
-      (r) =>
-        r.connected &&
-        r.hostingMode === "local" &&
-        (r.access?.allowed || r.access?.isOwner),
-    );
+    const connected = runtimes.filter(isAccessibleLocalRuntime);
     const eligible = channelRepoId
       ? connected.filter((r) => r.registeredRepoIds.includes(channelRepoId))
       : connected;

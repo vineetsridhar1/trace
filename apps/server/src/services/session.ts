@@ -2184,6 +2184,7 @@ export class SessionService {
       if (!runtime) {
         throw new Error("Requested runtime not found");
       }
+      let useRequestedRuntime = true;
       if (runtime.hostingMode === "local") {
         if (existingGroup?.id) {
           await this.assertRuntimeAccess({
@@ -2200,18 +2201,25 @@ export class SessionService {
             sessionGroupId: null,
           });
           selectedRuntimeAccessAllowed = access.hostingMode !== "local" || access.allowed;
+          useRequestedRuntime =
+            selectedRuntimeAccessAllowed || !!input.runtimeInstanceId || !!input.environmentId;
         }
       }
-      if (
-        runtime.hostingMode === "local" &&
-        resolvedRepoId &&
-        !runtime.registeredRepoIds.includes(resolvedRepoId)
-      ) {
-        throw new Error("Selected runtime does not have this repo linked");
+      if (useRequestedRuntime) {
+        if (
+          runtime.hostingMode === "local" &&
+          resolvedRepoId &&
+          !runtime.registeredRepoIds.includes(resolvedRepoId)
+        ) {
+          throw new Error("Selected runtime does not have this repo linked");
+        }
+        hosting = runtime.hostingMode;
+        runtimeLabel = runtime.label;
+        requestedRuntimeInstanceId = runtime.id;
+      } else {
+        requestedRuntimeInstanceId = undefined;
+        selectedRuntimeAccessAllowed = true;
       }
-      hosting = runtime.hostingMode;
-      runtimeLabel = runtime.label;
-      requestedRuntimeInstanceId = runtime.id;
     }
 
     if (!requestedRuntimeInstanceId && hosting === "local" && !deferRuntimeSelection) {

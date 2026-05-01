@@ -1,4 +1,4 @@
-import type { BridgeAccessCapability } from "@trace/gql";
+import type { BridgeAccessCapability, SessionRuntimeInstance } from "@trace/gql";
 
 export type BridgeAccessApprovalDuration = "1h" | "3h" | "1d";
 
@@ -60,4 +60,12 @@ export function ensureSessionCapability(caps: BridgeAccessCapability[]): BridgeA
   const set = new Set<BridgeAccessCapability>(caps);
   set.add("session");
   return Array.from(set);
+}
+
+export function isAccessibleLocalRuntime(runtime: SessionRuntimeInstance): boolean {
+  return (
+    runtime.connected &&
+    runtime.hostingMode === "local" &&
+    (runtime.access?.allowed || runtime.access?.isOwner)
+  );
 }

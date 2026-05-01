@@ -4,6 +4,7 @@ import type { SessionRuntimeInstance } from "@trace/gql";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { client } from "../../lib/urql";
 import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
+import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
 
 /** Legacy sentinel retained for compatibility with existing callers. */
 export const CLOUD_RUNTIME_ID = "__cloud__";
@@ -12,14 +13,6 @@ export const CLOUD_RUNTIME_ID = "__cloud__";
 export interface RuntimeInfo {
   hostingMode: "cloud" | "local";
   registeredRepoIds: string[];
-}
-
-function isAccessibleLocalRuntime(runtime: SessionRuntimeInstance): boolean {
-  return (
-    runtime.connected &&
-    runtime.hostingMode === "local" &&
-    (runtime.access?.allowed || runtime.access?.isOwner)
-  );
 }
 
 interface RuntimeSelectorProps {

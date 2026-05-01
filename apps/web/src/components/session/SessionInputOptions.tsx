@@ -13,6 +13,7 @@ import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
+import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
@@ -72,10 +73,7 @@ export function SessionInputOptions({
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
-  const connectedLocalRuntimes = runtimes.filter(
-    (r: SessionRuntimeInstance) =>
-      r.hostingMode === "local" && r.connected && (r.access?.allowed || r.access?.isOwner),
-  );
+  const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
   useEffect(() => {
     if (!isNotStarted || isOptimistic) return;
     client

@@ -956,6 +956,121 @@ describe("SessionService", () => {
       );
     });
 
+    it("falls back from an inaccessible default local environment runtime to an accessible bridge", async () => {
+      const sessionGroup = makeSessionGroup({
+        connection: {
+          state: "connected",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+          runtimeInstanceId: "runtime-accessible",
+          runtimeLabel: "Accessible Laptop",
+          environmentId: "env-default-local",
+          adapterType: "local",
+        },
+      });
+      const session = makeSession({
+        sessionGroup,
+        hosting: "local",
+        connection: sessionGroup.connection,
+      });
+
+      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(
+        makeAgentEnvironment({
+          id: "env-default-local",
+          name: "Default Local",
+          adapterType: "local",
+          config: { runtimeInstanceId: "runtime-denied" },
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-denied",
+        label: "Denied Laptop",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
+        runtimeInstanceId: "runtime-denied",
+        bridgeRuntimeId: "bridge-denied",
+        label: "Denied Laptop",
+        hostingMode: "local",
+        connected: true,
+        ownerUser: { id: "owner-1", name: "Owner", avatarUrl: null },
+        allowed: false,
+        isOwner: false,
+        scopeType: null,
+        sessionGroupId: null,
+        capabilities: [],
+        expiresAt: null,
+        pendingRequest: null,
+      });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(
+        new Set(["runtime-accessible"]),
+      );
+      sessionRouterMock.listRuntimes.mockReturnValueOnce([
+        {
+          id: "runtime-denied",
+          label: "Denied Laptop",
+          organizationId: "org-1",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          registeredRepoIds: ["repo-1"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          id: "runtime-accessible",
+          label: "Accessible Laptop",
+          organizationId: "org-1",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          registeredRepoIds: ["repo-1"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+        prompt: "Use the default local environment",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              environmentId: "env-default-local",
+              adapterType: "local",
+              runtimeInstanceId: "runtime-accessible",
+              runtimeLabel: "Accessible Laptop",
+            }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-accessible");
+      expect(sessionRouterMock.bindSession).not.toHaveBeenCalledWith("session-1", "runtime-denied");
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adapterType: "local",
+          environment: expect.objectContaining({ id: "env-default-local" }),
+        }),
+      );
+    });
+
     it("rejects session creation when no default or compatibility fallback exists", async () => {
       prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(null);
       prismaMock.channel.findUnique.mockResolvedValueOnce({
