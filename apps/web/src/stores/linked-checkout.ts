@@ -72,11 +72,12 @@ function emptyStatus(repoId: string): DesktopLinkedCheckoutStatus {
 async function queryLinkedCheckoutStatus(
   sessionGroupId: string,
   repoId: string,
+  runtimeInstanceId: string,
 ): Promise<DesktopLinkedCheckoutStatus | null> {
   const result = await client
     .query(
       LINKED_CHECKOUT_STATUS_QUERY,
-      { sessionGroupId, repoId },
+      { sessionGroupId, repoId, runtimeInstanceId },
       { requestPolicy: "network-only" },
     )
     .toPromise();
@@ -145,7 +146,7 @@ export async function refreshLinkedCheckoutStatus(
   if (!key) return null;
 
   try {
-    const status = await queryLinkedCheckoutStatus(sessionGroupId, repoId);
+    const status = await queryLinkedCheckoutStatus(sessionGroupId, repoId, runtimeInstanceId);
     useLinkedCheckoutStore.getState().setStatus(key, status);
     return status;
   } catch (error) {
@@ -174,6 +175,7 @@ export async function linkLinkedCheckoutRepo(
         sessionGroupId,
         repoId,
         localPath,
+        runtimeInstanceId,
       },
     );
     useLinkedCheckoutStore.getState().setStatus(key, result.status);
@@ -200,6 +202,7 @@ export async function syncLinkedCheckout(
         sessionGroupId: request.sessionGroupId,
         repoId: request.repoId,
         branch: request.branch,
+        runtimeInstanceId: request.runtimeInstanceId,
         commitSha: request.commitSha,
         autoSyncEnabled: request.autoSyncEnabled,
         conflictStrategy: request.conflictStrategy,
@@ -245,6 +248,7 @@ export async function restoreLinkedCheckout(
       {
         sessionGroupId,
         repoId,
+        runtimeInstanceId,
       },
     );
     useLinkedCheckoutStore.getState().setStatus(key, result.status);
@@ -277,6 +281,7 @@ export async function commitLinkedCheckoutChanges(
       {
         sessionGroupId,
         repoId,
+        runtimeInstanceId,
         message,
       },
     );
@@ -311,6 +316,7 @@ export async function setLinkedCheckoutAutoSync(
         sessionGroupId,
         repoId,
         enabled,
+        runtimeInstanceId,
       },
     );
     useLinkedCheckoutStore.getState().setStatus(key, result.status);

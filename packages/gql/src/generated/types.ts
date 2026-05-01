@@ -284,6 +284,7 @@ export type BridgeRuntime = {
   linkedCheckouts: Array<LinkedCheckoutStatus>;
   metadata?: Maybe<Scalars["JSON"]["output"]>;
   ownerUser: User;
+  registeredRepoIds: Array<Scalars["ID"]["output"]>;
 };
 
 export type BridgeRuntimeAccess = {
@@ -804,6 +805,7 @@ export type MutationCommentOnTicketArgs = {
 export type MutationCommitLinkedCheckoutChangesArgs = {
   message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -945,6 +947,7 @@ export type MutationLinkEntityToProjectArgs = {
 export type MutationLinkLinkedCheckoutRepoArgs = {
   localPath: Scalars["String"]["input"];
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1020,6 +1023,7 @@ export type MutationRequestBridgeAccessArgs = {
 
 export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1082,6 +1086,7 @@ export type MutationSetApiTokenArgs = {
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
   enabled: Scalars["Boolean"]["input"];
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1105,6 +1110,7 @@ export type MutationSyncLinkedCheckoutArgs = {
   commitSha?: InputMaybe<Scalars["String"]["input"]>;
   conflictStrategy?: InputMaybe<LinkedCheckoutSyncConflictStrategy>;
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1447,6 +1453,7 @@ export type QueryInboxItemsArgs = {
 
 export type QueryLinkedCheckoutStatusArgs = {
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 

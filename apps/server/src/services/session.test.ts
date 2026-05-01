@@ -4332,7 +4332,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("requires the current user to have the repo linked on a connected local runtime", async () => {
+    it("requires sync actions to target a connected local runtime with the repo linked", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
@@ -4356,9 +4356,133 @@ describe("SessionService", () => {
       ]);
 
       await expect(
-        service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1"),
+        service.syncLinkedCheckout("group-1", "repo-1", "trace/raccoon", "org-1", "user-1"),
       ).rejects.toThrow("No connected local runtime with this repo linked");
-      expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+      expect(sessionRouterMock.syncLinkedCheckout).not.toHaveBeenCalled();
+    });
+
+    it("allows first-time linked-checkout repo linking on an explicitly selected local runtime", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-owner",
+        },
+        sessions: [],
+      });
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "org-1:runtime-current",
+          id: "runtime-current",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: [],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      sessionRouterMock.linkLinkedCheckoutRepo.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        status: {
+          repoId: "repo-1",
+          repoPath: "/tmp/trace",
+          isAttached: false,
+          attachedSessionGroupId: null,
+          targetBranch: null,
+          autoSyncEnabled: false,
+          currentBranch: "main",
+          currentCommitSha: "abc123",
+          lastSyncedCommitSha: null,
+          lastSyncError: null,
+          restoreBranch: null,
+          restoreCommitSha: null,
+          hasUncommittedChanges: false,
+        },
+      });
+
+      await service.linkLinkedCheckoutRepo(
+        "group-1",
+        "repo-1",
+        "/tmp/trace",
+        "org-1",
+        "user-1",
+        "runtime-current",
+      );
+
+      expect(sessionRouterMock.linkLinkedCheckoutRepo).toHaveBeenCalledWith(
+        "org-1:runtime-current",
+        "repo-1",
+        "/tmp/trace",
+      );
+    });
+
+    it("routes linked-checkout sync through the explicitly selected local runtime", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+        },
+        sessions: [],
+      });
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "org-1:runtime-a",
+          id: "runtime-a",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          key: "org-1:runtime-b",
+          id: "runtime-b",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      sessionRouterMock.syncLinkedCheckout.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        errorCode: null,
+        status: {
+          repoId: "repo-1",
+          repoPath: "/tmp/trace",
+          isAttached: true,
+          attachedSessionGroupId: "group-1",
+          targetBranch: "trace/raccoon",
+          autoSyncEnabled: true,
+          currentBranch: null,
+          currentCommitSha: "def456",
+          lastSyncedCommitSha: "def456",
+          lastSyncError: null,
+          restoreBranch: "main",
+          restoreCommitSha: "abc123",
+          hasUncommittedChanges: false,
+        },
+      });
+
+      await service.syncLinkedCheckout("group-1", "repo-1", "trace/raccoon", "org-1", "user-1", {
+        runtimeInstanceId: "runtime-b",
+      });
+
+      expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
+        "org-1:runtime-b",
+        expect.objectContaining({
+          repoId: "repo-1",
+          sessionGroupId: "group-1",
+          branch: "trace/raccoon",
+        }),
+      );
     });
 
     it("routes commit-back actions through the session group's canonical runtime", async () => {

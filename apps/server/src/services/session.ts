@@ -1599,6 +1599,7 @@ export class SessionService {
     repoId: string,
     organizationId: string,
     userId: string,
+    options: { runtimeInstanceId?: string; requireRegisteredRepo?: boolean } = {},
   ): Promise<string> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
@@ -1629,17 +1630,27 @@ export class SessionService {
       .filter((candidate) => {
         if (candidate.organizationId !== organizationId) return false;
         if (candidate.ownerUserId !== userId) return false;
-        if (!candidate.registeredRepoIds.includes(repoId)) return false;
+        if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) {
+          return false;
+        }
         if (candidate.ws.readyState !== candidate.ws.OPEN) return false;
 
         return true;
       });
-    const runtime =
-      ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
-      ownedRuntimesForRepo[0];
+    const runtime = options.runtimeInstanceId
+      ? ownedRuntimesForRepo.find((candidate) => candidate.id === options.runtimeInstanceId)
+      : (ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
+        ownedRuntimesForRepo.find((candidate) => candidate.registeredRepoIds.includes(repoId)) ??
+        ownedRuntimesForRepo[0]);
 
     if (!runtime) {
-      throw new Error("No connected local runtime with this repo linked");
+      throw new Error(
+        options.runtimeInstanceId
+          ? "Requested local runtime is not connected or not available for this repo"
+          : options.requireRegisteredRepo
+            ? "No connected local runtime with this repo linked"
+            : "No connected local runtime available",
+      );
     }
 
     return runtime.key;
@@ -5510,6 +5521,7 @@ export class SessionService {
     repoId: string,
     organizationId: string,
     userId: string,
+    runtimeInstanceId?: string,
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -5517,6 +5529,7 @@ export class SessionService {
       repoId,
       organizationId,
       userId,
+      { runtimeInstanceId },
     );
     return sessionRouter.getLinkedCheckoutStatus(runtimeId, repoId);
   }
@@ -5527,6 +5540,7 @@ export class SessionService {
     localPath: string,
     organizationId: string,
     userId: string,
+    runtimeInstanceId?: string,
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -5534,6 +5548,7 @@ export class SessionService {
       repoId,
       organizationId,
       userId,
+      { runtimeInstanceId },
     );
     return sessionRouter.linkLinkedCheckoutRepo(runtimeId, repoId, localPath);
   }
@@ -5545,6 +5560,7 @@ export class SessionService {
     organizationId: string,
     userId: string,
     options?: {
+      runtimeInstanceId?: string;
       commitSha?: string | null;
       autoSyncEnabled?: boolean;
       conflictStrategy?: "discard" | "commit" | "rebase";
@@ -5557,6 +5573,7 @@ export class SessionService {
       repoId,
       organizationId,
       userId,
+      { runtimeInstanceId: options?.runtimeInstanceId, requireRegisteredRepo: true },
     );
     return sessionRouter.syncLinkedCheckout(runtimeId, {
       repoId,
@@ -5574,6 +5591,7 @@ export class SessionService {
     repoId: string,
     organizationId: string,
     userId: string,
+    runtimeInstanceId?: string,
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -5581,6 +5599,7 @@ export class SessionService {
       repoId,
       organizationId,
       userId,
+      { runtimeInstanceId, requireRegisteredRepo: true },
     );
     return sessionRouter.restoreLinkedCheckout(runtimeId, repoId);
   }
@@ -5590,6 +5609,7 @@ export class SessionService {
     repoId: string,
     organizationId: string,
     userId: string,
+    runtimeInstanceId?: string,
     message?: string | null,
   ) {
     await this.assertRepoExists(repoId, organizationId);
@@ -5598,6 +5618,7 @@ export class SessionService {
       repoId,
       organizationId,
       userId,
+      { runtimeInstanceId, requireRegisteredRepo: true },
     );
     return sessionRouter.commitLinkedCheckoutChanges(runtimeId, {
       repoId,
@@ -5612,6 +5633,7 @@ export class SessionService {
     enabled: boolean,
     organizationId: string,
     userId: string,
+    runtimeInstanceId?: string,
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -5619,6 +5641,7 @@ export class SessionService {
       repoId,
       organizationId,
       userId,
+      { runtimeInstanceId, requireRegisteredRepo: true },
     );
     return sessionRouter.setLinkedCheckoutAutoSync(runtimeId, repoId, enabled);
   }

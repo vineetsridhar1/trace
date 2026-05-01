@@ -7,6 +7,7 @@ import {
   syncLinkedCheckout,
   useLinkedCheckoutStatus,
 } from "../../stores/linked-checkout";
+import { usePreferredLinkedCheckoutBridge } from "../../stores/bridges";
 
 interface UseLinkedCheckoutHeaderStateProps {
   repoId: string | null | undefined;
@@ -51,37 +52,45 @@ export function useLinkedCheckoutHeaderState({
   sessionGroupId,
   enabled,
 }: UseLinkedCheckoutHeaderStateProps): LinkedCheckoutHeaderState {
+  const preferredBridge = usePreferredLinkedCheckoutBridge(repoId, sessionGroupId);
+  const effectiveRuntimeInstanceId = preferredBridge?.instanceId ?? runtimeInstanceId ?? null;
+  const effectiveRuntimeLabel = preferredBridge?.label ?? runtimeLabel ?? null;
   const {
     status,
     pending: syncPending,
     loaded,
     canPickFolder,
-  } = useLinkedCheckoutStatus(repoId ?? null, sessionGroupId, runtimeInstanceId ?? null, enabled);
+  } = useLinkedCheckoutStatus(
+    repoId ?? null,
+    sessionGroupId,
+    effectiveRuntimeInstanceId,
+    enabled,
+  );
   const [linking, setLinking] = useState(false);
   const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === sessionGroupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
   const repoLinked = !!status?.repoPath;
-  const hasSyncContext = !!repoId && !!groupBranch && !!runtimeInstanceId;
+  const hasSyncContext = !!repoId && !!groupBranch && !!effectiveRuntimeInstanceId;
   const canShowControls = enabled && hasSyncContext && loaded;
   const canLinkRepo = canShowControls && !repoLinked && canPickFolder;
   const requiresRepoLink = canShowControls && !repoLinked;
   const pending = syncPending || linking;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
   const summaryBranch = isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
-  const runtimeDisplayLabel = runtimeLabel?.trim() || "this bridge";
+  const runtimeDisplayLabel = effectiveRuntimeLabel?.trim() || "this bridge";
 
   const runSync = async (options?: {
     conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE";
     commitMessage?: string;
   }) => {
-    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return null;
+    if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return null;
 
     return syncLinkedCheckout({
       repoId,
       sessionGroupId,
-      runtimeInstanceId,
+      runtimeInstanceId: effectiveRuntimeInstanceId,
       branch: groupBranch,
       autoSyncEnabled: true,
       conflictStrategy: options?.conflictStrategy,
@@ -90,7 +99,7 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onLinkRepo = async () => {
-    if (!repoId || !runtimeInstanceId || pending) return;
+    if (!repoId || !effectiveRuntimeInstanceId || pending) return;
 
     if (!window.trace?.pickFolder || !canPickFolder) {
       toast.error("Linking a local checkout is only available in Trace Desktop.");
@@ -101,12 +110,14 @@ export function useLinkedCheckoutHeaderState({
     try {
       const folderPath = await window.trace.pickFolder();
       if (!folderPath) return;
+      const bridgeInfo = await window.trace.getBridgeInfo?.();
+      const linkRuntimeInstanceId = bridgeInfo?.instanceId ?? effectiveRuntimeInstanceId;
 
       const result = await linkLinkedCheckoutRepo(
         sessionGroupId,
         repoId,
         folderPath,
-        runtimeInstanceId,
+        linkRuntimeInstanceId,
       );
       if (!result.ok) {
         toast.error("Failed to link local checkout", {
@@ -128,7 +139,7 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onSync = async () => {
-    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
+    if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return;
 
     try {
       const result = await runSync();
@@ -163,7 +174,7 @@ export function useLinkedCheckoutHeaderState({
     strategy: "DISCARD" | "COMMIT" | "REBASE";
     commitMessage?: string;
   }) => {
-    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
+    if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return;
 
     try {
       const result = await runSync({ conflictStrategy: strategy, commitMessage });
@@ -196,10 +207,14 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onRestore = async () => {
-    if (!repoId || !runtimeInstanceId || pending) return;
+    if (!repoId || !effectiveRuntimeInstanceId || pending) return;
 
     try {
-      const result = await restoreLinkedCheckout(repoId, sessionGroupId, runtimeInstanceId);
+      const result = await restoreLinkedCheckout(
+        repoId,
+        sessionGroupId,
+        effectiveRuntimeInstanceId,
+      );
       if (!result.ok) {
         toast.error("Failed to restore main worktree", {
           description: result.error ?? "Unknown error",
@@ -216,7 +231,7 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onToggleAutoSync = async () => {
-    if (!repoId || !runtimeInstanceId || !status || pending) return;
+    if (!repoId || !effectiveRuntimeInstanceId || !status || pending) return;
 
     const nextEnabled = !status.autoSyncEnabled;
 
@@ -225,7 +240,7 @@ export function useLinkedCheckoutHeaderState({
         repoId,
         sessionGroupId,
         nextEnabled,
-        runtimeInstanceId,
+        effectiveRuntimeInstanceId,
       );
       if (!result.ok) {
         toast.error("Failed to update auto-sync", {

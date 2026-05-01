@@ -106,6 +106,21 @@ export const bridgeAccessTypeResolvers = {
   BridgeRuntime: {
     connected: (runtime: { instanceId: string; organizationId: string }) =>
       sessionRouter.isRuntimeAvailable(runtime.instanceId, runtime.organizationId),
+    registeredRepoIds: (runtime: {
+      instanceId: string;
+      organizationId: string;
+      metadata?: unknown;
+    }) => {
+      const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);
+      if (live) return live.registeredRepoIds;
+      if (!runtime.metadata || typeof runtime.metadata !== "object" || Array.isArray(runtime.metadata)) {
+        return [];
+      }
+      const registeredRepoIds = (runtime.metadata as Record<string, unknown>).registeredRepoIds;
+      return Array.isArray(registeredRepoIds)
+        ? registeredRepoIds.filter((repoId): repoId is string => typeof repoId === "string")
+        : [];
+    },
     linkedCheckouts: (runtime: { instanceId: string; organizationId: string }) => {
       const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);
       if (!live || live.ws.readyState !== live.ws.OPEN) return [];
