@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   complete: vi.fn(() => Promise.resolve()),
   listIdleActiveRunSessionIds: vi.fn(() => Promise.resolve([])),
   reconcileIdleActiveRuns: vi.fn(() => Promise.resolve([])),
+  syncPrObservation: vi.fn(() => Promise.resolve()),
   registerLocalRuntimeConnection: vi.fn(),
   addRegisteredRepoToLocalRuntime: vi.fn(() => Promise.resolve()),
   restoreTerminals: vi.fn(() => Promise.resolve()),
@@ -37,6 +38,17 @@ vi.mock("./session-router.js", () => ({
     getBoundSessionIds: mocks.getBoundSessionIds,
     getHeartbeatReconcileSessionIds: mocks.getHeartbeatReconcileSessionIds,
     getLinkedCheckoutStatus: mocks.getLinkedCheckoutStatus,
+    recordHeartbeat: vi.fn(),
+    addRegisteredRepo: vi.fn(),
+    resolveLinkedCheckoutStatusRequest: vi.fn(),
+    resolveLinkedCheckoutActionRequest: vi.fn(),
+    resolveSessionGitSyncStatusRequest: vi.fn(),
+    resolveBranchRequest: vi.fn(),
+    resolveFileRequest: vi.fn(),
+    resolveFileContentRequest: vi.fn(),
+    resolveBranchDiffRequest: vi.fn(),
+    resolveFileAtRefRequest: vi.fn(),
+    resolveSkillsRequest: vi.fn(),
   },
 }));
 
@@ -47,6 +59,13 @@ vi.mock("../services/session.js", () => ({
     complete: mocks.complete,
     listIdleActiveRunSessionIds: mocks.listIdleActiveRunSessionIds,
     reconcileIdleActiveRuns: mocks.reconcileIdleActiveRuns,
+    syncPrObservation: mocks.syncPrObservation,
+    workspaceReady: vi.fn(() => Promise.resolve()),
+    workspaceFailed: vi.fn(() => Promise.resolve()),
+    storeToolSessionId: vi.fn(() => Promise.resolve()),
+    recoverMissingToolSession: vi.fn(() => Promise.resolve()),
+    recordGitCheckpoint: vi.fn(() => Promise.resolve()),
+    markConnectionLost: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -865,5 +884,70 @@ describe("bridge handler auth", () => {
         "cloud-machine-owned",
       );
     });
+  });
+
+  it("forwards local session_pr_status observations to the session service", async () => {
+    const ws = createMockWs();
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        userId: "user-1",
+        organizationId: "org-1",
+        instanceId: "runtime-home",
+      },
+    });
+    ws.emitMessage({
+      type: "session_pr_status",
+      sessionId: "session-1",
+      branch: "trace/branch",
+      observedAt: "2026-05-01T00:00:00.000Z",
+      pr: {
+        url: "https://github.com/trace/trace/pull/100",
+        state: "OPEN",
+        merged: false,
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.syncPrObservation).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      runtimeInstanceId: expect.any(String),
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      branch: "trace/branch",
+      observedAt: "2026-05-01T00:00:00.000Z",
+      pr: {
+        url: "https://github.com/trace/trace/pull/100",
+        state: "OPEN",
+        merged: false,
+      },
+      error: null,
+      actorId: "github-bridge-poll",
+    });
+  });
+
+  it("ignores session_pr_status from non-local bridges", async () => {
+    const ws = createMockWs();
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "session_pr_status",
+      sessionId: "session-1",
+      branch: "trace/branch",
+      observedAt: "2026-05-01T00:00:00.000Z",
+      pr: null,
+    });
+    await Promise.resolve();
+
+    expect(mocks.syncPrObservation).not.toHaveBeenCalled();
   });
 });
