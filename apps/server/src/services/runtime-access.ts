@@ -80,6 +80,24 @@ type BridgeGrantUpdatedEventPayload = {
   updatedAt: string;
 };
 
+export type BridgeAccessApprovedHandlerInput = {
+  organizationId: string;
+  granteeUserId: string;
+  runtimeInstanceId: string;
+  scopeType: BridgeAccessScopeType;
+  sessionGroupId: string | null;
+};
+
+type BridgeAccessApprovedHandler = (
+  input: BridgeAccessApprovedHandlerInput,
+) => Promise<void> | void;
+
+let bridgeAccessApprovedHandler: BridgeAccessApprovedHandler | null = null;
+
+export function setBridgeAccessApprovedHandler(handler: BridgeAccessApprovedHandler): void {
+  bridgeAccessApprovedHandler = handler;
+}
+
 const OWNER_CAPABILITIES: BridgeAccessCapability[] = ["session", "terminal"];
 
 /**
@@ -651,7 +669,7 @@ class RuntimeAccessService {
   }) {
     const now = new Date();
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const request = await tx.bridgeAccessRequest.findUnique({
         where: { id: input.requestId },
         include: {
@@ -755,8 +773,30 @@ class RuntimeAccessService {
         tx,
       );
 
-      return grant;
+      return {
+        grant,
+        runtimeInstanceId: request.bridgeRuntime.instanceId,
+        granteeUserId: request.requesterUserId,
+        scopeType,
+        sessionGroupId,
+      };
     });
+
+    if (bridgeAccessApprovedHandler) {
+      try {
+        await bridgeAccessApprovedHandler({
+          organizationId: input.organizationId,
+          granteeUserId: result.granteeUserId,
+          runtimeInstanceId: result.runtimeInstanceId,
+          scopeType: result.scopeType,
+          sessionGroupId: result.sessionGroupId,
+        });
+      } catch (error) {
+        console.error("[runtime-access] failed to resume sessions after bridge approval", error);
+      }
+    }
+
+    return result.grant;
   }
 
   async denyRequest(input: { requestId: string; organizationId: string; ownerUserId: string }) {
