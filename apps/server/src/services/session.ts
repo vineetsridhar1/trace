@@ -6017,6 +6017,7 @@ export class SessionService {
       const exitCode = await terminalRelay.executeCommand(
         sessionId,
         sessionGroupId,
+        organizationId,
         runtimeInstanceId,
         setupScript,
         workdir,

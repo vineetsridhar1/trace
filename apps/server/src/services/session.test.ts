@@ -3112,6 +3112,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "org-1",
         "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
@@ -3180,6 +3181,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "org-1",
         "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
