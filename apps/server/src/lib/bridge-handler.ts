@@ -495,6 +495,32 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "session_pr_status" && msg.sessionId) {
+        const pr =
+          msg.pr &&
+          typeof msg.pr === "object" &&
+          typeof (msg.pr as Record<string, unknown>).url === "string" &&
+          typeof (msg.pr as Record<string, unknown>).merged === "boolean" &&
+          (((msg.pr as Record<string, unknown>).state as string) === "OPEN" ||
+            ((msg.pr as Record<string, unknown>).state as string) === "CLOSED" ||
+            ((msg.pr as Record<string, unknown>).state as string) === "MERGED")
+            ? {
+                url: (msg.pr as Record<string, unknown>).url as string,
+                state: (msg.pr as Record<string, unknown>).state as "OPEN" | "CLOSED" | "MERGED",
+                merged: (msg.pr as Record<string, unknown>).merged as boolean,
+              }
+            : null;
+
+        enqueueEvent(msg.sessionId, async () => {
+          await sessionService.syncPrObservation({
+            sessionId: msg.sessionId as string,
+            pr,
+            actorId: "github-bridge-poll",
+          });
+        });
+        return;
+      }
+
       if (
         msg.type === "branches_result" &&
         typeof msg.requestId === "string" &&

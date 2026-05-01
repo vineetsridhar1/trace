@@ -6604,6 +6604,12 @@ export class SessionService {
   }) {
     const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
 
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { prUrl: true },
+    });
+    if (group?.prUrl === prUrl) return;
+
     // Transition all non-merged, non-needs-input sessions in the group to in_review.
     await prisma.session.updateMany({
       where: { sessionGroupId, sessionStatus: { notIn: ["merged", "needs_input"] } },
@@ -6625,6 +6631,71 @@ export class SessionService {
       actorType: "system",
       actorId: "github-webhook",
     });
+  }
+
+  async syncPrObservation(params: {
+    sessionId: string;
+    pr: { url: string; state: "OPEN" | "CLOSED" | "MERGED"; merged: boolean } | null;
+    actorId?: string;
+  }) {
+    const { sessionId, pr, actorId = "github-bridge-poll" } = params;
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        hosting: true,
+        organizationId: true,
+        sessionGroupId: true,
+        sessionGroup: {
+          select: {
+            id: true,
+            prUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!session || session.hosting !== "local" || !session.sessionGroupId || !session.sessionGroup) {
+      return;
+    }
+
+    if (!pr) return;
+
+    if (pr.state === "OPEN") {
+      await this.markPrOpened({
+        sessionGroupId: session.sessionGroupId,
+        eventSessionId: session.id,
+        prUrl: pr.url,
+        organizationId: session.organizationId,
+        actorId,
+      });
+      return;
+    }
+
+    if (!session.sessionGroup.prUrl || session.sessionGroup.prUrl !== pr.url) {
+      return;
+    }
+
+    if (pr.state === "CLOSED" && !pr.merged) {
+      await this.markPrClosed({
+        sessionGroupId: session.sessionGroupId,
+        eventSessionId: session.id,
+        prUrl: pr.url,
+        organizationId: session.organizationId,
+        actorId,
+      });
+      return;
+    }
+
+    if (pr.state === "MERGED" || pr.merged) {
+      await this.markPrMerged({
+        sessionGroupId: session.sessionGroupId,
+        eventSessionId: session.id,
+        prUrl: pr.url,
+        organizationId: session.organizationId,
+        actorId,
+      });
+    }
   }
 
   /** Clear prUrl on the active session group when its current PR is closed without merging. */

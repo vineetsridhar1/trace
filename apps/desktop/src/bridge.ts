@@ -9,6 +9,7 @@ import type {
   BridgeClient as IBridgeClient,
   BridgeCommand,
   BridgeMessage,
+  BridgePrObservation,
   CodingToolAdapter,
   GitCheckpointBridgePayload,
   GitCheckpointContext,
@@ -56,6 +57,7 @@ import {
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
 const LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS = 15_000;
+const LOCAL_PR_POLL_INTERVAL_MS = 60_000;
 const execFileAsync = promisify(execFile);
 
 async function inspectGitCheckpoint(
@@ -112,6 +114,92 @@ async function maybeReadGitRef(repoPath: string, args: string[]): Promise<string
   } catch {
     return null;
   }
+}
+
+function parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | null {
+  const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2] };
+}
+
+async function inspectLocalPrStatus(workdir: string): Promise<BridgePrObservation | null> {
+  const [branch, remoteUrl] = await Promise.all([
+    maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]),
+    maybeReadGitRef(workdir, ["remote", "get-url", "origin"]),
+  ]);
+  if (!branch || !remoteUrl) return null;
+
+  const parsedRepo = parseGitHubRepo(remoteUrl);
+  if (!parsedRepo) return null;
+
+  const query = `
+query($owner: String!, $name: String!, $head: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(
+      headRefName: $head,
+      states: [OPEN, MERGED, CLOSED],
+      first: 1,
+      orderBy: { field: UPDATED_AT, direction: DESC }
+    ) {
+      nodes {
+        url
+        state
+        merged
+      }
+    }
+  }
+}
+`;
+
+  const { stdout } = await execFileAsync(
+    "gh",
+    [
+      "api",
+      "graphql",
+      "-f",
+      `query=${query}`,
+      "-F",
+      `owner=${parsedRepo.owner}`,
+      "-F",
+      `name=${parsedRepo.repo}`,
+      "-F",
+      `head=${branch}`,
+    ],
+    {
+      cwd: workdir,
+      maxBuffer: 1024 * 1024,
+    },
+  );
+
+  const parsed = JSON.parse(stdout) as {
+    data?: {
+      repository?: {
+        pullRequests?: {
+          nodes?: Array<{
+            url?: unknown;
+            state?: unknown;
+            merged?: unknown;
+          }>;
+        };
+      } | null;
+    } | null;
+  };
+
+  const node = parsed.data?.repository?.pullRequests?.nodes?.[0];
+  if (!node) return null;
+  if (
+    typeof node.url !== "string" ||
+    (node.state !== "OPEN" && node.state !== "CLOSED" && node.state !== "MERGED") ||
+    typeof node.merged !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    url: node.url,
+    state: node.state,
+    merged: node.merged,
+  };
 }
 
 async function inspectSessionGitSyncStatus(repoPath: string) {
@@ -206,8 +294,10 @@ export class BridgeClient implements IBridgeClient {
   private instanceId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private hookQueueTimer: ReturnType<typeof setInterval> | null = null;
+  private localPrPollTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private isFlushingHookQueue = false;
+  private isPollingLocalPrs = false;
   private status: BridgeConnectionStatus = "disconnected";
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
   private authContext: BridgeAuthContext | null = null;
@@ -215,6 +305,7 @@ export class BridgeClient implements IBridgeClient {
   private connectAttempt = 0;
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
+  private lastReportedLocalPrs = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<
     string,
@@ -332,8 +423,10 @@ export class BridgeClient implements IBridgeClient {
       this.sendRuntimeHello();
       this.startHeartbeat();
       this.startHookQueueDrain();
+      this.startLocalPrPolling();
       this.autoSyncManager.start();
       void this.flushQueuedGitHookCheckpoints();
+      void this.pollLocalPrStatuses();
     });
 
     this.ws.on("message", (data) => {
@@ -354,6 +447,7 @@ export class BridgeClient implements IBridgeClient {
       );
       this.stopHeartbeat();
       this.stopHookQueueDrain();
+      this.stopLocalPrPolling();
       this.autoSyncManager.stop();
       runtimeDebug("desktop bridge websocket closed", {
         instanceId: this.instanceId,
@@ -385,6 +479,7 @@ export class BridgeClient implements IBridgeClient {
     this.cancelPendingReconnect();
     this.stopHeartbeat();
     this.stopHookQueueDrain();
+    this.stopLocalPrPolling();
     this.autoSyncManager.stop();
     this.terminalManager.destroyAll();
     for (const [sessionId, adapter] of this.adapters.entries()) {
@@ -408,6 +503,7 @@ export class BridgeClient implements IBridgeClient {
     this.cancelPendingReconnect();
     this.stopHeartbeat();
     this.stopHookQueueDrain();
+    this.stopLocalPrPolling();
     this.autoSyncManager.stop();
     // Tear down the old socket without triggering the close handler's reconnect
     if (this.ws) {
@@ -601,6 +697,56 @@ export class BridgeClient implements IBridgeClient {
     if (this.hookQueueTimer) {
       clearInterval(this.hookQueueTimer);
       this.hookQueueTimer = null;
+    }
+  }
+
+  private startLocalPrPolling() {
+    this.stopLocalPrPolling();
+    this.lastReportedLocalPrs.clear();
+    this.localPrPollTimer = setInterval(() => {
+      void this.pollLocalPrStatuses();
+    }, LOCAL_PR_POLL_INTERVAL_MS);
+  }
+
+  private stopLocalPrPolling() {
+    if (this.localPrPollTimer) {
+      clearInterval(this.localPrPollTimer);
+      this.localPrPollTimer = null;
+    }
+    this.isPollingLocalPrs = false;
+  }
+
+  private async pollLocalPrStatuses() {
+    if (this.isPollingLocalPrs || this.ws?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    this.isPollingLocalPrs = true;
+
+    try {
+      const activeSessionIds = new Set(this.sessionWorkdirs.keys());
+      for (const cachedSessionId of this.lastReportedLocalPrs.keys()) {
+        if (!activeSessionIds.has(cachedSessionId)) {
+          this.lastReportedLocalPrs.delete(cachedSessionId);
+        }
+      }
+
+      for (const [sessionId, workdir] of this.sessionWorkdirs.entries()) {
+        try {
+          const pr = await inspectLocalPrStatus(workdir);
+          const serialized = JSON.stringify(pr);
+          if (this.lastReportedLocalPrs.get(sessionId) === serialized) {
+            continue;
+          }
+          this.lastReportedLocalPrs.set(sessionId, serialized);
+          this.send({ type: "session_pr_status", sessionId, pr });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[bridge] failed to inspect local PR status for ${workdir}: ${message}`);
+        }
+      }
+    } finally {
+      this.isPollingLocalPrs = false;
     }
   }
 
@@ -907,6 +1053,7 @@ export class BridgeClient implements IBridgeClient {
           this.sessionWorkdirs.set(sessionId, repoPath);
           this.readOnlySessions.add(sessionId);
           this.send({ type: "workspace_ready", sessionId, workdir: repoPath });
+          void this.pollLocalPrStatuses();
           break;
         }
 
@@ -939,6 +1086,7 @@ export class BridgeClient implements IBridgeClient {
               branch: worktreeBranch,
               slug: worktreeSlug,
             });
+            void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
@@ -989,6 +1137,7 @@ export class BridgeClient implements IBridgeClient {
               branch: worktreeBranch,
               slug: worktreeSlug,
             });
+            void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
@@ -1031,6 +1180,7 @@ export class BridgeClient implements IBridgeClient {
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
+        this.lastReportedLocalPrs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 

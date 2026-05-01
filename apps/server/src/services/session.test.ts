@@ -4829,6 +4829,110 @@ describe("SessionService", () => {
   });
 
   describe("pr lifecycle", () => {
+    it("does not emit a duplicate PR-opened event when the group already tracks that PR", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        prUrl: "https://github.com/trace/trace/pull/100",
+      });
+
+      await service.markPrOpened({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/trace/trace/pull/100",
+        organizationId: "org-1",
+      });
+
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("routes local bridge PR observations through markPrOpened", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        hosting: "local",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        sessionGroup: { id: "group-1", prUrl: null },
+      });
+      const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValue(undefined);
+
+      await service.syncPrObservation({
+        sessionId: "session-1",
+        pr: {
+          url: "https://github.com/trace/trace/pull/100",
+          state: "OPEN",
+          merged: false,
+        },
+      });
+
+      expect(markPrOpenedSpy).toHaveBeenCalledWith({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/trace/trace/pull/100",
+        organizationId: "org-1",
+        actorId: "github-bridge-poll",
+      });
+    });
+
+    it("routes tracked local bridge PR observations through close and merge handlers", async () => {
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          id: "session-1",
+          hosting: "local",
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          sessionGroup: {
+            id: "group-1",
+            prUrl: "https://github.com/trace/trace/pull/100",
+          },
+        })
+        .mockResolvedValueOnce({
+          id: "session-1",
+          hosting: "local",
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          sessionGroup: {
+            id: "group-1",
+            prUrl: "https://github.com/trace/trace/pull/100",
+          },
+        });
+      const markPrClosedSpy = vi.spyOn(service, "markPrClosed").mockResolvedValue(undefined);
+      const markPrMergedSpy = vi.spyOn(service, "markPrMerged").mockResolvedValue(undefined);
+
+      await service.syncPrObservation({
+        sessionId: "session-1",
+        pr: {
+          url: "https://github.com/trace/trace/pull/100",
+          state: "CLOSED",
+          merged: false,
+        },
+      });
+
+      await service.syncPrObservation({
+        sessionId: "session-1",
+        pr: {
+          url: "https://github.com/trace/trace/pull/100",
+          state: "MERGED",
+          merged: true,
+        },
+      });
+
+      expect(markPrClosedSpy).toHaveBeenCalledWith({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/trace/trace/pull/100",
+        organizationId: "org-1",
+        actorId: "github-bridge-poll",
+      });
+      expect(markPrMergedSpy).toHaveBeenCalledWith({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/trace/trace/pull/100",
+        organizationId: "org-1",
+        actorId: "github-bridge-poll",
+      });
+    });
+
     it("ignores stale PR close events from an old session in the group", async () => {
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
         prUrl: "https://github.com/trace/trace/pull/100",

@@ -388,6 +388,18 @@ export interface BridgeSessionGitSyncStatusResult {
   error?: string;
 }
 
+export interface BridgePrObservation {
+  url: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  merged: boolean;
+}
+
+export interface BridgeSessionPrStatus {
+  type: "session_pr_status";
+  sessionId: string;
+  pr: BridgePrObservation | null;
+}
+
 export interface BridgeBranchesResult {
   type: "branches_result";
   requestId: string;
@@ -483,6 +495,7 @@ export type BridgeMessage =
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutActionResult
   | BridgeSessionGitSyncStatusResult
+  | BridgeSessionPrStatus
   | BridgeBranchesResult
   | BridgeFilesResult
   | BridgeFileContentResult
