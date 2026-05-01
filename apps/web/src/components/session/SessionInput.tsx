@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { Send, Square, Cloud, Monitor } from "lucide-react";
+import { useCallback, useRef, useState, type ChangeEvent } from "react";
+import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
 import { useEntityField, useEntityStore, type SessionEntity } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
@@ -21,17 +21,17 @@ import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
-import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
-import { uploadImage } from "../../lib/upload";
+import { ImageAttachmentBar, type FileAttachment } from "./ImageAttachmentBar";
+import { uploadFile } from "../../lib/upload";
 import { generateUUID } from "@trace/client-core";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
-const EMPTY_IMAGES: ImageAttachment[] = [];
+const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
-const MAX_IMAGES = 5;
+const MAX_ATTACHMENTS = 5;
 
 export function SessionInput({
   sessionId,
@@ -57,7 +57,7 @@ export function SessionInput({
     | boolean
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
-  const images = useDraftsStore((s) => s.drafts[sessionId]?.images ?? EMPTY_IMAGES);
+  const images = useDraftsStore((s) => s.drafts[sessionId]?.images ?? EMPTY_ATTACHMENTS);
   const setDraftImages = useDraftsStore((s) => s.setDraftImages);
   const setDraftText = useDraftsStore((s) => s.setDraftText);
   const [initialDraftHtml] = useState(
@@ -69,13 +69,13 @@ export function SessionInput({
   const [mode, setMode] = useState<InteractionMode>("code");
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
-  const bridgeInteractionAllowed =
-    hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
@@ -96,23 +96,31 @@ export function SessionInput({
     });
   }, []);
 
-  const handleImagePaste = useCallback(
+  const addAttachments = useCallback(
     (files: File[]) => {
       if (isSendingRef.current) return;
       setDraftImages(sessionId, (prev) => {
-        const remaining = MAX_IMAGES - prev.length;
+        const remaining = MAX_ATTACHMENTS - prev.length;
         if (remaining <= 0) return prev;
-        const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
+        const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
           id: generateUUID(),
           file,
           previewUrl: URL.createObjectURL(file),
           s3Key: null,
           uploading: false,
         }));
-        return [...prev, ...newImages];
+        return [...prev, ...newAttachments];
       });
     },
     [sessionId, setDraftImages],
+  );
+
+  const handleFileInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      addAttachments(Array.from(event.currentTarget.files ?? []));
+      event.currentTarget.value = "";
+    },
+    [addAttachments],
   );
 
   const handleRemoveImage = useCallback(
@@ -155,13 +163,13 @@ export function SessionInput({
           const orgId = useAuthStore.getState().activeOrgId;
           try {
             imageKeys = await Promise.all(
-              savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
+              savedImages.map((img) => uploadFile(img.file, orgId ?? undefined)),
             );
           } catch (error) {
             setDraftImages(sessionId, (prev) =>
               prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
             );
-            toast.error(error instanceof Error ? error.message : "Failed to upload image");
+            toast.error(error instanceof Error ? error.message : "Failed to upload file");
             throw error;
           }
         }
@@ -304,7 +312,7 @@ export function SessionInput({
         MODE_CONFIG[mode as InteractionMode].containerBorder,
       )}
     >
-      <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
+      <ImageAttachmentBar attachments={images} onRemove={handleRemoveImage} />
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>
@@ -351,7 +359,7 @@ export function SessionInput({
               disabled={!canSend || isSending}
               slashCommands={slashCommands.commands}
               onShiftTab={cycleMode}
-              onImagePaste={handleImagePaste}
+              onImagePaste={addAttachments}
               hasAttachments={images.length > 0}
               onChange={(text: string, html: string) => {
                 setHasContent(text.trim().length > 0);
@@ -360,6 +368,21 @@ export function SessionInput({
             />
           </div>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileInputChange}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={!canSend || isSending || images.length >= MAX_ATTACHMENTS}
+          className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-50"
+          title="Attach files"
+        >
+          <Paperclip size={16} />
+        </button>
         {isActive ? (
           <>
             <button

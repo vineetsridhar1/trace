@@ -87,6 +87,33 @@ describe("upload routes in local mode", () => {
     });
   });
 
+  it("presigns non-image file uploads", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
+    storageMock.getPutUrl.mockResolvedValueOnce("https://upload.example/put");
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/uploads/presign`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filename: "notes.pdf",
+        contentType: "application/pdf",
+        organizationId: "org-local",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { uploadUrl: string; key: string };
+    expect(body.uploadUrl).toBe("https://upload.example/put");
+    expect(body.key).toMatch(/^uploads\/org-local\/.+-notes\.pdf$/);
+    expect(storageMock.getPutUrl).toHaveBeenCalledWith(body.key, "application/pdf");
+  });
+
   it("rejects local-mode upload URLs for non-canonical organizations", async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
     prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });

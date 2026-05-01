@@ -12,7 +12,7 @@ import { storage } from "../lib/storage/index.js";
 
 const router: RouterType = Router();
 const MAX_FILENAME_LENGTH = 100;
-const FALLBACK_BASENAME = "image";
+const FALLBACK_BASENAME = "file";
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 
 function sanitizeFilename(filename: string): string {
@@ -88,10 +88,6 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
 
   if (typeof contentType !== "string" || !contentType.trim()) {
     return res.status(400).json({ error: "contentType is required" });
-  }
-
-  if (!contentType.startsWith("image/")) {
-    return res.status(400).json({ error: "contentType must be an image" });
   }
 
   const sanitizedFilename = sanitizeFilename(filename);

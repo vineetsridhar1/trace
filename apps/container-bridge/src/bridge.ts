@@ -677,7 +677,7 @@ export class ContainerBridge implements IBridgeClient {
     let endedOnPending = false;
     let recoveringMissingToolSession = false;
 
-    // Download attached images to temp files
+    // Download attached files to temp files
     let imagePaths: string[] | undefined;
     if (imageUrls?.length) {
       try {
@@ -688,14 +688,14 @@ export class ContainerBridge implements IBridgeClient {
           randomUUID: crypto.randomUUID,
         });
       } catch (err) {
-        console.error(`[container-bridge] Failed to download images for ${sessionId}:`, err);
+        console.error(`[container-bridge] Failed to download files for ${sessionId}:`, err);
       }
     }
 
-    // Prepend image paths to prompt so all adapters see them
+    // Prepend file paths to prompt so all adapters see them
     let finalPrompt = prompt;
     if (imagePaths?.length) {
-      const refs = imagePaths.map((p) => `[Attached image: ${p}]`).join("\n");
+      const refs = imagePaths.map((p) => `[Attached file: ${p}]`).join("\n");
       finalPrompt = `${refs}\n\n${prompt}`;
     }
 

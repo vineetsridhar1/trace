@@ -22,7 +22,9 @@ function extensionFor(mimeType: string): string {
   if (lower === "image/gif") return "gif";
   if (lower === "image/webp") return "webp";
   if (lower === "image/heic") return "heic";
-  return "img";
+  if (lower === "application/pdf") return "pdf";
+  if (lower === "text/plain") return "txt";
+  return "bin";
 }
 
 async function bodyFromArgs(args: UploadArgs): Promise<Blob> {
@@ -30,30 +32,26 @@ async function bodyFromArgs(args: UploadArgs): Promise<Blob> {
     // RN's fetch handles both `file://` (iOS cached asset from the picker)
     // and `content://` (Android) URIs and returns a real Blob we can PUT.
     const res = await fetch(args.fileUri);
-    if (!res.ok) throw new Error("Could not read picked image");
+    if (!res.ok) throw new Error("Could not read picked file");
     return await res.blob();
   }
   if (args.base64) {
     const dataUrl = `data:${args.mimeType};base64,${args.base64}`;
     return await (await fetch(dataUrl)).blob();
   }
-  throw new Error("uploadImage requires base64 or fileUri");
+  throw new Error("uploadFile requires base64 or fileUri");
 }
 
 /**
- * Uploads an image to S3 via the presign endpoint and returns the S3 key.
+ * Uploads a file to S3 via the presign endpoint and returns the S3 key.
  * Accepts either raw base64 (clipboard path) or a local URI (gallery picker
  * path). Reads bytes lazily so a URI-only attachment doesn't need base64
  * buffered in JS memory until send time.
  */
-export async function uploadImage(args: UploadArgs): Promise<string> {
-  if (!args.mimeType.startsWith("image/")) {
-    throw new Error("File must be an image");
-  }
-
+export async function uploadFile(args: UploadArgs): Promise<string> {
   const blob = await bodyFromArgs(args);
   if (blob.size > MAX_BYTES) {
-    throw new Error("Image must be 5MB or smaller");
+    throw new Error("File must be 5MB or smaller");
   }
 
   const filename = `attachment-${Date.now()}.${extensionFor(args.mimeType)}`;
@@ -93,11 +91,13 @@ export async function uploadImage(args: UploadArgs): Promise<string> {
     body: blob,
   });
   if (!uploadResponse.ok) {
-    throw new Error("Failed to upload image");
+    throw new Error("Failed to upload file");
   }
 
   return key;
 }
+
+export const uploadImage = uploadFile;
 
 export function getCachedUploadedImageUrl(key: string): string | null {
   return uploadedImageUrlCache.get(key);

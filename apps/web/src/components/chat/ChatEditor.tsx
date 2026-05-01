@@ -108,9 +108,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const root = editor?.root;
     if (!root) return;
     const handler = (e: ClipboardEvent) => {
-      const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
-        f.type.startsWith("image/"),
-      );
+      const files = Array.from(e.clipboardData?.files ?? []);
       if (files.length > 0 && onImagePasteRef.current) {
         e.preventDefault();
         e.stopImmediatePropagation();

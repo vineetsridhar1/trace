@@ -3,15 +3,12 @@ import { getAuthHeaders } from "@trace/client-core";
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
-export async function uploadImage(file: File, organizationId?: string): Promise<string> {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("File must be an image");
-  }
-
+export async function uploadFile(file: File, organizationId?: string): Promise<string> {
   if (file.size > MAX_FILE_SIZE_BYTES) {
-    throw new Error("Image must be 5MB or smaller");
+    throw new Error("File must be 5MB or smaller");
   }
 
+  const contentType = file.type || "application/octet-stream";
   const presignResponse = await fetch(`${API_URL}/uploads/presign`, {
     method: "POST",
     credentials: "include",
@@ -21,7 +18,7 @@ export async function uploadImage(file: File, organizationId?: string): Promise<
     },
     body: JSON.stringify({
       filename: file.name,
-      contentType: file.type,
+      contentType,
       organizationId,
     }),
   });
@@ -42,14 +39,16 @@ export async function uploadImage(file: File, organizationId?: string): Promise<
   const uploadResponse = await fetch(uploadUrl, {
     method: "PUT",
     headers: {
-      "Content-Type": file.type,
+      "Content-Type": contentType,
     },
     body: file,
   });
 
   if (!uploadResponse.ok) {
-    throw new Error("Failed to upload image");
+    throw new Error("Failed to upload file");
   }
 
   return key;
 }
+
+export const uploadImage = uploadFile;

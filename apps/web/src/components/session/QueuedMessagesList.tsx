@@ -1,4 +1,4 @@
-import { Image, X, Trash2 } from "lucide-react";
+import { FileText, X, Trash2 } from "lucide-react";
 import { useEntityField, useQueuedMessageIdsForSession } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { REMOVE_QUEUED_MESSAGE_MUTATION, CLEAR_QUEUED_MESSAGES_MUTATION } from "@trace/client-core";
@@ -20,10 +20,10 @@ function QueuedMessageItem({ id }: { id: string }) {
 
   return (
     <div className="group flex items-center gap-2 rounded-md bg-surface-deep px-3 py-1.5 text-sm text-muted-foreground">
-      <span className="min-w-0 flex-1 truncate">{text || "Image attachment"}</span>
+      <span className="min-w-0 flex-1 truncate">{text || "File attachment"}</span>
       {imageCount > 0 && (
         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-          <Image size={12} />
+          <FileText size={12} />
           {imageCount}
         </span>
       )}

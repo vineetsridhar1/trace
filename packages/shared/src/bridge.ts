@@ -1020,10 +1020,10 @@ function extractMarkdownSummary(content: string): string | undefined {
   return lines[0];
 }
 
-// --- Shared image download helper ---
+// --- Shared attachment download helper ---
 
 /**
- * Download images from presigned URLs to temp files.
+ * Download attachments from presigned URLs to temp files.
  * Shared between container and desktop bridges.
  */
 export interface ImageDownloadDeps {
@@ -1043,14 +1043,14 @@ export async function downloadImagesToTempFiles(
   imageUrls: string[],
   deps: ImageDownloadDeps,
 ): Promise<string[]> {
-  const tmpDir = deps.path.join(deps.tmpdir(), "trace-images");
+  const tmpDir = deps.path.join(deps.tmpdir(), "trace-files");
   await deps.fs.promises.mkdir(tmpDir, { recursive: true });
   return Promise.all(
     imageUrls.map(async (url) => {
-      let ext = "png";
+      let ext = "bin";
       try {
         const pathname = new URL(url).pathname;
-        const match = pathname.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i);
+        const match = pathname.match(/\.([a-zA-Z0-9]{1,16})(?:$|[?#])/);
         if (match) ext = match[1];
       } catch {
         // Fall back to default extension
@@ -1066,7 +1066,7 @@ export async function downloadImagesToTempFiles(
 }
 
 /**
- * Clean up temp image files. Errors are silently ignored.
+ * Clean up temp attachment files. Errors are silently ignored.
  */
 export function cleanupTempImages(
   imagePaths: string[],

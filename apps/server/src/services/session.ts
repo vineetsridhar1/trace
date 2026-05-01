@@ -3564,7 +3564,7 @@ export class SessionService {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
         if (typeof key !== "string" || !key.startsWith("uploads/") || key.includes("..")) {
-          throw new Error("Invalid image key");
+          throw new Error("Invalid upload key");
         }
       }
     }
@@ -3613,9 +3613,9 @@ export class SessionService {
             runtimeLabel: conn.runtimeLabel ?? null,
           };
 
-    // Image keys are scoped to an organization (`uploads/{orgId}/...`).
+    // Upload keys are scoped to an organization (`uploads/{orgId}/...`).
     // Reject keys whose org segment doesn't match the session's org so a
-    // multi-org user can't smuggle another org's image into this session.
+    // multi-org user can't smuggle another org's file into this session.
     if (imageKeys?.length) {
       for (const key of imageKeys) {
         const orgSegment = key.split("/")[1];
@@ -3796,11 +3796,11 @@ export class SessionService {
       ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
       : undefined;
 
-    // Generate presigned GET URLs for attached images
+    // Generate presigned GET URLs for attached files
     let imageUrls: string[] | undefined;
     if (imageKeys?.length) {
       imageUrls = await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)));
-      runtimeDebug(`Generated ${imageUrls.length} image URLs for ${sessionId}`);
+      runtimeDebug(`Generated ${imageUrls.length} attachment URLs for ${sessionId}`);
     }
 
     // Attempt delivery before marking active. Pinning to the session's home
@@ -3963,7 +3963,7 @@ export class SessionService {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
         if (typeof key !== "string" || !key.startsWith("uploads/") || key.includes("..")) {
-          throw new Error("Invalid image key");
+          throw new Error("Invalid upload key");
         }
       }
     }
@@ -6413,7 +6413,7 @@ export class SessionService {
         : null;
     const checkpointContext = pending.checkpointContext ?? fallbackCheckpointContext;
 
-    // Generate presigned GET URLs for any attached images in the pending command
+    // Generate presigned GET URLs for any attached files in the pending command
     let imageUrls: string[] | undefined;
     if (pending.type === "send" && pending.imageKeys?.length) {
       imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));

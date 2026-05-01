@@ -627,10 +627,10 @@ export class BridgeClient implements IBridgeClient {
     let endedOnPending = false;
     let recoveringMissingToolSession = false;
 
-    // Download attached images to temp files
+    // Download attached files to temp files
     let imagePaths: string[] | undefined;
     if (imageUrls?.length) {
-      runtimeDebug("downloading session images", { sessionId, count: imageUrls.length });
+      runtimeDebug("downloading session files", { sessionId, count: imageUrls.length });
       try {
         imagePaths = await downloadImagesToTempFiles(imageUrls, {
           fs,
@@ -638,16 +638,16 @@ export class BridgeClient implements IBridgeClient {
           tmpdir: os.tmpdir,
           randomUUID: crypto.randomUUID,
         });
-        runtimeDebug("downloaded session images", { sessionId, count: imagePaths.length });
+        runtimeDebug("downloaded session files", { sessionId, count: imagePaths.length });
       } catch (err) {
-        console.error(`[bridge] Failed to download images for ${sessionId}:`, err);
+        console.error(`[bridge] Failed to download files for ${sessionId}:`, err);
       }
     }
 
-    // Prepend image paths to prompt so all adapters see them
+    // Prepend file paths to prompt so all adapters see them
     let finalPrompt = prompt;
     if (imagePaths?.length) {
-      const refs = imagePaths.map((p) => `[Attached image: ${p}]`).join("\n");
+      const refs = imagePaths.map((p) => `[Attached file: ${p}]`).join("\n");
       finalPrompt = `${refs}\n\n${prompt}`;
     }
 

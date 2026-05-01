@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Image as ImageIcon } from "lucide-react";
+import { FileText, Image as ImageIcon } from "lucide-react";
 import { formatTime } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
 import { useAuthStore } from "@trace/client-core";
@@ -9,14 +9,19 @@ import { getAuthHeaders } from "@trace/client-core";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
-function ImageChip({ imageKey, label }: { imageKey: string; label: string }) {
+function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const isImage = isImageKey(imageKey);
 
   const handleClick = async () => {
-    if (src) {
+    if (src && isImage) {
       setLightboxOpen(true);
+      return;
+    }
+    if (src) {
+      window.open(src, "_blank", "noopener,noreferrer");
       return;
     }
     setLoading(true);
@@ -28,7 +33,11 @@ function ImageChip({ imageKey, label }: { imageKey: string; label: string }) {
       const data = (await res.json()) as { url?: string };
       if (data.url) {
         setSrc(data.url);
-        setLightboxOpen(true);
+        if (isImage) {
+          setLightboxOpen(true);
+        } else {
+          window.open(data.url, "_blank", "noopener,noreferrer");
+        }
       }
     } catch (err) {
       console.warn("Failed to load image URL:", err);
@@ -43,10 +52,10 @@ function ImageChip({ imageKey, label }: { imageKey: string; label: string }) {
         onClick={() => void handleClick()}
         className="inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
       >
-        <ImageIcon size={12} />
+        {isImage ? <ImageIcon size={12} /> : <FileText size={12} />}
         {loading ? "Loading…" : label}
       </button>
-      {src && (
+      {src && isImage && (
         <ImageLightbox
           src={src}
           alt={label}
@@ -88,8 +97,8 @@ export function UserBubble({
           </div>
           {imageKeys && imageKeys.length > 0 && (
             <div className="mb-1.5 flex gap-1.5 flex-wrap">
-              {imageKeys.map((key, i) => (
-                <ImageChip key={key} imageKey={key} label={`Image ${i + 1}`} />
+              {imageKeys.map((key) => (
+                <AttachmentChip key={key} imageKey={key} label={attachmentLabel(key)} />
               ))}
             </div>
           )}
@@ -101,4 +110,16 @@ export function UserBubble({
       </div>
     </div>
   );
+}
+
+function attachmentLabel(key: string): string {
+  const filename = key
+    .split("/")
+    .pop()
+    ?.replace(/^[0-9a-f-]{36}-/i, "");
+  return filename || "Attachment";
+}
+
+function isImageKey(key: string): boolean {
+  return /\.(png|jpe?g|gif|webp|svg)$/i.test(key);
 }
