@@ -373,10 +373,7 @@ export function SessionGroupDetailView({
     : !selectedSessionBridgeInteractionAllowed
       ? "You don't have access to this bridge"
       : undefined;
-  const linkedCheckoutAllowed =
-    bridgeInteractionAllowed &&
-    !!groupRuntimeInstanceId &&
-    (!groupConnection || groupConnection.state !== "disconnected");
+  const linkedCheckoutAllowed = !!groupRuntimeInstanceId;
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;

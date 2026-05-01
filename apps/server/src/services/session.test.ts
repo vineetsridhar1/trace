@@ -4160,6 +4160,8 @@ describe("SessionService", () => {
       });
       sessionRouterMock.getRuntime.mockReset();
       sessionRouterMock.getRuntime.mockReturnValue(null);
+      sessionRouterMock.listRuntimes.mockReset();
+      sessionRouterMock.listRuntimes.mockReturnValue([]);
       sessionRouterMock.getLinkedCheckoutStatus.mockReset();
       sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue(null);
     });
@@ -4190,22 +4192,26 @@ describe("SessionService", () => {
           },
         ],
       });
-      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
-        hostingMode: "local",
-        allowed: true,
-        isOwner: true,
-      });
-      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
-        runtimeId === "runtime-home"
-          ? {
-              key: "runtime-home",
-              id: "runtime-home",
-              hostingMode: "local",
-              organizationId: "org-1",
-              ws: { readyState: 1, OPEN: 1 },
-            }
-          : null,
-      );
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-stale",
+          id: "runtime-stale",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          key: "runtime-home",
+          id: "runtime-home",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
       sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValueOnce({
         repoId: "repo-1",
         repoPath: "/tmp/trace",
@@ -4256,7 +4262,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });
 
-    it("only allows the user who owns the session group's local runtime", async () => {
+    it("uses the current user's linked runtime for another owner's session group", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
@@ -4282,23 +4288,76 @@ describe("SessionService", () => {
           },
         ],
       });
-      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
-        runtimeId === "runtime-home"
-          ? {
-              key: "runtime-home",
-              id: "runtime-home",
-              hostingMode: "local",
-              organizationId: "org-1",
-              ws: { readyState: 1, OPEN: 1 },
-            }
-          : null,
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-home",
+          id: "runtime-home",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-2",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          key: "runtime-other",
+          id: "runtime-other",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValueOnce({
+        repoId: "repo-1",
+        repoPath: "/tmp/trace",
+        isAttached: true,
+        attachedSessionGroupId: "group-1",
+        targetBranch: "main",
+        autoSyncEnabled: true,
+        currentBranch: "main",
+        currentCommitSha: "abc123",
+        lastSyncedCommitSha: "abc123",
+        lastSyncError: null,
+        restoreBranch: "main",
+        restoreCommitSha: "abc123",
+        hasUncommittedChanges: false,
+      });
+
+      await service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1");
+
+      expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith(
+        "runtime-other",
+        "repo-1",
       );
+    });
+
+    it("requires the current user to have the repo linked on a connected local runtime", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-home",
+        },
+        sessions: [],
+      });
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-home",
+          id: "runtime-home",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-2",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
 
       await expect(
         service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1"),
-      ).rejects.toThrow(
-        "Linked checkout is only available on session groups backed by your local runtime.",
-      );
+      ).rejects.toThrow("No connected local runtime with this repo linked");
       expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });
 
@@ -4321,22 +4380,17 @@ describe("SessionService", () => {
           },
         ],
       });
-      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
-        hostingMode: "local",
-        allowed: true,
-        isOwner: true,
-      });
-      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
-        runtimeId === "runtime-home"
-          ? {
-              key: "runtime-home",
-              id: "runtime-home",
-              hostingMode: "local",
-              organizationId: "org-1",
-              ws: { readyState: 1, OPEN: 1 },
-            }
-          : null,
-      );
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-home",
+          id: "runtime-home",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
       sessionRouterMock.commitLinkedCheckoutChanges.mockResolvedValueOnce({
         ok: true,
         error: null,
@@ -4385,22 +4439,17 @@ describe("SessionService", () => {
           },
         ],
       });
-      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
-        hostingMode: "local",
-        allowed: true,
-        isOwner: true,
-      });
-      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
-        runtimeId === "runtime-home"
-          ? {
-              key: "runtime-home",
-              id: "runtime-home",
-              hostingMode: "local",
-              organizationId: "org-1",
-              ws: { readyState: 1, OPEN: 1 },
-            }
-          : null,
-      );
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-home",
+          id: "runtime-home",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
       sessionRouterMock.syncLinkedCheckout.mockResolvedValueOnce({
         ok: true,
         error: null,

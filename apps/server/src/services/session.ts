@@ -1623,31 +1623,23 @@ export class SessionService {
       throw new Error("Session group is not associated with this repo");
     }
 
-    // Linked checkout is tied to the session group's shared workspace runtime,
-    // not whichever child session happens to be selected in the UI.
-    const runtimeId = this.getConnectionRuntimeInstanceId(group.connection);
+    const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
+    const ownedRuntimesForRepo = sessionRouter
+      .listRuntimes({ hostingMode: "local" })
+      .filter((candidate) => {
+        if (candidate.organizationId !== organizationId) return false;
+        if (candidate.ownerUserId !== userId) return false;
+        if (!candidate.registeredRepoIds.includes(repoId)) return false;
+        if (candidate.ws.readyState !== candidate.ws.OPEN) return false;
 
-    if (!runtimeId) {
-      throw new Error(
-        "Linked checkout is only available on session groups backed by a local runtime.",
-      );
-    }
-    const runtimeAccess = await runtimeAccessService.getAccessState({
-      userId,
-      organizationId,
-      runtimeInstanceId: runtimeId,
-      sessionGroupId,
-      capability: "session",
-    });
-    if (runtimeAccess.hostingMode !== "local" || !runtimeAccess.isOwner) {
-      throw new Error(
-        "Linked checkout is only available on session groups backed by your local runtime.",
-      );
-    }
+        return true;
+      });
+    const runtime =
+      ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
+      ownedRuntimesForRepo[0];
 
-    const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
-    if (!runtime || runtime.hostingMode !== "local" || runtime.ws.readyState !== runtime.ws.OPEN) {
-      throw new Error("No connected local runtime available for this session group");
+    if (!runtime) {
+      throw new Error("No connected local runtime with this repo linked");
     }
 
     return runtime.key;
