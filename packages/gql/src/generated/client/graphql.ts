@@ -978,6 +978,7 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationQueueSessionMessageArgs = {
+  attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
@@ -1069,6 +1070,7 @@ export type MutationSendMessageArgs = {
 };
 
 export type MutationSendSessionMessageArgs = {
+  attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
@@ -1585,6 +1587,7 @@ export type QueryTicketsArgs = {
 
 export type QueuedMessage = {
   __typename?: "QueuedMessage";
+  attachmentKeys: Array<Scalars["String"]["output"]>;
   createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
   imageKeys: Array<Scalars["String"]["output"]>;
@@ -2509,10 +2512,10 @@ export type SessionDetailQuery = {
       id: string;
       sessionId: string;
       text: string;
-      imageKeys: Array<string>;
       interactionMode?: string | null;
       position: number;
       createdAt: string;
+      imageKeys: Array<string>;
     }>;
   } | null;
 };
@@ -4890,7 +4893,11 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionId" } },
                       { kind: "Field", name: { kind: "Name", value: "text" } },
-                      { kind: "Field", name: { kind: "Name", value: "imageKeys" } },
+                      {
+                        kind: "Field",
+                        alias: { kind: "Name", value: "imageKeys" },
+                        name: { kind: "Name", value: "attachmentKeys" },
+                      },
                       { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
                       { kind: "Field", name: { kind: "Name", value: "position" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },

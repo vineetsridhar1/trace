@@ -21,6 +21,7 @@ export interface LocalStorageToken {
   key: string;
   action: "put" | "get";
   contentType?: string;
+  maxBytes?: number;
 }
 
 export class LocalStorageAdapter implements StorageAdapter {
@@ -36,9 +37,11 @@ export class LocalStorageAdapter implements StorageAdapter {
     fs.mkdirSync(this.rootDir, { recursive: true });
   }
 
-  async getPutUrl(key: string, contentType: string): Promise<string> {
-    const token = jwt.sign({ key, action: "put", contentType }, JWT_SECRET, { expiresIn: "5m" });
-    return `${this.publicUrl}/uploads/local/put/${token}`;
+  async getUploadTarget(key: string, contentType: string, maxBytes: number) {
+    const token = jwt.sign({ key, action: "put", contentType, maxBytes }, JWT_SECRET, {
+      expiresIn: "5m",
+    });
+    return { method: "PUT" as const, url: `${this.publicUrl}/uploads/local/put/${token}` };
   }
 
   async getGetUrl(key: string): Promise<string> {

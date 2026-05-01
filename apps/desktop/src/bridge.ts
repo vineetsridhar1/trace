@@ -24,8 +24,8 @@ import {
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
-  downloadImagesToTempFiles,
-  cleanupTempImages,
+  downloadAttachmentsToTempFiles,
+  cleanupTempAttachments,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
   isMissingToolSessionError,
@@ -632,7 +632,7 @@ export class BridgeClient implements IBridgeClient {
     if (imageUrls?.length) {
       runtimeDebug("downloading session files", { sessionId, count: imageUrls.length });
       try {
-        imagePaths = await downloadImagesToTempFiles(imageUrls, {
+        imagePaths = await downloadAttachmentsToTempFiles(imageUrls, {
           fs,
           path,
           tmpdir: os.tmpdir,
@@ -658,7 +658,7 @@ export class BridgeClient implements IBridgeClient {
     const cleanupImages = () => {
       if (imagePaths && !imagesCleanedUp) {
         imagesCleanedUp = true;
-        cleanupTempImages(imagePaths, fs);
+        cleanupTempAttachments(imagePaths, fs);
       }
     };
 

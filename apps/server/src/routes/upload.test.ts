@@ -11,7 +11,7 @@ vi.mock("../lib/db.js", async () => {
 
 vi.mock("../lib/storage/index.js", () => ({
   storage: {
-    getPutUrl: vi.fn(),
+    getUploadTarget: vi.fn(),
     getGetUrl: vi.fn(),
   },
 }));
@@ -23,7 +23,7 @@ import { uploadRouter } from "./upload.js";
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const storageMock = storage as unknown as {
-  getPutUrl: ReturnType<typeof vi.fn>;
+  getUploadTarget: ReturnType<typeof vi.fn>;
   getGetUrl: ReturnType<typeof vi.fn>;
 };
 
@@ -56,7 +56,11 @@ describe("upload routes in local mode", () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
     prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
     prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
-    storageMock.getPutUrl.mockResolvedValueOnce("https://upload.example/put");
+    storageMock.getUploadTarget.mockResolvedValueOnce({
+      method: "POST",
+      url: "https://upload.example/post",
+      fields: { key: "value" },
+    });
 
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
     const res = await fetch(`${baseUrl}/uploads/presign`, {
@@ -68,13 +72,23 @@ describe("upload routes in local mode", () => {
       body: JSON.stringify({
         filename: "screen.png",
         contentType: "image/png",
+        contentLength: 1024,
         organizationId: "org-stale",
       }),
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { uploadUrl: string; key: string };
-    expect(body.uploadUrl).toBe("https://upload.example/put");
+    const body = (await res.json()) as {
+      uploadUrl: string;
+      uploadTarget: { method: string; url: string; fields?: Record<string, string> };
+      key: string;
+    };
+    expect(body.uploadUrl).toBe("https://upload.example/post");
+    expect(body.uploadTarget).toEqual({
+      method: "POST",
+      url: "https://upload.example/post",
+      fields: { key: "value" },
+    });
     expect(body.key.startsWith("uploads/org-local/")).toBe(true);
     expect(prismaMock.orgMember.findUnique).toHaveBeenCalledWith({
       where: {
@@ -91,7 +105,10 @@ describe("upload routes in local mode", () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
     prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
     prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
-    storageMock.getPutUrl.mockResolvedValueOnce("https://upload.example/put");
+    storageMock.getUploadTarget.mockResolvedValueOnce({
+      method: "PUT",
+      url: "https://upload.example/put",
+    });
 
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
     const res = await fetch(`${baseUrl}/uploads/presign`, {
@@ -103,6 +120,7 @@ describe("upload routes in local mode", () => {
       body: JSON.stringify({
         filename: "notes.pdf",
         contentType: "application/pdf",
+        contentLength: 2048,
         organizationId: "org-local",
       }),
     });
@@ -111,7 +129,61 @@ describe("upload routes in local mode", () => {
     const body = (await res.json()) as { uploadUrl: string; key: string };
     expect(body.uploadUrl).toBe("https://upload.example/put");
     expect(body.key).toMatch(/^uploads\/org-local\/.+-notes\.pdf$/);
-    expect(storageMock.getPutUrl).toHaveBeenCalledWith(body.key, "application/pdf");
+    expect(storageMock.getUploadTarget).toHaveBeenCalledWith(
+      body.key,
+      "application/pdf",
+      5 * 1024 * 1024,
+    );
+  });
+
+  it("rejects uploads over the server-side file size limit", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/uploads/presign`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filename: "large.pdf",
+        contentType: "application/pdf",
+        contentLength: 5 * 1024 * 1024 + 1,
+        organizationId: "org-local",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({ error: "File must be 5MB or smaller" });
+    expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported upload content types", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/uploads/presign`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filename: "binary.bin",
+        contentType: "application/octet-stream",
+        contentLength: 1024,
+        organizationId: "org-local",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({ error: "contentType is not supported" });
+    expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
   });
 
   it("rejects local-mode upload URLs for non-canonical organizations", async () => {
@@ -149,6 +221,7 @@ describe("upload routes in local mode", () => {
       body: JSON.stringify({
         filename: "screen.png",
         contentType: "image/png",
+        contentLength: 1024,
         organizationId: "org-local",
       }),
     });
@@ -157,6 +230,6 @@ describe("upload routes in local mode", () => {
     await expect(res.json()).resolves.toEqual({
       error: "External local-mode access requires a paired mobile token",
     });
-    expect(storageMock.getPutUrl).not.toHaveBeenCalled();
+    expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
   });
 });

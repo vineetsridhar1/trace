@@ -195,7 +195,7 @@ export const SessionMessage = memo(function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={asStringArray(payload?.imageKeys)}
+          imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : payload?.type === "runtime_move" ? (
@@ -223,7 +223,7 @@ export const SessionMessage = memo(function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={asStringArray(payload?.imageKeys)}
+          imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );

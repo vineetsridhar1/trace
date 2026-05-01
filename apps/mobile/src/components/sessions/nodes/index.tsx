@@ -72,7 +72,7 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
             text={payload.prompt}
             actorId={actor?.id}
             actorName={actor?.name}
-            imageKeys={asStringArray(payload?.imageKeys)}
+            imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
             imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
             checkpoints={checkpoints}
           />
@@ -86,7 +86,7 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
           text={typeof payload?.text === "string" ? payload.text : ""}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={asStringArray(payload?.imageKeys)}
+          imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
           imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
           checkpoints={checkpoints}
         />

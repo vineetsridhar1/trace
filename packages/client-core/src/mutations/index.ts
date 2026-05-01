@@ -21,14 +21,14 @@ export const SEND_SESSION_MESSAGE_MUTATION = gql`
   mutation SendSessionMessage(
     $sessionId: ID!
     $text: String!
-    $imageKeys: [String!]
+    $attachmentKeys: [String!]
     $interactionMode: String
     $clientMutationId: String
   ) {
     sendSessionMessage(
       sessionId: $sessionId
       text: $text
-      imageKeys: $imageKeys
+      attachmentKeys: $attachmentKeys
       interactionMode: $interactionMode
       clientMutationId: $clientMutationId
     ) {
@@ -41,19 +41,19 @@ export const QUEUE_SESSION_MESSAGE_MUTATION = gql`
   mutation QueueSessionMessage(
     $sessionId: ID!
     $text: String!
-    $imageKeys: [String!]
+    $attachmentKeys: [String!]
     $interactionMode: String
   ) {
     queueSessionMessage(
       sessionId: $sessionId
       text: $text
-      imageKeys: $imageKeys
+      attachmentKeys: $attachmentKeys
       interactionMode: $interactionMode
     ) {
       id
       sessionId
       text
-      imageKeys
+      imageKeys: attachmentKeys
       interactionMode
       position
       createdAt

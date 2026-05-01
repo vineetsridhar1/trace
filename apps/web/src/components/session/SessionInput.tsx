@@ -180,7 +180,7 @@ export function SessionInput({
               .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
                 sessionId,
                 text: wrappedText,
-                imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+                attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
                 interactionMode: mode === "code" ? undefined : mode,
               })
               .toPromise();
@@ -241,7 +241,7 @@ export function SessionInput({
             .mutation(SEND_SESSION_MESSAGE_MUTATION, {
               sessionId,
               text: wrappedText,
-              imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+              attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
               interactionMode: mode === "code" ? undefined : mode,
               clientMutationId,
             })

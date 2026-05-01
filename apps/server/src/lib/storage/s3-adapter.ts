@@ -1,5 +1,6 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import type { StorageAdapter } from "./types.js";
 
 export class S3StorageAdapter implements StorageAdapter {
@@ -15,13 +16,20 @@ export class S3StorageAdapter implements StorageAdapter {
     this.client = new S3Client({ region });
   }
 
-  async getPutUrl(key: string, contentType: string): Promise<string> {
-    const command = new PutObjectCommand({
+  async getUploadTarget(key: string, contentType: string, maxBytes: number) {
+    const target = await createPresignedPost(this.client, {
       Bucket: this.bucket,
       Key: key,
-      ContentType: contentType,
+      Conditions: [
+        ["content-length-range", 1, maxBytes],
+        ["eq", "$Content-Type", contentType],
+      ],
+      Fields: {
+        "Content-Type": contentType,
+      },
+      Expires: 300,
     });
-    return getSignedUrl(this.client, command, { expiresIn: 300 });
+    return { method: "POST" as const, url: target.url, fields: target.fields };
   }
 
   async getGetUrl(key: string): Promise<string> {

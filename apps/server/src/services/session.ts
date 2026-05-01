@@ -3620,7 +3620,7 @@ export class SessionService {
       for (const key of imageKeys) {
         const orgSegment = key.split("/")[1];
         if (orgSegment !== session.organizationId) {
-          throw new Error("Image key does not belong to this organization");
+          throw new Error("Attachment key does not belong to this organization");
         }
       }
     }
@@ -3700,7 +3700,7 @@ export class SessionService {
             deliveryStatus: "pending_runtime",
             agentStatus: "active",
             sessionStatus: "in_progress",
-            ...(imageKeys?.length ? { imageKeys } : {}),
+            ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
             ...(clientMutationId ? { clientMutationId } : {}),
           },
           actorType,
@@ -3734,7 +3734,7 @@ export class SessionService {
         payload: {
           text,
           clientSource: normalizeClientSource(clientSource),
-          ...(imageKeys?.length ? { imageKeys } : {}),
+          ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
           ...(clientMutationId ? { clientMutationId } : {}),
         },
         actorType,
@@ -3860,7 +3860,7 @@ export class SessionService {
         payload: {
           text,
           clientSource: normalizeClientSource(clientSource),
-          ...(imageKeys?.length ? { imageKeys } : {}),
+          ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
           deliveryFailed: true,
           ...(clientMutationId ? { clientMutationId } : {}),
         },
@@ -3932,7 +3932,7 @@ export class SessionService {
       payload: {
         text,
         clientSource: normalizeClientSource(clientSource),
-        ...(imageKeys?.length ? { imageKeys } : {}),
+        ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
         ...(clientMutationId ? { clientMutationId } : {}),
       },
       metadata: checkpointMetadata,
@@ -3982,7 +3982,7 @@ export class SessionService {
       for (const key of imageKeys) {
         const orgSegment = key.split("/")[1];
         if (orgSegment !== session.organizationId) {
-          throw new Error("Image key does not belong to this organization");
+          throw new Error("Attachment key does not belong to this organization");
         }
       }
     }
@@ -4021,6 +4021,7 @@ export class SessionService {
           id: queuedMessage.id,
           sessionId: queuedMessage.sessionId,
           text: queuedMessage.text,
+          attachmentKeys: queuedMessage.imageKeys,
           imageKeys: queuedMessage.imageKeys,
           interactionMode: queuedMessage.interactionMode,
           position: queuedMessage.position,

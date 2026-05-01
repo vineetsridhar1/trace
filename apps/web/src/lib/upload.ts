@@ -19,6 +19,7 @@ export async function uploadFile(file: File, organizationId?: string): Promise<s
     body: JSON.stringify({
       filename: file.name,
       contentType,
+      contentLength: file.size,
       organizationId,
     }),
   });
@@ -27,22 +28,25 @@ export async function uploadFile(file: File, organizationId?: string): Promise<s
     throw new Error("Failed to create upload URL");
   }
 
-  const { uploadUrl, key } = (await presignResponse.json()) as {
+  const { uploadUrl, uploadTarget, key } = (await presignResponse.json()) as {
     uploadUrl?: string;
+    uploadTarget?: UploadTarget;
     key?: string;
   };
 
-  if (!uploadUrl || !key) {
+  if ((!uploadTarget && !uploadUrl) || !key) {
     throw new Error("Invalid upload response");
   }
 
-  const uploadResponse = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": contentType,
-    },
-    body: file,
-  });
+  const uploadResponse = uploadTarget
+    ? await uploadToTarget(uploadTarget, file, contentType)
+    : await fetch(uploadUrl as string, {
+        method: "PUT",
+        headers: {
+          "Content-Type": contentType,
+        },
+        body: file,
+      });
 
   if (!uploadResponse.ok) {
     throw new Error("Failed to upload file");
@@ -52,3 +56,26 @@ export async function uploadFile(file: File, organizationId?: string): Promise<s
 }
 
 export const uploadImage = uploadFile;
+
+type UploadTarget =
+  | { method: "PUT"; url: string }
+  | { method: "POST"; url: string; fields: Record<string, string> };
+
+function uploadToTarget(target: UploadTarget, file: File, contentType: string): Promise<Response> {
+  if (target.method === "POST") {
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(target.fields)) {
+      formData.append(key, value);
+    }
+    formData.append("file", file);
+    return fetch(target.url, { method: "POST", body: formData });
+  }
+
+  return fetch(target.url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": contentType,
+    },
+    body: file,
+  });
+}

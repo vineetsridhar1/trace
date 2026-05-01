@@ -22,6 +22,7 @@
     "@apollo/server": "^4.11.3",
     "@as-integrations/express5": "^1.1.2",
     "@aws-sdk/client-s3": "^3.1014.0",
+    "@aws-sdk/s3-presigned-post": "^3.1014.0",
     "@aws-sdk/s3-request-presigner": "^3.1014.0",
     "@graphql-tools/schema": "^10.0.14",
     "@prisma/client": "^6.19.2",
@@ -42,12 +43,12 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^3.2.4",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/sanitize-html": "^2.16.1",
     "@types/ws": "^8.5.13",
+    "@vitest/coverage-v8": "^3.2.4",
     "prisma": "^6.19.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.0",

@@ -229,7 +229,9 @@ export function optimisticallyInsertSessionMessage(
       text,
       clientMutationId,
       ...(options?.deliveryStatus ? { deliveryStatus: options.deliveryStatus } : {}),
-      ...(options?.imageKeys?.length ? { imageKeys: options.imageKeys } : {}),
+      ...(options?.imageKeys?.length
+        ? { attachmentKeys: options.imageKeys, imageKeys: options.imageKeys }
+        : {}),
       ...(options?.imagePreviewUrls?.length ? { imagePreviewUrls: options.imagePreviewUrls } : {}),
     } as JsonObject,
     actor: {

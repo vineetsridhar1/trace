@@ -69,6 +69,7 @@ export async function uploadFile(args: UploadArgs): Promise<string> {
     body: JSON.stringify({
       filename,
       contentType: args.mimeType,
+      contentLength: blob.size,
       organizationId: args.organizationId,
     }),
   });
@@ -77,19 +78,22 @@ export async function uploadFile(args: UploadArgs): Promise<string> {
     throw new Error("Failed to create upload URL");
   }
 
-  const { uploadUrl, key } = (await presignResponse.json()) as {
+  const { uploadUrl, uploadTarget, key } = (await presignResponse.json()) as {
     uploadUrl?: string;
+    uploadTarget?: UploadTarget;
     key?: string;
   };
-  if (!uploadUrl || !key) {
+  if ((!uploadTarget && !uploadUrl) || !key) {
     throw new Error("Invalid upload response");
   }
 
-  const uploadResponse = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": args.mimeType },
-    body: blob,
-  });
+  const uploadResponse = uploadTarget
+    ? await uploadToTarget(uploadTarget, blob, args.mimeType)
+    : await fetch(uploadUrl as string, {
+        method: "PUT",
+        headers: { "Content-Type": args.mimeType },
+        body: blob,
+      });
   if (!uploadResponse.ok) {
     throw new Error("Failed to upload file");
   }
@@ -98,6 +102,27 @@ export async function uploadFile(args: UploadArgs): Promise<string> {
 }
 
 export const uploadImage = uploadFile;
+
+type UploadTarget =
+  | { method: "PUT"; url: string }
+  | { method: "POST"; url: string; fields: Record<string, string> };
+
+function uploadToTarget(target: UploadTarget, blob: Blob, contentType: string): Promise<Response> {
+  if (target.method === "POST") {
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(target.fields)) {
+      formData.append(key, value);
+    }
+    formData.append("file", blob);
+    return fetch(target.url, { method: "POST", body: formData });
+  }
+
+  return fetch(target.url, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: blob,
+  });
+}
 
 export function getCachedUploadedImageUrl(key: string): string | null {
   return uploadedImageUrlCache.get(key);

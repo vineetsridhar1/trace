@@ -979,6 +979,7 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationQueueSessionMessageArgs = {
+  attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
@@ -1070,6 +1071,7 @@ export type MutationSendMessageArgs = {
 };
 
 export type MutationSendSessionMessageArgs = {
+  attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
@@ -1586,6 +1588,7 @@ export type QueryTicketsArgs = {
 
 export type QueuedMessage = {
   __typename?: "QueuedMessage";
+  attachmentKeys: Array<Scalars["String"]["output"]>;
   createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
   imageKeys: Array<Scalars["String"]["output"]>;
@@ -3835,6 +3838,7 @@ export type QueuedMessageResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["QueuedMessage"] = ResolversParentTypes["QueuedMessage"],
 > = ResolversObject<{
+  attachmentKeys?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   imageKeys?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;

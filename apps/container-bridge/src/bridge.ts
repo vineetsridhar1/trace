@@ -23,8 +23,8 @@ import {
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
-  downloadImagesToTempFiles,
-  cleanupTempImages,
+  downloadAttachmentsToTempFiles,
+  cleanupTempAttachments,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
   isMissingToolSessionError,
@@ -681,7 +681,7 @@ export class ContainerBridge implements IBridgeClient {
     let imagePaths: string[] | undefined;
     if (imageUrls?.length) {
       try {
-        imagePaths = await downloadImagesToTempFiles(imageUrls, {
+        imagePaths = await downloadAttachmentsToTempFiles(imageUrls, {
           fs,
           path,
           tmpdir: os.tmpdir,
@@ -706,7 +706,7 @@ export class ContainerBridge implements IBridgeClient {
     const cleanupImages = () => {
       if (imagePaths && !imagesCleanedUp) {
         imagesCleanedUp = true;
-        cleanupTempImages(imagePaths, fs);
+        cleanupTempAttachments(imagePaths, fs);
       }
     };
 

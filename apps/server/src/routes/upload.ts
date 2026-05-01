@@ -12,8 +12,26 @@ import { storage } from "../lib/storage/index.js";
 
 const router: RouterType = Router();
 const MAX_FILENAME_LENGTH = 100;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const FALLBACK_BASENAME = "file";
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
+const ALLOWED_EXACT_CONTENT_TYPES = new Set([
+  "application/json",
+  "application/pdf",
+  "application/zip",
+  "text/csv",
+  "text/markdown",
+  "text/plain",
+]);
+
+function isAllowedContentType(contentType: string): boolean {
+  const normalized = contentType.toLowerCase();
+  return (
+    normalized.startsWith("image/") ||
+    normalized.startsWith("text/") ||
+    ALLOWED_EXACT_CONTENT_TYPES.has(normalized)
+  );
+}
 
 function sanitizeFilename(filename: string): string {
   const trimmed = filename.trim();
@@ -52,9 +70,10 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "User not found" });
   }
 
-  const { filename, contentType, organizationId } = req.body as {
+  const { filename, contentType, contentLength, organizationId } = req.body as {
     filename?: unknown;
     contentType?: unknown;
+    contentLength?: unknown;
     organizationId?: unknown;
   };
 
@@ -90,11 +109,24 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "contentType is required" });
   }
 
+  const normalizedContentType = contentType.trim().toLowerCase();
+  if (!isAllowedContentType(normalizedContentType)) {
+    return res.status(400).json({ error: "contentType is not supported" });
+  }
+
+  if (typeof contentLength !== "number" || !Number.isInteger(contentLength) || contentLength <= 0) {
+    return res.status(400).json({ error: "contentLength is required" });
+  }
+
+  if (contentLength > MAX_UPLOAD_BYTES) {
+    return res.status(400).json({ error: "File must be 5MB or smaller" });
+  }
+
   const sanitizedFilename = sanitizeFilename(filename);
   const key = `uploads/${effectiveOrganizationId}/${randomUUID()}-${sanitizedFilename}`;
-  const uploadUrl = await storage.getPutUrl(key, contentType);
+  const uploadTarget = await storage.getUploadTarget(key, normalizedContentType, MAX_UPLOAD_BYTES);
 
-  return res.json({ uploadUrl, key });
+  return res.json({ uploadUrl: uploadTarget.url, uploadTarget, key });
 });
 
 router.get("/uploads/url", async (req: Request, res: Response) => {

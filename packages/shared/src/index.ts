@@ -75,6 +75,7 @@ export type {
   BridgeLinkedCheckoutActionResultPayload,
   BridgeLinkedCheckoutStatusResult,
   BridgeLinkedCheckoutActionResult,
+  AttachmentDownloadDeps,
   ImageDownloadDeps,
 } from "./bridge.js";
 export {
@@ -85,6 +86,8 @@ export {
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
+  downloadAttachmentsToTempFiles,
+  cleanupTempAttachments,
   downloadImagesToTempFiles,
   cleanupTempImages,
 } from "./bridge.js";

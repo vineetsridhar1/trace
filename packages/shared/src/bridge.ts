@@ -1026,7 +1026,7 @@ function extractMarkdownSummary(content: string): string | undefined {
  * Download attachments from presigned URLs to temp files.
  * Shared between container and desktop bridges.
  */
-export interface ImageDownloadDeps {
+export interface AttachmentDownloadDeps {
   fs: {
     promises: {
       mkdir: (p: string, opts: { recursive: boolean }) => Promise<unknown>;
@@ -1039,14 +1039,14 @@ export interface ImageDownloadDeps {
   randomUUID: () => string;
 }
 
-export async function downloadImagesToTempFiles(
-  imageUrls: string[],
-  deps: ImageDownloadDeps,
+export async function downloadAttachmentsToTempFiles(
+  attachmentUrls: string[],
+  deps: AttachmentDownloadDeps,
 ): Promise<string[]> {
   const tmpDir = deps.path.join(deps.tmpdir(), "trace-files");
   await deps.fs.promises.mkdir(tmpDir, { recursive: true });
   return Promise.all(
-    imageUrls.map(async (url) => {
+    attachmentUrls.map(async (url) => {
       let ext = "bin";
       try {
         const pathname = new URL(url).pathname;
@@ -1057,7 +1057,7 @@ export async function downloadImagesToTempFiles(
       }
       const filePath = deps.path.join(tmpDir, `${deps.randomUUID()}.${ext}`);
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`Failed to download image: ${res.status}`);
+      if (!res.ok) throw new Error(`Failed to download attachment: ${res.status}`);
       const buffer = Buffer.from(await res.arrayBuffer());
       await deps.fs.promises.writeFile(filePath, buffer);
       return filePath;
@@ -1068,14 +1068,18 @@ export async function downloadImagesToTempFiles(
 /**
  * Clean up temp attachment files. Errors are silently ignored.
  */
-export function cleanupTempImages(
-  imagePaths: string[],
+export function cleanupTempAttachments(
+  attachmentPaths: string[],
   fs: { promises: { unlink: (p: string) => Promise<void> } },
 ): void {
-  for (const p of imagePaths) {
+  for (const p of attachmentPaths) {
     fs.promises.unlink(p).catch(() => {});
   }
 }
+
+export type ImageDownloadDeps = AttachmentDownloadDeps;
+export const downloadImagesToTempFiles = downloadAttachmentsToTempFiles;
+export const cleanupTempImages = cleanupTempAttachments;
 
 // --- Bridge client interface ---
 

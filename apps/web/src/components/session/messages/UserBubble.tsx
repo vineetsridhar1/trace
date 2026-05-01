@@ -24,6 +24,7 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
       window.open(src, "_blank", "noopener,noreferrer");
       return;
     }
+    const pendingWindow = isImage ? null : window.open("", "_blank", "noopener,noreferrer");
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(imageKey)}`, {
@@ -36,10 +37,17 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
         if (isImage) {
           setLightboxOpen(true);
         } else {
-          window.open(data.url, "_blank", "noopener,noreferrer");
+          if (pendingWindow) {
+            pendingWindow.location.href = data.url;
+          } else {
+            window.open(data.url, "_blank", "noopener,noreferrer");
+          }
         }
+      } else {
+        pendingWindow?.close();
       }
     } catch (err) {
+      pendingWindow?.close();
       console.warn("Failed to load image URL:", err);
     } finally {
       setLoading(false);

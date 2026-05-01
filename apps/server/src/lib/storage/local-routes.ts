@@ -24,6 +24,13 @@ export function createLocalStorageRouter(adapter: LocalStorageAdapter): RouterTy
       } catch {
         return res.status(400).json({ error: "Invalid key" });
       }
+      if (
+        typeof verified.maxBytes === "number" &&
+        Buffer.isBuffer(req.body) &&
+        req.body.length > verified.maxBytes
+      ) {
+        return res.status(400).json({ error: "File must be 5MB or smaller" });
+      }
       await fs.promises.mkdir(path.dirname(target), { recursive: true });
       await fs.promises.writeFile(target, req.body as Buffer);
       return res.status(200).end();

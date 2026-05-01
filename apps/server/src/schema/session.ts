@@ -295,6 +295,7 @@ export const sessionMutations = {
     args: {
       sessionId: string;
       text: string;
+      attachmentKeys?: string[] | null;
       imageKeys?: string[] | null;
       interactionMode?: string | null;
       clientMutationId?: string | null;
@@ -305,7 +306,7 @@ export const sessionMutations = {
     return sessionService.sendMessage({
       sessionId: args.sessionId,
       text: args.text,
-      imageKeys: args.imageKeys ?? undefined,
+      imageKeys: args.attachmentKeys ?? args.imageKeys ?? undefined,
       actorType: ctx.actorType,
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
@@ -474,6 +475,7 @@ export const sessionMutations = {
     args: {
       sessionId: string;
       text: string;
+      attachmentKeys?: string[] | null;
       imageKeys?: string[] | null;
       interactionMode?: string | null;
     },
@@ -482,7 +484,7 @@ export const sessionMutations = {
     return sessionService.queueMessage({
       sessionId: args.sessionId,
       text: args.text,
-      imageKeys: args.imageKeys ?? undefined,
+      imageKeys: args.attachmentKeys ?? args.imageKeys ?? undefined,
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
       organizationId: requireOrgContext(ctx),
@@ -541,6 +543,9 @@ export const sessionTypeResolvers = {
         orderBy: { position: "asc" },
       });
     },
+  },
+  QueuedMessage: {
+    attachmentKeys: (message: { imageKeys: string[] }) => message.imageKeys,
   },
   GitCheckpoint: {
     session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {

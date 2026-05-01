@@ -48,8 +48,7 @@ export function useComposerSubmit({
       // `onFailure(draft)` restores it on error.
       try {
         if (isActive) {
-          // Queue path: server mutation doesn't accept imageKeys. Match web
-          // and submit text only — attachments remain in the draft.
+          // Queue path still submits text only; attachments remain in the draft.
           onSuccess();
           const result = await getClient()
             .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
@@ -110,7 +109,7 @@ export function useComposerSubmit({
             .mutation<{ sendSessionMessage: { id: string } }>(SEND_SESSION_MESSAGE_MUTATION, {
               sessionId,
               text: wrapped,
-              imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+              attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
               interactionMode,
               clientMutationId,
             })

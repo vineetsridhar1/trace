@@ -444,6 +444,7 @@ type QueuedMessage {
   id: ID!
   sessionId: ID!
   text: String!
+  attachmentKeys: [String!]!
   imageKeys: [String!]!
   interactionMode: String
   position: Int!
@@ -1267,6 +1268,7 @@ type Mutation {
   sendSessionMessage(
     sessionId: ID!
     text: String!
+    attachmentKeys: [String!]
     imageKeys: [String!]
     interactionMode: String
     clientMutationId: String
@@ -1274,6 +1276,7 @@ type Mutation {
   queueSessionMessage(
     sessionId: ID!
     text: String!
+    attachmentKeys: [String!]
     imageKeys: [String!]
     interactionMode: String
   ): QueuedMessage!
