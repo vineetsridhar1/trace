@@ -27,7 +27,11 @@ import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
-import { runtimeAccessService } from "./runtime-access.js";
+import {
+  runtimeAccessService,
+  setBridgeAccessApprovedHandler,
+  type BridgeAccessApprovedHandlerInput,
+} from "./runtime-access.js";
 import { agentEnvironmentService } from "./agent-environment.js";
 import {
   alertAgentEnvironmentOperator,
@@ -2167,7 +2171,10 @@ export class SessionService {
       environmentRuntimeInstanceId;
     if (input.runtimeInstanceId || shouldUseEnvironmentRuntime) {
       const runtimeId = input.runtimeInstanceId ?? environmentRuntimeInstanceId;
-      const runtime = runtimeId ? sessionRouter.getRuntime(runtimeId) : null;
+      if (!runtimeId) {
+        throw new Error("Requested runtime not found");
+      }
+      const runtime = sessionRouter.getRuntime(runtimeId);
       runtimeDebug("startSession resolving requested runtime", {
         sessionId: "pending",
         runtimeInstanceId: runtimeId,
@@ -2234,6 +2241,8 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
+    const queueInitialRunUntilBridgeAccess =
+      needsRuntimeProvisioning && !!input.prompt && !selectedRuntimeAccessAllowed;
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
@@ -2304,6 +2313,17 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
+          pendingRun: queueInitialRunUntilBridgeAccess
+            ? pendingRunValue([
+                {
+                  type: "run",
+                  prompt: input.prompt ?? null,
+                  interactionMode: input.interactionMode ?? null,
+                  clientSource: normalizeClientSource(input.clientSource),
+                  checkpointContext: null,
+                },
+              ])
+            : undefined,
           lastUserMessageAt: input.prompt ? new Date() : undefined,
           lastMessageAt: input.prompt ? new Date() : undefined,
           worktreeDeleted: sessionGroup.worktreeDeleted,
@@ -2390,6 +2410,63 @@ export class SessionService {
     }
 
     return session;
+  }
+
+  async resumePendingBridgeAccessSessions(input: BridgeAccessApprovedHandlerInput): Promise<void> {
+    const where: Prisma.SessionWhereInput = {
+      organizationId: input.organizationId,
+      createdById: input.granteeUserId,
+      hosting: "local",
+      agentStatus: "not_started",
+      workdir: null,
+      connection: { path: ["runtimeInstanceId"], equals: input.runtimeInstanceId },
+    };
+    if (input.scopeType === "session_group") {
+      if (!input.sessionGroupId) return;
+      where.sessionGroupId = input.sessionGroupId;
+    }
+
+    const sessions = await prisma.session.findMany({
+      where,
+      include: SESSION_INCLUDE,
+    });
+
+    for (const session of sessions) {
+      if (this.parsePendingCommands(session.pendingRun).length === 0) continue;
+      const conn = this.parseConnection(session.connection);
+      if (isRuntimeStartupState(conn.state)) continue;
+
+      const updated = await prisma.session.update({
+        where: { id: session.id },
+        data: {
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          connection: this.mergeConnection(session.connection, {
+            state: "connecting",
+            runtimeInstanceId: input.runtimeInstanceId,
+            runtimeLabel:
+              sessionRouter.getRuntime(input.runtimeInstanceId)?.label ?? conn.runtimeLabel,
+          }),
+        },
+        include: SESSION_INCLUDE,
+      });
+
+      this.provisionRuntime({
+        sessionId: updated.id,
+        sessionGroupId: updated.sessionGroupId,
+        slug: updated.sessionGroup?.slug,
+        preserveBranchName: false,
+        hosting: updated.hosting,
+        tool: updated.tool,
+        model: updated.model,
+        repo: updated.repo,
+        branch: updated.branch,
+        createdById: updated.createdById,
+        organizationId: updated.organizationId,
+        readOnly: updated.readOnlyWorkspace,
+        adapterType: conn.adapterType,
+      });
+    }
   }
 
   async run(
@@ -6585,3 +6662,7 @@ export class SessionService {
 }
 
 export const sessionService = new SessionService();
+
+setBridgeAccessApprovedHandler((input) =>
+  sessionService.resumePendingBridgeAccessSessions(input),
+);
