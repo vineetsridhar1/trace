@@ -185,7 +185,7 @@ export const sessionQueries = {
     }
     if (runtime && canUseBridgeSkills) {
       try {
-        skills = await sessionRouter.listSkills(runtime.id, args.sessionId, {
+        skills = await sessionRouter.listSkills(runtime.key, args.sessionId, {
           workdirHint: session.workdir ?? undefined,
           includeUserSkills: true,
           includeProjectSkills: true,

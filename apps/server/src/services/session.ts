@@ -2175,13 +2175,31 @@ export class SessionService {
       if (!runtimeId) {
         throw new Error("Requested runtime not found");
       }
-      const runtime = sessionRouter.getRuntime(runtimeId, input.organizationId);
+      let runtime = sessionRouter.getRuntime(runtimeId, input.organizationId);
       runtimeDebug("startSession resolving requested runtime", {
         sessionId: "pending",
         runtimeInstanceId: runtimeId,
         requestedHosting: input.hosting ?? null,
         runtimeFoundInRouter: !!runtime,
       });
+      if (!runtime && shouldUseEnvironmentRuntime && !input.environmentId) {
+        const fallbackRuntime = await this.resolveDefaultAccessibleLocalRuntime({
+          userId: input.createdById,
+          organizationId: input.organizationId,
+          tool: input.tool,
+          repoId: resolvedRepoId ?? null,
+          sessionGroupId: existingGroup?.id ?? null,
+        });
+        if (fallbackRuntime) {
+          runtimeDebug("startSession fell back from stale default local runtime", {
+            sessionId: "pending",
+            configuredRuntimeInstanceId: runtimeId,
+            fallbackRuntimeInstanceId: fallbackRuntime.id,
+            environmentId: requestedEnvironment?.id ?? null,
+          });
+          runtime = fallbackRuntime;
+        }
+      }
       if (!runtime) {
         throw new Error("Requested runtime not found");
       }
@@ -2190,14 +2208,14 @@ export class SessionService {
           await this.assertRuntimeAccess({
             userId: input.createdById,
             organizationId: input.organizationId,
-            runtimeInstanceId: runtimeId,
+            runtimeInstanceId: runtime.id,
             sessionGroupId: existingGroup.id,
           });
         } else {
           const access = await runtimeAccessService.getAccessState({
             userId: input.createdById,
             organizationId: input.organizationId,
-            runtimeInstanceId: runtimeId,
+            runtimeInstanceId: runtime.id,
             sessionGroupId: null,
           });
           selectedRuntimeAccessAllowed = access.hostingMode !== "local" || access.allowed;
@@ -2384,7 +2402,9 @@ export class SessionService {
     // or inherit from the restore group so the session lands on the same machine.
     const runtimeToBind = requestedRuntimeInstanceId;
     if (runtimeToBind) {
-      sessionRouter.bindSession(session.id, runtimeToBind);
+      const runtimeKeyToBind =
+        sessionRouter.getRuntime(runtimeToBind, input.organizationId)?.key ?? runtimeToBind;
+      sessionRouter.bindSession(session.id, runtimeKeyToBind);
     }
 
     // Only provision the runtime immediately when a prompt is provided.
@@ -3036,7 +3056,7 @@ export class SessionService {
         }
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
-        sessionRouter.bindSession(sessionId, runtime.id);
+        sessionRouter.bindSession(sessionId, runtime.key);
       }
       data.hosting = newHosting;
       data.connection = connJson(
@@ -5184,7 +5204,10 @@ export class SessionService {
     });
 
     if (targetHosting === "local" && targetRuntimeInstanceId) {
-      sessionRouter.bindSession(movedSession.id, targetRuntimeInstanceId);
+      const targetRuntimeKey =
+        sessionRouter.getRuntime(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
+        targetRuntimeInstanceId;
+      sessionRouter.bindSession(movedSession.id, targetRuntimeKey);
     }
 
     await eventService.create({
