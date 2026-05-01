@@ -172,7 +172,7 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
   if (!expanded || sessionIds.length === 0) return null;
 
   return (
-    <div className="ml-6 mt-1 space-y-1 pl-2">
+    <div className="ml-4 mt-1 space-y-1 pl-1">
       {groups.map((group) => (
         <SidebarSessionStatusGroup
           key={group.status}
@@ -208,7 +208,7 @@ function SidebarSessionStatusGroup({
     <div>
       <button
         type="button"
-        className="flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left text-xs font-semibold transition-colors hover:bg-white/10"
+        className="flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-left text-xs font-semibold transition-colors hover:bg-white/10"
         onClick={() => onToggle(group.status)}
       >
         <Icon size={12} className="shrink-0 text-foreground" />
@@ -266,7 +266,7 @@ function OwnedSessionItem({
     <button
       type="button"
       className={cn(
-        "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm leading-none transition-colors",
+        "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-sm leading-none transition-colors",
         isActive
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
