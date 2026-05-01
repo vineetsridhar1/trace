@@ -17,6 +17,7 @@ import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
+import { LinkedCheckoutTargetSelect } from "./LinkedCheckoutTargetSelect";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -127,6 +128,7 @@ export function GroupHeader({
         <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
 
+      <LinkedCheckoutTargetSelect state={linkedCheckout} />
       <LinkedCheckoutActions state={linkedCheckout} />
 
       {hasRunScripts && (

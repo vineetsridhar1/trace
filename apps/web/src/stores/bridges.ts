@@ -7,7 +7,7 @@ export interface AttachedCheckoutInfo {
   checkout: SyncedCheckoutSummary;
 }
 
-interface BridgesState {
+export interface BridgesState {
   bridges: MyBridgeSummary[];
   /**
    * Linked-checkout attachments keyed by `sessionGroupId`. O(1) lookup for
@@ -52,32 +52,4 @@ export function useAttachedCheckoutForGroup(
   return useBridgesStore((s: BridgesState) =>
     sessionGroupId ? (s.attachedByGroupId[sessionGroupId] ?? null) : null,
   );
-}
-
-export function usePreferredLinkedCheckoutBridge(
-  repoId: string | null | undefined,
-  sessionGroupId: string | null | undefined,
-): MyBridgeSummary | null {
-  return useBridgesStore((s: BridgesState) => {
-    const connectedLocalBridges = s.bridges.filter(
-      (bridge) => bridge.connected && bridge.hostingMode === "local",
-    );
-    if (connectedLocalBridges.length === 0) return null;
-
-    if (sessionGroupId) {
-      const attached = connectedLocalBridges.find((bridge) =>
-        bridge.linkedCheckouts.some((checkout) => checkout.sessionGroup.id === sessionGroupId),
-      );
-      if (attached) return attached;
-    }
-
-    if (repoId) {
-      const repoLinked = connectedLocalBridges.find((bridge) =>
-        bridge.registeredRepoIds.includes(repoId),
-      );
-      if (repoLinked) return repoLinked;
-    }
-
-    return connectedLocalBridges[0] ?? null;
-  });
 }

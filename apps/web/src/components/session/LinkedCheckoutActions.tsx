@@ -50,8 +50,9 @@ export function LinkedCheckoutActions({ state }: Props) {
         size="sm"
         onClick={() => void runAction("link", onLinkRepo)}
         disabled={pending}
+        title={`Link checkout on ${state.targetDisplayLabel}`}
       >
-        {pendingAction === "link" ? "Linking..." : "Link Local Checkout"}
+        {pendingAction === "link" ? "Linking..." : "Link Checkout"}
       </Button>
     );
   }
@@ -74,8 +75,16 @@ export function LinkedCheckoutActions({ state }: Props) {
         className={iconButtonClassName}
         onClick={() => void runAction("sync", onSync)}
         disabled={pending}
-        aria-label={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
-        title={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
+        aria-label={
+          isAttachedToThisGroup
+            ? `Sync checkout on ${state.targetDisplayLabel}`
+            : `Sync to checkout on ${state.targetDisplayLabel}`
+        }
+        title={
+          isAttachedToThisGroup
+            ? `Sync checkout on ${state.targetDisplayLabel}`
+            : `Sync to checkout on ${state.targetDisplayLabel}`
+        }
       >
         {pendingAction === "sync" ? (
           <Loader2 size={14} className="animate-spin" />
@@ -92,8 +101,16 @@ export function LinkedCheckoutActions({ state }: Props) {
             className={iconButtonClassName}
             onClick={() => void runAction("toggle-auto-sync", onToggleAutoSync)}
             disabled={pending}
-            aria-label={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
-            title={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
+            aria-label={
+              autoSyncEnabled
+                ? `Pause auto-sync on ${state.targetDisplayLabel}`
+                : `Resume auto-sync on ${state.targetDisplayLabel}`
+            }
+            title={
+              autoSyncEnabled
+                ? `Pause auto-sync on ${state.targetDisplayLabel}`
+                : `Resume auto-sync on ${state.targetDisplayLabel}`
+            }
           >
             {pendingAction === "toggle-auto-sync" ? (
               <Loader2 size={14} className="animate-spin" />
@@ -109,8 +126,8 @@ export function LinkedCheckoutActions({ state }: Props) {
             className={iconButtonClassName}
             onClick={() => void runAction("restore", onRestore)}
             disabled={pending}
-            aria-label="Restore main worktree"
-            title="Restore main worktree"
+            aria-label={`Restore checkout on ${state.targetDisplayLabel}`}
+            title={`Restore checkout on ${state.targetDisplayLabel}`}
           >
             {pendingAction === "restore" ? (
               <Loader2 size={14} className="animate-spin" />
