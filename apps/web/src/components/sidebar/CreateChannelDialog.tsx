@@ -20,6 +20,7 @@ import { features } from "../../lib/features";
 import { useAuthStore } from "@trace/client-core";
 import { useEntityField, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
+import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
 
 const CREATE_CHANNEL_MUTATION = gql`
   mutation CreateChannel($input: CreateChannelInput!) {
@@ -116,14 +117,18 @@ export function CreateChannelDialog({
   // Repos already cloned on at least one connected local bridge. When no local
   // bridge is connected we skip the filter so cloud-only users can still pick
   // any repo (cloud clones on demand).
+  const accessibleLocalRuntimes = useMemo(
+    () => runtimes.filter(isAccessibleLocalRuntime),
+    [runtimes],
+  );
   const clonedRepoIds = useMemo(() => {
     const set = new Set<string>();
-    for (const runtime of runtimes) {
+    for (const runtime of accessibleLocalRuntimes) {
       for (const id of runtime.registeredRepoIds) set.add(id);
     }
     return set;
-  }, [runtimes]);
-  const hasLocalBridge = runtimes.length > 0;
+  }, [accessibleLocalRuntimes]);
+  const hasLocalBridge = accessibleLocalRuntimes.length > 0;
   const isRepoCloned = (id: string) => !hasLocalBridge || clonedRepoIds.has(id);
 
   async function handleCreateChannel(e: React.FormEvent) {
