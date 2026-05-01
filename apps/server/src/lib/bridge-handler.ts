@@ -6,13 +6,14 @@ import type {
   BridgeLinkedCheckoutActionResultPayload,
   GitCheckpointContext,
 } from "@trace/shared";
-import { sessionRouter } from "./session-router.js";
+import { runtimeRouterKey, sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { prisma } from "./db.js";
+import { AuthorizationError } from "./errors.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -91,6 +92,7 @@ function connectionRuntimeInstanceId(connection: unknown): string | null {
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
+  let runtimeKey = runtimeId;
   let registered = false;
   const bridgeAuth = req?.bridgeAuth;
 
@@ -129,7 +131,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     if (typeof sessionId !== "string" || !sessionId) return null;
     const runtime = sessionRouter.getRuntimeForSession(sessionId);
     if (runtime) {
-      const allowed = runtime.id === runtimeId && runtime.ws === ws;
+      const allowed =
+        runtime.key === runtimeKey &&
+        runtime.ws === ws &&
+        (!bridgeAuth?.organizationId || runtime.organizationId === bridgeAuth.organizationId);
       if (!allowed) {
         runtimeDebug("bridge ignored message for session bound to another runtime", {
           runtimeId,
@@ -145,6 +150,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         id: sessionId,
         agentStatus: { notIn: ["failed", "stopped"] },
         sessionStatus: { not: "merged" },
+        ...(bridgeAuth?.organizationId ? { organizationId: bridgeAuth.organizationId } : {}),
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
       select: { id: true, connection: true },
@@ -157,7 +163,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       return null;
     }
 
-    sessionRouter.bindSession(sessionId, runtimeId);
+    sessionRouter.bindSession(sessionId, runtimeKey);
     return sessionId;
   }
 
@@ -245,12 +251,14 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               });
 
             if (registered && oldId !== newId) {
-              sessionRouter.unregisterRuntime(oldId, ws);
+              sessionRouter.unregisterRuntime(runtimeKey, ws);
             }
 
             runtimeId = newId;
-            const existingRuntime = sessionRouter.getRuntime(newId);
+            runtimeKey = runtimeRouterKey(newId, bridgeAuth.organizationId);
+            const existingRuntime = sessionRouter.getRuntime(newId, bridgeAuth.organizationId);
             sessionRouter.registerRuntime({
+              key: runtimeKey,
               id: runtimeId,
               label: bridgeRuntime.label,
               ws,
@@ -314,10 +322,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             }
 
             if (registered && oldId !== newId) {
-              sessionRouter.unregisterRuntime(oldId, ws);
+              sessionRouter.unregisterRuntime(runtimeKey, ws);
             }
 
             runtimeId = newId;
+            runtimeKey = runtimeId;
             const existingRuntime = sessionRouter.getRuntime(newId);
             sessionRouter.registerRuntime({
               id: runtimeId,
@@ -355,7 +364,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 ws.close(1008, "Session is not waiting for this runtime");
                 return;
               }
-              sessionRouter.bindSession(bridgeAuth.sessionId, runtimeId);
+              sessionRouter.bindSession(bridgeAuth.sessionId, runtimeKey);
             }
 
             if (existingRuntime && existingRuntime.ws !== ws) {
@@ -374,9 +383,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           // The DB (connection.runtimeInstanceId) is the single source of truth —
           // the bridge doesn't need to report session lists.
           runtimeDebug("restoring sessions for runtime after hello", { runtimeId });
-          sessionService.restoreSessionsForRuntime(runtimeId).catch((err) => {
-            console.error("[bridge] error restoring sessions for runtime:", err);
-          });
+          sessionService
+            .restoreSessionsForRuntime(runtimeId, bridgeAuth?.organizationId)
+            .catch((err) => {
+              console.error("[bridge] error restoring sessions for runtime:", err);
+            });
 
           // Warm the linked-checkout cache for each registered repo so
           // `BridgeRuntime.linkedCheckouts` can answer without a per-call
@@ -386,7 +397,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           // before responses land will see an empty list; the next poll
           // (10s later) picks up the warmed cache.
           for (const repoId of registeredRepoIds) {
-            sessionRouter.getLinkedCheckoutStatus(runtimeId, repoId).catch(() => {});
+            sessionRouter.getLinkedCheckoutStatus(runtimeKey, repoId).catch(() => {});
           }
 
           // Restore terminal relay entries from bridge-reported active terminals
@@ -403,13 +414,17 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 runtimeId,
                 count: activeTerminals.length,
               });
-              terminalRelay.restoreTerminals(runtimeId, activeTerminals).catch((err) => {
+              terminalRelay.restoreTerminals(runtimeKey, activeTerminals).catch((err) => {
                 console.error("[bridge] error restoring terminals:", err);
               });
             }
           }
         })().catch((err) => {
           console.error("[bridge] error handling runtime_hello:", err);
+          if (err instanceof AuthorizationError) {
+            ws.close(1008, err.message);
+            return;
+          }
           ws.close(1011, "runtime_hello failed");
         });
         return;
@@ -417,7 +432,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "runtime_heartbeat") {
         if (!registered) return;
-        sessionRouter.recordHeartbeat(runtimeId, ws);
+        sessionRouter.recordHeartbeat(runtimeKey, ws);
         return;
       }
 
@@ -431,10 +446,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "repo_linked" && msg.repoId) {
         const repoId = msg.repoId as string;
-        sessionRouter.addRegisteredRepo(runtimeId, repoId, ws);
+        sessionRouter.addRegisteredRepo(runtimeKey, repoId, ws);
         // Warm the linked-checkout cache for the freshly-linked repo (no-op
         // if no checkout is configured for it).
-        sessionRouter.getLinkedCheckoutStatus(runtimeId, repoId).catch(() => {});
+        sessionRouter.getLinkedCheckoutStatus(runtimeKey, repoId).catch(() => {});
         return;
       }
 
@@ -442,7 +457,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveLinkedCheckoutStatusRequest(
           msg.requestId,
           msg.status as BridgeLinkedCheckoutStatus,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -451,7 +466,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveLinkedCheckoutActionRequest(
           msg.requestId,
           msg.result as BridgeLinkedCheckoutActionResultPayload,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -475,7 +490,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               })
             : undefined,
           typeof msg.error === "string" ? msg.error : undefined,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -492,7 +507,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           branches,
           typeof msg.error === "string" ? msg.error : undefined,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -507,7 +522,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           files,
           typeof msg.error === "string" ? msg.error : undefined,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -517,7 +532,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           typeof msg.content === "string" ? msg.content : "",
           typeof msg.error === "string" ? msg.error : undefined,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -535,7 +550,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           files,
           typeof msg.error === "string" ? msg.error : undefined,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -545,7 +560,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           typeof msg.content === "string" ? msg.content : "",
           typeof msg.error === "string" ? msg.error : undefined,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -561,7 +576,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               }>)
             : [],
           typeof msg.error === "string" ? msg.error : undefined,
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -575,7 +590,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       ) {
         terminalRelay.relayFromBridge(
           msg as { type: string; terminalId: string; [key: string]: unknown },
-          runtimeId,
+          runtimeKey,
         );
         return;
       }
@@ -608,7 +623,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           const sessionId = await resolveSessionBoundToThisRuntime(msg.sessionId);
           if (!sessionId) return;
           runtimeDebug("received register_session", { runtimeId, sessionId });
-          sessionRouter.bindSession(sessionId, runtimeId);
+          sessionRouter.bindSession(sessionId, runtimeKey);
         })().catch((err: unknown) => {
           console.error("[bridge] error authorizing register_session:", err);
         });
@@ -659,16 +674,18 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       graceMs: DISCONNECT_GRACE_MS,
     });
     const closedRuntimeId = bridgeAuth?.kind === "local" ? bridgeAuth.instanceId : runtimeId;
-    const affectedSessions = registered ? sessionRouter.unregisterRuntime(runtimeId, ws) : [];
+    const affectedSessions = registered ? sessionRouter.unregisterRuntime(runtimeKey, ws) : [];
     runtimeDebug("bridge close affected sessions", {
       runtimeId: closedRuntimeId,
       affectedSessions,
     });
 
     if (bridgeAuth?.kind === "local") {
-      runtimeAccessService.markRuntimeDisconnected(closedRuntimeId).catch((err) => {
-        console.error("[bridge] failed to mark local runtime disconnected:", err);
-      });
+      runtimeAccessService
+        .markRuntimeDisconnected(closedRuntimeId, bridgeAuth.organizationId)
+        .catch((err) => {
+          console.error("[bridge] failed to mark local runtime disconnected:", err);
+        });
     }
 
     // Wait a grace period before marking sessions disconnected — if the bridge

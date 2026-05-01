@@ -1038,9 +1038,11 @@ describe("SessionService", () => {
       );
       sessionRouterMock.listRuntimes.mockReturnValueOnce([
         {
+          key: "runtime-accessible",
           id: "runtime-accessible",
           label: "Accessible Laptop",
           hostingMode: "local",
+          organizationId: "org-1",
           registeredRepoIds: ["repo-1"],
           supportedTools: ["claude_code"],
           boundSessions: new Set<string>(),
@@ -2080,7 +2082,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({ type: "send", sessionId: "session-1" }),
-        { expectedHomeRuntimeId: "runtime-a" },
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );
       // Post-delivery: session transitions to active and records the send
       expect(prismaMock.session.update).toHaveBeenCalledWith(
@@ -2198,7 +2200,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({ type: "send" }),
-        { expectedHomeRuntimeId: "runtime-a" },
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );
       expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2478,7 +2480,7 @@ describe("SessionService", () => {
             promptEventId: "event-message-1",
           }),
         }),
-        { expectedHomeRuntimeId: "runtime-a" },
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );
       const sendCommand = sessionRouterMock.send.mock.calls[0]?.[1] as
         | Record<string, unknown>
@@ -2698,7 +2700,7 @@ describe("SessionService", () => {
           type: "prepare",
           readOnly: true,
         }),
-        { expectedHomeRuntimeId: "runtime-a" },
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );
     });
   });
@@ -2817,7 +2819,7 @@ describe("SessionService", () => {
             "https://example.test/uploads/org-1/image-b.png",
           ],
         }),
-        { expectedHomeRuntimeId: "runtime-a" },
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -4101,8 +4103,10 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
         runtimeId === "runtime-home"
           ? {
+              key: "runtime-home",
               id: "runtime-home",
               hostingMode: "local",
+              organizationId: "org-1",
               ws: { readyState: 1, OPEN: 1 },
             }
           : null,
@@ -4186,8 +4190,10 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
         runtimeId === "runtime-home"
           ? {
+              key: "runtime-home",
               id: "runtime-home",
               hostingMode: "local",
+              organizationId: "org-1",
               ws: { readyState: 1, OPEN: 1 },
             }
           : null,
@@ -4228,8 +4234,10 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
         runtimeId === "runtime-home"
           ? {
+              key: "runtime-home",
               id: "runtime-home",
               hostingMode: "local",
+              organizationId: "org-1",
               ws: { readyState: 1, OPEN: 1 },
             }
           : null,
@@ -4290,8 +4298,10 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
         runtimeId === "runtime-home"
           ? {
+              key: "runtime-home",
               id: "runtime-home",
               hostingMode: "local",
+              organizationId: "org-1",
               ws: { readyState: 1, OPEN: 1 },
             }
           : null,
@@ -4644,6 +4654,11 @@ describe("SessionService", () => {
     it("allows listing branches when the sessionGroupId matches the repo", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({ repoId: "repo-a" });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-1",
+        id: "runtime-1",
+        organizationId: "org-1",
+      });
       sessionRouterMock.listBranches.mockResolvedValueOnce(["main", "feat/x"]);
 
       const branches = await service.listBranches(
@@ -4665,8 +4680,20 @@ describe("SessionService", () => {
         new Set(["local-1"]),
       );
       sessionRouterMock.listRuntimes.mockReturnValueOnce([
-        { id: "cloud-1", hostingMode: "cloud", registeredRepoIds: [] },
-        { id: "local-1", hostingMode: "local", registeredRepoIds: ["repo-a"] },
+        {
+          key: "cloud-1",
+          id: "cloud-1",
+          organizationId: "org-1",
+          hostingMode: "cloud",
+          registeredRepoIds: [],
+        },
+        {
+          key: "local-1",
+          id: "local-1",
+          organizationId: "org-1",
+          hostingMode: "local",
+          registeredRepoIds: ["repo-a"],
+        },
       ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
       sessionRouterMock.listBranches.mockResolvedValueOnce(["main"]);
 

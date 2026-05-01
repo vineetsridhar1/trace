@@ -44,13 +44,13 @@ interface TerminalEntry {
  * Relays terminal I/O between frontend WebSocket clients and bridge runtimes.
  * No persistence — terminal data is ephemeral and never hits the event store.
  */
-class TerminalRelay {
+export class TerminalRelay {
   /** If no frontend ever attaches within this window, kill the orphaned terminal. */
   private static ORPHAN_TIMEOUT_MS = 30 * 60 * 1000;
   /** Max scrollback buffer size in bytes — older output is trimmed from the front. */
   private static MAX_SCROLLBACK_BYTES = 50 * 1024;
 
-  private terminals = new Map<string, TerminalEntry>();
+  private terminals = new Map<string, TerminalEntry & { runtimeKey: string }>();
   /** Reverse index: sessionId → Set<terminalId> for bulk cleanup */
   private sessionTerminals = new Map<string, Set<string>>();
   /** Reverse index: sessionGroupId → Set<terminalId> for group-scoped terminal tabs */
@@ -70,6 +70,7 @@ class TerminalRelay {
   createTerminal(
     sessionId: string,
     sessionGroupId: string | null,
+    organizationId: string | null,
     runtimeInstanceId: string,
     ownerUserId: string,
     cols: number,
@@ -77,12 +78,15 @@ class TerminalRelay {
     cwd?: string,
   ): string {
     const terminalId = randomUUID();
+    const runtimeKey = this.resolveRuntimeKey(runtimeInstanceId, organizationId);
 
     this.terminals.set(terminalId, {
       sessionId,
       sessionGroupId,
       kind: "session",
+      organizationId: organizationId ?? undefined,
       runtimeInstanceId,
+      runtimeKey,
       ownerUserId,
       frontendWs: null,
       attachedUserId: null,
@@ -114,7 +118,7 @@ class TerminalRelay {
         rows,
         cwd: cwd ?? "",
       },
-      { expectedHomeRuntimeId: runtimeInstanceId },
+      { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
     );
 
     if (result !== "delivered") {
@@ -142,6 +146,7 @@ class TerminalRelay {
   ): string {
     const terminalId = randomUUID();
     const sessionId = `channel:${channelId}`;
+    const runtimeKey = this.resolveRuntimeKey(runtimeInstanceId, organizationId);
 
     this.terminals.set(terminalId, {
       sessionId,
@@ -151,6 +156,7 @@ class TerminalRelay {
       organizationId,
       repoId,
       runtimeInstanceId,
+      runtimeKey,
       ownerUserId,
       frontendWs: null,
       attachedUserId: null,
@@ -171,14 +177,18 @@ class TerminalRelay {
     channelIds.add(terminalId);
     this.channelTerminals.set(channelKey, channelIds);
 
-    const result = sessionRouter.sendToRuntime(runtimeInstanceId, {
-      type: "terminal_create",
-      terminalId,
-      sessionId,
-      cols,
-      rows,
-      cwd,
-    });
+    const result = sessionRouter.sendToRuntime(
+      runtimeInstanceId,
+      {
+        type: "terminal_create",
+        terminalId,
+        sessionId,
+        cols,
+        rows,
+        cwd,
+      },
+      organizationId,
+    );
 
     if (result !== "delivered") {
       const entry = this.terminals.get(terminalId);
@@ -209,6 +219,7 @@ class TerminalRelay {
       const terminalId = this.createTerminal(
         sessionId,
         sessionGroupId,
+        null,
         runtimeInstanceId,
         "system",
         80,
@@ -237,7 +248,7 @@ class TerminalRelay {
             terminalId,
             data: command + "\n",
           },
-          { expectedHomeRuntimeId: runtimeInstanceId },
+          { expectedHomeRuntimeId: runtimeInstanceId, organizationId: entry.organizationId },
         );
       };
 
@@ -260,9 +271,12 @@ class TerminalRelay {
    * the bridge, so keep them alive until explicit destroy or process exit.
    */
   async restoreTerminals(
-    runtimeInstanceId: string,
+    runtimeKey: string,
     terminals: Array<{ terminalId: string; sessionId: string }>,
   ): Promise<void> {
+    const runtime = sessionRouter.getRuntime(runtimeKey);
+    const runtimeInstanceId = runtime?.id ?? runtimeKey;
+    const runtimeOrganizationId = runtime?.organizationId;
     const channelPrefix = "channel:";
     const sessionIds = [
       ...new Set(
@@ -284,7 +298,7 @@ class TerminalRelay {
         ? []
         : await prisma.session.findMany({
             where: { id: { in: sessionIds } },
-            select: { id: true, sessionGroupId: true },
+            select: { id: true, sessionGroupId: true, organizationId: true },
           });
     const channels =
       channelIds.length === 0
@@ -293,11 +307,19 @@ class TerminalRelay {
             where: { id: { in: channelIds } },
             select: { id: true, organizationId: true, repoId: true },
           });
-    const sessionGroupIds = new Map<string, string | null>(
-      sessions.map((session: { id: string; sessionGroupId: string | null }) => [
-        session.id,
-        session.sessionGroupId ?? null,
-      ]),
+    const sessionContexts = new Map<
+      string,
+      { sessionGroupId: string | null; organizationId: string | null }
+    >(
+      sessions.map(
+        (session: { id: string; sessionGroupId: string | null; organizationId: string }) => [
+          session.id,
+          {
+            sessionGroupId: session.sessionGroupId ?? null,
+            organizationId: session.organizationId ?? runtimeOrganizationId ?? null,
+          },
+        ],
+      ),
     );
     const channelsById = new Map(channels.map((channel) => [channel.id, channel]));
 
@@ -316,6 +338,7 @@ class TerminalRelay {
           organizationId: channel.organizationId,
           repoId: channel.repoId,
           runtimeInstanceId,
+          runtimeKey,
           ownerUserId: null,
           frontendWs: null,
           attachedUserId: null,
@@ -339,13 +362,16 @@ class TerminalRelay {
         continue;
       }
 
-      const sessionGroupId = sessionGroupIds.get(sessionId) ?? null;
+      const sessionContext = sessionContexts.get(sessionId);
+      const sessionGroupId = sessionContext?.sessionGroupId ?? null;
 
       this.terminals.set(terminalId, {
         sessionId,
         sessionGroupId,
         kind: "session",
+        organizationId: sessionContext?.organizationId ?? runtimeOrganizationId,
         runtimeInstanceId,
+        runtimeKey,
         ownerUserId: null,
         frontendWs: null,
         attachedUserId: null,
@@ -514,7 +540,13 @@ class TerminalRelay {
   ): void {
     const entry = this.terminals.get(msg.terminalId);
     if (!entry) return;
-    if (sourceRuntimeInstanceId && entry.runtimeInstanceId !== sourceRuntimeInstanceId) return;
+    if (
+      sourceRuntimeInstanceId &&
+      entry.runtimeInstanceId !== sourceRuntimeInstanceId &&
+      entry.runtimeKey !== sourceRuntimeInstanceId
+    ) {
+      return;
+    }
 
     // Accumulate output into the scrollback ring buffer
     if (msg.type === "terminal_output") {
@@ -734,16 +766,21 @@ class TerminalRelay {
       | { type: "terminal_destroy"; terminalId: string },
   ): void {
     if (entry.kind === "channel") {
-      sessionRouter.sendToRuntime(entry.runtimeInstanceId, command);
+      sessionRouter.sendToRuntime(entry.runtimeInstanceId, command, entry.organizationId);
       return;
     }
     sessionRouter.send(entry.sessionId, command, {
       expectedHomeRuntimeId: entry.runtimeInstanceId,
+      organizationId: entry.organizationId,
     });
   }
 
   private channelTerminalKey(channelId: string, runtimeInstanceId: string): string {
     return `${channelId}:${runtimeInstanceId}`;
+  }
+
+  private resolveRuntimeKey(runtimeInstanceId: string, organizationId?: string | null): string {
+    return sessionRouter.getRuntime(runtimeInstanceId, organizationId)?.key ?? runtimeInstanceId;
   }
 
   private removeTerminal(terminalId: string): void {

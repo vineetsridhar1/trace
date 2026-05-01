@@ -104,10 +104,10 @@ export const bridgeAccessMutations = {
 
 export const bridgeAccessTypeResolvers = {
   BridgeRuntime: {
-    connected: (runtime: { instanceId: string }) =>
-      sessionRouter.isRuntimeAvailable(runtime.instanceId),
-    linkedCheckouts: (runtime: { instanceId: string }) => {
-      const live = sessionRouter.getRuntime(runtime.instanceId);
+    connected: (runtime: { instanceId: string; organizationId: string }) =>
+      sessionRouter.isRuntimeAvailable(runtime.instanceId, runtime.organizationId),
+    linkedCheckouts: (runtime: { instanceId: string; organizationId: string }) => {
+      const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);
       if (!live || live.ws.readyState !== live.ws.OPEN) return [];
       // Filter by current registeredRepoIds so stale cache entries from
       // previously-linked-but-now-unlinked repos don't surface.

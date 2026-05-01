@@ -69,6 +69,7 @@ describe("TerminalService", () => {
     it("creates a terminal for a valid session", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
@@ -90,6 +91,7 @@ describe("TerminalService", () => {
       expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "org-1",
         "runtime-1",
         "user-1",
         80,
@@ -115,6 +117,7 @@ describe("TerminalService", () => {
     it("throws when session is fully unloaded", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
@@ -137,6 +140,7 @@ describe("TerminalService", () => {
     it("throws when worktree is deleted", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
@@ -159,6 +163,7 @@ describe("TerminalService", () => {
     it("throws when the setup script is still running", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
@@ -228,6 +233,7 @@ describe("TerminalService", () => {
     it("passes undefined workdir when session has no workdir", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
@@ -248,6 +254,7 @@ describe("TerminalService", () => {
       expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "org-1",
         "runtime-1",
         "user-1",
         120,

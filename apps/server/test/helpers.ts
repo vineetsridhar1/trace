@@ -213,7 +213,9 @@ export function createPrismaMock() {
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      create: vi.fn(),
       upsert: vi.fn(),
+      update: vi.fn(),
       updateMany: vi.fn(),
     },
     bridgeAccessGrant: {

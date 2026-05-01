@@ -257,11 +257,32 @@ export function SessionGroupDetailView({
     setActiveSessionId,
   ]);
 
-  // Initialize open tabs with the most recent session
+  const activeSessionBelongsToGroup = groupSessions.some(
+    (session: SessionEntity) => session.id === activeSessionId,
+  );
+  const initialSessionTabId =
+    activeSessionId && activeSessionBelongsToGroup ? activeSessionId : sessionsByRecency[0]?.id;
+
+  // Initialize open tabs with the active deep-linked session when possible.
   useEffect(() => {
-    if (sessionsByRecency.length === 0) return;
-    initSessionTabs(sessionGroupId, [sessionsByRecency[0].id]);
-  }, [sessionGroupId, sessionsByRecency, initSessionTabs]);
+    if (!initialSessionTabId) return;
+    initSessionTabs(sessionGroupId, [initialSessionTabId]);
+  }, [sessionGroupId, initialSessionTabId, initSessionTabs]);
+
+  // Keep URL/history-driven session changes visible in the tab strip.
+  useEffect(() => {
+    if (activeSessionGroupId !== sessionGroupId) return;
+    if (!activeSessionId || !activeSessionBelongsToGroup) return;
+    if (openTabIds?.includes(activeSessionId)) return;
+    openSessionTab(sessionGroupId, activeSessionId);
+  }, [
+    activeSessionGroupId,
+    activeSessionBelongsToGroup,
+    activeSessionId,
+    openSessionTab,
+    openTabIds,
+    sessionGroupId,
+  ]);
 
   // Clear terminal selection if the terminal was removed
   useEffect(() => {

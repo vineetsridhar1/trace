@@ -190,7 +190,10 @@ async function main() {
         freshnessMs: Date.now() - stale.lastHeartbeat,
       });
       if (stale.runtimeId) {
-        void runtimeAccessService.markRuntimeDisconnected(stale.runtimeId);
+        void runtimeAccessService.markRuntimeDisconnected(
+          stale.runtimeInstanceId,
+          stale.organizationId,
+        );
       }
       for (const sessionId of eviction.affectedSessions) {
         runtimeDebug("marking session disconnected after stale runtime eviction", {
@@ -200,7 +203,7 @@ async function main() {
         void sessionService.markConnectionLost(
           sessionId,
           "runtime_heartbeat_timeout",
-          stale.runtimeId,
+          stale.runtimeInstanceId,
         );
       }
     }

@@ -168,7 +168,7 @@ export const sessionQueries = {
         ? ((session.connection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null)
         : null;
     const runtime =
-      (runtimeInstanceId ? sessionRouter.getRuntime(runtimeInstanceId) : null) ??
+      (runtimeInstanceId ? sessionRouter.getRuntime(runtimeInstanceId, orgId) : null) ??
       sessionRouter.getRuntimeForSession(args.sessionId);
 
     // Try to get skills from bridge
