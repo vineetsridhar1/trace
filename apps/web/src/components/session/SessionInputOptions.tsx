@@ -73,7 +73,8 @@ export function SessionInputOptions({
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(
-    (r: SessionRuntimeInstance) => r.hostingMode === "local" && r.connected,
+    (r: SessionRuntimeInstance) =>
+      r.hostingMode === "local" && r.connected && (r.access?.allowed || r.access?.isOwner),
   );
   useEffect(() => {
     if (!isNotStarted || isOptimistic) return;

@@ -14,6 +14,14 @@ export interface RuntimeInfo {
   registeredRepoIds: string[];
 }
 
+function isAccessibleLocalRuntime(runtime: SessionRuntimeInstance): boolean {
+  return (
+    runtime.connected &&
+    runtime.hostingMode === "local" &&
+    (runtime.access?.allowed || runtime.access?.isOwner)
+  );
+}
+
 interface RuntimeSelectorProps {
   tool: string;
   open: boolean;
@@ -41,9 +49,7 @@ export function RuntimeSelector({
       .then((result: { data?: Record<string, unknown> }) => {
         const fetched = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
         setRuntimes(fetched);
-        const connected = fetched.filter(
-          (r: SessionRuntimeInstance) => r.connected && r.hostingMode === "local",
-        );
+        const connected = fetched.filter(isAccessibleLocalRuntime);
         const eligible = channelRepoId
           ? connected.filter((r: SessionRuntimeInstance) =>
               r.registeredRepoIds.includes(channelRepoId),
@@ -56,16 +62,18 @@ export function RuntimeSelector({
           onChange(undefined, null);
         } else if (value === CLOUD_RUNTIME_ID) {
           onChange(undefined, null);
-        } else if (value && value !== CLOUD_RUNTIME_ID && !fetched.find((r) => r.id === value)) {
+        } else if (
+          value &&
+          value !== CLOUD_RUNTIME_ID &&
+          !fetched.find((r) => r.id === value && isAccessibleLocalRuntime(r))
+        ) {
           onChange(undefined, null);
         }
       })
       .finally(() => setLoading(false));
   }, [open, tool, channelRepoId]);
 
-  const connectedRuntimes = runtimes.filter(
-    (r: SessionRuntimeInstance) => r.connected && r.hostingMode === "local",
-  );
+  const connectedRuntimes = runtimes.filter(isAccessibleLocalRuntime);
   const selectedRuntime =
     value === CLOUD_RUNTIME_ID
       ? null

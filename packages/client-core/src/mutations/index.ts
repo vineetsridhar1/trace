@@ -240,6 +240,10 @@ export const AVAILABLE_RUNTIMES_QUERY = gql`
       connected
       sessionCount
       registeredRepoIds
+      access {
+        allowed
+        isOwner
+      }
     }
   }
 `;
