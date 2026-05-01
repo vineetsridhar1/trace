@@ -268,7 +268,6 @@ export class BridgeClient implements IBridgeClient {
       this.setStatus("disconnected");
       return;
     }
-
     this.setStatus("connecting");
     runtimeDebug("desktop bridge connecting", {
       serverUrl: this.serverUrl,
@@ -346,12 +345,21 @@ export class BridgeClient implements IBridgeClient {
       }
     });
 
-    this.ws.on("close", () => {
-      console.log("[bridge] disconnected, reconnecting in 3s...");
+    this.ws.on("close", (code, reason) => {
+      const reasonText = reason.toString();
+      console.log(
+        `[bridge] disconnected, reconnecting in 3s... code=${code}${
+          reasonText ? ` reason=${reasonText}` : ""
+        }`,
+      );
       this.stopHeartbeat();
       this.stopHookQueueDrain();
       this.autoSyncManager.stop();
-      runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId });
+      runtimeDebug("desktop bridge websocket closed", {
+        instanceId: this.instanceId,
+        code,
+        reason: reasonText || null,
+      });
       this.setStatus("disconnected");
       if (this.authContext) {
         this.scheduleReconnect(3000);

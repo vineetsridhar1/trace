@@ -101,8 +101,8 @@ class TerminalService {
     });
     if (!bridge) throw new Error("Bridge not found");
 
-    const runtime = sessionRouter.getRuntime(bridge.instanceId);
-    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id)) {
+    const runtime = sessionRouter.getRuntime(bridge.instanceId, input.organizationId);
+    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, input.organizationId)) {
       throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
     }
     if (runtime.organizationId !== input.organizationId) {
@@ -121,7 +121,7 @@ class TerminalService {
 
     let repoPath: string | null = null;
     if (input.requireRepoPath) {
-      const status = await sessionRouter.getLinkedCheckoutStatus(runtime.id, channel.repoId);
+      const status = await sessionRouter.getLinkedCheckoutStatus(runtime.key, channel.repoId);
       repoPath = status.repoPath ?? null;
       if (!repoPath) throw new Error("Repo is not linked on this bridge");
     }
@@ -185,6 +185,7 @@ class TerminalService {
     const terminalId = terminalRelay.createTerminal(
       sessionId,
       session.sessionGroupId ?? null,
+      session.organizationId,
       runtimeInstanceId,
       userId,
       cols,

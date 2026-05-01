@@ -885,7 +885,7 @@ model CloudMachine {
 
 model BridgeRuntime {
   id             String       @id @default(uuid())
-  instanceId     String       @unique
+  instanceId     String
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ownerUserId    String
@@ -903,6 +903,7 @@ model BridgeRuntime {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([instanceId, organizationId])
   @@index([organizationId, ownerUserId])
   @@index([organizationId, connectedAt])
 }

@@ -60,6 +60,7 @@ vi.mock("./db.js", () => ({
 }));
 
 import { handleBridgeConnection } from "./bridge-handler.js";
+import { AuthorizationError } from "./errors.js";
 
 type Handler = (payload?: unknown) => void;
 
@@ -107,6 +108,36 @@ describe("bridge handler auth", () => {
     await Promise.resolve();
 
     expect(ws.close).toHaveBeenCalledWith(1008, "Bridge auth mismatch");
+    expect(mocks.registerRuntime).not.toHaveBeenCalled();
+  });
+
+  it("closes local bridge authorization failures with a policy violation", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockRejectedValueOnce(
+      new AuthorizationError("This bridge instance is already registered to another user"),
+    );
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      hostingMode: "local",
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(ws.close).toHaveBeenCalledWith(
+      1008,
+      "This bridge instance is already registered to another user",
+    );
     expect(mocks.registerRuntime).not.toHaveBeenCalled();
   });
 

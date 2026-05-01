@@ -62,6 +62,63 @@ describe("runtimeAccessService", () => {
     });
   });
 
+  it("creates a bridge runtime row for the same instance in a different organization", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce(null);
+    prismaMock.bridgeRuntime.create.mockResolvedValueOnce({
+      id: "bridge-2",
+      instanceId: "runtime-1",
+      organizationId: "org-2",
+      ownerUserId: "user-1",
+      label: "Laptop",
+      hostingMode: "local",
+      ownerUser: { id: "user-1", name: "Owner" },
+    });
+
+    const runtime = await runtimeAccessService.registerLocalRuntimeConnection({
+      instanceId: "runtime-1",
+      organizationId: "org-2",
+      ownerUserId: "user-1",
+      label: "Laptop",
+      hostingMode: "local",
+    });
+
+    expect(prismaMock.bridgeRuntime.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { instanceId: "runtime-1", organizationId: "org-2" },
+      }),
+    );
+    expect(prismaMock.bridgeRuntime.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          instanceId: "runtime-1",
+          organizationId: "org-2",
+          ownerUserId: "user-1",
+        }),
+      }),
+    );
+    expect(runtime.id).toBe("bridge-2");
+  });
+
+  it("rejects a bridge instance registered to another user in the same organization", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+      id: "bridge-1",
+      ownerUserId: "user-2",
+    });
+
+    await expect(
+      runtimeAccessService.registerLocalRuntimeConnection({
+        instanceId: "runtime-1",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        label: "Laptop",
+        hostingMode: "local",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+
+    expect(prismaMock.bridgeRuntime.create).not.toHaveBeenCalled();
+    expect(prismaMock.bridgeRuntime.update).not.toHaveBeenCalled();
+  });
+
   it("grants access to the bridge owner", async () => {
     prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
@@ -168,7 +225,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("emits an owner-only bridge request event when access is requested", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -226,7 +283,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("returns the existing pending when a matching scope is re-requested", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -268,7 +325,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("supersedes a prior pending with a different scope and emits a resolved event", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -472,7 +529,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("requestAccess persists requestedCapabilities and defaults to ['session'] when omitted", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -516,7 +573,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("requestAccess always ensures `session` is present in requestedCapabilities", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -560,7 +617,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("requestAccess allows requesting terminal when an active grant only has session", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",

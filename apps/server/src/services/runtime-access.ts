@@ -152,15 +152,16 @@ function buildActiveGrantWhere(params: {
   return where;
 }
 
-function isConnectedRuntime(instanceId: string): boolean {
-  return sessionRouter.isRuntimeAvailable(instanceId);
+function isConnectedRuntime(instanceId: string, organizationId: string): boolean {
+  return sessionRouter.isRuntimeAvailable(instanceId, organizationId);
 }
 
 function runtimeHostingMode(
   runtimeInstanceId: string,
+  organizationId: string,
   persisted: { id: string } | null,
 ): "cloud" | "local" | null {
-  const runtime = sessionRouter.getRuntime(runtimeInstanceId);
+  const runtime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
   if (runtime) return runtime.hostingMode;
   if (persisted) return "local";
   if (isCloudMachineRuntimeId(runtimeInstanceId)) return "cloud";
@@ -216,55 +217,72 @@ class RuntimeAccessService {
     hostingMode: "local";
     metadata?: Prisma.InputJsonValue;
   }) {
-    const existing = await prisma.bridgeRuntime.findUnique({
-      where: { instanceId: params.instanceId },
+    const existing = await prisma.bridgeRuntime.findFirst({
+      where: { instanceId: params.instanceId, organizationId: params.organizationId },
       select: {
         id: true,
-        organizationId: true,
         ownerUserId: true,
       },
     });
 
-    if (
-      existing &&
-      (existing.organizationId !== params.organizationId ||
-        existing.ownerUserId !== params.ownerUserId)
-    ) {
+    if (existing && existing.ownerUserId !== params.ownerUserId) {
       throw new AuthorizationError(
-        "This bridge instance is already registered to another user or organization",
+        "This bridge instance is already registered to another user in this organization",
       );
     }
 
-    return prisma.bridgeRuntime.upsert({
-      where: { instanceId: params.instanceId },
-      create: {
-        instanceId: params.instanceId,
-        organizationId: params.organizationId,
-        ownerUserId: params.ownerUserId,
-        label: params.label,
-        hostingMode: params.hostingMode,
-        connectedAt: new Date(),
-        lastSeenAt: new Date(),
-        disconnectedAt: null,
-        metadata: params.metadata,
-      },
-      update: {
-        organizationId: params.organizationId,
-        ownerUserId: params.ownerUserId,
-        label: params.label,
-        hostingMode: params.hostingMode,
-        connectedAt: new Date(),
-        lastSeenAt: new Date(),
-        disconnectedAt: null,
-        metadata: params.metadata,
-      },
-      include: { ownerUser: true },
-    });
+    const data = {
+      organizationId: params.organizationId,
+      ownerUserId: params.ownerUserId,
+      label: params.label,
+      hostingMode: params.hostingMode,
+      connectedAt: new Date(),
+      lastSeenAt: new Date(),
+      disconnectedAt: null,
+      metadata: params.metadata,
+    };
+
+    if (existing) {
+      return prisma.bridgeRuntime.update({
+        where: { id: existing.id },
+        data,
+        include: { ownerUser: true },
+      });
+    }
+
+    try {
+      return await prisma.bridgeRuntime.create({
+        data: {
+          instanceId: params.instanceId,
+          ...data,
+        },
+        include: { ownerUser: true },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const raced = await prisma.bridgeRuntime.findFirst({
+          where: { instanceId: params.instanceId, organizationId: params.organizationId },
+          select: { id: true, ownerUserId: true },
+        });
+        if (!raced) throw error;
+        if (raced.ownerUserId !== params.ownerUserId) {
+          throw new AuthorizationError(
+            "This bridge instance is already registered to another user in this organization",
+          );
+        }
+        return prisma.bridgeRuntime.update({
+          where: { id: raced.id },
+          data,
+          include: { ownerUser: true },
+        });
+      }
+      throw error;
+    }
   }
 
-  async markRuntimeDisconnected(instanceId: string): Promise<void> {
+  async markRuntimeDisconnected(instanceId: string, organizationId?: string | null): Promise<void> {
     await prisma.bridgeRuntime.updateMany({
-      where: { instanceId },
+      where: { instanceId, ...(organizationId ? { organizationId } : {}) },
       data: {
         disconnectedAt: new Date(),
         lastSeenAt: new Date(),
@@ -334,8 +352,8 @@ class RuntimeAccessService {
       },
     });
 
-    const hostingMode = runtimeHostingMode(input.runtimeInstanceId, persisted);
-    const connected = isConnectedRuntime(input.runtimeInstanceId);
+    const hostingMode = runtimeHostingMode(input.runtimeInstanceId, input.organizationId, persisted);
+    const connected = isConnectedRuntime(input.runtimeInstanceId, input.organizationId);
 
     if (!persisted) {
       const allowed = hostingMode !== "local";
@@ -489,11 +507,11 @@ class RuntimeAccessService {
     requestedCapabilities?: BridgeAccessCapability[] | null;
   }) {
     const normalizedCapabilities = ensureSessionCapability(input.requestedCapabilities);
-    const runtime = await prisma.bridgeRuntime.findUnique({
-      where: { instanceId: input.runtimeInstanceId },
+    const runtime = await prisma.bridgeRuntime.findFirst({
+      where: { instanceId: input.runtimeInstanceId, organizationId: input.organizationId },
       include: { ownerUser: true },
     });
-    if (!runtime || runtime.organizationId !== input.organizationId) {
+    if (!runtime) {
       throw new Error("Bridge runtime not found");
     }
     if (runtime.ownerUserId === input.requesterUserId) {

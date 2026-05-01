@@ -69,6 +69,7 @@ export type DeliveryResult =
   | "delivery_failed";
 
 export interface RuntimeInstance {
+  key: string;
   id: string;
   label: string;
   ws: WebSocket;
@@ -91,6 +92,8 @@ export interface RuntimeInstance {
 
 export interface StaleRuntimeSnapshot {
   runtimeId: string;
+  runtimeInstanceId: string;
+  organizationId?: string;
   sessionIds: string[];
   lastHeartbeat: number;
 }
@@ -156,6 +159,10 @@ export type RuntimeLifecycleEventType = Extract<
   | "session_runtime_stopped"
   | "session_runtime_deprovision_failed"
 >;
+
+export function runtimeRouterKey(runtimeInstanceId: string, organizationId: string): string {
+  return `${organizationId}:${runtimeInstanceId}`;
+}
 
 function adapterTypeFromHosting(
   hosting: string,
@@ -321,6 +328,7 @@ export class SessionRouter {
   static HEARTBEAT_TIMEOUT_MS = 30_000;
 
   registerRuntime(runtime: {
+    key?: string;
     id: string;
     label: string;
     ws: WebSocket;
@@ -331,7 +339,8 @@ export class SessionRouter {
     supportedTools: string[];
     registeredRepoIds?: string[];
   }) {
-    const existing = this.runtimes.get(runtime.id);
+    const runtimeKey = runtime.key ?? runtime.id;
+    const existing = this.runtimes.get(runtimeKey);
     const boundSessions = existing?.boundSessions ?? new Set<string>();
     const linkedCheckouts =
       existing?.linkedCheckouts ?? new Map<string, BridgeLinkedCheckoutStatus>();
@@ -343,8 +352,9 @@ export class SessionRouter {
         preservedBoundSessions: [...boundSessions],
       });
     }
-    this.runtimes.set(runtime.id, {
+    this.runtimes.set(runtimeKey, {
       ...runtime,
+      key: runtimeKey,
       organizationId: runtime.organizationId ?? existing?.organizationId,
       ownerUserId: runtime.ownerUserId ?? existing?.ownerUserId,
       bridgeRuntimeId: runtime.bridgeRuntimeId ?? existing?.bridgeRuntimeId,
@@ -367,7 +377,7 @@ export class SessionRouter {
   }
 
   recordHeartbeat(runtimeId: string, ws?: WebSocket): boolean {
-    const runtime = this.runtimes.get(runtimeId);
+    const runtime = this.getRuntime(runtimeId);
     if (!runtime) return false;
     if (ws && runtime.ws !== ws) {
       runtimeDebug("ignored heartbeat from stale websocket", {
@@ -383,7 +393,7 @@ export class SessionRouter {
 
   /** Add a newly linked repo to a runtime's registeredRepoIds (called when bridge sends repo_linked). */
   addRegisteredRepo(runtimeId: string, repoId: string, ws?: WebSocket): void {
-    const runtime = this.runtimes.get(runtimeId);
+    const runtime = this.getRuntime(runtimeId);
     if (!runtime) {
       runtimeDebug("repo_linked ignored for missing runtime", { runtimeId, repoId });
       return;
@@ -496,19 +506,21 @@ export class SessionRouter {
   }
 
   bindSession(sessionId: string, runtimeId: string) {
+    const resolvedRuntime = this.getRuntime(runtimeId);
+    const runtimeKey = resolvedRuntime?.key ?? runtimeId;
     const previousRuntimeId = this.sessionRuntime.get(sessionId);
-    if (previousRuntimeId && previousRuntimeId !== runtimeId) {
+    if (previousRuntimeId && previousRuntimeId !== runtimeKey) {
       const previousRuntime = this.runtimes.get(previousRuntimeId);
       previousRuntime?.boundSessions.delete(sessionId);
     }
-    this.sessionRuntime.set(sessionId, runtimeId);
-    const runtime = this.runtimes.get(runtimeId);
+    this.sessionRuntime.set(sessionId, runtimeKey);
+    const runtime = this.runtimes.get(runtimeKey);
     if (runtime) {
       runtime.boundSessions.add(sessionId);
     }
     runtimeDebug("bound session to runtime", {
       sessionId,
-      runtimeId,
+      runtimeId: runtimeKey,
       previousRuntimeId,
       boundSessions: runtime ? [...runtime.boundSessions] : [],
     });
@@ -555,13 +567,22 @@ export class SessionRouter {
     return this.runtimes.get(runtimeId);
   }
 
-  getRuntime(runtimeId: string): RuntimeInstance | undefined {
-    return this.runtimes.get(runtimeId);
+  getRuntime(runtimeId: string, organizationId?: string | null): RuntimeInstance | undefined {
+    const key = organizationId ? runtimeRouterKey(runtimeId, organizationId) : runtimeId;
+    const direct = this.runtimes.get(key);
+    if (direct) return direct;
+
+    const matches = [...this.runtimes.values()].filter(
+      (runtime) =>
+        runtime.id === runtimeId &&
+        (organizationId == null || runtime.organizationId === organizationId),
+    );
+    return matches.length === 1 ? matches[0] : undefined;
   }
 
   /** True when the given runtime is registered and its websocket is open. */
-  isRuntimeAvailable(runtimeId: string): boolean {
-    const runtime = this.runtimes.get(runtimeId);
+  isRuntimeAvailable(runtimeId: string, organizationId?: string | null): boolean {
+    const runtime = this.getRuntime(runtimeId, organizationId);
     if (!runtime) return false;
     return runtime.ws.readyState === runtime.ws.OPEN;
   }
@@ -581,14 +602,17 @@ export class SessionRouter {
   send(
     sessionId: string,
     command: SessionCommand,
-    options?: { expectedHomeRuntimeId?: string },
+    options?: { expectedHomeRuntimeId?: string; organizationId?: string | null },
   ): DeliveryResult {
     const expectedHomeId = options?.expectedHomeRuntimeId;
     if (expectedHomeId) {
-      if (!this.isRuntimeAvailable(expectedHomeId)) return "runtime_disconnected";
+      const expectedRuntime = this.getRuntime(expectedHomeId, options?.organizationId);
+      if (!expectedRuntime || expectedRuntime.ws.readyState !== expectedRuntime.ws.OPEN) {
+        return "runtime_disconnected";
+      }
       // Force the in-memory binding to match the persisted home so we never
       // dispatch to a stale (possibly hijacked) runtime.
-      this.bindSession(sessionId, expectedHomeId);
+      this.bindSession(sessionId, expectedRuntime.key);
     }
 
     const runtimeId = this.sessionRuntime.get(sessionId);
@@ -654,6 +678,8 @@ export class SessionRouter {
         });
         stale.push({
           runtimeId,
+          runtimeInstanceId: runtime.id,
+          organizationId: runtime.organizationId,
           sessionIds: [...runtime.boundSessions],
           lastHeartbeat: runtime.lastHeartbeat,
         });
@@ -736,8 +762,12 @@ export class SessionRouter {
   }
 
   /** Send a command directly to a runtime (not session-scoped). */
-  sendToRuntime(runtimeId: string, command: Record<string, unknown>): DeliveryResult {
-    const runtime = this.runtimes.get(runtimeId);
+  sendToRuntime(
+    runtimeId: string,
+    command: Record<string, unknown>,
+    organizationId?: string | null,
+  ): DeliveryResult {
+    const runtime = this.getRuntime(runtimeId, organizationId);
     if (!runtime) return "no_runtime";
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
     try {

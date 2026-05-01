@@ -13,7 +13,7 @@ vi.mock("../services/org-secret.js", () => ({
 
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
-import { SessionRouter } from "./session-router.js";
+import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
 import { orgSecretService } from "../services/org-secret.js";
@@ -145,6 +145,47 @@ describe("SessionRouter stale runtime eviction", () => {
 
     expect(eviction).toEqual({ evicted: true, affectedSessions: [] });
     expect(router.getRuntime("runtime-1")).toBeUndefined();
+  });
+});
+
+describe("SessionRouter org-scoped runtime keys", () => {
+  it("keeps the same bridge instance isolated across organizations", () => {
+    const router = new SessionRouter();
+    const org1Ws = makeWs();
+    const org2Ws = makeWs();
+
+    router.registerRuntime({
+      key: runtimeRouterKey("bridge-1", "org-1"),
+      id: "bridge-1",
+      label: "Laptop org 1",
+      ws: org1Ws,
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+    router.registerRuntime({
+      key: runtimeRouterKey("bridge-1", "org-2"),
+      id: "bridge-1",
+      label: "Laptop org 2",
+      ws: org2Ws,
+      hostingMode: "local",
+      organizationId: "org-2",
+      supportedTools: ["codex"],
+    });
+
+    expect(router.getRuntime("bridge-1")).toBeUndefined();
+    expect(router.getRuntime("bridge-1", "org-1")?.ws).toBe(org1Ws);
+    expect(router.getRuntime("bridge-1", "org-2")?.ws).toBe(org2Ws);
+
+    const result = router.send(
+      "session-1",
+      { type: "send", sessionId: "session-1", tool: "codex" },
+      { expectedHomeRuntimeId: "bridge-1", organizationId: "org-1" },
+    );
+
+    expect(result).toBe("delivered");
+    expect(org1Ws.send).toHaveBeenCalledOnce();
+    expect(org2Ws.send).not.toHaveBeenCalled();
   });
 });
 
