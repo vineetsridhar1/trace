@@ -17,6 +17,7 @@ vi.mock("./inbox.js", () => ({
 }));
 
 vi.mock("./runtime-access.js", () => ({
+  setBridgeAccessApprovedHandler: vi.fn(),
   runtimeAccessService: {
     assertAccess: vi.fn().mockResolvedValue(undefined),
     listAccessibleRuntimeInstanceIds: vi
@@ -644,6 +645,171 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
+    it("creates a new session group on a selected bridge before access is approved", async () => {
+      const sessionGroup = makeSessionGroup({
+        connection: {
+          state: "connected",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+          runtimeInstanceId: "runtime-1",
+          runtimeLabel: "Teammate Laptop",
+        },
+      });
+      const session = makeSession({
+        sessionGroup,
+        hosting: "local",
+        connection: sessionGroup.connection,
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Teammate Laptop",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
+        runtimeInstanceId: "runtime-1",
+        bridgeRuntimeId: "bridge-runtime-1",
+        label: "Teammate Laptop",
+        hostingMode: "local",
+        connected: true,
+        ownerUser: { id: "owner-1", name: "Owner", avatarUrl: null },
+        allowed: false,
+        isOwner: false,
+        scopeType: null,
+        sessionGroupId: null,
+        capabilities: [],
+        expiresAt: null,
+        pendingRequest: null,
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+        runtimeInstanceId: "runtime-1",
+        prompt: "Use the selected bridge",
+      } as unknown as StartSessionServiceInput);
+
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalledWith(
+        expect.objectContaining({ runtimeInstanceId: "runtime-1" }),
+      );
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              runtimeInstanceId: "runtime-1",
+              runtimeLabel: "Teammate Laptop",
+            }),
+          }),
+        }),
+      );
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Use the selected bridge",
+            }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-1");
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    });
+
+    it("resumes a queued initial prompt when bridge access is approved", async () => {
+      const session = makeSession({
+        hosting: "local",
+        agentStatus: "not_started",
+        workdir: null,
+        pendingRun: {
+          type: "run",
+          prompt: "Use the selected bridge",
+          interactionMode: null,
+          clientSource: null,
+        },
+        connection: {
+          state: "connected",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+          runtimeInstanceId: "runtime-1",
+          runtimeLabel: "Teammate Laptop",
+        },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([session]);
+      prismaMock.session.update.mockResolvedValueOnce({
+        ...session,
+        agentStatus: "active",
+        connection: {
+          ...session.connection,
+          state: "connecting",
+        },
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Teammate Laptop",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await service.resumePendingBridgeAccessSessions({
+        organizationId: "org-1",
+        granteeUserId: "user-1",
+        runtimeInstanceId: "runtime-1",
+        scopeType: "session_group",
+        sessionGroupId: "group-1",
+      });
+
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdById: "user-1",
+            sessionGroupId: "group-1",
+            connection: { path: ["runtimeInstanceId"], equals: "runtime-1" },
+          }),
+        }),
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "active",
+            connection: expect.objectContaining({
+              state: "connecting",
+              runtimeInstanceId: "runtime-1",
+            }),
+          }),
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sessionId: "session-1",
+            sessionGroupId: "group-1",
+            hosting: "local",
+            repo: expect.objectContaining({ id: "repo-1" }),
+          }),
+        );
+      });
+    });
+
     it("uses an explicit runtime from a local environment config", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup, hosting: "local" });
@@ -685,7 +851,7 @@ describe("SessionService", () => {
         prompt: "Use the local environment",
       } as unknown as StartSessionServiceInput);
 
-      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith(
+      expect(runtimeAccessServiceMock.getAccessState).toHaveBeenCalledWith(
         expect.objectContaining({
           runtimeInstanceId: "runtime-env",
           sessionGroupId: null,
