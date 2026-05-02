@@ -31,7 +31,7 @@ export function LinkedCheckoutControlSheet({
   onOpenChange,
   onRunAction,
 }: Props) {
-  const syncTooltip = `Syncs this session's branch to ${state.targetDisplayLabel}, the selected local checkout target. It only uses the session runtime when that runtime is selected.`;
+  const syncTooltip = `Syncing to ${state.targetDisplayLabel}`;
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
