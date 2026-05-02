@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2, MoreHorizontal, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { LinkedCheckoutSyncConflictDialog } from "./LinkedCheckoutSyncConflictDialog";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutControlSheet } from "./LinkedCheckoutControlSheet";
@@ -41,6 +42,7 @@ export function LinkedCheckoutActions({ state }: Props) {
 
   const iconButtonVariant = "secondary" as const;
   const iconButtonClassName = "rounded-md";
+  const syncTooltip = `Syncs this session's branch to ${state.targetDisplayLabel}, the selected local checkout target. It only uses the session runtime when that runtime is selected.`;
 
   if (requiresRepoLink) {
     return (
@@ -100,29 +102,31 @@ export function LinkedCheckoutActions({ state }: Props) {
         onResolve={onResolveSyncConflict}
       />
 
-      <Button
-        variant={iconButtonVariant}
-        size="icon"
-        className={iconButtonClassName}
-        onClick={() => void runAction("sync", onSync)}
-        disabled={pending}
-        aria-label={
-          isAttachedToThisGroup
-            ? `Sync checkout on ${state.targetDisplayLabel}`
-            : `Sync to checkout on ${state.targetDisplayLabel}`
-        }
-        title={
-          isAttachedToThisGroup
-            ? `Sync checkout on ${state.targetDisplayLabel}`
-            : `Sync to checkout on ${state.targetDisplayLabel}`
-        }
-      >
-        {pendingAction === "sync" ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          <RefreshCw size={14} />
-        )}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant={iconButtonVariant}
+              size="icon"
+              className={iconButtonClassName}
+              onClick={() => void runAction("sync", onSync)}
+              disabled={pending}
+              aria-label={
+                isAttachedToThisGroup
+                  ? `Sync checkout on ${state.targetDisplayLabel}`
+                  : `Sync to checkout on ${state.targetDisplayLabel}`
+              }
+            />
+          }
+        >
+          {pendingAction === "sync" ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+        </TooltipTrigger>
+        <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
+      </Tooltip>
 
       <Button
         variant={iconButtonVariant}

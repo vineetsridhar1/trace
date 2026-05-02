@@ -1,5 +1,6 @@
 import { Check, GitBranch, Monitor, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -30,6 +31,8 @@ export function LinkedCheckoutControlSheet({
   onOpenChange,
   onRunAction,
 }: Props) {
+  const syncTooltip = `Syncs this session's branch to ${state.targetDisplayLabel}, the selected local checkout target. It only uses the session runtime when that runtime is selected.`;
+
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent className="sm:max-w-md">
@@ -94,15 +97,22 @@ export function LinkedCheckoutControlSheet({
                 {pendingAction === "link" ? "Linking..." : "Link folder"}
               </Button>
             ) : (
-              <Button
-                variant="default"
-                onClick={() => onRunAction("sync", state.onSync)}
-                disabled={state.pending}
-                className="justify-start"
-              >
-                <GitBranch size={14} />
-                {pendingAction === "sync" ? "Syncing..." : "Sync now"}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="default"
+                      onClick={() => onRunAction("sync", state.onSync)}
+                      disabled={state.pending}
+                      className="justify-start"
+                    />
+                  }
+                >
+                  <GitBranch size={14} />
+                  {pendingAction === "sync" ? "Syncing..." : "Sync now"}
+                </TooltipTrigger>
+                <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
+              </Tooltip>
             )}
 
             {!state.requiresRepoLink && state.isAttachedToThisGroup && (
