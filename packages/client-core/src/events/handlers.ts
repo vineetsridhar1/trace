@@ -9,6 +9,7 @@ import type {
   Event,
   EventType,
   InboxItem,
+  Preview,
   QueuedMessage,
   Repo,
   ScopeType,
@@ -61,6 +62,15 @@ const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
 
+const PREVIEW_EVENTS: Set<EventType> = new Set([
+  "preview_created",
+  "preview_process_started",
+  "preview_ready",
+  "preview_failed",
+  "preview_stopping",
+  "preview_stopped",
+]);
+
 function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
   const environments = payload.agentEnvironments;
   if (Array.isArray(environments)) {
@@ -80,6 +90,13 @@ function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: Jso
   const environment = asJsonObject(payload.agentEnvironment);
   if (environment && typeof environment.id === "string") {
     batch.upsert("agentEnvironments", environment.id, environment as unknown as AgentEnvironment);
+  }
+}
+
+function upsertPreviewFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const preview = asJsonObject(payload.preview);
+  if (preview && typeof preview.id === "string") {
+    batch.upsert("previews", preview.id, preview as unknown as Preview);
   }
 }
 
@@ -205,6 +222,10 @@ export function handleOrgEvent(event: Event): void {
     if (qmId && sid) {
       batch.removeQueuedMessage(sid, qmId);
     }
+  }
+
+  if (PREVIEW_EVENTS.has(event.eventType)) {
+    upsertPreviewFromPayload(batch, payload);
   }
 
   // Agent environment events
@@ -587,4 +608,11 @@ export function handleOrgEvent(event: Event): void {
  */
 export function handleSessionEvent(sessionId: string, event: Event & { id: string }): void {
   upsertSessionEventWithOptimisticResolution(sessionId, event);
+  if (PREVIEW_EVENTS.has(event.eventType)) {
+    const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
+    const preview = asJsonObject(payload.preview);
+    if (preview && typeof preview.id === "string") {
+      useEntityStore.getState().upsert("previews", preview.id, preview as unknown as Preview);
+    }
+  }
 }

@@ -18,6 +18,7 @@ export {
   useEntityStore,
   useMessageField,
   useMessageIdsForScope,
+  usePreviewIdsForSession,
   useQueuedMessageIdsForSession,
   useScopedEventField,
   useScopedEventIds,

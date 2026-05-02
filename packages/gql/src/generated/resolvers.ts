@@ -436,6 +436,14 @@ export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
 
+export type CreatePreviewInput = {
+  command: Scalars["String"]["input"];
+  cwd?: InputMaybe<Scalars["String"]["input"]>;
+  port: Scalars["Int"]["input"];
+  sessionId: Scalars["ID"]["input"];
+  visibility: PreviewVisibility;
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -511,6 +519,12 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "preview_created"
+  | "preview_failed"
+  | "preview_process_started"
+  | "preview_ready"
+  | "preview_stopped"
+  | "preview_stopping"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -687,6 +701,7 @@ export type Mutation = {
   createChannelTerminal: Terminal;
   createChat: Chat;
   createOrganization: OrgMember;
+  createPreview: Preview;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -740,6 +755,7 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  stopPreview: Preview;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -840,6 +856,10 @@ export type MutationCreateChatArgs = {
 
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
+};
+
+export type MutationCreatePreviewArgs = {
+  input: CreatePreviewInput;
 };
 
 export type MutationCreateProjectArgs = {
@@ -1096,6 +1116,10 @@ export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
 
+export type MutationStopPreviewArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationSubscribeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
@@ -1264,6 +1288,32 @@ export type PortEndpoint = {
   url: Scalars["String"]["output"];
 };
 
+export type Preview = {
+  __typename?: "Preview";
+  command: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  cwd?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  port: Scalars["Int"]["output"];
+  routeId?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  sessionId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: PreviewStatus;
+  stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  terminalId?: Maybe<Scalars["String"]["output"]>;
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+  visibility: PreviewVisibility;
+};
+
+export type PreviewStatus = "failed" | "ready" | "starting" | "stopped" | "stopping";
+
+export type PreviewVisibility = "org" | "public";
+
 export type Priority = "high" | "low" | "medium" | "urgent";
 
 export type Project = {
@@ -1328,6 +1378,7 @@ export type Query = {
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroups: Array<SessionGroup>;
+  sessionPreviews: Array<Preview>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
@@ -1542,6 +1593,10 @@ export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
   channelId: Scalars["ID"]["input"];
   status?: InputMaybe<SessionGroupStatus>;
+};
+
+export type QuerySessionPreviewsArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionSlashCommandsArgs = {
@@ -2127,6 +2182,7 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
+  CreatePreviewInput: CreatePreviewInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
@@ -2162,6 +2218,9 @@ export type ResolversTypes = ResolversObject<{
   Organization: ResolverTypeWrapper<Organization>;
   Participant: ResolverTypeWrapper<Participant>;
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
+  Preview: ResolverTypeWrapper<Preview>;
+  PreviewStatus: PreviewStatus;
+  PreviewVisibility: PreviewVisibility;
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
   PushPlatform: PushPlatform;
@@ -2249,6 +2308,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
+  CreatePreviewInput: CreatePreviewInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
@@ -2272,6 +2332,7 @@ export type ResolversParentTypes = ResolversObject<{
   Organization: Organization;
   Participant: Participant;
   PortEndpoint: PortEndpoint;
+  Preview: Preview;
   Project: Project;
   Query: {};
   QueuedMessage: QueuedMessage;
@@ -2983,6 +3044,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationCreateOrganizationArgs, "input">
   >;
+  createPreview?: Resolver<
+    ResolversTypes["Preview"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreatePreviewArgs, "input">
+  >;
   createProject?: Resolver<
     ResolversTypes["Project"],
     ParentType,
@@ -3301,6 +3368,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationStartSessionArgs, "input">
   >;
+  stopPreview?: Resolver<
+    ResolversTypes["Preview"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationStopPreviewArgs, "id">
+  >;
   subscribe?: Resolver<
     ResolversTypes["Participant"],
     ParentType,
@@ -3498,6 +3571,31 @@ export type PortEndpointResolvers<
   port?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   status?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   url?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type PreviewResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["Preview"] = ResolversParentTypes["Preview"],
+> = ResolversObject<{
+  command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  cwd?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  port?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  routeId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["PreviewStatus"], ParentType, ContextType>;
+  stoppedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  terminalId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  url?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  visibility?: Resolver<ResolversTypes["PreviewVisibility"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3775,6 +3873,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QuerySessionGroupsArgs, "channelId">
+  >;
+  sessionPreviews?: Resolver<
+    Array<ResolversTypes["Preview"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionPreviewsArgs, "sessionId">
   >;
   sessionSlashCommands?: Resolver<
     Array<ResolversTypes["SlashCommand"]>,
@@ -4199,6 +4303,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Organization?: OrganizationResolvers<ContextType>;
   Participant?: ParticipantResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;
+  Preview?: PreviewResolvers<ContextType>;
   Project?: ProjectResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   QueuedMessage?: QueuedMessageResolvers<ContextType>;

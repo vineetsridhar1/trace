@@ -41,6 +41,7 @@ import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
 import { orgSecretMutations, orgSecretQueries, orgSecretTypeResolvers } from "./org-secret.js";
 import { pushTokenMutations } from "./push-token.js";
 import { terminalQueries, terminalMutations } from "./terminal.js";
+import { previewQueries, previewMutations } from "./preview.js";
 import { connectionsQueries } from "./connections.js";
 import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from "./chat.js";
 import {
@@ -105,6 +106,7 @@ export const resolvers = {
     ...inboxQueries,
     ...apiTokenQueries,
     ...terminalQueries,
+    ...previewQueries,
     ...connectionsQueries,
     ...chatQueries,
     ...participantQueries,
@@ -128,6 +130,7 @@ export const resolvers = {
     ...apiTokenMutations,
     ...pushTokenMutations,
     ...terminalMutations,
+    ...previewMutations,
     ...chatMutations,
     ...participantMutations,
     ...agentIdentityMutations,

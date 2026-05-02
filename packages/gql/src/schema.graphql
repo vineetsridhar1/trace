@@ -54,6 +54,19 @@ enum HostingMode {
   local
 }
 
+enum PreviewStatus {
+  starting
+  ready
+  failed
+  stopping
+  stopped
+}
+
+enum PreviewVisibility {
+  org
+  public
+}
+
 enum SessionConnectionState {
   pending
   requested
@@ -285,6 +298,12 @@ enum EventType {
   session_runtime_deprovision_failed
   session_runtime_disconnected
   session_runtime_reconnected
+  preview_created
+  preview_process_started
+  preview_ready
+  preview_failed
+  preview_stopping
+  preview_stopped
 }
 
 # --- Core Types ---
@@ -435,6 +454,27 @@ type Session {
   lastUserMessageAt: DateTime
   lastMessageAt: DateTime
   queuedMessages: [QueuedMessage!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Preview {
+  id: ID!
+  organizationId: ID!
+  sessionId: ID!
+  sessionGroupId: ID
+  createdById: ID!
+  command: String!
+  cwd: String
+  port: Int!
+  visibility: PreviewVisibility!
+  status: PreviewStatus!
+  url: String
+  routeId: String
+  terminalId: String
+  startedAt: DateTime
+  stoppedAt: DateTime
+  lastError: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -1008,6 +1048,14 @@ input SessionFilters {
   channelId: ID
 }
 
+input CreatePreviewInput {
+  sessionId: ID!
+  command: String!
+  cwd: String
+  port: Int!
+  visibility: PreviewVisibility!
+}
+
 input CreateTicketInput {
   organizationId: ID!
   title: String!
@@ -1130,6 +1178,7 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
+  sessionPreviews(sessionId: ID!): [Preview!]!
   mySessions(
     organizationId: ID!
     agentStatus: AgentStatus
@@ -1275,6 +1324,8 @@ type Mutation {
   retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
+  createPreview(input: CreatePreviewInput!): Preview!
+  stopPreview(id: ID!): Preview!
   requestBridgeAccess(
     runtimeInstanceId: ID!
     scopeType: BridgeAccessScopeType!

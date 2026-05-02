@@ -265,6 +265,43 @@ export class TerminalRelay {
     });
   }
 
+  startLongRunningProcess(input: {
+    sessionId: string;
+    sessionGroupId: string | null;
+    organizationId: string;
+    runtimeInstanceId: string;
+    ownerUserId: string;
+    command: string;
+    cwd?: string;
+    onEnd?: (exitCode: number | null, error?: string) => void;
+  }): string {
+    const terminalId = this.createTerminal(
+      input.sessionId,
+      input.sessionGroupId,
+      input.organizationId,
+      input.runtimeInstanceId,
+      input.ownerUserId,
+      120,
+      30,
+      input.cwd,
+    );
+    const entry = this.terminals.get(terminalId);
+    if (!entry) {
+      throw new Error("Failed to create terminal");
+    }
+
+    entry.onReady = () => {
+      this.sendTerminalCommand(entry, {
+        type: "terminal_input",
+        terminalId,
+        data: `${input.command}\n`,
+      });
+    };
+    entry.onEnd = input.onEnd;
+
+    return terminalId;
+  }
+
   /**
    * Rebuild relay entries from bridge-reported active terminals (on reconnect).
    * Skips entries that already exist. Restored terminals already existed on

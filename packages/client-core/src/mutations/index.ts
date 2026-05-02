@@ -775,6 +775,51 @@ export const CHANNEL_TERMINALS_QUERY = gql`
   }
 `;
 
+const PREVIEW_FIELDS = `
+  id
+  organizationId
+  sessionId
+  sessionGroupId
+  createdById
+  command
+  cwd
+  port
+  visibility
+  status
+  url
+  routeId
+  terminalId
+  startedAt
+  stoppedAt
+  lastError
+  createdAt
+  updatedAt
+`;
+
+export const SESSION_PREVIEWS_QUERY = gql`
+  query SessionPreviews($sessionId: ID!) {
+    sessionPreviews(sessionId: $sessionId) {
+      ${PREVIEW_FIELDS}
+    }
+  }
+`;
+
+export const CREATE_PREVIEW_MUTATION = gql`
+  mutation CreatePreview($input: CreatePreviewInput!) {
+    createPreview(input: $input) {
+      ${PREVIEW_FIELDS}
+    }
+  }
+`;
+
+export const STOP_PREVIEW_MUTATION = gql`
+  mutation StopPreview($id: ID!) {
+    stopPreview(id: $id) {
+      ${PREVIEW_FIELDS}
+    }
+  }
+`;
+
 export const CREATE_TERMINAL_MUTATION = gql`
   mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
     createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {

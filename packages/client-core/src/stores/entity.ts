@@ -16,6 +16,7 @@ import type {
   Message,
   QueuedMessage,
   AgentEnvironment,
+  Preview,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -46,6 +47,7 @@ export type EntityTableMap = {
   messages: Message;
   queuedMessages: QueuedMessage;
   agentEnvironments: AgentEnvironment;
+  previews: Preview;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -111,6 +113,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   messages: {},
   queuedMessages: {},
   agentEnvironments: {},
+  previews: {},
   eventsByScope: {},
   _eventIdsByScope: {},
   _sessionIdsByGroup: {},
@@ -348,6 +351,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       messages: {},
       queuedMessages: {},
       agentEnvironments: {},
+      previews: {},
       eventsByScope: {},
       _eventIdsByScope: {},
       _sessionIdsByGroup: {},
@@ -679,6 +683,7 @@ const ENTITY_KEYS: EntityType[] = [
   "messages",
   "queuedMessages",
   "agentEnvironments",
+  "previews",
 ];
 
 function getMessageEntityScopeKey(
@@ -990,6 +995,17 @@ export function useQueuedMessageIdsForSession(sessionId: string): string[] {
         return (qa?.position ?? 0) - (qb?.position ?? 0);
       });
     }),
+  );
+}
+
+export function usePreviewIdsForSession(sessionId: string): string[] {
+  return useEntityStore(
+    useShallow((state: EntityState) =>
+      Object.values(state.previews)
+        .filter((preview) => preview.sessionId === sessionId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((preview) => preview.id),
+    ),
   );
 }
 

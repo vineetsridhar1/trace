@@ -29,6 +29,7 @@ import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
 import { ScrambleText } from "../ui/ScrambleText";
 import { SessionMoveButton } from "./SessionMoveButton";
+import { SessionPreviewButton } from "./SessionPreviewButton";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
@@ -243,6 +244,8 @@ export function SessionHeader({
           disabled={!canMoveSession}
           disabledReason={moveDisabledReason}
         />
+
+        <SessionPreviewButton sessionId={sessionId} />
 
         <div className="relative" ref={historyRef}>
           <button

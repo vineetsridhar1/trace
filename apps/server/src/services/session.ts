@@ -2236,7 +2236,7 @@ export class SessionService {
         runtimeLabel = runtime.label;
         requestedRuntimeInstanceId = runtime.id;
       } else {
-        requestedRuntimeInstanceId = undefined;
+        requestedRuntimeInstanceId = null;
         selectedRuntimeAccessAllowed = true;
       }
     }

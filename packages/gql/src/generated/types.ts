@@ -433,6 +433,14 @@ export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
 
+export type CreatePreviewInput = {
+  command: Scalars["String"]["input"];
+  cwd?: InputMaybe<Scalars["String"]["input"]>;
+  port: Scalars["Int"]["input"];
+  sessionId: Scalars["ID"]["input"];
+  visibility: PreviewVisibility;
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -508,6 +516,12 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "preview_created"
+  | "preview_failed"
+  | "preview_process_started"
+  | "preview_ready"
+  | "preview_stopped"
+  | "preview_stopping"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -684,6 +698,7 @@ export type Mutation = {
   createChannelTerminal: Terminal;
   createChat: Chat;
   createOrganization: OrgMember;
+  createPreview: Preview;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -737,6 +752,7 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  stopPreview: Preview;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -837,6 +853,10 @@ export type MutationCreateChatArgs = {
 
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
+};
+
+export type MutationCreatePreviewArgs = {
+  input: CreatePreviewInput;
 };
 
 export type MutationCreateProjectArgs = {
@@ -1093,6 +1113,10 @@ export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
 
+export type MutationStopPreviewArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationSubscribeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
@@ -1261,6 +1285,32 @@ export type PortEndpoint = {
   url: Scalars["String"]["output"];
 };
 
+export type Preview = {
+  __typename?: "Preview";
+  command: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  cwd?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  port: Scalars["Int"]["output"];
+  routeId?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  sessionId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: PreviewStatus;
+  stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  terminalId?: Maybe<Scalars["String"]["output"]>;
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+  visibility: PreviewVisibility;
+};
+
+export type PreviewStatus = "failed" | "ready" | "starting" | "stopped" | "stopping";
+
+export type PreviewVisibility = "org" | "public";
+
 export type Priority = "high" | "low" | "medium" | "urgent";
 
 export type Project = {
@@ -1325,6 +1375,7 @@ export type Query = {
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroups: Array<SessionGroup>;
+  sessionPreviews: Array<Preview>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
@@ -1539,6 +1590,10 @@ export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
   channelId: Scalars["ID"]["input"];
   status?: InputMaybe<SessionGroupStatus>;
+};
+
+export type QuerySessionPreviewsArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionSlashCommandsArgs = {
