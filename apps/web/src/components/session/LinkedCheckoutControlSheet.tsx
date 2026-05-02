@@ -75,7 +75,7 @@ export function LinkedCheckoutControlSheet({
             </div>
           </section>
 
-          {state.sessionRuntimeLabel && (
+          {state.sessionRuntimeLabel && !state.targetIsSessionRuntime && (
             <section className="rounded-md border border-border px-3 py-2">
               <div className="text-xs font-medium text-muted-foreground">Session runtime</div>
               <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
