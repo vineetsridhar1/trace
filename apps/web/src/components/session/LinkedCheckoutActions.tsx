@@ -42,7 +42,7 @@ export function LinkedCheckoutActions({ state }: Props) {
 
   const iconButtonVariant = "secondary" as const;
   const iconButtonClassName = "rounded-md";
-  const syncTooltip = `Syncing to ${state.targetDisplayLabel}`;
+  const syncTooltip = `Sync this session's branch to the local checkout on ${state.targetDisplayLabel}.`;
 
   if (requiresRepoLink) {
     return (

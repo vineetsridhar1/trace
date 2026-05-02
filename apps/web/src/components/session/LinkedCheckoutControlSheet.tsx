@@ -31,7 +31,7 @@ export function LinkedCheckoutControlSheet({
   onOpenChange,
   onRunAction,
 }: Props) {
-  const syncTooltip = `Syncing to ${state.targetDisplayLabel}`;
+  const syncTooltip = `Sync this session's branch to the local checkout on ${state.targetDisplayLabel}.`;
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
