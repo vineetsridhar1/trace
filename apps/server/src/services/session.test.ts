@@ -915,7 +915,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
-    it("uses the org default environment when no environment or hosting is specified", async () => {
+    it("uses the org default environment for prompted starts when no environment or hosting is specified", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup, hosting: "cloud" });
       prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(
@@ -1071,26 +1071,35 @@ describe("SessionService", () => {
       );
     });
 
-    it("rejects session creation when no default or compatibility fallback exists", async () => {
-      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(null);
+    it("creates a pending session when no default environment exists", async () => {
+      const sessionGroup = makeSessionGroup({ connection: { state: "pending" } });
+      const session = makeSession({ sessionGroup, hosting: "local" });
       prismaMock.channel.findUnique.mockResolvedValueOnce({
         id: "channel-1",
         organizationId: "org-1",
         type: "coding",
         repoId: "repo-1",
       });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
 
-      await expect(
-        service.start({
-          organizationId: "org-1",
-          createdById: "user-1",
-          tool: "claude_code",
-          channelId: "channel-1",
-        } as unknown as StartSessionServiceInput),
-      ).rejects.toThrow("No default agent environment is configured");
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+      } as unknown as StartSessionServiceInput);
 
-      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
-      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "local",
+            connection: expect.objectContaining({ state: "pending" }),
+          }),
+        }),
+      );
     });
 
     it("defers runtime selection without resolving the org default environment", async () => {

@@ -2091,9 +2091,17 @@ export class SessionService {
       throw new Error("Cloud sessions are disabled in local mode");
     }
 
-    const deferRuntimeSelection = input.deferRuntimeSelection === true;
+    const requestedRuntimeSelection =
+      !!input.environmentId || !!input.hosting || !!input.runtimeInstanceId;
+    const deferRuntimeSelection =
+      input.deferRuntimeSelection === true ||
+      (!input.prompt &&
+        !input.restoreCheckpointId &&
+        !requestedRuntimeSelection &&
+        !sharedRuntimeInstanceId &&
+        !restoreGroupRuntimeInstanceId);
     if (
-      deferRuntimeSelection &&
+      input.deferRuntimeSelection === true &&
       (input.environmentId || input.hosting || input.runtimeInstanceId)
     ) {
       throw new ValidationError(
@@ -2165,7 +2173,7 @@ export class SessionService {
       !restoreGroupRuntimeInstanceId &&
       !!environmentRuntimeInstanceId;
     let selectedRuntimeAccessAllowed = true;
-    let requestedRuntimeInstanceId =
+    let requestedRuntimeInstanceId: string | null | undefined =
       input.runtimeInstanceId ??
       sharedRuntimeInstanceId ??
       restoreGroupRuntimeInstanceId ??
@@ -2269,11 +2277,14 @@ export class SessionService {
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
     const queueInitialRunUntilBridgeAccess =
-      needsRuntimeProvisioning && !!input.prompt && !selectedRuntimeAccessAllowed;
+      needsRuntimeProvisioning &&
+      !!input.prompt &&
+      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
           defaultConnection({
+            ...(deferRuntimeSelection && { state: "pending" }),
             ...(requestedEnvironment && {
               environmentId: requestedEnvironment.id,
               adapterType: requestedEnvironment.adapterType,
@@ -2418,7 +2429,12 @@ export class SessionService {
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
-    if (needsRuntimeProvisioning && input.prompt && selectedRuntimeAccessAllowed) {
+    if (
+      needsRuntimeProvisioning &&
+      input.prompt &&
+      selectedRuntimeAccessAllowed &&
+      !deferRuntimeSelection
+    ) {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
