@@ -2921,6 +2921,91 @@ describe("SessionService", () => {
   });
 
   describe("queueMessage", () => {
+    it("preserves and provisions a queued prompt when selecting a runtime", async () => {
+      const pendingRun = {
+        type: "run",
+        prompt: "Implement the plan",
+        interactionMode: null,
+        clientSource: "web",
+        checkpointContext: null,
+      };
+      const selectedRuntime = {
+        key: "org-1:runtime-a",
+        id: "runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        organizationId: "org-1",
+        registeredRepoIds: ["repo-1"],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      };
+      const updatedSession = makeSession({
+        agentStatus: "active",
+        hosting: "local",
+        pendingRun,
+        connection: {
+          state: "connecting",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          pendingRun,
+          connection: { state: "pending", retryCount: 0, canRetry: true, canMove: true },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce(
+        selectedRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+      );
+      prismaMock.session.update.mockResolvedValueOnce(updatedSession);
+
+      const result = await service.updateConfig(
+        "session-1",
+        "org-1",
+        { runtimeInstanceId: "runtime-a" },
+        "user",
+        "user-1",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(result.pendingRun).toEqual(pendingRun);
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            agentStatus: "active",
+            connection: expect.objectContaining({
+              state: "connecting",
+              runtimeInstanceId: "runtime-a",
+              runtimeLabel: "Laptop A",
+            }),
+          }),
+        }),
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({
+            pendingRun: expect.anything(),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "org-1:runtime-a");
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          hosting: "local",
+          repo: expect.objectContaining({ id: "repo-1" }),
+        }),
+      );
+    });
+
     it("persists image keys and includes them in the queued message event payload", async () => {
       const queuedMessage = {
         id: "queued-1",
