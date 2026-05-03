@@ -824,6 +824,7 @@ type BridgeRuntime {
   ownerUser: User!
   label: String!
   hostingMode: HostingMode!
+  registeredRepoIds: [ID!]!
   lastSeenAt: DateTime!
   connectedAt: DateTime
   disconnectedAt: DateTime
@@ -1158,7 +1159,11 @@ type Query {
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
-  linkedCheckoutStatus(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutStatus!
+  linkedCheckoutStatus(
+    sessionGroupId: ID!
+    repoId: ID!
+    runtimeInstanceId: ID
+  ): LinkedCheckoutStatus!
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
@@ -1299,11 +1304,13 @@ type Mutation {
     sessionGroupId: ID!
     repoId: ID!
     localPath: String!
+    runtimeInstanceId: ID
   ): LinkedCheckoutActionResult!
   syncLinkedCheckout(
     sessionGroupId: ID!
     repoId: ID!
     branch: String!
+    runtimeInstanceId: ID
     commitSha: String
     autoSyncEnabled: Boolean
     conflictStrategy: LinkedCheckoutSyncConflictStrategy
@@ -1312,13 +1319,19 @@ type Mutation {
   commitLinkedCheckoutChanges(
     sessionGroupId: ID!
     repoId: ID!
+    runtimeInstanceId: ID
     message: String
   ): LinkedCheckoutActionResult!
-  restoreLinkedCheckout(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
+  restoreLinkedCheckout(
+    sessionGroupId: ID!
+    repoId: ID!
+    runtimeInstanceId: ID
+  ): LinkedCheckoutActionResult!
   setLinkedCheckoutAutoSync(
     sessionGroupId: ID!
     repoId: ID!
     enabled: Boolean!
+    runtimeInstanceId: ID
   ): LinkedCheckoutActionResult!
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!

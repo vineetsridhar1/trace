@@ -286,6 +286,7 @@ export type BridgeRuntime = {
   linkedCheckouts: Array<LinkedCheckoutStatus>;
   metadata?: Maybe<Scalars["JSON"]["output"]>;
   ownerUser: User;
+  registeredRepoIds: Array<Scalars["ID"]["output"]>;
 };
 
 export type BridgeRuntimeAccess = {
@@ -806,6 +807,7 @@ export type MutationCommentOnTicketArgs = {
 export type MutationCommitLinkedCheckoutChangesArgs = {
   message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -947,6 +949,7 @@ export type MutationLinkEntityToProjectArgs = {
 export type MutationLinkLinkedCheckoutRepoArgs = {
   localPath: Scalars["String"]["input"];
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1022,6 +1025,7 @@ export type MutationRequestBridgeAccessArgs = {
 
 export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1084,6 +1088,7 @@ export type MutationSetApiTokenArgs = {
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
   enabled: Scalars["Boolean"]["input"];
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1107,6 +1112,7 @@ export type MutationSyncLinkedCheckoutArgs = {
   commitSha?: InputMaybe<Scalars["String"]["input"]>;
   conflictStrategy?: InputMaybe<LinkedCheckoutSyncConflictStrategy>;
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1449,6 +1455,7 @@ export type QueryInboxItemsArgs = {
 
 export type QueryLinkedCheckoutStatusArgs = {
   repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2780,6 +2787,22 @@ export type AgentEnvironmentsSettingsQuery = {
       __typename?: "ConnectionsRepoEntry";
       repo: { __typename?: "Repo"; id: string; name: string };
     }>;
+  }>;
+};
+
+export type OrgSecretsQueryVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+}>;
+
+export type OrgSecretsQuery = {
+  __typename?: "Query";
+  orgSecrets: Array<{
+    __typename?: "OrgSecret";
+    id: string;
+    orgId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
   }>;
 };
 
@@ -5745,6 +5768,52 @@ export const AgentEnvironmentsSettingsDocument = {
   AgentEnvironmentsSettingsQuery,
   AgentEnvironmentsSettingsQueryVariables
 >;
+export const OrgSecretsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "OrgSecrets" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "orgSecrets" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<OrgSecretsQuery, OrgSecretsQueryVariables>;
 export const CreateAgentEnvironmentDocument = {
   kind: "Document",
   definitions: [

@@ -28,6 +28,7 @@ export interface MyBridgeSummary {
   label: string;
   hostingMode: HostingMode;
   connected: boolean;
+  registeredRepoIds: string[];
   lastSeenAt: string;
   /** Currently-attached linked checkouts on this bridge — at most one per repo. */
   linkedCheckouts: SyncedCheckoutSummary[];
@@ -39,6 +40,7 @@ interface BridgesQueryResult {
     instanceId: string;
     label: string;
     hostingMode: HostingMode;
+    registeredRepoIds?: string[];
     lastSeenAt: string;
     connected: boolean;
     linkedCheckouts?: Array<{
@@ -138,6 +140,7 @@ function toBridgeSummaries(
     label: bridge.label,
     hostingMode: bridge.hostingMode,
     connected: bridge.connected,
+    registeredRepoIds: bridge.registeredRepoIds ?? [],
     lastSeenAt: bridge.lastSeenAt,
     linkedCheckouts: (bridge.linkedCheckouts ?? [])
       .map((checkout): SyncedCheckoutSummary | null => {

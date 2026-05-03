@@ -132,7 +132,7 @@ export const sessionQueries = {
   },
   linkedCheckoutStatus: (
     _: unknown,
-    args: { sessionGroupId: string; repoId: string },
+    args: { sessionGroupId: string; repoId: string; runtimeInstanceId?: string | null },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -142,6 +142,7 @@ export const sessionQueries = {
       args.repoId,
       orgId,
       ctx.userId,
+      args.runtimeInstanceId ?? undefined,
     );
   },
   sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
@@ -349,7 +350,12 @@ export const sessionMutations = {
   },
   linkLinkedCheckoutRepo: (
     _: unknown,
-    args: { sessionGroupId: string; repoId: string; localPath: string },
+    args: {
+      sessionGroupId: string;
+      repoId: string;
+      localPath: string;
+      runtimeInstanceId?: string | null;
+    },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -360,6 +366,7 @@ export const sessionMutations = {
       args.localPath,
       orgId,
       ctx.userId,
+      args.runtimeInstanceId ?? undefined,
     );
   },
   syncLinkedCheckout: (
@@ -368,6 +375,7 @@ export const sessionMutations = {
       sessionGroupId: string;
       repoId: string;
       branch: string;
+      runtimeInstanceId?: string | null;
       commitSha?: string | null;
       autoSyncEnabled?: boolean | null;
       conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | null;
@@ -384,6 +392,7 @@ export const sessionMutations = {
       orgId,
       ctx.userId,
       {
+        runtimeInstanceId: args.runtimeInstanceId ?? undefined,
         commitSha: args.commitSha ?? undefined,
         autoSyncEnabled: args.autoSyncEnabled ?? undefined,
         conflictStrategy:
@@ -400,7 +409,12 @@ export const sessionMutations = {
   },
   commitLinkedCheckoutChanges: (
     _: unknown,
-    args: { sessionGroupId: string; repoId: string; message?: string | null },
+    args: {
+      sessionGroupId: string;
+      repoId: string;
+      runtimeInstanceId?: string | null;
+      message?: string | null;
+    },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -410,12 +424,13 @@ export const sessionMutations = {
       args.repoId,
       orgId,
       ctx.userId,
+      args.runtimeInstanceId ?? undefined,
       args.message ?? undefined,
     );
   },
   restoreLinkedCheckout: (
     _: unknown,
-    args: { sessionGroupId: string; repoId: string },
+    args: { sessionGroupId: string; repoId: string; runtimeInstanceId?: string | null },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -425,11 +440,17 @@ export const sessionMutations = {
       args.repoId,
       orgId,
       ctx.userId,
+      args.runtimeInstanceId ?? undefined,
     );
   },
   setLinkedCheckoutAutoSync: (
     _: unknown,
-    args: { sessionGroupId: string; repoId: string; enabled: boolean },
+    args: {
+      sessionGroupId: string;
+      repoId: string;
+      enabled: boolean;
+      runtimeInstanceId?: string | null;
+    },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -440,6 +461,7 @@ export const sessionMutations = {
       args.enabled,
       orgId,
       ctx.userId,
+      args.runtimeInstanceId ?? undefined,
     );
   },
   queueSessionMessage: (

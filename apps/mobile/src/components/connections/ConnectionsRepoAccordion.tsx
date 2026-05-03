@@ -10,9 +10,11 @@ import { ConnectionsRepoSyncActions } from "./ConnectionsRepoSyncActions";
 
 export function ConnectionsRepoAccordion({
   entry,
+  runtimeInstanceId,
   onChanged,
 }: {
   entry: ConnectionRepoEntry;
+  runtimeInstanceId: string;
   onChanged: () => Promise<void>;
 }) {
   const theme = useTheme();
@@ -83,7 +85,11 @@ export function ConnectionsRepoAccordion({
             </Text>
           )}
           {checkout?.isAttached && checkout.attachedSessionGroupId ? (
-            <ConnectionsRepoSyncActions checkout={checkout} onChanged={onChanged} />
+            <ConnectionsRepoSyncActions
+              checkout={checkout}
+              runtimeInstanceId={runtimeInstanceId}
+              onChanged={onChanged}
+            />
           ) : null}
         </View>
       ) : null}

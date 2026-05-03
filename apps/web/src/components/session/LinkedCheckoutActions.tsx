@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Loader2, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
+import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { LinkedCheckoutSyncConflictDialog } from "./LinkedCheckoutSyncConflictDialog";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
+import { LinkedCheckoutControlSheet } from "./LinkedCheckoutControlSheet";
 
 interface Props {
   state: LinkedCheckoutHeaderState;
@@ -12,21 +14,20 @@ type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
 
 export function LinkedCheckoutActions({ state }: Props) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  if (!state.canShowControls) return null;
+  if (!state.canSelectTarget && !state.canShowControls) return null;
 
   const {
     isAttachedToThisGroup,
     pending,
-    autoSyncEnabled,
     canLinkRepo,
+    needsTargetSelection,
     requiresRepoLink,
     onLinkRepo,
     onSync,
     onResolveSyncConflict,
     onCloseSyncConflict,
-    onRestore,
-    onToggleAutoSync,
   } = state;
 
   const runAction = async (action: Exclude<PendingAction, null>, fn: () => Promise<void>) => {
@@ -40,26 +41,89 @@ export function LinkedCheckoutActions({ state }: Props) {
     }
   };
 
-  const iconButtonVariant = "secondary" as const;
-  const iconButtonClassName = "rounded-md";
+  const syncTooltip = `This syncs the session branch to your local checkout on ${state.targetDisplayLabel}.`;
 
-  if (requiresRepoLink && canLinkRepo) {
+  if (needsTargetSelection) {
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => void runAction("link", onLinkRepo)}
-        disabled={pending}
-      >
-        {pendingAction === "link" ? "Linking..." : "Link Local Checkout"}
-      </Button>
+      <>
+        <LinkedCheckoutControlSheet
+          state={state}
+          open={sheetOpen}
+          pendingAction={pendingAction}
+          onOpenChange={setSheetOpen}
+          onRunAction={(action, fn) => void runAction(action, fn)}
+        />
+        <div className="flex shrink-0 items-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="rounded-r-none border-r border-border/70"
+            onClick={() => setSheetOpen(true)}
+          >
+            Sync
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="rounded-l-none px-1.5"
+            onClick={() => setSheetOpen(true)}
+            aria-label="Choose local checkout target"
+            title="Choose local checkout target"
+          >
+            <ChevronDown size={13} />
+          </Button>
+        </div>
+      </>
     );
   }
 
-  if (requiresRepoLink) return null;
+  if (requiresRepoLink) {
+    return (
+      <>
+        <LinkedCheckoutControlSheet
+          state={state}
+          open={sheetOpen}
+          pendingAction={pendingAction}
+          onOpenChange={setSheetOpen}
+          onRunAction={(action, fn) => void runAction(action, fn)}
+        />
+        <div className="flex shrink-0 items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-r-none border-r-0"
+            onClick={() => void runAction("link", onLinkRepo)}
+            disabled={pending || !canLinkRepo}
+            title={`Link checkout on ${state.targetDisplayLabel}`}
+          >
+            {pendingAction === "link" ? "Linking..." : "Link"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-l-none px-1.5"
+            onClick={() => setSheetOpen(true)}
+            aria-label="Local checkout settings"
+            title="Local checkout settings"
+          >
+            <ChevronDown size={13} />
+          </Button>
+        </div>
+      </>
+    );
+  }
+
+  if (!state.canShowControls) return null;
 
   return (
     <>
+      <LinkedCheckoutControlSheet
+        state={state}
+        open={sheetOpen}
+        pendingAction={pendingAction}
+        onOpenChange={setSheetOpen}
+        onRunAction={(action, fn) => void runAction(action, fn)}
+      />
       <LinkedCheckoutSyncConflictDialog
         open={state.syncConflictOpen}
         error={state.syncConflictError}
@@ -68,58 +132,46 @@ export function LinkedCheckoutActions({ state }: Props) {
         onResolve={onResolveSyncConflict}
       />
 
-      <Button
-        variant={iconButtonVariant}
-        size="icon"
-        className={iconButtonClassName}
-        onClick={() => void runAction("sync", onSync)}
-        disabled={pending}
-        aria-label={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
-        title={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
-      >
-        {pendingAction === "sync" ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          <RefreshCw size={14} />
-        )}
-      </Button>
-
-      {isAttachedToThisGroup && (
-        <>
-          <Button
-            variant={iconButtonVariant}
-            size="icon"
-            className={iconButtonClassName}
-            onClick={() => void runAction("toggle-auto-sync", onToggleAutoSync)}
-            disabled={pending}
-            aria-label={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
-            title={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
+      <div className="flex shrink-0 items-center">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-r-none border-r border-border/70"
+                onClick={() => void runAction("sync", onSync)}
+                disabled={pending}
+                aria-label={
+                  isAttachedToThisGroup
+                    ? `Sync checkout on ${state.targetDisplayLabel}`
+                    : `Sync to checkout on ${state.targetDisplayLabel}`
+                }
+              />
+            }
           >
-            {pendingAction === "toggle-auto-sync" ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : autoSyncEnabled ? (
-              <Pause size={14} />
-            ) : (
-              <Play size={14} />
-            )}
-          </Button>
-          <Button
-            variant={iconButtonVariant}
-            size="icon"
-            className={iconButtonClassName}
-            onClick={() => void runAction("restore", onRestore)}
-            disabled={pending}
-            aria-label="Restore main worktree"
-            title="Restore main worktree"
-          >
-            {pendingAction === "restore" ? (
+            {pendingAction === "sync" ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
-              <RotateCcw size={14} />
+              <RefreshCw size={14} />
             )}
-          </Button>
-        </>
-      )}
+            Sync
+          </TooltipTrigger>
+          <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
+        </Tooltip>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="rounded-l-none px-1.5"
+          onClick={() => setSheetOpen(true)}
+          aria-label={
+            isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"
+          }
+          title={isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"}
+        >
+          <ChevronDown size={13} />
+        </Button>
+      </div>
     </>
   );
 }

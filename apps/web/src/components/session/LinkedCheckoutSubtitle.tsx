@@ -5,7 +5,7 @@ interface Props {
 }
 
 export function LinkedCheckoutSubtitle({ state }: Props) {
-  if (!state.canShowControls) return null;
+  if (!state.canShowControls && !state.needsTargetSelection) return null;
 
   const {
     canLinkRepo,
@@ -17,32 +17,46 @@ export function LinkedCheckoutSubtitle({ state }: Props) {
     autoSyncEnabled,
     hasUncommittedChanges,
     lastSyncError,
+    targetDisplayLabel,
+    sessionRuntimeLabel,
+    targetIsSessionRuntime,
+    needsTargetSelection,
   } = state;
 
   const hasStatusLine =
-    requiresRepoLink || (isAttachedToThisGroup && summaryBranch) || isAttachedElsewhere;
+    needsTargetSelection ||
+    requiresRepoLink ||
+    (isAttachedToThisGroup && summaryBranch) ||
+    isAttachedElsewhere;
   const hasErrorLine = isAttachedToThisGroup && !!lastSyncError;
 
   if (!hasStatusLine && !hasErrorLine) return null;
 
   return (
     <>
-      {requiresRepoLink ? (
+      {needsTargetSelection ? (
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          Choose one of your bridges to sync this session.
+        </p>
+      ) : requiresRepoLink ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           {canLinkRepo
-            ? "Link a local checkout to sync this session group into your main worktree."
-            : "Link a local checkout in Trace Desktop to sync this session group into your main worktree."}
+            ? `Link a local checkout on ${targetDisplayLabel}.`
+            : `Repo not linked on ${targetDisplayLabel}. Open Trace Desktop there to link a folder.`}
         </p>
       ) : isAttachedToThisGroup && summaryBranch ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          Main worktree following {summaryBranch}
+          {targetDisplayLabel} following {summaryBranch}
           {syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""}
           {autoSyncEnabled ? "" : " (auto-sync paused)"}
           {hasUncommittedChanges ? " (has live changes)" : ""}
+          {!targetIsSessionRuntime && sessionRuntimeLabel
+            ? ` · Session runtime: ${sessionRuntimeLabel}`
+            : ""}
         </p>
       ) : isAttachedElsewhere ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          Main worktree is attached to another Trace session.
+          {targetDisplayLabel} is attached to another Trace session.
         </p>
       ) : null}
       {hasErrorLine && <p className="mt-0.5 truncate text-xs text-destructive">{lastSyncError}</p>}

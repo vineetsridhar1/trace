@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   linkLinkedCheckoutRepo,
@@ -7,6 +7,7 @@ import {
   syncLinkedCheckout,
   useLinkedCheckoutStatus,
 } from "../../stores/linked-checkout";
+import { useBridgesStore, type BridgesState } from "../../stores/bridges";
 
 interface UseLinkedCheckoutHeaderStateProps {
   repoId: string | null | undefined;
@@ -18,6 +19,13 @@ interface UseLinkedCheckoutHeaderStateProps {
 }
 
 export interface LinkedCheckoutHeaderState {
+  targetRuntimeInstanceId: string | null;
+  targetDisplayLabel: string;
+  sessionRuntimeLabel: string | null;
+  targetIsSessionRuntime: boolean;
+  canSelectTarget: boolean;
+  needsTargetSelection: boolean;
+  targetOptions: LinkedCheckoutTargetOption[];
   repoLinked: boolean;
   canLinkRepo: boolean;
   requiresRepoLink: boolean;
@@ -32,6 +40,7 @@ export interface LinkedCheckoutHeaderState {
   canShowControls: boolean;
   syncConflictOpen: boolean;
   syncConflictError: string | null;
+  onSelectTarget: (runtimeInstanceId: string) => void;
   onLinkRepo: () => Promise<void>;
   onSync: () => Promise<void>;
   onResolveSyncConflict: (input: {
@@ -43,6 +52,14 @@ export interface LinkedCheckoutHeaderState {
   onToggleAutoSync: () => Promise<void>;
 }
 
+export interface LinkedCheckoutTargetOption {
+  instanceId: string;
+  label: string;
+  repoRegistered: boolean;
+  isAttachedToGroup: boolean;
+  isCurrentDesktop: boolean;
+}
+
 export function useLinkedCheckoutHeaderState({
   repoId,
   groupBranch,
@@ -51,37 +68,110 @@ export function useLinkedCheckoutHeaderState({
   sessionGroupId,
   enabled,
 }: UseLinkedCheckoutHeaderStateProps): LinkedCheckoutHeaderState {
+  const bridges = useBridgesStore((s: BridgesState) => s.bridges);
+  const connectedLocalBridges = bridges.filter(
+    (bridge) => bridge.connected && bridge.hostingMode === "local",
+  );
+  const [selectedTargetRuntimeId, setSelectedTargetRuntimeId] = useState<string | null>(null);
+  const [desktopBridgeInstanceId, setDesktopBridgeInstanceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!window.trace?.getBridgeInfo) return;
+
+    window.trace
+      .getBridgeInfo()
+      .then((info) => {
+        if (!cancelled) setDesktopBridgeInstanceId(info?.instanceId ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setDesktopBridgeInstanceId(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const connectedLocalBridgeIds = connectedLocalBridges
+    .map((bridge) => bridge.instanceId)
+    .join("\0");
+
+  useEffect(() => {
+    if (!selectedTargetRuntimeId) return;
+    if (connectedLocalBridges.some((bridge) => bridge.instanceId === selectedTargetRuntimeId)) {
+      return;
+    }
+    setSelectedTargetRuntimeId(null);
+  }, [connectedLocalBridgeIds, connectedLocalBridges, selectedTargetRuntimeId]);
+
+  const currentDesktopBridge = desktopBridgeInstanceId
+    ? (connectedLocalBridges.find((bridge) => bridge.instanceId === desktopBridgeInstanceId) ??
+      null)
+    : null;
+  const sessionRuntimeBridge = runtimeInstanceId
+    ? (connectedLocalBridges.find((bridge) => bridge.instanceId === runtimeInstanceId) ?? null)
+    : null;
+  const preferredBridge = currentDesktopBridge ?? sessionRuntimeBridge;
+  const selectedBridge = selectedTargetRuntimeId
+    ? (connectedLocalBridges.find((bridge) => bridge.instanceId === selectedTargetRuntimeId) ??
+      null)
+    : null;
+  const targetBridge = selectedBridge ?? preferredBridge;
+  const effectiveRuntimeInstanceId = targetBridge?.instanceId ?? null;
+  const effectiveRuntimeLabel = targetBridge?.label ?? null;
+  const targetOptions = connectedLocalBridges.map((bridge) => ({
+    instanceId: bridge.instanceId,
+    label: bridge.label,
+    repoRegistered: repoId ? bridge.registeredRepoIds.includes(repoId) : false,
+    isAttachedToGroup: sessionGroupId
+      ? bridge.linkedCheckouts.some((checkout) => checkout.sessionGroup.id === sessionGroupId)
+      : false,
+    isCurrentDesktop: bridge.instanceId === desktopBridgeInstanceId,
+  }));
   const {
     status,
     pending: syncPending,
     loaded,
     canPickFolder,
-  } = useLinkedCheckoutStatus(repoId ?? null, sessionGroupId, runtimeInstanceId ?? null, enabled);
+  } = useLinkedCheckoutStatus(repoId ?? null, sessionGroupId, effectiveRuntimeInstanceId, enabled);
   const [linking, setLinking] = useState(false);
   const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === sessionGroupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
   const repoLinked = !!status?.repoPath;
-  const hasSyncContext = !!repoId && !!groupBranch && !!runtimeInstanceId;
+  const hasSyncContext = !!repoId && !!groupBranch && !!effectiveRuntimeInstanceId;
+  const canSelectTarget = enabled && !!repoId && !!groupBranch && targetOptions.length > 0;
+  const needsTargetSelection = canSelectTarget && !effectiveRuntimeInstanceId;
   const canShowControls = enabled && hasSyncContext && loaded;
-  const canLinkRepo = canShowControls && !repoLinked && canPickFolder;
+  const selectedTargetCanPickFolder =
+    canPickFolder &&
+    (!desktopBridgeInstanceId ||
+      !effectiveRuntimeInstanceId ||
+      desktopBridgeInstanceId === effectiveRuntimeInstanceId);
+  const canLinkRepo = canShowControls && !repoLinked && selectedTargetCanPickFolder;
   const requiresRepoLink = canShowControls && !repoLinked;
   const pending = syncPending || linking;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
   const summaryBranch = isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
-  const runtimeDisplayLabel = runtimeLabel?.trim() || "this bridge";
+  const runtimeDisplayLabel = effectiveRuntimeLabel?.trim() || "this bridge";
+  const sessionRuntimeLabel = runtimeLabel?.trim() || null;
+  const targetIsSessionRuntime =
+    !!effectiveRuntimeInstanceId &&
+    !!runtimeInstanceId &&
+    effectiveRuntimeInstanceId === runtimeInstanceId;
 
   const runSync = async (options?: {
     conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE";
     commitMessage?: string;
   }) => {
-    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return null;
+    if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return null;
 
     return syncLinkedCheckout({
       repoId,
       sessionGroupId,
-      runtimeInstanceId,
+      runtimeInstanceId: effectiveRuntimeInstanceId,
       branch: groupBranch,
       autoSyncEnabled: true,
       conflictStrategy: options?.conflictStrategy,
@@ -90,7 +180,7 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onLinkRepo = async () => {
-    if (!repoId || !runtimeInstanceId || pending) return;
+    if (!repoId || !effectiveRuntimeInstanceId || pending) return;
 
     if (!window.trace?.pickFolder || !canPickFolder) {
       toast.error("Linking a local checkout is only available in Trace Desktop.");
@@ -101,12 +191,20 @@ export function useLinkedCheckoutHeaderState({
     try {
       const folderPath = await window.trace.pickFolder();
       if (!folderPath) return;
+      const bridgeInfo = await window.trace.getBridgeInfo?.();
+      const pickerRuntimeInstanceId = bridgeInfo?.instanceId ?? desktopBridgeInstanceId;
+      if (pickerRuntimeInstanceId && pickerRuntimeInstanceId !== effectiveRuntimeInstanceId) {
+        toast.error("Open Trace Desktop on the selected bridge to link a folder.", {
+          description: `${runtimeDisplayLabel} is selected as the checkout target.`,
+        });
+        return;
+      }
 
       const result = await linkLinkedCheckoutRepo(
         sessionGroupId,
         repoId,
         folderPath,
-        runtimeInstanceId,
+        effectiveRuntimeInstanceId,
       );
       if (!result.ok) {
         toast.error("Failed to link local checkout", {
@@ -128,7 +226,7 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onSync = async () => {
-    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
+    if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return;
 
     try {
       const result = await runSync();
@@ -163,7 +261,7 @@ export function useLinkedCheckoutHeaderState({
     strategy: "DISCARD" | "COMMIT" | "REBASE";
     commitMessage?: string;
   }) => {
-    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
+    if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return;
 
     try {
       const result = await runSync({ conflictStrategy: strategy, commitMessage });
@@ -196,10 +294,14 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onRestore = async () => {
-    if (!repoId || !runtimeInstanceId || pending) return;
+    if (!repoId || !effectiveRuntimeInstanceId || pending) return;
 
     try {
-      const result = await restoreLinkedCheckout(repoId, sessionGroupId, runtimeInstanceId);
+      const result = await restoreLinkedCheckout(
+        repoId,
+        sessionGroupId,
+        effectiveRuntimeInstanceId,
+      );
       if (!result.ok) {
         toast.error("Failed to restore main worktree", {
           description: result.error ?? "Unknown error",
@@ -216,7 +318,7 @@ export function useLinkedCheckoutHeaderState({
   };
 
   const onToggleAutoSync = async () => {
-    if (!repoId || !runtimeInstanceId || !status || pending) return;
+    if (!repoId || !effectiveRuntimeInstanceId || !status || pending) return;
 
     const nextEnabled = !status.autoSyncEnabled;
 
@@ -225,7 +327,7 @@ export function useLinkedCheckoutHeaderState({
         repoId,
         sessionGroupId,
         nextEnabled,
-        runtimeInstanceId,
+        effectiveRuntimeInstanceId,
       );
       if (!result.ok) {
         toast.error("Failed to update auto-sync", {
@@ -243,6 +345,13 @@ export function useLinkedCheckoutHeaderState({
   };
 
   return {
+    targetRuntimeInstanceId: effectiveRuntimeInstanceId,
+    targetDisplayLabel: runtimeDisplayLabel,
+    sessionRuntimeLabel,
+    targetIsSessionRuntime,
+    canSelectTarget,
+    needsTargetSelection,
+    targetOptions,
     repoLinked,
     canLinkRepo,
     requiresRepoLink,
@@ -257,6 +366,7 @@ export function useLinkedCheckoutHeaderState({
     canShowControls,
     syncConflictOpen: syncConflictError !== null,
     syncConflictError,
+    onSelectTarget: setSelectedTargetRuntimeId,
     onLinkRepo,
     onSync,
     onResolveSyncConflict,

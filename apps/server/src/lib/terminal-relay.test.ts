@@ -100,4 +100,26 @@ describe("TerminalRelay runtime identity", () => {
     });
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "ready" }));
   });
+
+  it("scopes restored session and channel terminal lookups to the runtime organization", async () => {
+    const relay = new TerminalRelay();
+    mocks.sessionFindMany.mockResolvedValueOnce([]);
+    mocks.channelFindMany.mockResolvedValueOnce([]);
+
+    await relay.restoreTerminals("org-1:bridge-1", [
+      { terminalId: "session-term", sessionId: "session-from-other-org" },
+      { terminalId: "channel-term", sessionId: "channel:channel-from-other-org" },
+    ]);
+
+    expect(mocks.sessionFindMany).toHaveBeenCalledWith({
+      where: { id: { in: ["session-from-other-org"] }, organizationId: "org-1" },
+      select: { id: true, sessionGroupId: true, organizationId: true },
+    });
+    expect(mocks.channelFindMany).toHaveBeenCalledWith({
+      where: { id: { in: ["channel-from-other-org"] }, organizationId: "org-1" },
+      select: { id: true, organizationId: true, repoId: true },
+    });
+    expect(relay.getTerminalAuthContext("session-term")).toBeNull();
+    expect(relay.getTerminalAuthContext("channel-term")).toBeNull();
+  });
 });

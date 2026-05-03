@@ -210,6 +210,7 @@ export class TerminalRelay {
   executeCommand(
     sessionId: string,
     sessionGroupId: string | null,
+    organizationId: string | null,
     runtimeInstanceId: string,
     command: string,
     cwd?: string,
@@ -219,7 +220,7 @@ export class TerminalRelay {
       const terminalId = this.createTerminal(
         sessionId,
         sessionGroupId,
-        null,
+        organizationId,
         runtimeInstanceId,
         "system",
         80,
@@ -297,14 +298,20 @@ export class TerminalRelay {
       sessionIds.length === 0
         ? []
         : await prisma.session.findMany({
-            where: { id: { in: sessionIds } },
+            where: {
+              id: { in: sessionIds },
+              ...(runtimeOrganizationId ? { organizationId: runtimeOrganizationId } : {}),
+            },
             select: { id: true, sessionGroupId: true, organizationId: true },
           });
     const channels =
       channelIds.length === 0
         ? []
         : await prisma.channel.findMany({
-            where: { id: { in: channelIds } },
+            where: {
+              id: { in: channelIds },
+              ...(runtimeOrganizationId ? { organizationId: runtimeOrganizationId } : {}),
+            },
             select: { id: true, organizationId: true, repoId: true },
           });
     const sessionContexts = new Map<
@@ -363,6 +370,7 @@ export class TerminalRelay {
       }
 
       const sessionContext = sessionContexts.get(sessionId);
+      if (!sessionContext) continue;
       const sessionGroupId = sessionContext?.sessionGroupId ?? null;
 
       this.terminals.set(terminalId, {

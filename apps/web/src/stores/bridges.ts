@@ -7,7 +7,7 @@ export interface AttachedCheckoutInfo {
   checkout: SyncedCheckoutSummary;
 }
 
-interface BridgesState {
+export interface BridgesState {
   bridges: MyBridgeSummary[];
   /**
    * Linked-checkout attachments keyed by `sessionGroupId`. O(1) lookup for

@@ -21,9 +21,11 @@ type MutationData = {
 
 export function useConnectionSyncActions({
   checkout,
+  runtimeInstanceId,
   onChanged,
 }: {
   checkout: ConnectionLinkedCheckout;
+  runtimeInstanceId: string;
   onChanged: () => Promise<void>;
 }) {
   const [status, setStatus] = useState(checkout);
@@ -67,24 +69,29 @@ export function useConnectionSyncActions({
           sessionGroupId,
           repoId: status.repoId,
           branch,
+          runtimeInstanceId,
           autoSyncEnabled: true,
         })
         .toPromise();
       if (result.error) throw result.error;
       return (result.data as MutationData | undefined)?.syncLinkedCheckout ?? null;
     });
-  }, [branch, runAction, sessionGroupId, status.repoId]);
+  }, [branch, runAction, sessionGroupId, status.repoId, runtimeInstanceId]);
 
   const restore = useCallback(async () => {
     if (!sessionGroupId) return { ok: false, error: "Missing synced session." };
     return runAction("restore", async () => {
       const result = await getClient()
-        .mutation(RESTORE_LINKED_CHECKOUT_MUTATION, { sessionGroupId, repoId: status.repoId })
+        .mutation(RESTORE_LINKED_CHECKOUT_MUTATION, {
+          sessionGroupId,
+          repoId: status.repoId,
+          runtimeInstanceId,
+        })
         .toPromise();
       if (result.error) throw result.error;
       return (result.data as MutationData | undefined)?.restoreLinkedCheckout ?? null;
     });
-  }, [runAction, sessionGroupId, status.repoId]);
+  }, [runAction, sessionGroupId, status.repoId, runtimeInstanceId]);
 
   const commitChanges = useCallback(async () => {
     if (!sessionGroupId) return { ok: false, error: "Missing synced session." };
@@ -93,12 +100,13 @@ export function useConnectionSyncActions({
         .mutation(COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION, {
           sessionGroupId,
           repoId: status.repoId,
+          runtimeInstanceId,
         })
         .toPromise();
       if (result.error) throw result.error;
       return (result.data as MutationData | undefined)?.commitLinkedCheckoutChanges ?? null;
     });
-  }, [runAction, sessionGroupId, status.repoId]);
+  }, [runAction, sessionGroupId, status.repoId, runtimeInstanceId]);
 
   const toggleAutoSync = useCallback(async () => {
     if (!sessionGroupId) return { ok: false, error: "Missing synced session." };
@@ -108,12 +116,13 @@ export function useConnectionSyncActions({
           sessionGroupId,
           repoId: status.repoId,
           enabled: !status.autoSyncEnabled,
+          runtimeInstanceId,
         })
         .toPromise();
       if (result.error) throw result.error;
       return (result.data as MutationData | undefined)?.setLinkedCheckoutAutoSync ?? null;
     });
-  }, [runAction, sessionGroupId, status.autoSyncEnabled, status.repoId]);
+  }, [runAction, sessionGroupId, status.autoSyncEnabled, status.repoId, runtimeInstanceId]);
 
   return { status, branch, pendingAction, sync, commitChanges, restore, toggleAutoSync };
 }

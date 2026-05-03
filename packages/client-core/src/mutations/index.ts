@@ -364,6 +364,7 @@ export const MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY = gql`
       instanceId
       label
       hostingMode
+      registeredRepoIds
       lastSeenAt
       connected
       linkedCheckouts {
@@ -646,19 +647,29 @@ const LINKED_CHECKOUT_STATUS_FIELDS = `
 `;
 
 export const LINKED_CHECKOUT_STATUS_QUERY = gql`
-  query LinkedCheckoutStatus($sessionGroupId: ID!, $repoId: ID!) {
-    linkedCheckoutStatus(sessionGroupId: $sessionGroupId, repoId: $repoId) {
+  query LinkedCheckoutStatus($sessionGroupId: ID!, $repoId: ID!, $runtimeInstanceId: ID) {
+    linkedCheckoutStatus(
+      sessionGroupId: $sessionGroupId
+      repoId: $repoId
+      runtimeInstanceId: $runtimeInstanceId
+    ) {
       ${LINKED_CHECKOUT_STATUS_FIELDS}
     }
   }
 `;
 
 export const LINK_LINKED_CHECKOUT_REPO_MUTATION = gql`
-  mutation LinkLinkedCheckoutRepo($sessionGroupId: ID!, $repoId: ID!, $localPath: String!) {
+  mutation LinkLinkedCheckoutRepo(
+    $sessionGroupId: ID!
+    $repoId: ID!
+    $localPath: String!
+    $runtimeInstanceId: ID
+  ) {
     linkLinkedCheckoutRepo(
       sessionGroupId: $sessionGroupId
       repoId: $repoId
       localPath: $localPath
+      runtimeInstanceId: $runtimeInstanceId
     ) {
       ok
       error
@@ -675,6 +686,7 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
     $sessionGroupId: ID!
     $repoId: ID!
     $branch: String!
+    $runtimeInstanceId: ID
     $commitSha: String
     $autoSyncEnabled: Boolean
     $conflictStrategy: LinkedCheckoutSyncConflictStrategy
@@ -684,6 +696,7 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
       sessionGroupId: $sessionGroupId
       repoId: $repoId
       branch: $branch
+      runtimeInstanceId: $runtimeInstanceId
       commitSha: $commitSha
       autoSyncEnabled: $autoSyncEnabled
       conflictStrategy: $conflictStrategy
@@ -700,8 +713,12 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
 `;
 
 export const RESTORE_LINKED_CHECKOUT_MUTATION = gql`
-  mutation RestoreLinkedCheckout($sessionGroupId: ID!, $repoId: ID!) {
-    restoreLinkedCheckout(sessionGroupId: $sessionGroupId, repoId: $repoId) {
+  mutation RestoreLinkedCheckout($sessionGroupId: ID!, $repoId: ID!, $runtimeInstanceId: ID) {
+    restoreLinkedCheckout(
+      sessionGroupId: $sessionGroupId
+      repoId: $repoId
+      runtimeInstanceId: $runtimeInstanceId
+    ) {
       ok
       error
       errorCode
@@ -713,10 +730,16 @@ export const RESTORE_LINKED_CHECKOUT_MUTATION = gql`
 `;
 
 export const COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION = gql`
-  mutation CommitLinkedCheckoutChanges($sessionGroupId: ID!, $repoId: ID!, $message: String) {
+  mutation CommitLinkedCheckoutChanges(
+    $sessionGroupId: ID!
+    $repoId: ID!
+    $runtimeInstanceId: ID
+    $message: String
+  ) {
     commitLinkedCheckoutChanges(
       sessionGroupId: $sessionGroupId
       repoId: $repoId
+      runtimeInstanceId: $runtimeInstanceId
       message: $message
     ) {
       ok
@@ -730,11 +753,17 @@ export const COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION = gql`
 `;
 
 export const SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION = gql`
-  mutation SetLinkedCheckoutAutoSync($sessionGroupId: ID!, $repoId: ID!, $enabled: Boolean!) {
+  mutation SetLinkedCheckoutAutoSync(
+    $sessionGroupId: ID!
+    $repoId: ID!
+    $enabled: Boolean!
+    $runtimeInstanceId: ID
+  ) {
     setLinkedCheckoutAutoSync(
       sessionGroupId: $sessionGroupId
       repoId: $repoId
       enabled: $enabled
+      runtimeInstanceId: $runtimeInstanceId
     ) {
       ok
       error

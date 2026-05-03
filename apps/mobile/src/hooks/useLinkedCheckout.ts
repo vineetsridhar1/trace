@@ -118,7 +118,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     };
   }, [groupId, runtimeInstanceId]);
 
-  const bridgeAllowed = !access || access.hostingMode !== "local" || access.allowed;
+  const bridgeAllowed = !access || access.hostingMode !== "local" || access.isOwner;
   const available = bridgeAllowed && !!repoId && !!branch && connected;
 
   const [status, setStatus] = useState<LinkedCheckoutStatus | null>(null);
@@ -148,7 +148,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     void getClient()
       .query(
         LINKED_CHECKOUT_STATUS_QUERY,
-        { sessionGroupId: groupId, repoId },
+        { sessionGroupId: groupId, repoId, runtimeInstanceId },
         { requestPolicy: "network-only" },
       )
       .toPromise()
@@ -179,7 +179,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     return () => {
       cancelled = true;
     };
-  }, [accessLoaded, available, groupId, refreshTick, repoId, status]);
+  }, [accessLoaded, available, groupId, refreshTick, repoId, runtimeInstanceId, status]);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === groupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
@@ -243,6 +243,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
             sessionGroupId: groupId,
             repoId,
             branch,
+            runtimeInstanceId,
             autoSyncEnabled: true,
             conflictStrategy: input?.conflictStrategy,
             commitMessage: input?.commitMessage,
@@ -252,7 +253,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         return (result.data as SyncMutationData | undefined)?.syncLinkedCheckout ?? null;
       });
     },
-    [branch, groupId, repoId, runAction],
+    [branch, groupId, repoId, runAction, runtimeInstanceId],
   );
 
   const restore = useCallback(async (): Promise<ActionOutcome> => {
@@ -262,12 +263,13 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         .mutation(RESTORE_LINKED_CHECKOUT_MUTATION, {
           sessionGroupId: groupId,
           repoId,
+          runtimeInstanceId,
         })
         .toPromise();
       if (result.error) throw result.error;
       return (result.data as RestoreMutationData | undefined)?.restoreLinkedCheckout ?? null;
     });
-  }, [groupId, repoId, runAction]);
+  }, [groupId, repoId, runAction, runtimeInstanceId]);
 
   const commitChanges = useCallback(async (): Promise<ActionOutcome> => {
     if (!repoId) return { ok: false, error: "Missing repo." };
@@ -276,12 +278,13 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         .mutation(COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION, {
           sessionGroupId: groupId,
           repoId,
+          runtimeInstanceId,
         })
         .toPromise();
       if (result.error) throw result.error;
       return (result.data as CommitMutationData | undefined)?.commitLinkedCheckoutChanges ?? null;
     });
-  }, [groupId, repoId, runAction]);
+  }, [groupId, repoId, runAction, runtimeInstanceId]);
 
   const toggleAutoSync = useCallback(async (): Promise<ActionOutcome> => {
     if (!repoId || !status) return { ok: false, error: "Missing repo or status." };
@@ -292,12 +295,13 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
           sessionGroupId: groupId,
           repoId,
           enabled: next,
+          runtimeInstanceId,
         })
         .toPromise();
       if (result.error) throw result.error;
       return (result.data as AutoSyncMutationData | undefined)?.setLinkedCheckoutAutoSync ?? null;
     });
-  }, [groupId, repoId, runAction, status]);
+  }, [groupId, repoId, runAction, runtimeInstanceId, status]);
 
   return {
     available,
