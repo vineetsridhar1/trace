@@ -5,6 +5,9 @@ import "@xterm/xterm/css/xterm.css";
 import { TerminalSocket } from "../../lib/terminal-ws";
 import { useTerminalStore } from "../../stores/terminal";
 
+const terminalFontFamily =
+  "'Hack Nerd Font Mono', 'Hack Nerd Font', 'HackNerdFontComplete-Regular', 'JetBrainsMono Nerd Font Mono', 'JetBrainsMono Nerd Font', 'Symbols Nerd Font Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace";
+
 export function TerminalInstance({
   terminalId,
   visible,
@@ -28,7 +31,7 @@ export function TerminalInstance({
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
+      fontFamily: terminalFontFamily,
       theme: {
         background: "#0a0a0a",
         foreground: "#e4e4e7",
