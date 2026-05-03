@@ -8,7 +8,6 @@ import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import {
   getModelsForTool,
@@ -46,7 +45,7 @@ function EffortDots({ index, total }: { index: number; total: number }) {
           key={i}
           className={cn(
             "block h-[3px] w-[3px] rounded-full transition-opacity duration-150",
-            i <= index ? "bg-[var(--th-accent-light)] opacity-100" : "bg-muted-foreground/40",
+            i <= index ? "bg-current opacity-100" : "bg-current opacity-30",
           )}
         />
       ))}
@@ -72,51 +71,44 @@ function EffortCycleButton({
   const currentOption = options[displayIndex];
   const currentLabel = currentOption?.label ?? getReasoningEffortLabel(effort);
   const nextOption = options[(displayIndex + 1) % options.length];
-  const tooltip = `Reasoning effort: ${currentLabel}. Click to cycle.`;
   const labels = Array.from({ length: counter + 2 }, (_, i) => options[i % options.length]);
 
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>
-        <button
-          type="button"
-          onClick={() => {
-            if (!nextOption) return;
-            setCounter((value) => value + 1);
-            onChange(nextOption.value);
-          }}
-          disabled={disabled}
-          aria-label={tooltip}
-          className={cn(
-            "btn-secondary flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-medium text-foreground transition-colors",
-            "hover:border-[var(--th-accent)] hover:text-[var(--th-accent-light)]",
-            "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-          )}
+    <button
+      type="button"
+      onClick={() => {
+        if (!nextOption) return;
+        setCounter((value) => value + 1);
+        onChange(nextOption.value);
+      }}
+      disabled={disabled}
+      aria-label={`Reasoning effort: ${currentLabel}. Click to cycle.`}
+      className={cn(
+        "flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none",
+        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+      )}
+    >
+      <EffortDots index={displayIndex} total={options.length} />
+      <span
+        className="relative block min-w-[4.25rem] overflow-hidden text-left"
+        style={{ height: EFFORT_LINE_HEIGHT }}
+      >
+        <span
+          className="flex flex-col transition-transform duration-150 ease-out"
+          style={{ transform: `translateY(-${counter * EFFORT_LINE_HEIGHT}px)` }}
         >
-          <EffortDots index={displayIndex} total={options.length} />
-          <span
-            className="relative block min-w-[4.25rem] overflow-hidden text-left"
-            style={{ height: EFFORT_LINE_HEIGHT }}
-          >
+          {labels.map((option, index) => (
             <span
-              className="flex flex-col transition-transform duration-150 ease-out"
-              style={{ transform: `translateY(-${counter * EFFORT_LINE_HEIGHT}px)` }}
+              key={`${option.value}-${index}`}
+              className="block whitespace-nowrap"
+              style={{ height: EFFORT_LINE_HEIGHT, lineHeight: `${EFFORT_LINE_HEIGHT}px` }}
             >
-              {labels.map((option, index) => (
-                <span
-                  key={`${option.value}-${index}`}
-                  className="block whitespace-nowrap"
-                  style={{ height: EFFORT_LINE_HEIGHT, lineHeight: `${EFFORT_LINE_HEIGHT}px` }}
-                >
-                  {option.label}
-                </span>
-              ))}
+              {option.label}
             </span>
-          </span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="top">{tooltip}</TooltipContent>
-    </Tooltip>
+          ))}
+        </span>
+      </span>
+    </button>
   );
 }
 
