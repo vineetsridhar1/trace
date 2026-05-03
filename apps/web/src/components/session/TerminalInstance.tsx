@@ -5,6 +5,10 @@ import "@xterm/xterm/css/xterm.css";
 import { TerminalSocket } from "../../lib/terminal-ws";
 import { useTerminalStore } from "../../stores/terminal";
 
+const terminalFontFamily =
+  "'Hack Nerd Font Mono', 'Hack Nerd Font', 'HackNerdFontComplete-Regular', 'Trace Nerd Symbols', 'JetBrainsMono Nerd Font Mono', 'JetBrainsMono Nerd Font', 'Symbols Nerd Font Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace";
+const terminalFontSize = 13;
+
 export function TerminalInstance({
   terminalId,
   visible,
@@ -25,10 +29,11 @@ export function TerminalInstance({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    let disposed = false;
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
-      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
+      fontSize: terminalFontSize,
+      fontFamily: terminalFontFamily,
       theme: {
         background: "#0a0a0a",
         foreground: "#e4e4e7",
@@ -40,6 +45,15 @@ export function TerminalInstance({
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
+
+    if ("fonts" in document) {
+      void document.fonts
+        .load(`${terminalFontSize}px "Trace Nerd Symbols"`, "\ue0b0\uf07c\uf113\uf126")
+        .then(() => {
+          if (!disposed) term.refresh(0, term.rows - 1);
+        })
+        .catch(() => undefined);
+    }
 
     // Fit after a brief delay so the container has been laid out
     requestAnimationFrame(() => {
@@ -113,6 +127,7 @@ export function TerminalInstance({
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      disposed = true;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       socket.close();
