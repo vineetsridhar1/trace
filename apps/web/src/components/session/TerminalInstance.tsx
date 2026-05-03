@@ -29,6 +29,7 @@ export function TerminalInstance({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    let disposed = false;
     const term = new Terminal({
       cursorBlink: true,
       fontSize: terminalFontSize,
@@ -48,7 +49,9 @@ export function TerminalInstance({
     if ("fonts" in document) {
       void document.fonts
         .load(`${terminalFontSize}px "Trace Nerd Symbols"`, "\ue0b0\uf07c\uf113\uf126")
-        .then(() => term.refresh(0, term.rows - 1))
+        .then(() => {
+          if (!disposed) term.refresh(0, term.rows - 1);
+        })
         .catch(() => undefined);
     }
 
@@ -124,6 +127,7 @@ export function TerminalInstance({
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      disposed = true;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       socket.close();
