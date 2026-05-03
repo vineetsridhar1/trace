@@ -24,6 +24,7 @@ export interface LinkedCheckoutHeaderState {
   sessionRuntimeLabel: string | null;
   targetIsSessionRuntime: boolean;
   canSelectTarget: boolean;
+  needsTargetSelection: boolean;
   targetOptions: LinkedCheckoutTargetOption[];
   repoLinked: boolean;
   canLinkRepo: boolean;
@@ -104,17 +105,14 @@ export function useLinkedCheckoutHeaderState({
     setSelectedTargetRuntimeId(null);
   }, [connectedLocalBridgeIds, connectedLocalBridges, selectedTargetRuntimeId]);
 
-  const preferredBridge =
-    (sessionGroupId
-      ? connectedLocalBridges.find((bridge) =>
-          bridge.linkedCheckouts.some((checkout) => checkout.sessionGroup.id === sessionGroupId),
-        )
-      : null) ??
-    (repoId
-      ? connectedLocalBridges.find((bridge) => bridge.registeredRepoIds.includes(repoId))
-      : null) ??
-    connectedLocalBridges[0] ??
-    null;
+  const currentDesktopBridge = desktopBridgeInstanceId
+    ? (connectedLocalBridges.find((bridge) => bridge.instanceId === desktopBridgeInstanceId) ??
+      null)
+    : null;
+  const sessionRuntimeBridge = runtimeInstanceId
+    ? (connectedLocalBridges.find((bridge) => bridge.instanceId === runtimeInstanceId) ?? null)
+    : null;
+  const preferredBridge = currentDesktopBridge ?? sessionRuntimeBridge;
   const selectedBridge = selectedTargetRuntimeId
     ? (connectedLocalBridges.find((bridge) => bridge.instanceId === selectedTargetRuntimeId) ??
       null)
@@ -145,6 +143,7 @@ export function useLinkedCheckoutHeaderState({
   const repoLinked = !!status?.repoPath;
   const hasSyncContext = !!repoId && !!groupBranch && !!effectiveRuntimeInstanceId;
   const canSelectTarget = enabled && !!repoId && !!groupBranch && targetOptions.length > 0;
+  const needsTargetSelection = canSelectTarget && !effectiveRuntimeInstanceId;
   const canShowControls = enabled && hasSyncContext && loaded;
   const selectedTargetCanPickFolder =
     canPickFolder &&
@@ -351,6 +350,7 @@ export function useLinkedCheckoutHeaderState({
     sessionRuntimeLabel,
     targetIsSessionRuntime,
     canSelectTarget,
+    needsTargetSelection,
     targetOptions,
     repoLinked,
     canLinkRepo,

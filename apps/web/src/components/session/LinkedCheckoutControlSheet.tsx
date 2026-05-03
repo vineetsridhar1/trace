@@ -31,7 +31,7 @@ export function LinkedCheckoutControlSheet({
   onOpenChange,
   onRunAction,
 }: Props) {
-  const syncTooltip = `Sync this session's branch to the local checkout on ${state.targetDisplayLabel}.`;
+  const syncTooltip = `This syncs the session branch to your local checkout on ${state.targetDisplayLabel}.`;
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -85,59 +85,65 @@ export function LinkedCheckoutControlSheet({
             </section>
           )}
 
-          <section className="grid gap-2 sm:grid-cols-2">
-            {state.requiresRepoLink ? (
-              <Button
-                variant="default"
-                onClick={() => onRunAction("link", state.onLinkRepo)}
-                disabled={state.pending || !state.canLinkRepo}
-                className="justify-start"
-              >
-                <GitBranch size={14} />
-                {pendingAction === "link" ? "Linking..." : "Link folder"}
-              </Button>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="default"
-                      onClick={() => onRunAction("sync", state.onSync)}
-                      disabled={state.pending}
-                      className="justify-start"
-                    />
-                  }
+          {state.needsTargetSelection ? (
+            <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+              Select one of your bridges above to choose where this session branch should sync.
+            </p>
+          ) : (
+            <section className="grid gap-2 sm:grid-cols-2">
+              {state.requiresRepoLink ? (
+                <Button
+                  variant="default"
+                  onClick={() => onRunAction("link", state.onLinkRepo)}
+                  disabled={state.pending || !state.canLinkRepo}
+                  className="justify-start"
                 >
                   <GitBranch size={14} />
-                  {pendingAction === "sync" ? "Syncing..." : "Sync now"}
-                </TooltipTrigger>
-                <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
-              </Tooltip>
-            )}
+                  {pendingAction === "link" ? "Linking..." : "Link folder"}
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="default"
+                        onClick={() => onRunAction("sync", state.onSync)}
+                        disabled={state.pending}
+                        className="justify-start"
+                      />
+                    }
+                  >
+                    <GitBranch size={14} />
+                    {pendingAction === "sync" ? "Syncing..." : "Sync now"}
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
+                </Tooltip>
+              )}
 
-            {!state.requiresRepoLink && state.isAttachedToThisGroup && (
-              <>
-                <Button
-                  variant="secondary"
-                  onClick={() => onRunAction("toggle-auto-sync", state.onToggleAutoSync)}
-                  disabled={state.pending}
-                  className="justify-start"
-                >
-                  <SlidersHorizontal size={14} />
-                  {state.autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => onRunAction("restore", state.onRestore)}
-                  disabled={state.pending}
-                  className="justify-start"
-                >
-                  <RotateCcw size={14} />
-                  {pendingAction === "restore" ? "Restoring..." : "Restore checkout"}
-                </Button>
-              </>
-            )}
-          </section>
+              {!state.requiresRepoLink && state.isAttachedToThisGroup && (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => onRunAction("toggle-auto-sync", state.onToggleAutoSync)}
+                    disabled={state.pending}
+                    className="justify-start"
+                  >
+                    <SlidersHorizontal size={14} />
+                    {state.autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => onRunAction("restore", state.onRestore)}
+                    disabled={state.pending}
+                    className="justify-start"
+                  >
+                    <RotateCcw size={14} />
+                    {pendingAction === "restore" ? "Restoring..." : "Restore checkout"}
+                  </Button>
+                </>
+              )}
+            </section>
+          )}
         </div>
       </ResponsiveDialogContent>
     </ResponsiveDialog>

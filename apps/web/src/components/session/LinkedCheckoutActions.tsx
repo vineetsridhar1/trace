@@ -22,6 +22,7 @@ export function LinkedCheckoutActions({ state }: Props) {
     isAttachedToThisGroup,
     pending,
     canLinkRepo,
+    needsTargetSelection,
     requiresRepoLink,
     onLinkRepo,
     onSync,
@@ -40,7 +41,41 @@ export function LinkedCheckoutActions({ state }: Props) {
     }
   };
 
-  const syncTooltip = `Sync this session's branch to the local checkout on ${state.targetDisplayLabel}.`;
+  const syncTooltip = `This syncs the session branch to your local checkout on ${state.targetDisplayLabel}.`;
+
+  if (needsTargetSelection) {
+    return (
+      <>
+        <LinkedCheckoutControlSheet
+          state={state}
+          open={sheetOpen}
+          pendingAction={pendingAction}
+          onOpenChange={setSheetOpen}
+          onRunAction={(action, fn) => void runAction(action, fn)}
+        />
+        <div className="flex shrink-0 items-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="rounded-r-none border-r border-border/70"
+            onClick={() => setSheetOpen(true)}
+          >
+            Sync
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="rounded-l-none px-1.5"
+            onClick={() => setSheetOpen(true)}
+            aria-label="Choose local checkout target"
+            title="Choose local checkout target"
+          >
+            <ChevronDown size={13} />
+          </Button>
+        </div>
+      </>
+    );
+  }
 
   if (requiresRepoLink) {
     return (

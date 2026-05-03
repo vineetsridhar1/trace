@@ -5,7 +5,7 @@ interface Props {
 }
 
 export function LinkedCheckoutSubtitle({ state }: Props) {
-  if (!state.canShowControls) return null;
+  if (!state.canShowControls && !state.needsTargetSelection) return null;
 
   const {
     canLinkRepo,
@@ -20,17 +20,25 @@ export function LinkedCheckoutSubtitle({ state }: Props) {
     targetDisplayLabel,
     sessionRuntimeLabel,
     targetIsSessionRuntime,
+    needsTargetSelection,
   } = state;
 
   const hasStatusLine =
-    requiresRepoLink || (isAttachedToThisGroup && summaryBranch) || isAttachedElsewhere;
+    needsTargetSelection ||
+    requiresRepoLink ||
+    (isAttachedToThisGroup && summaryBranch) ||
+    isAttachedElsewhere;
   const hasErrorLine = isAttachedToThisGroup && !!lastSyncError;
 
   if (!hasStatusLine && !hasErrorLine) return null;
 
   return (
     <>
-      {requiresRepoLink ? (
+      {needsTargetSelection ? (
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          Choose one of your bridges to sync this session.
+        </p>
+      ) : requiresRepoLink ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           {canLinkRepo
             ? `Link a local checkout on ${targetDisplayLabel}.`
