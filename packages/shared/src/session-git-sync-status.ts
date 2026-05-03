@@ -54,7 +54,7 @@ export async function inspectSessionGitSyncStatus(
         maxBuffer: DEFAULT_MAX_BUFFER,
         timeoutMs: DEFAULT_TIMEOUT_MS,
       }),
-      runGit(["status", "--porcelain=v1", "--untracked-files=no", "--ignore-submodules=dirty"], {
+      runGit(["status", "--porcelain=v1", "--untracked-files=no"], {
         maxBuffer: DEFAULT_MAX_BUFFER,
         timeoutMs: DEFAULT_TIMEOUT_MS,
       }),

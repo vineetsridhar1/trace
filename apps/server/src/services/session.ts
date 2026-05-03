@@ -5120,8 +5120,18 @@ export class SessionService {
     repoId?: string | null;
     workdir?: string | null;
     runtimeInstanceId?: string | null;
-  }): Promise<BridgeSessionGitSyncStatus | null> {
-    if (!params.repoId || !params.workdir || !params.runtimeInstanceId) return null;
+  }): Promise<{
+    status: BridgeSessionGitSyncStatus | null;
+    verified: boolean;
+    skippedReason: string | null;
+  }> {
+    if (!params.repoId) return { status: null, verified: true, skippedReason: null };
+    if (!params.workdir) {
+      return { status: null, verified: false, skippedReason: "missing_workdir" };
+    }
+    if (!params.runtimeInstanceId) {
+      return { status: null, verified: false, skippedReason: "source_runtime_unavailable" };
+    }
 
     let status: BridgeSessionGitSyncStatus;
     try {
@@ -5131,13 +5141,10 @@ export class SessionService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message === "Session git sync status request timed out") {
-        console.warn(
-          `[session-service] skipping move source git sync check for ${params.sessionId}: ${message}`,
-        );
-        return null;
-      }
-      throw error;
+      console.warn(
+        `[session-service] skipping move source git sync check for ${params.sessionId}: ${message}`,
+      );
+      return { status: null, verified: false, skippedReason: "inspection_failed" };
     }
 
     if (status.hasUncommittedChanges) {
@@ -5150,7 +5157,7 @@ export class SessionService {
       if (!status.headCommitSha) {
         throw new Error("Cannot move session: unable to resolve the current detached commit.");
       }
-      return status;
+      return { status, verified: true, skippedReason: null };
     }
 
     if (status.remoteBranch && status.remoteCommitSha) {
@@ -5159,7 +5166,7 @@ export class SessionService {
           "Cannot move session: local branch must match its remote branch before moving.",
         );
       }
-      return status;
+      return { status, verified: true, skippedReason: null };
     }
 
     if (!status.upstreamBranch || !status.upstreamCommitSha) {
@@ -5172,7 +5179,7 @@ export class SessionService {
       throw new Error("Cannot move session: local branch must match its upstream before moving.");
     }
 
-    return status;
+    return { status, verified: true, skippedReason: null };
   }
 
   private async moveSessionInPlace(params: {
@@ -5211,12 +5218,13 @@ export class SessionService {
       throw new Error("No enabled cloud agent environment is configured");
     }
 
-    const sourceGitStatus = await this.inspectSessionMoveSource({
+    const sourceInspection = await this.inspectSessionMoveSource({
       sessionId: session.id,
       repoId: session.repoId,
       workdir: session.workdir,
       runtimeInstanceId: inspectableSourceRuntimeId,
     });
+    const sourceGitStatus = sourceInspection.status;
 
     terminalRelay.destroyAllForSession(session.id);
 
@@ -5295,6 +5303,8 @@ export class SessionService {
         sourceHosting: session.hosting,
         targetHosting,
         targetRuntimeLabel: targetRuntimeLabel ?? null,
+        sourceGitStatusVerified: sourceInspection.verified,
+        sourceGitStatusSkippedReason: sourceInspection.skippedReason,
       } as Prisma.InputJsonValue,
       actorType,
       actorId,
