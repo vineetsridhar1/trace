@@ -32,6 +32,8 @@ const TOOL_LABELS: Record<string, string> = {
   codex: "Codex",
 };
 
+const EFFORT_LINE_HEIGHT = 16;
+
 function getToolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? tool;
 }
@@ -69,13 +71,19 @@ function EffortCycleButton({
   const currentLabel = currentOption?.label ?? getReasoningEffortLabel(effort);
   const nextOption = options[(safeIndex + 1) % options.length];
   const tooltip = `Reasoning effort: ${currentLabel}. Click to cycle.`;
+  const [counter, setCounter] = useState(safeIndex);
+  const labels = Array.from({ length: counter + 2 }, (_, i) => options[i % options.length]);
 
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="inline-flex" />}>
         <button
           type="button"
-          onClick={() => nextOption && onChange(nextOption.value)}
+          onClick={() => {
+            if (!nextOption) return;
+            setCounter((value) => value + 1);
+            onChange(nextOption.value);
+          }}
           disabled={disabled}
           aria-label={tooltip}
           className={cn(
@@ -85,19 +93,24 @@ function EffortCycleButton({
           )}
         >
           <EffortDots index={safeIndex} total={options.length} />
-          <span className="relative block h-4 min-w-[4.25rem] overflow-hidden text-left">
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.span
-                key={currentOption?.value ?? effort}
-                initial={{ y: 8, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -8, opacity: 0 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute left-0 top-0 whitespace-nowrap leading-4"
-              >
-                {currentLabel}
-              </motion.span>
-            </AnimatePresence>
+          <span
+            className="relative block min-w-[4.25rem] overflow-hidden text-left"
+            style={{ height: EFFORT_LINE_HEIGHT }}
+          >
+            <span
+              className="flex flex-col transition-transform duration-150 ease-out"
+              style={{ transform: `translateY(-${counter * EFFORT_LINE_HEIGHT}px)` }}
+            >
+              {labels.map((option, index) => (
+                <span
+                  key={`${option.value}-${index}`}
+                  className="block whitespace-nowrap"
+                  style={{ height: EFFORT_LINE_HEIGHT, lineHeight: `${EFFORT_LINE_HEIGHT}px` }}
+                >
+                  {option.label}
+                </span>
+              ))}
+            </span>
           </span>
         </button>
       </TooltipTrigger>
@@ -438,6 +451,7 @@ export function SessionInputOptions({
       )}
       {reasoningEffortOptions.length > 0 && (
         <EffortCycleButton
+          key={currentTool}
           effort={currentReasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
           options={reasoningEffortOptions}
           disabled={isActive || isOptimistic}
