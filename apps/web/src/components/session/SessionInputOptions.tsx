@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
@@ -70,6 +70,7 @@ export function SessionInputOptions({
   const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(isNotStarted);
   const showCloudRuntimeOption =
     cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
+  const autoSelectedRuntimeSessionRef = useRef<string | null>(null);
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
@@ -212,6 +213,40 @@ export function SessionInputOptions({
     [isOptimistic, sessionId, currentRuntimeValue, runtimes, connection, cloudEnvironmentAvailable],
   );
 
+  useEffect(() => {
+    if (
+      !isNotStarted ||
+      isOptimistic ||
+      isCloudRuntime ||
+      runtimeInstanceId ||
+      currentRuntimeValue !== UNBOUND_LOCAL_RUNTIME_ID ||
+      autoSelectedRuntimeSessionRef.current === sessionId
+    ) {
+      return;
+    }
+
+    const ownedRuntime = runtimes.find(
+      (r: SessionRuntimeInstance) =>
+        isAccessibleLocalRuntime(r) &&
+        r.access?.isOwner &&
+        (!channelRepoId || r.registeredRepoIds.includes(channelRepoId)),
+    );
+    if (!ownedRuntime) return;
+
+    autoSelectedRuntimeSessionRef.current = sessionId;
+    void handleRuntimeChange(ownedRuntime.id);
+  }, [
+    channelRepoId,
+    currentRuntimeValue,
+    handleRuntimeChange,
+    isCloudRuntime,
+    isNotStarted,
+    isOptimistic,
+    runtimeInstanceId,
+    runtimes,
+    sessionId,
+  ]);
+
   const modeConfig = MODE_CONFIG[mode];
   const ModeIcon = modeConfig.icon;
 
@@ -303,7 +338,7 @@ export function SessionInputOptions({
                   </>
                 ) : !runtimeInstanceId ? (
                   <>
-                    <AlertTriangle size={12} className="text-amber-500" /> No local runtime
+                    <AlertTriangle size={12} className="text-amber-500" /> Choose runtime
                   </>
                 ) : (
                   <>
@@ -325,7 +360,7 @@ export function SessionInputOptions({
               connectedLocalRuntimes.length === 0) && (
               <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <AlertTriangle size={12} className="text-amber-500" /> No local runtime
+                  <AlertTriangle size={12} className="text-amber-500" /> Choose runtime
                 </span>
               </SelectItem>
             )}
