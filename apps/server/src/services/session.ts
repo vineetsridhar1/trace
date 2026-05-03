@@ -5123,10 +5123,21 @@ export class SessionService {
   }): Promise<BridgeSessionGitSyncStatus | null> {
     if (!params.repoId || !params.workdir || !params.runtimeInstanceId) return null;
 
-    const status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
-      sessionId: params.sessionId,
-      workdirHint: params.workdir,
-    });
+    let status: BridgeSessionGitSyncStatus;
+    try {
+      status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
+        sessionId: params.sessionId,
+        workdirHint: params.workdir,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "Session git sync status request timed out") {
+        throw new Error(
+          "Cannot move session: source runtime did not respond while checking git sync status. Restart or update that runtime and try again.",
+        );
+      }
+      throw error;
+    }
 
     if (status.hasUncommittedChanges) {
       throw new Error(

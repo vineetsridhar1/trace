@@ -30,6 +30,7 @@ import {
   GIT_DIFF_TREE_ARGS,
   isMissingToolSessionError,
   parseGitShowOutput,
+  inspectSessionGitSyncStatus,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
@@ -98,76 +99,6 @@ async function buildLinkedCheckoutFailureResult(repoId: string, error: unknown) 
     status,
     error: message,
     errorCode: null,
-  };
-}
-
-async function maybeReadGitRef(repoPath: string, args: string[]): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync("git", args, {
-      cwd: repoPath,
-      maxBuffer: 1024 * 1024,
-    });
-    const value = stdout.trim();
-    return value.length > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-async function inspectSessionGitSyncStatus(repoPath: string) {
-  const [{ stdout: headStdout }, { stdout: statusStdout }, branch, upstreamBranch] =
-    await Promise.all([
-      execFileAsync("git", ["rev-parse", "HEAD"], { cwd: repoPath, maxBuffer: 1024 * 1024 }),
-      execFileAsync("git", ["status", "--porcelain", "--untracked-files=all"], {
-        cwd: repoPath,
-        maxBuffer: 1024 * 1024,
-      }),
-      maybeReadGitRef(repoPath, ["symbolic-ref", "--short", "-q", "HEAD"]),
-      maybeReadGitRef(repoPath, [
-        "rev-parse",
-        "--abbrev-ref",
-        "--symbolic-full-name",
-        "@{upstream}",
-      ]),
-    ]);
-
-  const upstreamCommitSha = upstreamBranch
-    ? await maybeReadGitRef(repoPath, ["rev-parse", `${upstreamBranch}^{commit}`])
-    : null;
-  const remoteBranch = branch ? `origin/${branch}` : null;
-  const remoteCommitSha = remoteBranch
-    ? await maybeReadGitRef(repoPath, ["rev-parse", `${remoteBranch}^{commit}`])
-    : null;
-
-  const countDivergence = async (ref: string | null) => {
-    if (!ref) return { aheadCount: 0, behindCount: 0 };
-    const { stdout } = await execFileAsync(
-      "git",
-      ["rev-list", "--left-right", "--count", `HEAD...${ref}`],
-      { cwd: repoPath, maxBuffer: 1024 * 1024 },
-    );
-    const [aheadRaw = "0", behindRaw = "0"] = stdout.trim().split(/\s+/);
-    return {
-      aheadCount: Number.parseInt(aheadRaw, 10) || 0,
-      behindCount: Number.parseInt(behindRaw, 10) || 0,
-    };
-  };
-
-  const upstreamDivergence = await countDivergence(upstreamBranch);
-  const remoteDivergence = await countDivergence(remoteCommitSha ? remoteBranch : null);
-
-  return {
-    branch,
-    headCommitSha: headStdout.trim() || null,
-    upstreamBranch,
-    upstreamCommitSha,
-    aheadCount: upstreamDivergence.aheadCount,
-    behindCount: upstreamDivergence.behindCount,
-    remoteBranch: remoteCommitSha ? remoteBranch : null,
-    remoteCommitSha,
-    remoteAheadCount: remoteDivergence.aheadCount,
-    remoteBehindCount: remoteDivergence.behindCount,
-    hasUncommittedChanges: statusStdout.trim().length > 0,
   };
 }
 
@@ -1233,7 +1164,13 @@ export class BridgeClient implements IBridgeClient {
           });
           break;
         }
-        void inspectSessionGitSyncStatus(workdir)
+        void inspectSessionGitSyncStatus((args, options) =>
+          execFileAsync("git", args, {
+            cwd: workdir,
+            maxBuffer: options?.maxBuffer,
+            timeout: options?.timeoutMs,
+          }).then(({ stdout }) => String(stdout)),
+        )
           .then((status) => {
             this.send({
               type: "session_git_sync_status_result",
