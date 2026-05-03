@@ -8,6 +8,7 @@ import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import {
   getModelsForTool,
@@ -16,6 +17,7 @@ import {
   getReasoningEffortsForTool,
   getDefaultReasoningEffort,
   getReasoningEffortLabel,
+  type ReasoningEffortOption,
 } from "./modelOptions";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
@@ -32,6 +34,76 @@ const TOOL_LABELS: Record<string, string> = {
 
 function getToolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? tool;
+}
+
+function EffortDots({ index, total }: { index: number; total: number }) {
+  return (
+    <span className="flex flex-col-reverse items-center gap-[2px]" aria-hidden="true">
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "block h-[3px] w-[3px] rounded-full transition-opacity duration-150",
+            i <= index ? "bg-[var(--th-accent-light)] opacity-100" : "bg-muted-foreground/40",
+          )}
+        />
+      ))}
+    </span>
+  );
+}
+
+function EffortCycleButton({
+  effort,
+  options,
+  disabled,
+  onChange,
+}: {
+  effort: string;
+  options: readonly ReasoningEffortOption[];
+  disabled: boolean | undefined;
+  onChange: (effort: string) => void;
+}) {
+  const currentIndex = options.findIndex((option) => option.value === effort);
+  const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+  const currentOption = options[safeIndex];
+  const currentLabel = currentOption?.label ?? getReasoningEffortLabel(effort);
+  const nextOption = options[(safeIndex + 1) % options.length];
+  const tooltip = `Reasoning effort: ${currentLabel}. Click to cycle.`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        <button
+          type="button"
+          onClick={() => nextOption && onChange(nextOption.value)}
+          disabled={disabled}
+          aria-label={tooltip}
+          className={cn(
+            "btn-secondary flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-medium text-foreground transition-colors",
+            "hover:border-[var(--th-accent)] hover:text-[var(--th-accent-light)]",
+            "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+          )}
+        >
+          <EffortDots index={safeIndex} total={options.length} />
+          <span className="relative block h-4 min-w-[4.25rem] overflow-hidden text-left">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={currentOption?.value ?? effort}
+                initial={{ y: 8, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -8, opacity: 0 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="absolute left-0 top-0 whitespace-nowrap leading-4"
+              >
+                {currentLabel}
+              </motion.span>
+            </AnimatePresence>
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{tooltip}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 interface SessionInputOptionsProps {
@@ -365,26 +437,12 @@ export function SessionInputOptions({
         </Select>
       )}
       {reasoningEffortOptions.length > 0 && (
-        <Select
-          value={currentReasoningEffort ?? ""}
-          onValueChange={handleReasoningEffortChange}
+        <EffortCycleButton
+          effort={currentReasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
+          options={reasoningEffortOptions}
           disabled={isActive || isOptimistic}
-        >
-          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-            <SelectValue>
-              {currentReasoningEffort
-                ? `Effort ${getReasoningEffortLabel(currentReasoningEffort)}`
-                : ""}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {reasoningEffortOptions.map((effort: { value: string; label: string }) => (
-              <SelectItem key={effort.value} value={effort.value}>
-                {effort.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={handleReasoningEffortChange}
+        />
       )}
       {isNotStarted ? (
         <Select
