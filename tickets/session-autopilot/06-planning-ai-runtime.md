@@ -25,6 +25,13 @@ Wire the AI planning runtime, context packet, prompt, and scoped actions for pro
   - `project.askQuestion`
   - `project.recordDecision`
   - `project.summarizePlan`
+- Define each action contract before prompt integration:
+  - typed input shape
+  - typed result shape
+  - allowed scope types
+  - actor authorization rule
+  - event emitted on success
+  - safe failure behavior
 - Launch planning/controller sessions with scoped runtime context.
 
 ## Deliverable
@@ -39,12 +46,15 @@ The project AI can ask useful clarifying questions and update durable planning s
 - [ ] Actions call services, not database writes.
 - [ ] Action output is machine-readable.
 - [ ] Invalid project/run/action combinations are rejected.
+- [ ] Prompt cannot create tickets before ticket-generation actions ship.
 
 ## Implementation notes
 
 - Reuse existing agent context-builder patterns where practical.
 - Keep packets bounded and deterministic.
 - Do not rely on model-returned JSON batches as the only action channel.
+- Planning sessions are runtime/transcript surfaces only; durable planning state is the project event stream plus `ProjectRun`.
+- Runtime actions must use the same service methods humans use.
 
 ## How to test
 
@@ -52,3 +62,4 @@ The project AI can ask useful clarifying questions and update durable planning s
 2. Trigger a planning AI turn.
 3. Verify the AI can ask a question through a service action.
 4. Attempt an out-of-scope project action and verify rejection.
+5. Verify an attempted ticket-generation action is unavailable in this milestone.

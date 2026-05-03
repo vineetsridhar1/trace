@@ -13,6 +13,7 @@ Expand project orchestration from sequential execution to dependency-aware paral
 - Keep integration serialized.
 - Handle stale worker bases and integration conflicts.
 - Add debug surfaces for scheduler decisions.
+- Reuse the sequential scheduler path with `maxParallelWorkers = 1` as the baseline behavior.
 
 ## Deliverable
 
@@ -27,12 +28,15 @@ Independent ready tickets can run in parallel while preserving a coherent final 
 - [ ] Failed or blocked workers do not block unrelated ready tickets unless dependencies require it.
 - [ ] Scheduler decisions are inspectable.
 - [ ] Tests cover branching DAGs.
+- [ ] Tests cover concurrent claims for the same ready ticket.
+- [ ] Integration remains serialized under concurrent worker completion.
 
 ## Implementation notes
 
 - This is intentionally post-v1.
 - Keep the v1 sequential scheduler as `maxParallelWorkers = 1`.
 - Expect more conflicts when workers start from the same integration checkpoint.
+- Do not change dependency semantics introduced by the ticket planning model.
 
 ## How to test
 
@@ -41,3 +45,4 @@ Independent ready tickets can run in parallel while preserving a coherent final 
 3. Verify the independent tickets start together.
 4. Verify the downstream ticket waits.
 5. Verify integration remains serialized.
+6. Simulate concurrent scheduler ticks and verify one worker claims each ticket.

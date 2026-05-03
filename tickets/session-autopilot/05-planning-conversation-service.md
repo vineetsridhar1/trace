@@ -16,6 +16,11 @@ Add the service-backed planning/interview flow that turns a raw project goal int
 - Persist planning state through project events and project-run fields.
 - Add project planning event payloads with snapshots for hydration.
 - Keep the planning flow useful without code execution.
+- Define payload contracts:
+  - `project_question_asked`: `{ projectRunId, message }`
+  - `project_answer_recorded`: `{ projectRunId, message }`
+  - `project_decision_recorded`: `{ projectRunId, decision }`
+  - `project_plan_summary_updated`: `{ projectRun }`
 
 ## Deliverable
 
@@ -28,6 +33,7 @@ The project can maintain an interview thread, decisions, risks, and a plan summa
 - [ ] Answers and decisions update project-run planning state.
 - [ ] Plan summary is durable and event-backed.
 - [ ] Planning can request more information instead of prematurely generating tickets.
+- [ ] Refresh can reconstruct the planning surface without transcript parsing.
 - [ ] Service tests cover planning state transitions.
 
 ## Implementation notes
@@ -35,6 +41,8 @@ The project can maintain an interview thread, decisions, risks, and a plan summa
 - The planning conversation is not the orchestrator's only memory.
 - Use events and summaries as durable state.
 - Keep this ticket focused on persistence and services, not model prompting.
+- A linked planning/controller session may exist later, but it is never the canonical planning store.
+- Use generated GraphQL/client types for exposed planning payloads; do not redefine schema types locally.
 
 ## How to test
 
@@ -42,3 +50,4 @@ The project can maintain an interview thread, decisions, risks, and a plan summa
 2. Record an AI question.
 3. Submit a user answer.
 4. Verify decisions and summary updates.
+5. Refresh/reload from persisted events and verify the same planning state appears.

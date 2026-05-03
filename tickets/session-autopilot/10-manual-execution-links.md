@@ -13,6 +13,7 @@ Let users manually start sessions or session groups from project tickets before 
 - Store links through existing ticket/project link services or new service methods.
 - Show linked sessions/session groups on project and ticket surfaces.
 - Ensure sessions started from a project inherit project/repo context.
+- Emit link events with snapshots sufficient to hydrate project, ticket, session, and session-group surfaces.
 
 ## Deliverable
 
@@ -26,12 +27,14 @@ Projects become useful for real coding workflows before the orchestrator can lau
 - [ ] Project detail shows linked active sessions/session groups.
 - [ ] Ticket detail shows linked sessions.
 - [ ] Events hydrate the links.
+- [ ] Starting a session from a project ticket does not create a `TicketExecution`.
 
 ## Implementation notes
 
 - This is the bridge milestone between planning and automation.
 - Do not add scheduler behavior here.
 - Reuse existing session start behavior where possible.
+- Manual links are organizational relationships, not execution attempts.
 
 ## How to test
 

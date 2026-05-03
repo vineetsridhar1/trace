@@ -16,6 +16,9 @@ Add human approval gates and loop-protection controls for project orchestration.
 - Prevent infinite controller/worker loops.
 - Require human approval for large or risky plans when configured.
 - Route gate resolution back into project-run state.
+- Define gate event payloads:
+  - `project_human_gate_requested`: `{ gate, projectRun }`
+  - gate resolution events include `{ gate, projectRun }`
 
 ## Deliverable
 
@@ -30,12 +33,14 @@ The project orchestrator can safely stop for human judgment and avoid runaway ex
 - [ ] Controller wakeup after gate resolution is deduped.
 - [ ] Cooldowns prevent rapid repeated controller runs.
 - [ ] UI clearly shows active gate state.
+- [ ] Gate payloads identify the exact project run and optional ticket/execution they block.
 
 ## Implementation notes
 
 - Inbox remains the human handoff primitive.
 - Gate payloads should include project, project run, ticket, execution, session, branch, and summary IDs where relevant.
 - Do not let unresolved gates silently continue execution.
+- Gate resolution must update durable project-run state through services before any controller wakeup.
 
 ## How to test
 

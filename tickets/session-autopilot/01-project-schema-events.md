@@ -14,35 +14,36 @@ Add the durable database and event foundation for project-first planning.
 - Add project event types:
   - project created/updated
   - project member added/removed
-  - project goal submitted
-  - project planning events
-  - project run lifecycle events
-- Add project-run core model:
-  - `ProjectRun`
-  - `ProjectRunStatus`
-  - initial goal
-  - plan summary
-  - active gate/status fields
+  - project link compatibility events
+- Define v1 project event payload contracts:
+  - `project_created`: `{ project }`
+  - `project_updated`: `{ project }`
+  - `project_member_added`: `{ projectId, member }`
+  - `project_member_removed`: `{ projectId, userId, leftAt }`
 - Add migration and Prisma generate.
+- Preserve compatibility with historical `system` scoped `entity_linked` project events.
 
 ## Deliverable
 
-Projects can act as first-class workspaces with members, project-scoped events, and project runs before any AI or execution work ships.
+Projects can act as first-class workspaces with members and project-scoped events before any project-run, AI, ticket-generation, or execution work ships.
 
 ## Completion requirements
 
 - [ ] Existing projects migrate cleanly.
 - [ ] Project members can be created independently of channel members.
 - [ ] Project events can use `ScopeType.project`.
-- [ ] Project runs can exist without tickets, sessions, or executions.
-- [ ] Project-run state changes can be represented by events.
+- [ ] Project event payloads include enough data for client upserts.
+- [ ] Historical project-created/link events remain readable.
 - [ ] Migration runs cleanly on an existing local database.
 
 ## Implementation notes
 
 - Keep projects as org-scoped peer entities.
-- Do not anchor project runs to session groups.
-- Do not put project planning state only in JSON.
+- Do not add `ProjectRun` in this ticket.
+- Do not make project membership the only visibility rule until the rollout explicitly enables enforcement.
+- Backfill project members conservatively; existing org admins must not lose project visibility.
+- Update `packages/gql/src/schema.graphql` first for GraphQL-facing types, then run `pnpm gql:codegen`.
+- Do not duplicate generated GraphQL enum/type definitions in app code.
 
 ## How to test
 
@@ -50,4 +51,4 @@ Projects can act as first-class workspaces with members, project-scoped events, 
 2. Run Prisma generate.
 3. Create a project with members.
 4. Create a project-scoped event.
-5. Create a project run from an initial goal.
+5. Verify historical project events still hydrate.

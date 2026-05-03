@@ -19,14 +19,14 @@ See [session-autopilot-plan.md](session-autopilot-plan.md) for the full RFC. The
 
 The implementation is split into 15 tickets. The count is intentionally sized around coherent implementation slices, not preserved from the old Ultraplan plan.
 
-## D0 — Project Foundation
+## D0 — Project Workspace Foundation
 
-Users can create, view, update, and join projects. Projects become a first-class navigation surface with project-scoped events.
+Users can create, view, update, and join projects. Projects become a first-class navigation surface with project-scoped events. Project runs, AI planning, ticket generation, and execution are not part of D0.
 
 | # | Ticket | What it ships |
 | --- | --- | --- |
-| 01 | [Project Schema and Events](01-project-schema-events.md) | Project members, project scope/events, and core project-run schema |
-| 02 | [Project Services and GraphQL](02-project-service-graphql.md) | Service-layer project/project-run operations and typed GraphQL contract |
+| 01 | [Project Schema and Events](01-project-schema-events.md) | Project members, project scope/events, event payload contracts, and compatibility |
+| 02 | [Project Services and GraphQL](02-project-service-graphql.md) | Service-layer project operations and typed GraphQL contract |
 | 03 | [Project Client Shell](03-project-client-shell.md) | Zustand hydration, project navigation, project list, and project detail shell |
 
 ## D1 — Prompt-First Project Creation
@@ -35,7 +35,7 @@ Users can start a project by typing a goal into a focused prompt-first surface.
 
 | # | Ticket | What it ships |
 | --- | --- | --- |
-| 04 | [Prompt-First Project Creation](04-prompt-first-project-creation.md) | New project prompt screen, initial goal capture, and project planning route |
+| 04 | [Prompt-First Project Creation](04-prompt-first-project-creation.md) | Project-run schema/service, new project prompt screen, initial goal capture, and project planning route |
 
 ## D2 — AI Interview and Planning
 
@@ -99,14 +99,14 @@ D0 Project Foundation
    └─ 03 Project Client Shell
 
 D1 Prompt-First Creation
-04 Prompt-First Project Creation  (needs 02, 03)
+04 Prompt-First Project Creation  (needs 01, 02, 03)
 
 D2 AI Interview and Planning
-05 Planning Conversation Service  (needs 01, 02)
+05 Planning Conversation Service  (needs 04)
 └─ 06 Planning AI Runtime  (needs 05)
 
 D3 Durable Ticket Generation
-07 Ticket Planning Model  (needs 01, 02, 03)
+07 Ticket Planning Model  (needs 04)
 ├─ 08 AI Ticket Generation  (needs 06, 07)
 └─ 09 Project Ticket Table  (needs 03, 07)
 
@@ -135,6 +135,7 @@ V1 should ship:
 - project members
 - project event scope
 - prompt-first creation
+- project run with initial goal
 - planning/interview flow
 - durable plan summary
 - ticket generation

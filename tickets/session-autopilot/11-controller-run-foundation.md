@@ -19,6 +19,11 @@ Add durable controller-run sessions for project orchestration.
   - structured summary payload
   - error state
 - Emit controller-run lifecycle events in the project scope.
+- Define payload contracts:
+  - `project_controller_run_created`: `{ controllerRun }`
+  - `project_controller_run_started`: `{ controllerRun }`
+  - `project_controller_run_completed`: `{ controllerRun, projectRun }`
+  - `project_controller_run_failed`: `{ controllerRun, projectRun }`
 - Hide controller-run sessions from normal tab strips by default.
 - Link full controller transcripts from explicit project activity/debug surfaces.
 
@@ -34,12 +39,15 @@ The orchestrator can create inspectable, episodic controller sessions attached t
 - [ ] Structured summaries are required on successful completion.
 - [ ] Controller-run transcripts can be opened from the project UI.
 - [ ] Normal session lists do not become noisy.
+- [ ] Controller session transcripts are inspectable but not canonical orchestration state.
 
 ## Implementation notes
 
 - The orchestrator is durable service state, not the controller session.
 - Do not create one permanent controller session.
 - Keep summaries concise and machine-readable.
+- Controller-run state updates must be service methods that emit project-scoped events.
+- Controller actions must have typed input/result contracts before prompt integration.
 
 ## How to test
 
