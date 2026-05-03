@@ -5132,9 +5132,10 @@ export class SessionService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message === "Session git sync status request timed out") {
-        throw new Error(
-          "Cannot move session: source runtime did not respond while checking git sync status. Restart or update that runtime and try again.",
+        console.warn(
+          `[session-service] skipping move source git sync check for ${params.sessionId}: ${message}`,
         );
+        return null;
       }
       throw error;
     }

@@ -3935,7 +3935,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
-    it("reports an actionable move error when the source runtime git sync check times out", async () => {
+    it("allows moving for recovery when the source runtime git sync check times out", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           hosting: "local",
@@ -3944,6 +3945,22 @@ describe("SessionService", () => {
             state: "connected",
             runtimeInstanceId: "runtime-source",
             runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Laptop B",
             retryCount: 0,
             canRetry: true,
             canMove: true,
@@ -3963,12 +3980,28 @@ describe("SessionService", () => {
         new Error("Session git sync status request timed out"),
       );
 
-      await expect(
-        service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
-      ).rejects.toThrow(
-        "Cannot move session: source runtime did not respond while checking git sync status. Restart or update that runtime and try again.",
+      const result = await service.moveToRuntime(
+        "session-1",
+        "runtime-1",
+        "org-1",
+        "user",
+        "user-1",
       );
-      expect(prismaMock.session.update).not.toHaveBeenCalled();
+
+      expect(result.id).toBe("session-1");
+      expect(sessionRouterMock.inspectSessionGitSyncStatus).toHaveBeenCalledWith(
+        "runtime-source",
+        {
+          sessionId: "session-1",
+          workdirHint: "/tmp/trace/worktrees/session-1",
+        },
+      );
+      expect(prismaMock.session.update).toHaveBeenCalled();
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-1");
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[session-service] skipping move source git sync check for session-1: Session git sync status request timed out",
+      );
+      warnSpy.mockRestore();
     });
 
     it("allows moving when the trace remote branch matches even if upstream is still origin/main", async () => {
