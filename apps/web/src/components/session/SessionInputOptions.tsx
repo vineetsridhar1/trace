@@ -197,8 +197,6 @@ export function SessionInputOptions({
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
             sessionId,
             tool: newTool,
-            model: newDefault,
-            reasoningEffort: newDefaultReasoningEffort,
           })
           .toPromise();
         if (result.error) throw result.error;
