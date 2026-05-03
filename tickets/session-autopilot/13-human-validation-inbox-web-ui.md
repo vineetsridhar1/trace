@@ -1,53 +1,47 @@
-# 13 — Human Gate Inbox UI
+# 13 — Sequential Project Orchestrator
 
 ## Summary
 
-Render Ultraplan human gates in the web inbox with clear context and explicit actions.
+Add the first autonomous execution loop: one ready ticket worker at a time.
 
 ## What needs to happen
 
-- Add Ultraplan gate handling to `InboxItemRow`.
-- Create dedicated gate body components as needed for:
-  - plan approval
-  - ticket validation
-  - conflict resolution
-  - final review
-- Render:
-  - short title
-  - summary
-  - QA checklist or decision checklist
-  - linked ticket
-  - linked worker session
-  - linked controller run summary/chat
-  - branch/checkpoint metadata
-  - open session/group actions
-  - open PR/diff action when available
-  - approve/request changes/dismiss actions
-- Make the UX feel like a focused workflow gate, not a generic alert.
+- Add ticket execution records.
+- Add `SessionRole.ticket_worker`.
+- Add a scheduler that selects the next ready ticket:
+  - unstarted
+  - dependencies completed/integrated
+  - project run not paused
+  - no active worker for the run
+- Start one worker session for the selected ticket.
+- Wake a controller run when a worker completes, fails, or stops.
+- Dedupe worker lifecycle wakeups.
+- Keep worker sessions linked to ticket, project, project run, and session group.
 
-## Dependencies
+## Deliverable
 
-- [06 — Client Store and Event Handling](06-client-store-and-event-handling.md)
-- [12 — Human Gates Server Flow](12-human-validation-handoff-server.md)
+A project run can implement a ticket plan sequentially through normal Trace sessions.
 
 ## Completion requirements
 
-- [ ] Ultraplan gate items render with dedicated bodies.
-- [ ] Checklist items display clearly.
-- [ ] Session, group, ticket, controller-run, and PR actions work when present.
-- [ ] Gate resolution actions call the appropriate mutation/service path.
-- [ ] The row does not fall through to plan/question/suggestion rendering.
+- [ ] Project run can start the next ready ticket.
+- [ ] Only one worker is active per project run.
+- [ ] Worker session is linked to ticket/project/project run.
+- [ ] Worker completion creates one controller run.
+- [ ] Worker failure creates one controller run.
+- [ ] Ordinary `session_output` does not wake the controller.
+- [ ] Ticket execution state transitions are event-backed.
 
 ## Implementation notes
 
-- Reuse existing inbox styling patterns.
-- Keep button labels explicit.
-- Do not describe internal controller mechanics in user-facing copy.
+- This replaces the old v1 Ultraplan execution model.
+- Keep integration out of scope unless needed for readiness semantics.
+- Use dependency edges even if v1 plans are linear.
 
 ## How to test
 
-1. Render each Ultraplan inbox item type.
-2. Verify missing optional links degrade cleanly.
-3. Open the linked controller-run chat from a gate.
-4. Resolve an approval gate and verify UI state updates from events.
-5. Request changes from a validation gate and verify payload is preserved.
+1. Create a project run with three dependent tickets.
+2. Start orchestration.
+3. Verify only the first ticket worker starts.
+4. Complete the worker and verify controller wakeup.
+5. Verify duplicate lifecycle events do not create duplicate controller runs.

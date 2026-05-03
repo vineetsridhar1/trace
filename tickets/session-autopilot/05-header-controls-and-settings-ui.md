@@ -1,69 +1,44 @@
-# 05 — Group Controls and Ultraplan UI
+# 05 — Prompt-First Project Creation UI
 
 ## Summary
 
-Move the product surface to the session-group UI and add the first Ultraplan status/control panel, including the controller run summary timeline.
+Build the new project creation experience around the user's goal prompt, not a form-first setup flow.
 
 ## What needs to happen
 
-- Add an `Ultraplan` button or menu to the session group header.
-- Add a state chip with the supported Ultraplan statuses.
-- Build a compact group-level panel showing:
-  - plan summary
-  - current status
-  - ordered ticket plan
-  - planned tickets before execution
-  - ticket executions
-  - worker sessions
-  - branch names
-  - active human gate
-  - final branch/PR link
-  - controller run summaries
-- Add controller activity timeline rows with:
-  - summary title
-  - short summary
-  - actions/decisions when available
-  - timestamp/status
-  - link to full controller run chat
-- Add controls for:
-  - start
-  - pause
-  - resume
-  - run controller now
-  - cancel
-- Wire controls to GraphQL operations.
-- Use events as the source of truth for final UI state.
+- Add a "New Project" action from the project list/navigation.
+- Show a prompt-first screen inspired by the ChatGPT home-page interaction pattern.
+- Let the user type a broad project goal immediately.
+- Optionally allow repo selection and member selection as secondary controls.
+- On submit:
+  - call service/GraphQL to create the project
+  - create the first project run with the initial goal
+  - navigate to the project planning surface
+- Show loading/error states.
 
-## Dependencies
+## Deliverable
 
-- [02 — GraphQL Schema and Client Types](02-graphql-schema-and-client-types.md)
-- [04 — Ultraplan Service CRUD and Controller Runs](04-autopilot-service-crud-and-state.md)
+A user can start a project by typing what they want to build.
 
 ## Completion requirements
 
-- [ ] Session group header shows an Ultraplan affordance.
-- [ ] State chip reflects live Ultraplan status.
-- [ ] User can start, pause, resume, cancel, and run-now from the group surface.
-- [ ] Ordered tickets and their dependency/blocking state are visible.
-- [ ] Planned tickets render before any `TicketExecution` exists.
-- [ ] Ticket worker sessions are linked from the panel.
-- [ ] Controller run summaries render in an activity timeline.
-- [ ] User can open the full chat for a controller run from the timeline.
-- [ ] Controller-run sessions are not shown in normal tabs.
-- [ ] UI survives missing Ultraplan state cleanly.
+- [ ] New Project opens a prompt-first surface.
+- [ ] Initial goal is required.
+- [ ] Repo/member options do not block the primary prompt flow.
+- [ ] Submit creates a project and project run.
+- [ ] The user lands on the project planning page.
+- [ ] Empty/error/loading states are polished.
+- [ ] UI remains useful before AI planning is wired up.
 
 ## Implementation notes
 
-- Keep the initial panel practical and dense. Do not build a large management console in v1.
-- Use shadcn/ui components and existing session UI patterns.
-- Product copy should describe the workflow, not implementation details.
+- Do not make a marketing landing page.
+- Keep the first viewport focused on the input.
+- Store any draft prompt in local component state only unless it must survive navigation.
 
 ## How to test
 
-1. Open a session group with no Ultraplan and verify the empty/start state.
-2. Start Ultraplan and verify event-driven status updates.
-3. Pause/resume/run-now/cancel and verify the chip and panel update.
-4. Verify the ordered plan shows the active ticket and blocked future tickets.
-5. Verify planned tickets without executions still appear in the plan.
-6. Verify controller run summaries appear and link to full chats.
-7. Verify the UI does not expose controller-run sessions in normal navigation.
+1. Open New Project.
+2. Submit a project goal.
+3. Verify project and project run appear in the store.
+4. Refresh the resulting route and verify the project loads.

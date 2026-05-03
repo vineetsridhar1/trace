@@ -1,63 +1,48 @@
-# 08 — Controller Run Context Packet Builder
+# 08 — Planning Context Packet Builder
 
 ## Summary
 
-Build the compact context packet each fresh controller run receives when it starts.
+Build compact context packets for project planning and controller runs.
 
 ## What needs to happen
 
-- Add a context builder for Ultraplan controller runs.
-- Include:
-  - wakeup trigger and trigger event
-  - Ultraplan summary and status
-  - playbook and playbook config
-  - session group branch and PR state
-  - ordered ticket plan and dependency state
-  - `UltraplanTicket` position/status/generated metadata
-  - current and future ticket context
-  - active ticket executions
-  - worker session statuses
-  - latest worker checkpoint metadata
-  - worker final message or failure summary, when relevant
-  - active inbox gates
-  - prior controller run summaries
-  - selected prior controller messages when useful
-  - relevant user instructions
-- Include diff summary or patch only when the run is reviewing implementation or integration.
-- Reuse existing transcript/session helpers where useful.
-- Add truncation and prioritization rules for long transcripts, prior summaries, and large diffs.
-- Ensure context is scoped to one organization and one session group.
+- Build context from:
+  - project details
+  - project members
+  - repo metadata
+  - initial goal
+  - planning summary
+  - prior questions and answers
+  - recorded decisions
+  - existing project tickets
+  - dependency graph when present
+  - prior controller summaries when present
+- Keep packets bounded and deterministic.
+- Exclude unrelated channels/chats unless linked and relevant.
+- Include action permissions and constraints.
 
-## Dependencies
+## Deliverable
 
-- [04 — Ultraplan Service CRUD and Controller Runs](04-autopilot-service-crud-and-state.md)
-- [07 — Branch and Diff Runtime Commands](07-commit-diff-bridge-command.md)
+Planning/controller sessions receive enough context to act without reading unbounded transcripts.
 
 ## Completion requirements
 
-- [ ] Context packet includes the event that triggered the controller run.
-- [ ] Ordered ticket plan and execution state are included.
-- [ ] Planned tickets are read from `UltraplanTicket`, not inferred only from executions.
-- [ ] Dependency edges and the next runnable ticket are included.
-- [ ] Prior controller run summaries are included.
-- [ ] Latest checkpoint and branch diff are included when useful.
-- [ ] Active inbox gates are included.
-- [ ] Large packets are truncated predictably.
-- [ ] No cross-org or unauthorized data is included.
+- [ ] Context packet includes canonical project state.
+- [ ] Packet includes linked project tickets.
+- [ ] Packet includes dependency summaries.
+- [ ] Packet includes prior summaries rather than full transcripts by default.
+- [ ] Packet includes allowed action list.
+- [ ] Tests cover empty project, planning project, and ticketed project.
 
 ## Implementation notes
 
-- Favor server-built context over asking the controller to rediscover state through broad tool calls.
-- Keep the packet session-group-scoped and event-centered.
-- Prior controller summaries are the main memory layer; full old chats should be linked, not blindly pasted.
-- Diff context should be included selectively for implementation review and integration decisions, not every run.
+- Reuse existing agent context-builder patterns where practical.
+- Keep project context separate from session-group execution context.
+- Add execution details later when worker orchestration ships.
 
 ## How to test
 
-1. Build context for the initial planning run.
-2. Build context for a worker `done` event.
-3. Build context for a worker `failed` event.
-4. Build context for an inbox gate resolution.
-5. Verify diff inclusion is conditional on review/integration triggers.
-6. Verify truncation behavior with large diffs, prior summaries, and transcripts.
-7. Verify unauthorized/cross-org data is excluded.
+1. Build context for a new project run.
+2. Build context after multiple interview turns.
+3. Build context after ticket generation.
+4. Verify token-bounded summaries are stable.

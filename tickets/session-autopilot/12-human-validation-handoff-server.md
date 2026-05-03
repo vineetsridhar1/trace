@@ -1,59 +1,48 @@
-# 12 — Human Gates Server Flow
+# 12 — Project Run Controller Contracts
 
 ## Summary
 
-Create the server-side path for Ultraplan human gates: plan approval, ticket validation, conflict resolution, and final review.
+Add durable controller-run contracts for project orchestration. This prepares the system for sequential execution without requiring the scheduler in this ticket.
 
 ## What needs to happen
 
-- Create Ultraplan inbox items through the inbox service.
-- Support gate item types:
-  - `ultraplan_plan_approval`
-  - `ultraplan_validation_request`
-  - `ultraplan_conflict_resolution`
-  - `ultraplan_final_review`
-- Define gate payloads with:
-  - Ultraplan id
-  - controller run id, when applicable
-  - session group id
-  - ticket id, when applicable
-  - ticket execution id, when applicable
-  - worker session id, when applicable
-  - branch name
-  - checkpoint sha
-  - summary
-  - QA checklist
-  - recommended action
-  - links to controller run chat and worker session
-- Update Ultraplan or TicketExecution state to `needs_human`.
-- Define what happens when each gate type is resolved or dismissed.
-- Gate resolution should create a fresh controller run when orchestration needs to continue.
-- Emit human gate events.
-- Emit gate events with `ScopeType.ultraplan` and enough snapshots for client upserts.
+- Add `ProjectControllerRun`.
+- Add `SessionRole.project_controller_run`.
+- Create controller-run sessions as normal Trace sessions.
+- Store:
+  - trigger type
+  - trigger event
+  - linked session
+  - status
+  - summary title
+  - summary text
+  - structured summary payload
+  - error state
+- Emit controller-run lifecycle events in the project scope.
+- Hide controller-run sessions from normal user tab strips by default, but make them accessible from project activity/debug surfaces.
 
-## Dependencies
+## Deliverable
 
-- [10 — Ultraplan Event Router](10-autopilot-orchestrator.md)
+The orchestrator can create inspectable, episodic controller sessions attached to a project run.
 
 ## Completion requirements
 
-- [ ] Controller run can request a human gate through the service.
-- [ ] Duplicate active gates are not created for the same execution/reason.
-- [ ] Ultraplan or execution state transitions to `needs_human`.
-- [ ] Inbox resolution/dismissal can trigger a fresh controller run.
-- [ ] Gate payloads are complete enough for the web inbox UI.
-- [ ] Gate events are scoped to the Ultraplan.
+- [ ] Controller-run rows can be created and completed.
+- [ ] Controller-run sessions use a distinct role.
+- [ ] Controller runs emit project-scoped lifecycle events.
+- [ ] Structured summaries are required on successful completion.
+- [ ] Controller-run transcripts can be opened from the project UI.
+- [ ] Normal session lists do not become noisy.
 
 ## Implementation notes
 
-- Use the inbox service and event service; do not special-case DB writes.
-- Prefer `sourceType = ultraplan` or `ticket_execution` depending on the gate scope.
-- Gate resolution should be explicit: approved, changes requested, dismissed, blocked, or cancelled.
+- The orchestrator is durable service state, not the controller session.
+- Do not create one permanent controller session.
+- Keep summaries concise and machine-readable.
 
 ## How to test
 
-1. Request a plan approval gate and verify payload/state.
-2. Request a ticket validation gate and verify dedupe.
-3. Resolve a gate and verify controller-run creation when needed.
-4. Dismiss a gate and verify pause/cooldown hooks are possible.
-5. Verify events hydrate client state without refetches.
+1. Create a controller run for a project run.
+2. Verify a session is linked.
+3. Complete the run with a summary.
+4. Verify project activity shows the summary and transcript link.

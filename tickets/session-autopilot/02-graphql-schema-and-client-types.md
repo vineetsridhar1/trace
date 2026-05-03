@@ -2,61 +2,54 @@
 
 ## Summary
 
-Expose Ultraplan, planned tickets, controller runs, ticket executions, session roles, dependency fields, event scope, and gate event types through the single GraphQL schema source of truth.
+Expose Project Orchestration contracts through GraphQL while keeping resolvers thin wrappers over services.
 
 ## What needs to happen
 
-- Add GraphQL enums mirroring the new Prisma enums.
-- Add `Ultraplan` GraphQL type.
-- Add `UltraplanTicket` GraphQL type.
-- Add `UltraplanTicketStatus` GraphQL enum.
-- Add `UltraplanControllerRun` GraphQL type.
-- Add `TicketExecution` GraphQL type.
-- Add `Session.role`.
-- Add ticket acceptance criteria, test plan, and dependency fields.
-- Add a `SessionGroup.ultraplan` field for the active group plan.
-- Add fields for controller run summaries and linked controller-run sessions.
-- Add `ScopeType.ultraplan`.
-- Add queries as needed:
-  - `ultraplan(id: ID!)`
-  - `ultraplanForSessionGroup(sessionGroupId: ID!)`
-  - `ultraplanControllerRun(id: ID!)`
+- Add schema support for:
+  - project members
+  - project-scoped events
+  - project runs
+  - planned tickets
+  - ticket acceptance criteria
+  - ticket test plans
+  - ticket dependencies
+- Add project queries:
+  - list projects
+  - get project detail
+  - get project runs
+  - get project tickets
 - Add mutations:
-  - `startUltraplan`
-  - `pauseUltraplan`
-  - `resumeUltraplan`
-  - `runUltraplanControllerNow`
-  - `cancelUltraplan`
-- Extend GraphQL `EventType` with Ultraplan and controller-run events.
-- Extend GraphQL `InboxItemType` with Ultraplan gate values.
-- Run `pnpm gql:codegen`.
+  - create/update project
+  - join/leave or add/remove project member
+  - create project run from a goal
+  - update project run summary/state
+  - add/update planned ticket
+  - add/remove ticket dependency
+- Regenerate shared GQL and resolver types with `pnpm gql:codegen`.
 
-## Dependencies
+## Deliverable
 
-- [01 — Database Schema and Event Types](01-database-schema-and-event-types.md)
+Clients and services can talk about projects, project runs, planning state, and project tickets through typed GraphQL.
 
 ## Completion requirements
 
-- [ ] GraphQL schema contains all Ultraplan, ControllerRun, and TicketExecution types and enums.
-- [ ] GraphQL schema exposes planned tickets independently from executions.
-- [ ] `UltraplanTicket.status` is exposed as `UltraplanTicketStatus`.
-- [ ] GraphQL schema includes `ScopeType.ultraplan`.
-- [ ] Generated client and resolver types compile.
-- [ ] Session group detail can hydrate the active Ultraplan.
-- [ ] The schema can represent controller run summaries and full-chat links.
-- [ ] The schema can represent a v1 ordered plan and future DAG dependencies.
-- [ ] No duplicate type definitions are added outside `schema.graphql`.
+- [ ] Schema compiles.
+- [ ] Generated client/server types compile.
+- [ ] No duplicated enum/type definitions are introduced outside schema/codegen.
+- [ ] Project resolvers call services only.
+- [ ] Ticket resolvers expose planning fields.
+- [ ] Queries support project-scoped tickets without requiring channel IDs.
+- [ ] Existing project/ticket/session queries remain compatible.
 
 ## Implementation notes
 
-- Keep GraphQL thin. This ticket defines schema and generated types, not business logic.
-- Prefer surfacing Ultraplan off `SessionGroup` because the product surface is group-level.
-- `StartUltraplanInput` should use controller provider/model/runtime policy language, not worker-only `CodingTool`/`HostingMode` coupling.
-- Do not expose mutations that let clients directly create events or ticket execution state without services.
+- Prefer adding project-specific fields to existing types over inventing parallel ticket types.
+- Keep mutation return payloads useful for optimistic UI, but state hydration should still come from events.
+- Use generated types from `@trace/gql`.
 
 ## How to test
 
 1. Run `pnpm gql:codegen`.
-2. Run package typechecking.
-3. Confirm generated types include the new enums, fields, and mutations.
-4. Confirm server resolver type generation requires thin resolver additions only.
+2. Run TypeScript checks for gql/server/web packages.
+3. Add resolver tests for project-run and project-ticket query paths.
