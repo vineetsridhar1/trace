@@ -1217,6 +1217,16 @@ export class BridgeClient implements IBridgeClient {
         }
         break;
       }
+      case "track_session": {
+        this.sessionWorkdirs.set(cmd.sessionId, cmd.workdir);
+        if (cmd.readOnly) {
+          this.readOnlySessions.add(cmd.sessionId);
+        } else {
+          this.readOnlySessions.delete(cmd.sessionId);
+        }
+        void this.pollLocalPrStatuses();
+        break;
+      }
       case "list_branches": {
         const { requestId, repoId } = cmd;
         const repoPath = getRepoConfig(repoId)?.path;

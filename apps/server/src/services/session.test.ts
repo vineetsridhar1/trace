@@ -32,6 +32,7 @@ vi.mock("./runtime-access.js", () => ({
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     send: vi.fn().mockReturnValue("delivered"),
+    sendToRuntime: vi.fn().mockReturnValue("delivered"),
     createRuntime: vi.fn(),
     destroyRuntime: vi.fn().mockResolvedValue(undefined),
     transitionRuntime: vi.fn().mockResolvedValue("delivered"),
@@ -3126,6 +3127,53 @@ describe("SessionService", () => {
           eventType: "queued_messages_drained",
           payload: { sessionId: "session-1", queuedMessageId: "queued-1" },
         }),
+      );
+    });
+  });
+
+  describe("restoreSessionsForRuntime", () => {
+    it("rehydrates tracked workdirs back into a reconnected local bridge", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "org-1:runtime-a",
+        id: "runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          agentStatus: "active",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          organizationId: "org-1",
+          workdir: "/tmp/trace/worktrees/session-1",
+          readOnlyWorkspace: true,
+        },
+      ]);
+
+      await service.restoreSessionsForRuntime("runtime-a", "org-1");
+
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "org-1:runtime-a");
+      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+        "runtime-a",
+        {
+          type: "track_session",
+          sessionId: "session-1",
+          workdir: "/tmp/trace/worktrees/session-1",
+          readOnly: true,
+        },
+        "org-1",
       );
     });
   });

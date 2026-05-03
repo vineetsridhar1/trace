@@ -191,6 +191,13 @@ export interface BridgeSessionGitSyncStatusCommand {
   workdirHint?: string;
 }
 
+export interface BridgeTrackSessionCommand {
+  type: "track_session";
+  sessionId: string;
+  workdir: string;
+  readOnly?: boolean;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -242,6 +249,7 @@ export type BridgeCommand =
   | BridgeRestoreLinkedCheckoutCommand
   | BridgeSetLinkedCheckoutAutoSyncCommand
   | BridgeSessionGitSyncStatusCommand
+  | BridgeTrackSessionCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
