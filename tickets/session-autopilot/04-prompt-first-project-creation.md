@@ -1,20 +1,20 @@
-# 05 — Prompt-First Project Creation UI
+# 04 — Prompt-First Project Creation
 
 ## Summary
 
-Build the new project creation experience around the user's goal prompt, not a form-first setup flow.
+Build the new project creation experience around the user's goal prompt.
 
 ## What needs to happen
 
 - Add a "New Project" action from the project list/navigation.
-- Show a prompt-first screen inspired by the ChatGPT home-page interaction pattern.
-- Let the user type a broad project goal immediately.
-- Optionally allow repo selection and member selection as secondary controls.
+- Show a prompt-first screen where the user can describe the project immediately.
+- Allow repo/member choices as secondary controls.
 - On submit:
-  - call service/GraphQL to create the project
-  - create the first project run with the initial goal
+  - create the project
+  - create the first project run
+  - record the initial goal
   - navigate to the project planning surface
-- Show loading/error states.
+- Show loading and error states.
 
 ## Deliverable
 
@@ -24,7 +24,7 @@ A user can start a project by typing what they want to build.
 
 - [ ] New Project opens a prompt-first surface.
 - [ ] Initial goal is required.
-- [ ] Repo/member options do not block the primary prompt flow.
+- [ ] Repo/member controls do not block the primary prompt flow.
 - [ ] Submit creates a project and project run.
 - [ ] The user lands on the project planning page.
 - [ ] Empty/error/loading states are polished.
@@ -32,9 +32,9 @@ A user can start a project by typing what they want to build.
 
 ## Implementation notes
 
-- Do not make a marketing landing page.
+- Do not make a landing page.
 - Keep the first viewport focused on the input.
-- Store any draft prompt in local component state only unless it must survive navigation.
+- Store draft prompt locally unless it must survive navigation.
 
 ## How to test
 

@@ -1,8 +1,8 @@
-# 12 — Project Run Controller Contracts
+# 11 — Controller Run Foundation
 
 ## Summary
 
-Add durable controller-run contracts for project orchestration. This prepares the system for sequential execution without requiring the scheduler in this ticket.
+Add durable controller-run sessions for project orchestration.
 
 ## What needs to happen
 
@@ -19,7 +19,8 @@ Add durable controller-run contracts for project orchestration. This prepares th
   - structured summary payload
   - error state
 - Emit controller-run lifecycle events in the project scope.
-- Hide controller-run sessions from normal user tab strips by default, but make them accessible from project activity/debug surfaces.
+- Hide controller-run sessions from normal tab strips by default.
+- Link full controller transcripts from explicit project activity/debug surfaces.
 
 ## Deliverable
 

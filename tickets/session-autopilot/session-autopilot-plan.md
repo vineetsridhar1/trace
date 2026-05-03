@@ -649,17 +649,23 @@ Events should include snapshots needed by Zustand to upsert projects, runs, tick
 
 ## Rollout Plan
 
-1. Project contracts: project members, project scope, project events, ticket planning fields.
-2. Project GraphQL/client store support.
-3. Project navigation, project list, project detail shell.
+The implementation ticket set is intentionally resized around coherent shipping slices, not preserved from the old Ultraplan ticket count.
+
+1. Project schema and events.
+2. Project services and GraphQL.
+3. Project client shell.
 4. Prompt-first project creation.
-5. Project planning/interview service and AI prompt.
-6. Ticket generation and project ticket table.
-7. Manual execution links from tickets to sessions/session groups.
-8. Project run/controller-run contracts.
-9. Sequential worker orchestration.
-10. Human gates and integration.
-11. Parallel DAG scheduling.
+5. Planning conversation service.
+6. Planning AI runtime.
+7. Ticket planning model.
+8. AI ticket generation.
+9. Project ticket table.
+10. Manual execution links.
+11. Controller run foundation.
+12. Sequential orchestrator.
+13. Human gates and guardrails.
+14. Integration and final QA.
+15. Parallel DAG scheduler.
 
 ## Testing Strategy
 

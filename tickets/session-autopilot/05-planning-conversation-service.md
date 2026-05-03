@@ -1,8 +1,8 @@
-# 07 — Project Planning Conversation Service
+# 05 — Planning Conversation Service
 
 ## Summary
 
-Add the service-backed planning/interview flow that turns a raw project goal into structured project knowledge.
+Add the service-backed planning/interview flow that turns a raw project goal into durable project knowledge.
 
 ## What needs to happen
 
@@ -14,17 +14,12 @@ Add the service-backed planning/interview flow that turns a raw project goal int
   - risks
   - summary updates
 - Persist planning state through project events and project-run fields.
-- Add a system prompt for the planning agent:
-  - interview the user
-  - identify missing requirements
-  - keep scope explicit
-  - avoid creating tickets until enough information exists or the user asks
-  - summarize decisions
+- Add project planning event payloads with snapshots for hydration.
 - Keep the planning flow useful without code execution.
 
 ## Deliverable
 
-The project AI can interview the user and maintain durable planning state.
+The project can maintain an interview thread, decisions, risks, and a plan summary before ticket generation exists.
 
 ## Completion requirements
 
@@ -39,12 +34,11 @@ The project AI can interview the user and maintain durable planning state.
 
 - The planning conversation is not the orchestrator's only memory.
 - Use events and summaries as durable state.
-- Keep the prompt focused on planning, not autonomous coding.
+- Keep this ticket focused on persistence and services, not model prompting.
 
 ## How to test
 
 1. Start a project run from a goal.
-2. Trigger an AI planning turn.
-3. Verify question/summary events are created.
-4. Submit an answer.
-5. Verify decisions/summary update.
+2. Record an AI question.
+3. Submit a user answer.
+4. Verify decisions and summary updates.

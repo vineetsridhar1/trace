@@ -1,4 +1,4 @@
-# 11 — Manual Execution Links
+# 10 — Manual Execution Links
 
 ## Summary
 
@@ -16,7 +16,7 @@ Let users manually start sessions or session groups from project tickets before 
 
 ## Deliverable
 
-Projects become useful for real work even before the orchestrator can launch workers.
+Projects become useful for real coding workflows before the orchestrator can launch workers.
 
 ## Completion requirements
 
@@ -29,7 +29,7 @@ Projects become useful for real work even before the orchestrator can launch wor
 
 ## Implementation notes
 
-- This is a bridge milestone between planning and automation.
+- This is the bridge milestone between planning and automation.
 - Do not add scheduler behavior here.
 - Reuse existing session start behavior where possible.
 

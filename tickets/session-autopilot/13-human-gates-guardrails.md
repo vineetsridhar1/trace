@@ -1,4 +1,4 @@
-# 14 — Human Gates, Pause, and Guardrails
+# 13 — Human Gates and Guardrails
 
 ## Summary
 

@@ -1,4 +1,4 @@
-# 13 — Sequential Project Orchestrator
+# 12 — Sequential Orchestrator
 
 ## Summary
 
@@ -34,9 +34,9 @@ A project run can implement a ticket plan sequentially through normal Trace sess
 
 ## Implementation notes
 
-- This replaces the old v1 Ultraplan execution model.
 - Keep integration out of scope unless needed for readiness semantics.
 - Use dependency edges even if v1 plans are linear.
+- This ticket should preserve a path to `maxParallelWorkers > 1`.
 
 ## How to test
 

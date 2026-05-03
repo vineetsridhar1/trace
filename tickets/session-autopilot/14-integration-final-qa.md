@@ -1,4 +1,4 @@
-# 15 — Integration, Telemetry, and Polish
+# 14 — Integration and Final QA
 
 ## Summary
 
