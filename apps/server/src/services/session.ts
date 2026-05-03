@@ -2091,9 +2091,16 @@ export class SessionService {
       throw new Error("Cloud sessions are disabled in local mode");
     }
 
-    const deferRuntimeSelection = input.deferRuntimeSelection === true;
+    const requestedRuntimeSelection =
+      !!input.environmentId || !!input.hosting || !!input.runtimeInstanceId;
+    const deferRuntimeSelection =
+      input.deferRuntimeSelection === true ||
+      (!input.restoreCheckpointId &&
+        !requestedRuntimeSelection &&
+        !sharedRuntimeInstanceId &&
+        !restoreGroupRuntimeInstanceId);
     if (
-      deferRuntimeSelection &&
+      input.deferRuntimeSelection === true &&
       (input.environmentId || input.hosting || input.runtimeInstanceId)
     ) {
       throw new ValidationError(
@@ -2165,7 +2172,7 @@ export class SessionService {
       !restoreGroupRuntimeInstanceId &&
       !!environmentRuntimeInstanceId;
     let selectedRuntimeAccessAllowed = true;
-    let requestedRuntimeInstanceId =
+    let requestedRuntimeInstanceId: string | null | undefined =
       input.runtimeInstanceId ??
       sharedRuntimeInstanceId ??
       restoreGroupRuntimeInstanceId ??
@@ -2269,11 +2276,14 @@ export class SessionService {
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
     const queueInitialRunUntilBridgeAccess =
-      needsRuntimeProvisioning && !!input.prompt && !selectedRuntimeAccessAllowed;
+      needsRuntimeProvisioning &&
+      !!input.prompt &&
+      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
           defaultConnection({
+            ...(deferRuntimeSelection && { state: "pending" }),
             ...(requestedEnvironment && {
               environmentId: requestedEnvironment.id,
               adapterType: requestedEnvironment.adapterType,
@@ -2418,7 +2428,12 @@ export class SessionService {
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
-    if (needsRuntimeProvisioning && input.prompt && selectedRuntimeAccessAllowed) {
+    if (
+      needsRuntimeProvisioning &&
+      input.prompt &&
+      selectedRuntimeAccessAllowed &&
+      !deferRuntimeSelection
+    ) {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
@@ -2990,6 +3005,8 @@ export class SessionService {
         sessionGroup: { select: { slug: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
+        workdir: true,
+        pendingRun: true,
         readOnlyWorkspace: true,
         branch: true,
         repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
@@ -3017,6 +3034,10 @@ export class SessionService {
     const runtimeChanged =
       prev.agentStatus === "not_started" &&
       (config.hosting != null || config.runtimeInstanceId != null);
+    let requestedEnvironment: Awaited<
+      ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
+    > | null = null;
+    let shouldProvisionPendingRun = false;
     if (runtimeChanged) {
       if (isLocalMode() && config.hosting === "cloud") {
         throw new Error("Cloud sessions are disabled in local mode");
@@ -3024,9 +3045,6 @@ export class SessionService {
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeInstanceId: string | undefined;
       let runtimeLabel: string | undefined;
-      let requestedEnvironment: Awaited<
-        ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
-      > | null = null;
       if (config.runtimeInstanceId) {
         await this.assertRuntimeAccess({
           userId: actorId,
@@ -3066,9 +3084,14 @@ export class SessionService {
         runtimeLabel = runtime.label;
         sessionRouter.bindSession(sessionId, runtime.key);
       }
+      shouldProvisionPendingRun =
+        this.parsePendingCommands(prev.pendingRun).length > 0 &&
+        !prev.workdir &&
+        (!!prev.repoId || newHosting === "cloud");
       data.hosting = newHosting;
       data.connection = connJson(
         defaultConnection({
+          ...(shouldProvisionPendingRun && { state: "connecting" }),
           ...(requestedEnvironment && {
             environmentId: requestedEnvironment.id,
             adapterType: requestedEnvironment.adapterType,
@@ -3078,7 +3101,10 @@ export class SessionService {
         }),
       );
       data.workdir = null;
-      data.pendingRun = Prisma.DbNull;
+      if (shouldProvisionPendingRun) {
+        data.agentStatus = "active";
+        data.sessionStatus = "in_progress";
+      }
     }
 
     const session = await prisma.session.update({
@@ -3110,6 +3136,30 @@ export class SessionService {
       actorType,
       actorId,
     });
+
+    if (shouldProvisionPendingRun) {
+      const conn = this.parseConnection(session.connection);
+      this.provisionRuntime({
+        sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
+        slug: session.sessionGroup?.slug,
+        preserveBranchName: shouldPreserveWorkspaceBranchName({
+          slug: session.sessionGroup?.slug,
+          branch: session.branch,
+          channelBaseBranch: session.channel?.baseBranch,
+        }),
+        hosting: session.hosting,
+        tool: session.tool,
+        model: session.model,
+        repo: session.repo,
+        branch: session.branch,
+        createdById: session.createdById,
+        organizationId: session.organizationId,
+        readOnly: session.readOnlyWorkspace,
+        adapterType: conn.adapterType,
+        environment: requestedEnvironment,
+      });
+    }
 
     return session;
   }

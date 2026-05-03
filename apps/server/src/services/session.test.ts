@@ -915,12 +915,9 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
-    it("uses the org default environment when no environment or hosting is specified", async () => {
-      const sessionGroup = makeSessionGroup();
-      const session = makeSession({ sessionGroup, hosting: "cloud" });
-      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(
-        makeAgentEnvironment({ id: "env-default-cloud" }),
-      );
+    it("queues prompted starts without resolving the org default environment", async () => {
+      const sessionGroup = makeSessionGroup({ connection: { state: "pending" } });
+      const session = makeSession({ sessionGroup, hosting: "local" });
       prismaMock.channel.findUnique.mockResolvedValueOnce({
         id: "channel-1",
         organizationId: "org-1",
@@ -942,21 +939,27 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             connection: expect.objectContaining({
-              environmentId: "env-default-cloud",
-              adapterType: "provisioned",
+              state: "pending",
             }),
           }),
         }),
       );
-      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          adapterType: "provisioned",
-          environment: expect.objectContaining({ id: "env-default-cloud" }),
+          data: expect.objectContaining({
+            hosting: "local",
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Use the default environment",
+            }),
+          }),
         }),
       );
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
     });
 
-    it("falls back from an inaccessible default local environment runtime to an accessible bridge", async () => {
+    it("falls back from an inaccessible explicit local environment runtime to an accessible bridge", async () => {
       const sessionGroup = makeSessionGroup({
         connection: {
           state: "connected",
@@ -1046,6 +1049,7 @@ describe("SessionService", () => {
         createdById: "user-1",
         tool: "claude_code",
         channelId: "channel-1",
+        hosting: "local",
         prompt: "Use the default local environment",
       } as unknown as StartSessionServiceInput);
 
@@ -1071,26 +1075,35 @@ describe("SessionService", () => {
       );
     });
 
-    it("rejects session creation when no default or compatibility fallback exists", async () => {
-      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(null);
+    it("creates a pending session when no default environment exists", async () => {
+      const sessionGroup = makeSessionGroup({ connection: { state: "pending" } });
+      const session = makeSession({ sessionGroup, hosting: "local" });
       prismaMock.channel.findUnique.mockResolvedValueOnce({
         id: "channel-1",
         organizationId: "org-1",
         type: "coding",
         repoId: "repo-1",
       });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
 
-      await expect(
-        service.start({
-          organizationId: "org-1",
-          createdById: "user-1",
-          tool: "claude_code",
-          channelId: "channel-1",
-        } as unknown as StartSessionServiceInput),
-      ).rejects.toThrow("No default agent environment is configured");
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+      } as unknown as StartSessionServiceInput);
 
-      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
-      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "local",
+            connection: expect.objectContaining({ state: "pending" }),
+          }),
+        }),
+      );
     });
 
     it("defers runtime selection without resolving the org default environment", async () => {
@@ -1191,7 +1204,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-accessible");
     });
 
-    it("falls back from a stale implicit local default environment to an accessible bridge", async () => {
+    it("falls back from a stale explicit local default environment to an accessible bridge", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup, hosting: "local" });
       prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({
@@ -1250,6 +1263,7 @@ describe("SessionService", () => {
         createdById: "user-1",
         tool: "claude_code",
         channelId: "channel-1",
+        hosting: "local",
         prompt: "Use the current bridge",
       } as unknown as StartSessionServiceInput);
 
@@ -2907,6 +2921,91 @@ describe("SessionService", () => {
   });
 
   describe("queueMessage", () => {
+    it("preserves and provisions a queued prompt when selecting a runtime", async () => {
+      const pendingRun = {
+        type: "run",
+        prompt: "Implement the plan",
+        interactionMode: null,
+        clientSource: "web",
+        checkpointContext: null,
+      };
+      const selectedRuntime = {
+        key: "org-1:runtime-a",
+        id: "runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        organizationId: "org-1",
+        registeredRepoIds: ["repo-1"],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      };
+      const updatedSession = makeSession({
+        agentStatus: "active",
+        hosting: "local",
+        pendingRun,
+        connection: {
+          state: "connecting",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          pendingRun,
+          connection: { state: "pending", retryCount: 0, canRetry: true, canMove: true },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce(
+        selectedRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+      );
+      prismaMock.session.update.mockResolvedValueOnce(updatedSession);
+
+      const result = await service.updateConfig(
+        "session-1",
+        "org-1",
+        { runtimeInstanceId: "runtime-a" },
+        "user",
+        "user-1",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(result.pendingRun).toEqual(pendingRun);
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            agentStatus: "active",
+            connection: expect.objectContaining({
+              state: "connecting",
+              runtimeInstanceId: "runtime-a",
+              runtimeLabel: "Laptop A",
+            }),
+          }),
+        }),
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({
+            pendingRun: expect.anything(),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "org-1:runtime-a");
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          hosting: "local",
+          repo: expect.objectContaining({ id: "repo-1" }),
+        }),
+      );
+    });
+
     it("persists image keys and includes them in the queued message event payload", async () => {
       const queuedMessage = {
         id: "queued-1",
