@@ -62,50 +62,47 @@ function EffortCycleButton({
   effort: string;
   options: readonly ReasoningEffortOption[];
   disabled: boolean | undefined;
-  onChange: (effort: string) => void;
+  onChange: (effort: string) => Promise<void> | void;
 }) {
-  const currentIndex = options.findIndex((option) => option.value === effort);
+  const [pendingEffort, setPendingEffort] = useState<string | null>(null);
+  const displayedEffort = pendingEffort ?? effort;
+  const currentIndex = options.findIndex((option) => option.value === displayedEffort);
   const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-  const [counter, setCounter] = useState(safeIndex);
-  const displayIndex = counter % options.length;
-  const currentOption = options[displayIndex];
-  const currentLabel = currentOption?.label ?? getReasoningEffortLabel(effort);
-  const nextOption = options[(displayIndex + 1) % options.length];
-  const labels = Array.from({ length: counter + 2 }, (_, i) => options[i % options.length]);
+  const currentOption = options[safeIndex];
+  const currentLabel = currentOption?.label ?? getReasoningEffortLabel(displayedEffort);
+  const nextOption = options[(safeIndex + 1) % options.length];
+  const isPending = pendingEffort !== null;
 
   return (
     <button
       type="button"
-      onClick={() => {
-        if (!nextOption) return;
-        setCounter((value) => value + 1);
-        onChange(nextOption.value);
+      onClick={async () => {
+        if (!nextOption || isPending) return;
+        setPendingEffort(nextOption.value);
+        try {
+          await onChange(nextOption.value);
+        } finally {
+          setPendingEffort(null);
+        }
       }}
-      disabled={disabled}
+      disabled={disabled || isPending}
       aria-label={`Reasoning effort: ${currentLabel}. Click to cycle.`}
       className={cn(
         "flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none",
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
       )}
     >
-      <EffortDots index={displayIndex} total={options.length} />
+      <EffortDots index={safeIndex} total={options.length} />
       <span
         className="relative block min-w-[4.25rem] overflow-hidden text-left"
         style={{ height: EFFORT_LINE_HEIGHT }}
       >
         <span
-          className="flex flex-col transition-transform duration-150 ease-out"
-          style={{ transform: `translateY(-${counter * EFFORT_LINE_HEIGHT}px)` }}
+          key={currentOption?.value ?? displayedEffort}
+          className="block transition-opacity duration-150 ease-out"
+          style={{ height: EFFORT_LINE_HEIGHT, lineHeight: `${EFFORT_LINE_HEIGHT}px` }}
         >
-          {labels.map((option, index) => (
-            <span
-              key={`${option.value}-${index}`}
-              className="block whitespace-nowrap"
-              style={{ height: EFFORT_LINE_HEIGHT, lineHeight: `${EFFORT_LINE_HEIGHT}px` }}
-            >
-              {option.label}
-            </span>
-          ))}
+          {currentLabel}
         </span>
       </span>
     </button>

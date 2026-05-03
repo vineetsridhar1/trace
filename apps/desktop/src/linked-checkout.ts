@@ -242,10 +242,16 @@ async function fetchOriginIfAvailable(repoPath: string): Promise<void> {
     return;
   }
 
-  await execFileAsync("git", ["fetch", "origin", "--prune"], {
-    cwd: repoPath,
-    maxBuffer: GIT_MAX_BUFFER,
-  });
+  try {
+    await execFileAsync("git", ["fetch", "origin", "--prune"], {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+  } catch (error) {
+    console.warn(
+      `[linked-checkout] origin fetch failed; using cached refs: ${formatGitError(error)}`,
+    );
+  }
 }
 
 async function listTreePaths(repoPath: string, ref: string): Promise<string[]> {

@@ -101,6 +101,7 @@ import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { getDefaultReasoningEffort, isSupportedReasoningEffort } from "@trace/shared";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
 
@@ -119,6 +120,8 @@ const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminal
 const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
   typeof runtimeAccessService
 >;
+const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
+const isSupportedReasoningEffortMock = vi.mocked(isSupportedReasoningEffort);
 
 function makeSessionGroup(overrides: Record<string, unknown> = {}) {
   return {
@@ -593,6 +596,51 @@ describe("SessionService", () => {
         }),
         expect.anything(),
       );
+    });
+
+    it("stores the default reasoning effort when none is provided", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({ sessionGroup });
+
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(getDefaultReasoningEffortMock).toHaveBeenCalledWith("claude_code");
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            reasoningEffort: "auto",
+          }),
+        }),
+      );
+    });
+
+    it("rejects an unsupported reasoning effort on start", async () => {
+      isSupportedReasoningEffortMock.mockReturnValueOnce(false);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          reasoningEffort: "unsupported",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow('Unsupported reasoning effort "unsupported" for tool "claude_code"');
+
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
     it("rejects a repo that conflicts with the channel repo", async () => {
@@ -2955,6 +3003,61 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+
+    it("resets reasoning effort to the new tool default when switching tools", async () => {
+      getDefaultReasoningEffortMock.mockReturnValueOnce("medium");
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({ tool: "claude_code", reasoningEffort: "max" }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ tool: "codex", reasoningEffort: "medium" }),
+      );
+
+      await service.updateConfig("session-1", "org-1", { tool: "codex" }, "user", "user-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+            reasoningEffort: "medium",
+            toolSessionId: null,
+          }),
+        }),
+      );
+    });
+
+    it("rejects invalid reasoning effort updates", async () => {
+      isSupportedReasoningEffortMock.mockReturnValueOnce(false);
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(makeSession());
+
+      await expect(
+        service.updateConfig(
+          "session-1",
+          "org-1",
+          { reasoningEffort: "unsupported" },
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow('Unsupported reasoning effort "unsupported" for tool "claude_code"');
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects empty reasoning effort updates", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(makeSession());
+
+      await expect(
+        service.updateConfig(
+          "session-1",
+          "org-1",
+          { reasoningEffort: "   " },
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow("Reasoning effort cannot be empty");
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
   });
 

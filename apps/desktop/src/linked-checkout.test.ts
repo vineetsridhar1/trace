@@ -292,6 +292,29 @@ describe("linked checkout commit-back", () => {
     expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(latestSha);
   }, 15_000);
 
+  it("continues sync with cached refs when origin fetch fails", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+    await git(repoPath, ["remote", "add", "origin", path.join(repoPath, "../missing-origin.git")]);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const result = await syncLinkedCheckout({
+        repoId: "repo-1",
+        sessionGroupId: "group-1",
+        branch: "trace/raccoon",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.status.autoSyncEnabled).toBe(true);
+      expect(result.status.lastSyncError).toBeNull();
+      expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("origin fetch failed"));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  }, 15_000);
+
   it("returns a structured error code for dirty-root sync failures", async () => {
     const { repoPath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);
