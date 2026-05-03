@@ -329,7 +329,11 @@ export const sessionMutations = {
   },
   moveSessionToRuntime: (
     _: unknown,
-    args: { sessionId: string; runtimeInstanceId: string },
+    args: {
+      sessionId: string;
+      runtimeInstanceId: string;
+      allowUnverifiedSourceGitStatus?: boolean | null;
+    },
     ctx: Context,
   ) => {
     return sessionService.moveToRuntime(
@@ -338,14 +342,20 @@ export const sessionMutations = {
       requireOrgContext(ctx),
       ctx.actorType,
       ctx.userId,
+      args.allowUnverifiedSourceGitStatus ?? false,
     );
   },
-  moveSessionToCloud: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+  moveSessionToCloud: (
+    _: unknown,
+    args: { sessionId: string; allowUnverifiedSourceGitStatus?: boolean | null },
+    ctx: Context,
+  ) => {
     return sessionService.moveToCloud(
       args.sessionId,
       requireOrgContext(ctx),
       ctx.actorType,
       ctx.userId,
+      args.allowUnverifiedSourceGitStatus ?? false,
     );
   },
   linkLinkedCheckoutRepo: (

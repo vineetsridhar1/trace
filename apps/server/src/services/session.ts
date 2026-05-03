@@ -678,8 +678,9 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
   return `<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n${lines.join("\n\n")}\n</conversation-history>`;
 }
 
-function buildMigrationPrompt(): string {
-  return "Continue this session on the new runtime.";
+function buildMigrationPrompt(sourceGitStatusVerified: boolean): string {
+  if (sourceGitStatusVerified) return "Continue this session on the new runtime.";
+  return "Continue this session on the new runtime. Source git sync was not verified during the move; inspect the repository state before making changes.";
 }
 
 function buildToolSessionRecoveryPrompt(context: string | null): string {
@@ -5120,16 +5121,20 @@ export class SessionService {
     repoId?: string | null;
     workdir?: string | null;
     runtimeInstanceId?: string | null;
+    allowUnverifiedSourceGitStatus?: boolean;
   }): Promise<{
     status: BridgeSessionGitSyncStatus | null;
     verified: boolean;
     skippedReason: string | null;
   }> {
     if (!params.repoId) return { status: null, verified: true, skippedReason: null };
-    if (!params.workdir) {
-      return { status: null, verified: false, skippedReason: "missing_workdir" };
-    }
+    if (!params.workdir) return { status: null, verified: true, skippedReason: null };
     if (!params.runtimeInstanceId) {
+      if (!params.allowUnverifiedSourceGitStatus) {
+        throw new Error(
+          "Cannot move session: source git status could not be verified because the source runtime is unavailable.",
+        );
+      }
       return { status: null, verified: false, skippedReason: "source_runtime_unavailable" };
     }
 
@@ -5141,6 +5146,9 @@ export class SessionService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (!params.allowUnverifiedSourceGitStatus) {
+        throw new Error(`Cannot move session: source git status could not be verified. ${message}`);
+      }
       console.warn(
         `[session-service] skipping move source git sync check for ${params.sessionId}: ${message}`,
       );
@@ -5187,6 +5195,7 @@ export class SessionService {
     targetHosting: "cloud" | "local";
     targetRuntimeInstanceId?: string | null;
     targetRuntimeLabel?: string | null;
+    allowUnverifiedSourceGitStatus?: boolean;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -5195,6 +5204,7 @@ export class SessionService {
       targetHosting,
       targetRuntimeInstanceId,
       targetRuntimeLabel,
+      allowUnverifiedSourceGitStatus,
       actorType,
       actorId,
     } = params;
@@ -5223,6 +5233,7 @@ export class SessionService {
       repoId: session.repoId,
       workdir: session.workdir,
       runtimeInstanceId: inspectableSourceRuntimeId,
+      allowUnverifiedSourceGitStatus,
     });
     const sourceGitStatus = sourceInspection.status;
 
@@ -5241,7 +5252,7 @@ export class SessionService {
 
     sessionRouter.unbindSession(session.id);
 
-    const bootstrapPrompt = buildMigrationPrompt();
+    const bootstrapPrompt = buildMigrationPrompt(sourceInspection.verified);
     const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
     const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
@@ -5360,6 +5371,7 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType,
     actorId: string,
+    allowUnverifiedSourceGitStatus = false,
   ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
@@ -5402,6 +5414,7 @@ export class SessionService {
       targetHosting: targetRuntime.hostingMode,
       targetRuntimeInstanceId: runtimeInstanceId,
       targetRuntimeLabel: targetRuntime.label,
+      allowUnverifiedSourceGitStatus,
       actorType,
       actorId,
     });
@@ -5416,6 +5429,7 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType,
     actorId: string,
+    allowUnverifiedSourceGitStatus = false,
   ) {
     if (isLocalMode()) {
       throw new Error("Cloud sessions are disabled in local mode");
@@ -5441,6 +5455,7 @@ export class SessionService {
       targetHosting: "cloud",
       targetRuntimeInstanceId: null,
       targetRuntimeLabel: null,
+      allowUnverifiedSourceGitStatus,
       actorType,
       actorId,
     });

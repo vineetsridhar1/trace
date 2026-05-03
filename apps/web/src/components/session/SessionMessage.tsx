@@ -146,6 +146,25 @@ function renderSessionOutput(
   return null;
 }
 
+function runtimeMoveText(payload: JsonObject): string {
+  const target =
+    typeof payload.targetRuntimeLabel === "string" && payload.targetRuntimeLabel
+      ? `Moved session to ${payload.targetRuntimeLabel}`
+      : payload.targetHosting === "cloud"
+        ? "Moved session to cloud"
+        : "Moved session to another runtime";
+
+  if (payload.sourceGitStatusVerified !== false) return target;
+
+  const reason =
+    payload.sourceGitStatusSkippedReason === "missing_workdir"
+      ? "missing workdir"
+      : payload.sourceGitStatusSkippedReason === "source_runtime_unavailable"
+        ? "source runtime unavailable"
+        : "inspection failed";
+  return `${target}; source git sync was not verified (${reason})`;
+}
+
 export const SessionMessage = memo(function SessionMessage({
   id,
   gitCheckpointsByPromptEventId,
@@ -180,15 +199,7 @@ export const SessionMessage = memo(function SessionMessage({
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : payload?.type === "runtime_move" ? (
-        <SystemBadge
-          text={
-            typeof payload?.targetRuntimeLabel === "string" && payload.targetRuntimeLabel
-              ? `Moved session to ${payload.targetRuntimeLabel}`
-              : payload?.targetHosting === "cloud"
-                ? "Moved session to cloud"
-                : "Moved session to another runtime"
-          }
-        />
+        <SystemBadge text={runtimeMoveText(payload)} />
       ) : (
         <SystemBadge text="Session started" />
       );

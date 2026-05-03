@@ -156,7 +156,11 @@ export function SessionRecoveryPanel({
       </div>
 
       {showPicker && (
-        <SessionRuntimePicker sessionId={sessionId} onClose={() => setShowPicker(false)} />
+        <SessionRuntimePicker
+          sessionId={sessionId}
+          onClose={() => setShowPicker(false)}
+          allowUnverifiedSourceGitStatus
+        />
       )}
     </div>
   );

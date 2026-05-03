@@ -1278,8 +1278,12 @@ type Mutation {
   clearQueuedMessages(sessionId: ID!): Boolean!
   retrySessionConnection(sessionId: ID!): Session!
   retrySessionGroupSetup(id: ID!): SessionGroup!
-  moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
-  moveSessionToCloud(sessionId: ID!): Session!
+  moveSessionToRuntime(
+    sessionId: ID!
+    runtimeInstanceId: ID!
+    allowUnverifiedSourceGitStatus: Boolean = false
+  ): Session!
+  moveSessionToCloud(sessionId: ID!, allowUnverifiedSourceGitStatus: Boolean = false): Session!
   requestBridgeAccess(
     runtimeInstanceId: ID!
     scopeType: BridgeAccessScopeType!

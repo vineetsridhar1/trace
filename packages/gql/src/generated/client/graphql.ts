@@ -964,10 +964,12 @@ export type MutationMoveChannelArgs = {
 };
 
 export type MutationMoveSessionToCloudArgs = {
+  allowUnverifiedSourceGitStatus?: InputMaybe<Scalars["Boolean"]["input"]>;
   sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationMoveSessionToRuntimeArgs = {
+  allowUnverifiedSourceGitStatus?: InputMaybe<Scalars["Boolean"]["input"]>;
   runtimeInstanceId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };

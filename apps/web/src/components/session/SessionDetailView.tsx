@@ -611,7 +611,10 @@ function RuntimeLifecycleNotice({
     setAction("cloud");
     try {
       const result = await client
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
+        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
+          sessionId,
+          allowUnverifiedSourceGitStatus: true,
+        })
         .toPromise();
       if (result.error) {
         toast.error("Failed to start cloud runtime", { description: result.error.message });
@@ -672,7 +675,11 @@ function RuntimeLifecycleNotice({
         )}
       </div>
       {failed && showPicker && (
-        <SessionRuntimePicker sessionId={sessionId} onClose={() => setShowPicker(false)} />
+        <SessionRuntimePicker
+          sessionId={sessionId}
+          onClose={() => setShowPicker(false)}
+          allowUnverifiedSourceGitStatus
+        />
       )}
     </div>
   );

@@ -24,10 +24,12 @@ interface RuntimeInstance {
 export function SessionRuntimePicker({
   sessionId,
   onClose,
+  allowUnverifiedSourceGitStatus = false,
   className,
 }: {
   sessionId: string;
   onClose: () => void;
+  allowUnverifiedSourceGitStatus?: boolean;
   className?: string;
 }) {
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
@@ -67,7 +69,11 @@ export function SessionRuntimePicker({
       setMoving(runtimeInstanceId);
       try {
         const result = await client
-          .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, { sessionId, runtimeInstanceId })
+          .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, {
+            sessionId,
+            runtimeInstanceId,
+            allowUnverifiedSourceGitStatus,
+          })
           .toPromise();
         if (result.error) {
           toast.error("Failed to move session", { description: result.error.message });
@@ -86,7 +92,7 @@ export function SessionRuntimePicker({
         setMoving(null);
       }
     },
-    [onClose, sessionId],
+    [allowUnverifiedSourceGitStatus, onClose, sessionId],
   );
 
   const handleMoveToCloud = useCallback(async () => {
@@ -97,7 +103,10 @@ export function SessionRuntimePicker({
     setMoving("cloud");
     try {
       const result = await client
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
+        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
+          sessionId,
+          allowUnverifiedSourceGitStatus,
+        })
         .toPromise();
       if (result.error) {
         toast.error("Failed to move session", { description: result.error.message });
@@ -115,7 +124,7 @@ export function SessionRuntimePicker({
     } finally {
       setMoving(null);
     }
-  }, [cloudEnvironmentAvailable, onClose, sessionId]);
+  }, [allowUnverifiedSourceGitStatus, cloudEnvironmentAvailable, onClose, sessionId]);
 
   const localRuntimes = runtimes.filter(
     (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,

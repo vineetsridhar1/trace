@@ -965,10 +965,12 @@ export type MutationMoveChannelArgs = {
 };
 
 export type MutationMoveSessionToCloudArgs = {
+  allowUnverifiedSourceGitStatus?: InputMaybe<Scalars["Boolean"]["input"]>;
   sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationMoveSessionToRuntimeArgs = {
+  allowUnverifiedSourceGitStatus?: InputMaybe<Scalars["Boolean"]["input"]>;
   runtimeInstanceId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -3157,13 +3159,16 @@ export type MutationResolvers<
     ResolversTypes["Session"],
     ParentType,
     ContextType,
-    RequireFields<MutationMoveSessionToCloudArgs, "sessionId">
+    RequireFields<MutationMoveSessionToCloudArgs, "allowUnverifiedSourceGitStatus" | "sessionId">
   >;
   moveSessionToRuntime?: Resolver<
     ResolversTypes["Session"],
     ParentType,
     ContextType,
-    RequireFields<MutationMoveSessionToRuntimeArgs, "runtimeInstanceId" | "sessionId">
+    RequireFields<
+      MutationMoveSessionToRuntimeArgs,
+      "allowUnverifiedSourceGitStatus" | "runtimeInstanceId" | "sessionId"
+    >
   >;
   muteScope?: Resolver<
     ResolversTypes["Participant"],
