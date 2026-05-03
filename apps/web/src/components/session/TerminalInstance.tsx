@@ -6,7 +6,8 @@ import { TerminalSocket } from "../../lib/terminal-ws";
 import { useTerminalStore } from "../../stores/terminal";
 
 const terminalFontFamily =
-  "'Hack Nerd Font Mono', 'Hack Nerd Font', 'HackNerdFontComplete-Regular', 'JetBrainsMono Nerd Font Mono', 'JetBrainsMono Nerd Font', 'Symbols Nerd Font Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace";
+  "'Hack Nerd Font Mono', 'Hack Nerd Font', 'HackNerdFontComplete-Regular', 'Trace Nerd Symbols', 'JetBrainsMono Nerd Font Mono', 'JetBrainsMono Nerd Font', 'Symbols Nerd Font Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace";
+const terminalFontSize = 13;
 
 export function TerminalInstance({
   terminalId,
@@ -30,7 +31,7 @@ export function TerminalInstance({
 
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
+      fontSize: terminalFontSize,
       fontFamily: terminalFontFamily,
       theme: {
         background: "#0a0a0a",
@@ -43,6 +44,13 @@ export function TerminalInstance({
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
+
+    if ("fonts" in document) {
+      void document.fonts
+        .load(`${terminalFontSize}px "Trace Nerd Symbols"`, "\ue0b0\uf07c\uf113\uf126")
+        .then(() => term.refresh(0, term.rows - 1))
+        .catch(() => undefined);
+    }
 
     // Fit after a brief delay so the container has been laid out
     requestAnimationFrame(() => {
