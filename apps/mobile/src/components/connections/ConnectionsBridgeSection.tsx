@@ -76,7 +76,12 @@ export function ConnectionsBridgeSection({
 
       {bridge.connected
         ? repos.map((entry) => (
-            <ConnectionsRepoAccordion key={entry.repo.id} entry={entry} onChanged={onRefresh} />
+            <ConnectionsRepoAccordion
+              key={entry.repo.id}
+              entry={entry}
+              runtimeInstanceId={bridge.instanceId}
+              onChanged={onRefresh}
+            />
           ))
         : null}
 

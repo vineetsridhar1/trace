@@ -19,14 +19,17 @@ const ALERT_TITLE: Record<ConnectionSyncAction, string> = {
 
 export function ConnectionsRepoSyncActions({
   checkout,
+  runtimeInstanceId,
   onChanged,
 }: {
   checkout: ConnectionLinkedCheckout;
+  runtimeInstanceId: string;
   onChanged: () => Promise<void>;
 }) {
   const theme = useTheme();
   const { status, pendingAction, sync, restore, toggleAutoSync } = useConnectionSyncActions({
     checkout,
+    runtimeInstanceId,
     onChanged,
   });
   const busy = pendingAction !== null;

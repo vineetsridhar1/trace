@@ -14,9 +14,11 @@ type Action = "sync" | "toggle" | "restore";
 
 export function ConnectionsSyncActions({
   checkout,
+  runtimeInstanceId,
   onChanged,
 }: {
   checkout: ConnectionLinkedCheckout;
+  runtimeInstanceId: string;
   onChanged: () => Promise<void>;
 }) {
   const [pending, setPending] = useState<Action | null>(null);
@@ -52,6 +54,7 @@ export function ConnectionsSyncActions({
           sessionGroupId,
           repoId: checkout.repoId,
           branch,
+          runtimeInstanceId,
           autoSyncEnabled: true,
         })
         .toPromise();
@@ -67,6 +70,7 @@ export function ConnectionsSyncActions({
         .mutation(SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION, {
           sessionGroupId,
           repoId: checkout.repoId,
+          runtimeInstanceId,
           enabled: !checkout.autoSyncEnabled,
         })
         .toPromise();
@@ -79,7 +83,11 @@ export function ConnectionsSyncActions({
     if (!sessionGroupId) return;
     void run("restore", async () => {
       const result = await client
-        .mutation(RESTORE_LINKED_CHECKOUT_MUTATION, { sessionGroupId, repoId: checkout.repoId })
+        .mutation(RESTORE_LINKED_CHECKOUT_MUTATION, {
+          sessionGroupId,
+          repoId: checkout.repoId,
+          runtimeInstanceId,
+        })
         .toPromise();
       if (result.error) throw result.error;
       return result.data?.restoreLinkedCheckout as LinkedCheckoutActionResult | null;
