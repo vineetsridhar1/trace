@@ -67,11 +67,12 @@ function EffortCycleButton({
 }) {
   const currentIndex = options.findIndex((option) => option.value === effort);
   const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-  const currentOption = options[safeIndex];
-  const currentLabel = currentOption?.label ?? getReasoningEffortLabel(effort);
-  const nextOption = options[(safeIndex + 1) % options.length];
-  const tooltip = `Reasoning effort: ${currentLabel}. Click to cycle.`;
   const [counter, setCounter] = useState(safeIndex);
+  const displayIndex = counter % options.length;
+  const currentOption = options[displayIndex];
+  const currentLabel = currentOption?.label ?? getReasoningEffortLabel(effort);
+  const nextOption = options[(displayIndex + 1) % options.length];
+  const tooltip = `Reasoning effort: ${currentLabel}. Click to cycle.`;
   const labels = Array.from({ length: counter + 2 }, (_, i) => options[i % options.length]);
 
   return (
@@ -92,7 +93,7 @@ function EffortCycleButton({
             "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
-          <EffortDots index={safeIndex} total={options.length} />
+          <EffortDots index={displayIndex} total={options.length} />
           <span
             className="relative block min-w-[4.25rem] overflow-hidden text-left"
             style={{ height: EFFORT_LINE_HEIGHT }}
