@@ -2806,6 +2806,7 @@ describe("SessionService", () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           hosting: "cloud",
+          workdir: "/tmp/trace/worktrees/session-1",
           connection: {
             state: "timed_out",
             adapterType: "provisioned",
@@ -2862,11 +2863,36 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             hosting: "cloud",
-            pendingRun: expect.objectContaining({ type: "run" }),
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: expect.stringContaining("Source git sync was not verified"),
+            }),
             connection: expect.objectContaining({
               adapterType: "provisioned",
               environmentId: "env-1",
             }),
+          }),
+        }),
+      );
+      const runtimeMoveCalls = eventServiceMock.create.mock.calls.filter((call: unknown[]) => {
+        const arg = call[0] as
+          | {
+              eventType?: string;
+              payload?: {
+                type?: string;
+                sourceGitStatusVerified?: boolean;
+                sourceGitStatusSkippedReason?: string | null;
+              };
+            }
+          | undefined;
+        return arg?.eventType === "session_started" && arg.payload?.type === "runtime_move";
+      });
+      expect(runtimeMoveCalls.length).toBe(1);
+      expect(runtimeMoveCalls[0][0]).toEqual(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            sourceGitStatusVerified: false,
+            sourceGitStatusSkippedReason: "source_runtime_unavailable",
           }),
         }),
       );

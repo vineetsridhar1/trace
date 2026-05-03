@@ -4838,6 +4838,7 @@ export class SessionService {
         targetHosting: "cloud",
         targetRuntimeInstanceId: null,
         targetRuntimeLabel: null,
+        allowUnverifiedSourceGitStatus: true,
         actorType,
         actorId,
       });
