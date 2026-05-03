@@ -780,7 +780,8 @@ const PREVIEW_FIELDS = `
   organizationId
   sessionId
   sessionGroupId
-  createdById
+  createdByActorType
+  createdByActorId
   command
   cwd
   port

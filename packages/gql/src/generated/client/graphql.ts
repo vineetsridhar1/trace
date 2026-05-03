@@ -1291,7 +1291,8 @@ export type Preview = {
   __typename?: "Preview";
   command: Scalars["String"]["output"];
   createdAt: Scalars["DateTime"]["output"];
-  createdById: Scalars["ID"]["output"];
+  createdByActorId: Scalars["ID"]["output"];
+  createdByActorType: ActorType;
   cwd?: Maybe<Scalars["String"]["output"]>;
   id: Scalars["ID"]["output"];
   lastError?: Maybe<Scalars["String"]["output"]>;

@@ -5,9 +5,11 @@ import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { previewGatewayAdapter, type PreviewGatewayAdapter } from "../lib/preview-gateway.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { assertScopeAccess } from "./access.js";
 import { eventService } from "./event.js";
 
 const ACTIVE_PREVIEW_STATUSES: PreviewStatus[] = ["starting", "ready", "stopping"];
+const TERMINAL_PREVIEW_STATUSES: PreviewStatus[] = ["starting", "ready"];
 
 type PreviewSnapshot = Omit<Preview, "createdAt" | "updatedAt" | "startedAt" | "stoppedAt"> & {
   createdAt: string;
@@ -65,20 +67,34 @@ function validateCreatePreviewInput(input: CreatePreviewInput): {
   return { command, cwd, port: input.port, visibility: input.visibility };
 }
 
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  );
+}
+
 class PreviewService {
   constructor(private readonly gateway: PreviewGatewayAdapter = previewGatewayAdapter) {}
 
-  async listForSession(sessionId: string, organizationId: string): Promise<Preview[]> {
+  async listForSession(input: {
+    sessionId: string;
+    organizationId: string;
+    actorId: string;
+  }): Promise<Preview[]> {
     const session = await prisma.session.findFirst({
-      where: { id: sessionId, organizationId },
+      where: { id: input.sessionId, organizationId: input.organizationId },
       select: { id: true },
     });
     if (!session) {
-      throw new NotFoundError("Session", sessionId);
+      throw new NotFoundError("Session", input.sessionId);
     }
+    await assertScopeAccess("session", session.id, input.actorId, input.organizationId);
 
     return prisma.preview.findMany({
-      where: { sessionId, organizationId },
+      where: { sessionId: input.sessionId, organizationId: input.organizationId },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -106,6 +122,7 @@ class PreviewService {
     if (session.hosting !== "cloud") {
       throw new ValidationError("Preview links are only available for cloud sessions");
     }
+    await assertScopeAccess("session", session.id, input.actorId, input.organizationId);
 
     const existingActive = await prisma.preview.findFirst({
       where: {
@@ -134,19 +151,28 @@ class PreviewService {
       throw new ValidationError("Preview links require a cloud runtime");
     }
 
-    let preview = await prisma.preview.create({
-      data: {
-        organizationId: input.organizationId,
-        sessionId: session.id,
-        sessionGroupId: session.sessionGroupId,
-        createdById: input.actorId,
-        command: validated.command,
-        cwd: validated.cwd,
-        port: validated.port,
-        visibility: validated.visibility,
-        status: "starting",
-      },
-    });
+    let preview: Preview;
+    try {
+      preview = await prisma.preview.create({
+        data: {
+          organizationId: input.organizationId,
+          sessionId: session.id,
+          sessionGroupId: session.sessionGroupId,
+          createdByActorType: input.actorType,
+          createdByActorId: input.actorId,
+          command: validated.command,
+          cwd: validated.cwd,
+          port: validated.port,
+          visibility: validated.visibility,
+          status: "starting",
+        },
+      });
+    } catch (err) {
+      if (isUniqueConstraintError(err)) {
+        throw new ValidationError("This session already has an active preview");
+      }
+      throw err;
+    }
     await this.emit(preview, "preview_created", input.actorType, input.actorId);
 
     let routeId: string | null = null;
@@ -215,29 +241,94 @@ class PreviewService {
     if (!preview) {
       throw new NotFoundError("Preview", input.id);
     }
+    await assertScopeAccess("session", preview.sessionId, input.actorId, input.organizationId);
 
-    if (preview.status === "stopped" || preview.status === "failed") {
-      return preview;
+    if (preview.status === "stopped" || preview.status === "failed") return preview;
+
+    return this.stopLoadedPreview(preview, input.actorType, input.actorId);
+  }
+
+  async stopActiveForSession(input: {
+    sessionId: string;
+    organizationId: string;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<Preview[]> {
+    const previews = await prisma.preview.findMany({
+      where: {
+        sessionId: input.sessionId,
+        organizationId: input.organizationId,
+        status: { in: ACTIVE_PREVIEW_STATUSES },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const stopped: Preview[] = [];
+    for (const preview of previews) {
+      stopped.push(await this.stopLoadedPreview(preview, input.actorType, input.actorId));
     }
+    return stopped;
+  }
 
-    preview = await prisma.preview.update({
-      where: { id: preview.id },
+  async stopActiveForSessionGroup(input: {
+    sessionGroupId: string;
+    organizationId: string;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<Preview[]> {
+    const previews = await prisma.preview.findMany({
+      where: {
+        sessionGroupId: input.sessionGroupId,
+        organizationId: input.organizationId,
+        status: { in: ACTIVE_PREVIEW_STATUSES },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const stopped: Preview[] = [];
+    for (const preview of previews) {
+      stopped.push(await this.stopLoadedPreview(preview, input.actorType, input.actorId));
+    }
+    return stopped;
+  }
+
+  private async stopLoadedPreview(
+    loaded: Preview,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<Preview> {
+    let preview = await prisma.preview.update({
+      where: { id: loaded.id },
       data: { status: "stopping" },
     });
-    await this.emit(preview, "preview_stopping", input.actorType, input.actorId);
+    await this.emit(preview, "preview_stopping", actorType, actorId);
 
+    const cleanupErrors: string[] = [];
     if (preview.routeId) {
-      await this.gateway.revokeRoute(preview.routeId);
+      try {
+        await this.gateway.revokeRoute(preview.routeId);
+      } catch (err) {
+        cleanupErrors.push(err instanceof Error ? err.message : "Failed to revoke preview route");
+      }
     }
     if (preview.terminalId) {
-      terminalRelay.destroyTerminal(preview.terminalId);
+      try {
+        terminalRelay.destroyTerminal(preview.terminalId);
+      } catch (err) {
+        cleanupErrors.push(err instanceof Error ? err.message : "Failed to stop preview process");
+      }
     }
 
+    const failed = cleanupErrors.length > 0;
     preview = await prisma.preview.update({
       where: { id: preview.id },
-      data: { status: "stopped", stoppedAt: new Date() },
+      data: {
+        status: failed ? "failed" : "stopped",
+        stoppedAt: new Date(),
+        lastError: failed ? cleanupErrors.join("; ") : null,
+      },
     });
-    await this.emit(preview, "preview_stopped", input.actorType, input.actorId);
+    await this.emit(preview, failed ? "preview_failed" : "preview_stopped", actorType, actorId);
     return preview;
   }
 
@@ -247,7 +338,7 @@ class PreviewService {
     error?: string,
   ): Promise<void> {
     const current = await prisma.preview.findUnique({ where: { id: previewId } });
-    if (!current || current.status === "stopped" || current.status === "failed") return;
+    if (!current || !TERMINAL_PREVIEW_STATUSES.includes(current.status)) return;
 
     const failure =
       error ?? (exitCode && exitCode !== 0 ? `Process exited with code ${exitCode}` : null);

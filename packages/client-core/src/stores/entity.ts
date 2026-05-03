@@ -58,6 +58,7 @@ type Tables = { [K in EntityType]: Record<string, EntityTableMap[K]> };
 type EventsByScope = Record<string, Record<string, Event>>;
 type EventIdsByScope = Record<string, string[]>;
 type MessageIdsByScope = Record<string, string[]>;
+type PreviewIdsBySession = Record<string, string[]>;
 
 interface EntityActions {
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) => void;
@@ -94,6 +95,8 @@ export type EntityState = Tables & {
   _eventIdsByParentId: Record<string, string[]>;
   /** Reverse index: sessionId → queued message IDs */
   _queuedMessageIdsBySession: Record<string, string[]>;
+  /** Reverse index: sessionId → preview IDs */
+  _previewIdsBySession: PreviewIdsBySession;
 } & EntityActions;
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
@@ -120,6 +123,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   _messageIdsByScope: {},
   _eventIdsByParentId: {},
   _queuedMessageIdsBySession: {},
+  _previewIdsBySession: {},
 
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) =>
     set((state: EntityState) => {
@@ -155,6 +159,17 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
         );
         if (nextIndex !== state._messageIdsByScope) {
           update._messageIdsByScope = nextIndex;
+        }
+      }
+      if (entityType === "previews") {
+        const nextIndex = updatePreviewIdsBySession(
+          state._previewIdsBySession,
+          id,
+          (previous as Preview | undefined)?.sessionId ?? null,
+          (data as unknown as Preview).sessionId,
+        );
+        if (nextIndex !== state._previewIdsBySession) {
+          update._previewIdsBySession = nextIndex;
         }
       }
       return update;
@@ -205,6 +220,20 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
           update._messageIdsByScope = nextIndex;
         }
       }
+      if (entityType === "previews") {
+        let nextIndex = state._previewIdsBySession;
+        for (const item of items) {
+          nextIndex = updatePreviewIdsBySession(
+            nextIndex,
+            item.id,
+            state.previews[item.id]?.sessionId ?? null,
+            (item as unknown as Preview).sessionId,
+          );
+        }
+        if (nextIndex !== state._previewIdsBySession) {
+          update._previewIdsBySession = nextIndex;
+        }
+      }
       return update;
     }),
 
@@ -247,6 +276,17 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
           update._messageIdsByScope = nextIndex;
         }
       }
+      if (entityType === "previews") {
+        const nextIndex = updatePreviewIdsBySession(
+          state._previewIdsBySession,
+          id,
+          (existing as Preview).sessionId,
+          (table[id] as Preview).sessionId,
+        );
+        if (nextIndex !== state._previewIdsBySession) {
+          update._previewIdsBySession = nextIndex;
+        }
+      }
       return update;
     }),
 
@@ -275,6 +315,17 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
         );
         if (nextIndex !== state._messageIdsByScope) {
           update._messageIdsByScope = nextIndex;
+        }
+      }
+      if (entityType === "previews" && removed) {
+        const nextIndex = updatePreviewIdsBySession(
+          state._previewIdsBySession,
+          id,
+          (removed as Preview).sessionId,
+          null,
+        );
+        if (nextIndex !== state._previewIdsBySession) {
+          update._previewIdsBySession = nextIndex;
         }
       }
       return update;
@@ -358,6 +409,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       _messageIdsByScope: {},
       _eventIdsByParentId: {},
       _queuedMessageIdsBySession: {},
+      _previewIdsBySession: {},
     }),
 }));
 
@@ -374,6 +426,7 @@ export class StoreBatchWriter {
   private _messageIdsByScope: MessageIdsByScope;
   private _eventIdsByParentId: Record<string, string[]>;
   private _queuedMessageIdsBySession: Record<string, string[]>;
+  private _previewIdsBySession: PreviewIdsBySession;
   private dirty = new Set<string>();
 
   constructor() {
@@ -390,6 +443,7 @@ export class StoreBatchWriter {
     this._messageIdsByScope = s._messageIdsByScope;
     this._eventIdsByParentId = s._eventIdsByParentId;
     this._queuedMessageIdsBySession = s._queuedMessageIdsBySession;
+    this._previewIdsBySession = s._previewIdsBySession;
   }
 
   /** Read the current (possibly batched) value of an entity */
@@ -418,6 +472,13 @@ export class StoreBatchWriter {
         getMessageEntityScopeKey(data as unknown as Message),
       );
     }
+    if (type === "previews") {
+      this.updatePreviewSessionIndex(
+        id,
+        (previous as Preview | undefined)?.sessionId ?? null,
+        (data as unknown as Preview).sessionId,
+      );
+    }
   }
 
   patch<T extends EntityType>(type: T, id: string, data: Partial<EntityTableMap[T]>): void {
@@ -444,6 +505,13 @@ export class StoreBatchWriter {
         getMessageEntityScopeKey(table[id] as unknown as Message),
       );
     }
+    if (type === "previews") {
+      this.updatePreviewSessionIndex(
+        id,
+        (existing as Preview).sessionId,
+        (table[id] as unknown as Preview).sessionId,
+      );
+    }
   }
 
   remove(type: EntityType, id: string): void {
@@ -457,6 +525,12 @@ export class StoreBatchWriter {
     if (type === "messages") {
       const existing = table[id] as unknown as Message | undefined;
       this.updateMessageScopeIndex(id, getMessageEntityScopeKey(existing), null);
+    }
+    if (type === "previews") {
+      const existing = table[id] as unknown as Preview | undefined;
+      if (existing) {
+        this.updatePreviewSessionIndex(id, existing.sessionId, null);
+      }
     }
     delete table[id];
     this.dirty.add(type);
@@ -503,6 +577,8 @@ export class StoreBatchWriter {
         update._eventIdsByParentId = this._eventIdsByParentId;
       } else if (key === "_queuedMessageIdsBySession") {
         update._queuedMessageIdsBySession = this._queuedMessageIdsBySession;
+      } else if (key === "_previewIdsBySession") {
+        update._previewIdsBySession = this._previewIdsBySession;
       } else {
         update[key] = (this.tables as Record<string, unknown>)[key];
       }
@@ -653,6 +729,23 @@ export class StoreBatchWriter {
     if (nextIndex !== this._messageIdsByScope) {
       this._messageIdsByScope = nextIndex;
       this.dirty.add("_messageIdsByScope");
+    }
+  }
+
+  private updatePreviewSessionIndex(
+    id: string,
+    previousSessionId: string | null,
+    nextSessionId: string | null,
+  ): void {
+    const nextIndex = updatePreviewIdsBySession(
+      this._previewIdsBySession,
+      id,
+      previousSessionId,
+      nextSessionId,
+    );
+    if (nextIndex !== this._previewIdsBySession) {
+      this._previewIdsBySession = nextIndex;
+      this.dirty.add("_previewIdsBySession");
     }
   }
 
@@ -820,6 +913,46 @@ function updateMessageIdsByScope(
         nextIndex = { ...nextIndex };
       }
       nextIndex[nextScopeKey] = [...(nextIds ?? []), messageId];
+    }
+  }
+
+  return nextIndex;
+}
+
+function updatePreviewIdsBySession(
+  index: PreviewIdsBySession,
+  previewId: string,
+  previousSessionId: string | null,
+  nextSessionId: string | null,
+): PreviewIdsBySession {
+  if (previousSessionId === nextSessionId) {
+    return index;
+  }
+
+  let nextIndex = index;
+
+  if (previousSessionId) {
+    const previousIds = nextIndex[previousSessionId];
+    if (previousIds?.includes(previewId)) {
+      if (nextIndex === index) {
+        nextIndex = { ...nextIndex };
+      }
+      const filtered = previousIds.filter((id) => id !== previewId);
+      if (filtered.length > 0) {
+        nextIndex[previousSessionId] = filtered;
+      } else {
+        delete nextIndex[previousSessionId];
+      }
+    }
+  }
+
+  if (nextSessionId) {
+    const nextIds = nextIndex[nextSessionId];
+    if (!nextIds?.includes(previewId)) {
+      if (nextIndex === index) {
+        nextIndex = { ...nextIndex };
+      }
+      nextIndex[nextSessionId] = [...(nextIds ?? []), previewId];
     }
   }
 
@@ -1000,12 +1133,16 @@ export function useQueuedMessageIdsForSession(sessionId: string): string[] {
 
 export function usePreviewIdsForSession(sessionId: string): string[] {
   return useEntityStore(
-    useShallow((state: EntityState) =>
-      Object.values(state.previews)
+    useShallow((state: EntityState) => {
+      const ids = state._previewIdsBySession[sessionId];
+      if (!ids || ids.length === 0) return EMPTY_IDS;
+      return ids
+        .map((id) => state.previews[id])
+        .filter((preview): preview is Preview => Boolean(preview))
         .filter((preview) => preview.sessionId === sessionId)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((preview) => preview.id),
-    ),
+        .map((preview) => preview.id);
+    }),
   );
 }
 

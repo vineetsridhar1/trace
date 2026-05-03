@@ -1292,7 +1292,8 @@ export type Preview = {
   __typename?: "Preview";
   command: Scalars["String"]["output"];
   createdAt: Scalars["DateTime"]["output"];
-  createdById: Scalars["ID"]["output"];
+  createdByActorId: Scalars["ID"]["output"];
+  createdByActorType: ActorType;
   cwd?: Maybe<Scalars["String"]["output"]>;
   id: Scalars["ID"]["output"];
   lastError?: Maybe<Scalars["String"]["output"]>;
@@ -3580,7 +3581,8 @@ export type PreviewResolvers<
 > = ResolversObject<{
   command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
-  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  createdByActorId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  createdByActorType?: Resolver<ResolversTypes["ActorType"], ParentType, ContextType>;
   cwd?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;

@@ -33,6 +33,7 @@ import {
   type BridgeAccessApprovedHandlerInput,
 } from "./runtime-access.js";
 import { agentEnvironmentService } from "./agent-environment.js";
+import { previewService } from "./preview.js";
 import {
   alertAgentEnvironmentOperator,
   logAgentEnvironmentTelemetry,
@@ -961,6 +962,20 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
+    if (
+      eventType === "session_runtime_stopped" ||
+      eventType === "session_runtime_start_failed" ||
+      eventType === "session_runtime_start_timed_out" ||
+      eventType === "session_runtime_deprovision_failed"
+    ) {
+      await previewService.stopActiveForSession({
+        sessionId,
+        organizationId: session.organizationId,
+        actorType: "system",
+        actorId: "system",
+      });
+    }
 
     if (eventType === "session_runtime_stopped" && adapterType === "provisioned") {
       logAgentEnvironmentTelemetry("deprovision.completed", {
@@ -2770,6 +2785,12 @@ export class SessionService {
       orgId: session.organizationId,
       resolution,
     });
+    await previewService.stopActiveForSession({
+      sessionId: id,
+      organizationId: session.organizationId,
+      actorType,
+      actorId,
+    });
     return this.transition(
       id,
       "terminate",
@@ -2812,8 +2833,20 @@ export class SessionService {
 
     if (remainingCount === 0) {
       if (session.sessionGroupId) {
+        await previewService.stopActiveForSessionGroup({
+          sessionGroupId: session.sessionGroupId,
+          organizationId: session.organizationId,
+          actorType,
+          actorId,
+        });
         terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
       } else {
+        await previewService.stopActiveForSession({
+          sessionId: id,
+          organizationId: session.organizationId,
+          actorType,
+          actorId,
+        });
         terminalRelay.destroyAllForSession(id);
       }
       await this.resetReconcileState(id);
@@ -2824,6 +2857,12 @@ export class SessionService {
         this.destroyRuntimeOptions(id, "session_deleted"),
       );
     } else {
+      await previewService.stopActiveForSession({
+        sessionId: id,
+        organizationId: session.organizationId,
+        actorType,
+        actorId,
+      });
       terminalRelay.destroyAllForSession(id);
       try {
         await sessionRouter.transitionRuntime(id, session.hosting, "terminate");
@@ -5016,6 +5055,12 @@ export class SessionService {
   }) {
     const { sessionId, hosting, organizationId, actorType, actorId } = params;
 
+    await previewService.stopActiveForSession({
+      sessionId,
+      organizationId,
+      actorType,
+      actorId,
+    });
     terminalRelay.destroyAllForSession(sessionId);
 
     try {
@@ -5153,6 +5198,12 @@ export class SessionService {
       runtimeInstanceId: inspectableSourceRuntimeId,
     });
 
+    await previewService.stopActiveForSession({
+      sessionId: session.id,
+      organizationId: session.organizationId,
+      actorType,
+      actorId,
+    });
     terminalRelay.destroyAllForSession(session.id);
 
     try {
@@ -6443,6 +6494,12 @@ export class SessionService {
       const runtimeSession = await this.withGroupRuntimeState(session);
 
       // Group-level unload: destroy all terminals and the shared runtime
+      await previewService.stopActiveForSessionGroup({
+        sessionGroupId: session.sessionGroupId,
+        organizationId: session.organizationId,
+        actorType: "system",
+        actorId: "system",
+      });
       terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
       try {
         await sessionRouter.destroyRuntime(sessionId, runtimeSession, destroyOptions);
@@ -6461,6 +6518,12 @@ export class SessionService {
     }
 
     // Single-session unload: only destroy this session's terminals
+    await previewService.stopActiveForSession({
+      sessionId,
+      organizationId: session.organizationId,
+      actorType: "system",
+      actorId: "system",
+    });
     terminalRelay.destroyAllForSession(sessionId);
 
     if (session.sessionGroupId) {
@@ -6713,6 +6776,4 @@ export class SessionService {
 
 export const sessionService = new SessionService();
 
-setBridgeAccessApprovedHandler((input) =>
-  sessionService.resumePendingBridgeAccessSessions(input),
-);
+setBridgeAccessApprovedHandler((input) => sessionService.resumePendingBridgeAccessSessions(input));

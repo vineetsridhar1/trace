@@ -29,6 +29,13 @@ vi.mock("./runtime-access.js", () => ({
   },
 }));
 
+vi.mock("./preview.js", () => ({
+  previewService: {
+    stopActiveForSession: vi.fn().mockResolvedValue([]),
+    stopActiveForSessionGroup: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     send: vi.fn().mockReturnValue("delivered"),
@@ -99,6 +106,7 @@ import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { previewService } from "./preview.js";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
 
@@ -117,6 +125,7 @@ const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminal
 const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
   typeof runtimeAccessService
 >;
+const previewServiceMock = previewService as unknown as MockedDeep<typeof previewService>;
 
 function makeSessionGroup(overrides: Record<string, unknown> = {}) {
   return {
@@ -264,6 +273,8 @@ describe("SessionService", () => {
       allowed: true,
       isOwner: true,
     });
+    previewServiceMock.stopActiveForSession.mockResolvedValue([]);
+    previewServiceMock.stopActiveForSessionGroup.mockResolvedValue([]);
     prismaMock.agentEnvironment.findFirst.mockResolvedValue(makeAgentEnvironment());
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
@@ -2828,7 +2839,9 @@ describe("SessionService", () => {
           canMove: true,
         },
       });
-      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(makeAgentEnvironment({ id: "env-1" }));
+      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(
+        makeAgentEnvironment({ id: "env-1" }),
+      );
       sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
 
       await service.retryConnection("session-1", "org-1", "user", "user-1");

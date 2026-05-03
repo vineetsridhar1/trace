@@ -463,7 +463,8 @@ type Preview {
   organizationId: ID!
   sessionId: ID!
   sessionGroupId: ID
-  createdById: ID!
+  createdByActorType: ActorType!
+  createdByActorId: ID!
   command: String!
   cwd: String
   port: Int!

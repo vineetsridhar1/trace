@@ -72,6 +72,7 @@ export function SessionPreviewButton({ sessionId }: { sessionId: string }) {
   };
 
   const hasReadyUrl = activePreview?.status === "ready" && activePreview.url;
+  const hasActivePreview = activePreview ? ACTIVE_STATUSES.has(activePreview.status) : false;
   const icon =
     activePreview?.status === "starting" || activePreview?.status === "stopping" ? (
       <Loader2 size={14} className="animate-spin" />
@@ -108,7 +109,12 @@ export function SessionPreviewButton({ sessionId }: { sessionId: string }) {
               <p className="text-sm font-medium text-foreground">Preview</p>
               <p className="truncate text-xs text-muted-foreground">{statusText(activePreview)}</p>
             </div>
-            <Button size="xs" variant="outline" onClick={() => setDialogOpen(true)}>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={hasActivePreview}
+              onClick={() => setDialogOpen(true)}
+            >
               <Play size={12} />
               New
             </Button>
@@ -143,7 +149,7 @@ export function SessionPreviewButton({ sessionId }: { sessionId: string }) {
               <Copy size={13} />
               Copy
             </Button>
-            {ACTIVE_STATUSES.has(activePreview.status) && (
+            {hasActivePreview && (
               <Button
                 size="sm"
                 variant="destructive"
