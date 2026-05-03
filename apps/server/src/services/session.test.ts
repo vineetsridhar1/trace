@@ -88,7 +88,9 @@ vi.mock("../lib/storage/index.js", () => ({
 vi.mock("@trace/shared", () => {
   return {
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
+    getDefaultEffort: vi.fn().mockReturnValue("medium"),
     isSupportedModel: vi.fn().mockReturnValue(true),
+    isSupportedEffort: vi.fn().mockReturnValue(true),
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
   };

@@ -8,6 +8,7 @@ import {
 export interface OptimisticSessionShape {
   tool: string;
   model?: string | null;
+  effort?: string | null;
   hosting: string;
   channelId: string;
   repoId?: string | null;
@@ -61,6 +62,7 @@ function buildSessionEntity(params: {
   sessionGroupId: string;
   tool: string;
   model: string | null;
+  effort: string | null;
   hosting: string;
   channelId: string;
   repoId: string | null;
@@ -75,6 +77,7 @@ function buildSessionEntity(params: {
     sessionStatus: "in_progress",
     tool: params.tool,
     model: params.model,
+    effort: params.effort,
     hosting: params.hosting,
     channel: { id: params.channelId },
     repo: params.repoId ? { id: params.repoId } : null,
@@ -116,6 +119,7 @@ export function insertOptimisticSessionPair(params: InsertOptimisticSessionPairP
       sessionGroupId: params.tempGroupId,
       tool: params.tool,
       model: params.model ?? null,
+      effort: params.effort ?? null,
       hosting: params.hosting,
       channelId: params.channelId,
       repoId,
@@ -147,6 +151,7 @@ export function reconcileOptimisticSessionPair(params: ReconcileOptimisticSessio
     sessionGroupId: params.realGroupId,
     tool: params.tool,
     model: params.model ?? null,
+    effort: params.effort ?? null,
     hosting: params.hosting,
     channelId: params.channelId,
     repoId,

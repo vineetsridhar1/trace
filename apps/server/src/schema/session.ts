@@ -269,6 +269,7 @@ export const sessionMutations = {
       sessionId: string;
       tool?: CodingTool | null;
       model?: string | null;
+      effort?: string | null;
       hosting?: string | null;
       runtimeInstanceId?: string | null;
     },
@@ -280,6 +281,7 @@ export const sessionMutations = {
       {
         tool: args.tool ?? undefined,
         model: args.model ?? undefined,
+        effort: args.effort ?? undefined,
         hosting: args.hosting ?? undefined,
         runtimeInstanceId: args.runtimeInstanceId ?? undefined,
       },

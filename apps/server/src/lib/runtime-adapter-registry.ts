@@ -19,6 +19,7 @@ export type RuntimeStartInput = {
   environment?: RuntimeEnvironment | null;
   tool: string;
   model?: string;
+  effort?: string;
   repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
   branch?: string;
   checkpointSha?: string;

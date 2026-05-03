@@ -77,6 +77,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         sessionStatus
         tool
         model
+        effort
         hosting
         branch
         worktreeDeleted
@@ -432,6 +433,7 @@ export function SessionGroupDetailView({
         input: {
           tool: selectedSession.tool,
           model: selectedSession.model ?? undefined,
+          effort: selectedSession.effort ?? undefined,
           hosting: selectedSession.hosting,
           channelId: resolvedChannelId ?? undefined,
           repoId: groupRepo?.id ?? (selectedSession.repo as { id: string } | null | undefined)?.id,
@@ -457,6 +459,7 @@ export function SessionGroupDetailView({
       sessionGroupId,
       tool: selectedSession.tool,
       model: selectedSession.model,
+      effort: selectedSession.effort,
       hosting: selectedSession.hosting,
       channel: resolvedChannelId ? { id: resolvedChannelId } : null,
       repo: groupRepo ?? (selectedSession.repo as { id: string } | null | undefined),

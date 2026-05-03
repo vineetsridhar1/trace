@@ -104,6 +104,7 @@ export function CheckpointPanel({
             input: {
               tool: restoreSession.tool,
               model: restoreSession.model ?? undefined,
+              effort: restoreSession.effort ?? undefined,
               hosting: restoreSession.hosting,
               channelId: channelId ?? undefined,
               restoreCheckpointId: checkpoint.id,

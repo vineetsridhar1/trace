@@ -69,6 +69,8 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     | null
     | undefined;
   const sessionTool = useEntityField("sessions", sourceId ?? "", "tool") as string | undefined;
+  const sessionModel = useEntityField("sessions", sourceId ?? "", "model") as string | undefined;
+  const sessionEffort = useEntityField("sessions", sourceId ?? "", "effort") as string | undefined;
   const sessionHosting = useEntityField("sessions", sourceId ?? "", "hosting") as
     | string
     | undefined;
@@ -112,6 +114,8 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
         .mutation(START_SESSION_MUTATION, {
           input: {
             tool: sessionTool ?? "claude_code",
+            model: sessionModel,
+            effort: sessionEffort,
             hosting: sessionHosting ?? "cloud",
             channelId: sessionChannel?.id,
             repoId: sessionRepo?.id,
@@ -129,6 +133,8 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
           id: newSessionId,
           sessionGroupId,
           tool: sessionTool ?? "claude_code",
+          model: sessionModel,
+          effort: sessionEffort,
           hosting: sessionHosting ?? "cloud",
           channel: sessionChannel,
           repo: sessionRepo,
@@ -147,6 +153,8 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     sourceId,
     planContent,
     sessionTool,
+    sessionModel,
+    sessionEffort,
     sessionHosting,
     sessionChannel?.id,
     sessionRepo?.id,

@@ -14,6 +14,7 @@ export interface BridgeRunCommand {
   cwd?: string;
   tool?: string;
   model?: string;
+  effort?: string;
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
@@ -27,6 +28,7 @@ export interface BridgeSendCommand {
   cwd?: string;
   tool?: string;
   model?: string;
+  effort?: string;
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;

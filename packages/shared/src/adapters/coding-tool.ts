@@ -156,6 +156,7 @@ export interface RunOptions {
   onComplete: () => void;
   interactionMode?: "code" | "plan" | "ask";
   model?: string;
+  effort?: string;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
 }

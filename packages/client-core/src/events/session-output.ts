@@ -39,6 +39,9 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
     return {
       ...(typeof payload.tool === "string" ? { tool: payload.tool as SessionEntity["tool"] } : {}),
       ...(typeof payload.model === "string" ? { model: payload.model } : {}),
+      ...(typeof payload.effort === "string" || payload.effort === null
+        ? { effort: payload.effort }
+        : {}),
       ...(typeof payload.hosting === "string"
         ? { hosting: payload.hosting as SessionEntity["hosting"] }
         : {}),

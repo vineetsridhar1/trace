@@ -1196,6 +1196,7 @@ export type MutationUpdateScopeAiModeArgs = {
 };
 
 export type MutationUpdateSessionConfigArgs = {
+  effort?: InputMaybe<Scalars["String"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1623,6 +1624,7 @@ export type Session = {
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  effort?: Maybe<Scalars["String"]["output"]>;
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -1788,6 +1790,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  effort?: InputMaybe<Scalars["String"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
@@ -3858,6 +3861,7 @@ export type SessionResolvers<
   connection?: Resolver<Maybe<ResolversTypes["SessionConnection"]>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  effort?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   endpoints?: Resolver<Maybe<ResolversTypes["SessionEndpoints"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes["HostingMode"], ParentType, ContextType>;

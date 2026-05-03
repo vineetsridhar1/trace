@@ -4,9 +4,11 @@ import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import {
+  getDefaultEffort,
   getDefaultModel,
   hasQuestionBlock,
   hasPlanBlock,
+  isSupportedEffort,
   isSupportedModel,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
@@ -459,6 +461,7 @@ function serializeSession(session: {
   sessionStatus: SessionStatus;
   tool: string;
   model: string | null;
+  effort: string | null;
   hosting: string;
   createdBy: unknown;
   repo: unknown;
@@ -482,6 +485,7 @@ function serializeSession(session: {
     sessionStatus: session.sessionStatus,
     tool: session.tool,
     model: session.model,
+    effort: session.effort,
     hosting: session.hosting,
     createdBy: session.createdBy,
     repo: session.repo ?? null,
@@ -742,6 +746,20 @@ function validateModelForTool(tool: string, model: string): string {
   return trimmed;
 }
 
+function validateEffortForModel(model: string | null | undefined, effort: string): string {
+  const trimmed = effort.trim();
+  if (!trimmed) {
+    throw new Error("Effort cannot be empty");
+  }
+  if (!model) {
+    throw new Error("Effort requires a model");
+  }
+  if (!isSupportedEffort(model, trimmed)) {
+    throw new Error(`Unsupported effort "${trimmed}" for model "${model}"`);
+  }
+  return trimmed;
+}
+
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
 
 export function isFullyUnloadedSession(
@@ -764,6 +782,7 @@ export class SessionService {
     hosting: string;
     tool: string;
     model?: string | null;
+    effort?: string | null;
     repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
     branch?: string | null;
     checkpointSha?: string | null;
@@ -791,6 +810,7 @@ export class SessionService {
         environment,
         tool: params.tool,
         model: params.model ?? undefined,
+        effort: params.effort ?? undefined,
         repo: params.repo
           ? {
               id: params.repo.id,
@@ -1899,6 +1919,9 @@ export class SessionService {
     const model = input.model
       ? validateModelForTool(input.tool, input.model)
       : getDefaultModel(input.tool);
+    const effort = input.effort
+      ? validateEffortForModel(model, input.effort)
+      : (getDefaultEffort(model) ?? null);
 
     const restoreGroup = restoreCheckpoint
       ? await prisma.sessionGroup.findFirst({
@@ -2341,6 +2364,7 @@ export class SessionService {
           sessionStatus: initialSessionStatus,
           tool: input.tool,
           model: model ?? undefined,
+          effort: effort ?? undefined,
           hosting,
           organizationId: input.organizationId,
           createdById: input.createdById,
@@ -2442,6 +2466,7 @@ export class SessionService {
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
+        effort: session.effort,
         repo: session.repo,
         branch: resolvedBranch,
         checkpointSha: restoreCheckpoint?.commitSha,
@@ -2503,6 +2528,7 @@ export class SessionService {
         hosting: updated.hosting,
         tool: updated.tool,
         model: updated.model,
+        effort: updated.effort,
         repo: updated.repo,
         branch: updated.branch,
         createdById: updated.createdById,
@@ -2621,6 +2647,7 @@ export class SessionService {
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
+          effort: session.effort,
           repo: session.repo,
           branch: session.branch,
           createdById: session.createdById,
@@ -2690,6 +2717,7 @@ export class SessionService {
       prompt: resolvedPrompt ?? undefined,
       tool: session.tool,
       model: session.model ?? undefined,
+      effort: session.effort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -2988,7 +3016,13 @@ export class SessionService {
   async updateConfig(
     sessionId: string,
     organizationId: string,
-    config: { tool?: CodingTool; model?: string; hosting?: string; runtimeInstanceId?: string },
+    config: {
+      tool?: CodingTool;
+      model?: string;
+      effort?: string;
+      hosting?: string;
+      runtimeInstanceId?: string;
+    },
     actorType: ActorType,
     actorId: string,
   ) {
@@ -2998,6 +3032,7 @@ export class SessionService {
         id: true,
         tool: true,
         model: true,
+        effort: true,
         agentStatus: true,
         hosting: true,
         repoId: true,
@@ -3021,10 +3056,19 @@ export class SessionService {
         : toolChanged
           ? (getDefaultModel(nextTool) ?? null)
           : undefined;
+    const resolvedModel = nextModel !== undefined ? nextModel : prev.model;
+    const effortShouldReset = toolChanged || nextModel !== undefined;
+    const nextEffort =
+      config.effort != null
+        ? validateEffortForModel(resolvedModel, config.effort)
+        : effortShouldReset
+          ? (getDefaultEffort(resolvedModel) ?? null)
+          : undefined;
 
     const data: Record<string, unknown> = {};
     if (config.tool != null) data.tool = config.tool;
     if (nextModel !== undefined) data.model = nextModel;
+    if (nextEffort !== undefined) data.effort = nextEffort;
     if (toolChanged) {
       data.toolChangedAt = new Date();
       data.toolSessionId = null;
@@ -3130,6 +3174,7 @@ export class SessionService {
         type: "config_changed",
         tool: config.tool ?? session.tool,
         model: nextModel !== undefined ? nextModel : session.model,
+        effort: nextEffort !== undefined ? nextEffort : session.effort,
         toolChanged,
         ...(runtimeChanged && { hosting: session.hosting, connection: session.connection }),
       },
@@ -3151,6 +3196,7 @@ export class SessionService {
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
+        effort: session.effort,
         repo: session.repo,
         branch: session.branch,
         createdById: session.createdById,
@@ -3524,6 +3570,7 @@ export class SessionService {
         createdById: true,
         tool: true,
         model: true,
+        effort: true,
         toolChangedAt: true,
         workdir: true,
         toolSessionId: true,
@@ -3623,6 +3670,7 @@ export class SessionService {
             hosting: session.hosting,
             tool: session.tool,
             model: session.model,
+            effort: session.effort,
             repo: session.repo,
             branch: session.branch,
             createdById: session.createdById,
@@ -3756,6 +3804,7 @@ export class SessionService {
       prompt,
       tool: session.tool,
       model: session.model ?? undefined,
+      effort: session.effort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -4562,6 +4611,7 @@ export class SessionService {
         sessionStatus: true,
         tool: true,
         model: true,
+        effort: true,
         workdir: true,
         toolSessionId: true,
         repoId: true,
@@ -4612,6 +4662,7 @@ export class SessionService {
         prompt,
         tool: session.tool,
         model: session.model ?? undefined,
+        effort: session.effort ?? undefined,
         interactionMode: options.interactionMode,
         cwd: session.workdir ?? undefined,
         checkpointContext,
@@ -5298,6 +5349,7 @@ export class SessionService {
         hosting: targetHosting,
         tool: movedSession.tool,
         model: movedSession.model,
+        effort: movedSession.effort,
         repo: movedSession.repo,
         branch: movedSession.branch,
         checkpointSha,
@@ -6258,6 +6310,7 @@ export class SessionService {
         organizationId: true,
         tool: true,
         model: true,
+        effort: true,
         workdir: true,
         toolSessionId: true,
         repoId: true,
@@ -6304,6 +6357,7 @@ export class SessionService {
       prompt: prompt ?? undefined,
       tool: session.tool,
       model: session.model ?? undefined,
+      effort: session.effort ?? undefined,
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -6315,6 +6369,7 @@ export class SessionService {
       prompt?: string;
       tool: CodingTool;
       model?: string;
+      effort?: string;
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;

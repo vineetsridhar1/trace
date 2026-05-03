@@ -392,6 +392,7 @@ export class ContainerBridge implements IBridgeClient {
           cwd: cmd.cwd ?? os.homedir(),
           tool: cmd.tool,
           model: cmd.model,
+          effort: cmd.effort,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
@@ -695,6 +696,7 @@ export class ContainerBridge implements IBridgeClient {
     cwd,
     tool,
     model,
+    effort,
     interactionMode,
     toolSessionId,
     imageUrls,
@@ -704,6 +706,7 @@ export class ContainerBridge implements IBridgeClient {
     cwd: string;
     tool?: string;
     model?: string;
+    effort?: string;
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
@@ -878,6 +881,7 @@ export class ContainerBridge implements IBridgeClient {
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
+      effort,
       toolSessionId,
     });
   }

@@ -416,6 +416,7 @@ type Session {
   sessionStatus: SessionStatus!
   tool: CodingTool!
   model: String
+  effort: String
   hosting: HostingMode!
   createdBy: User!
   repo: Repo
@@ -985,6 +986,7 @@ input ReorderChannelsInput {
 input StartSessionInput {
   tool: CodingTool!
   model: String
+  effort: String
   environmentId: ID
   hosting: HostingMode
   runtimeInstanceId: ID
@@ -1253,6 +1255,7 @@ type Mutation {
     sessionId: ID!
     tool: CodingTool
     model: String
+    effort: String
     hosting: HostingMode
     runtimeInstanceId: ID
   ): Session!

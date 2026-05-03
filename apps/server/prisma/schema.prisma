@@ -655,6 +655,7 @@ model Session {
   sessionStatus  SessionStatus @default(in_progress)
   tool           CodingTool
   model          String?
+  effort         String?
   toolChangedAt      DateTime?
   lastUserMessageAt  DateTime?
   lastMessageAt      DateTime?

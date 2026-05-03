@@ -1193,6 +1193,7 @@ export type MutationUpdateScopeAiModeArgs = {
 };
 
 export type MutationUpdateSessionConfigArgs = {
+  effort?: InputMaybe<Scalars["String"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1620,6 +1621,7 @@ export type Session = {
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  effort?: Maybe<Scalars["String"]["output"]>;
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -1785,6 +1787,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  effort?: InputMaybe<Scalars["String"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;

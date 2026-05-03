@@ -1195,6 +1195,7 @@ export type MutationUpdateScopeAiModeArgs = {
 };
 
 export type MutationUpdateSessionConfigArgs = {
+  effort?: InputMaybe<Scalars["String"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1622,6 +1623,7 @@ export type Session = {
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  effort?: Maybe<Scalars["String"]["output"]>;
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -1787,6 +1789,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  effort?: InputMaybe<Scalars["String"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
@@ -2203,6 +2206,7 @@ export type SessionGroupsQuery = {
       sessionStatus: SessionStatus;
       tool: CodingTool;
       model?: string | null;
+      effort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
       prUrl?: string | null;
@@ -2258,6 +2262,7 @@ export type FilteredSessionGroupsQuery = {
       sessionStatus: SessionStatus;
       tool: CodingTool;
       model?: string | null;
+      effort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
       prUrl?: string | null;
@@ -2417,6 +2422,7 @@ export type SessionDetailQuery = {
     sessionStatus: SessionStatus;
     tool: CodingTool;
     model?: string | null;
+    effort?: string | null;
     hosting: HostingMode;
     branch?: string | null;
     workdir?: string | null;
@@ -2558,6 +2564,7 @@ export type SessionGroupDetailQuery = {
       sessionStatus: SessionStatus;
       tool: CodingTool;
       model?: string | null;
+      effort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
       worktreeDeleted: boolean;
@@ -2780,6 +2787,22 @@ export type AgentEnvironmentsSettingsQuery = {
       __typename?: "ConnectionsRepoEntry";
       repo: { __typename?: "Repo"; id: string; name: string };
     }>;
+  }>;
+};
+
+export type OrgSecretsQueryVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+}>;
+
+export type OrgSecretsQuery = {
+  __typename?: "Query";
+  orgSecrets: Array<{
+    __typename?: "OrgSecret";
+    id: string;
+    orgId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
   }>;
 };
 
@@ -3945,6 +3968,7 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "effort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -4095,6 +4119,7 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "effort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -4701,6 +4726,7 @@ export const SessionDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                 { kind: "Field", name: { kind: "Name", value: "tool" } },
                 { kind: "Field", name: { kind: "Name", value: "model" } },
+                { kind: "Field", name: { kind: "Name", value: "effort" } },
                 { kind: "Field", name: { kind: "Name", value: "hosting" } },
                 {
                   kind: "Field",
@@ -4987,6 +5013,7 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "effort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
@@ -5745,6 +5772,52 @@ export const AgentEnvironmentsSettingsDocument = {
   AgentEnvironmentsSettingsQuery,
   AgentEnvironmentsSettingsQueryVariables
 >;
+export const OrgSecretsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "OrgSecrets" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "orgSecrets" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<OrgSecretsQuery, OrgSecretsQueryVariables>;
 export const CreateAgentEnvironmentDocument = {
   kind: "Document",
   definitions: [

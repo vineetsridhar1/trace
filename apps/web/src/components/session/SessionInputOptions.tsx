@@ -9,7 +9,14 @@ import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
-import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
+import {
+  getModelsForTool,
+  getDefaultModel,
+  getModelLabel,
+  getEffortLevelsForModel,
+  getDefaultEffort,
+  getEffortLabel,
+} from "./modelOptions";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
@@ -42,6 +49,7 @@ export function SessionInputOptions({
 }: SessionInputOptionsProps) {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const effort = useEntityField("sessions", sessionId, "effort") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
@@ -59,6 +67,8 @@ export function SessionInputOptions({
   const currentTool = tool ?? "claude_code";
   const modelOptions = getModelsForTool(currentTool);
   const currentModel = model ?? getDefaultModel(currentTool);
+  const effortOptions = currentModel ? getEffortLevelsForModel(currentModel) : [];
+  const currentEffort = effort ?? getDefaultEffort(currentModel);
   const isNotStarted = agentStatus === "not_started";
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
@@ -94,14 +104,21 @@ export function SessionInputOptions({
   const handleToolChange = useCallback(
     async (newTool: string | null) => {
       if (!newTool || isOptimistic) return;
-      const newDefault = getDefaultModel(newTool);
+      const newDefaultModel = getDefaultModel(newTool);
+      const newDefaultEffort = getDefaultEffort(newDefaultModel);
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         tool: newTool as CodingTool,
-        model: newDefault ?? null,
+        model: newDefaultModel ?? null,
+        effort: newDefaultEffort ?? null,
       });
       try {
         const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool, model: newDefault })
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            tool: newTool,
+            model: newDefaultModel,
+            effort: newDefaultEffort,
+          })
           .toPromise();
         if (result.error) throw result.error;
       } catch (error) {
@@ -115,15 +132,40 @@ export function SessionInputOptions({
   const handleModelChange = useCallback(
     async (newModel: string | null) => {
       if (!newModel || isOptimistic) return;
-      const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
+      const newDefaultEffort = getDefaultEffort(newModel);
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        model: newModel,
+        effort: newDefaultEffort ?? null,
+      });
       try {
         const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            model: newModel,
+            effort: newDefaultEffort,
+          })
           .toPromise();
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
         console.error("Failed to update session model:", error);
+      }
+    },
+    [isOptimistic, sessionId],
+  );
+
+  const handleEffortChange = useCallback(
+    async (newEffort: string | null) => {
+      if (!newEffort || isOptimistic) return;
+      const rollback = applyOptimisticPatch("sessions", sessionId, { effort: newEffort });
+      try {
+        const result = await client
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, effort: newEffort })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        rollback();
+        console.error("Failed to update session effort:", error);
       }
     },
     [isOptimistic, sessionId],
@@ -283,6 +325,24 @@ export function SessionInputOptions({
             {modelOptions.map((m: { value: string; label: string }) => (
               <SelectItem key={m.value} value={m.value}>
                 {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {effortOptions.length > 0 && (
+        <Select
+          value={currentEffort ?? ""}
+          onValueChange={handleEffortChange}
+          disabled={isActive || isOptimistic}
+        >
+          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
+            <SelectValue>{currentEffort ? getEffortLabel(currentEffort) : ""}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {effortOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>

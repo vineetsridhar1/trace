@@ -113,6 +113,7 @@ export interface SessionAdapterCreateOptions {
   preserveBranchName?: boolean;
   tool: string;
   model?: string;
+  effort?: string;
   repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
   branch?: string;
   checkpointSha?: string;
@@ -1442,6 +1443,7 @@ export class SessionRouter {
           environment: options.environment,
           tool: options.tool,
           model: options.model,
+          effort: options.effort,
           repo: options.repo,
           branch: options.branch,
           checkpointSha: options.checkpointSha,
@@ -1756,6 +1758,7 @@ export class SessionRouter {
           organizationId: true,
           tool: true,
           model: true,
+          effort: true,
         },
       });
       const conn = connectionRecord(session.connection);
@@ -1767,6 +1770,7 @@ export class SessionRouter {
         environment,
         tool: session.tool,
         model: session.model ?? undefined,
+        effort: session.effort ?? undefined,
       });
       const runtimeId =
         startResult.runtimeInstanceId ??

@@ -61,6 +61,7 @@ const SESSION_DETAIL_QUERY = gql`
       sessionStatus
       tool
       model
+      effort
       hosting
       repo {
         id

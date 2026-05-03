@@ -36,6 +36,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const effort = useEntityField("sessions", sessionId, "effort") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
@@ -51,6 +52,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           input: {
             tool: tool ?? "claude_code",
             model,
+            effort,
             hosting: defaultHosting,
             channelId: channel?.id,
             repoId: repo?.id,
@@ -69,6 +71,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           sessionGroupId,
           tool: tool ?? "claude_code",
           model,
+          effort,
           hosting: defaultHosting,
           channel,
           repo,
@@ -88,6 +91,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     planContent,
     tool,
     model,
+    effort,
     defaultHosting,
     channel?.id,
     repo?.id,
