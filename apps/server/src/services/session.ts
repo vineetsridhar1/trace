@@ -2095,8 +2095,7 @@ export class SessionService {
       !!input.environmentId || !!input.hosting || !!input.runtimeInstanceId;
     const deferRuntimeSelection =
       input.deferRuntimeSelection === true ||
-      (!input.prompt &&
-        !input.restoreCheckpointId &&
+      (!input.restoreCheckpointId &&
         !requestedRuntimeSelection &&
         !sharedRuntimeInstanceId &&
         !restoreGroupRuntimeInstanceId);

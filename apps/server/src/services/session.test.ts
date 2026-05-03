@@ -915,12 +915,9 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
-    it("uses the org default environment for prompted starts when no environment or hosting is specified", async () => {
-      const sessionGroup = makeSessionGroup();
-      const session = makeSession({ sessionGroup, hosting: "cloud" });
-      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(
-        makeAgentEnvironment({ id: "env-default-cloud" }),
-      );
+    it("queues prompted starts without resolving the org default environment", async () => {
+      const sessionGroup = makeSessionGroup({ connection: { state: "pending" } });
+      const session = makeSession({ sessionGroup, hosting: "local" });
       prismaMock.channel.findUnique.mockResolvedValueOnce({
         id: "channel-1",
         organizationId: "org-1",
@@ -942,21 +939,27 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             connection: expect.objectContaining({
-              environmentId: "env-default-cloud",
-              adapterType: "provisioned",
+              state: "pending",
             }),
           }),
         }),
       );
-      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          adapterType: "provisioned",
-          environment: expect.objectContaining({ id: "env-default-cloud" }),
+          data: expect.objectContaining({
+            hosting: "local",
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Use the default environment",
+            }),
+          }),
         }),
       );
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
     });
 
-    it("falls back from an inaccessible default local environment runtime to an accessible bridge", async () => {
+    it("falls back from an inaccessible explicit local environment runtime to an accessible bridge", async () => {
       const sessionGroup = makeSessionGroup({
         connection: {
           state: "connected",
@@ -1046,6 +1049,7 @@ describe("SessionService", () => {
         createdById: "user-1",
         tool: "claude_code",
         channelId: "channel-1",
+        hosting: "local",
         prompt: "Use the default local environment",
       } as unknown as StartSessionServiceInput);
 
@@ -1200,7 +1204,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-accessible");
     });
 
-    it("falls back from a stale implicit local default environment to an accessible bridge", async () => {
+    it("falls back from a stale explicit local default environment to an accessible bridge", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup, hosting: "local" });
       prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({
@@ -1259,6 +1263,7 @@ describe("SessionService", () => {
         createdById: "user-1",
         tool: "claude_code",
         channelId: "channel-1",
+        hosting: "local",
         prompt: "Use the current bridge",
       } as unknown as StartSessionServiceInput);
 
