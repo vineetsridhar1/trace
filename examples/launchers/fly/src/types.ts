@@ -20,6 +20,7 @@ export type StartSessionRequest = {
   repo: TraceRepo | null;
   tool: "claude_code" | "codex";
   model: string | null;
+  reasoningEffort: string | null;
   bootstrapEnv: Record<string, string>;
   metadata: {
     requestedBy: string;

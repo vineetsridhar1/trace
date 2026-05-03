@@ -20,7 +20,16 @@ export class CodexAdapter implements CodingToolAdapter {
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
 
-  run({ prompt, cwd, onOutput, onComplete, model, toolSessionId, interactionMode }: RunOptions) {
+  run({
+    prompt,
+    cwd,
+    onOutput,
+    onComplete,
+    model,
+    reasoningEffort,
+    toolSessionId,
+    interactionMode,
+  }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
     this.interactionMode = interactionMode;
@@ -44,6 +53,9 @@ export class CodexAdapter implements CodingToolAdapter {
       : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", prompt];
     if (model) {
       args.push("--model", model);
+    }
+    if (reasoningEffort) {
+      args.push("--config", `model_reasoning_effort="${reasoningEffort}"`);
     }
 
     const processGeneration = ++this.processGeneration;

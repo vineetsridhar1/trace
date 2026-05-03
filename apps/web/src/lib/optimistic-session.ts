@@ -30,6 +30,7 @@ export function optimisticallyInsertSession(params: {
   sessionGroupId: string;
   tool: string;
   model?: string | null;
+  reasoningEffort?: string | null;
   hosting: string;
   channel?: { id: string } | null;
   repo?: { id: string } | null;
@@ -45,6 +46,7 @@ export function optimisticallyInsertSession(params: {
     sessionStatus: "in_progress",
     tool: params.tool,
     model: params.model ?? null,
+    reasoningEffort: params.reasoningEffort ?? null,
     hosting: params.hosting,
     channel: params.channel ?? null,
     repo: params.repo ?? null,
@@ -94,6 +96,7 @@ export function reconcileOptimisticSession(params: {
   realGroupId: string;
   tool: string;
   model?: string | null;
+  reasoningEffort?: string | null;
   hosting: string;
   channelId: string;
   repoId?: string | null;

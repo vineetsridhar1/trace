@@ -61,6 +61,7 @@ const SESSION_DETAIL_QUERY = gql`
       sessionStatus
       tool
       model
+      reasoningEffort
       hosting
       repo {
         id
@@ -206,13 +207,12 @@ export function SessionDetailView({
   const runtimeInstanceId =
     hosting === "cloud"
       ? sessionRuntimeInstanceId
-      : groupRuntimeInstanceId ?? sessionRuntimeInstanceId;
+      : (groupRuntimeInstanceId ?? sessionRuntimeInstanceId);
   const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
     runtimeInstanceId,
     sessionGroupId ?? null,
   );
-  const bridgeInteractionAllowed =
-    hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
@@ -574,13 +574,13 @@ function RuntimeLifecycleNotice({
       : "Cloud runtime failed"
     : connectionState === "requested"
       ? "Cloud recovery requested"
-    : connectionState === "provisioning"
-      ? providerStatus === "booting"
-        ? "Cloud runtime booting"
-        : "Cloud runtime provisioning"
-      : connectionState === "connecting"
-        ? "Waiting for cloud bridge"
-        : "Starting cloud runtime";
+      : connectionState === "provisioning"
+        ? providerStatus === "booting"
+          ? "Cloud runtime booting"
+          : "Cloud runtime provisioning"
+        : connectionState === "connecting"
+          ? "Waiting for cloud bridge"
+          : "Starting cloud runtime";
   const body = failed
     ? "Trace could not finish starting the cloud runtime."
     : connectionState === "requested"
@@ -623,9 +623,7 @@ function RuntimeLifecycleNotice({
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
-      <div
-        className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${bannerTone}`}
-      >
+      <div className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${bannerTone}`}>
         {failed ? (
           <AlertCircle size={16} className={`shrink-0 ${iconTone}`} />
         ) : (

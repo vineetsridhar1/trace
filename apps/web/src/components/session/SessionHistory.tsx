@@ -67,6 +67,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
             input: {
               tool: source.tool,
               model: source.model ?? undefined,
+              reasoningEffort: source.reasoningEffort ?? undefined,
               hosting: source.hosting,
               channelId: getSessionChannelId(source) ?? undefined,
               repoId: (source.repo as { id: string } | null | undefined)?.id,

@@ -109,6 +109,7 @@ export async function createAgentTab(
         input: {
           tool: sourceSession.tool as CodingTool,
           model: sourceSession.model ?? undefined,
+          reasoningEffort: sourceSession.reasoningEffort ?? undefined,
           hosting: sourceSession.hosting,
           channelId,
           repoId: groupRepo?.id ?? sourceRepo?.id,
@@ -182,6 +183,7 @@ export async function startPlanImplementationSession(
         input: {
           tool: sourceSession.tool as CodingTool,
           model: sourceSession.model ?? undefined,
+          reasoningEffort: sourceSession.reasoningEffort ?? undefined,
           hosting: sourceSession.hosting,
           channelId,
           repoId: groupRepo?.id ?? sourceRepo?.id,

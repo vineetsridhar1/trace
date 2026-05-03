@@ -15,6 +15,7 @@ describe("validateStartSessionRequest", () => {
     });
 
     expect(request.model).toBeNull();
+    expect(request.reasoningEffort).toBe("xhigh");
     expect(request.metadata.launcherMetadata).toEqual({});
   });
 });
@@ -32,6 +33,7 @@ function startRequest(): StartSessionRequest {
     repo: null,
     tool: "codex",
     model: "gpt-5",
+    reasoningEffort: "xhigh",
     bootstrapEnv: {
       TRACE_SESSION_ID: "session-1",
       TRACE_ORG_ID: "org-1",

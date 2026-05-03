@@ -43,9 +43,14 @@ export function SessionModelPickerSheetContent({
 }: SessionModelPickerSheetContentProps) {
   const theme = useTheme();
   const [pendingModel, setPendingModel] = useState<string | null>(null);
+  const [pendingReasoningEffort, setPendingReasoningEffort] = useState<string | null>(null);
 
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
+  const reasoningEffort = useEntityField("sessions", sessionId, "reasoningEffort") as
+    | string
+    | null
+    | undefined;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
     | string
     | null
@@ -74,8 +79,11 @@ export function SessionModelPickerSheetContent({
     currentTool: selectedTool,
     model: selectedModel,
     modelOptions,
+    reasoningEffort: selectedReasoningEffort,
+    reasoningEffortOptions,
     toolOptions,
     handleModelChange,
+    handleReasoningEffortChange,
     handleToolChange,
   } = useSessionComposerConfig({
     connection,
@@ -84,6 +92,7 @@ export function SessionModelPickerSheetContent({
     isNotStarted: agentStatus === "not_started",
     isOptimistic,
     model,
+    reasoningEffort,
     sessionId,
     tool,
   });
@@ -108,7 +117,20 @@ export function SessionModelPickerSheetContent({
     [canSelectModel, handleModelChange, onClose, onSelectModel, selectedModel],
   );
 
+  const handleSelectReasoningEffort = useCallback(
+    async (nextReasoningEffort: string) => {
+      if (!canSelectModel) return;
+      if (selectedReasoningEffort === nextReasoningEffort) return;
+
+      setPendingReasoningEffort(nextReasoningEffort);
+      await handleReasoningEffortChange(nextReasoningEffort);
+      setPendingReasoningEffort(null);
+    },
+    [canSelectModel, handleReasoningEffortChange, selectedReasoningEffort],
+  );
+
   const displayedModel = pendingModel ?? selectedModel;
+  const displayedReasoningEffort = pendingReasoningEffort ?? selectedReasoningEffort;
 
   return (
     <ScrollView
@@ -119,7 +141,7 @@ export function SessionModelPickerSheetContent({
       <View style={styles.header}>
         <Text variant="headline">Model</Text>
         <Text variant="footnote" color="mutedForeground">
-          Pick the coding tool and model for this session before you send the next message.
+          Pick the coding tool, model, and effort for this session before you send the next message.
         </Text>
       </View>
 
@@ -158,6 +180,26 @@ export function SessionModelPickerSheetContent({
             separator={index < modelOptions.length - 1}
             onPress={!canSelectModel ? undefined : () => void handleSelectModel(option.value)}
             haptic={displayedModel === option.value ? "none" : "selection"}
+            style={!canSelectModel ? styles.disabledRow : undefined}
+          />
+        ))}
+      </Section>
+
+      <Section title="Effort">
+        {reasoningEffortOptions.map((option, index) => (
+          <ListRow
+            key={option.value}
+            title={option.label}
+            trailing={
+              displayedReasoningEffort === option.value ? (
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+              ) : undefined
+            }
+            separator={index < reasoningEffortOptions.length - 1}
+            onPress={
+              !canSelectModel ? undefined : () => void handleSelectReasoningEffort(option.value)
+            }
+            haptic={displayedReasoningEffort === option.value ? "none" : "selection"}
             style={!canSelectModel ? styles.disabledRow : undefined}
           />
         ))}

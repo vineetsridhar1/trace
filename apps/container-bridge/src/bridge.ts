@@ -392,6 +392,7 @@ export class ContainerBridge implements IBridgeClient {
           cwd: cmd.cwd ?? os.homedir(),
           tool: cmd.tool,
           model: cmd.model,
+          reasoningEffort: cmd.reasoningEffort,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
@@ -488,7 +489,11 @@ export class ContainerBridge implements IBridgeClient {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
             this.send({ type: "repo_linked", repoId });
-            const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await createWorktree({
+            const {
+              workdir,
+              branch: worktreeBranch,
+              slug: worktreeSlug,
+            } = await createWorktree({
               repoId,
               sessionId,
               defaultBranch,
@@ -695,6 +700,7 @@ export class ContainerBridge implements IBridgeClient {
     cwd,
     tool,
     model,
+    reasoningEffort,
     interactionMode,
     toolSessionId,
     imageUrls,
@@ -704,6 +710,7 @@ export class ContainerBridge implements IBridgeClient {
     cwd: string;
     tool?: string;
     model?: string;
+    reasoningEffort?: string;
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
@@ -878,6 +885,7 @@ export class ContainerBridge implements IBridgeClient {
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
+      reasoningEffort,
       toolSessionId,
     });
   }

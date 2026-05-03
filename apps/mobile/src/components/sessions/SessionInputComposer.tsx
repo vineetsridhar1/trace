@@ -82,6 +82,10 @@ export function SessionInputComposer({
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted");
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
+  const reasoningEffort = useEntityField("sessions", sessionId, "reasoningEffort") as
+    | string
+    | null
+    | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | SessionConnection
@@ -223,6 +227,7 @@ export function SessionInputComposer({
     isNotStarted,
     isOptimistic,
     model,
+    reasoningEffort,
     sessionId,
     tool,
   });

@@ -26,6 +26,7 @@ describe("Fly machine helpers", () => {
       TRACE_TOOL: "codex",
       TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
       TRACE_MODEL: "gpt-5",
+      TRACE_REASONING_EFFORT: "xhigh",
       TRACE_REPO_URL: "https://github.com/example/repo.git",
       TRACE_REPO_BRANCH: "feature/test",
     });
@@ -53,6 +54,7 @@ function startRequest(): StartSessionRequest {
     },
     tool: "codex",
     model: "gpt-5",
+    reasoningEffort: "xhigh",
     bootstrapEnv: {
       TRACE_SESSION_ID: "session-1",
       TRACE_ORG_ID: "org-1",

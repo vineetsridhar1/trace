@@ -20,10 +20,7 @@ import type {
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
-import {
-  ProvisionedLauncherError,
-  runtimeAdapterRegistry,
-} from "./runtime-adapters.js";
+import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import {
   RuntimeAdapterRegistry,
@@ -113,6 +110,7 @@ export interface SessionAdapterCreateOptions {
   preserveBranchName?: boolean;
   tool: string;
   model?: string;
+  reasoningEffort?: string;
   repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
   branch?: string;
   checkpointSha?: string;
@@ -1442,6 +1440,7 @@ export class SessionRouter {
           environment: options.environment,
           tool: options.tool,
           model: options.model,
+          reasoningEffort: options.reasoningEffort,
           repo: options.repo,
           branch: options.branch,
           checkpointSha: options.checkpointSha,
@@ -1756,6 +1755,7 @@ export class SessionRouter {
           organizationId: true,
           tool: true,
           model: true,
+          reasoningEffort: true,
         },
       });
       const conn = connectionRecord(session.connection);
@@ -1767,6 +1767,7 @@ export class SessionRouter {
         environment,
         tool: session.tool,
         model: session.model ?? undefined,
+        reasoningEffort: session.reasoningEffort ?? undefined,
       });
       const runtimeId =
         startResult.runtimeInstanceId ??

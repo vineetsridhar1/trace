@@ -25,6 +25,10 @@ export function validateStartSessionRequest(body: unknown): StartSessionRequest 
     repo,
     tool: requireOneOf(value.tool, ["claude_code", "codex"], "tool"),
     model: value.model === null ? null : requireString(value.model, "model"),
+    reasoningEffort:
+      value.reasoningEffort === null
+        ? null
+        : requireString(value.reasoningEffort, "reasoningEffort"),
     bootstrapEnv,
     metadata: validateMetadata(value.metadata),
   };

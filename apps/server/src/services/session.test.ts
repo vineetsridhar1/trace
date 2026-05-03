@@ -88,7 +88,9 @@ vi.mock("../lib/storage/index.js", () => ({
 vi.mock("@trace/shared", () => {
   return {
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
+    getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
     isSupportedModel: vi.fn().mockReturnValue(true),
+    isSupportedReasoningEffort: vi.fn().mockReturnValue(true),
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
   };
@@ -158,6 +160,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     sessionStatus: "in_progress",
     tool: "claude_code",
     model: "claude-sonnet-4-20250514",
+    reasoningEffort: "auto",
     hosting: "cloud",
     organizationId: "org-1",
     createdById: "user-1",
@@ -2842,7 +2845,9 @@ describe("SessionService", () => {
           canMove: true,
         },
       });
-      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(makeAgentEnvironment({ id: "env-1" }));
+      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(
+        makeAgentEnvironment({ id: "env-1" }),
+      );
       sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
 
       await service.retryConnection("session-1", "org-1", "user", "user-1");
@@ -2916,6 +2921,39 @@ describe("SessionService", () => {
           readOnly: true,
         }),
         { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+    });
+  });
+
+  describe("updateConfig", () => {
+    it("updates reasoning effort and emits a config change", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(makeSession());
+      prismaMock.session.update.mockResolvedValueOnce(makeSession({ reasoningEffort: "xhigh" }));
+
+      const result = await service.updateConfig(
+        "session-1",
+        "org-1",
+        { reasoningEffort: "xhigh" },
+        "user",
+        "user-1",
+      );
+
+      expect(result.reasoningEffort).toBe("xhigh");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            reasoningEffort: "xhigh",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "config_changed",
+            reasoningEffort: "xhigh",
+          }),
+        }),
       );
     });
   });

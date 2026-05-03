@@ -187,6 +187,7 @@ function startRequest(): StartSessionRequest {
     repo: null,
     tool: "codex",
     model: "gpt-5",
+    reasoningEffort: "xhigh",
     bootstrapEnv: {
       TRACE_SESSION_ID: "session-1",
       TRACE_ORG_ID: "org-1",

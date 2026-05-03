@@ -5,9 +5,11 @@ import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import {
   getDefaultModel,
+  getDefaultReasoningEffort,
   hasQuestionBlock,
   hasPlanBlock,
   isSupportedModel,
+  isSupportedReasoningEffort,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
@@ -459,6 +461,7 @@ function serializeSession(session: {
   sessionStatus: SessionStatus;
   tool: string;
   model: string | null;
+  reasoningEffort: string | null;
   hosting: string;
   createdBy: unknown;
   repo: unknown;
@@ -482,6 +485,7 @@ function serializeSession(session: {
     sessionStatus: session.sessionStatus,
     tool: session.tool,
     model: session.model,
+    reasoningEffort: session.reasoningEffort,
     hosting: session.hosting,
     createdBy: session.createdBy,
     repo: session.repo ?? null,
@@ -742,6 +746,17 @@ function validateModelForTool(tool: string, model: string): string {
   return trimmed;
 }
 
+function validateReasoningEffortForTool(tool: string, effort: string): string {
+  const trimmed = effort.trim();
+  if (!trimmed) {
+    throw new Error("Reasoning effort cannot be empty");
+  }
+  if (!isSupportedReasoningEffort(tool, trimmed)) {
+    throw new Error(`Unsupported reasoning effort "${trimmed}" for tool "${tool}"`);
+  }
+  return trimmed;
+}
+
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
 
 export function isFullyUnloadedSession(
@@ -764,6 +779,7 @@ export class SessionService {
     hosting: string;
     tool: string;
     model?: string | null;
+    reasoningEffort?: string | null;
     repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
     branch?: string | null;
     checkpointSha?: string | null;
@@ -791,6 +807,7 @@ export class SessionService {
         environment,
         tool: params.tool,
         model: params.model ?? undefined,
+        reasoningEffort: params.reasoningEffort ?? undefined,
         repo: params.repo
           ? {
               id: params.repo.id,
@@ -1902,6 +1919,9 @@ export class SessionService {
     const model = input.model
       ? validateModelForTool(input.tool, input.model)
       : getDefaultModel(input.tool);
+    const reasoningEffort = input.reasoningEffort
+      ? validateReasoningEffortForTool(input.tool, input.reasoningEffort)
+      : getDefaultReasoningEffort(input.tool);
 
     const restoreGroup = restoreCheckpoint
       ? await prisma.sessionGroup.findFirst({
@@ -2344,6 +2364,7 @@ export class SessionService {
           sessionStatus: initialSessionStatus,
           tool: input.tool,
           model: model ?? undefined,
+          reasoningEffort: reasoningEffort ?? undefined,
           hosting,
           organizationId: input.organizationId,
           createdById: input.createdById,
@@ -2445,6 +2466,7 @@ export class SessionService {
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
+        reasoningEffort: session.reasoningEffort,
         repo: session.repo,
         branch: resolvedBranch,
         checkpointSha: restoreCheckpoint?.commitSha,
@@ -2506,6 +2528,7 @@ export class SessionService {
         hosting: updated.hosting,
         tool: updated.tool,
         model: updated.model,
+        reasoningEffort: updated.reasoningEffort,
         repo: updated.repo,
         branch: updated.branch,
         createdById: updated.createdById,
@@ -2624,6 +2647,7 @@ export class SessionService {
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
+          reasoningEffort: session.reasoningEffort,
           repo: session.repo,
           branch: session.branch,
           createdById: session.createdById,
@@ -2693,6 +2717,7 @@ export class SessionService {
       prompt: resolvedPrompt ?? undefined,
       tool: session.tool,
       model: session.model ?? undefined,
+      reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -2991,7 +3016,13 @@ export class SessionService {
   async updateConfig(
     sessionId: string,
     organizationId: string,
-    config: { tool?: CodingTool; model?: string; hosting?: string; runtimeInstanceId?: string },
+    config: {
+      tool?: CodingTool;
+      model?: string;
+      reasoningEffort?: string;
+      hosting?: string;
+      runtimeInstanceId?: string;
+    },
     actorType: ActorType,
     actorId: string,
   ) {
@@ -3001,6 +3032,7 @@ export class SessionService {
         id: true,
         tool: true,
         model: true,
+        reasoningEffort: true,
         agentStatus: true,
         hosting: true,
         repoId: true,
@@ -3024,10 +3056,17 @@ export class SessionService {
         : toolChanged
           ? (getDefaultModel(nextTool) ?? null)
           : undefined;
+    const nextReasoningEffort =
+      config.reasoningEffort != null
+        ? validateReasoningEffortForTool(nextTool, config.reasoningEffort)
+        : toolChanged
+          ? (getDefaultReasoningEffort(nextTool) ?? null)
+          : undefined;
 
     const data: Record<string, unknown> = {};
     if (config.tool != null) data.tool = config.tool;
     if (nextModel !== undefined) data.model = nextModel;
+    if (nextReasoningEffort !== undefined) data.reasoningEffort = nextReasoningEffort;
     if (toolChanged) {
       data.toolChangedAt = new Date();
       data.toolSessionId = null;
@@ -3133,6 +3172,8 @@ export class SessionService {
         type: "config_changed",
         tool: config.tool ?? session.tool,
         model: nextModel !== undefined ? nextModel : session.model,
+        reasoningEffort:
+          nextReasoningEffort !== undefined ? nextReasoningEffort : session.reasoningEffort,
         toolChanged,
         ...(runtimeChanged && { hosting: session.hosting, connection: session.connection }),
       },
@@ -3154,6 +3195,7 @@ export class SessionService {
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
+        reasoningEffort: session.reasoningEffort,
         repo: session.repo,
         branch: session.branch,
         createdById: session.createdById,
@@ -3527,6 +3569,7 @@ export class SessionService {
         createdById: true,
         tool: true,
         model: true,
+        reasoningEffort: true,
         toolChangedAt: true,
         workdir: true,
         toolSessionId: true,
@@ -3626,6 +3669,7 @@ export class SessionService {
             hosting: session.hosting,
             tool: session.tool,
             model: session.model,
+            reasoningEffort: session.reasoningEffort,
             repo: session.repo,
             branch: session.branch,
             createdById: session.createdById,
@@ -3759,6 +3803,7 @@ export class SessionService {
       prompt,
       tool: session.tool,
       model: session.model ?? undefined,
+      reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -4565,6 +4610,7 @@ export class SessionService {
         sessionStatus: true,
         tool: true,
         model: true,
+        reasoningEffort: true,
         workdir: true,
         toolSessionId: true,
         repoId: true,
@@ -4615,6 +4661,7 @@ export class SessionService {
         prompt,
         tool: session.tool,
         model: session.model ?? undefined,
+        reasoningEffort: session.reasoningEffort ?? undefined,
         interactionMode: options.interactionMode,
         cwd: session.workdir ?? undefined,
         checkpointContext,
@@ -5301,6 +5348,7 @@ export class SessionService {
         hosting: targetHosting,
         tool: movedSession.tool,
         model: movedSession.model,
+        reasoningEffort: movedSession.reasoningEffort,
         repo: movedSession.repo,
         branch: movedSession.branch,
         checkpointSha,
@@ -6274,6 +6322,7 @@ export class SessionService {
         organizationId: true,
         tool: true,
         model: true,
+        reasoningEffort: true,
         workdir: true,
         toolSessionId: true,
         repoId: true,
@@ -6320,6 +6369,7 @@ export class SessionService {
       prompt: prompt ?? undefined,
       tool: session.tool,
       model: session.model ?? undefined,
+      reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -6331,6 +6381,7 @@ export class SessionService {
       prompt?: string;
       tool: CodingTool;
       model?: string;
+      reasoningEffort?: string;
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;
@@ -6779,6 +6830,4 @@ export class SessionService {
 
 export const sessionService = new SessionService();
 
-setBridgeAccessApprovedHandler((input) =>
-  sessionService.resumePendingBridgeAccessSessions(input),
-);
+setBridgeAccessApprovedHandler((input) => sessionService.resumePendingBridgeAccessSessions(input));

@@ -120,6 +120,7 @@ describe("ProvisionedRuntimeAdapter", () => {
         },
         tool: "codex",
         model: "gpt-test",
+        reasoningEffort: "xhigh",
         repo: {
           id: "repo-1",
           name: "app",
@@ -155,6 +156,7 @@ describe("ProvisionedRuntimeAdapter", () => {
       expect(body.runtimeToken).not.toBe("runtime-token");
       expect(body.runtimeTokenScope).toBe("session");
       expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(body.reasoningEffort).toBe("xhigh");
       expect(body.bootstrapEnv).toEqual(
         expect.objectContaining({
           TRACE_SESSION_ID: "session-1",
