@@ -203,6 +203,8 @@ describe("handleOrgEvent", () => {
   });
 
   it("keeps historical system project-created events readable", () => {
+    useAuthStore.setState({ activeOrgId: "org-1" });
+
     handleOrgEvent(
       makeEvent({
         eventType: "entity_linked",
@@ -215,8 +217,22 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().projects["project-1"]).toMatchObject({
       id: "project-1",
       name: "Legacy",
+      organizationId: "org-1",
       members: [],
     });
+  });
+
+  it("does not hydrate historical project events without an active org", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "entity_linked",
+        scopeType: "system",
+        scopeId: "project-1",
+        payload: { type: "project_created", projectId: "project-1", name: "Legacy" },
+      }),
+    );
+
+    expect(useEntityStore.getState().projects["project-1"]).toBeUndefined();
   });
 
   it("patches project members from member events", () => {

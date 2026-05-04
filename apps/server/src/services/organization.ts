@@ -14,25 +14,38 @@ import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { isLocalMode } from "../lib/mode.js";
 
+const USER_SELECT = { id: true, email: true, name: true, avatarUrl: true } as const;
+
 const PROJECT_INCLUDE = {
   repo: true,
-  channels: { include: { channel: true } },
-  sessions: { include: { session: true } },
-  tickets: { include: { ticket: true } },
+  channels: { include: { channel: { include: { repo: true } } } },
+  sessions: { include: { session: { include: { createdBy: { select: USER_SELECT }, repo: true } } } },
+  tickets: {
+    include: {
+      ticket: {
+        include: {
+          createdBy: { select: USER_SELECT },
+          assignees: { include: { user: { select: USER_SELECT } } },
+          links: true,
+        },
+      },
+    },
+  },
   members: {
     where: { leftAt: null },
-    include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+    include: { user: { select: USER_SELECT } },
   },
 } as const;
 
 type ProjectWithRelations = Prisma.ProjectGetPayload<{ include: typeof PROJECT_INCLUDE }>;
+type ProjectUser = { id: string; email: string; name: string | null; avatarUrl: string | null };
 
 type ProjectMemberWithUser = {
   userId: string;
   role: UserRole;
   joinedAt: Date;
   leftAt: Date | null;
-  user: { id: string; email: string; name: string | null; avatarUrl: string | null };
+  user: ProjectUser;
 };
 
 function dateToJson(value: Date | string | null | undefined): string | null {
@@ -40,12 +53,115 @@ function dateToJson(value: Date | string | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function userPayload(user: ProjectUser): Prisma.InputJsonObject {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? "",
+    avatarUrl: user.avatarUrl,
+    organizations: [],
+  };
+}
+
+function repoPayload(repo: NonNullable<ProjectWithRelations["repo"]>): Prisma.InputJsonObject {
+  return {
+    id: repo.id,
+    name: repo.name,
+    remoteUrl: repo.remoteUrl,
+    defaultBranch: repo.defaultBranch,
+    webhookActive: Boolean(repo.webhookId),
+    projects: [],
+    sessions: [],
+  };
+}
+
 function projectMemberPayload(member: ProjectMemberWithUser): Prisma.InputJsonObject {
   return {
-    user: member.user,
+    user: userPayload(member.user),
     role: member.role,
     joinedAt: member.joinedAt.toISOString(),
     leftAt: member.leftAt ? member.leftAt.toISOString() : null,
+  };
+}
+
+function channelPayload(
+  channel: ProjectWithRelations["channels"][number]["channel"],
+): Prisma.InputJsonObject {
+  return {
+    id: channel.id,
+    name: channel.name,
+    type: channel.type,
+    position: channel.position,
+    groupId: channel.groupId,
+    baseBranch: channel.baseBranch,
+    repo: channel.repo ? repoPayload(channel.repo) : null,
+    aiMode: channel.aiMode,
+    setupScript: channel.setupScript,
+    runScripts: channel.runScripts ?? null,
+    members: [],
+    projects: [],
+    messages: [],
+  };
+}
+
+function sessionPayload(
+  session: ProjectWithRelations["sessions"][number]["session"],
+): Prisma.InputJsonObject {
+  return {
+    id: session.id,
+    name: session.name,
+    agentStatus: session.agentStatus,
+    sessionStatus: session.sessionStatus,
+    tool: session.tool,
+    model: session.model,
+    reasoningEffort: session.reasoningEffort,
+    hosting: session.hosting,
+    createdBy: userPayload(session.createdBy),
+    repo: session.repo ? repoPayload(session.repo) : null,
+    branch: session.branch,
+    workdir: session.workdir,
+    toolSessionId: session.toolSessionId,
+    channel: null,
+    sessionGroupId: session.sessionGroupId,
+    sessionGroup: null,
+    gitCheckpoints: [],
+    projects: [],
+    tickets: [],
+    endpoints: session.endpoints ?? null,
+    connection: session.connection ?? null,
+    prUrl: session.prUrl,
+    worktreeDeleted: session.worktreeDeleted,
+    lastUserMessageAt: dateToJson(session.lastUserMessageAt),
+    lastMessageAt: dateToJson(session.lastMessageAt),
+    queuedMessages: [],
+    createdAt: dateToJson(session.createdAt),
+    updatedAt: dateToJson(session.updatedAt),
+  };
+}
+
+function ticketPayload(ticket: ProjectWithRelations["tickets"][number]["ticket"]): Prisma.InputJsonObject {
+  return {
+    id: ticket.id,
+    title: ticket.title,
+    description: ticket.description,
+    status: ticket.status,
+    priority: ticket.priority,
+    createdBy: userPayload(ticket.createdBy),
+    assignees: ticket.assignees.map((assignee) => userPayload(assignee.user)),
+    labels: ticket.labels,
+    origin: null,
+    channel: null,
+    aiMode: ticket.aiMode,
+    projects: [],
+    sessions: [],
+    links: ticket.links.map((link) => ({
+      id: link.id,
+      entityType: link.entityType,
+      entityId: link.entityId,
+      createdAt: dateToJson(link.createdAt),
+    })),
+    createdAt: dateToJson(ticket.createdAt),
+    updatedAt: dateToJson(ticket.updatedAt),
   };
 }
 
@@ -58,36 +174,43 @@ function projectPayload(
     name: project.name,
     organizationId: project.organizationId,
     repoId: project.repoId,
-    repo: project.repo
-      ? {
-          id: project.repo.id,
-          name: project.repo.name,
-          remoteUrl: project.repo.remoteUrl,
-          defaultBranch: project.repo.defaultBranch,
-          webhookActive: Boolean(project.repo.webhookId),
-        }
-      : null,
+    repo: project.repo ? repoPayload(project.repo) : null,
     aiMode: project.aiMode,
     soulFile: project.soulFile,
     members,
-    channels: project.channels.map((link) => ({
-      id: link.channel.id,
-      name: link.channel.name,
-    })),
-    sessions: project.sessions.map((link) => ({
-      id: link.session.id,
-      name: link.session.name,
-      sessionGroupId: link.session.sessionGroupId,
-    })),
-    tickets: project.tickets.map((link) => ({
-      id: link.ticket.id,
-      title: link.ticket.title,
-      status: link.ticket.status,
-      priority: link.ticket.priority,
-    })),
+    channels: project.channels.map((link) => channelPayload(link.channel)),
+    sessions: project.sessions.map((link) => sessionPayload(link.session)),
+    tickets: project.tickets.map((link) => ticketPayload(link.ticket)),
     createdAt: dateToJson(project.createdAt),
     updatedAt: dateToJson(project.updatedAt),
   };
+}
+
+async function assertActorProjectAdmin(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  organizationId: string,
+  actorType: ActorType,
+  actorId: string,
+): Promise<void> {
+  if (actorType === "system") return;
+  if (actorType === "agent") {
+    throw new Error("Only project admins can perform this action");
+  }
+
+  const orgMember = await tx.orgMember.findUniqueOrThrow({
+    where: { userId_organizationId: { userId: actorId, organizationId } },
+    select: { userId: true, role: true },
+  });
+  if (orgMember.role === "admin") return;
+
+  const projectMember = await tx.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId: actorId } },
+    select: { role: true, leftAt: true },
+  });
+  if (projectMember?.role === "admin" && projectMember.leftAt === null) return;
+
+  throw new Error("Only project admins can perform this action");
 }
 
 export class OrganizationService {
@@ -431,7 +554,7 @@ export class OrganizationService {
         where: { id: projectId },
         select: { organizationId: true },
       });
-      await assertActorOrgAccess(tx, project.organizationId, actorType, actorId);
+      await assertActorProjectAdmin(tx, projectId, project.organizationId, actorType, actorId);
       await tx.orgMember.findUniqueOrThrow({
         where: {
           userId_organizationId: {
@@ -483,7 +606,7 @@ export class OrganizationService {
         where: { id: projectId },
         select: { organizationId: true },
       });
-      await assertActorOrgAccess(tx, project.organizationId, actorType, actorId);
+      await assertActorProjectAdmin(tx, projectId, project.organizationId, actorType, actorId);
 
       const leftAt = new Date();
       const member = await tx.projectMember.update({

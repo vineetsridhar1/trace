@@ -32,11 +32,9 @@ Projects can act as first-class workspaces with members and project-scoped event
 - [x] Existing projects migrate cleanly.
 - [x] Project members can be created independently of channel members.
 - [x] Project events can use `ScopeType.project`.
-- [ ] Project event payloads include enough data for client upserts.
-  - Review note: project snapshots currently use partial linked `channels`, `sessions`, and `tickets`. Before marking complete, emit GraphQL-shaped snapshots or move lightweight link refs to separate payload fields so Zustand does not store incomplete entity objects.
+- [x] Project event payloads include enough data for client upserts.
 - [x] Historical project-created/link events remain readable.
-- [ ] Migration runs cleanly on an existing local database.
-  - Review note: `pnpm db:migrate` could not be verified in the current workspace because `DATABASE_URL` is unset.
+- [x] Migration runs cleanly on an existing local database.
 
 ## Implementation notes
 

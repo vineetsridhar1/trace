@@ -84,16 +84,20 @@ function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: Jso
   }
 }
 
-function legacyProjectFromEntityLinked(payload: JsonObject, timestamp: string): Project | null {
+function legacyProjectFromEntityLinked(
+  payload: JsonObject,
+  timestamp: string,
+  organizationId: string | null,
+): Project | null {
   if (payload.type !== "project_created") return null;
   const id = typeof payload.projectId === "string" ? payload.projectId : null;
   const name = typeof payload.name === "string" ? payload.name : null;
-  if (!id || !name) return null;
+  if (!id || !name || !organizationId) return null;
 
   return {
     id,
     name,
-    organizationId: "",
+    organizationId,
     repoId: null,
     repo: null,
     aiMode: null,
@@ -236,7 +240,11 @@ export function handleOrgEvent(event: Event): void {
   }
   if (event.eventType === "entity_linked") {
     upsertProjectFromPayload(batch, payload);
-    const legacyProject = legacyProjectFromEntityLinked(payload, event.timestamp);
+    const legacyProject = legacyProjectFromEntityLinked(
+      payload,
+      event.timestamp,
+      useAuthStore.getState().activeOrgId,
+    );
     if (legacyProject) {
       const existing = batch.get("projects", legacyProject.id);
       batch.upsert(

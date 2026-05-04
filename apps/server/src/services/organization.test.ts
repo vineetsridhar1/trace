@@ -19,6 +19,44 @@ const prismaMock = prisma as any;
 const eventServiceMock = eventService as any;
 const projectTimestamp = new Date("2026-05-04T12:00:00.000Z");
 
+function makeUser(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "user-1",
+    email: "user@example.com",
+    name: "User",
+    avatarUrl: null,
+    ...overrides,
+  };
+}
+
+function makeSession(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "session-1",
+    name: "Worker",
+    agentStatus: "active",
+    sessionStatus: "in_progress",
+    tool: "codex",
+    model: null,
+    reasoningEffort: null,
+    hosting: "local",
+    createdBy: makeUser(),
+    repo: null,
+    branch: null,
+    workdir: null,
+    toolSessionId: null,
+    sessionGroupId: null,
+    endpoints: null,
+    connection: null,
+    prUrl: null,
+    worktreeDeleted: false,
+    lastUserMessageAt: null,
+    lastMessageAt: null,
+    createdAt: projectTimestamp,
+    updatedAt: projectTimestamp,
+    ...overrides,
+  };
+}
+
 function makeProject(overrides: Record<string, unknown> = {}) {
   return {
     id: "project-1",
@@ -42,7 +80,7 @@ describe("OrganizationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
-    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1", role: "admin" });
     prismaMock.orgMember.count.mockResolvedValue(1);
   });
 
@@ -235,7 +273,7 @@ describe("OrganizationService", () => {
     prismaMock.project.create.mockResolvedValueOnce(makeProject({ repoId: "repo-1" }));
     prismaMock.project.findUniqueOrThrow
       .mockResolvedValueOnce({ organizationId: "org-1" })
-      .mockResolvedValueOnce(makeProject())
+      .mockResolvedValueOnce(makeProject({ sessions: [{ session: makeSession() }] }))
       .mockResolvedValueOnce({ organizationId: "org-1" });
     prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({ id: "session-1" });
 
@@ -257,6 +295,28 @@ describe("OrganizationService", () => {
     expect(prismaMock.sessionProject.create).toHaveBeenCalledWith({
       data: { sessionId: "session-1", projectId: "project-1" },
     });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeType: "project",
+        eventType: "entity_linked",
+        payload: expect.objectContaining({
+          project: expect.objectContaining({
+            sessions: [
+              expect.objectContaining({
+                id: "session-1",
+                agentStatus: "active",
+                createdBy: expect.objectContaining({ id: "user-1", organizations: [] }),
+                gitCheckpoints: [],
+                projects: [],
+                tickets: [],
+                queuedMessages: [],
+              }),
+            ],
+          }),
+        }),
+      }),
+      prismaMock,
+    );
     await expect(
       service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
     ).rejects.toThrow("Chats cannot be linked to projects");
@@ -327,7 +387,10 @@ describe("OrganizationService", () => {
 
   it("adds and removes project members with project-scoped events", async () => {
     prismaMock.project.findUniqueOrThrow.mockResolvedValue({ organizationId: "org-1" });
-    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({ userId: "user-2" });
+    prismaMock.orgMember.findUniqueOrThrow
+      .mockResolvedValueOnce({ userId: "user-1", role: "admin" })
+      .mockResolvedValueOnce({ userId: "user-2" })
+      .mockResolvedValueOnce({ userId: "user-1", role: "admin" });
     prismaMock.projectMember.upsert.mockResolvedValueOnce({
       projectId: "project-1",
       userId: "user-2",
@@ -380,6 +443,26 @@ describe("OrganizationService", () => {
         eventType: "project_member_removed",
         payload: expect.objectContaining({ projectId: "project-1", userId: "user-2" }),
       }),
+      prismaMock,
+    );
+  });
+
+  it("rejects project member writes for non-admin project members", async () => {
+    prismaMock.project.findUniqueOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      role: "member",
+    });
+    prismaMock.projectMember.findUnique.mockResolvedValueOnce({ role: "member", leftAt: null });
+
+    const service = new OrganizationService();
+    await expect(
+      service.addProjectMember("project-1", "user-2", "member", "user", "user-1"),
+    ).rejects.toThrow("Only project admins can perform this action");
+
+    expect(prismaMock.projectMember.upsert).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "project_member_added" }),
       prismaMock,
     );
   });
