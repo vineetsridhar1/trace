@@ -26,7 +26,7 @@ export function validateStartSessionRequest(body: unknown): StartSessionRequest 
     tool: requireOneOf(value.tool, ["claude_code", "codex"], "tool"),
     model: value.model === null ? null : requireString(value.model, "model"),
     reasoningEffort:
-      value.reasoningEffort === null
+      value.reasoningEffort === null || value.reasoningEffort === undefined
         ? null
         : requireString(value.reasoningEffort, "reasoningEffort"),
     bootstrapEnv,

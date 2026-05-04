@@ -38,8 +38,10 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
     const connection = asJsonObject(payload.connection);
     return {
       ...(typeof payload.tool === "string" ? { tool: payload.tool as SessionEntity["tool"] } : {}),
-      ...(typeof payload.model === "string" ? { model: payload.model } : {}),
-      ...(typeof payload.reasoningEffort === "string"
+      ...(typeof payload.model === "string" || payload.model === null
+        ? { model: payload.model }
+        : {}),
+      ...(typeof payload.reasoningEffort === "string" || payload.reasoningEffort === null
         ? { reasoningEffort: payload.reasoningEffort }
         : {}),
       ...(typeof payload.hosting === "string"

@@ -18,6 +18,15 @@ describe("validateStartSessionRequest", () => {
     expect(request.reasoningEffort).toBe("xhigh");
     expect(request.metadata.launcherMetadata).toEqual({});
   });
+
+  it("normalizes missing reasoning effort to null", () => {
+    const body: Record<string, unknown> = { ...startRequest() };
+    delete body.reasoningEffort;
+
+    const request = validateStartSessionRequest(body);
+
+    expect(request.reasoningEffort).toBeNull();
+  });
 });
 
 function startRequest(): StartSessionRequest {
