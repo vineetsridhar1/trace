@@ -514,6 +514,12 @@ type Event {
   metadata: JSON
 }
 
+type SessionOutputDelta {
+  sessionId: ID!
+  type: String!
+  text: String!
+}
+
 type Message {
   id: ID!
   chatId: ID
@@ -1416,5 +1422,6 @@ type Subscription {
   chatEvents(chatId: ID!, types: [String!]): Event!
   branchTurns(branchId: ID!): Turn!
   sessionEvents(sessionId: ID!, organizationId: ID!): Event!
+  sessionOutputDeltas(sessionId: ID!, organizationId: ID!): SessionOutputDelta!
   conversationEvents(conversationId: ID!): AiConversationEvent!
 }

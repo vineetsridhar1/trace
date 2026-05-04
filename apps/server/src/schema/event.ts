@@ -231,4 +231,16 @@ export const eventSubscriptions = {
       return pubsub.asyncIterator(topics.sessionEvents(args.sessionId));
     },
   },
+
+  sessionOutputDeltas: {
+    subscribe: async (
+      _: unknown,
+      args: { sessionId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      assertOrgAccess(ctx, args.organizationId);
+      await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
+      return pubsub.asyncIterator(topics.sessionOutputDeltas(args.sessionId));
+    },
+  },
 };

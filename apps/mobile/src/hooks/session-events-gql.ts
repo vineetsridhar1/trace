@@ -54,6 +54,16 @@ export const SESSION_EVENTS_SUBSCRIPTION = gql`
   }
 `;
 
+export const SESSION_OUTPUT_DELTAS_SUBSCRIPTION = gql`
+  subscription MobileSessionOutputDeltasLive($sessionId: ID!, $organizationId: ID!) {
+    sessionOutputDeltas(sessionId: $sessionId, organizationId: $organizationId) {
+      sessionId
+      type
+      text
+    }
+  }
+`;
+
 export const SESSION_STATUS_SUBSCRIPTION = gql`
   subscription MobileSessionStatusChanged($sessionId: ID!, $organizationId: ID!) {
     sessionStatusChanged(sessionId: $sessionId, organizationId: $organizationId) {

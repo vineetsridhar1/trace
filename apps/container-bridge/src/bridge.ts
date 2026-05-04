@@ -739,6 +739,10 @@ export class ContainerBridge implements IBridgeClient {
     adapter.run({
       prompt: finalPrompt,
       cwd,
+      onOutputDelta: (delta) => {
+        if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
+        this.send({ type: "session_output_delta", sessionId, data: delta });
+      },
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
 

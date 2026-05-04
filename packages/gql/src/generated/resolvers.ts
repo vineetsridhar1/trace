@@ -1751,6 +1751,13 @@ export type SessionGroupStatus =
   | "needs_input"
   | "stopped";
 
+export type SessionOutputDelta = {
+  __typename?: "SessionOutputDelta";
+  sessionId: Scalars["ID"]["output"];
+  text: Scalars["String"]["output"];
+  type: Scalars["String"]["output"];
+};
+
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
   access: BridgeRuntimeAccess;
@@ -1824,6 +1831,7 @@ export type Subscription = {
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionEvents: Event;
+  sessionOutputDeltas: SessionOutputDelta;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -1855,6 +1863,11 @@ export type SubscriptionOrgEventsArgs = {
 };
 
 export type SubscriptionSessionEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
+export type SubscriptionSessionOutputDeltasArgs = {
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -2192,6 +2205,7 @@ export type ResolversTypes = ResolversObject<{
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
   SessionGroupStatus: SessionGroupStatus;
+  SessionOutputDelta: ResolverTypeWrapper<SessionOutputDelta>;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
   SessionStatus: SessionStatus;
@@ -2297,6 +2311,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
+  SessionOutputDelta: SessionOutputDelta;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
   SetApiTokenInput: SetApiTokenInput;
@@ -3965,6 +3980,17 @@ export type SessionGroupResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionOutputDeltaResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionOutputDelta"] =
+    ResolversParentTypes["SessionOutputDelta"],
+> = ResolversObject<{
+  sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  type?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionRuntimeInstanceResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionRuntimeInstance"] =
@@ -4047,6 +4073,13 @@ export type SubscriptionResolvers<
     ParentType,
     ContextType,
     RequireFields<SubscriptionSessionEventsArgs, "organizationId" | "sessionId">
+  >;
+  sessionOutputDeltas?: SubscriptionResolver<
+    ResolversTypes["SessionOutputDelta"],
+    "sessionOutputDeltas",
+    ParentType,
+    ContextType,
+    RequireFields<SubscriptionSessionOutputDeltasArgs, "organizationId" | "sessionId">
   >;
   sessionPortsChanged?: SubscriptionResolver<
     ResolversTypes["SessionEndpoints"],
@@ -4223,6 +4256,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
+  SessionOutputDelta?: SessionOutputDeltaResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;
   SlashCommand?: SlashCommandResolvers<ContextType>;

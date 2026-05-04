@@ -428,6 +428,7 @@ export function SessionDetailView({
             ) : (
               <SessionMessageList
                 key={sessionId}
+                sessionId={sessionId}
                 nodes={nodes}
                 gitCheckpoints={gitCheckpoints ?? []}
                 initialLoading={initialEventsLoading}

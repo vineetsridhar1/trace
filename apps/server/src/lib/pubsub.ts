@@ -144,4 +144,5 @@ export const topics = {
   branchTurns: (branchId: string) => `branch:${branchId}:turns`,
   conversationEvents: (conversationId: string) => `conversation:${conversationId}:events`,
   sessionEvents: (sessionId: string) => `session:${sessionId}:events`,
+  sessionOutputDeltas: (sessionId: string) => `session:${sessionId}:output-deltas`,
 } as const;

@@ -3,11 +3,13 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
+import { useStreamingSessionOutput } from "@trace/client-core";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
 import { PlanReviewCard } from "./messages/PlanReviewCard";
 import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
+import { AssistantText } from "./messages/AssistantText";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
@@ -15,6 +17,7 @@ const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
 
 export interface SessionMessageListProps {
   key?: React.Key;
+  sessionId: string;
   nodes: SessionNode[];
   gitCheckpoints: GitCheckpoint[];
   initialLoading?: boolean;
@@ -28,6 +31,7 @@ export interface SessionMessageListProps {
 }
 
 export function SessionMessageList({
+  sessionId,
   nodes,
   gitCheckpoints,
   initialLoading = false,
@@ -39,6 +43,7 @@ export function SessionMessageList({
   scrollToEventId,
   onScrollComplete,
 }: SessionMessageListProps) {
+  const streamingOutput = useStreamingSessionOutput(sessionId);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevNodeCountRef = useRef(0);
@@ -327,7 +332,7 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
-  const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
+  const showEmptyState = !initialLoading && nodes.length === 0 && !streamingOutput && !loadingOlder;
 
   const emptyState = (
     <motion.div
@@ -353,6 +358,16 @@ export function SessionMessageList({
       </div>
     </motion.div>
   );
+
+  useEffect(() => {
+    if (!streamingOutput || !isNearBottomRef.current) return;
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+  }, [streamingOutput]);
 
   return (
     <div className="relative h-full">
@@ -434,6 +449,11 @@ export function SessionMessageList({
             );
           })}
         </div>
+        {streamingOutput ? (
+          <div className="pb-3">
+            <AssistantText text={streamingOutput.text} timestamp={streamingOutput.updatedAt} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

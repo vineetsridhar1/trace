@@ -283,6 +283,12 @@ export interface BridgeSessionOutput {
   data: unknown;
 }
 
+export interface BridgeSessionOutputDelta {
+  type: "session_output_delta";
+  sessionId: string;
+  data: unknown;
+}
+
 export interface BridgeSessionComplete {
   type: "session_complete";
   sessionId: string;
@@ -475,6 +481,7 @@ export type BridgeMessage =
   | BridgeRuntimeHeartbeat
   | BridgeRegisterSession
   | BridgeSessionOutput
+  | BridgeSessionOutputDelta
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed

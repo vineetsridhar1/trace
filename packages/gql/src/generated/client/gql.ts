@@ -73,6 +73,7 @@ type Documents = {
   "\n  subscription OrgEvents($organizationId: ID!) {\n    orgEvents(organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.OrgEventsDocument;
   "\n  query SessionEvents(\n    $organizationId: ID!\n    $scope: ScopeInput\n    $limit: Int\n    $before: DateTime\n    $excludePayloadTypes: [String!]\n  ) {\n    events(\n      organizationId: $organizationId\n      scope: $scope\n      limit: $limit\n      before: $before\n      excludePayloadTypes: $excludePayloadTypes\n    ) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.SessionEventsDocument;
   "\n  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {\n    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.SessionEventsLiveDocument;
+  "\n  subscription SessionOutputDeltasLive($sessionId: ID!, $organizationId: ID!) {\n    sessionOutputDeltas(sessionId: $sessionId, organizationId: $organizationId) {\n      sessionId\n      type\n      text\n    }\n  }\n": typeof types.SessionOutputDeltasLiveDocument;
   "\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      baseBranch\n      setupScript\n      runScripts\n      repo {\n        id\n        name\n      }\n    }\n  }\n": typeof types.ChannelsDocument;
   "\n  query ChannelGroups($organizationId: ID!) {\n    channelGroups(organizationId: $organizationId) {\n      id\n      name\n      position\n      isCollapsed\n    }\n  }\n": typeof types.ChannelGroupsDocument;
   "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.ReposDocument;
@@ -200,6 +201,8 @@ const documents: Documents = {
     types.SessionEventsDocument,
   "\n  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {\n    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n":
     types.SessionEventsLiveDocument,
+  "\n  subscription SessionOutputDeltasLive($sessionId: ID!, $organizationId: ID!) {\n    sessionOutputDeltas(sessionId: $sessionId, organizationId: $organizationId) {\n      sessionId\n      type\n      text\n    }\n  }\n":
+    types.SessionOutputDeltasLiveDocument,
   "\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      baseBranch\n      setupScript\n      runScripts\n      repo {\n        id\n        name\n      }\n    }\n  }\n":
     types.ChannelsDocument,
   "\n  query ChannelGroups($organizationId: ID!) {\n    channelGroups(organizationId: $organizationId) {\n      id\n      name\n      position\n      isCollapsed\n    }\n  }\n":
@@ -584,6 +587,12 @@ export function graphql(
 export function graphql(
   source: "\n  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {\n    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n",
 ): (typeof documents)["\n  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {\n    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  subscription SessionOutputDeltasLive($sessionId: ID!, $organizationId: ID!) {\n    sessionOutputDeltas(sessionId: $sessionId, organizationId: $organizationId) {\n      sessionId\n      type\n      text\n    }\n  }\n",
+): (typeof documents)["\n  subscription SessionOutputDeltasLive($sessionId: ID!, $organizationId: ID!) {\n    sessionOutputDeltas(sessionId: $sessionId, organizationId: $organizationId) {\n      sessionId\n      type\n      text\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -1,6 +1,42 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
+import type {
+  CodingToolAdapter,
+  OutputDeltaCallback,
+  RunOptions,
+  ToolOutput,
+} from "./coding-tool.js";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function extractTextDelta(data: Record<string, unknown>): string | null {
+  if (typeof data.delta === "string") return data.delta;
+  if (typeof data.text === "string") return data.text;
+  if (typeof data.content === "string") return data.content;
+  const delta = asRecord(data.delta);
+  if (typeof delta?.text === "string") return delta.text;
+  if (typeof delta?.content === "string") return delta.content;
+
+  const item = asRecord(data.item);
+  if (typeof item?.delta === "string") return item.delta;
+  if (typeof item?.text === "string") return item.text;
+  const itemDelta = asRecord(item?.delta);
+  if (typeof itemDelta?.text === "string") return itemDelta.text;
+  if (typeof itemDelta?.content === "string") return itemDelta.content;
+
+  const params = asRecord(data.params);
+  if (typeof params?.delta === "string") return params.delta;
+  if (typeof params?.text === "string") return params.text;
+  const paramsDelta = asRecord(params?.delta);
+  if (typeof paramsDelta?.text === "string") return paramsDelta.text;
+  if (typeof paramsDelta?.content === "string") return paramsDelta.content;
+
+  return null;
+}
 
 /**
  * Adapter for running OpenAI Codex CLI sessions.
@@ -29,6 +65,7 @@ export class CodexAdapter implements CodingToolAdapter {
     reasoningEffort,
     toolSessionId,
     interactionMode,
+    onOutputDelta,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
@@ -80,7 +117,7 @@ export class CodexAdapter implements CodingToolAdapter {
         if (!line.trim()) return;
         try {
           const parsed = JSON.parse(line);
-          this.processEvent(parsed, onOutput);
+          this.processEvent(parsed, onOutput, onOutputDelta);
         } catch {
           // Non-JSON text from stdout
         }
@@ -131,11 +168,18 @@ export class CodexAdapter implements CodingToolAdapter {
     });
   }
 
-  private processEvent(data: Record<string, unknown>, onOutput: (event: ToolOutput) => void) {
+  private processEvent(
+    data: Record<string, unknown>,
+    onOutput: (event: ToolOutput) => void,
+    onOutputDelta: OutputDeltaCallback | undefined,
+  ) {
     const eventType = data.type as string | undefined;
     if (!eventType) return;
 
-    if (eventType === "thread.started" && typeof data.thread_id === "string") {
+    if (
+      (eventType === "thread.started" || eventType === "thread_started") &&
+      typeof data.thread_id === "string"
+    ) {
       this.threadId = data.thread_id;
       return;
     }
@@ -151,7 +195,7 @@ export class CodexAdapter implements CodingToolAdapter {
       return;
     }
 
-    if (eventType === "turn.failed") {
+    if (eventType === "turn.failed" || eventType === "turn_failed") {
       const error = data.error as Record<string, unknown> | undefined;
       const message = typeof error?.message === "string" ? error.message : "Turn failed";
       if (this.lastErrorMessage !== message) {
@@ -162,12 +206,30 @@ export class CodexAdapter implements CodingToolAdapter {
       return;
     }
 
+    if (
+      eventType === "agent_message_delta" ||
+      eventType === "agent_message_content_delta" ||
+      eventType === "AgentMessageDelta" ||
+      eventType === "AgentMessageContentDelta" ||
+      eventType === "item.agent_message.delta" ||
+      eventType === "item.agent_message.content_delta"
+    ) {
+      const text = extractTextDelta(data);
+      if (text) {
+        onOutputDelta?.({ type: "assistant_text_delta", text });
+      }
+      return;
+    }
+
     const item = data.item as Record<string, unknown> | undefined;
     if (!item) return;
     const itemType = item.type as string | undefined;
 
     // item.started + command_execution → tool_use (command is being invoked)
-    if (eventType === "item.started" && itemType === "command_execution") {
+    if (
+      (eventType === "item.started" || eventType === "item_started") &&
+      itemType === "command_execution"
+    ) {
       const command = item.command as string | undefined;
       if (command) {
         onOutput({
@@ -178,7 +240,7 @@ export class CodexAdapter implements CodingToolAdapter {
       return;
     }
 
-    if (eventType !== "item.completed") return;
+    if (eventType !== "item.completed" && eventType !== "item_completed") return;
 
     // command_execution completed → tool_result
     if (itemType === "command_execution") {

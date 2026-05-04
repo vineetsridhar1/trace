@@ -57,6 +57,11 @@ type EventsByScope = Record<string, Record<string, Event>>;
 type EventIdsByScope = Record<string, string[]>;
 type MessageIdsByScope = Record<string, string[]>;
 
+export interface StreamingSessionOutput {
+  text: string;
+  updatedAt: string;
+}
+
 interface EntityActions {
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) => void;
   upsertMany: <T extends EntityType>(
@@ -78,6 +83,8 @@ interface EntityActions {
   removeScopedEvents: (scopeKey: string) => void;
   /** Reset all entity tables and indices — used on sign-out / org switch. */
   reset: () => void;
+  appendStreamingSessionOutput: (sessionId: string, text: string, updatedAt: string) => void;
+  clearStreamingSessionOutput: (sessionId: string) => void;
 }
 
 export type EntityState = Tables & {
@@ -92,6 +99,7 @@ export type EntityState = Tables & {
   _eventIdsByParentId: Record<string, string[]>;
   /** Reverse index: sessionId → queued message IDs */
   _queuedMessageIdsBySession: Record<string, string[]>;
+  streamingSessionOutputs: Record<string, StreamingSessionOutput>;
 } & EntityActions;
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
@@ -117,6 +125,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   _messageIdsByScope: {},
   _eventIdsByParentId: {},
   _queuedMessageIdsBySession: {},
+  streamingSessionOutputs: {},
 
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) =>
     set((state: EntityState) => {
@@ -332,6 +341,27 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       return { eventsByScope: rest, _eventIdsByScope: restEventIds };
     }),
 
+  appendStreamingSessionOutput: (sessionId: string, text: string, updatedAt: string) =>
+    set((state: EntityState) => {
+      const current = state.streamingSessionOutputs[sessionId];
+      return {
+        streamingSessionOutputs: {
+          ...state.streamingSessionOutputs,
+          [sessionId]: {
+            text: `${current?.text ?? ""}${text}`,
+            updatedAt,
+          },
+        },
+      };
+    }),
+
+  clearStreamingSessionOutput: (sessionId: string) =>
+    set((state: EntityState) => {
+      if (!state.streamingSessionOutputs[sessionId]) return {};
+      const { [sessionId]: _, ...rest } = state.streamingSessionOutputs;
+      return { streamingSessionOutputs: rest };
+    }),
+
   reset: () =>
     set({
       organizations: {},
@@ -354,6 +384,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       _messageIdsByScope: {},
       _eventIdsByParentId: {},
       _queuedMessageIdsBySession: {},
+      streamingSessionOutputs: {},
     }),
 }));
 
@@ -976,6 +1007,18 @@ export function useScopedEventField<F extends keyof Event>(
     const bucket = state.eventsByScope[scopeKey];
     return bucket?.[id]?.[field];
   });
+}
+
+export function appendStreamingSessionOutput(sessionId: string, text: string, updatedAt: string) {
+  useEntityStore.getState().appendStreamingSessionOutput(sessionId, text, updatedAt);
+}
+
+export function clearStreamingSessionOutput(sessionId: string) {
+  useEntityStore.getState().clearStreamingSessionOutput(sessionId);
+}
+
+export function useStreamingSessionOutput(sessionId: string): StreamingSessionOutput | undefined {
+  return useEntityStore((state: EntityState) => state.streamingSessionOutputs[sessionId]);
 }
 
 /** Subscribe to queued message IDs for a session, sorted by position */

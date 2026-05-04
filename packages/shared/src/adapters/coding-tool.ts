@@ -134,7 +134,15 @@ export interface ErrorEvent {
 
 export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | ErrorEvent;
 
+export interface AssistantTextDelta {
+  type: "assistant_text_delta";
+  text: string;
+}
+
+export type ToolOutputDelta = AssistantTextDelta;
+
 export type OutputCallback = (data: ToolOutput) => void;
+export type OutputDeltaCallback = (data: ToolOutputDelta) => void;
 
 const MISSING_TOOL_SESSION_PATTERNS = [
   /\bno\s+(conversation|session|thread|chat)\s+found\b/i,
@@ -153,6 +161,7 @@ export interface RunOptions {
   prompt: string;
   cwd: string;
   onOutput: OutputCallback;
+  onOutputDelta?: OutputDeltaCallback;
   onComplete: () => void;
   interactionMode?: "code" | "plan" | "ask";
   model?: string;

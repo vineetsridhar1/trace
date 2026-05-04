@@ -3,6 +3,7 @@ import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import {
   eventScopeKey,
+  appendStreamingSessionOutput,
   handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
@@ -62,6 +63,16 @@ const SESSION_EVENTS_SUBSCRIPTION = gql`
       parentId
       timestamp
       metadata
+    }
+  }
+`;
+
+const SESSION_OUTPUT_DELTAS_SUBSCRIPTION = gql`
+  subscription SessionOutputDeltasLive($sessionId: ID!, $organizationId: ID!) {
+    sessionOutputDeltas(sessionId: $sessionId, organizationId: $organizationId) {
+      sessionId
+      type
+      text
     }
   }
 `;
@@ -131,7 +142,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
   useEffect(() => {
     if (skip || !activeOrgId) return;
 
-    const subscription = client
+    const eventSubscription = client
       .subscription(SESSION_EVENTS_SUBSCRIPTION, {
         sessionId,
         organizationId: activeOrgId,
@@ -141,7 +152,23 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         handleSessionEvent(sessionId, result.data.sessionEvents as Event & { id: string });
       });
 
-    return () => subscription.unsubscribe();
+    const deltaSubscription = client
+      .subscription(SESSION_OUTPUT_DELTAS_SUBSCRIPTION, {
+        sessionId,
+        organizationId: activeOrgId,
+      })
+      .subscribe(
+        (result: { data?: { sessionOutputDeltas?: { type?: string; text?: string } | null } }) => {
+          const delta = result.data?.sessionOutputDeltas;
+          if (delta?.type !== "assistant_text_delta" || typeof delta.text !== "string") return;
+          appendStreamingSessionOutput(sessionId, delta.text, new Date().toISOString());
+        },
+      );
+
+    return () => {
+      eventSubscription.unsubscribe();
+      deltaSubscription.unsubscribe();
+    };
   }, [activeOrgId, sessionId, skip]);
 
   // Load an older page of events (called when user scrolls to top)
