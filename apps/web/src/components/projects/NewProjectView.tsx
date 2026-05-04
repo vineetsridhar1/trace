@@ -144,7 +144,7 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1 overflow-hidden">
       <div className="border-b border-border px-4 py-3">
         <Button variant="ghost" size="sm" className="-ml-2" onClick={onCancel}>
           <ArrowLeft size={16} />
@@ -152,8 +152,8 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
         </Button>
       </div>
 
-      <div className="grid min-h-[calc(100vh-57px)] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px]">
-        <section className="min-h-0 border-r border-border bg-background px-6 py-5">
+      <div className="grid h-[calc(100vh-57px)] min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px]">
+        <section className="min-h-0 overflow-y-auto border-r border-border bg-background px-6 py-5">
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-muted-foreground" />
             <h1 className="text-sm font-semibold text-foreground">Readonly plan</h1>
@@ -162,7 +162,7 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
             <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
               {projectName}
             </div>
-            <div className="min-h-[520px] px-5 py-4 font-mono text-sm leading-7 text-foreground">
+            <div className="min-h-[360px] px-5 py-4 font-mono text-sm leading-7 text-foreground lg:h-[calc(100vh-225px)]">
               {goal.trim() ? (
                 <>
                   <div className="text-muted-foreground"># Project goal</div>
@@ -177,11 +177,12 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
           </div>
         </section>
 
-        <aside className="flex min-h-0 flex-col bg-surface px-5 py-5">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">New Chat</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Plan mode</p>
-          </div>
+        <aside className="flex min-h-0 flex-col overflow-hidden bg-surface px-5 py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">New Chat</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Plan mode</p>
+            </div>
 
           <div className="mt-4 space-y-2">
             <label htmlFor="project-goal" className="text-sm font-medium text-foreground">
@@ -258,9 +259,10 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
             </div>
           </div>
 
-          {error && <div className="text-sm text-destructive">{error}</div>}
+            {error && <div className="mt-4 text-sm text-destructive">{error}</div>}
+          </div>
 
-          <div className="mt-auto flex justify-end gap-2 pt-5">
+          <div className="flex shrink-0 justify-end gap-2 border-t border-border pt-3">
             <Button variant="outline" onClick={onCancel} disabled={submitting}>
               Cancel
             </Button>
