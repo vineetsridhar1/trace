@@ -152,3 +152,27 @@ export async function getUploadedImageUrl(key: string): Promise<string> {
   uploadedImageUrlCache.set(key, url);
   return url;
 }
+
+export async function getUploadedFileDownloadUrl(key: string): Promise<string> {
+  const apiUrl = getActiveApiUrl();
+  if (!apiUrl) {
+    throw new Error("No active Trace host is configured");
+  }
+
+  const response = await fetch(
+    `${apiUrl}/uploads/url?download=1&key=${encodeURIComponent(key)}`,
+    {
+      headers: getAuthHeaders(),
+    },
+  );
+  if (!response.ok) {
+    throw new Error("Failed to load file URL");
+  }
+
+  const { url } = (await response.json()) as { url?: string };
+  if (!url) {
+    throw new Error("Invalid file URL response");
+  }
+
+  return url;
+}
