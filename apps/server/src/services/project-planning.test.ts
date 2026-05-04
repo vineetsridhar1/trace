@@ -386,7 +386,78 @@ describe("ProjectPlanningService", () => {
     );
   });
 
-  it("approves a plan without server-side ticket draft generation", async () => {
+  it("synthesizes ticket drafts from an approved implementation plan", async () => {
+    const approvedPlan = [
+      "## Scope",
+      "- Keep this focused.",
+      "",
+      "## Implementation Order",
+      "1. Add quick notes shell",
+      "2. Add local note CRUD actions",
+      "",
+      "## Testing",
+      "- Test creating a note.",
+      "- Test deleting a note.",
+    ].join("\n");
+
+    prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(
+      makeProjectRun({
+        project: { id: "project-1", name: "Autopilot", repoId: null },
+      }),
+    );
+    prismaMock.$executeRaw.mockResolvedValue(0);
+    prismaMock.projectRun.update
+      .mockResolvedValueOnce(makeProjectRun({ planSummary: approvedPlan }))
+      .mockResolvedValueOnce(makeProjectRun({ status: "ready", planSummary: approvedPlan }));
+    prismaMock.projectTicketGenerationAttempt.findUnique.mockResolvedValueOnce(null);
+    prismaMock.projectTicketGenerationAttempt.create.mockResolvedValueOnce(makeGenerationAttempt());
+    prismaMock.projectTicketGenerationAttempt.findUniqueOrThrow.mockResolvedValueOnce(
+      makeGenerationAttempt(),
+    );
+    prismaMock.ticket.findUnique.mockResolvedValue(null);
+    prismaMock.ticket.create
+      .mockResolvedValueOnce(makeTicket({ id: "ticket-1", title: "Quick notes shell" }))
+      .mockResolvedValueOnce(makeTicket({ id: "ticket-2", title: "Local note CRUD actions" }));
+    prismaMock.projectTicketGenerationAttempt.update.mockResolvedValueOnce(
+      makeGenerationAttempt({
+        status: "completed",
+        draftCount: 2,
+        createdTicketIds: ["ticket-1", "ticket-2"],
+        completedAt: timestamp,
+      }),
+    );
+
+    const service = new ProjectPlanningService();
+    const attempt = await service.approvePlanAndGenerateTickets(
+      { projectRunId: "run-1", planSummary: approvedPlan },
+      "org-1",
+      "user",
+      "user-1",
+    );
+
+    expect(attempt.status).toBe("completed");
+    expect(prismaMock.ticket.create).toHaveBeenCalledTimes(2);
+    expect(prismaMock.ticket.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: "Quick notes shell",
+          description: expect.stringContaining("Add quick notes shell"),
+        }),
+      }),
+    );
+    expect(prismaMock.ticket.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: "Local note CRUD actions",
+          description: expect.stringContaining("Add local note CRUD actions"),
+        }),
+      }),
+    );
+  });
+
+  it("fails generation clearly when no draftable work items exist", async () => {
     prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(
       makeProjectRun({
         project: { id: "project-1", name: "Autopilot", repoId: null },
@@ -398,6 +469,14 @@ describe("ProjectPlanningService", () => {
     prismaMock.projectTicketGenerationAttempt.create.mockResolvedValueOnce(
       makeGenerationAttempt({ status: "pending", startedAt: null }),
     );
+    prismaMock.projectTicketGenerationAttempt.update.mockResolvedValueOnce(
+      makeGenerationAttempt({
+        status: "failed",
+        error:
+          "Approved plan does not contain an Implementation Order, ticket list, or work-item list that Trace can turn into tickets.",
+        failedAt: timestamp,
+      }),
+    );
 
     const service = new ProjectPlanningService();
     const attempt = await service.approvePlanAndGenerateTickets(
@@ -407,14 +486,33 @@ describe("ProjectPlanningService", () => {
       "user-1",
     );
 
-    expect(attempt.status).toBe("pending");
+    expect(attempt.status).toBe("failed");
     expect(prismaMock.ticket.create).not.toHaveBeenCalled();
-    expect(prismaMock.projectTicketGenerationAttempt.update).not.toHaveBeenCalled();
+    expect(prismaMock.projectTicketGenerationAttempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "attempt-1" },
+        data: expect.objectContaining({
+          status: "failed",
+          error:
+            "Approved plan does not contain an Implementation Order, ticket list, or work-item list that Trace can turn into tickets.",
+        }),
+      }),
+    );
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "project_ticket_generation_started",
         payload: expect.objectContaining({
           generationAttempt: expect.objectContaining({ status: "pending" }),
+        }),
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "project_ticket_generation_failed",
+        payload: expect.objectContaining({
+          error:
+            "Approved plan does not contain an Implementation Order, ticket list, or work-item list that Trace can turn into tickets.",
         }),
       }),
       prismaMock,

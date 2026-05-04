@@ -9,7 +9,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { gql } from "@urql/core";
-import type { Project, Ticket } from "@trace/gql";
+import type { Project, ProjectTicketGenerationAttempt, Ticket } from "@trace/gql";
 import {
   type ProjectRunEntity,
   type SessionEntity,
@@ -124,6 +124,23 @@ const PROJECT_QUERY = gql`
         executionConfig
         playbookVersionId
         playbookSnapshot
+        ticketGenerationAttempt {
+          id
+          organizationId
+          projectId
+          projectRunId
+          status
+          approvedPlan
+          draftCount
+          createdTicketIds
+          error
+          retryCount
+          startedAt
+          completedAt
+          failedAt
+          createdAt
+          updatedAt
+        }
         createdAt
         updatedAt
       }
@@ -183,6 +200,14 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     if (fetched && (!activeOrgId || fetched.organizationId === activeOrgId)) {
       upsert("projects", fetched.id, fetched);
       upsertMany("projectRuns", fetched.runs as Array<ProjectRunEntity & { id: string }>);
+      upsertMany(
+        "projectTicketGenerationAttempts",
+        fetched.runs
+          .map((run) => run.ticketGenerationAttempt)
+          .filter((attempt): attempt is ProjectTicketGenerationAttempt & { id: string } =>
+            Boolean(attempt?.id),
+          ),
+      );
       upsertMany("sessions", fetched.sessions as Array<SessionEntity & { id: string }>);
       upsertMany("tickets", fetched.tickets as Array<Ticket & { id: string }>);
       setNotFound(false);
@@ -315,7 +340,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       <div className="grid min-h-0 flex-1 grid-cols-1 bg-surface lg:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.05fr)]">
         <div className="flex min-h-0 flex-col overflow-hidden border-b border-border bg-background lg:border-b-0 lg:border-r">
           {currentProjectRun ? <ProjectPlanPanel projectRunId={currentProjectRun.id} /> : null}
-          <ProjectTicketList projectId={project.id} />
+          <ProjectTicketList projectId={project.id} projectRunId={currentProjectRun?.id ?? null} />
         </div>
 
         <div className="min-h-0 overflow-hidden">

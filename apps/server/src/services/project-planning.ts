@@ -165,6 +165,107 @@ function normalizeTicketDrafts(value: unknown): { drafts: TicketDraft[]; errors:
   return { drafts, errors };
 }
 
+const TICKET_SOURCE_HEADING_RE =
+  /^(implementation\s+(order|plan|steps?)|ticket\s+(drafts?|plan)|tickets?|work\s+items?|milestones?)$/i;
+const TEST_HEADING_RE = /^(test(ing)?|acceptance\s+criteria|validation)$/i;
+const HEADING_RE = /^#{1,6}\s+(.+?)\s*#*\s*$/;
+const ORDERED_ITEM_RE = /^\s*\d+[\.)]\s+(.+?)\s*$/;
+const TASK_ITEM_RE = /^\s*[-*]\s+\[[ xX]\]\s+(.+?)\s*$/;
+const BULLET_ITEM_RE = /^\s*[-*]\s+(.+?)\s*$/;
+
+function synthesizeTicketDraftsFromPlan(plan: string): TicketDraft[] {
+  const lines = plan.split(/\r?\n/);
+  const workItems = extractPlanItems(lines, TICKET_SOURCE_HEADING_RE, true);
+  const fallbackItems = workItems.length > 0 ? workItems : extractPlanItems(lines, null, true);
+  const acceptanceCriteria = extractPlanItems(lines, TEST_HEADING_RE, false).slice(0, 5);
+
+  return fallbackItems.slice(0, 12).map((item, index) => {
+    const title = ticketTitleFromPlanItem(item, index);
+    return {
+      title,
+      description: [
+        `Implement approved-plan step ${index + 1}: ${item}`,
+        "",
+        "Scope comes from the approved project plan. Keep changes limited to this step.",
+      ].join("\n"),
+      priority: "medium",
+      labels: ["project-plan"],
+      acceptanceCriteria:
+        acceptanceCriteria.length > 0
+          ? acceptanceCriteria
+          : [
+              "The approved-plan step is implemented.",
+              "Relevant tests or validation for this step pass.",
+            ],
+    };
+  });
+}
+
+function extractPlanItems(
+  lines: string[],
+  headingPattern: RegExp | null,
+  allowGlobalFallback: boolean,
+): string[] {
+  const items: string[] = [];
+  let inTargetSection = headingPattern === null;
+  let sawTargetSection = headingPattern === null;
+
+  for (const line of lines) {
+    const heading = HEADING_RE.exec(line.trim());
+    if (heading) {
+      const headingText = heading[1]?.trim() ?? "";
+      inTargetSection = headingPattern ? headingPattern.test(headingText) : true;
+      sawTargetSection = sawTargetSection || inTargetSection;
+      continue;
+    }
+
+    if (!inTargetSection) continue;
+
+    const item =
+      ORDERED_ITEM_RE.exec(line)?.[1] ??
+      TASK_ITEM_RE.exec(line)?.[1] ??
+      (!headingPattern || sawTargetSection ? BULLET_ITEM_RE.exec(line)?.[1] : undefined);
+    if (item) {
+      const cleaned = cleanPlanItem(item);
+      if (cleaned) items.push(cleaned);
+    }
+  }
+
+  if (items.length > 0 || !allowGlobalFallback || headingPattern === null || sawTargetSection) {
+    return dedupePlanItems(items);
+  }
+
+  return extractPlanItems(lines, null, false);
+}
+
+function cleanPlanItem(value: string): string {
+  return value
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[.;]\s*$/, "")
+    .trim();
+}
+
+function dedupePlanItems(items: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+function ticketTitleFromPlanItem(item: string, index: number): string {
+  const withoutPrefix = item.replace(/^(add|build|create|implement|wire|update)\s+/i, "");
+  const base = withoutPrefix || item || `Project plan step ${index + 1}`;
+  const title = base.charAt(0).toUpperCase() + base.slice(1);
+  return title.length > 120 ? `${title.slice(0, 117).trimEnd()}...` : title;
+}
+
 export class ProjectPlanningService {
   getGenerationAttemptForRun(projectRunId: string) {
     return prisma.projectTicketGenerationAttempt.findUnique({ where: { projectRunId } });
@@ -436,7 +537,10 @@ export class ProjectPlanningService {
     actorId: string,
   ): Promise<ProjectTicketGenerationAttempt> {
     const approvedPlan = normalizeText(input.planSummary, "Plan summary");
-    const hasStructuredDrafts = Boolean(input.structuredDrafts?.length);
+    const draftSource = input.structuredDrafts?.length
+      ? input.structuredDrafts
+      : synthesizeTicketDraftsFromPlan(approvedPlan);
+    const hasStructuredDrafts = draftSource.length > 0;
     const started = await this.beginGenerationAttempt(
       input.projectRunId,
       organizationId,
@@ -448,10 +552,20 @@ export class ProjectPlanningService {
     );
 
     if (started.attempt.status === "completed") return started.attempt;
-    if (!hasStructuredDrafts || !started.shouldGenerate) return started.attempt;
+    if (!hasStructuredDrafts) {
+      return this.failGenerationAttempt({
+        attemptId: started.attempt.id,
+        projectRun: started.projectRun,
+        error:
+          "Approved plan does not contain an Implementation Order, ticket list, or work-item list that Trace can turn into tickets.",
+        actorType,
+        actorId,
+      });
+    }
+    if (!started.shouldGenerate) return started.attempt;
 
     try {
-      const rawDrafts = { tickets: input.structuredDrafts };
+      const rawDrafts = { tickets: draftSource };
       const normalized = normalizeTicketDrafts(rawDrafts);
       return this.persistGeneratedTickets({
         attemptId: started.attempt.id,
