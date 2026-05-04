@@ -186,6 +186,33 @@ describe("upload routes in local mode", () => {
     expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
   });
 
+  it("rejects active browser-rendered content types", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
+    prismaMock.organization.findFirst.mockResolvedValue({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ role: "admin" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    for (const contentType of ["text/html", "image/svg+xml"]) {
+      const res = await fetch(`${baseUrl}/uploads/presign`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filename: "active-file",
+          contentType,
+          contentLength: 1024,
+          organizationId: "org-local",
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toEqual({ error: "contentType is not supported" });
+    }
+    expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
+  });
+
   it("rejects local-mode upload URLs for non-canonical organizations", async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
     prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
@@ -205,6 +232,27 @@ describe("upload routes in local mode", () => {
       error: "Local mode only supports one organization",
     });
     expect(storageMock.getGetUrl).not.toHaveBeenCalled();
+  });
+
+  it("requests attachment disposition for download URLs", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
+    storageMock.getGetUrl.mockResolvedValueOnce("https://download.example/file");
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const key = "uploads/org-local/123e4567-e89b-12d3-a456-426614174000-notes.pdf";
+    const res = await fetch(`${baseUrl}/uploads/url?download=1&key=${encodeURIComponent(key)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ url: "https://download.example/file" });
+    expect(storageMock.getGetUrl).toHaveBeenCalledWith(key, {
+      downloadFilename: "notes.pdf",
+    });
   });
 
   it("rejects proxied external uploads without a paired mobile token", async () => {

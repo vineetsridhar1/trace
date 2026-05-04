@@ -32,8 +32,18 @@ export class S3StorageAdapter implements StorageAdapter {
     return { method: "POST" as const, url: target.url, fields: target.fields };
   }
 
-  async getGetUrl(key: string): Promise<string> {
-    const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
+  async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ...(options?.downloadFilename
+        ? { ResponseContentDisposition: attachmentDisposition(options.downloadFilename) }
+        : {}),
+    });
     return getSignedUrl(this.client, command, { expiresIn: 3600 });
   }
+}
+
+function attachmentDisposition(filename: string): string {
+  return `attachment; filename="${filename.replace(/["\\]/g, "_")}"`;
 }

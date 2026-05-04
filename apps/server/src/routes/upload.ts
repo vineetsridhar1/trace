@@ -19,18 +19,20 @@ const ALLOWED_EXACT_CONTENT_TYPES = new Set([
   "application/json",
   "application/pdf",
   "application/zip",
+  "image/gif",
+  "image/heic",
+  "image/heif",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
   "text/csv",
   "text/markdown",
   "text/plain",
 ]);
 
 function isAllowedContentType(contentType: string): boolean {
-  const normalized = contentType.toLowerCase();
-  return (
-    normalized.startsWith("image/") ||
-    normalized.startsWith("text/") ||
-    ALLOWED_EXACT_CONTENT_TYPES.has(normalized)
-  );
+  return ALLOWED_EXACT_CONTENT_TYPES.has(contentType.toLowerCase());
 }
 
 function sanitizeFilename(filename: string): string {
@@ -173,8 +175,21 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
     }
   }
 
-  const url = await storage.getGetUrl(key);
+  const downloadFilename =
+    req.query.download === "1" || req.query.download === "true"
+      ? attachmentFilenameFromKey(key)
+      : undefined;
+  const url = await storage.getGetUrl(key, downloadFilename ? { downloadFilename } : undefined);
   return res.json({ url });
 });
 
 export { router as uploadRouter };
+
+function attachmentFilenameFromKey(key: string): string {
+  const filename = key
+    .split("/")
+    .pop()
+    ?.replace(/^[0-9a-f-]{36}-/i, "");
+  const safe = filename?.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return safe || "attachment";
+}

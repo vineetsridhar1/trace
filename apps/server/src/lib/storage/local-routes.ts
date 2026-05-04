@@ -52,8 +52,16 @@ export function createLocalStorageRouter(adapter: LocalStorageAdapter): RouterTy
     if (!fs.existsSync(target)) {
       return res.status(404).json({ error: "Not found" });
     }
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (verified.downloadFilename) {
+      res.setHeader("Content-Disposition", attachmentDisposition(verified.downloadFilename));
+    }
     return res.sendFile(target);
   });
 
   return router;
+}
+
+function attachmentDisposition(filename: string): string {
+  return `attachment; filename="${filename.replace(/["\\]/g, "_")}"`;
 }

@@ -25,7 +25,7 @@ export function ImageAttachmentBar({
     <>
       <div className="flex gap-2 px-2 pt-2 pb-1 overflow-x-auto">
         {attachments.map((attachment) => {
-          const isImage = attachment.file.type.startsWith("image/");
+          const isImage = isSupportedImageFile(attachment.file);
           return (
             <div key={attachment.id} className="relative shrink-0 group">
               {isImage ? (
@@ -82,3 +82,10 @@ function formatFileSize(bytes: number): string {
 }
 
 export type ImageAttachment = FileAttachment;
+
+function isSupportedImageFile(file: File): boolean {
+  return (
+    ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"].includes(file.type) ||
+    /\.(png|jpe?g|gif|webp)$/i.test(file.name)
+  );
+}

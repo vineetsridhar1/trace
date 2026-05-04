@@ -22,6 +22,7 @@ export interface LocalStorageToken {
   action: "put" | "get";
   contentType?: string;
   maxBytes?: number;
+  downloadFilename?: string;
 }
 
 export class LocalStorageAdapter implements StorageAdapter {
@@ -44,8 +45,12 @@ export class LocalStorageAdapter implements StorageAdapter {
     return { method: "PUT" as const, url: `${this.publicUrl}/uploads/local/put/${token}` };
   }
 
-  async getGetUrl(key: string): Promise<string> {
-    const token = jwt.sign({ key, action: "get" }, JWT_SECRET, { expiresIn: "1h" });
+  async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
+    const token = jwt.sign(
+      { key, action: "get", downloadFilename: options?.downloadFilename },
+      JWT_SECRET,
+      { expiresIn: "1h" },
+    );
     return `${this.publicUrl}/uploads/local/get/${token}`;
   }
 

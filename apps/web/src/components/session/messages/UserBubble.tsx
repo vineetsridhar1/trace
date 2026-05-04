@@ -6,6 +6,15 @@ import { useAuthStore } from "@trace/client-core";
 import { Markdown } from "../../ui/Markdown";
 import { ImageLightbox } from "../ImageLightbox";
 import { getAuthHeaders } from "@trace/client-core";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../ui/dialog";
+import { Button } from "../../ui/button";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -13,18 +22,18 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const isImage = isImageKey(imageKey);
 
   const handleClick = async () => {
+    if (!isImage) {
+      setDownloadDialogOpen(true);
+      return;
+    }
     if (src && isImage) {
       setLightboxOpen(true);
       return;
     }
-    if (src) {
-      window.open(src, "_blank", "noopener,noreferrer");
-      return;
-    }
-    const pendingWindow = isImage ? null : window.open("", "_blank", "noopener,noreferrer");
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(imageKey)}`, {
@@ -34,21 +43,38 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
       const data = (await res.json()) as { url?: string };
       if (data.url) {
         setSrc(data.url);
-        if (isImage) {
-          setLightboxOpen(true);
-        } else {
-          if (pendingWindow) {
-            pendingWindow.location.href = data.url;
-          } else {
-            window.open(data.url, "_blank", "noopener,noreferrer");
-          }
-        }
-      } else {
-        pendingWindow?.close();
+        setLightboxOpen(true);
       }
     } catch (err) {
-      pendingWindow?.close();
       console.warn("Failed to load image URL:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/uploads/url?download=1&key=${encodeURIComponent(imageKey)}`,
+        {
+          credentials: "include",
+          headers: getAuthHeaders(),
+        },
+      );
+      const data = (await res.json()) as { url?: string };
+      if (data.url) {
+        const link = document.createElement("a");
+        link.href = data.url;
+        link.download = label;
+        link.rel = "noopener noreferrer";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setDownloadDialogOpen(false);
+      }
+    } catch (err) {
+      console.warn("Failed to download attachment:", err);
     } finally {
       setLoading(false);
     }
@@ -70,6 +96,30 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
           open={lightboxOpen}
           onClose={() => setLightboxOpen(false)}
         />
+      )}
+      {!isImage && (
+        <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Download attachment?</DialogTitle>
+              <DialogDescription>
+                This file type is not previewed in Trace. Download it only if you trust the
+                attachment.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <div className="truncate font-medium">{label}</div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDownloadDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={() => void handleDownload()} disabled={loading}>
+                {loading ? "Preparing..." : "Download"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );
@@ -129,5 +179,5 @@ function attachmentLabel(key: string): string {
 }
 
 function isImageKey(key: string): boolean {
-  return /\.(png|jpe?g|gif|webp|svg)$/i.test(key);
+  return /\.(png|jpe?g|gif|webp)$/i.test(key);
 }
