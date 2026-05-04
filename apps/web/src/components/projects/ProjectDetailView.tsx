@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ArrowLeft, CalendarClock, GitBranch, Radio, RefreshCw, Users } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project } from "@trace/gql";
+import { useShallow } from "zustand/react/shallow";
 import {
   eventScopeKey,
   type ProjectRunEntity,
@@ -317,12 +318,14 @@ function ProjectActivityList({
   loading: boolean;
   error: string | null;
 }) {
-  const events = useEntityStore((s) =>
-    eventIds
-      .slice(-8)
-      .reverse()
-      .map((id) => s.eventsByScope[scopeKey]?.[id])
-      .filter((event): event is NonNullable<typeof event> => event !== undefined),
+  const events = useEntityStore(
+    useShallow((s) =>
+      eventIds
+        .slice(-8)
+        .reverse()
+        .map((id) => s.eventsByScope[scopeKey]?.[id])
+        .filter((event): event is NonNullable<typeof event> => event !== undefined),
+    ),
   );
 
   if (error) {
