@@ -16,6 +16,7 @@ See [session-autopilot-plan.md](session-autopilot-plan.md) for the full plan. Th
 - Planning chat uses a normal project-linked session.
 - Ticket generation happens after the user confirms the plan.
 - Generated tickets are DB records created through services/CLI.
+- Claude Code/Codex sessions call Trace through a CLI/action surface with dynamically injected scoped credentials.
 - Orchestration is episodic: lifecycle event in, normal coding-tool session out.
 - Playbooks guide orchestrator behavior; they are not hardcoded workflow branches.
 - Start sequentially. Do not add parallel scheduling until the default loop works well.
@@ -29,7 +30,7 @@ See [session-autopilot-plan.md](session-autopilot-plan.md) for the full plan. Th
 | # | Ticket | What it ships |
 | --- | --- | --- |
 | 01 | [Planning Workspace](01-planning-workspace.md) | Prompt-first project creation, normal planning session, split plan/chat UI |
-| 02 | [Plan Approval And Ticket Generation](02-plan-approval-ticket-generation.md) | Next action, plan persistence, structured AI ticket drafts, linked tickets |
+| 02 | [Plan Approval And Ticket Generation](02-plan-approval-ticket-generation.md) | Next action, plan persistence, structured ticket drafts from the planning session, linked tickets |
 | 03 | [Project Ticket List](03-project-ticket-list.md) | Project detail ticket list from durable project-linked tickets |
 
 ## Orchestration Foundation
@@ -40,7 +41,7 @@ See [session-autopilot-plan.md](session-autopilot-plan.md) for the full plan. Th
 | 05 | [Playbook Model](05-playbook-model.md) | Durable playbooks and default review/QA/PR playbook |
 | 06 | [Orchestrator Episode Runtime](06-orchestrator-episode-runtime.md) | New normal coding-tool session per lifecycle event |
 | 07 | [Orchestrator Context Packet](07-orchestrator-context-packet.md) | Project, ticket, session, diff, history, event, and playbook context |
-| 08 | [Orchestrator Action Surface](08-orchestrator-action-surface.md) | Explicit service/CLI actions for messages, inbox, sessions, tickets, PRs, merges |
+| 08 | [Orchestrator Action Surface](08-orchestrator-action-surface.md) | Trace CLI/action surface, injected credentials, messages, inbox, sessions, tickets, PRs, merges |
 | 09 | [Default Playbook Loop](09-default-playbook-loop.md) | Sequential implement/review/fix/QA/PR/merge loop |
 | 10 | [Orchestration UI And Inbox](10-orchestration-ui-inbox.md) | Progress, decisions, linked sessions, inbox gates, pause/resume/cancel |
 

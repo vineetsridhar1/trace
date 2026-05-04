@@ -6,7 +6,7 @@ Project Autopilot turns a loose user goal into a project plan, durable tickets, 
 
 The product ships in two major phases:
 
-- **Deliverable 0: Planning to tickets.** A cursor-like planning workspace interviews the user, iterates on the plan, saves the confirmed plan through the project planning service, asks AI for structured ticket drafts, lets the service validate and create durable tickets, and shows the ticket list in the project.
+- **Deliverable 0: Planning to tickets.** A cursor-like planning workspace interviews the user, iterates on the plan, saves the confirmed plan through the project planning service, asks the active Claude Code/Codex planning session to submit structured ticket drafts through the Trace CLI/API action surface, lets the service validate and create durable tickets, and shows the ticket list in the project.
 - **Orchestration phase.** A separate orchestrator starts one ticket at a time. On lifecycle events such as implementation completion, review completion, PR creation, merge, or inbox feedback, Trace starts a normal coding-tool session with the project context, lifecycle event, history, diff/session data, and playbook. Claude Code can be the initial adapter, but the core plan must not depend on Claude-specific behavior.
 
 ## Non-Negotiable Decisions
@@ -15,6 +15,7 @@ The product ships in two major phases:
 - Planning chat happens in a normal project-linked session.
 - Ticket generation happens only after the user confirms the plan.
 - Tickets are durable DB records created through services/CLI, not markdown-only artifacts.
+- AI sessions call Trace through an explicit CLI/action surface with dynamically injected, scoped credentials. The server must not call an LLM to generate project plans, ticket drafts, or orchestration decisions on behalf of the coding tool session.
 - Orchestration is episodic. Each lifecycle event starts a fresh orchestrator session with a context packet and playbook.
 - The orchestrator can send messages, create inbox items, start sessions, request reviews, and later create/merge PRs through explicit service/CLI actions.
 - Start with sequential ticket execution. Parallel scheduling is out of scope until the sequential loop is excellent.
@@ -44,6 +45,15 @@ Project Autopilot should be implemented as a service-owned workflow on top of Tr
 - Lifecycle events wake the orchestrator through a dedicated consumer or service path. They must not route through the ambient agent.
 - Use unique constraints or processed-event records for exactly-once effects on top of at-least-once event delivery, especially for ticket generation, execution startup, orchestrator episode creation, and PR/merge actions.
 
+### Trace CLI And Session Credentials
+
+- Claude Code and Codex sessions must have access to a Trace CLI command surface for service-backed actions such as reading project/session context, sending messages, creating inbox items, submitting structured ticket drafts, updating ticket execution state, and later PR/merge operations.
+- The CLI must be a thin client over authenticated Trace APIs or direct service-backed runtime endpoints. It must never write database rows or create events directly.
+- When Trace starts a Claude Code or Codex process, the session runtime must dynamically inject short-lived, scoped credentials into the process environment or command wrapper. The token scope should include the organization, project, project run, session, ticket, and orchestrator episode boundaries needed by that session.
+- Injected credentials must be revocable, auditable, and excluded from chat/event rendering. They should not be persisted in prompts, messages, plan text, ticket descriptions, or logs.
+- Every CLI mutation must be authorized server-side against the injected token scope and should accept an operation key for idempotent retries.
+- The CLI/action schema is adapter-neutral. Claude Code and Codex can both call the same Trace commands; vendor-specific setup belongs only in coding-tool adapters.
+
 ### Scalability
 
 - Sequential execution is per project run, not global. Many organizations and project runs must be able to progress independently.
@@ -67,8 +77,8 @@ D0 is the first shippable product slice. It includes everything from first promp
 4. The AI interviews the user and updates the plan through normal session turns.
 5. The user clicks **Next** when the plan is acceptable.
 6. Trace approves and saves the plan through the project planning service.
-7. Trace asks AI for structured ticket drafts from the approved plan.
-8. A service validates the drafts and creates tickets as durable DB rows linked to the project.
+7. Trace asks the active planning session to generate structured ticket drafts and submit them through the Trace CLI/action surface using injected credentials.
+8. A service validates the submitted drafts and creates tickets as durable DB rows linked to the project.
 9. The user lands on or remains in the project ticket list.
 
 ### D0 Success Criteria
@@ -92,7 +102,7 @@ Project prompt
   -> split planning UI
   -> user confirms plan
   -> projectPlanningService saves approved plan
-  -> ticket-generation service asks AI for structured drafts
+  -> active planning session calls Trace CLI/API with structured drafts
   -> ticketService creates linked tickets in a validated batch
   -> project ticket list
 ```
@@ -190,7 +200,7 @@ The implementation is split into ten tickets:
 ### Deliverable 0
 
 1. **Planning Workspace**: prompt-first project creation, normal planning session, split plan/chat UI.
-2. **Plan Approval and Ticket Generation**: Next action, save plan, structured AI ticket drafts, service-created tickets.
+2. **Plan Approval and Ticket Generation**: Next action, save plan, structured ticket drafts from the planning session, service-created tickets.
 3. **Project Ticket List**: project detail ticket list fed by durable project-linked tickets.
 
 ### Orchestration Foundation
@@ -199,7 +209,7 @@ The implementation is split into ten tickets:
 5. **Playbook Model**: store playbooks and provide the default review/QA/PR playbook.
 6. **Orchestrator Episode Runtime**: start a new normal coding-tool session for each lifecycle event.
 7. **Orchestrator Context Packet**: provide project, ticket, session, diff, history, and playbook context.
-8. **Orchestrator Action Surface**: allow explicit service/CLI actions for messages, inbox, sessions, ticket updates, PRs, and merges.
+8. **Orchestrator Action Surface**: provide the Trace CLI/action surface, injected session credentials, and explicit service actions for messages, inbox, sessions, ticket updates, PRs, and merges.
 9. **Default Playbook Loop**: implement the sequential implement/review/fix/QA/PR/merge loop.
 10. **Project Autopilot UI**: show ticket progress, orchestrator decisions, inbox gates, and linked sessions.
 
@@ -211,7 +221,7 @@ D0 tests:
 - verify the planning session is linked to the project
 - iterate plan text and chat without losing state
 - click Next and verify the plan persists
-- verify structured AI ticket draft generation creates DB tickets linked to the project through the service
+- verify structured ticket drafts submitted through the Trace CLI/API create DB tickets linked to the project through the service
 - verify duplicate approval or retry does not duplicate tickets
 - verify ticket events upsert full ticket/project-link state in the client store
 - refresh and verify the project shows the plan and tickets
