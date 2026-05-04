@@ -21,24 +21,19 @@ const REPOS_QUERY = gql`
   }
 `;
 
-const CREATE_PROJECT_MUTATION = gql`
-  mutation CreatePromptProject($input: CreateProjectInput!) {
-    createProject(input: $input) {
+const CREATE_PROJECT_FROM_GOAL_MUTATION = gql`
+  mutation CreateProjectFromGoal($input: CreateProjectFromGoalInput!) {
+    createProjectFromGoal(input: $input) {
       id
       name
       organizationId
       repoId
+      runs {
+        id
+        projectId
+      }
       createdAt
       updatedAt
-    }
-  }
-`;
-
-const CREATE_PROJECT_RUN_MUTATION = gql`
-  mutation CreatePromptProjectRun($input: CreateProjectRunInput!) {
-    createProjectRun(input: $input) {
-      id
-      projectId
     }
   }
 `;
@@ -53,6 +48,7 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [repoError, setRepoError] = useState<string | null>(null);
 
   const repoIds = useEntityIds(
     "repos",
@@ -67,7 +63,13 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
   const fetchRepos = useCallback(async () => {
     if (!activeOrgId) return;
     setLoadingRepos(true);
+    setRepoError(null);
     const result = await client.query(REPOS_QUERY, { organizationId: activeOrgId }).toPromise();
+    if (result.error) {
+      setRepoError(result.error.message);
+      setLoadingRepos(false);
+      return;
+    }
     if (result.data?.repos) {
       const repos = (result.data.repos as Array<Omit<Repo, "projects" | "sessions">>).map(
         (repo) =>
@@ -96,35 +98,21 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
 
     setSubmitting(true);
     setError(null);
-    const createProjectResult = await client
-      .mutation(CREATE_PROJECT_MUTATION, {
+    const result = await client
+      .mutation(CREATE_PROJECT_FROM_GOAL_MUTATION, {
         input: {
           organizationId: activeOrgId,
+          goal: initialGoal,
           name: projectName,
           repoId: repoId === "__none__" ? null : repoId,
-        },
-      })
-      .toPromise();
-
-    const project = createProjectResult.data?.createProject as Pick<Project, "id"> | undefined;
-    if (createProjectResult.error || !project) {
-      setError(createProjectResult.error?.message ?? "Project could not be created.");
-      setSubmitting(false);
-      return;
-    }
-
-    const createRunResult = await client
-      .mutation(CREATE_PROJECT_RUN_MUTATION, {
-        input: {
-          projectId: project.id,
-          initialGoal,
           executionConfig: {},
         },
       })
       .toPromise();
 
-    if (createRunResult.error) {
-      setError(createRunResult.error.message);
+    const project = result.data?.createProjectFromGoal as Pick<Project, "id"> | undefined;
+    if (result.error || !project) {
+      setError(result.error?.message ?? "Project could not be created.");
       setSubmitting(false);
       return;
     }
@@ -185,6 +173,7 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
                 ))}
               </SelectContent>
             </Select>
+            {repoError && <p className="text-xs text-destructive">{repoError}</p>}
           </div>
 
           <div className="space-y-2">

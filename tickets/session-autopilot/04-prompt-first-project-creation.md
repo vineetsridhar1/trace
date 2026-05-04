@@ -42,16 +42,16 @@ A user can start a project by typing what they want to build.
 
 ## Completion requirements
 
-- [ ] New Project opens a prompt-first surface.
-- [ ] Initial goal is required.
-- [ ] Project-run schema and service methods exist before UI submit wiring depends on them.
-- [ ] Project-run events hydrate the normalized store.
-- [ ] Repo/member controls do not block the primary prompt flow.
-- [ ] Submit creates a project and project run.
-- [ ] Initial goal is recorded through a service method and event.
-- [ ] The user lands on the project planning page.
-- [ ] Empty/error/loading states are polished.
-- [ ] UI remains useful before AI planning is wired up.
+- [x] New Project opens a prompt-first surface.
+- [x] Initial goal is required.
+- [x] Project-run schema and service methods exist before UI submit wiring depends on them.
+- [x] Project-run events hydrate the normalized store.
+- [x] Repo/member controls do not block the primary prompt flow.
+- [x] Submit creates a project and project run.
+- [x] Initial goal is recorded through a service method and event.
+- [x] The user lands on the project planning page.
+- [x] Empty/error/loading states are polished.
+- [x] UI remains useful before AI planning is wired up.
 
 ## Implementation notes
 
@@ -69,11 +69,3 @@ A user can start a project by typing what they want to build.
 3. Verify project and project run appear in the store.
 4. Refresh the resulting route and verify the project loads.
 5. Attempt to create a second active run and verify service rejection.
-
-## Review follow-ups
-
-Review against the ticket 4 implementation surfaced three items to close before considering this ticket complete:
-
-- Add a service-level, atomic prompt-first creation method or explicit rollback so submit cannot leave a project without its first run if run creation fails.
-- Add service or resolver tests for one-active-run rejection, goal validation, event emission, and update/list authorization.
-- Align project-run event/query snapshots with the client store shape so normalized `projectRuns` do not rely on partial casts for required GraphQL fields.

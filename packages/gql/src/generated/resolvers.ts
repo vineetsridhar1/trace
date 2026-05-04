@@ -443,6 +443,14 @@ export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
 
+export type CreateProjectFromGoalInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  goal: Scalars["String"]["input"];
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -709,6 +717,7 @@ export type Mutation = {
   createChat: Chat;
   createOrganization: OrgMember;
   createProject: Project;
+  createProjectFromGoal: Project;
   createProjectRun: ProjectRun;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -874,6 +883,10 @@ export type MutationCreateOrganizationArgs = {
 
 export type MutationCreateProjectArgs = {
   input: CreateProjectInput;
+};
+
+export type MutationCreateProjectFromGoalArgs = {
+  input: CreateProjectFromGoalInput;
 };
 
 export type MutationCreateProjectRunArgs = {
@@ -2264,6 +2277,7 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
+  CreateProjectFromGoalInput: CreateProjectFromGoalInput;
   CreateProjectInput: CreateProjectInput;
   CreateProjectRunInput: CreateProjectRunInput;
   CreateRepoInput: CreateRepoInput;
@@ -2394,6 +2408,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
+  CreateProjectFromGoalInput: CreateProjectFromGoalInput;
   CreateProjectInput: CreateProjectInput;
   CreateProjectRunInput: CreateProjectRunInput;
   CreateRepoInput: CreateRepoInput;
@@ -3146,6 +3161,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateProjectArgs, "input">
+  >;
+  createProjectFromGoal?: Resolver<
+    ResolversTypes["Project"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateProjectFromGoalArgs, "input">
   >;
   createProjectRun?: Resolver<
     ResolversTypes["ProjectRun"],

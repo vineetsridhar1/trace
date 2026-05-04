@@ -1130,6 +1130,14 @@ input CreateProjectRunInput {
   executionConfig: JSON
 }
 
+input CreateProjectFromGoalInput {
+  organizationId: ID!
+  goal: String!
+  name: String
+  repoId: ID
+  executionConfig: JSON
+}
+
 input UpdateProjectRunInput {
   status: ProjectRunStatus
   planSummary: String
@@ -1437,6 +1445,7 @@ type Mutation {
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
   updateProject(id: ID!, input: UpdateProjectInput!): Project!
+  createProjectFromGoal(input: CreateProjectFromGoalInput!): Project!
   createProjectRun(input: CreateProjectRunInput!): ProjectRun!
   updateProjectRun(id: ID!, input: UpdateProjectRunInput!): ProjectRun!
   addProjectMember(input: AddProjectMemberInput!): ProjectMember!

@@ -10,7 +10,6 @@ import type {
   EventType,
   InboxItem,
   Project,
-  ProjectRun,
   QueuedMessage,
   Repo,
   ScopeType,
@@ -19,6 +18,7 @@ import type {
 import {
   StoreBatchWriter,
   useEntityStore,
+  type ProjectRunEntity,
   type SessionEntity,
   type SessionGroupEntity,
 } from "../stores/entity.js";
@@ -133,7 +133,7 @@ function upsertProjectRunFromPayload(batch: StoreBatchWriter, payload: JsonObjec
   batch.upsert(
     "projectRuns",
     projectRun.id,
-    (existing ? { ...existing, ...projectRun } : projectRun) as unknown as ProjectRun,
+    (existing ? { ...existing, ...projectRun } : projectRun) as unknown as ProjectRunEntity,
   );
 }
 

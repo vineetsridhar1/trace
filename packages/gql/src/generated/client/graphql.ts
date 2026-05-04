@@ -442,6 +442,14 @@ export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
 
+export type CreateProjectFromGoalInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  goal: Scalars["String"]["input"];
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -708,6 +716,7 @@ export type Mutation = {
   createChat: Chat;
   createOrganization: OrgMember;
   createProject: Project;
+  createProjectFromGoal: Project;
   createProjectRun: ProjectRun;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -873,6 +882,10 @@ export type MutationCreateOrganizationArgs = {
 
 export type MutationCreateProjectArgs = {
   input: CreateProjectInput;
+};
+
+export type MutationCreateProjectFromGoalArgs = {
+  input: CreateProjectFromGoalInput;
 };
 
 export type MutationCreateProjectRunArgs = {
@@ -2492,6 +2505,40 @@ export type ThreadRepliesQuery = {
   }>;
 };
 
+export type NewProjectReposQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type NewProjectReposQuery = {
+  __typename?: "Query";
+  repos: Array<{
+    __typename?: "Repo";
+    id: string;
+    name: string;
+    remoteUrl: string;
+    defaultBranch: string;
+    webhookActive: boolean;
+  }>;
+};
+
+export type CreateProjectFromGoalMutationVariables = Exact<{
+  input: CreateProjectFromGoalInput;
+}>;
+
+export type CreateProjectFromGoalMutation = {
+  __typename?: "Mutation";
+  createProjectFromGoal: {
+    __typename?: "Project";
+    id: string;
+    name: string;
+    organizationId: string;
+    repoId?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    runs: Array<{ __typename?: "ProjectRun"; id: string; projectId: string }>;
+  };
+};
+
 export type ProjectQueryVariables = Exact<{
   id: Scalars["ID"]["input"];
 }>;
@@ -2532,6 +2579,21 @@ export type ProjectQuery = {
     channels: Array<{ __typename?: "Channel"; id: string; name: string }>;
     sessions: Array<{ __typename?: "Session"; id: string; name: string }>;
     tickets: Array<{ __typename?: "Ticket"; id: string; title: string }>;
+    runs: Array<{
+      __typename?: "ProjectRun";
+      id: string;
+      organizationId: string;
+      projectId: string;
+      status: ProjectRunStatus;
+      initialGoal: string;
+      planSummary?: string | null;
+      activeGateId?: string | null;
+      latestControllerSummaryId?: string | null;
+      latestControllerSummaryText?: string | null;
+      executionConfig: JsonValue;
+      createdAt: string;
+      updatedAt: string;
+    }>;
   } | null;
 };
 
@@ -2575,6 +2637,21 @@ export type ProjectsQuery = {
     channels: Array<{ __typename?: "Channel"; id: string }>;
     sessions: Array<{ __typename?: "Session"; id: string }>;
     tickets: Array<{ __typename?: "Ticket"; id: string }>;
+    runs: Array<{
+      __typename?: "ProjectRun";
+      id: string;
+      organizationId: string;
+      projectId: string;
+      status: ProjectRunStatus;
+      initialGoal: string;
+      planSummary?: string | null;
+      activeGateId?: string | null;
+      latestControllerSummaryId?: string | null;
+      latestControllerSummaryText?: string | null;
+      executionConfig: JsonValue;
+      createdAt: string;
+      updatedAt: string;
+    }>;
   }>;
 };
 
@@ -4691,6 +4768,113 @@ export const ThreadRepliesDocument = {
     },
   ],
 } as unknown as DocumentNode<ThreadRepliesQuery, ThreadRepliesQueryVariables>;
+export const NewProjectReposDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "NewProjectRepos" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repos" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
+                { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<NewProjectReposQuery, NewProjectReposQueryVariables>;
+export const CreateProjectFromGoalDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateProjectFromGoal" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "CreateProjectFromGoalInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createProjectFromGoal" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "runs" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CreateProjectFromGoalMutation, CreateProjectFromGoalMutationVariables>;
 export const ProjectDocument = {
   kind: "Document",
   definitions: [
@@ -4799,6 +4983,30 @@ export const ProjectDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "title" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "runs" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                      { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "initialGoal" } },
+                      { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                      { kind: "Field", name: { kind: "Name", value: "activeGateId" } },
+                      { kind: "Field", name: { kind: "Name", value: "latestControllerSummaryId" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "latestControllerSummaryText" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "executionConfig" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                     ],
                   },
                 },
@@ -4912,6 +5120,30 @@ export const ProjectsDocument = {
                   selectionSet: {
                     kind: "SelectionSet",
                     selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "runs" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                      { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "initialGoal" } },
+                      { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                      { kind: "Field", name: { kind: "Name", value: "activeGateId" } },
+                      { kind: "Field", name: { kind: "Name", value: "latestControllerSummaryId" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "latestControllerSummaryText" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "executionConfig" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                    ],
                   },
                 },
                 { kind: "Field", name: { kind: "Name", value: "createdAt" } },

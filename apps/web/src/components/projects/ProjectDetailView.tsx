@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowLeft, CalendarClock, GitBranch, Radio, RefreshCw, Users } from "lucide-react";
 import { gql } from "@urql/core";
-import type { Project, ProjectRun } from "@trace/gql";
+import type { Project } from "@trace/gql";
 import {
   eventScopeKey,
+  type ProjectRunEntity,
   useActiveProjectRunId,
   useAuthStore,
   useEntityField,
@@ -105,7 +106,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     const fetched = result.data?.project as (Project & { id: string }) | null | undefined;
     if (fetched && (!activeOrgId || fetched.organizationId === activeOrgId)) {
       upsert("projects", fetched.id, fetched);
-      upsertMany("projectRuns", fetched.runs as Array<ProjectRun & { id: string }>);
+      upsertMany("projectRuns", fetched.runs as Array<ProjectRunEntity & { id: string }>);
       setNotFound(false);
     } else {
       setNotFound(true);
@@ -251,7 +252,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   );
 }
 
-function ProjectRunPanel({ projectRun }: { projectRun: ProjectRun }) {
+function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
   return (
     <div className="rounded-md border border-accent/30 bg-surface-elevated p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">

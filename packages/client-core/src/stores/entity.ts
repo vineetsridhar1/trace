@@ -31,13 +31,17 @@ export type SessionGroupEntity = SessionGroup & {
   _optimistic?: boolean;
 };
 
+export type ProjectRunEntity = Omit<ProjectRun, "project"> & {
+  project?: Project;
+};
+
 /** Entity types that the store manages, keyed by ID */
 export type EntityTableMap = {
   organizations: Organization;
   users: User;
   repos: Repo;
   projects: Project;
-  projectRuns: ProjectRun;
+  projectRuns: ProjectRunEntity;
   channels: Channel;
   channelGroups: ChannelGroup;
   sessionGroups: SessionGroupEntity;

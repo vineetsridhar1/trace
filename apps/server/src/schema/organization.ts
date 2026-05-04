@@ -4,6 +4,7 @@ import type {
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
+  CreateProjectFromGoalInput,
   CreateProjectRunInput,
   UpdateProjectInput,
   UpdateProjectRunInput,
@@ -78,6 +79,14 @@ export const organizationMutations = {
   updateProject: (_: unknown, args: { id: string; input: UpdateProjectInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return organizationService.updateProject(args.id, orgId, args.input, ctx.actorType, ctx.userId);
+  },
+  createProjectFromGoal: (
+    _: unknown,
+    args: { input: CreateProjectFromGoalInput },
+    ctx: Context,
+  ) => {
+    assertOrgAccess(ctx, args.input.organizationId);
+    return projectRunService.createProjectFromGoal(args.input, ctx.actorType, ctx.userId);
   },
   createProjectRun: (_: unknown, args: { input: CreateProjectRunInput }, ctx: Context) => {
     return projectRunService.createProjectRun(args.input, ctx.actorType, ctx.userId);
