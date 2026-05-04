@@ -190,6 +190,8 @@ type PendingSessionCommand =
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
       traceAction?: BridgeTraceActionContext | null;
+      resetToolSession?: boolean;
+      skipConversationContext?: boolean;
       workspaceUpgrade?: boolean;
     }
   | {
@@ -199,6 +201,8 @@ type PendingSessionCommand =
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
       traceAction?: BridgeTraceActionContext | null;
+      resetToolSession?: boolean;
+      skipConversationContext?: boolean;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
     };
@@ -3553,6 +3557,8 @@ export class SessionService {
     clientMutationId,
     clientSource,
     traceAction,
+    resetToolSession,
+    skipConversationContext,
   }: {
     sessionId: string;
     text: string;
@@ -3563,6 +3569,8 @@ export class SessionService {
     clientMutationId?: string;
     clientSource?: string | null;
     traceAction?: BridgeTraceActionContext | null;
+    resetToolSession?: boolean;
+    skipConversationContext?: boolean;
   }) {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
@@ -3644,6 +3652,8 @@ export class SessionService {
           clientSource: normalizeClientSource(clientSource),
           checkpointContext: null,
           traceAction: traceAction ?? null,
+          resetToolSession: resetToolSession === true,
+          skipConversationContext: skipConversationContext === true,
           ...(imageKeys?.length ? { imageKeys } : {}),
         };
         const markLocalPreparing = session.hosting === "local";
@@ -3724,6 +3734,8 @@ export class SessionService {
         clientSource: normalizeClientSource(clientSource),
         checkpointContext: null,
         traceAction: traceAction ?? null,
+        resetToolSession: resetToolSession === true,
+        skipConversationContext: skipConversationContext === true,
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand, {
@@ -3753,7 +3765,7 @@ export class SessionService {
     let prompt = text;
     let conversationContext: string | null | undefined;
     let hasPrependedConversationContext = false;
-    if (session.toolChangedAt) {
+    if (!skipConversationContext && session.toolChangedAt) {
       const msgSinceSwitch = await prisma.event.findFirst({
         where: {
           scopeId: sessionId,
@@ -3772,7 +3784,7 @@ export class SessionService {
       }
     }
 
-    if (!session.toolSessionId) {
+    if (!skipConversationContext && !session.toolSessionId) {
       const context =
         conversationContext === undefined
           ? await buildConversationContext(sessionId)
@@ -3821,7 +3833,7 @@ export class SessionService {
       reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
-      toolSessionId: session.toolSessionId ?? undefined,
+      toolSessionId: resetToolSession ? undefined : (session.toolSessionId ?? undefined),
       checkpointContext,
       imageUrls,
       traceAction: traceAction ?? null,
@@ -3844,6 +3856,8 @@ export class SessionService {
           clientSource: normalizeClientSource(clientSource),
           checkpointContext,
           traceAction: traceAction ?? null,
+          resetToolSession: resetToolSession === true,
+          skipConversationContext: skipConversationContext === true,
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
         {
@@ -6280,6 +6294,8 @@ export class SessionService {
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         traceAction: this.parseTraceAction(pending.traceAction),
+        resetToolSession: pending.resetToolSession === true,
+        skipConversationContext: pending.skipConversationContext === true,
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
@@ -6293,6 +6309,8 @@ export class SessionService {
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         traceAction: this.parseTraceAction(pending.traceAction),
+        resetToolSession: pending.resetToolSession === true,
+        skipConversationContext: pending.skipConversationContext === true,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
@@ -6423,7 +6441,7 @@ export class SessionService {
     // If no tool session ID exists, prepend conversation context so the new
     // process has the full history (same pattern as tool-switch).
     let prompt = pending.prompt;
-    if (!session.toolSessionId && prompt) {
+    if (!pending.skipConversationContext && !session.toolSessionId && prompt) {
       const context = await buildConversationContext(sessionId);
       if (context) {
         prompt = `${context}\n\n${prompt}`;
@@ -6461,7 +6479,7 @@ export class SessionService {
       reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
-      toolSessionId: session.toolSessionId ?? undefined,
+      toolSessionId: pending.resetToolSession ? undefined : (session.toolSessionId ?? undefined),
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
       traceAction: pending.traceAction ?? undefined,

@@ -367,6 +367,8 @@ describe("ProjectPlanningService", () => {
         sessionId: "session-1",
         interactionMode: "code",
         clientSource: "project_ticket_generation",
+        resetToolSession: true,
+        skipConversationContext: true,
         traceAction: expect.objectContaining({
           type: "project_ticket_generation",
           generationAttemptId: "attempt-1",

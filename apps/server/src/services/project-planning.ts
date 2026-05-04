@@ -1090,6 +1090,8 @@ export class ProjectPlanningService {
       interactionMode: "code",
       clientSource: "project_ticket_generation",
       traceAction,
+      resetToolSession: true,
+      skipConversationContext: true,
     });
   }
 
