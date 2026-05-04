@@ -133,6 +133,7 @@ describe("ProjectPlanningService", () => {
 
   it("updates the durable plan summary and emits a snapshot event", async () => {
     prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(makeProjectRun());
+    prismaMock.projectRun.findFirst.mockResolvedValueOnce(null);
     prismaMock.projectRun.update.mockResolvedValueOnce(
       makeProjectRun({ status: "planning", planSummary: "Plan v1" }),
     );
@@ -164,6 +165,24 @@ describe("ProjectPlanningService", () => {
       }),
       prismaMock,
     );
+  });
+
+  it("rejects summary status updates that would create a second active run", async () => {
+    prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(makeProjectRun());
+    prismaMock.projectRun.findFirst.mockResolvedValueOnce({ id: "run-existing" });
+
+    const service = new ProjectPlanningService();
+    await expect(
+      service.updatePlanSummary(
+        { projectRunId: "run-1", planSummary: "Plan v1", status: "planning" },
+        "org-1",
+        "agent",
+        "agent-1",
+      ),
+    ).rejects.toThrow("Project already has an active run");
+
+    expect(prismaMock.projectRun.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
   it("rejects empty planning messages before writing events", async () => {

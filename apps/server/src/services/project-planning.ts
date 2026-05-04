@@ -17,6 +17,16 @@ type ProjectRunContext = {
   projectId: string;
 };
 
+const ACTIVE_PROJECT_RUN_STATUSES = [
+  "draft",
+  "interviewing",
+  "planning",
+  "ready",
+  "running",
+  "needs_human",
+  "paused",
+] as const;
+
 function normalizeText(value: string, label: string): string {
   const normalized = value.trim();
   if (!normalized) {
@@ -133,6 +143,12 @@ export class ProjectPlanningService {
         actorType,
         actorId,
       );
+      if (
+        input.status &&
+        (ACTIVE_PROJECT_RUN_STATUSES as readonly string[]).includes(input.status)
+      ) {
+        await this.assertNoActiveRun(tx, existing.projectId, existing.id);
+      }
 
       const projectRun = await tx.projectRun.update({
         where: { id: existing.id },
@@ -205,6 +221,24 @@ export class ProjectPlanningService {
     });
     await assertActorOrgAccess(tx, organizationId, actorType, actorId);
     return projectRun;
+  }
+
+  private async assertNoActiveRun(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    excludingRunId: string,
+  ) {
+    const existing = await tx.projectRun.findFirst({
+      where: {
+        projectId,
+        status: { in: [...ACTIVE_PROJECT_RUN_STATUSES] },
+        id: { not: excludingRunId },
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new Error("Project already has an active run");
+    }
   }
 }
 

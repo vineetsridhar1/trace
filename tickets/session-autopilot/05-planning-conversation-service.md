@@ -20,6 +20,7 @@ Add the service-backed planning/interview flow that turns a raw project goal int
   - `project_question_asked`: `{ projectRunId, message }`
   - `project_answer_recorded`: `{ projectRunId, message }`
   - `project_decision_recorded`: `{ projectRunId, decision }`
+  - `project_risk_recorded`: `{ projectRunId, risk }`
   - `project_plan_summary_updated`: `{ projectRun }`
 
 ## Deliverable

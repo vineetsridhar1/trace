@@ -13,6 +13,7 @@ Wire the AI planning runtime, context packet, prompt, and scoped actions for pro
   - initial goal
   - prior questions and answers
   - recorded decisions
+  - recorded risks
   - plan summary
 - Add a planning system prompt:
   - interview the user
@@ -23,7 +24,9 @@ Wire the AI planning runtime, context packet, prompt, and scoped actions for pro
 - Provide scoped service-backed actions:
   - `project.get`
   - `project.askQuestion`
+  - `project.recordAnswer`
   - `project.recordDecision`
+  - `project.recordRisk`
   - `project.summarizePlan`
 - Define each action contract before prompt integration:
   - typed input shape

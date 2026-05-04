@@ -171,6 +171,7 @@ Minimum v1 event payloads:
 - `project_question_asked`: `{ projectRunId, message }`
 - `project_answer_recorded`: `{ projectRunId, message }`
 - `project_decision_recorded`: `{ projectRunId, decision }`
+- `project_risk_recorded`: `{ projectRunId, risk }`
 - `project_plan_summary_updated`: `{ projectRun }`
 - `project_plan_ticket_created`: `{ projectPlanTicket, ticket }`
 - `project_plan_ticket_updated`: `{ projectPlanTicket, ticket }`
@@ -440,7 +441,9 @@ Initial action surface:
 - `project.get`
 - `project.update`
 - `project.askQuestion`
+- `project.recordAnswer`
 - `project.recordDecision`
+- `project.recordRisk`
 - `project.summarizePlan`
 - `ticket.create`
 - `ticket.update`
