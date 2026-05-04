@@ -449,6 +449,12 @@ export type CreateProjectInput = {
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type CreateProjectRunInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  initialGoal: Scalars["String"]["input"];
+  projectId: Scalars["ID"]["input"];
+};
+
 export type CreateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name: Scalars["String"]["input"];
@@ -519,8 +525,11 @@ export type EventType =
   | "message_sent"
   | "organization_created"
   | "project_created"
+  | "project_goal_submitted"
   | "project_member_added"
   | "project_member_removed"
+  | "project_run_created"
+  | "project_run_updated"
   | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
@@ -700,6 +709,7 @@ export type Mutation = {
   createChat: Chat;
   createOrganization: OrgMember;
   createProject: Project;
+  createProjectRun: ProjectRun;
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -771,6 +781,7 @@ export type Mutation = {
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateProject: Project;
+  updateProjectRun: ProjectRun;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
@@ -863,6 +874,10 @@ export type MutationCreateOrganizationArgs = {
 
 export type MutationCreateProjectArgs = {
   input: CreateProjectInput;
+};
+
+export type MutationCreateProjectRunArgs = {
+  input: CreateProjectRunInput;
 };
 
 export type MutationCreateRepoArgs = {
@@ -1217,6 +1232,11 @@ export type MutationUpdateProjectArgs = {
   input: UpdateProjectInput;
 };
 
+export type MutationUpdateProjectRunArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectRunInput;
+};
+
 export type MutationUpdateRepoArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateRepoInput;
@@ -1312,6 +1332,7 @@ export type Project = {
   organizationId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
   repoId?: Maybe<Scalars["ID"]["output"]>;
+  runs: Array<ProjectRun>;
   sessions: Array<Session>;
   soulFile: Scalars["String"]["output"];
   tickets: Array<Ticket>;
@@ -1325,6 +1346,35 @@ export type ProjectMember = {
   role: UserRole;
   user: User;
 };
+
+export type ProjectRun = {
+  __typename?: "ProjectRun";
+  activeGateId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  executionConfig: Scalars["JSON"]["output"];
+  id: Scalars["ID"]["output"];
+  initialGoal: Scalars["String"]["output"];
+  latestControllerSummaryId?: Maybe<Scalars["ID"]["output"]>;
+  latestControllerSummaryText?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  planSummary?: Maybe<Scalars["String"]["output"]>;
+  project: Project;
+  projectId: Scalars["ID"]["output"];
+  status: ProjectRunStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectRunStatus =
+  | "cancelled"
+  | "completed"
+  | "draft"
+  | "failed"
+  | "interviewing"
+  | "needs_human"
+  | "paused"
+  | "planning"
+  | "ready"
+  | "running";
 
 export type PushPlatform = "android" | "ios";
 
@@ -1363,6 +1413,7 @@ export type Query = {
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
+  projectRuns: Array<ProjectRun>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
@@ -1525,6 +1576,10 @@ export type QueryParticipantsArgs = {
 
 export type QueryProjectArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryProjectRunsArgs = {
+  projectId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectsArgs = {
@@ -2038,6 +2093,15 @@ export type UpdateProjectInput = {
   soulFile?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type UpdateProjectRunInput = {
+  activeGateId?: InputMaybe<Scalars["ID"]["input"]>;
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  latestControllerSummaryId?: InputMaybe<Scalars["ID"]["input"]>;
+  latestControllerSummaryText?: InputMaybe<Scalars["String"]["input"]>;
+  planSummary?: InputMaybe<Scalars["String"]["input"]>;
+  status?: InputMaybe<ProjectRunStatus>;
+};
+
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
@@ -2201,6 +2265,7 @@ export type ResolversTypes = ResolversObject<{
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
+  CreateProjectRunInput: CreateProjectRunInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
@@ -2238,6 +2303,8 @@ export type ResolversTypes = ResolversObject<{
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
   ProjectMember: ResolverTypeWrapper<ProjectMember>;
+  ProjectRun: ResolverTypeWrapper<ProjectRun>;
+  ProjectRunStatus: ProjectRunStatus;
   PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
@@ -2280,6 +2347,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
   UpdateProjectInput: UpdateProjectInput;
+  UpdateProjectRunInput: UpdateProjectRunInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
@@ -2327,6 +2395,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
+  CreateProjectRunInput: CreateProjectRunInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
@@ -2351,6 +2420,7 @@ export type ResolversParentTypes = ResolversObject<{
   PortEndpoint: PortEndpoint;
   Project: Project;
   ProjectMember: ProjectMember;
+  ProjectRun: ProjectRun;
   Query: {};
   QueuedMessage: QueuedMessage;
   RemoveProjectMemberInput: RemoveProjectMemberInput;
@@ -2383,6 +2453,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
   UpdateProjectInput: UpdateProjectInput;
+  UpdateProjectRunInput: UpdateProjectRunInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
@@ -3076,6 +3147,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationCreateProjectArgs, "input">
   >;
+  createProjectRun?: Resolver<
+    ResolversTypes["ProjectRun"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateProjectRunArgs, "input">
+  >;
   createRepo?: Resolver<
     ResolversTypes["Repo"],
     ParentType,
@@ -3502,6 +3579,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationUpdateProjectArgs, "id" | "input">
   >;
+  updateProjectRun?: Resolver<
+    ResolversTypes["ProjectRun"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateProjectRunArgs, "id" | "input">
+  >;
   updateRepo?: Resolver<
     ResolversTypes["Repo"],
     ParentType,
@@ -3613,6 +3696,7 @@ export type ProjectResolvers<
   organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
   repoId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  runs?: Resolver<Array<ResolversTypes["ProjectRun"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   soulFile?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes["Ticket"]>, ParentType, ContextType>;
@@ -3628,6 +3712,26 @@ export type ProjectMemberResolvers<
   leftAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   role?: Resolver<ResolversTypes["UserRole"], ParentType, ContextType>;
   user?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ProjectRunResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ProjectRun"] = ResolversParentTypes["ProjectRun"],
+> = ResolversObject<{
+  activeGateId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  executionConfig?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  initialGoal?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  latestControllerSummaryId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  latestControllerSummaryText?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  planSummary?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  project?: Resolver<ResolversTypes["Project"], ParentType, ContextType>;
+  projectId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ProjectRunStatus"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3807,6 +3911,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryProjectArgs, "id">
+  >;
+  projectRuns?: Resolver<
+    Array<ResolversTypes["ProjectRun"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryProjectRunsArgs, "projectId">
   >;
   projects?: Resolver<
     Array<ResolversTypes["Project"]>,
@@ -4326,6 +4436,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   PortEndpoint?: PortEndpointResolvers<ContextType>;
   Project?: ProjectResolvers<ContextType>;
   ProjectMember?: ProjectMemberResolvers<ContextType>;
+  ProjectRun?: ProjectRunResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   QueuedMessage?: QueuedMessageResolvers<ContextType>;
   Repo?: RepoResolvers<ContextType>;

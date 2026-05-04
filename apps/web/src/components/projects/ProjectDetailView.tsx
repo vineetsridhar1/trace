@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowLeft, CalendarClock, GitBranch, Radio, RefreshCw, Users } from "lucide-react";
 import { gql } from "@urql/core";
-import type { Project } from "@trace/gql";
+import type { Project, ProjectRun } from "@trace/gql";
 import {
   eventScopeKey,
+  useActiveProjectRunId,
   useAuthStore,
   useEntityField,
   useEntityStore,
@@ -55,6 +56,20 @@ const PROJECT_QUERY = gql`
         id
         title
       }
+      runs {
+        id
+        organizationId
+        projectId
+        status
+        initialGoal
+        planSummary
+        activeGateId
+        latestControllerSummaryId
+        latestControllerSummaryText
+        executionConfig
+        createdAt
+        updatedAt
+      }
       createdAt
       updatedAt
     }
@@ -64,12 +79,17 @@ const PROJECT_QUERY = gql`
 export function ProjectDetailView({ projectId }: { projectId: string }) {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const upsert = useEntityStore((s) => s.upsert);
+  const upsertMany = useEntityStore((s) => s.upsertMany);
   const setActiveProjectId = useUIStore((s) => s.setActiveProjectId);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const projectName = useEntityField("projects", projectId, "name");
   const project = useEntityStore((s) => s.projects[projectId]);
+  const activeProjectRunId = useActiveProjectRunId(projectId);
+  const activeProjectRun = useEntityStore((s) =>
+    activeProjectRunId ? s.projectRuns[activeProjectRunId] : null,
+  );
   const scopeKey = useMemo(() => eventScopeKey("project", projectId), [projectId]);
   const eventIds = useScopedEventIds(scopeKey);
   const projectEvents = useProjectEvents(projectId);
@@ -85,12 +105,13 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     const fetched = result.data?.project as (Project & { id: string }) | null | undefined;
     if (fetched && (!activeOrgId || fetched.organizationId === activeOrgId)) {
       upsert("projects", fetched.id, fetched);
+      upsertMany("projectRuns", fetched.runs as Array<ProjectRun & { id: string }>);
       setNotFound(false);
     } else {
       setNotFound(true);
     }
     setLoading(false);
-  }, [activeOrgId, projectId, upsert]);
+  }, [activeOrgId, projectId, upsert, upsertMany]);
 
   useEffect(() => {
     setLoading(true);
@@ -143,7 +164,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="border-b border-border px-4 py-3">
-        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setActiveProjectId(null)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2"
+          onClick={() => setActiveProjectId(null)}
+        >
           <ArrowLeft size={16} />
           Projects
         </Button>
@@ -170,6 +196,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
       <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="space-y-4">
+          {activeProjectRun && <ProjectRunPanel projectRun={activeProjectRun} />}
+
           <div className="rounded-md border border-border bg-background p-4">
             <h2 className="text-sm font-semibold text-foreground">Overview</h2>
             <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
@@ -218,6 +246,31 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             error={projectEvents.error}
           />
         </section>
+      </div>
+    </div>
+  );
+}
+
+function ProjectRunPanel({ projectRun }: { projectRun: ProjectRun }) {
+  return (
+    <div className="rounded-md border border-accent/30 bg-surface-elevated p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-foreground">Planning run</h2>
+        <span className="rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent">
+          {formatStatus(projectRun.status)}
+        </span>
+      </div>
+      <div className="mt-3">
+        <div className="text-xs font-medium uppercase text-muted-foreground">Initial goal</div>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground">
+          {projectRun.initialGoal}
+        </p>
+      </div>
+      <div className="mt-3">
+        <div className="text-xs font-medium uppercase text-muted-foreground">Plan summary</div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {projectRun.planSummary || "Planning has not produced a summary yet."}
+        </p>
       </div>
     </div>
   );
@@ -302,4 +355,8 @@ function formatDateTime(value: string): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatStatus(value: string): string {
+  return value.replace(/_/g, " ");
 }

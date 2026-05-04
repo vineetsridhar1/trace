@@ -446,6 +446,12 @@ export type CreateProjectInput = {
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type CreateProjectRunInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  initialGoal: Scalars["String"]["input"];
+  projectId: Scalars["ID"]["input"];
+};
+
 export type CreateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name: Scalars["String"]["input"];
@@ -516,8 +522,11 @@ export type EventType =
   | "message_sent"
   | "organization_created"
   | "project_created"
+  | "project_goal_submitted"
   | "project_member_added"
   | "project_member_removed"
+  | "project_run_created"
+  | "project_run_updated"
   | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
@@ -697,6 +706,7 @@ export type Mutation = {
   createChat: Chat;
   createOrganization: OrgMember;
   createProject: Project;
+  createProjectRun: ProjectRun;
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -768,6 +778,7 @@ export type Mutation = {
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateProject: Project;
+  updateProjectRun: ProjectRun;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
@@ -860,6 +871,10 @@ export type MutationCreateOrganizationArgs = {
 
 export type MutationCreateProjectArgs = {
   input: CreateProjectInput;
+};
+
+export type MutationCreateProjectRunArgs = {
+  input: CreateProjectRunInput;
 };
 
 export type MutationCreateRepoArgs = {
@@ -1214,6 +1229,11 @@ export type MutationUpdateProjectArgs = {
   input: UpdateProjectInput;
 };
 
+export type MutationUpdateProjectRunArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectRunInput;
+};
+
 export type MutationUpdateRepoArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateRepoInput;
@@ -1309,6 +1329,7 @@ export type Project = {
   organizationId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
   repoId?: Maybe<Scalars["ID"]["output"]>;
+  runs: Array<ProjectRun>;
   sessions: Array<Session>;
   soulFile: Scalars["String"]["output"];
   tickets: Array<Ticket>;
@@ -1322,6 +1343,35 @@ export type ProjectMember = {
   role: UserRole;
   user: User;
 };
+
+export type ProjectRun = {
+  __typename?: "ProjectRun";
+  activeGateId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  executionConfig: Scalars["JSON"]["output"];
+  id: Scalars["ID"]["output"];
+  initialGoal: Scalars["String"]["output"];
+  latestControllerSummaryId?: Maybe<Scalars["ID"]["output"]>;
+  latestControllerSummaryText?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  planSummary?: Maybe<Scalars["String"]["output"]>;
+  project: Project;
+  projectId: Scalars["ID"]["output"];
+  status: ProjectRunStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectRunStatus =
+  | "cancelled"
+  | "completed"
+  | "draft"
+  | "failed"
+  | "interviewing"
+  | "needs_human"
+  | "paused"
+  | "planning"
+  | "ready"
+  | "running";
 
 export type PushPlatform = "android" | "ios";
 
@@ -1360,6 +1410,7 @@ export type Query = {
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
+  projectRuns: Array<ProjectRun>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
@@ -1522,6 +1573,10 @@ export type QueryParticipantsArgs = {
 
 export type QueryProjectArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryProjectRunsArgs = {
+  projectId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectsArgs = {
@@ -2033,6 +2088,15 @@ export type UpdateProjectInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   soulFile?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateProjectRunInput = {
+  activeGateId?: InputMaybe<Scalars["ID"]["input"]>;
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  latestControllerSummaryId?: InputMaybe<Scalars["ID"]["input"]>;
+  latestControllerSummaryText?: InputMaybe<Scalars["String"]["input"]>;
+  planSummary?: InputMaybe<Scalars["String"]["input"]>;
+  status?: InputMaybe<ProjectRunStatus>;
 };
 
 export type UpdateRepoInput = {

@@ -5,6 +5,7 @@ import type {
   User,
   Repo,
   Project,
+  ProjectRun,
   Channel,
   ChannelGroup,
   SessionGroup,
@@ -36,6 +37,7 @@ export type EntityTableMap = {
   users: User;
   repos: Repo;
   projects: Project;
+  projectRuns: ProjectRun;
   channels: Channel;
   channelGroups: ChannelGroup;
   sessionGroups: SessionGroupEntity;
@@ -101,6 +103,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   users: {},
   repos: {},
   projects: {},
+  projectRuns: {},
   channels: {},
   channelGroups: {},
   sessionGroups: {},
@@ -338,6 +341,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       users: {},
       repos: {},
       projects: {},
+      projectRuns: {},
       channels: {},
       channelGroups: {},
       sessionGroups: {},
@@ -669,6 +673,7 @@ const ENTITY_KEYS: EntityType[] = [
   "users",
   "repos",
   "projects",
+  "projectRuns",
   "channels",
   "channelGroups",
   "sessionGroups",
@@ -857,6 +862,36 @@ export function useEntityIds<T extends EntityType>(
       return entries.map(([id]) => id);
     }),
   );
+}
+
+const ACTIVE_PROJECT_RUN_STATUSES = new Set<ProjectRun["status"]>([
+  "draft",
+  "interviewing",
+  "planning",
+  "ready",
+  "running",
+  "needs_human",
+  "paused",
+]);
+
+export function useProjectRunIds(projectId: string): string[] {
+  return useEntityIds(
+    "projectRuns",
+    (projectRun) => projectRun.projectId === projectId,
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
+export function useActiveProjectRunId(projectId: string): string | null {
+  return useEntityStore((state: EntityState) => {
+    const activeRuns = Object.values(state.projectRuns)
+      .filter(
+        (projectRun) =>
+          projectRun.projectId === projectId && ACTIVE_PROJECT_RUN_STATUSES.has(projectRun.status),
+      )
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return activeRuns[0]?.id ?? null;
+  });
 }
 
 export function useEntitiesByIds<T extends EntityType>(

@@ -10,6 +10,7 @@ import type {
   EventType,
   InboxItem,
   Project,
+  ProjectRun,
   QueuedMessage,
   Repo,
   ScopeType,
@@ -106,6 +107,7 @@ function legacyProjectFromEntityLinked(
     channels: [],
     sessions: [],
     tickets: [],
+    runs: [],
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -120,6 +122,18 @@ function upsertProjectFromPayload(batch: StoreBatchWriter, payload: JsonObject):
     "projects",
     project.id,
     (existing ? { ...existing, ...project } : project) as unknown as Project,
+  );
+}
+
+function upsertProjectRunFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const projectRun = asJsonObject(payload.projectRun);
+  if (!projectRun || typeof projectRun.id !== "string") return;
+
+  const existing = batch.get("projectRuns", projectRun.id);
+  batch.upsert(
+    "projectRuns",
+    projectRun.id,
+    (existing ? { ...existing, ...projectRun } : projectRun) as unknown as ProjectRun,
   );
 }
 
@@ -234,6 +248,13 @@ export function handleOrgEvent(event: Event): void {
   // Project events
   if (event.eventType === "project_created" || event.eventType === "project_updated") {
     upsertProjectFromPayload(batch, payload);
+  }
+  if (
+    event.eventType === "project_run_created" ||
+    event.eventType === "project_run_updated" ||
+    event.eventType === "project_goal_submitted"
+  ) {
+    upsertProjectRunFromPayload(batch, payload);
   }
   if (event.eventType === "project_member_added" || event.eventType === "project_member_removed") {
     patchProjectMemberFromPayload(batch, payload, event.eventType);
