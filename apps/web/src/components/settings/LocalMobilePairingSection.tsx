@@ -5,9 +5,12 @@ import * as QRCode from "qrcode";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { isLocalMode } from "../../lib/runtime-mode";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const PUBLIC_URL_KEY = "trace_local_mobile_public_url";
+const hostedPairingBaseUrl =
+  API_URL.trim().length > 0 ? API_URL.replace(/\/+$/, "") : window.location.origin;
 
 type LocalMobileDevice = {
   id: string;
@@ -54,10 +57,13 @@ export function LocalMobilePairingSection() {
   async function loadDevices() {
     setLoadingDevices(true);
     try {
-      const response = await fetch(`${API_URL}/auth/local-mobile/devices`, {
-        headers: getAuthHeaders(),
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${API_URL}${isLocalMode ? "/auth/local-mobile/devices" : "/auth/mobile/devices"}`,
+        {
+          headers: getAuthHeaders(),
+          credentials: "include",
+        },
+      );
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
         devices?: LocalMobileDevice[];
@@ -102,24 +108,31 @@ export function LocalMobilePairingSection() {
   }, [qrPayload]);
 
   async function handleGenerateQr() {
-    let normalizedUrl: string;
-    try {
-      normalizedUrl = normalizePublicUrl(publicUrl);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Enter a valid public URL");
-      return;
+    let normalizedUrl = hostedPairingBaseUrl;
+    if (isLocalMode) {
+      try {
+        normalizedUrl = normalizePublicUrl(publicUrl);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Enter a valid public URL");
+        return;
+      }
     }
 
     setGenerating(true);
     try {
-      const response = await fetch(`${API_URL}/auth/local-mobile/pairing-token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
+      const response = await fetch(
+        `${API_URL}${
+          isLocalMode ? "/auth/local-mobile/pairing-token" : "/auth/mobile/pairing-token"
+        }`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          credentials: "include",
         },
-        credentials: "include",
-      });
+      );
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
         pairingToken?: string;
@@ -129,13 +142,15 @@ export function LocalMobilePairingSection() {
         throw new Error(body.error ?? "Failed to create pairing code");
       }
 
-      localStorage.setItem(PUBLIC_URL_KEY, normalizedUrl);
-      setPublicUrl(normalizedUrl);
+      if (isLocalMode) {
+        localStorage.setItem(PUBLIC_URL_KEY, normalizedUrl);
+        setPublicUrl(normalizedUrl);
+      }
       setExpiresAt(body.expiresAt ?? null);
       setQrPayload(
         JSON.stringify({
           v: 1,
-          kind: "trace-local-pair",
+          kind: isLocalMode ? "trace-local-pair" : "trace-account-pair",
           baseUrl: normalizedUrl,
           pairingToken: body.pairingToken,
           expiresAt: body.expiresAt ?? undefined,
@@ -162,11 +177,16 @@ export function LocalMobilePairingSection() {
   async function handleRevoke(deviceId: string) {
     setRevokingId(deviceId);
     try {
-      const response = await fetch(`${API_URL}/auth/local-mobile/devices/${deviceId}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${API_URL}${
+          isLocalMode ? "/auth/local-mobile/devices" : "/auth/mobile/devices"
+        }/${deviceId}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+          credentials: "include",
+        },
+      );
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
         throw new Error(body.error ?? "Failed to revoke paired device");
@@ -189,8 +209,8 @@ export function LocalMobilePairingSection() {
             <h3 className="text-sm font-semibold text-foreground">Mobile Pairing</h3>
           </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Paste your public ngrok URL, generate a one-time QR code, and pair exactly one phone at
-            a time without exposing open signup on the tunnel.
+            Generate a one-time QR code from this signed-in account, then scan it from the mobile
+            app to pair exactly one phone.
           </p>
         </div>
         <Button
@@ -209,35 +229,49 @@ export function LocalMobilePairingSection() {
       <div className="mt-4 grid min-w-0 gap-4">
         <div className="min-w-0 space-y-4">
           <div className="space-y-2">
-            <label
-              htmlFor="local-mobile-public-url"
-              className="text-sm font-medium text-foreground"
-            >
-              Public server URL
-            </label>
-            <div className="flex min-w-0 flex-col gap-3 md:flex-row">
-              <Input
-                id="local-mobile-public-url"
-                value={publicUrl}
-                onChange={(event) => setPublicUrl(event.target.value)}
-                placeholder="https://your-trace.ngrok-free.app"
-                className="min-w-0 flex-1"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-              <Button
-                className="w-full md:w-auto"
-                onClick={handleGenerateQr}
-                disabled={generating || !publicUrl.trim()}
-              >
+            {isLocalMode ? (
+              <>
+                <label
+                  htmlFor="local-mobile-public-url"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Public server URL
+                </label>
+                <div className="flex min-w-0 flex-col gap-3 md:flex-row">
+                  <Input
+                    id="local-mobile-public-url"
+                    value={publicUrl}
+                    onChange={(event) => setPublicUrl(event.target.value)}
+                    placeholder="https://your-trace.ngrok-free.app"
+                    className="min-w-0 flex-1"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <Button
+                    className="w-full md:w-auto"
+                    onClick={handleGenerateQr}
+                    disabled={generating || !publicUrl.trim()}
+                  >
+                    {generating ? "Generating..." : "Generate QR"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button className="w-full md:w-auto" onClick={handleGenerateQr} disabled={generating}>
                 {generating ? "Generating..." : "Generate QR"}
               </Button>
+            )}
+            <div className="text-xs text-muted-foreground">
+              {isLocalMode ? (
+                "This should be the public URL that your phone can reach. The generated QR expires in 5 minutes and can only be used once."
+              ) : (
+                <>
+                  The generated QR expires in 5 minutes and can only be used once. Mobile will
+                  connect to <span className="font-mono">{hostedPairingBaseUrl}</span>.
+                </>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              This should be the public URL that your phone can reach. The generated QR expires in 5
-              minutes and can only be used once.
-            </p>
           </div>
 
           {qrPayload ? (
@@ -310,7 +344,7 @@ export function LocalMobilePairingSection() {
           {qrDataUrl ? (
             <img
               src={qrDataUrl}
-              alt="Trace local mobile pairing QR code"
+              alt="Trace mobile pairing QR code"
               className="box-border h-auto w-full max-w-[min(18rem,100%)] rounded-lg bg-white p-3"
             />
           ) : (

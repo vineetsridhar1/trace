@@ -759,6 +759,98 @@ describe("local mobile pairing", () => {
   });
 });
 
+describe("hosted mobile pairing", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: PrismaMock) => unknown) =>
+      callback(prismaMock),
+    );
+
+    const app = express();
+    app.use(express.json());
+    app.use(authRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  it("creates a one-time pairing token for an authenticated hosted session", async () => {
+    prismaMock.orgMember.findUnique.mockResolvedValue({ organizationId: "org-1" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/mobile/pairing-token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Organization-Id": "org-1",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { pairingToken: string; expiresAt: string };
+    expect(body.pairingToken.length).toBeGreaterThan(20);
+    expect(prismaMock.localMobilePairingToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ownerUserId: "user-1",
+        organizationId: "org-1",
+        tokenHash: expect.any(String),
+      }),
+    });
+  });
+
+  it("redeems a hosted pairing token into a mobile device secret", async () => {
+    prismaMock.localMobilePairingToken.findUnique
+      .mockResolvedValueOnce({
+        id: "pair-1",
+        ownerUserId: "user-1",
+        organizationId: "org-1",
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: "pair-1",
+        ownerUserId: "user-1",
+        organizationId: "org-1",
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+      });
+    prismaMock.localMobileDevice.upsert.mockResolvedValue({ id: "device-1" });
+    prismaMock.localMobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
+
+    const res = await fetch(`${baseUrl}/auth/mobile/pair`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pairingToken: "pair-token-1234567890",
+        installId: "install-12345678",
+        deviceName: "Vineet's iPhone",
+        platform: "ios",
+        appVersion: "0.0.1",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      token: string;
+      deviceId: string;
+      organizationId: string;
+    };
+    expect(body.token.length).toBeGreaterThan(20);
+    expect(body.deviceId).toBe("device-1");
+    expect(body.organizationId).toBe("org-1");
+  });
+});
+
 describe("github oauth callback", () => {
   let server: Server;
   let baseUrl: string;
