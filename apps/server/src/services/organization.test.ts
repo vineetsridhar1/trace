@@ -261,7 +261,9 @@ describe("OrganizationService", () => {
   });
 
   it("updates repos, creates projects, and links entities", async () => {
-    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({ id: "repo-1" });
+    prismaMock.repo.findFirstOrThrow
+      .mockResolvedValueOnce({ id: "repo-1" })
+      .mockResolvedValueOnce({ id: "repo-1" });
     prismaMock.repo.update.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-1",
@@ -320,6 +322,78 @@ describe("OrganizationService", () => {
     await expect(
       service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
     ).rejects.toThrow("Chats cannot be linked to projects");
+  });
+
+  it("updates projects and emits project_updated snapshots", async () => {
+    prismaMock.project.findFirstOrThrow.mockResolvedValueOnce({ id: "project-1" });
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({ id: "repo-1" });
+    prismaMock.project.update.mockResolvedValueOnce(
+      makeProject({
+        name: "Roadmap v2",
+        repoId: "repo-1",
+        aiMode: "suggest",
+        soulFile: "docs/soul.md",
+      }),
+    );
+
+    const service = new OrganizationService();
+    const project = await service.updateProject(
+      "project-1",
+      "org-1",
+      {
+        name: " Roadmap v2 ",
+        repoId: "repo-1",
+        aiMode: "suggest",
+        soulFile: "docs/soul.md",
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(project.name).toBe("Roadmap v2");
+    expect(prismaMock.project.update).toHaveBeenCalledWith({
+      where: { id: "project-1" },
+      data: {
+        name: "Roadmap v2",
+        repoId: "repo-1",
+        aiMode: "suggest",
+        soulFile: "docs/soul.md",
+      },
+      include: expect.objectContaining({
+        members: expect.objectContaining({ where: { leftAt: null } }),
+      }),
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        scopeType: "project",
+        scopeId: "project-1",
+        eventType: "project_updated",
+        payload: expect.objectContaining({
+          project: expect.objectContaining({
+            id: "project-1",
+            name: "Roadmap v2",
+            repoId: "repo-1",
+            soulFile: "docs/soul.md",
+          }),
+        }),
+      }),
+      prismaMock,
+    );
+  });
+
+  it("rejects blank project names before updating", async () => {
+    const service = new OrganizationService();
+
+    await expect(
+      service.updateProject("project-1", "org-1", { name: "   " }, "user", "user-1"),
+    ).rejects.toThrow("Project name is required");
+
+    expect(prismaMock.project.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "project_updated" }),
+      prismaMock,
+    );
   });
 
   it("creates project members and emits project-scoped project events", async () => {

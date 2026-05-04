@@ -1073,6 +1073,24 @@ input CreateProjectInput {
   repoId: ID
 }
 
+input UpdateProjectInput {
+  name: String
+  repoId: ID
+  aiMode: AutonomyMode
+  soulFile: String
+}
+
+input AddProjectMemberInput {
+  projectId: ID!
+  userId: ID!
+  role: UserRole
+}
+
+input RemoveProjectMemberInput {
+  projectId: ID!
+  userId: ID!
+}
+
 input CreateChatInput {
   memberIds: [ID!]!
   name: String
@@ -1369,6 +1387,9 @@ type Mutation {
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
+  updateProject(id: ID!, input: UpdateProjectInput!): Project!
+  addProjectMember(input: AddProjectMemberInput!): ProjectMember!
+  removeProjectMember(input: RemoveProjectMemberInput!): Boolean!
   dismissInboxItem(id: ID!): InboxItem!
   acceptAgentSuggestion(inboxItemId: ID!, edits: JSON): InboxItem!
   dismissAgentSuggestion(inboxItemId: ID!): InboxItem!

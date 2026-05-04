@@ -39,6 +39,12 @@ export type AddChatMemberInput = {
   userId: Scalars["ID"]["input"];
 };
 
+export type AddProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  role?: InputMaybe<UserRole>;
+  userId: Scalars["ID"]["input"];
+};
+
 export type AgentBudgetStatus = {
   __typename?: "AgentBudgetStatus";
   dailyLimitCents: Scalars["Int"]["output"];
@@ -679,6 +685,7 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  addProjectMember: ProjectMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
@@ -726,6 +733,7 @@ export type Mutation = {
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
+  removeProjectMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
@@ -762,6 +770,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateProject: Project;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
@@ -781,6 +790,10 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   role?: InputMaybe<UserRole>;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationAddProjectMemberArgs = {
+  input: AddProjectMemberInput;
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {
@@ -1004,6 +1017,10 @@ export type MutationRemoveOrgMemberArgs = {
   userId: Scalars["ID"]["input"];
 };
 
+export type MutationRemoveProjectMemberArgs = {
+  input: RemoveProjectMemberInput;
+};
+
 export type MutationRemoveQueuedMessageArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1193,6 +1210,11 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdateProjectArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectInput;
 };
 
 export type MutationUpdateRepoArgs = {
@@ -1616,6 +1638,11 @@ export type QueuedMessage = {
   text: Scalars["String"]["output"];
 };
 
+export type RemoveProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  userId: Scalars["ID"]["input"];
+};
+
 export type ReorderChannelGroupsInput = {
   groupIds: Array<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -2004,6 +2031,13 @@ export type UpdateChannelInput = {
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type UpdateProjectInput = {
+  aiMode?: InputMaybe<AutonomyMode>;
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  soulFile?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
@@ -2118,6 +2152,7 @@ export type ResolversTypes = ResolversObject<{
   Actor: ResolverTypeWrapper<Actor>;
   ActorType: ActorType;
   AddChatMemberInput: AddChatMemberInput;
+  AddProjectMemberInput: AddProjectMemberInput;
   AgentBudgetStatus: ResolverTypeWrapper<AgentBudgetStatus>;
   AgentCostEntry: ResolverTypeWrapper<AgentCostEntry>;
   AgentCostSummary: ResolverTypeWrapper<AgentCostSummary>;
@@ -2206,6 +2241,7 @@ export type ResolversTypes = ResolversObject<{
   PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
+  RemoveProjectMemberInput: RemoveProjectMemberInput;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: ResolverTypeWrapper<Repo>;
@@ -2243,6 +2279,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateProjectInput: UpdateProjectInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
@@ -2253,6 +2290,7 @@ export type ResolversTypes = ResolversObject<{
 export type ResolversParentTypes = ResolversObject<{
   Actor: Actor;
   AddChatMemberInput: AddChatMemberInput;
+  AddProjectMemberInput: AddProjectMemberInput;
   AgentBudgetStatus: AgentBudgetStatus;
   AgentCostEntry: AgentCostEntry;
   AgentCostSummary: AgentCostSummary;
@@ -2315,6 +2353,7 @@ export type ResolversParentTypes = ResolversObject<{
   ProjectMember: ProjectMember;
   Query: {};
   QueuedMessage: QueuedMessage;
+  RemoveProjectMemberInput: RemoveProjectMemberInput;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: Repo;
@@ -2343,6 +2382,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateProjectInput: UpdateProjectInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
@@ -2943,6 +2983,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationAddOrgMemberArgs, "organizationId" | "userId">
   >;
+  addProjectMember?: Resolver<
+    ResolversTypes["ProjectMember"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationAddProjectMemberArgs, "input">
+  >;
   approveBridgeAccessRequest?: Resolver<
     ResolversTypes["BridgeAccessGrant"],
     ParentType,
@@ -3228,6 +3274,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRemoveOrgMemberArgs, "organizationId" | "userId">
   >;
+  removeProjectMember?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRemoveProjectMemberArgs, "input">
+  >;
   removeQueuedMessage?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -3443,6 +3495,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUpdateOrgMemberRoleArgs, "organizationId" | "role" | "userId">
+  >;
+  updateProject?: Resolver<
+    ResolversTypes["Project"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateProjectArgs, "id" | "input">
   >;
   updateRepo?: Resolver<
     ResolversTypes["Repo"],

@@ -36,6 +36,12 @@ export type AddChatMemberInput = {
   userId: Scalars["ID"]["input"];
 };
 
+export type AddProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  role?: InputMaybe<UserRole>;
+  userId: Scalars["ID"]["input"];
+};
+
 export type AgentBudgetStatus = {
   __typename?: "AgentBudgetStatus";
   dailyLimitCents: Scalars["Int"]["output"];
@@ -676,6 +682,7 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  addProjectMember: ProjectMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
@@ -723,6 +730,7 @@ export type Mutation = {
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
+  removeProjectMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
@@ -759,6 +767,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateProject: Project;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
@@ -778,6 +787,10 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   role?: InputMaybe<UserRole>;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationAddProjectMemberArgs = {
+  input: AddProjectMemberInput;
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {
@@ -1001,6 +1014,10 @@ export type MutationRemoveOrgMemberArgs = {
   userId: Scalars["ID"]["input"];
 };
 
+export type MutationRemoveProjectMemberArgs = {
+  input: RemoveProjectMemberInput;
+};
+
 export type MutationRemoveQueuedMessageArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1190,6 +1207,11 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdateProjectArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectInput;
 };
 
 export type MutationUpdateRepoArgs = {
@@ -1613,6 +1635,11 @@ export type QueuedMessage = {
   text: Scalars["String"]["output"];
 };
 
+export type RemoveProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  userId: Scalars["ID"]["input"];
+};
+
 export type ReorderChannelGroupsInput = {
   groupIds: Array<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -1999,6 +2026,13 @@ export type UpdateChannelInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
   runScripts?: InputMaybe<Scalars["JSON"]["input"]>;
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateProjectInput = {
+  aiMode?: InputMaybe<AutonomyMode>;
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  soulFile?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateRepoInput = {

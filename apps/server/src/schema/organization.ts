@@ -4,6 +4,9 @@ import type {
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
+  UpdateProjectInput,
+  AddProjectMemberInput,
+  RemoveProjectMemberInput,
   EntityType,
   UserRole,
 } from "@trace/gql";
@@ -64,6 +67,32 @@ export const organizationMutations = {
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     assertOrgAccess(ctx, args.input.organizationId);
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
+  },
+  updateProject: (_: unknown, args: { id: string; input: UpdateProjectInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return organizationService.updateProject(args.id, orgId, args.input, ctx.actorType, ctx.userId);
+  },
+  addProjectMember: (_: unknown, args: { input: AddProjectMemberInput }, ctx: Context) => {
+    return organizationService.addProjectMember(
+      args.input.projectId,
+      args.input.userId,
+      args.input.role ?? "member",
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  removeProjectMember: async (
+    _: unknown,
+    args: { input: RemoveProjectMemberInput },
+    ctx: Context,
+  ) => {
+    await organizationService.removeProjectMember(
+      args.input.projectId,
+      args.input.userId,
+      ctx.actorType,
+      ctx.userId,
+    );
+    return true;
   },
   linkEntityToProject: (
     _: unknown,

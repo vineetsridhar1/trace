@@ -23,14 +23,14 @@ Clients and agents can create/read/update projects through Trace services and ty
 
 ## Completion requirements
 
-- [ ] All project writes go through services.
-- [ ] All mutations validate organization and actor access.
+- [x] All project writes go through services.
+- [x] All mutations validate organization and actor access.
   - Membership mutations must enforce an explicit project/org admin rule before GraphQL or agent actions expose add/remove member operations; ordinary org membership is not sufficient authority to edit project membership.
-- [ ] GraphQL resolvers delegate to services only.
-- [ ] Project creation emits a project event with a snapshot.
-- [ ] Historical project-link event behavior is preserved or intentionally adapted.
-- [ ] Generated client/server types compile.
-- [ ] Existing project actions continue to work or are migrated cleanly.
+- [x] GraphQL resolvers delegate to services only.
+- [x] Project creation emits a project event with a snapshot.
+- [x] Historical project-link event behavior is preserved or intentionally adapted.
+- [x] Generated client/server types compile.
+- [x] Existing project actions continue to work or are migrated cleanly.
 
 ## Implementation notes
 
