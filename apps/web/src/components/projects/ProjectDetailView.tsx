@@ -349,6 +349,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               sessionId={planningSessionId}
               panelMode
               hideHeader
+              onProjectPlanApproved={fetchProject}
               projectPlanningContext={
                 currentProjectRun
                   ? {

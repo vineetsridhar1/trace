@@ -165,6 +165,7 @@ export function SessionDetailView({
   scrollToEventId,
   onScrollComplete,
   projectPlanningContext,
+  onProjectPlanApproved,
 }: {
   key?: React.Key;
   sessionId: string;
@@ -173,6 +174,7 @@ export function SessionDetailView({
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
   projectPlanningContext?: ProjectPlanningSessionContext | null;
+  onProjectPlanApproved?: () => void | Promise<void>;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(
@@ -537,6 +539,7 @@ export function SessionDetailView({
             sessionId={sessionId}
             planContent={activePlan.node.planContent}
             onDismiss={handleDismissPlan}
+            onApproved={onProjectPlanApproved}
             projectPlanningContext={projectPlanningContext}
           />
         ) : (

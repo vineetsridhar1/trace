@@ -14,6 +14,7 @@ interface PlanResponseBarProps {
   sessionId: string;
   planContent: string;
   onDismiss: () => void;
+  onApproved?: () => void | Promise<void>;
   projectPlanningContext?: ProjectPlanningSessionContext | null;
 }
 
@@ -35,6 +36,7 @@ export function PlanResponseBar({
   sessionId,
   planContent,
   onDismiss,
+  onApproved,
   projectPlanningContext,
 }: PlanResponseBarProps) {
   const [feedback, setFeedback] = useState("");
@@ -56,13 +58,41 @@ export function PlanResponseBar({
         .toPromise();
 
       if (result.error) throw result.error;
+      const attempt = result.data?.approveProjectPlan as
+        | {
+            status?: string;
+            error?: string | null;
+            createdTicketIds?: string[] | null;
+          }
+        | undefined;
+      await onApproved?.();
+      const createdCount = attempt?.createdTicketIds?.length ?? 0;
+      if (
+        attempt?.status === "failed" ||
+        (attempt?.status === "partial_failed" && createdCount === 0)
+      ) {
+        setError(attempt.error ?? "Ticket generation failed. Update the plan and try again.");
+        return;
+      }
+      if (attempt?.status === "pending") {
+        setError(
+          "Ticket generation is pending. Update the plan with implementation steps and try again.",
+        );
+        return;
+      }
+      if (attempt?.status === "completed" && createdCount === 0) {
+        setError(
+          "Ticket generation completed without creating tickets. Update the plan and try again.",
+        );
+        return;
+      }
       onDismiss();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Project plan could not be approved.");
     } finally {
       setSending(false);
     }
-  }, [onDismiss, planContent, projectPlanningContext, sending, sessionId]);
+  }, [onApproved, onDismiss, planContent, projectPlanningContext, sending]);
 
   const handleRevise = useCallback(async () => {
     const text = feedback.trim();
