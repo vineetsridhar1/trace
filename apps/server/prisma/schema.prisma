@@ -216,6 +216,27 @@ enum ProjectRunStatus {
   cancelled
 }
 
+enum ProjectTicketGenerationStatus {
+  pending
+  running
+  completed
+  partial_failed
+  failed
+}
+
+enum ProjectTicketExecutionStatus {
+  queued
+  ready
+  running
+  reviewing
+  fixing
+  needs_human
+  blocked
+  completed
+  failed
+  cancelled
+}
+
 enum OrchestratorEpisodeStatus {
   pending
   starting
@@ -277,6 +298,12 @@ enum EventType {
   project_decision_recorded
   project_risk_recorded
   project_plan_summary_updated
+  project_ticket_generation_started
+  project_ticket_generation_completed
+  project_ticket_generation_failed
+  project_ticket_execution_created
+  project_ticket_execution_updated
+  project_ticket_lifecycle_event
   orchestrator_episode_created
   orchestrator_episode_updated
   chat_created
@@ -304,9 +331,11 @@ enum EventType {
 }
 
 model Organization {
-  id       String @id @default(uuid())
-  name     String
-  settings Json   @default("{}")
+  id                       String           @id @default(uuid())
+  name                     String
+  settings                 Json             @default("{}")
+  defaultPlaybookVersionId String?
+  defaultPlaybookVersion   PlaybookVersion? @relation("OrganizationDefaultPlaybookVersion", fields: [defaultPlaybookVersionId], references: [id], onDelete: SetNull)
 
   orgMembers               OrgMember[]
   pushTokens               PushToken[]
@@ -315,6 +344,9 @@ model Organization {
   repos                    Repo[]
   projects                 Project[]
   projectRuns              ProjectRun[]
+  projectTicketGenerations ProjectTicketGenerationAttempt[]
+  projectTicketExecutions  ProjectTicketExecution[]
+  playbooks                Playbook[]
   orchestratorEpisodes     OrchestratorEpisode[]
   bridgeRuntimes           BridgeRuntime[]
   channelGroups            ChannelGroup[]
@@ -580,12 +612,16 @@ model Project {
   aiMode         AutonomyMode?
   soulFile       String        @default("")
 
-  channels             ChannelProject[]
-  sessions             SessionProject[]
-  tickets              TicketProject[]
-  members              ProjectMember[]
-  runs                 ProjectRun[]
-  orchestratorEpisodes OrchestratorEpisode[]
+  channels                 ChannelProject[]
+  sessions                 SessionProject[]
+  tickets                  TicketProject[]
+  members                  ProjectMember[]
+  runs                     ProjectRun[]
+  ticketGenerations        ProjectTicketGenerationAttempt[]
+  ticketExecutions         ProjectTicketExecution[]
+  orchestratorEpisodes     OrchestratorEpisode[]
+  defaultPlaybookVersionId String?
+  defaultPlaybookVersion   PlaybookVersion?                 @relation("ProjectDefaultPlaybookVersion", fields: [defaultPlaybookVersionId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -600,12 +636,20 @@ model ProjectRun {
   status                      ProjectRunStatus @default(draft)
   initialGoal                 String
   planSummary                 String?
+  planningSessionId           String?
+  planningSession             Session?         @relation("ProjectRunPlanningSession", fields: [planningSessionId], references: [id], onDelete: SetNull)
   activeGateId                String?
   latestControllerSummaryId   String?
   latestControllerSummaryText String?
   executionConfig             Json             @default("{}")
+  playbookVersionId           String?
+  playbookVersion             PlaybookVersion? @relation("ProjectRunPlaybookVersion", fields: [playbookVersionId], references: [id], onDelete: SetNull)
+  playbookSnapshot            Json             @default("{}")
 
-  orchestratorEpisodes OrchestratorEpisode[]
+  ticketGenerationAttempt ProjectTicketGenerationAttempt?
+  ticketExecutions        ProjectTicketExecution[]
+  sourceTickets           Ticket[]                        @relation("TicketSourceProjectRun")
+  orchestratorEpisodes    OrchestratorEpisode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -627,6 +671,107 @@ model ProjectMember {
   @@id([projectId, userId])
   @@index([userId])
   @@index([projectId, leftAt])
+}
+
+model ProjectTicketGenerationAttempt {
+  id               String                        @id @default(uuid())
+  organizationId   String
+  organization     Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId        String
+  project          Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRunId     String                        @unique
+  projectRun       ProjectRun                    @relation(fields: [projectRunId], references: [id], onDelete: Cascade)
+  status           ProjectTicketGenerationStatus @default(pending)
+  approvedPlan     String
+  draftCount       Int                           @default(0)
+  createdTicketIds String[]                      @default([])
+  draftSnapshot    Json                          @default("[]")
+  error            String?
+  retryCount       Int                           @default(0)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  failedAt         DateTime?
+
+  tickets Ticket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([projectId, updatedAt])
+}
+
+model ProjectTicketExecution {
+  id                      String                        @id @default(uuid())
+  organizationId          String
+  organization            Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId               String
+  project                 Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRunId            String
+  projectRun              ProjectRun                    @relation(fields: [projectRunId], references: [id], onDelete: Cascade)
+  ticketId                String
+  ticket                  Ticket                        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  status                  ProjectTicketExecutionStatus  @default(queued)
+  sequence                Int                           @default(0)
+  implementationSessionId String?
+  implementationSession   Session?                      @relation("TicketImplementationSession", fields: [implementationSessionId], references: [id], onDelete: SetNull)
+  reviewSessionId         String?
+  reviewSession           Session?                      @relation("TicketReviewSession", fields: [reviewSessionId], references: [id], onDelete: SetNull)
+  fixSessionId            String?
+  fixSession              Session?                      @relation("TicketFixSession", fields: [fixSessionId], references: [id], onDelete: SetNull)
+  previousStatus          ProjectTicketExecutionStatus?
+  lastLifecycleEventId    String?
+  lastLifecycleEvent      Event?                        @relation("TicketExecutionLifecycleEvent", fields: [lastLifecycleEventId], references: [id], onDelete: SetNull)
+  lastError               String?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  failedAt                DateTime?
+  cancelledAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectRunId, ticketId])
+  @@index([organizationId, status])
+  @@index([projectRunId, sequence])
+  @@index([implementationSessionId])
+  @@index([reviewSessionId])
+  @@index([fixSessionId])
+  @@index([lastLifecycleEventId])
+}
+
+model Playbook {
+  id             String        @id @default(uuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  isBuiltIn      Boolean       @default(false)
+
+  versions PlaybookVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model PlaybookVersion {
+  id         String   @id @default(uuid())
+  playbookId String
+  playbook   Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  version    Int
+  content    String
+  metadata   Json     @default("{}")
+
+  organizationDefaults Organization[] @relation("OrganizationDefaultPlaybookVersion")
+  projectDefaults      Project[]      @relation("ProjectDefaultPlaybookVersion")
+  projectRuns          ProjectRun[]   @relation("ProjectRunPlaybookVersion")
+
+  createdAt DateTime @default(now())
+
+  @@unique([playbookId, version])
 }
 
 model ChannelGroup {
@@ -760,9 +905,13 @@ model Session {
   worktreeDeleted   Boolean       @default(false)
   readOnlyWorkspace Boolean       @default(false)
 
-  projects             SessionProject[]
-  queuedMessages       QueuedMessage[]
-  orchestratorEpisodes OrchestratorEpisode[]
+  projects                       SessionProject[]
+  queuedMessages                 QueuedMessage[]
+  orchestratorEpisodes           OrchestratorEpisode[]
+  planningProjectRuns            ProjectRun[]             @relation("ProjectRunPlanningSession")
+  implementationTicketExecutions ProjectTicketExecution[] @relation("TicketImplementationSession")
+  reviewTicketExecutions         ProjectTicketExecution[] @relation("TicketReviewSession")
+  fixTicketExecutions            ProjectTicketExecution[] @relation("TicketFixSession")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -830,29 +979,38 @@ model OrchestratorEpisode {
 }
 
 model Ticket {
-  id             String        @id @default(uuid())
-  title          String
-  description    String        @default("")
-  status         TicketStatus  @default(backlog)
-  priority       Priority      @default(medium)
-  labels         String[]      @default([])
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id])
-  createdById    String
-  createdBy      User          @relation("TicketCreator", fields: [createdById], references: [id])
-  originEventId  String?
-  channelId      String?
-  channel        Channel?      @relation(fields: [channelId], references: [id])
-  aiMode         AutonomyMode?
+  id                  String                          @id @default(uuid())
+  title               String
+  description         String                          @default("")
+  status              TicketStatus                    @default(backlog)
+  priority            Priority                        @default(medium)
+  labels              String[]                        @default([])
+  organizationId      String
+  organization        Organization                    @relation(fields: [organizationId], references: [id])
+  createdById         String
+  createdBy           User                            @relation("TicketCreator", fields: [createdById], references: [id])
+  originEventId       String?
+  sourceProjectRunId  String?
+  sourceProjectRun    ProjectRun?                     @relation("TicketSourceProjectRun", fields: [sourceProjectRunId], references: [id], onDelete: SetNull)
+  generationAttemptId String?
+  generationAttempt   ProjectTicketGenerationAttempt? @relation(fields: [generationAttemptId], references: [id], onDelete: SetNull)
+  generationDraftKey  String?
+  channelId           String?
+  channel             Channel?                        @relation(fields: [channelId], references: [id])
+  aiMode              AutonomyMode?
 
-  projects  TicketProject[]
-  assignees TicketAssignee[]
-  links     TicketLink[]
+  projects          TicketProject[]
+  projectExecutions ProjectTicketExecution[]
+  assignees         TicketAssignee[]
+  links             TicketLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([generationAttemptId, generationDraftKey])
   @@index([organizationId, status, priority])
+  @@index([sourceProjectRunId])
+  @@index([generationAttemptId])
 }
 
 model TicketProject {
@@ -929,8 +1087,9 @@ model Event {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  timestamp      DateTime        @default(now())
-  gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
+  timestamp                     DateTime                 @default(now())
+  gitCheckpoints                GitCheckpoint[]          @relation("GitCheckpointPromptEvent")
+  ticketExecutionLifecycleLinks ProjectTicketExecution[] @relation("TicketExecutionLifecycleEvent")
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])

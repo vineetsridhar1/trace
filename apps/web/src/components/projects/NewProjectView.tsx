@@ -2,16 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Send, UserRound } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project, Repo } from "@trace/gql";
-import {
-  START_SESSION_MUTATION,
-  useAuthStore,
-  useEntityIds,
-  useEntityStore,
-} from "@trace/client-core";
+import { useAuthStore, useEntityIds, useEntityStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { usePreferencesStore } from "../../stores/preferences";
-import { buildPlanningSessionPrompt } from "../../lib/projectPlanningSessionPrompt";
 import { Button } from "../ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
@@ -39,6 +33,7 @@ const CREATE_PROJECT_FROM_GOAL_MUTATION = gql`
       runs {
         id
         projectId
+        planningSessionId
       }
       createdAt
       updatedAt
@@ -115,6 +110,8 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
           goal: initialGoal,
           name: projectName,
           repoId: repoId === "__none__" ? null : repoId,
+          planningTool: defaultTool ?? "claude_code",
+          planningModel: defaultModel ?? getDefaultModel(defaultTool ?? "claude_code"),
           executionConfig: {},
         },
       })
@@ -124,27 +121,6 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
     if (result.error || !project) {
       setError(result.error?.message ?? "Project could not be created.");
       setSubmitting(false);
-      return;
-    }
-
-    const tool = defaultTool ?? "claude_code";
-    const sessionResult = await client
-      .mutation(START_SESSION_MUTATION, {
-        input: {
-          tool,
-          model: defaultModel ?? getDefaultModel(tool),
-          repoId: repoId === "__none__" ? undefined : repoId,
-          projectId: project.id,
-          prompt: buildPlanningSessionPrompt(initialGoal),
-          interactionMode: "plan",
-        },
-      })
-      .toPromise();
-
-    if (sessionResult.error) {
-      setError(sessionResult.error.message);
-      setSubmitting(false);
-      setActiveProjectId(project.id);
       return;
     }
 

@@ -14,6 +14,7 @@ import type {
   Repo,
   ScopeType,
   SessionStatus,
+  Ticket,
 } from "@trace/gql";
 import {
   StoreBatchWriter,
@@ -135,6 +136,33 @@ function upsertProjectRunFromPayload(batch: StoreBatchWriter, payload: JsonObjec
     projectRun.id,
     (existing ? { ...existing, ...projectRun } : projectRun) as unknown as ProjectRunEntity,
   );
+}
+
+function upsertTicketFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const ticket = asJsonObject(payload.ticket);
+  if (!ticket || typeof ticket.id !== "string") return;
+
+  const existing = batch.get("tickets", ticket.id);
+  batch.upsert(
+    "tickets",
+    ticket.id,
+    (existing ? { ...existing, ...ticket } : ticket) as unknown as Ticket,
+  );
+
+  const projects = Array.isArray(ticket.projects) ? ticket.projects : [];
+  for (const rawProject of projects) {
+    const project = asJsonObject(rawProject);
+    if (!project || typeof project.id !== "string") continue;
+    const existingProject = batch.get("projects", project.id);
+    if (!existingProject) continue;
+    const currentTickets = existingProject.tickets ?? [];
+    batch.patch("projects", project.id, {
+      tickets: [
+        ...(currentTickets as Ticket[]).filter((item) => item.id !== ticket.id),
+        ticket as unknown as Ticket,
+      ],
+    } as Partial<Project>);
+  }
 }
 
 function patchProjectMemberFromPayload(
@@ -274,6 +302,31 @@ export function handleOrgEvent(event: Event): void {
         legacyProject.id,
         existing ? { ...legacyProject, ...existing } : legacyProject,
       );
+    }
+  }
+
+  if (
+    event.eventType === "ticket_created" ||
+    event.eventType === "ticket_updated" ||
+    event.eventType === "ticket_assigned" ||
+    event.eventType === "ticket_unassigned" ||
+    event.eventType === "ticket_linked" ||
+    event.eventType === "ticket_unlinked"
+  ) {
+    upsertTicketFromPayload(batch, payload);
+  }
+
+  if (
+    event.eventType === "project_ticket_generation_completed" ||
+    event.eventType === "project_ticket_generation_failed"
+  ) {
+    upsertProjectRunFromPayload(batch, payload);
+    const tickets = payload.tickets;
+    if (Array.isArray(tickets)) {
+      for (const ticket of tickets) {
+        const ticketPayload = asJsonObject(ticket);
+        if (ticketPayload) upsertTicketFromPayload(batch, { ticket: ticketPayload });
+      }
     }
   }
 

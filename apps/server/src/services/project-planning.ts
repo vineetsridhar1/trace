@@ -1,21 +1,55 @@
 import type {
+  ApproveProjectPlanInput,
   ActorType,
   RecordProjectPlanningDecisionInput,
   RecordProjectPlanningMessageInput,
   RecordProjectPlanningRiskInput,
   UpdateProjectPlanSummaryInput,
 } from "@trace/gql";
-import type { Prisma } from "@prisma/client";
+import type { LLMToolDefinition } from "@trace/shared";
+import type { Prisma, ProjectTicketGenerationAttempt } from "@prisma/client";
+import { asJsonObject } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { projectRunPayload } from "./project-run.js";
+import { aiService } from "./ai.js";
+import { TICKET_INCLUDE, ticketPayload, type TicketWithRelations } from "./ticket.js";
 
 type ProjectRunContext = {
   id: string;
   organizationId: string;
   projectId: string;
 };
+
+type ProjectRunApprovalContext = {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  initialGoal: string;
+  planSummary: string | null;
+  executionConfig: Prisma.JsonValue;
+  project: { id: string; name: string; repoId: string | null };
+};
+
+type TicketDraft = {
+  title: string;
+  description: string;
+  priority: "urgent" | "high" | "medium" | "low";
+  labels: string[];
+  acceptanceCriteria: string[];
+};
+
+type TicketDraftGeneratorInput = {
+  organizationId: string;
+  actorId: string;
+  projectRun: ProjectRunApprovalContext;
+  approvedPlan: string;
+};
+
+export interface TicketDraftGenerator {
+  generate(input: TicketDraftGeneratorInput): Promise<unknown>;
+}
 
 export type ProjectPlanningContext = {
   project: {
@@ -50,6 +84,31 @@ const ACTIVE_PROJECT_RUN_STATUSES = [
   "paused",
 ] as const;
 
+const TICKET_DRAFT_TOOL: LLMToolDefinition = {
+  name: "submit_project_ticket_drafts",
+  description: "Submit structured ticket drafts for an approved Trace project plan.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tickets: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            description: { type: "string" },
+            priority: { type: "string", enum: ["urgent", "high", "medium", "low"] },
+            labels: { type: "array", items: { type: "string" } },
+            acceptanceCriteria: { type: "array", items: { type: "string" } },
+          },
+          required: ["title", "description"],
+        },
+      },
+    },
+    required: ["tickets"],
+  },
+};
+
 function normalizeText(value: string, label: string): string {
   const normalized = value.trim();
   if (!normalized) {
@@ -58,7 +117,143 @@ function normalizeText(value: string, label: string): string {
   return normalized;
 }
 
+function dateToJson(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function generationAttemptPayload(
+  attempt: ProjectTicketGenerationAttempt,
+): Prisma.InputJsonObject {
+  return {
+    id: attempt.id,
+    organizationId: attempt.organizationId,
+    projectId: attempt.projectId,
+    projectRunId: attempt.projectRunId,
+    status: attempt.status,
+    approvedPlan: attempt.approvedPlan,
+    draftCount: attempt.draftCount,
+    createdTicketIds: attempt.createdTicketIds,
+    error: attempt.error,
+    retryCount: attempt.retryCount,
+    startedAt: dateToJson(attempt.startedAt),
+    completedAt: dateToJson(attempt.completedAt),
+    failedAt: dateToJson(attempt.failedAt),
+    createdAt: dateToJson(attempt.createdAt),
+    updatedAt: dateToJson(attempt.updatedAt),
+  };
+}
+
+function priorityFromUnknown(value: unknown): TicketDraft["priority"] {
+  return value === "urgent" || value === "high" || value === "low" ? value : "medium";
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+}
+
+function draftKey(index: number, title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 64);
+  return `${String(index + 1).padStart(3, "0")}-${slug || "ticket"}`;
+}
+
+function descriptionWithAcceptanceCriteria(draft: TicketDraft): string {
+  if (draft.acceptanceCriteria.length === 0) return draft.description;
+  return [
+    draft.description,
+    "",
+    "Acceptance criteria:",
+    ...draft.acceptanceCriteria.map((criterion) => `- ${criterion}`),
+  ].join("\n");
+}
+
+function normalizeTicketDrafts(value: unknown): { drafts: TicketDraft[]; errors: string[] } {
+  const root = asJsonObject(value);
+  const rawTickets = Array.isArray(root?.tickets) ? root.tickets : Array.isArray(value) ? value : [];
+  const drafts: TicketDraft[] = [];
+  const errors: string[] = [];
+
+  rawTickets.forEach((raw, index) => {
+    const object = asJsonObject(raw);
+    const title = typeof object?.title === "string" ? object.title.trim() : "";
+    const description = typeof object?.description === "string" ? object.description.trim() : "";
+    if (!title || !description) {
+      errors.push(`Draft ${index + 1} must include title and description.`);
+      return;
+    }
+
+    drafts.push({
+      title,
+      description,
+      priority: priorityFromUnknown(object?.priority),
+      labels: stringList(object?.labels),
+      acceptanceCriteria: stringList(object?.acceptanceCriteria),
+    });
+  });
+
+  if (drafts.length === 0 && errors.length === 0) {
+    errors.push("Ticket generation returned no drafts.");
+  }
+
+  return { drafts, errors };
+}
+
+function extractTicketDraftToolInput(response: unknown): unknown {
+  const object = asJsonObject(response);
+  const content = object?.content;
+  if (!Array.isArray(content)) return response;
+  const toolUse = content.find((block) => {
+    const item = asJsonObject(block);
+    return item?.type === "tool_use" && item.name === "submit_project_ticket_drafts";
+  });
+  return asJsonObject(toolUse)?.input ?? response;
+}
+
+class AITicketDraftGenerator implements TicketDraftGenerator {
+  async generate(input: TicketDraftGeneratorInput): Promise<unknown> {
+    const config = normalizeExecutionConfig(input.projectRun.executionConfig);
+    const model =
+      typeof config.ticketGenerationModel === "string" && config.ticketGenerationModel.trim()
+        ? config.ticketGenerationModel.trim()
+        : "claude-sonnet-4-6";
+    const response = await aiService.complete({
+      organizationId: input.organizationId,
+      userId: input.actorId,
+      model,
+      system:
+        "You create concise, executable project tickets from approved Trace project plans. Always call the structured ticket draft tool.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            `Project: ${input.projectRun.project.name}`,
+            `Initial goal: ${input.projectRun.initialGoal}`,
+            "",
+            "Approved plan:",
+            input.approvedPlan,
+          ].join("\n"),
+        },
+      ],
+      tools: [TICKET_DRAFT_TOOL],
+      maxTokens: 4096,
+      temperature: 0.2,
+    });
+    return extractTicketDraftToolInput(response);
+  }
+}
+
 export class ProjectPlanningService {
+  constructor(private readonly draftGenerator: TicketDraftGenerator = new AITicketDraftGenerator()) {}
+
+  getGenerationAttemptForRun(projectRunId: string) {
+    return prisma.projectTicketGenerationAttempt.findUnique({ where: { projectRunId } });
+  }
+
   async getContext(
     projectRunId: string,
     organizationId: string,
@@ -318,6 +513,57 @@ export class ProjectPlanningService {
     });
   }
 
+  async approvePlanAndGenerateTickets(
+    input: ApproveProjectPlanInput,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<ProjectTicketGenerationAttempt> {
+    const approvedPlan = normalizeText(input.planSummary, "Plan summary");
+    const started = await this.beginGenerationAttempt(
+      input.projectRunId,
+      organizationId,
+      approvedPlan,
+      actorType,
+      actorId,
+      Boolean(input.retryFailed),
+    );
+
+    if (started.attempt.status === "completed") return started.attempt;
+    if (started.attempt.status === "running" && !started.shouldGenerate) return started.attempt;
+
+    try {
+      const rawDrafts =
+        input.structuredDrafts && input.structuredDrafts.length > 0
+          ? { tickets: input.structuredDrafts }
+          : await this.draftGenerator.generate({
+              organizationId,
+              actorId,
+              projectRun: started.projectRun,
+              approvedPlan,
+            });
+
+      const normalized = normalizeTicketDrafts(rawDrafts);
+      return this.persistGeneratedTickets({
+        attemptId: started.attempt.id,
+        projectRun: started.projectRun,
+        approvedPlan,
+        drafts: normalized.drafts,
+        validationErrors: normalized.errors,
+        actorType,
+        actorId,
+      });
+    } catch (error) {
+      return this.failGenerationAttempt({
+        attemptId: started.attempt.id,
+        projectRun: started.projectRun,
+        error: error instanceof Error ? error.message : String(error),
+        actorType,
+        actorId,
+      });
+    }
+  }
+
   private async recordMessage(
     input: RecordProjectPlanningMessageInput,
     organizationId: string,
@@ -363,6 +609,257 @@ export class ProjectPlanningService {
     });
     await assertActorOrgAccess(tx, organizationId, actorType, actorId);
     return projectRun;
+  }
+
+  private async beginGenerationAttempt(
+    projectRunId: string,
+    organizationId: string,
+    approvedPlan: string,
+    actorType: ActorType,
+    actorId: string,
+    retryFailed: boolean,
+  ): Promise<{
+    attempt: ProjectTicketGenerationAttempt;
+    projectRun: ProjectRunApprovalContext;
+    shouldGenerate: boolean;
+  }> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const projectRun = await tx.projectRun.findFirstOrThrow({
+        where: { id: projectRunId, organizationId },
+        select: {
+          id: true,
+          organizationId: true,
+          projectId: true,
+          initialGoal: true,
+          planSummary: true,
+          executionConfig: true,
+          project: { select: { id: true, name: true, repoId: true } },
+        },
+      });
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${projectRun.id}))`;
+
+      const existing = await tx.projectTicketGenerationAttempt.findUnique({
+        where: { projectRunId: projectRun.id },
+      });
+      if (existing?.status === "completed") {
+        return { attempt: existing, projectRun, shouldGenerate: false };
+      }
+      if (existing && existing.status === "running" && !retryFailed) {
+        return { attempt: existing, projectRun, shouldGenerate: false };
+      }
+      if (
+        existing &&
+        (existing.status === "failed" || existing.status === "partial_failed") &&
+        !retryFailed
+      ) {
+        return { attempt: existing, projectRun, shouldGenerate: false };
+      }
+
+      await tx.projectRun.update({
+        where: { id: projectRun.id },
+        data: { planSummary: approvedPlan, status: "planning" },
+      });
+
+      const now = new Date();
+      const attempt = existing
+        ? await tx.projectTicketGenerationAttempt.update({
+            where: { id: existing.id },
+            data: {
+              status: "running",
+              approvedPlan,
+              error: null,
+              failedAt: null,
+              completedAt: null,
+              startedAt: now,
+              retryCount: { increment: 1 },
+            },
+          })
+        : await tx.projectTicketGenerationAttempt.create({
+            data: {
+              organizationId,
+              projectId: projectRun.projectId,
+              projectRunId: projectRun.id,
+              status: "running",
+              approvedPlan,
+              startedAt: now,
+              retryCount: 1,
+            },
+          });
+
+      await eventService.create(
+        {
+          organizationId,
+          scopeType: "project",
+          scopeId: projectRun.projectId,
+          eventType: "project_ticket_generation_started",
+          payload: { generationAttempt: generationAttemptPayload(attempt), projectRunId },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return { attempt, projectRun, shouldGenerate: true };
+    });
+  }
+
+  private async persistGeneratedTickets(input: {
+    attemptId: string;
+    projectRun: ProjectRunApprovalContext;
+    approvedPlan: string;
+    drafts: TicketDraft[];
+    validationErrors: string[];
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<ProjectTicketGenerationAttempt> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.projectRun.id}))`;
+      const attempt = await tx.projectTicketGenerationAttempt.findUniqueOrThrow({
+        where: { id: input.attemptId },
+      });
+      if (attempt.status === "completed") return attempt;
+
+      const createdTickets: TicketWithRelations[] = [];
+      for (const [index, draft] of input.drafts.entries()) {
+        const key = draftKey(index, draft.title);
+        const existing = await tx.ticket.findUnique({
+          where: {
+            generationAttemptId_generationDraftKey: {
+              generationAttemptId: attempt.id,
+              generationDraftKey: key,
+            },
+          },
+          include: TICKET_INCLUDE,
+        });
+        if (existing) {
+          createdTickets.push(existing);
+          continue;
+        }
+
+        const ticket = await tx.ticket.create({
+          data: {
+            title: draft.title,
+            description: descriptionWithAcceptanceCriteria(draft),
+            priority: draft.priority,
+            labels: Array.from(new Set(["project-plan", ...draft.labels])),
+            organizationId: input.projectRun.organizationId,
+            createdById: input.actorId,
+            sourceProjectRunId: input.projectRun.id,
+            generationAttemptId: attempt.id,
+            generationDraftKey: key,
+            projects: { create: { projectId: input.projectRun.projectId } },
+          },
+          include: TICKET_INCLUDE,
+        });
+        createdTickets.push(ticket);
+
+        await eventService.create(
+          {
+            organizationId: input.projectRun.organizationId,
+            scopeType: "ticket",
+            scopeId: ticket.id,
+            eventType: "ticket_created",
+            payload: {
+              ticket: ticketPayload(ticket),
+              ticketId: ticket.id,
+              projectIds: [input.projectRun.projectId],
+              projectRunId: input.projectRun.id,
+              generationAttemptId: attempt.id,
+            },
+            actorType: input.actorType,
+            actorId: input.actorId,
+          },
+          tx,
+        );
+      }
+
+      const status = input.validationErrors.length > 0 ? "partial_failed" : "completed";
+      const completedAt = status === "completed" ? new Date() : null;
+      const failedAt = status === "partial_failed" ? new Date() : null;
+      const updatedAttempt = await tx.projectTicketGenerationAttempt.update({
+        where: { id: attempt.id },
+        data: {
+          status,
+          approvedPlan: input.approvedPlan,
+          draftCount: input.drafts.length + input.validationErrors.length,
+          createdTicketIds: createdTickets.map((ticket) => ticket.id),
+          draftSnapshot: {
+            tickets: input.drafts,
+            validationErrors: input.validationErrors,
+          },
+          error: input.validationErrors.length > 0 ? input.validationErrors.join("\n") : null,
+          completedAt,
+          failedAt,
+        },
+      });
+
+      const updatedRun = await tx.projectRun.update({
+        where: { id: input.projectRun.id },
+        data: { planSummary: input.approvedPlan, status: "ready" },
+        include: { project: true },
+      });
+
+      await eventService.create(
+        {
+          organizationId: input.projectRun.organizationId,
+          scopeType: "project",
+          scopeId: input.projectRun.projectId,
+          eventType:
+            status === "completed"
+              ? "project_ticket_generation_completed"
+              : "project_ticket_generation_failed",
+          payload: {
+            projectRun: projectRunPayload(updatedRun),
+            generationAttempt: generationAttemptPayload(updatedAttempt),
+            tickets: createdTickets.map(ticketPayload),
+          },
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      return updatedAttempt;
+    });
+  }
+
+  private async failGenerationAttempt(input: {
+    attemptId: string;
+    projectRun: ProjectRunApprovalContext;
+    error: string;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<ProjectTicketGenerationAttempt> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const failed = await tx.projectTicketGenerationAttempt.update({
+        where: { id: input.attemptId },
+        data: {
+          status: "failed",
+          error: input.error,
+          failedAt: new Date(),
+        },
+      });
+
+      await eventService.create(
+        {
+          organizationId: input.projectRun.organizationId,
+          scopeType: "project",
+          scopeId: input.projectRun.projectId,
+          eventType: "project_ticket_generation_failed",
+          payload: {
+            generationAttempt: generationAttemptPayload(failed),
+            projectRunId: input.projectRun.id,
+            error: input.error,
+          },
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      return failed;
+    });
   }
 
   private async assertNoActiveRun(

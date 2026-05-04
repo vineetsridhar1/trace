@@ -14,6 +14,7 @@ import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { isLocalMode } from "../lib/mode.js";
+import { TICKET_INCLUDE } from "./ticket.js";
 
 const USER_SELECT = { id: true, email: true, name: true, avatarUrl: true } as const;
 
@@ -735,7 +736,7 @@ export class OrganizationService {
   async getProjectTickets(projectId: string) {
     const links = await prisma.ticketProject.findMany({
       where: { projectId },
-      include: { ticket: true },
+      include: { ticket: { include: TICKET_INCLUDE } },
     });
     return links.map((link) => link.ticket);
   }

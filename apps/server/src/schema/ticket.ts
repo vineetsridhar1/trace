@@ -96,6 +96,10 @@ type TicketAssigneeWithUser = {
   user: { id: string; email: string; name: string; avatarUrl: string | null; role: string };
 };
 
+type TicketProjectRelation = {
+  project?: unknown;
+};
+
 type TicketLinkRow = {
   entityType: string;
   entityId: string;
@@ -109,6 +113,12 @@ export const ticketTypeResolvers = {
       ctx.userLoader.load(ticket.createdById),
     assignees: (ticket: { assignees?: TicketAssigneeWithUser[] }) =>
       (ticket.assignees ?? []).map((a) => a.user),
+    projects: (ticket: { id: string; projects?: TicketProjectRelation[] }) => {
+      if (ticket.projects) {
+        return ticket.projects.map((link) => link.project).filter(Boolean);
+      }
+      return ticketService.getProjects(ticket.id);
+    },
     sessions: async (ticket: { links?: TicketLinkRow[] }, _args: unknown, ctx: Context) => {
       const sessionLinks = (ticket.links ?? []).filter((l) => l.entityType === "session");
       if (sessionLinks.length === 0) return [];

@@ -60,19 +60,22 @@ describe("TicketService", () => {
       include: expect.any(Object),
     });
     expect(eventServiceMock.create).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         organizationId: "org-1",
         scopeType: "ticket",
         scopeId: "ticket-1",
         eventType: "ticket_created",
-        payload: {
+        payload: expect.objectContaining({
           ticketId: "ticket-1",
-          title: "Fix auth",
-          priority: "medium",
-        },
+          ticket: expect.objectContaining({
+            id: "ticket-1",
+            title: "Fix auth",
+            priority: "medium",
+          }),
+        }),
         actorType: "user",
         actorId: "user-1",
-      },
+      }),
       prismaMock,
     );
   });
@@ -100,19 +103,20 @@ describe("TicketService", () => {
       },
       include: expect.any(Object),
     });
-    expect(eventServiceMock.create).toHaveBeenCalledWith({
+    expect(eventServiceMock.create).toHaveBeenCalledWith(expect.objectContaining({
       organizationId: "org-1",
       scopeType: "ticket",
       scopeId: "ticket-1",
       eventType: "ticket_updated",
-      payload: {
+      payload: expect.objectContaining({
         ticketId: "ticket-1",
         changes: { title: "Updated", status: "done", description: null },
         previousStatus: "todo",
-      },
+        ticket: expect.objectContaining({ id: "ticket-1", title: "Updated" }),
+      }),
       actorType: "user",
       actorId: "user-1",
-    });
+    }));
   });
 
   it("adds comments through event creation", async () => {

@@ -213,6 +213,13 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type ApproveProjectPlanInput = {
+  planSummary: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+  retryFailed?: InputMaybe<Scalars["Boolean"]["input"]>;
+  structuredDrafts?: InputMaybe<Array<TicketDraftInput>>;
+};
+
 export type AutonomyMode = "act" | "observe" | "suggest";
 
 export type Branch = {
@@ -447,6 +454,10 @@ export type CreateProjectFromGoalInput = {
   goal: Scalars["String"]["input"];
   name?: InputMaybe<Scalars["String"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+  planningHosting?: InputMaybe<HostingMode>;
+  planningModel?: InputMaybe<Scalars["String"]["input"]>;
+  planningReasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  planningTool?: InputMaybe<CodingTool>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
@@ -544,6 +555,12 @@ export type EventType =
   | "project_risk_recorded"
   | "project_run_created"
   | "project_run_updated"
+  | "project_ticket_execution_created"
+  | "project_ticket_execution_updated"
+  | "project_ticket_generation_completed"
+  | "project_ticket_generation_failed"
+  | "project_ticket_generation_started"
+  | "project_ticket_lifecycle_event"
   | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
@@ -710,6 +727,7 @@ export type Mutation = {
   addOrgMember: OrgMember;
   addProjectMember: ProjectMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  approveProjectPlan: ProjectTicketGenerationAttempt;
   archiveSessionGroup?: Maybe<SessionGroup>;
   askProjectQuestion: Event;
   assignTicket: Ticket;
@@ -782,6 +800,8 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startOrchestratorEpisode: OrchestratorEpisode;
+  startProjectPlanningSession: Session;
+  startProjectTicketExecution: ProjectTicketExecution;
   startSession: Session;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
@@ -834,6 +854,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
   scopeType?: InputMaybe<BridgeAccessScopeType>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationApproveProjectPlanArgs = {
+  input: ApproveProjectPlanInput;
 };
 
 export type MutationArchiveSessionGroupArgs = {
@@ -1180,6 +1204,14 @@ export type MutationStartOrchestratorEpisodeArgs = {
   triggerEventId: Scalars["ID"]["input"];
 };
 
+export type MutationStartProjectPlanningSessionArgs = {
+  input: StartProjectPlanningSessionInput;
+};
+
+export type MutationStartProjectTicketExecutionArgs = {
+  input: StartProjectTicketExecutionInput;
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1386,6 +1418,28 @@ export type Participant = {
   userId: Scalars["ID"]["output"];
 };
 
+export type Playbook = {
+  __typename?: "Playbook";
+  createdAt: Scalars["DateTime"]["output"];
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  isBuiltIn: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  organizationId?: Maybe<Scalars["ID"]["output"]>;
+  updatedAt: Scalars["DateTime"]["output"];
+  versions: Array<PlaybookVersion>;
+};
+
+export type PlaybookVersion = {
+  __typename?: "PlaybookVersion";
+  content: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  metadata: Scalars["JSON"]["output"];
+  playbookId: Scalars["ID"]["output"];
+  version: Scalars["Int"]["output"];
+};
+
 export type PortEndpoint = {
   __typename?: "PortEndpoint";
   label: Scalars["String"]["output"];
@@ -1434,9 +1488,14 @@ export type ProjectRun = {
   orchestratorEpisodes: Array<OrchestratorEpisode>;
   organizationId: Scalars["ID"]["output"];
   planSummary?: Maybe<Scalars["String"]["output"]>;
+  planningSessionId?: Maybe<Scalars["ID"]["output"]>;
+  playbookSnapshot: Scalars["JSON"]["output"];
+  playbookVersionId?: Maybe<Scalars["ID"]["output"]>;
   project: Project;
   projectId: Scalars["ID"]["output"];
   status: ProjectRunStatus;
+  ticketExecutions: Array<ProjectTicketExecution>;
+  ticketGenerationAttempt?: Maybe<ProjectTicketGenerationAttempt>;
   updatedAt: Scalars["DateTime"]["output"];
 };
 
@@ -1450,6 +1509,68 @@ export type ProjectRunStatus =
   | "paused"
   | "planning"
   | "ready"
+  | "running";
+
+export type ProjectTicketExecution = {
+  __typename?: "ProjectTicketExecution";
+  cancelledAt?: Maybe<Scalars["DateTime"]["output"]>;
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  fixSessionId?: Maybe<Scalars["ID"]["output"]>;
+  id: Scalars["ID"]["output"];
+  implementationSessionId?: Maybe<Scalars["ID"]["output"]>;
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  lastLifecycleEventId?: Maybe<Scalars["ID"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  previousStatus?: Maybe<ProjectTicketExecutionStatus>;
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  reviewSessionId?: Maybe<Scalars["ID"]["output"]>;
+  sequence: Scalars["Int"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ProjectTicketExecutionStatus;
+  ticket: Ticket;
+  ticketId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectTicketExecutionStatus =
+  | "blocked"
+  | "cancelled"
+  | "completed"
+  | "failed"
+  | "fixing"
+  | "needs_human"
+  | "queued"
+  | "ready"
+  | "reviewing"
+  | "running";
+
+export type ProjectTicketGenerationAttempt = {
+  __typename?: "ProjectTicketGenerationAttempt";
+  approvedPlan: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdTicketIds: Array<Scalars["ID"]["output"]>;
+  draftCount: Scalars["Int"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  retryCount: Scalars["Int"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ProjectTicketGenerationStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectTicketGenerationStatus =
+  | "completed"
+  | "failed"
+  | "partial_failed"
+  | "pending"
   | "running";
 
 export type PushPlatform = "android" | "ios";
@@ -1495,6 +1616,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
+  resolveProjectRunPlaybook: ResolvedPlaybook;
   resolvedAiMode: AutonomyMode;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -1682,6 +1804,10 @@ export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryResolveProjectRunPlaybookArgs = {
+  projectRunId: Scalars["ID"]["input"];
+};
+
 export type QueryResolvedAiModeArgs = {
   organizationId: Scalars["ID"]["input"];
   scopeId: Scalars["ID"]["input"];
@@ -1813,6 +1939,13 @@ export type Repo = {
   remoteUrl: Scalars["String"]["output"];
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
+};
+
+export type ResolvedPlaybook = {
+  __typename?: "ResolvedPlaybook";
+  playbook?: Maybe<Playbook>;
+  source: Scalars["String"]["output"];
+  version: PlaybookVersion;
 };
 
 export type ScopeInput = {
@@ -1992,6 +2125,23 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
+export type StartProjectPlanningSessionInput = {
+  hosting?: InputMaybe<HostingMode>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectRunId: Scalars["ID"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
+export type StartProjectTicketExecutionInput = {
+  hosting?: InputMaybe<HostingMode>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectRunId: Scalars["ID"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  ticketId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -2122,6 +2272,14 @@ export type Ticket = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
+export type TicketDraftInput = {
+  acceptanceCriteria?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  description: Scalars["String"]["input"];
+  labels?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  priority?: InputMaybe<Priority>;
+  title: Scalars["String"]["input"];
+};
+
 export type TicketFilters = {
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   priority?: InputMaybe<Priority>;
@@ -2201,6 +2359,8 @@ export type UpdateProjectRunInput = {
   latestControllerSummaryId?: InputMaybe<Scalars["ID"]["input"]>;
   latestControllerSummaryText?: InputMaybe<Scalars["String"]["input"]>;
   planSummary?: InputMaybe<Scalars["String"]["input"]>;
+  planningSessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  playbookVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   status?: InputMaybe<ProjectRunStatus>;
 };
 
@@ -2625,7 +2785,12 @@ export type CreateProjectFromGoalMutation = {
     repoId?: string | null;
     createdAt: string;
     updatedAt: string;
-    runs: Array<{ __typename?: "ProjectRun"; id: string; projectId: string }>;
+    runs: Array<{
+      __typename?: "ProjectRun";
+      id: string;
+      projectId: string;
+      planningSessionId?: string | null;
+    }>;
   };
 };
 
@@ -2686,6 +2851,17 @@ export type ProjectQuery = {
       labels: Array<string>;
       createdAt: string;
       updatedAt: string;
+      projects: Array<{
+        __typename?: "Project";
+        id: string;
+        name: string;
+        organizationId: string;
+        repoId?: string | null;
+        aiMode?: AutonomyMode | null;
+        soulFile: string;
+        createdAt: string;
+        updatedAt: string;
+      }>;
       assignees: Array<{
         __typename?: "User";
         id: string;
@@ -2703,14 +2879,34 @@ export type ProjectQuery = {
       status: ProjectRunStatus;
       initialGoal: string;
       planSummary?: string | null;
+      planningSessionId?: string | null;
       activeGateId?: string | null;
       latestControllerSummaryId?: string | null;
       latestControllerSummaryText?: string | null;
       executionConfig: JsonValue;
+      playbookVersionId?: string | null;
+      playbookSnapshot: JsonValue;
       createdAt: string;
       updatedAt: string;
     }>;
   } | null;
+};
+
+export type StartProjectPlanningSessionMutationVariables = Exact<{
+  input: StartProjectPlanningSessionInput;
+}>;
+
+export type StartProjectPlanningSessionMutation = {
+  __typename?: "Mutation";
+  startProjectPlanningSession: {
+    __typename?: "Session";
+    id: string;
+    name: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    updatedAt: string;
+    createdAt: string;
+  };
 };
 
 export type ProjectsQueryVariables = Exact<{
@@ -2820,36 +3016,20 @@ export type SessionGroupFileContentQuery = {
   sessionGroupFileContent: string;
 };
 
-export type SaveApprovedProjectPlanMutationVariables = Exact<{
-  input: UpdateProjectPlanSummaryInput;
+export type ApproveProjectPlanMutationVariables = Exact<{
+  input: ApproveProjectPlanInput;
 }>;
 
-export type SaveApprovedProjectPlanMutation = {
+export type ApproveProjectPlanMutation = {
   __typename?: "Mutation";
-  updateProjectPlanSummary: {
-    __typename?: "ProjectRun";
+  approveProjectPlan: {
+    __typename?: "ProjectTicketGenerationAttempt";
     id: string;
-    status: ProjectRunStatus;
-    planSummary?: string | null;
-    updatedAt: string;
-  };
-};
-
-export type CreateProjectPlanTicketMutationVariables = Exact<{
-  input: CreateTicketInput;
-}>;
-
-export type CreateProjectPlanTicketMutation = {
-  __typename?: "Mutation";
-  createTicket: {
-    __typename?: "Ticket";
-    id: string;
-    title: string;
-    description: string;
-    status: TicketStatus;
-    priority: Priority;
-    labels: Array<string>;
-    createdAt: string;
+    status: ProjectTicketGenerationStatus;
+    projectRunId: string;
+    draftCount: number;
+    createdTicketIds: Array<string>;
+    error?: string | null;
     updatedAt: string;
   };
 };
@@ -5012,6 +5192,7 @@ export const CreateProjectFromGoalDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                      { kind: "Field", name: { kind: "Name", value: "planningSessionId" } },
                     ],
                   },
                 },
@@ -5143,6 +5324,23 @@ export const ProjectDocument = {
                       { kind: "Field", name: { kind: "Name", value: "labels" } },
                       {
                         kind: "Field",
+                        name: { kind: "Name", value: "projects" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                            { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                            { kind: "Field", name: { kind: "Name", value: "aiMode" } },
+                            { kind: "Field", name: { kind: "Name", value: "soulFile" } },
+                            { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
                         name: { kind: "Name", value: "assignees" },
                         selectionSet: {
                           kind: "SelectionSet",
@@ -5190,6 +5388,7 @@ export const ProjectDocument = {
                       { kind: "Field", name: { kind: "Name", value: "status" } },
                       { kind: "Field", name: { kind: "Name", value: "initialGoal" } },
                       { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                      { kind: "Field", name: { kind: "Name", value: "planningSessionId" } },
                       { kind: "Field", name: { kind: "Name", value: "activeGateId" } },
                       { kind: "Field", name: { kind: "Name", value: "latestControllerSummaryId" } },
                       {
@@ -5197,6 +5396,8 @@ export const ProjectDocument = {
                         name: { kind: "Name", value: "latestControllerSummaryText" },
                       },
                       { kind: "Field", name: { kind: "Name", value: "executionConfig" } },
+                      { kind: "Field", name: { kind: "Name", value: "playbookVersionId" } },
+                      { kind: "Field", name: { kind: "Name", value: "playbookSnapshot" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                       { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                     ],
@@ -5212,6 +5413,59 @@ export const ProjectDocument = {
     },
   ],
 } as unknown as DocumentNode<ProjectQuery, ProjectQueryVariables>;
+export const StartProjectPlanningSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "StartProjectPlanningSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "StartProjectPlanningSessionInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "startProjectPlanningSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  StartProjectPlanningSessionMutation,
+  StartProjectPlanningSessionMutationVariables
+>;
 export const ProjectsDocument = {
   kind: "Document",
   definitions: [
@@ -5592,23 +5846,20 @@ export const SessionGroupFileContentDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupFileContentQuery, SessionGroupFileContentQueryVariables>;
-export const SaveApprovedProjectPlanDocument = {
+export const ApproveProjectPlanDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "mutation",
-      name: { kind: "Name", value: "SaveApprovedProjectPlan" },
+      name: { kind: "Name", value: "ApproveProjectPlan" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
           variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
           type: {
             kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: { kind: "Name", value: "UpdateProjectPlanSummaryInput" },
-            },
+            type: { kind: "NamedType", name: { kind: "Name", value: "ApproveProjectPlanInput" } },
           },
         },
       ],
@@ -5617,7 +5868,7 @@ export const SaveApprovedProjectPlanDocument = {
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "updateProjectPlanSummary" },
+            name: { kind: "Name", value: "approveProjectPlan" },
             arguments: [
               {
                 kind: "Argument",
@@ -5630,7 +5881,10 @@ export const SaveApprovedProjectPlanDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                { kind: "Field", name: { kind: "Name", value: "projectRunId" } },
+                { kind: "Field", name: { kind: "Name", value: "draftCount" } },
+                { kind: "Field", name: { kind: "Name", value: "createdTicketIds" } },
+                { kind: "Field", name: { kind: "Name", value: "error" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
               ],
             },
@@ -5639,62 +5893,7 @@ export const SaveApprovedProjectPlanDocument = {
       },
     },
   ],
-} as unknown as DocumentNode<
-  SaveApprovedProjectPlanMutation,
-  SaveApprovedProjectPlanMutationVariables
->;
-export const CreateProjectPlanTicketDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "CreateProjectPlanTicket" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "CreateTicketInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "createTicket" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "title" } },
-                { kind: "Field", name: { kind: "Name", value: "description" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "priority" } },
-                { kind: "Field", name: { kind: "Name", value: "labels" } },
-                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  CreateProjectPlanTicketMutation,
-  CreateProjectPlanTicketMutationVariables
->;
+} as unknown as DocumentNode<ApproveProjectPlanMutation, ApproveProjectPlanMutationVariables>;
 export const SessionDetailDocument = {
   kind: "Document",
   definitions: [

@@ -18,10 +18,10 @@ import { useShallow } from "zustand/react/shallow";
 import {
   eventScopeKey,
   type ProjectRunEntity,
-  START_SESSION_MUTATION,
   type SessionEntity,
   useActiveProjectRunId,
   useAuthStore,
+  useEntityIds,
   useEntityField,
   useEntityStore,
   useScopedEventIds,
@@ -30,7 +30,6 @@ import { useProjectEvents } from "../../hooks/useProjectEvents";
 import { useUIStore } from "../../stores/ui";
 import { usePreferencesStore } from "../../stores/preferences";
 import { client } from "../../lib/urql";
-import { buildPlanningSessionPrompt } from "../../lib/projectPlanningSessionPrompt";
 import { SessionDetailView } from "../session/SessionDetailView";
 import { getDefaultModel } from "../session/modelOptions";
 import { ticketPriorityLabel, ticketStatusLabel } from "../tickets/tickets-table-types";
@@ -93,6 +92,16 @@ const PROJECT_QUERY = gql`
         status
         priority
         labels
+        projects {
+          id
+          name
+          organizationId
+          repoId
+          aiMode
+          soulFile
+          createdAt
+          updatedAt
+        }
         assignees {
           id
           name
@@ -116,15 +125,31 @@ const PROJECT_QUERY = gql`
         status
         initialGoal
         planSummary
+        planningSessionId
         activeGateId
         latestControllerSummaryId
         latestControllerSummaryText
         executionConfig
+        playbookVersionId
+        playbookSnapshot
         createdAt
         updatedAt
       }
       createdAt
       updatedAt
+    }
+  }
+`;
+
+const START_PROJECT_PLANNING_SESSION_MUTATION = gql`
+  mutation StartProjectPlanningSession($input: StartProjectPlanningSessionInput!) {
+    startProjectPlanningSession(input: $input) {
+      id
+      name
+      agentStatus
+      sessionStatus
+      updatedAt
+      createdAt
     }
   }
 `;
@@ -188,14 +213,11 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     setStartSessionError(null);
     const tool = defaultTool ?? "claude_code";
     const result = await client
-      .mutation(START_SESSION_MUTATION, {
+      .mutation(START_PROJECT_PLANNING_SESSION_MUTATION, {
         input: {
+          projectRunId: currentProjectRun.id,
           tool,
           model: defaultModel ?? getDefaultModel(tool),
-          repoId: project?.repoId ?? undefined,
-          projectId,
-          prompt: buildPlanningSessionPrompt(currentProjectRun.initialGoal),
-          interactionMode: "plan",
         },
       })
       .toPromise();
@@ -213,8 +235,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     defaultModel,
     defaultTool,
     fetchProject,
-    project?.repoId,
-    projectId,
     startingSession,
   ]);
 
@@ -258,7 +278,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   }
 
   const members = project.members.filter((member) => !member.leftAt);
-  const planningSession = selectPlanningSession(project.sessions);
+  const planningSession = selectPlanningSession(project.sessions, currentProjectRun?.planningSessionId);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -331,7 +351,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                       organizationId: project.organizationId,
                       projectId: project.id,
                       projectRunId: currentProjectRun.id,
-                      onPlanApproved: fetchProject,
                     }
                   : null
               }
@@ -348,7 +367,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
         <aside className="space-y-4">
           {currentProjectRun && <ProjectRunPanel projectRun={currentProjectRun} />}
-          <ProjectTicketsPanel tickets={project.tickets} />
+          <ProjectTicketsPanel projectId={project.id} />
 
           <div className="rounded-md border border-border bg-background p-4">
             <h2 className="text-sm font-semibold text-foreground">Overview</h2>
@@ -431,9 +450,11 @@ function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
   );
 }
 
-function ProjectTicketsPanel({ tickets }: { tickets: Project["tickets"] }) {
-  const sortedTickets = [...tickets].sort((a, b) =>
-    sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)),
+function ProjectTicketsPanel({ projectId }: { projectId: string }) {
+  const ticketIds = useEntityIds(
+    "tickets",
+    (ticket) => ticket.projects?.some((project) => project.id === projectId) ?? false,
+    (a, b) => sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)),
   );
 
   return (
@@ -443,42 +464,53 @@ function ProjectTicketsPanel({ tickets }: { tickets: Project["tickets"] }) {
           <ListChecks size={15} className="text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Tickets</h2>
         </div>
-        <span className="text-xs text-muted-foreground">{tickets.length}</span>
+        <span className="text-xs text-muted-foreground">{ticketIds.length}</span>
       </div>
 
-      {sortedTickets.length === 0 ? (
+      {ticketIds.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">
           Approved plans will create linked project tickets here.
         </p>
       ) : (
         <div className="mt-3 max-h-80 divide-y divide-border overflow-y-auto">
-          {sortedTickets.map((ticket) => (
-            <div key={ticket.id} className="py-3 first:pt-0 last:pb-0">
-              <div className="line-clamp-2 text-sm font-medium text-foreground">
-                {ticket.title ?? "Untitled ticket"}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                  {ticket.status
-                    ? (ticketStatusLabel[ticket.status] ?? formatStatus(ticket.status))
-                    : "Status pending"}
-                </span>
-                <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                  {ticket.priority
-                    ? (ticketPriorityLabel[ticket.priority] ?? formatStatus(ticket.priority))
-                    : "Priority pending"}
-                </span>
-                {(ticket.assignees?.length ?? 0) > 0 && (
-                  <span className="truncate text-xs text-muted-foreground">
-                    {ticket.assignees.map((assignee) => assignee.name ?? assignee.id).join(", ")}
-                  </span>
-                )}
-              </div>
-            </div>
+          {ticketIds.map((ticketId) => (
+            <ProjectTicketRow key={ticketId} ticketId={ticketId} />
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+function ProjectTicketRow({ ticketId }: { ticketId: string }) {
+  const title = useEntityField("tickets", ticketId, "title") as string | undefined;
+  const status = useEntityField("tickets", ticketId, "status") as keyof typeof ticketStatusLabel | undefined;
+  const priority = useEntityField("tickets", ticketId, "priority") as
+    | keyof typeof ticketPriorityLabel
+    | undefined;
+  const assignees = useEntityField("tickets", ticketId, "assignees") as
+    | Array<{ id: string; name?: string | null }>
+    | undefined;
+
+  return (
+    <div className="py-3 first:pt-0 last:pb-0">
+      <div className="line-clamp-2 text-sm font-medium text-foreground">
+        {title ?? "Untitled ticket"}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
+          {status ? (ticketStatusLabel[status] ?? formatStatus(status)) : "Status pending"}
+        </span>
+        <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
+          {priority ? (ticketPriorityLabel[priority] ?? formatStatus(priority)) : "Priority pending"}
+        </span>
+        {(assignees?.length ?? 0) > 0 && (
+          <span className="truncate text-xs text-muted-foreground">
+            {assignees?.map((assignee) => assignee.name ?? assignee.id).join(", ")}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -511,7 +543,14 @@ function ProjectSessionEmptyState({
   );
 }
 
-function selectPlanningSession(sessions: Project["sessions"]): Project["sessions"][number] | null {
+function selectPlanningSession(
+  sessions: Project["sessions"],
+  planningSessionId?: string | null,
+): Project["sessions"][number] | null {
+  const linked = planningSessionId
+    ? sessions.find((session) => session.id === planningSessionId)
+    : null;
+  if (linked) return linked;
   if (sessions.length === 0) return null;
   return (
     [...sessions].sort((a, b) =>

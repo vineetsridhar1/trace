@@ -3,6 +3,7 @@ import type {
   CreateProjectFromGoalInput,
   CreateProjectRunInput,
   ProjectRunStatus,
+  StartProjectPlanningSessionInput,
   UpdateProjectRunInput,
   UserRole,
 } from "@trace/gql";
@@ -141,16 +142,43 @@ export function projectRunPayload(projectRun: ProjectRunWithProject): Prisma.Inp
     status: projectRun.status,
     initialGoal: projectRun.initialGoal,
     planSummary: projectRun.planSummary,
+    planningSessionId: projectRun.planningSessionId,
     activeGateId: projectRun.activeGateId,
     latestControllerSummaryId: projectRun.latestControllerSummaryId,
     latestControllerSummaryText: projectRun.latestControllerSummaryText,
     executionConfig: normalizeExecutionConfig(projectRun.executionConfig),
+    playbookVersionId: projectRun.playbookVersionId,
+    playbookSnapshot: normalizeExecutionConfig(projectRun.playbookSnapshot),
     createdAt: dateToJson(projectRun.createdAt),
     updatedAt: dateToJson(projectRun.updatedAt),
   };
 }
 
 export class ProjectRunService {
+  constructor(
+    private readonly sessions: {
+      start(input: {
+        organizationId: string;
+        createdById: string;
+        actorType?: ActorType;
+        actorId?: string;
+        tool: "claude_code" | "codex" | "custom";
+        model?: string | null;
+        reasoningEffort?: string | null;
+        hosting?: "cloud" | "local" | null;
+        repoId?: string;
+        projectId?: string;
+        prompt?: string;
+        interactionMode?: string;
+      }): Promise<{ id: string }>;
+    } = {
+      start: async (input) => {
+        const { sessionService } = await import("./session.js");
+        return sessionService.start(input);
+      },
+    },
+  ) {}
+
   async createProjectFromGoal(
     input: CreateProjectFromGoalInput,
     actorType: ActorType,
@@ -166,7 +194,8 @@ export class ProjectRunService {
       throw new Error("Project name is required");
     }
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const { projectId, projectRunId, organizationId } = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
       if (input.repoId) {
         await tx.repo.findFirstOrThrow({
@@ -250,11 +279,108 @@ export class ProjectRunService {
         tx,
       );
 
-      return tx.project.findUniqueOrThrow({
-        where: { id: project.id },
-        include: PROMPT_PROJECT_INCLUDE,
-      });
+        return {
+          projectId: project.id,
+          projectRunId: projectRun.id,
+          organizationId: input.organizationId,
+        };
+      },
+    );
+
+    await this.startPlanningSession(
+      {
+        projectRunId,
+        tool: input.planningTool ?? "claude_code",
+        model: input.planningModel,
+        reasoningEffort: input.planningReasoningEffort,
+        hosting: input.planningHosting,
+      },
+      organizationId,
+      actorType,
+      actorId,
+    );
+
+    return prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      include: PROMPT_PROJECT_INCLUDE,
     });
+  }
+
+  async startPlanningSession(
+    input: StartProjectPlanningSessionInput,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const projectRun = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.projectRun.findFirstOrThrow({
+        where: { id: input.projectRunId, organizationId },
+        include: { project: true },
+      });
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+
+      if (existing.planningSessionId) {
+        return existing;
+      }
+
+      return existing;
+    });
+
+    if (projectRun.planningSessionId) {
+      return prisma.session.findFirstOrThrow({
+        where: { id: projectRun.planningSessionId, organizationId },
+        include: {
+          createdBy: true,
+          repo: true,
+          channel: true,
+          sessionGroup: true,
+        },
+      });
+    }
+
+    const session = await this.sessions.start({
+      organizationId,
+      createdById: actorId,
+      actorType,
+      actorId,
+      tool: input.tool ?? "claude_code",
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+      hosting: input.hosting,
+      repoId: projectRun.project.repoId ?? undefined,
+      projectId: projectRun.projectId,
+      prompt: buildPlanningSessionPrompt(projectRun.initialGoal, projectRun.id),
+      interactionMode: "plan",
+    });
+
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const current = await tx.projectRun.findFirstOrThrow({
+        where: { id: projectRun.id, organizationId },
+        include: { project: true },
+      });
+      if (current.planningSessionId) return;
+
+      const updated = await tx.projectRun.update({
+        where: { id: current.id },
+        data: { planningSessionId: session.id },
+        include: PROJECT_RUN_INCLUDE,
+      });
+
+      await eventService.create(
+        {
+          organizationId,
+          scopeType: "project",
+          scopeId: updated.projectId,
+          eventType: "project_run_updated",
+          payload: { projectRun: projectRunPayload(updated) },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+    });
+
+    return session;
   }
 
   async listProjectRuns(projectId: string, organizationId: string) {
@@ -356,6 +482,7 @@ export class ProjectRunService {
       const data: Prisma.ProjectRunUncheckedUpdateInput = {};
       if (input.status != null) data.status = input.status;
       if (input.planSummary !== undefined) data.planSummary = input.planSummary;
+      if (input.planningSessionId !== undefined) data.planningSessionId = input.planningSessionId;
       if (input.activeGateId !== undefined) data.activeGateId = input.activeGateId;
       if (input.latestControllerSummaryId !== undefined) {
         data.latestControllerSummaryId = input.latestControllerSummaryId;
@@ -366,6 +493,7 @@ export class ProjectRunService {
       if (input.executionConfig !== undefined) {
         data.executionConfig = normalizeExecutionConfig(input.executionConfig);
       }
+      if (input.playbookVersionId !== undefined) data.playbookVersionId = input.playbookVersionId;
 
       const projectRun = await tx.projectRun.update({
         where: { id: existing.id },
@@ -414,6 +542,19 @@ export class ProjectRunService {
 function deriveProjectName(goal: string): string {
   const normalized = goal.trim().replace(/\s+/g, " ");
   return normalized.length > 64 ? `${normalized.slice(0, 61)}...` : normalized;
+}
+
+function buildPlanningSessionPrompt(goal: string, projectRunId: string): string {
+  return [
+    "You are planning a Trace project run. Interview the user, ask clarifying questions when needed, and maintain a concise implementation plan.",
+    "",
+    `Project run id: ${projectRunId}`,
+    "",
+    "Initial goal:",
+    goal,
+    "",
+    "Stay in planning mode. Do not start implementation. When the plan is ready, present it as a structured markdown plan with enough detail for ticket generation.",
+  ].join("\n");
 }
 
 export const projectRunService = new ProjectRunService();

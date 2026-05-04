@@ -8,6 +8,9 @@ import type {
   CreateProjectRunInput,
   UpdateProjectInput,
   UpdateProjectRunInput,
+  StartProjectPlanningSessionInput,
+  ApproveProjectPlanInput,
+  StartProjectTicketExecutionInput,
   RecordProjectPlanningDecisionInput,
   RecordProjectPlanningMessageInput,
   RecordProjectPlanningRiskInput,
@@ -20,6 +23,8 @@ import type {
 import { organizationService } from "../services/organization.js";
 import { projectRunService } from "../services/project-run.js";
 import { projectPlanningService } from "../services/project-planning.js";
+import { projectTicketExecutionService } from "../services/project-ticket-execution.js";
+import { playbookService } from "../services/playbook.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
@@ -62,6 +67,10 @@ export const organizationQueries = {
   projectRuns: (_: unknown, args: { projectId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return projectRunService.listProjectRuns(args.projectId, orgId);
+  },
+  resolveProjectRunPlaybook: (_: unknown, args: { projectRunId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return playbookService.resolveForProjectRun(args.projectRunId, orgId, ctx.actorType, ctx.userId);
   },
 };
 
@@ -106,6 +115,36 @@ export const organizationMutations = {
       args.id,
       orgId,
       args.input,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  startProjectPlanningSession: (
+    _: unknown,
+    args: { input: StartProjectPlanningSessionInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectRunService.startPlanningSession(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  approveProjectPlan: (_: unknown, args: { input: ApproveProjectPlanInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.approvePlanAndGenerateTickets(
+      args.input,
+      orgId,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  startProjectTicketExecution: (
+    _: unknown,
+    args: { input: StartProjectTicketExecutionInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectTicketExecutionService.startNextOrTicket(
+      args.input,
+      orgId,
       ctx.actorType,
       ctx.userId,
     );

@@ -194,11 +194,18 @@ describe("ProjectRunService", () => {
   it("creates a project and its first run atomically from a goal", async () => {
     prismaMock.project.create.mockResolvedValueOnce(makeProject());
     prismaMock.projectRun.create.mockResolvedValueOnce(makeProjectRun());
-    prismaMock.project.findUniqueOrThrow.mockResolvedValueOnce(
-      makeProject({ runs: [makeProjectRun()] }),
+    prismaMock.projectRun.findFirstOrThrow
+      .mockResolvedValueOnce(makeProjectRun())
+      .mockResolvedValueOnce(makeProjectRun());
+    prismaMock.projectRun.update.mockResolvedValueOnce(
+      makeProjectRun({ planningSessionId: "session-1" }),
     );
+    prismaMock.project.findUniqueOrThrow.mockResolvedValueOnce(
+      makeProject({ runs: [makeProjectRun({ planningSessionId: "session-1" })] }),
+    );
+    const start = vi.fn().mockResolvedValue({ id: "session-1" });
 
-    const service = new ProjectRunService();
+    const service = new ProjectRunService({ start });
     const project = await service.createProjectFromGoal(
       {
         organizationId: "org-1",
@@ -211,10 +218,16 @@ describe("ProjectRunService", () => {
     );
 
     expect(project).toMatchObject({ id: "project-1", runs: [{ id: "run-1" }] });
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: "project-1",
+        interactionMode: "plan",
+      }),
+    );
     const projectCreateOrder = prismaMock.project.create.mock.invocationCallOrder[0] ?? 0;
     const runCreateOrder = prismaMock.projectRun.create.mock.invocationCallOrder[0] ?? 0;
     expect(projectCreateOrder).toBeLessThan(runCreateOrder);
-    expect(eventServiceMock.create).toHaveBeenCalledTimes(4);
+    expect(eventServiceMock.create).toHaveBeenCalledTimes(5);
     expect(eventServiceMock.create).toHaveBeenNthCalledWith(
       4,
       expect.objectContaining({

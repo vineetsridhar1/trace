@@ -236,6 +236,27 @@ enum ProjectRunStatus {
   cancelled
 }
 
+enum ProjectTicketGenerationStatus {
+  pending
+  running
+  completed
+  partial_failed
+  failed
+}
+
+enum ProjectTicketExecutionStatus {
+  queued
+  ready
+  running
+  reviewing
+  fixing
+  needs_human
+  blocked
+  completed
+  failed
+  cancelled
+}
+
 enum OrchestratorEpisodeStatus {
   pending
   starting
@@ -277,6 +298,12 @@ enum EventType {
   project_decision_recorded
   project_risk_recorded
   project_plan_summary_updated
+  project_ticket_generation_started
+  project_ticket_generation_completed
+  project_ticket_generation_failed
+  project_ticket_execution_created
+  project_ticket_execution_updated
+  project_ticket_lifecycle_event
   orchestrator_episode_created
   orchestrator_episode_updated
   entity_linked
@@ -410,13 +437,85 @@ type ProjectRun {
   status: ProjectRunStatus!
   initialGoal: String!
   planSummary: String
+  planningSessionId: ID
   activeGateId: ID
   latestControllerSummaryId: ID
   latestControllerSummaryText: String
   executionConfig: JSON!
+  playbookVersionId: ID
+  playbookSnapshot: JSON!
+  ticketGenerationAttempt: ProjectTicketGenerationAttempt
+  ticketExecutions: [ProjectTicketExecution!]!
   orchestratorEpisodes: [OrchestratorEpisode!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type ProjectTicketGenerationAttempt {
+  id: ID!
+  organizationId: ID!
+  projectId: ID!
+  projectRunId: ID!
+  status: ProjectTicketGenerationStatus!
+  approvedPlan: String!
+  draftCount: Int!
+  createdTicketIds: [ID!]!
+  error: String
+  retryCount: Int!
+  startedAt: DateTime
+  completedAt: DateTime
+  failedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ProjectTicketExecution {
+  id: ID!
+  organizationId: ID!
+  projectId: ID!
+  projectRunId: ID!
+  ticketId: ID!
+  ticket: Ticket!
+  status: ProjectTicketExecutionStatus!
+  sequence: Int!
+  implementationSessionId: ID
+  reviewSessionId: ID
+  fixSessionId: ID
+  previousStatus: ProjectTicketExecutionStatus
+  lastLifecycleEventId: ID
+  lastError: String
+  startedAt: DateTime
+  completedAt: DateTime
+  failedAt: DateTime
+  cancelledAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Playbook {
+  id: ID!
+  organizationId: ID
+  name: String!
+  description: String
+  isBuiltIn: Boolean!
+  versions: [PlaybookVersion!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type PlaybookVersion {
+  id: ID!
+  playbookId: ID!
+  version: Int!
+  content: String!
+  metadata: JSON!
+  createdAt: DateTime!
+}
+
+type ResolvedPlaybook {
+  source: String!
+  playbook: Playbook
+  version: PlaybookVersion!
 }
 
 type OrchestratorEpisode {
@@ -1174,16 +1273,30 @@ input CreateProjectFromGoalInput {
   goal: String!
   name: String
   repoId: ID
+  planningTool: CodingTool
+  planningModel: String
+  planningReasoningEffort: String
+  planningHosting: HostingMode
   executionConfig: JSON
 }
 
 input UpdateProjectRunInput {
   status: ProjectRunStatus
   planSummary: String
+  planningSessionId: ID
   activeGateId: ID
   latestControllerSummaryId: ID
   latestControllerSummaryText: String
   executionConfig: JSON
+  playbookVersionId: ID
+}
+
+input StartProjectPlanningSessionInput {
+  projectRunId: ID!
+  tool: CodingTool
+  model: String
+  reasoningEffort: String
+  hosting: HostingMode
 }
 
 input RecordProjectPlanningMessageInput {
@@ -1205,6 +1318,30 @@ input UpdateProjectPlanSummaryInput {
   projectRunId: ID!
   planSummary: String!
   status: ProjectRunStatus
+}
+
+input TicketDraftInput {
+  title: String!
+  description: String!
+  priority: Priority
+  labels: [String!]
+  acceptanceCriteria: [String!]
+}
+
+input ApproveProjectPlanInput {
+  projectRunId: ID!
+  planSummary: String!
+  structuredDrafts: [TicketDraftInput!]
+  retryFailed: Boolean
+}
+
+input StartProjectTicketExecutionInput {
+  projectRunId: ID!
+  ticketId: ID
+  tool: CodingTool
+  model: String
+  reasoningEffort: String
+  hosting: HostingMode
 }
 
 input CreateChatInput {
@@ -1280,6 +1417,7 @@ type Query {
   projects(organizationId: ID!, repoId: ID): [Project!]!
   project(id: ID!): Project
   projectRuns(projectId: ID!): [ProjectRun!]!
+  resolveProjectRunPlaybook(projectRunId: ID!): ResolvedPlaybook!
   orchestratorEpisodes(projectRunId: ID!): [OrchestratorEpisode!]!
   channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
@@ -1509,6 +1647,9 @@ type Mutation {
   createProjectFromGoal(input: CreateProjectFromGoalInput!): Project!
   createProjectRun(input: CreateProjectRunInput!): ProjectRun!
   updateProjectRun(id: ID!, input: UpdateProjectRunInput!): ProjectRun!
+  startProjectPlanningSession(input: StartProjectPlanningSessionInput!): Session!
+  approveProjectPlan(input: ApproveProjectPlanInput!): ProjectTicketGenerationAttempt!
+  startProjectTicketExecution(input: StartProjectTicketExecutionInput!): ProjectTicketExecution!
   startOrchestratorEpisode(triggerEventId: ID!): OrchestratorEpisode!
   askProjectQuestion(input: RecordProjectPlanningMessageInput!): Event!
   recordProjectAnswer(input: RecordProjectPlanningMessageInput!): Event!

@@ -199,6 +199,33 @@ export function createPrismaMock() {
       findFirstOrThrow: vi.fn(),
       update: vi.fn(),
     },
+    projectTicketGenerationAttempt: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+    },
+    projectTicketExecution: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    playbook: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+    },
+    playbookVersion: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+    },
     orchestratorEpisode: {
       create: vi.fn(),
       findMany: vi.fn(),

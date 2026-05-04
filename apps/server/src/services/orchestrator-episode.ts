@@ -12,6 +12,7 @@ import { eventService } from "./event.js";
 import { processedEventService } from "./processed-event.js";
 import { sessionService, type SessionService, type StartSessionServiceInput } from "./session.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
+import { playbookService } from "./playbook.js";
 
 const PROJECT_ORCHESTRATOR_CONSUMER = "project-orchestrator";
 const PROJECT_ORCHESTRATOR_ACTOR_ID = "project-orchestrator";
@@ -109,7 +110,11 @@ function resolveHosting(config: JsonRecord): StartSessionServiceInput["hosting"]
   return undefined;
 }
 
-function buildContextSnapshot(event: TriggerEvent, projectRun: ProjectRunForEpisode) {
+function buildContextSnapshot(
+  event: TriggerEvent,
+  projectRun: ProjectRunForEpisode,
+  playbook: { versionId: string; snapshot: Prisma.InputJsonObject; content: string },
+) {
   const payload = asRecord(event.payload);
   const executionConfig = asRecord(projectRun.executionConfig);
   return {
@@ -130,6 +135,11 @@ function buildContextSnapshot(event: TriggerEvent, projectRun: ProjectRunForEpis
     },
     project: projectRun.project,
     executionConfig,
+    playbook: {
+      versionId: playbook.versionId,
+      snapshot: playbook.snapshot,
+      content: playbook.content,
+    },
   };
 }
 
@@ -222,11 +232,18 @@ export class OrchestratorEpisodeService {
       throw new Error(`Project run is ${projectRun.status}`);
     }
 
-    const snapshot = buildContextSnapshot(event, projectRun);
+    const playbook = await playbookService.snapshotForProjectRun(
+      projectRun.id,
+      input.organizationId,
+      input.actorType,
+      input.actorId,
+    );
+    const snapshot = buildContextSnapshot(event, projectRun, playbook);
     const contextHash = hashSnapshot(snapshot);
     const episode = await this.ensureEpisode({
       event,
       projectRun,
+      playbook,
       snapshot,
       contextHash,
       actorType: input.actorType,
@@ -278,6 +295,7 @@ export class OrchestratorEpisodeService {
   private async ensureEpisode(input: {
     event: TriggerEvent;
     projectRun: ProjectRunForEpisode;
+    playbook: { versionId: string; snapshot: Prisma.InputJsonObject; content: string };
     snapshot: unknown;
     contextHash: string;
     actorType: ActorType;
@@ -301,7 +319,8 @@ export class OrchestratorEpisodeService {
           status: "pending",
           contextHash: input.contextHash,
           contextSnapshot: input.snapshot as Prisma.InputJsonValue,
-          playbookSnapshot: {},
+          playbookVersionId: input.playbook.versionId,
+          playbookSnapshot: input.playbook.snapshot,
           actionResults: [],
         },
       });

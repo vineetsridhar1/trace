@@ -25,6 +25,16 @@ vi.mock("./session.js", () => ({
   },
 }));
 
+vi.mock("./playbook.js", () => ({
+  playbookService: {
+    snapshotForProjectRun: vi.fn().mockResolvedValue({
+      versionId: "playbook-version-1",
+      snapshot: { version: { id: "playbook-version-1", content: "Default playbook" } },
+      content: "Default playbook",
+    }),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { processedEventService } from "./processed-event.js";

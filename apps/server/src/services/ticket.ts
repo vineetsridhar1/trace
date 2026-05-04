@@ -9,13 +9,95 @@ export type CreateTicketServiceInput = CreateTicketInput & {
   actorId: string;
 };
 
-const TICKET_INCLUDE = {
+export const TICKET_INCLUDE = {
   channel: true,
   createdBy: true,
   projects: { include: { project: true } },
   assignees: { include: { user: true } },
   links: true,
 } as const;
+
+export type TicketWithRelations = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
+
+function dateToJson(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function userPayload(user: TicketWithRelations["createdBy"] | null | undefined): Prisma.InputJsonObject {
+  return {
+    id: user?.id ?? "",
+    email: user?.email ?? "",
+    name: user?.name ?? "",
+    avatarUrl: user?.avatarUrl ?? null,
+    organizations: [],
+  };
+}
+
+function projectPayload(project: TicketWithRelations["projects"][number]["project"]) {
+  return {
+    id: project.id,
+    name: project.name,
+    organizationId: project.organizationId,
+    repoId: project.repoId,
+    aiMode: project.aiMode,
+    soulFile: project.soulFile,
+    members: [],
+    channels: [],
+    sessions: [],
+    tickets: [],
+    runs: [],
+    createdAt: dateToJson(project.createdAt),
+    updatedAt: dateToJson(project.updatedAt),
+  } satisfies Prisma.InputJsonObject;
+}
+
+export function ticketPayload(ticket: TicketWithRelations): Prisma.InputJsonObject {
+  return {
+    id: ticket.id,
+    title: ticket.title,
+    description: ticket.description,
+    status: ticket.status,
+    priority: ticket.priority,
+    labels: ticket.labels,
+    createdBy: userPayload(ticket.createdBy ?? { id: ticket.createdById, email: "", name: "", avatarUrl: null, githubId: null, createdAt: new Date(), updatedAt: new Date() }),
+    assignees: (ticket.assignees ?? []).map((assignee) => userPayload(assignee.user)),
+    origin: null,
+    channel: ticket.channel
+      ? {
+          id: ticket.channel.id,
+          name: ticket.channel.name,
+          type: ticket.channel.type,
+          position: ticket.channel.position,
+          groupId: ticket.channel.groupId,
+          baseBranch: ticket.channel.baseBranch,
+          repo: null,
+          aiMode: ticket.channel.aiMode,
+          setupScript: ticket.channel.setupScript,
+          runScripts: ticket.channel.runScripts,
+          members: [],
+          projects: [],
+          messages: [],
+          createdAt: dateToJson(ticket.channel.createdAt),
+          updatedAt: dateToJson(ticket.channel.updatedAt),
+        }
+      : null,
+    aiMode: ticket.aiMode,
+    projects: (ticket.projects ?? []).map((link) => projectPayload(link.project)),
+    sessions: [],
+    links: (ticket.links ?? []).map((link) => ({
+      id: link.id,
+      entityType: link.entityType,
+      entityId: link.entityId,
+      createdAt: dateToJson(link.createdAt),
+    })),
+    sourceProjectRunId: ticket.sourceProjectRunId,
+    generationAttemptId: ticket.generationAttemptId,
+    generationDraftKey: ticket.generationDraftKey,
+    createdAt: dateToJson(ticket.createdAt),
+    updatedAt: dateToJson(ticket.updatedAt),
+  };
+}
 
 export class TicketService {
   async list(
@@ -39,6 +121,14 @@ export class TicketService {
       where: { id, organizationId },
       include: TICKET_INCLUDE,
     });
+  }
+
+  async getProjects(ticketId: string) {
+    const links = await prisma.ticketProject.findMany({
+      where: { ticketId },
+      include: { project: true },
+    });
+    return links.map((link) => link.project);
   }
 
   async listForSession(sessionId: string) {
@@ -80,9 +170,9 @@ export class TicketService {
           scopeId: ticket.id,
           eventType: "ticket_created",
           payload: {
+            ticket: ticketPayload(ticket),
             ticketId: ticket.id,
-            title: ticket.title,
-            priority: ticket.priority,
+            projectIds: (ticket.projects ?? []).map((link) => link.projectId),
           },
           actorType: input.actorType,
           actorId: input.actorId,
@@ -125,6 +215,7 @@ export class TicketService {
       scopeId: id,
       eventType: "ticket_updated",
       payload: {
+        ticket: ticketPayload(ticket),
         ticketId: id,
         changes: input,
         previousStatus: existing.status,
@@ -188,7 +279,7 @@ export class TicketService {
           scopeType: "ticket",
           scopeId: ticketId,
           eventType: "ticket_assigned",
-          payload: { ticketId, userId },
+          payload: { ticket: ticketPayload(ticket), ticketId, userId },
           actorType,
           actorId,
         },
@@ -233,7 +324,7 @@ export class TicketService {
           scopeType: "ticket",
           scopeId: ticketId,
           eventType: "ticket_unassigned",
-          payload: { ticketId, userId },
+          payload: { ticket: ticketPayload(ticket), ticketId, userId },
           actorType,
           actorId,
         },
@@ -280,7 +371,7 @@ export class TicketService {
           scopeType: "ticket",
           scopeId: ticketId,
           eventType: "ticket_linked",
-          payload: { ticketId, entityType, entityId },
+          payload: { ticket: ticketPayload(ticket), ticketId, entityType, entityId },
           actorType,
           actorId,
         },
@@ -329,7 +420,7 @@ export class TicketService {
           scopeType: "ticket",
           scopeId: ticketId,
           eventType: "ticket_unlinked",
-          payload: { ticketId, entityType, entityId },
+          payload: { ticket: ticketPayload(ticket), ticketId, entityType, entityId },
           actorType,
           actorId,
         },
