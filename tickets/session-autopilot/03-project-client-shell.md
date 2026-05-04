@@ -21,15 +21,17 @@ Users can find, open, and inspect projects as real workspaces before prompt-firs
 
 ## Completion requirements
 
-- [ ] Project events update normalized store state.
-- [ ] Project-scoped events are stored by scope.
-- [ ] Projects appear in primary navigation.
-- [ ] Project list loads from GraphQL and hydrates Zustand.
-- [ ] Project detail route works on refresh/deep link.
-- [ ] Project members are visible.
-- [ ] Empty states guide the user to create or start a project.
-- [ ] Historical project-link events and new project events both hydrate correctly.
+- [x] Project events update normalized store state.
+- [x] Project-scoped events are stored by scope.
+- [x] Projects appear in primary navigation.
+- [x] Project list loads from GraphQL and hydrates Zustand.
+- [x] Project detail route works on refresh/deep link.
+- [x] Project members are visible.
+- [x] Empty states guide the user to create or start a project.
+- [x] Historical project-link events and new project events both hydrate correctly.
   - Historical project hydration must not synthesize blank `organizationId` values; use current org/event context or keep the legacy record out of the normalized `Project` entity shape.
+- [x] Project detail loads historical latest activity on refresh/deep link.
+- [x] Project live-event handling avoids duplicate notification/store side effects when the org-wide subscription is also active.
 
 ## Implementation notes
 
