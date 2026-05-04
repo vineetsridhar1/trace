@@ -10,7 +10,7 @@ See [session-autopilot-plan.md](session-autopilot-plan.md) for the full RFC. The
 
 - Every milestone should be independently useful.
 - Planning and ticket generation must ship before autonomous execution.
-- Project/run/ticket state must be durable service-layer state, not transcript parsing.
+- Approved project/run/ticket artifacts must be durable service-layer state, not transcript parsing.
 - Session groups are execution workspaces, not the orchestration anchor.
 - Agents and humans use the same services.
 - Events carry enough payload for client hydration without refetching.
@@ -21,7 +21,7 @@ The implementation is split into 15 tickets. The count is intentionally sized ar
 
 ## D0 — Project Workspace Foundation
 
-Users can create, view, update, and join projects. Projects become a first-class navigation surface with project-scoped events. Project runs, AI planning, ticket generation, and execution are not part of D0.
+Users can create, view, update, and join projects. Projects become a first-class navigation surface with project-scoped events. Project runs, session-backed planning, ticket generation, and execution are not part of D0.
 
 | # | Ticket | What it ships |
 | --- | --- | --- |
@@ -37,23 +37,23 @@ Users can start a project by typing a goal into a focused prompt-first surface.
 | --- | --- | --- |
 | 04 | [Prompt-First Project Creation](04-prompt-first-project-creation.md) | Project-run schema/service, new project prompt screen, initial goal capture, and project planning route |
 
-## D2 — AI Interview and Planning
+## D2 — Session-Backed Interview and Planning
 
-The project AI interviews the user, records answers and decisions, and maintains a plan summary. This is useful before execution exists.
+The project starts a normal linked session that interviews the user, produces a plan, and saves approved artifacts back to the project. This is useful before execution exists and does not use the ambient agent.
 
 | # | Ticket | What it ships |
 | --- | --- | --- |
 | 05 | [Planning Conversation Service](05-planning-conversation-service.md) | Durable planning turns, questions, answers, decisions, risks, and summaries |
-| 06 | [Planning AI Runtime](06-planning-ai-runtime.md) | Planning context packets, prompts, scoped runtime actions, and action auth |
+| 06 | [Session-Backed Planning Interview](06-planning-ai-runtime.md) | Normal linked interviewer session, side-by-side project planning UI, approval persistence, and ticket creation |
 
-## D3 — Durable Ticket Generation
+## D3 — Durable Ticket Planning
 
-The AI can create real tickets from the plan. Users can review and edit them in a project ticket table.
+Approved plans create real tickets. Users can review and edit them in a project ticket table.
 
 | # | Ticket | What it ships |
 | --- | --- | --- |
 | 07 | [Ticket Planning Model](07-ticket-planning-model.md) | Ticket acceptance criteria, test plans, dependencies, and planned-ticket membership |
-| 08 | [AI Ticket Generation](08-ai-ticket-generation.md) | Prompt/action contract for turning plans into durable tickets |
+| 08 | [AI Ticket Generation](08-ai-ticket-generation.md) | Structured service contract for improving approved-plan ticket generation |
 | 09 | [Project Ticket Table](09-project-ticket-table.md) | Project-scoped ticket table with dependency and planning metadata |
 
 ## D4 — Manual Project Execution Links
@@ -101,11 +101,11 @@ D0 Project Foundation
 D1 Prompt-First Creation
 04 Prompt-First Project Creation  (needs 01, 02, 03)
 
-D2 AI Interview and Planning
+D2 Session-Backed Interview and Planning
 05 Planning Conversation Service  (needs 04)
-└─ 06 Planning AI Runtime  (needs 05)
+└─ 06 Session-Backed Planning Interview  (needs 05)
 
-D3 Durable Ticket Generation
+D3 Durable Ticket Planning
 07 Ticket Planning Model  (needs 04)
 ├─ 08 AI Ticket Generation  (needs 06, 07)
 └─ 09 Project Ticket Table  (needs 03, 07)
@@ -136,9 +136,9 @@ V1 should ship:
 - project event scope
 - prompt-first creation
 - project run with initial goal
-- planning/interview flow
+- normal session-backed planning/interview flow
 - durable plan summary
-- ticket generation
+- linked project ticket creation
 - project ticket table
 
 Later releases add:

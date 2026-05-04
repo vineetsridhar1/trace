@@ -90,41 +90,6 @@ describe("router", () => {
     });
   });
 
-  it("aggregates project planning events", () => {
-    expect(
-      routeEvent(
-        event({
-          scopeType: "project",
-          scopeId: "project-1",
-          eventType: "project_goal_submitted",
-          payload: { projectRunId: "run-1", goal: "Update the readme" },
-        }),
-        settings,
-      ),
-    ).toEqual({
-      decision: "aggregate",
-      reason: "aggregate:project_goal_submitted",
-      maxTier: undefined,
-    });
-
-    expect(
-      routeEvent(
-        event({
-          id: "evt-answer",
-          scopeType: "project",
-          scopeId: "project-1",
-          eventType: "project_answer_recorded",
-          payload: { projectRunId: "run-1", message: "Use the web app first." },
-        }),
-        settings,
-      ),
-    ).toEqual({
-      decision: "aggregate",
-      reason: "aggregate:project_answer_recorded",
-      maxTier: undefined,
-    });
-  });
-
   it("suppresses agent self-triggers outside the allowlist", () => {
     seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 

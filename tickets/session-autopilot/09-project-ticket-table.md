@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add the project-scoped ticket table so generated tickets are reviewable and useful before autonomous execution exists.
+Add the project-scoped ticket surface so generated tickets are reviewable and useful before autonomous execution exists.
 
 ## What needs to happen
 
@@ -23,21 +23,22 @@ Users can review, edit, and manage tickets generated from a project plan.
 
 ## Completion requirements
 
-- [ ] Project detail has a Tickets view.
-- [ ] Tickets list is filtered by project.
+- [x] Project detail has a Tickets view.
+- [x] Tickets list is filtered by project.
 - [ ] Planned ticket order is visible.
 - [ ] Dependency state is visible.
 - [ ] Existing ticket detail panel works.
 - [ ] Store updates from events, not mutation response reads.
-- [ ] Empty state explains that planning can generate tickets.
-- [ ] A normal project-linked ticket without `ProjectPlanTicket` still appears.
+- [x] Empty state explains that planning can generate tickets.
+- [x] A normal project-linked ticket without `ProjectPlanTicket` still appears.
 - [ ] A planned ticket row can be upserted directly from event payload snapshots.
 
 ## Implementation notes
 
 - Keep tickets as normal tickets.
 - Do not fork a separate project-ticket implementation.
-- Virtualize the list/table.
+- The first slice can be a compact project detail list; graduate to the existing grid/table pattern when planned-ticket metadata ships.
+- Virtualize the full list/table once it can grow beyond the compact detail panel.
 - Components should receive entity IDs and select fields through Zustand hooks.
 - Planned-ticket metadata augments normal tickets; it does not replace them.
 

@@ -1,29 +1,72 @@
 import { useState, useCallback } from "react";
 import { Send, X } from "lucide-react";
+import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
   START_SESSION_MUTATION,
   RUN_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
+  DISMISS_SESSION_MUTATION,
 } from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
+import { extractProjectPlanTicketDrafts } from "../../lib/projectPlanTickets";
+
+export interface ProjectPlanningSessionContext {
+  organizationId: string;
+  projectId: string;
+  projectRunId: string;
+  onPlanApproved?: () => void | Promise<void>;
+}
 
 interface PlanResponseBarProps {
   sessionId: string;
   planContent: string;
   onDismiss: () => void;
+  projectPlanningContext?: ProjectPlanningSessionContext | null;
 }
 
 const PRESETS = ["Approve (new session)", "Approve (keep context)"];
 
-export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanResponseBarProps) {
+const UPDATE_PROJECT_PLAN_SUMMARY_MUTATION = gql`
+  mutation SaveApprovedProjectPlan($input: UpdateProjectPlanSummaryInput!) {
+    updateProjectPlanSummary(input: $input) {
+      id
+      status
+      planSummary
+      updatedAt
+    }
+  }
+`;
+
+const CREATE_PROJECT_TICKET_MUTATION = gql`
+  mutation CreateProjectPlanTicket($input: CreateTicketInput!) {
+    createTicket(input: $input) {
+      id
+      title
+      description
+      status
+      priority
+      labels
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export function PlanResponseBar({
+  sessionId,
+  planContent,
+  onDismiss,
+  projectPlanningContext,
+}: PlanResponseBarProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const openSessionTab = useUIStore(
     (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
   );
@@ -43,6 +86,52 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
   const defaultHosting = hosting ?? "local";
+
+  const handleApproveProjectPlan = useCallback(async () => {
+    if (sending || !projectPlanningContext) return;
+    setSending(true);
+    setError(null);
+    try {
+      const ticketDrafts = extractProjectPlanTicketDrafts(planContent);
+      const summaryResult = await client
+        .mutation(UPDATE_PROJECT_PLAN_SUMMARY_MUTATION, {
+          input: {
+            projectRunId: projectPlanningContext.projectRunId,
+            planSummary: planContent,
+            status: "ready",
+          },
+        })
+        .toPromise();
+
+      if (summaryResult.error) throw summaryResult.error;
+
+      for (const ticket of ticketDrafts) {
+        const ticketResult = await client
+          .mutation(CREATE_PROJECT_TICKET_MUTATION, {
+            input: {
+              organizationId: projectPlanningContext.organizationId,
+              projectId: projectPlanningContext.projectId,
+              title: ticket.title,
+              description: ticket.description,
+              priority: "medium",
+              labels: ["project-plan"],
+            },
+          })
+          .toPromise();
+        if (ticketResult.error) throw ticketResult.error;
+      }
+
+      const dismissResult = await client
+        .mutation(DISMISS_SESSION_MUTATION, { id: sessionId })
+        .toPromise();
+      if (dismissResult.error) throw dismissResult.error;
+      await projectPlanningContext.onPlanApproved?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Project plan could not be approved.");
+    } finally {
+      setSending(false);
+    }
+  }, [planContent, projectPlanningContext, sending, sessionId]);
 
   const handleClearContext = useCallback(async () => {
     if (sending || !sessionGroupId) return;
@@ -135,16 +224,36 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   }, [sessionId, feedback, sending]);
 
   const handleSubmit = useCallback(() => {
-    if (selected === "Approve (new session)") {
+    if (projectPlanningContext && feedback.trim()) {
+      handleRevise();
+    } else if (projectPlanningContext) {
+      handleApproveProjectPlan();
+    } else if (selected === "Approve (new session)") {
       handleClearContext();
     } else if (selected === "Approve (keep context)") {
       handleKeepContext();
     } else if (feedback.trim()) {
       handleRevise();
     }
-  }, [selected, feedback, handleClearContext, handleKeepContext, handleRevise]);
+  }, [
+    projectPlanningContext,
+    selected,
+    feedback,
+    handleApproveProjectPlan,
+    handleClearContext,
+    handleKeepContext,
+    handleRevise,
+  ]);
 
-  const hasAnswer = selected !== null || feedback.trim().length > 0;
+  const hasAnswer =
+    Boolean(projectPlanningContext) || selected !== null || feedback.trim().length > 0;
+  const submitLabel = feedback.trim()
+    ? "Revise"
+    : projectPlanningContext
+      ? "Approve plan"
+      : selected
+        ? "Approve"
+        : "Revise";
 
   return (
     <div className="shrink-0 border-t border-accent/30 bg-surface px-4 py-3">
@@ -163,28 +272,35 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         </button>
       </div>
 
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {PRESETS.map((label) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => {
-              setSelected(selected === label ? null : label);
-              setFeedback("");
-            }}
-            disabled={sending}
-            className={cn(
-              "min-h-8 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-              selected === label
-                ? "border-accent bg-accent/20 text-accent"
-                : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-elevated",
-              sending && "opacity-50",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {projectPlanningContext ? (
+        <p className="mb-2 text-xs text-muted-foreground">
+          Approval saves this plan to the project and creates linked tickets. Implementation stays
+          paused.
+        </p>
+      ) : (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {PRESETS.map((label) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => {
+                setSelected(selected === label ? null : label);
+                setFeedback("");
+              }}
+              disabled={sending}
+              className={cn(
+                "min-h-8 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                selected === label
+                  ? "border-accent bg-accent/20 text-accent"
+                  : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-elevated",
+                sending && "opacity-50",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <input
@@ -214,9 +330,10 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
         >
           <Send size={14} />
-          {selected ? "Approve" : "Revise"}
+          {submitLabel}
         </button>
       </div>
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
     </div>
   );
 }

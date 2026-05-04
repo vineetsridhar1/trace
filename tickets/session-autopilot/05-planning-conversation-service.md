@@ -2,18 +2,16 @@
 
 ## Summary
 
-Add the service-backed planning/interview flow that turns a raw project goal into durable project knowledge.
+Add service-backed persistence for planning artifacts produced by project-linked interviewer sessions.
 
 ## What needs to happen
 
 - Add a planning service for project runs.
-- Support planning turns:
-  - user answers
-  - AI questions
+- Support durable planning artifacts:
   - decisions
   - risks
   - summary updates
-- Persist planning state through project events and project-run fields.
+- Persist approved planning state through project events and project-run fields.
 - Add project planning event payloads with snapshots for hydration.
 - Keep the planning flow useful without code execution.
 - Define payload contracts:
@@ -25,16 +23,16 @@ Add the service-backed planning/interview flow that turns a raw project goal int
 
 ## Deliverable
 
-The project can maintain an interview thread, decisions, risks, and a plan summary before ticket generation exists.
+The project can maintain approved plan state, decisions, risks, and a plan summary while the live interview itself happens in a normal linked session.
 
 ## Completion requirements
 
-- [x] User planning messages are recorded in the project scope.
-- [x] AI questions are recorded in the project scope.
+- [x] User planning messages can be recorded in the project scope when needed.
+- [x] AI questions can be recorded in the project scope when needed.
 - [x] Answers and decisions update project-run planning state.
 - [x] Plan summary is durable and event-backed.
 - [x] Planning can request more information instead of prematurely generating tickets.
-- [x] Refresh can reconstruct the planning surface without transcript parsing.
+- [x] Refresh can reconstruct durable approved planning artifacts without transcript parsing.
 - [x] Service tests cover planning state transitions.
 
 ## Implementation notes
@@ -42,7 +40,7 @@ The project can maintain an interview thread, decisions, risks, and a plan summa
 - The planning conversation is not the orchestrator's only memory.
 - Use events and summaries as durable state.
 - Keep this ticket focused on persistence and services, not model prompting.
-- A linked planning/controller session may exist later, but it is never the canonical planning store.
+- The live interview uses a normal project-linked session in ticket 06.
 - Use generated GraphQL/client types for exposed planning payloads; do not redefine schema types locally.
 
 ## How to test

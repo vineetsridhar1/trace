@@ -2,11 +2,11 @@
 
 ## Summary
 
-Let the planning AI convert project planning state into real Trace tickets.
+Replace the first-pass approved-plan ticket extraction with a structured service contract for creating real Trace tickets from project plans.
 
 ## What needs to happen
 
-- Write the ticket-generation prompt.
+- Write the ticket-generation prompt or structured extraction contract.
 - Require generated tickets to include:
   - title
   - description
@@ -16,7 +16,7 @@ Let the planning AI convert project planning state into real Trace tickets.
   - test plan
   - dependencies
   - rationale
-- Add scoped actions:
+- Add service-backed generation methods or scoped actions for later automation:
   - `ticket.create`
   - `ticket.update`
   - `ticket.addDependency`
@@ -36,11 +36,11 @@ Let the planning AI convert project planning state into real Trace tickets.
 
 ## Deliverable
 
-The AI can turn an approved-enough project plan into durable project tickets with dependency metadata.
+Approved project plans can become durable project tickets with dependency metadata through a structured service path.
 
 ## Completion requirements
 
-- [ ] Ticket generation produces machine-readable output.
+- [ ] Ticket generation produces machine-readable output instead of relying on freeform markdown parsing.
 - [ ] Tickets are created through `ticketService`.
 - [ ] Planned-ticket associations are created through project-run services.
 - [ ] Dependencies are persisted as edges.
@@ -53,7 +53,7 @@ The AI can turn an approved-enough project plan into durable project tickets wit
 
 - Do not parse freeform markdown as the source of truth.
 - Do not let the model write directly to the database.
-- Ticket-generation actions must be explicitly added to the planning runtime action filter introduced in ticket 06; planning-only packets intentionally hide `ticket.create`.
+- Ticket-generation actions must not use ambient project planning routing. They can be used later by explicit project/session flows.
 - Human approval can be required for large or risky plans.
 - Prefer transactional ticket generation: either the full valid plan is persisted, or the service returns a structured error/gate.
 

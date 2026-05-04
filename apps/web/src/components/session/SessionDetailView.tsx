@@ -15,7 +15,7 @@ import { EventScopeContext } from "./EventScopeContext";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
-import { PlanResponseBar } from "./PlanResponseBar";
+import { PlanResponseBar, type ProjectPlanningSessionContext } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
@@ -164,6 +164,7 @@ export function SessionDetailView({
   hideHeader,
   scrollToEventId,
   onScrollComplete,
+  projectPlanningContext,
 }: {
   key?: React.Key;
   sessionId: string;
@@ -171,6 +172,7 @@ export function SessionDetailView({
   hideHeader?: boolean;
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
+  projectPlanningContext?: ProjectPlanningSessionContext | null;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(
@@ -535,6 +537,7 @@ export function SessionDetailView({
             sessionId={sessionId}
             planContent={activePlan.node.planContent}
             onDismiss={handleDismissPlan}
+            projectPlanningContext={projectPlanningContext}
           />
         ) : (
           <>

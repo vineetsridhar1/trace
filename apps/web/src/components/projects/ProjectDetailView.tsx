@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowLeft, CalendarClock, GitBranch, Radio, RefreshCw, Send, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  FileText,
+  GitBranch,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  Radio,
+  RefreshCw,
+  Users,
+} from "lucide-react";
 import { gql } from "@urql/core";
-import type { Project } from "@trace/gql";
+import type { Project, Ticket } from "@trace/gql";
 import { useShallow } from "zustand/react/shallow";
 import {
   eventScopeKey,
   type ProjectRunEntity,
+  START_SESSION_MUTATION,
+  type SessionEntity,
   useActiveProjectRunId,
   useAuthStore,
   useEntityField,
@@ -15,10 +28,24 @@ import {
 } from "@trace/client-core";
 import { useProjectEvents } from "../../hooks/useProjectEvents";
 import { useUIStore } from "../../stores/ui";
+import { usePreferencesStore } from "../../stores/preferences";
 import { client } from "../../lib/urql";
+import { buildPlanningSessionPrompt } from "../../lib/projectPlanningSessionPrompt";
+import { SessionDetailView } from "../session/SessionDetailView";
+import { getDefaultModel } from "../session/modelOptions";
+import { ticketPriorityLabel, ticketStatusLabel } from "../tickets/tickets-table-types";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
-import { Textarea } from "../ui/textarea";
+
+const ACTIVE_PROJECT_RUN_STATUSES = new Set([
+  "draft",
+  "interviewing",
+  "planning",
+  "ready",
+  "running",
+  "needs_human",
+  "paused",
+]);
 
 const PROJECT_QUERY = gql`
   query Project($id: ID!) {
@@ -54,10 +81,33 @@ const PROJECT_QUERY = gql`
       sessions {
         id
         name
+        agentStatus
+        sessionStatus
+        updatedAt
+        createdAt
       }
       tickets {
         id
         title
+        description
+        status
+        priority
+        labels
+        assignees {
+          id
+          name
+          avatarUrl
+        }
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
+        channel {
+          id
+        }
+        createdAt
+        updatedAt
       }
       runs {
         id
@@ -79,35 +129,27 @@ const PROJECT_QUERY = gql`
   }
 `;
 
-const RECORD_PROJECT_ANSWER_MUTATION = gql`
-  mutation RecordProjectAnswer($input: RecordProjectPlanningMessageInput!) {
-    recordProjectAnswer(input: $input) {
-      id
-    }
-  }
-`;
-
-const PLANNING_EVENT_TYPES = new Set([
-  "project_question_asked",
-  "project_answer_recorded",
-  "project_decision_recorded",
-  "project_risk_recorded",
-]);
-
 export function ProjectDetailView({ projectId }: { projectId: string }) {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const setActiveProjectId = useUIStore((s) => s.setActiveProjectId);
+  const defaultTool = usePreferencesStore((s) => s.defaultTool);
+  const defaultModel = usePreferencesStore((s) => s.defaultModel);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startingSession, setStartingSession] = useState(false);
+  const [startSessionError, setStartSessionError] = useState<string | null>(null);
   const projectName = useEntityField("projects", projectId, "name");
   const project = useEntityStore((s) => s.projects[projectId]);
   const activeProjectRunId = useActiveProjectRunId(projectId);
   const activeProjectRun = useEntityStore((s) =>
     activeProjectRunId ? s.projectRuns[activeProjectRunId] : null,
   );
+  const currentProjectRun =
+    activeProjectRun ??
+    selectActiveProjectRun((project?.runs ?? []) as Array<ProjectRunEntity & { id: string }>);
   const scopeKey = useMemo(() => eventScopeKey("project", projectId), [projectId]);
   const eventIds = useScopedEventIds(scopeKey);
   const projectEvents = useProjectEvents(projectId);
@@ -124,6 +166,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     if (fetched && (!activeOrgId || fetched.organizationId === activeOrgId)) {
       upsert("projects", fetched.id, fetched);
       upsertMany("projectRuns", fetched.runs as Array<ProjectRunEntity & { id: string }>);
+      upsertMany("sessions", fetched.sessions as Array<SessionEntity & { id: string }>);
+      upsertMany("tickets", fetched.tickets as Array<Ticket & { id: string }>);
       setNotFound(false);
     } else {
       setNotFound(true);
@@ -137,6 +181,42 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     setError(null);
     fetchProject();
   }, [fetchProject]);
+
+  const startInterviewerSession = useCallback(async () => {
+    if (!currentProjectRun || startingSession) return;
+    setStartingSession(true);
+    setStartSessionError(null);
+    const tool = defaultTool ?? "claude_code";
+    const result = await client
+      .mutation(START_SESSION_MUTATION, {
+        input: {
+          tool,
+          model: defaultModel ?? getDefaultModel(tool),
+          repoId: project?.repoId ?? undefined,
+          projectId,
+          prompt: buildPlanningSessionPrompt(currentProjectRun.initialGoal),
+          interactionMode: "plan",
+        },
+      })
+      .toPromise();
+
+    if (result.error) {
+      setStartSessionError(result.error.message);
+      setStartingSession(false);
+      return;
+    }
+
+    await fetchProject();
+    setStartingSession(false);
+  }, [
+    currentProjectRun,
+    defaultModel,
+    defaultTool,
+    fetchProject,
+    project?.repoId,
+    projectId,
+    startingSession,
+  ]);
 
   if (loading && !project) {
     return (
@@ -178,6 +258,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   }
 
   const members = project.members.filter((member) => !member.leftAt);
+  const planningSession = selectPlanningSession(project.sessions);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -212,19 +293,66 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="space-y-4">
-          {activeProjectRun && (
-            <ProjectRunPanel
-              projectRun={activeProjectRun}
-              scopeKey={scopeKey}
-              eventIds={eventIds}
+      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <section className="flex h-[calc(100vh-176px)] min-h-[620px] flex-col overflow-hidden rounded-md border border-border bg-background">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <MessageSquare size={16} className="shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-semibold text-foreground">
+                  Interviewer session
+                </h2>
+                <p className="truncate text-xs text-muted-foreground">
+                  {planningSession?.name ?? "Normal project-linked session"}
+                </p>
+              </div>
+            </div>
+            {!planningSession && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={startInterviewerSession}
+                disabled={!currentProjectRun || startingSession}
+              >
+                {startingSession ? <Loader2 size={14} className="animate-spin" /> : null}
+                Start interviewer
+              </Button>
+            )}
+          </div>
+
+          {planningSession ? (
+            <SessionDetailView
+              sessionId={planningSession.id}
+              panelMode
+              hideHeader
+              projectPlanningContext={
+                currentProjectRun
+                  ? {
+                      organizationId: project.organizationId,
+                      projectId: project.id,
+                      projectRunId: currentProjectRun.id,
+                      onPlanApproved: fetchProject,
+                    }
+                  : null
+              }
+            />
+          ) : (
+            <ProjectSessionEmptyState
+              error={startSessionError}
+              starting={startingSession}
+              canStart={Boolean(currentProjectRun)}
+              onStart={startInterviewerSession}
             />
           )}
+        </section>
+
+        <aside className="space-y-4">
+          {currentProjectRun && <ProjectRunPanel projectRun={currentProjectRun} />}
+          <ProjectTicketsPanel tickets={project.tickets} />
 
           <div className="rounded-md border border-border bg-background p-4">
             <h2 className="text-sm font-semibold text-foreground">Overview</h2>
-            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
               <DetailItem label="Repository" value={project.repo?.name ?? "Not linked"} />
               <DetailItem label="Default branch" value={project.repo?.defaultBranch ?? "Not set"} />
               <DetailItem label="Channels" value={String(project.channels.length)} />
@@ -256,71 +384,33 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
-        </section>
 
-        <section className="rounded-md border border-border bg-background p-4">
-          <div className="flex items-center gap-2">
-            <Radio size={15} className="text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">Latest activity</h2>
-          </div>
-          <ProjectActivityList
-            scopeKey={scopeKey}
-            eventIds={eventIds}
-            loading={projectEvents.loading}
-            error={projectEvents.error}
-          />
-        </section>
+          <section className="rounded-md border border-border bg-background p-4">
+            <div className="flex items-center gap-2">
+              <Radio size={15} className="text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-foreground">Latest activity</h2>
+            </div>
+            <ProjectActivityList
+              scopeKey={scopeKey}
+              eventIds={eventIds}
+              loading={projectEvents.loading}
+              error={projectEvents.error}
+            />
+          </section>
+        </aside>
       </div>
     </div>
   );
 }
 
-function ProjectRunPanel({
-  projectRun,
-  scopeKey,
-  eventIds,
-}: {
-  projectRun: ProjectRunEntity;
-  scopeKey: string;
-  eventIds: string[];
-}) {
-  const [answer, setAnswer] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const planningEvents = useEntityStore(
-    useShallow((s) =>
-      eventIds
-        .map((id) => s.eventsByScope[scopeKey]?.[id])
-        .filter((event): event is NonNullable<typeof event> => {
-          if (!event || !PLANNING_EVENT_TYPES.has(event.eventType)) return false;
-          const payload = asRecord(event.payload);
-          return payload?.projectRunId === projectRun.id;
-        }),
-    ),
-  );
-
-  const submitAnswer = useCallback(async (messageOverride?: string) => {
-    const message = (messageOverride ?? answer).trim();
-    if (!message || submitting) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    const result = await client
-      .mutation(RECORD_PROJECT_ANSWER_MUTATION, {
-        input: { projectRunId: projectRun.id, message },
-      })
-      .toPromise();
-    setSubmitting(false);
-    if (result.error) {
-      setSubmitError(result.error.message);
-      return;
-    }
-    if (!messageOverride) setAnswer("");
-  }, [answer, projectRun.id, submitting]);
-
+function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
   return (
-    <div className="rounded-md border border-accent/30 bg-surface-elevated p-4">
+    <section className="rounded-md border border-accent/30 bg-surface-elevated p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-foreground">Planning run</h2>
+        <div className="flex items-center gap-2">
+          <FileText size={15} className="text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Plan</h2>
+        </div>
         <span className="rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent">
           {formatStatus(projectRun.status)}
         </span>
@@ -337,104 +427,113 @@ function ProjectRunPanel({
           {projectRun.planSummary || "Planning has not produced a summary yet."}
         </p>
       </div>
-      <div className="mt-4 border-t border-border pt-4">
-        <div className="text-xs font-medium uppercase text-muted-foreground">
-          Planning conversation
-        </div>
-        {planningEvents.length === 0 ? (
-          <div className="mt-2 rounded-md border border-border bg-background/70 p-3">
-            <p className="text-sm text-muted-foreground">
-              Trace is preparing the first planning question.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-3"
-              onClick={() => submitAnswer("Please start planning from the initial goal.")}
-              disabled={submitting}
-            >
-              <Send size={14} />
-              Start planning
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {planningEvents.map((event) => (
-              <PlanningEventItem
-                key={event.id}
-                eventType={event.eventType}
-                payload={event.payload}
-              />
-            ))}
-          </div>
-        )}
-        <div className="mt-3 space-y-2">
-          <Textarea
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            placeholder={
-              planningEvents.length === 0
-                ? "Add context for Trace..."
-                : "Answer the latest planning question..."
-            }
-            className="min-h-20 resize-none"
-          />
-          {submitError && <p className="text-xs text-destructive">{submitError}</p>}
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => submitAnswer()} disabled={!answer.trim() || submitting}>
-              <Send size={14} />
-              {submitting ? "Sending..." : "Send answer"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }
 
-function PlanningEventItem({
-  eventType,
-  payload,
-}: {
-  eventType: string;
-  payload: unknown;
-}) {
-  const text = planningEventText(eventType, asRecord(payload) ?? {});
-  if (!text) return null;
+function ProjectTicketsPanel({ tickets }: { tickets: Project["tickets"] }) {
+  const sortedTickets = [...tickets].sort((a, b) =>
+    sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)),
+  );
 
   return (
-    <div className="rounded-md border border-border bg-background/70 p-3">
-      <div className="text-xs font-medium uppercase text-muted-foreground">
-        {planningEventLabel(eventType)}
+    <section className="rounded-md border border-border bg-background p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <ListChecks size={15} className="text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Tickets</h2>
+        </div>
+        <span className="text-xs text-muted-foreground">{tickets.length}</span>
       </div>
-      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground">{text}</p>
+
+      {sortedTickets.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Approved plans will create linked project tickets here.
+        </p>
+      ) : (
+        <div className="mt-3 max-h-80 divide-y divide-border overflow-y-auto">
+          {sortedTickets.map((ticket) => (
+            <div key={ticket.id} className="py-3 first:pt-0 last:pb-0">
+              <div className="line-clamp-2 text-sm font-medium text-foreground">
+                {ticket.title ?? "Untitled ticket"}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                  {ticket.status
+                    ? (ticketStatusLabel[ticket.status] ?? formatStatus(ticket.status))
+                    : "Status pending"}
+                </span>
+                <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                  {ticket.priority
+                    ? (ticketPriorityLabel[ticket.priority] ?? formatStatus(ticket.priority))
+                    : "Priority pending"}
+                </span>
+                {(ticket.assignees?.length ?? 0) > 0 && (
+                  <span className="truncate text-xs text-muted-foreground">
+                    {ticket.assignees.map((assignee) => assignee.name ?? assignee.id).join(", ")}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ProjectSessionEmptyState({
+  error,
+  starting,
+  canStart,
+  onStart,
+}: {
+  error: string | null;
+  starting: boolean;
+  canStart: boolean;
+  onStart: () => void;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <div className="max-w-sm text-center">
+        <MessageSquare size={28} className="mx-auto text-muted-foreground" />
+        <h3 className="mt-3 text-base font-semibold text-foreground">No interviewer session</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Start a normal project session to interview the user and draft the plan.
+        </p>
+        {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        <Button className="mt-4" onClick={onStart} disabled={!canStart || starting}>
+          {starting ? <Loader2 size={16} className="animate-spin" /> : null}
+          Start interviewer
+        </Button>
+      </div>
     </div>
   );
 }
 
-function planningEventLabel(eventType: string): string {
-  if (eventType === "project_question_asked") return "Trace asked";
-  if (eventType === "project_answer_recorded") return "You answered";
-  if (eventType === "project_decision_recorded") return "Decision";
-  if (eventType === "project_risk_recorded") return "Risk";
-  return formatStatus(eventType);
+function selectPlanningSession(sessions: Project["sessions"]): Project["sessions"][number] | null {
+  if (sessions.length === 0) return null;
+  return (
+    [...sessions].sort((a, b) =>
+      sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)),
+    )[0] ?? null
+  );
 }
 
-function planningEventText(eventType: string, payload: Record<string, unknown>): string | null {
-  if (eventType === "project_question_asked" || eventType === "project_answer_recorded") {
-    return typeof payload.message === "string" ? payload.message : null;
-  }
-  if (eventType === "project_decision_recorded") {
-    return typeof payload.decision === "string" ? payload.decision : null;
-  }
-  if (eventType === "project_risk_recorded") {
-    return typeof payload.risk === "string" ? payload.risk : null;
-  }
-  return null;
+function selectActiveProjectRun(
+  runs: Array<ProjectRunEntity & { id: string }>,
+): (ProjectRunEntity & { id: string }) | null {
+  if (runs.length === 0) return null;
+  return (
+    runs
+      .filter((run) => ACTIVE_PROJECT_RUN_STATUSES.has(run.status))
+      .sort((a, b) => sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)))[0] ??
+    null
+  );
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+function sortableDate(value: string | null | undefined): string {
+  return typeof value === "string" ? value : "";
 }
 
 function ProjectDetailState({

@@ -33,6 +33,7 @@ Build the new project creation experience around the user's goal prompt.
   - create the project
   - create the first project run
   - record the initial goal
+  - start a normal project-linked interviewer session
   - navigate to the project planning surface
 - Show loading and error states.
 
@@ -49,6 +50,7 @@ A user can start a project by typing what they want to build.
 - [x] Repo/member controls do not block the primary prompt flow.
 - [x] Submit creates a project and project run.
 - [x] Initial goal is recorded through a service method and event.
+- [x] Submit starts a normal linked session for the planning interview.
 - [x] The user lands on the project planning page.
 - [x] Empty/error/loading states are polished.
 - [x] UI remains useful before AI planning is wired up.
@@ -59,7 +61,7 @@ A user can start a project by typing what they want to build.
 - Keep the first viewport focused on the input.
 - Store draft prompt locally unless it must survive navigation.
 - Enforce one active project run per project in the service layer.
-- `ProjectRun` stores compact current state only; detailed planning turns belong to project-scoped events.
+- `ProjectRun` stores compact current state only; live interview turns live in the linked session transcript.
 - Mutations should not update Zustand from mutation results. The resulting events hydrate the store.
 
 ## How to test

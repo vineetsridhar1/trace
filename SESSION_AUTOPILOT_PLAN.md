@@ -7,12 +7,12 @@ Project Orchestration replaces the old session-group-centered Ultraplan model wi
 The product starts from a new primitive the user understands: a project.
 
 - A user creates a project by typing a goal into a prompt-first screen.
-- Trace creates project-scoped events and starts an AI planning/interview flow.
-- The AI asks clarifying questions, captures decisions, and produces durable tickets.
+- Trace creates project-scoped state and starts a normal project-linked session for the planning interview.
+- The session asks clarifying questions, helps produce a plan, and creates durable tickets after confirmation.
 - Tickets are linked to the project and can be viewed in a project ticket table.
 - A project run can later execute ready tickets through worker sessions and session groups.
 - The orchestrator is durable service-layer state, not a magic long-lived chat.
-- Controller runs and worker runs use normal Trace sessions as runtimes.
+- Planning, controller runs, and worker runs use normal Trace sessions as runtimes.
 
 The feature must be shippable in layers. The first useful deliverable is not autonomous implementation; it is a project workspace that can interview a user and create structured tickets. Execution, DAG scheduling, parallel workers, branch integration, and advanced guardrails can ship later without invalidating the early work.
 
@@ -57,23 +57,23 @@ The project is the durable workspace. The project run is the orchestration insta
 
 These decisions are intentionally fixed for v1 so implementation tickets do not make incompatible choices.
 
-- Project planning turns are project-scoped events. Controller or AI sessions may exist as inspectable transcripts, but they are never the canonical planning store.
-- `ProjectRun` stores compact current state only: status, initial goal, plan summary, active gate pointer, latest controller summary, and execution config. Detailed planning history lives in events. Ticket ordering and dependencies live in ticket planning tables. Execution attempts live in execution tables.
+- Project planning interviews run in normal project-linked sessions. The ambient agent does not start or continue project planning.
+- `ProjectRun` stores compact current state only: status, initial goal, approved plan summary, active gate pointer, latest controller summary, and execution config. Live interview history lives in the linked session transcript. Ticket ordering and dependencies live in ticket planning tables. Execution attempts live in execution tables.
 - Tickets remain org-scoped peer entities. A ticket can be linked to a project, and `ProjectPlanTicket` can associate that ticket with a project run, but the ticket is not owned by the project.
-- D0 does not ship prompt-first project creation or AI planning. D0 is only the durable project workspace foundation.
+- D0 does not ship prompt-first project creation or session-backed planning. D0 is only the durable project workspace foundation.
 - Existing project actions and events must keep working during migration. New project-scoped events may be added without breaking historical `system` scoped project events.
 
 ## Goals
 
 - Make projects a first-class product surface beside channels, sessions, and tickets.
 - Let a user start a project from a prompt-first "new project" screen.
-- Support project members, project events, project tickets, and project-scoped AI planning.
+- Support project members, project events, project tickets, and session-backed AI planning.
 - Use the AI first as an interviewer and planner before autonomous execution exists.
 - Create durable tickets with acceptance criteria, test plans, and dependency metadata.
 - Show project tickets in a table similar to the channel session-group table.
 - Preserve the ability to run a DAG orchestrator later without redesigning tickets.
 - Keep orchestration state in services and durable models.
-- Use sessions as runtimes for controller and worker episodes.
+- Use sessions as runtimes for planning, controller, and worker episodes.
 - Ship incremental deliverables that are useful on their own.
 
 ## Non-Goals
@@ -149,8 +149,8 @@ Add `ScopeType.project` and use project-scoped events for:
 
 - project creation and updates
 - project member changes
-- planning messages or planning turns
-- interview question/answer milestones
+- approved planning artifacts
+- optional interview question/answer milestones when explicitly recorded by a service
 - plan summaries
 - ticket plan creation and updates
 - project run lifecycle
@@ -168,8 +168,8 @@ Minimum v1 event payloads:
 - `project_run_created`: `{ projectRun }`
 - `project_run_updated`: `{ projectRun }`
 - `project_goal_submitted`: `{ projectRun, goal }`
-- `project_question_asked`: `{ projectRunId, message }`
-- `project_answer_recorded`: `{ projectRunId, message }`
+- `project_question_asked`: `{ projectRunId, message }` when the service explicitly records a durable milestone
+- `project_answer_recorded`: `{ projectRunId, message }` when the service explicitly records a durable milestone
 - `project_decision_recorded`: `{ projectRunId, decision }`
 - `project_risk_recorded`: `{ projectRunId, risk }`
 - `project_plan_summary_updated`: `{ projectRun }`
@@ -193,17 +193,18 @@ The prompt-first project screen should feel like a focused planning surface.
 
 The AI's first job is not to code. Its job is to interview the user and produce a plan.
 
-The planning flow is event-backed and should:
+The planning flow is session-backed and should:
 
 - accept the user's raw project goal
+- start a normal project-linked Trace session
 - ask clarifying questions
-- record answers as project events
-- maintain a planning summary
+- maintain a plan in the session until the user confirms it
 - identify risks and unknowns
-- produce ticket drafts
-- request human approval before converting or executing large plans
+- request human approval before creating tickets or executing work
+- save the approved plan summary to `ProjectRun`
+- create linked tickets after confirmation
 
-The durable state must not be only a transcript. If a planning session exists, it is a linked transcript and runtime context, not the source of truth. Reconstructing the planning surface from project-scoped events plus `ProjectRun` state must be possible after refresh.
+The transcript is inspectable session history. The durable project artifacts are the approved `ProjectRun` plan summary and linked tickets. Project planning should not depend on the ambient agent observing project events.
 
 ### ProjectRun
 
@@ -366,7 +367,7 @@ After submit:
 - create the project
 - create the first project run
 - record the initial goal
-- start the planning/interview flow
+- start a normal project-linked interviewer session
 - navigate to the project planning surface
 
 ### Project Planning Surface
@@ -375,10 +376,9 @@ The planning surface should show:
 
 - project prompt/interview thread
 - AI clarifying questions
-- captured decisions
-- plan summary
-- draft tickets
-- approval controls
+- approved plan summary
+- project tickets
+- approval controls that save the plan and create tickets
 
 This surface can ship before execution exists.
 
@@ -425,8 +425,9 @@ Web / Mobile / Electron
       -> Event Store
       -> Broker
 
-Agent Runtime
-  -> scoped runtime actions
+Normal Session Runtime
+  -> project-linked session transcript
+  -> explicit approval flow
     -> same services
 ```
 
@@ -434,14 +435,14 @@ GraphQL resolvers stay thin. Services own all business logic.
 
 ## Runtime Actions
 
-Controller runs should act through scoped service-backed runtime actions.
+Planning does not use the ambient agent. A normal project-linked session interviews the user, and the explicit approval flow writes the plan and tickets through services.
 
-Initial action surface:
+Controller runs can later act through scoped service-backed runtime actions.
+
+Later controller/action surface:
 
 - `project.get`
 - `project.update`
-- `project.askQuestion`
-- `project.recordAnswer`
 - `project.recordDecision`
 - `project.recordRisk`
 - `project.summarizePlan`
@@ -452,9 +453,7 @@ Initial action surface:
 - `projectRun.updatePlannedTicket`
 - `projectRun.requestApproval`
 
-Planning-only runtime packets expose only project interview actions until the ticket-generation
-milestone ships. Ticket-generation actions are added back by the ticket 08 prompt/action contract,
-after planned-ticket and dependency services exist.
+Ticket-generation actions should be invoked by explicit project/session flows, not by ambient routing of project planning events.
 
 Execution actions can ship later:
 
@@ -486,9 +485,9 @@ The feature should ship in deliverables that stand alone.
 
 Shippable result:
 
-Users can create, view, update, and join projects through normal services. Projects appear as first-class navigation items. Projects have members and project-scoped events. No prompt-first flow, AI planning, ticket generation, or execution is required in D0.
+Users can create, view, update, and join projects through normal services. Projects appear as first-class navigation items. Projects have members and project-scoped events. No prompt-first flow, session-backed planning, ticket generation, or execution is required in D0.
 
-This provides immediate product value without AI planning.
+This provides immediate product value without session-backed planning.
 
 ### D1: Prompt-First Project Creation
 
@@ -496,17 +495,17 @@ Shippable result:
 
 Users can create a project by typing a goal. The project stores the goal and shows a planning surface, even if the AI flow is initially basic.
 
-### D2: AI Interview and Planning
+### D2: Session-Backed Interview and Planning
 
 Shippable result:
 
-The project AI can ask clarifying questions, record answers, maintain a summary, and produce a proposed plan. No autonomous execution required.
+The project starts a normal linked session that asks clarifying questions and produces a proposed plan. Plan approval saves the summary and creates linked tickets. No autonomous execution required.
 
-### D3: Durable Ticket Generation
+### D3: Durable Ticket Planning
 
 Shippable result:
 
-The AI can create real tickets from the plan, with acceptance criteria, test plans, and dependencies. Users can view and edit those tickets in a project ticket table.
+The ticket-generation path becomes structured, with acceptance criteria, test plans, and dependencies. Users can view and edit those tickets in a project ticket table.
 
 ### D4: Manual Project Execution Links
 
@@ -752,7 +751,7 @@ The implementation ticket set is intentionally resized around coherent shipping 
 3. Project client shell and project event hydration.
 4. Prompt-first project creation and initial project-run creation.
 5. Planning conversation service.
-6. Planning AI runtime.
+6. Session-backed planning interview.
 7. Ticket planning model.
 8. AI ticket generation.
 9. Project ticket table.
@@ -777,10 +776,10 @@ Foundation:
 Planning:
 
 - prompt-first project creation records the initial goal
-- interview turns append project events
-- plan summaries update project run state
+- a linked normal session contains the interview transcript
+- plan approval updates project run state
 - generated tickets have acceptance criteria and test plans
-- refresh reconstructs the planning surface without transcript parsing
+- refresh shows the linked session, approved plan, and linked tickets
 
 Tickets:
 
@@ -808,6 +807,6 @@ Parallel:
 
 Rewrite Ultraplan as Project Orchestration.
 
-The first release should not attempt the full autonomous loop. Ship project foundation, prompt-first creation, AI interview, and durable ticket generation first. Those are user-visible and architecturally durable. Then add manual execution links, sequential orchestration, integration, and finally parallel DAG scheduling.
+The first release should not attempt the full autonomous loop. Ship project foundation, prompt-first creation, session-backed AI interview, and durable ticket creation first. Those are user-visible and architecturally durable. Then add manual execution links, sequential orchestration, integration, and finally parallel DAG scheduling.
 
 This keeps the product Trace-native and avoids turning the feature into a bolted-on mega-session.
