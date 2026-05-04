@@ -68,6 +68,7 @@ export function getCommandPrefix(command: string): string {
 }
 
 const TRACE_INTERNAL_RE = /<trace-internal>[\s\S]*?<\/trace-internal>\s*/g;
+const SYSTEM_INSTRUCTION_RE = /<system-instruction>[\s\S]*?<\/system-instruction>\s*/g;
 const CONVERSATION_HISTORY_RE = /<conversation-history>[\s\S]*?<\/conversation-history>\s*/g;
 export const PLAN_PREFIX =
   "Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.";
@@ -86,6 +87,7 @@ export function wrapPrompt(mode: InteractionMode, prompt: string): string {
 /** Strip server-wrapped prompt prefixes so the stored prompt renders as the user typed it. */
 export function stripPromptWrapping(text: string): string {
   let cleaned = text.replace(TRACE_INTERNAL_RE, "");
+  cleaned = cleaned.replace(SYSTEM_INSTRUCTION_RE, "");
   cleaned = cleaned.replace(CONVERSATION_HISTORY_RE, "");
   if (cleaned.startsWith(PLAN_PREFIX)) {
     cleaned = cleaned.slice(PLAN_PREFIX.length);

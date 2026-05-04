@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import {
   ArrowLeft,
   CalendarClock,
-  FileText,
   GitBranch,
   Loader2,
   MessageSquare,
@@ -311,88 +310,32 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
-        <section className="min-h-0 overflow-y-auto border-r border-border bg-background p-4">
-          {currentProjectRun ? (
-            <ProjectRunPanel projectRun={currentProjectRun} />
-          ) : (
-            <section className="rounded-md border border-border bg-surface-elevated p-4">
-              <div className="flex items-center gap-2">
-                <FileText size={15} className="text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Readonly plan</h2>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">No active project run.</p>
-            </section>
-          )}
-        </section>
-
-        <aside className="flex min-h-0 flex-col bg-surface">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <MessageSquare size={16} className="shrink-0 text-muted-foreground" />
-              <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-foreground">
-                  Planning chat
-                </h2>
-                <p className="truncate text-xs text-muted-foreground">
-                  {planningSession?.name ?? "Plan mode"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {planningSession ? (
-            <div className="min-h-0 flex-1">
-              <SessionDetailView
-                sessionId={planningSession.id}
-                panelMode
-                hideHeader
-                projectPlanningContext={
-                  currentProjectRun
-                    ? {
-                        organizationId: project.organizationId,
-                        projectId: project.id,
-                        projectRunId: currentProjectRun.id,
-                      }
-                    : null
-                }
-              />
-            </div>
-          ) : (
-            <ProjectSessionEmptyState
-              error={startSessionError}
-              starting={startingSession}
-              canStart={Boolean(currentProjectRun)}
-              onStart={startInterviewerSession}
-            />
-          )}
-        </aside>
+      <div className="min-h-0 flex-1 bg-surface">
+        {planningSession ? (
+          <SessionDetailView
+            sessionId={planningSession.id}
+            panelMode
+            hideHeader
+            projectPlanningContext={
+              currentProjectRun
+                ? {
+                    organizationId: project.organizationId,
+                    projectId: project.id,
+                    projectRunId: currentProjectRun.id,
+                  }
+                : null
+            }
+          />
+        ) : (
+          <ProjectSessionEmptyState
+            error={startSessionError}
+            starting={startingSession}
+            canStart={Boolean(currentProjectRun)}
+            onStart={startInterviewerSession}
+          />
+        )}
       </div>
     </div>
-  );
-}
-
-function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
-  return (
-    <section className="min-h-full rounded-md border border-border bg-surface-elevated">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 px-4 py-3">
-          <FileText size={15} className="text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Readonly plan</h2>
-        </div>
-        <span className="mr-4 rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent">
-          {formatStatus(projectRun.status)}
-        </span>
-      </div>
-      <div className="border-t border-border px-5 py-4 font-mono text-sm leading-7">
-        <div className="text-xs font-medium uppercase text-muted-foreground">Initial goal</div>
-        <p className="mt-2 whitespace-pre-wrap text-foreground">{projectRun.initialGoal}</p>
-        <div className="mt-8 text-xs font-medium uppercase text-muted-foreground">Plan summary</div>
-        <p className="mt-2 whitespace-pre-wrap text-foreground">
-          {projectRun.planSummary || "Planning has not produced a summary yet."}
-        </p>
-      </div>
-    </section>
   );
 }
 
@@ -491,8 +434,4 @@ function formatDateTime(value: string): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function formatStatus(value: string): string {
-  return value.replace(/_/g, " ");
 }
