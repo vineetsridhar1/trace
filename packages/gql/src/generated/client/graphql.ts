@@ -442,10 +442,24 @@ export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
 
+export type CreateProjectFromGoalInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  goal: Scalars["String"]["input"];
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type CreateProjectRunInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  initialGoal: Scalars["String"]["input"];
+  projectId: Scalars["ID"]["input"];
 };
 
 export type CreateRepoInput = {
@@ -518,8 +532,11 @@ export type EventType =
   | "message_sent"
   | "organization_created"
   | "project_created"
+  | "project_goal_submitted"
   | "project_member_added"
   | "project_member_removed"
+  | "project_run_created"
+  | "project_run_updated"
   | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
@@ -699,6 +716,8 @@ export type Mutation = {
   createChat: Chat;
   createOrganization: OrgMember;
   createProject: Project;
+  createProjectFromGoal: Project;
+  createProjectRun: ProjectRun;
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -770,6 +789,7 @@ export type Mutation = {
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateProject: Project;
+  updateProjectRun: ProjectRun;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
@@ -862,6 +882,14 @@ export type MutationCreateOrganizationArgs = {
 
 export type MutationCreateProjectArgs = {
   input: CreateProjectInput;
+};
+
+export type MutationCreateProjectFromGoalArgs = {
+  input: CreateProjectFromGoalInput;
+};
+
+export type MutationCreateProjectRunArgs = {
+  input: CreateProjectRunInput;
 };
 
 export type MutationCreateRepoArgs = {
@@ -1216,6 +1244,11 @@ export type MutationUpdateProjectArgs = {
   input: UpdateProjectInput;
 };
 
+export type MutationUpdateProjectRunArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectRunInput;
+};
+
 export type MutationUpdateRepoArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateRepoInput;
@@ -1311,6 +1344,7 @@ export type Project = {
   organizationId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
   repoId?: Maybe<Scalars["ID"]["output"]>;
+  runs: Array<ProjectRun>;
   sessions: Array<Session>;
   soulFile: Scalars["String"]["output"];
   tickets: Array<Ticket>;
@@ -1324,6 +1358,35 @@ export type ProjectMember = {
   role: UserRole;
   user: User;
 };
+
+export type ProjectRun = {
+  __typename?: "ProjectRun";
+  activeGateId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  executionConfig: Scalars["JSON"]["output"];
+  id: Scalars["ID"]["output"];
+  initialGoal: Scalars["String"]["output"];
+  latestControllerSummaryId?: Maybe<Scalars["ID"]["output"]>;
+  latestControllerSummaryText?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  planSummary?: Maybe<Scalars["String"]["output"]>;
+  project: Project;
+  projectId: Scalars["ID"]["output"];
+  status: ProjectRunStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectRunStatus =
+  | "cancelled"
+  | "completed"
+  | "draft"
+  | "failed"
+  | "interviewing"
+  | "needs_human"
+  | "paused"
+  | "planning"
+  | "ready"
+  | "running";
 
 export type PushPlatform = "android" | "ios";
 
@@ -1362,6 +1425,7 @@ export type Query = {
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
+  projectRuns: Array<ProjectRun>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
@@ -1524,6 +1588,10 @@ export type QueryParticipantsArgs = {
 
 export type QueryProjectArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryProjectRunsArgs = {
+  projectId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectsArgs = {
@@ -2037,6 +2105,15 @@ export type UpdateProjectInput = {
   soulFile?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type UpdateProjectRunInput = {
+  activeGateId?: InputMaybe<Scalars["ID"]["input"]>;
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  latestControllerSummaryId?: InputMaybe<Scalars["ID"]["input"]>;
+  latestControllerSummaryText?: InputMaybe<Scalars["String"]["input"]>;
+  planSummary?: InputMaybe<Scalars["String"]["input"]>;
+  status?: InputMaybe<ProjectRunStatus>;
+};
+
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
@@ -2425,6 +2502,156 @@ export type ThreadRepliesQuery = {
       name?: string | null;
       avatarUrl?: string | null;
     };
+  }>;
+};
+
+export type NewProjectReposQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type NewProjectReposQuery = {
+  __typename?: "Query";
+  repos: Array<{
+    __typename?: "Repo";
+    id: string;
+    name: string;
+    remoteUrl: string;
+    defaultBranch: string;
+    webhookActive: boolean;
+  }>;
+};
+
+export type CreateProjectFromGoalMutationVariables = Exact<{
+  input: CreateProjectFromGoalInput;
+}>;
+
+export type CreateProjectFromGoalMutation = {
+  __typename?: "Mutation";
+  createProjectFromGoal: {
+    __typename?: "Project";
+    id: string;
+    name: string;
+    organizationId: string;
+    repoId?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    runs: Array<{ __typename?: "ProjectRun"; id: string; projectId: string }>;
+  };
+};
+
+export type ProjectQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type ProjectQuery = {
+  __typename?: "Query";
+  project?: {
+    __typename?: "Project";
+    id: string;
+    name: string;
+    organizationId: string;
+    repoId?: string | null;
+    aiMode?: AutonomyMode | null;
+    soulFile: string;
+    createdAt: string;
+    updatedAt: string;
+    repo?: {
+      __typename?: "Repo";
+      id: string;
+      name: string;
+      remoteUrl: string;
+      defaultBranch: string;
+      webhookActive: boolean;
+    } | null;
+    members: Array<{
+      __typename?: "ProjectMember";
+      role: UserRole;
+      joinedAt: string;
+      leftAt?: string | null;
+      user: {
+        __typename?: "User";
+        id: string;
+        email: string;
+        name: string;
+        avatarUrl?: string | null;
+      };
+    }>;
+    channels: Array<{ __typename?: "Channel"; id: string; name: string }>;
+    sessions: Array<{ __typename?: "Session"; id: string; name: string }>;
+    tickets: Array<{ __typename?: "Ticket"; id: string; title: string }>;
+    runs: Array<{
+      __typename?: "ProjectRun";
+      id: string;
+      organizationId: string;
+      projectId: string;
+      status: ProjectRunStatus;
+      initialGoal: string;
+      planSummary?: string | null;
+      activeGateId?: string | null;
+      latestControllerSummaryId?: string | null;
+      latestControllerSummaryText?: string | null;
+      executionConfig: JsonValue;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  } | null;
+};
+
+export type ProjectsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type ProjectsQuery = {
+  __typename?: "Query";
+  projects: Array<{
+    __typename?: "Project";
+    id: string;
+    name: string;
+    organizationId: string;
+    repoId?: string | null;
+    aiMode?: AutonomyMode | null;
+    soulFile: string;
+    createdAt: string;
+    updatedAt: string;
+    repo?: {
+      __typename?: "Repo";
+      id: string;
+      name: string;
+      remoteUrl: string;
+      defaultBranch: string;
+      webhookActive: boolean;
+    } | null;
+    members: Array<{
+      __typename?: "ProjectMember";
+      role: UserRole;
+      joinedAt: string;
+      leftAt?: string | null;
+      user: {
+        __typename?: "User";
+        id: string;
+        email: string;
+        name: string;
+        avatarUrl?: string | null;
+      };
+    }>;
+    channels: Array<{ __typename?: "Channel"; id: string }>;
+    sessions: Array<{ __typename?: "Session"; id: string }>;
+    tickets: Array<{ __typename?: "Ticket"; id: string }>;
+    runs: Array<{
+      __typename?: "ProjectRun";
+      id: string;
+      organizationId: string;
+      projectId: string;
+      status: ProjectRunStatus;
+      initialGoal: string;
+      planSummary?: string | null;
+      activeGateId?: string | null;
+      latestControllerSummaryId?: string | null;
+      latestControllerSummaryText?: string | null;
+      executionConfig: JsonValue;
+      createdAt: string;
+      updatedAt: string;
+    }>;
   }>;
 };
 
@@ -3257,6 +3484,35 @@ export type OrgEventsSubscription = {
       avatarUrl?: string | null;
     };
   };
+};
+
+export type ProjectEventsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+  scope?: InputMaybe<ScopeInput>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+}>;
+
+export type ProjectEventsQuery = {
+  __typename?: "Query";
+  events: Array<{
+    __typename?: "Event";
+    id: string;
+    scopeType: ScopeType;
+    scopeId: string;
+    eventType: EventType;
+    payload: JsonValue;
+    parentId?: string | null;
+    timestamp: string;
+    metadata?: JsonValue | null;
+    actor: {
+      __typename?: "Actor";
+      type: ActorType;
+      id: string;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  }>;
 };
 
 export type SessionEventsQueryVariables = Exact<{
@@ -4512,6 +4768,394 @@ export const ThreadRepliesDocument = {
     },
   ],
 } as unknown as DocumentNode<ThreadRepliesQuery, ThreadRepliesQueryVariables>;
+export const NewProjectReposDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "NewProjectRepos" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repos" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
+                { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<NewProjectReposQuery, NewProjectReposQueryVariables>;
+export const CreateProjectFromGoalDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateProjectFromGoal" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "CreateProjectFromGoalInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createProjectFromGoal" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "runs" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CreateProjectFromGoalMutation, CreateProjectFromGoalMutationVariables>;
+export const ProjectDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "Project" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "project" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
+                      { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "aiMode" } },
+                { kind: "Field", name: { kind: "Name", value: "soulFile" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "members" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "user" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
+                      { kind: "Field", name: { kind: "Name", value: "joinedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "leftAt" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "channels" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "tickets" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "title" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "runs" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                      { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "initialGoal" } },
+                      { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                      { kind: "Field", name: { kind: "Name", value: "activeGateId" } },
+                      { kind: "Field", name: { kind: "Name", value: "latestControllerSummaryId" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "latestControllerSummaryText" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "executionConfig" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ProjectQuery, ProjectQueryVariables>;
+export const ProjectsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "Projects" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "projects" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
+                      { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "aiMode" } },
+                { kind: "Field", name: { kind: "Name", value: "soulFile" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "members" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "user" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
+                      { kind: "Field", name: { kind: "Name", value: "joinedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "leftAt" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "channels" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "tickets" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "runs" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                      { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "initialGoal" } },
+                      { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                      { kind: "Field", name: { kind: "Name", value: "activeGateId" } },
+                      { kind: "Field", name: { kind: "Name", value: "latestControllerSummaryId" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "latestControllerSummaryText" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "executionConfig" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ProjectsQuery, ProjectsQueryVariables>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [
@@ -7227,6 +7871,98 @@ export const OrgEventsDocument = {
     },
   ],
 } as unknown as DocumentNode<OrgEventsSubscription, OrgEventsSubscriptionVariables>;
+export const ProjectEventsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ProjectEvents" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "scope" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "ScopeInput" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "before" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "DateTime" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "events" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "scope" },
+                value: { kind: "Variable", name: { kind: "Name", value: "scope" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "before" },
+                value: { kind: "Variable", name: { kind: "Name", value: "before" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeType" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeId" } },
+                { kind: "Field", name: { kind: "Name", value: "eventType" } },
+                { kind: "Field", name: { kind: "Name", value: "payload" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "parentId" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+                { kind: "Field", name: { kind: "Name", value: "metadata" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ProjectEventsQuery, ProjectEventsQueryVariables>;
 export const SessionEventsDocument = {
   kind: "Document",
   definitions: [

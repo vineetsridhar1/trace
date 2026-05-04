@@ -202,6 +202,40 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().eventsByScope["project:project-1"]?.[event.id]).toEqual(event);
   });
 
+  it("hydrates project runs from project-run events", () => {
+    const event = makeEvent({
+      eventType: "project_goal_submitted",
+      scopeType: "project",
+      scopeId: "project-1",
+      payload: {
+        goal: "Build project planning",
+        projectRun: {
+          id: "run-1",
+          organizationId: "org-1",
+          projectId: "project-1",
+          status: "interviewing",
+          initialGoal: "Build project planning",
+          planSummary: null,
+          activeGateId: null,
+          latestControllerSummaryId: null,
+          latestControllerSummaryText: null,
+          executionConfig: {},
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+
+    handleOrgEvent(event);
+
+    expect(useEntityStore.getState().projectRuns["run-1"]).toMatchObject({
+      id: "run-1",
+      projectId: "project-1",
+      initialGoal: "Build project planning",
+      status: "interviewing",
+    });
+  });
+
   it("keeps historical system project-created events readable", () => {
     useAuthStore.setState({ activeOrgId: "org-1" });
 

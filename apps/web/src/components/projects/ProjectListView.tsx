@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { FolderKanban, GitBranch, RefreshCw, Users } from "lucide-react";
+import { FolderKanban, GitBranch, Plus, RefreshCw, Users } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project } from "@trace/gql";
 import { useAuthStore, useEntityIds, useEntityStore } from "@trace/client-core";
@@ -47,13 +47,27 @@ const PROJECTS_QUERY = gql`
       tickets {
         id
       }
+      runs {
+        id
+        organizationId
+        projectId
+        status
+        initialGoal
+        planSummary
+        activeGateId
+        latestControllerSummaryId
+        latestControllerSummaryText
+        executionConfig
+        createdAt
+        updatedAt
+      }
       createdAt
       updatedAt
     }
   }
 `;
 
-export function ProjectListView() {
+export function ProjectListView({ onNewProject }: { onNewProject: () => void }) {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const setActiveProjectId = useUIStore((s) => s.setActiveProjectId);
@@ -123,7 +137,13 @@ export function ProjectListView() {
       <ProjectListState
         icon={<FolderKanban size={28} />}
         title="No projects yet"
-        body="Start by creating a project from the service layer or seed data, then it will appear here as a workspace."
+        body="Describe a goal to create the first project workspace."
+        action={
+          <Button onClick={onNewProject}>
+            <Plus size={16} />
+            New Project
+          </Button>
+        }
       />
     );
   }
@@ -216,9 +236,7 @@ function ProjectListItem({
           <span>Updated {updatedAt}</span>
         </div>
       </div>
-      <span className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground">
-        Open
-      </span>
+      <span className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground">Open</span>
     </button>
   );
 }

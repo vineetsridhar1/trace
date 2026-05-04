@@ -12,6 +12,15 @@ vi.mock("../services/organization.js", () => ({
   },
 }));
 
+vi.mock("../services/project-run.js", () => ({
+  projectRunService: {
+    listProjectRuns: vi.fn(),
+    createProjectFromGoal: vi.fn(),
+    createProjectRun: vi.fn(),
+    updateProjectRun: vi.fn(),
+  },
+}));
+
 vi.mock("../services/agent-environment.js", () => ({
   agentEnvironmentService: {
     list: vi.fn(),
@@ -51,6 +60,7 @@ vi.mock("../services/access.js", () => ({
 
 import { organizationMutations, organizationQueries } from "./organization.js";
 import { organizationService } from "../services/organization.js";
+import { projectRunService } from "../services/project-run.js";
 
 const ctx = {
   userId: "user-1",
@@ -94,6 +104,56 @@ describe("organization GraphQL resolvers", () => {
       "project-1",
       "org-1",
       { name: "Roadmap v2" },
+      "user",
+      "user-1",
+    );
+  });
+
+  it("delegates project-run queries and mutations to projectRunService", async () => {
+    await organizationQueries.projectRuns({}, { projectId: "project-1" }, ctx);
+    await organizationMutations.createProjectFromGoal(
+      {},
+      {
+        input: {
+          organizationId: "org-1",
+          goal: "Build planning",
+          name: "Planning",
+          repoId: "repo-1",
+        },
+      },
+      ctx,
+    );
+    await organizationMutations.createProjectRun(
+      {},
+      { input: { projectId: "project-1", initialGoal: "Build planning" } },
+      ctx,
+    );
+    await organizationMutations.updateProjectRun(
+      {},
+      { id: "run-1", input: { status: "planning", planSummary: "Plan v1" } },
+      ctx,
+    );
+
+    expect(projectRunService.listProjectRuns).toHaveBeenCalledWith("project-1", "org-1");
+    expect(projectRunService.createProjectFromGoal).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        goal: "Build planning",
+        name: "Planning",
+        repoId: "repo-1",
+      },
+      "user",
+      "user-1",
+    );
+    expect(projectRunService.createProjectRun).toHaveBeenCalledWith(
+      { projectId: "project-1", initialGoal: "Build planning" },
+      "user",
+      "user-1",
+    );
+    expect(projectRunService.updateProjectRun).toHaveBeenCalledWith(
+      "run-1",
+      "org-1",
+      { status: "planning", planSummary: "Plan v1" },
       "user",
       "user-1",
     );

@@ -182,6 +182,7 @@ function projectPayload(
     channels: project.channels.map((link) => channelPayload(link.channel)),
     sessions: project.sessions.map((link) => sessionPayload(link.session)),
     tickets: project.tickets.map((link) => ticketPayload(link.ticket)),
+    runs: [],
     createdAt: dateToJson(project.createdAt),
     updatedAt: dateToJson(project.updatedAt),
   };

@@ -4,13 +4,17 @@ import type {
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
+  CreateProjectFromGoalInput,
+  CreateProjectRunInput,
   UpdateProjectInput,
+  UpdateProjectRunInput,
   AddProjectMemberInput,
   RemoveProjectMemberInput,
   EntityType,
   UserRole,
 } from "@trace/gql";
 import { organizationService } from "../services/organization.js";
+import { projectRunService } from "../services/project-run.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
@@ -50,6 +54,10 @@ export const organizationQueries = {
     const orgId = requireOrgContext(ctx);
     return organizationService.getProject(args.id, orgId);
   },
+  projectRuns: (_: unknown, args: { projectId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return projectRunService.listProjectRuns(args.projectId, orgId);
+  },
 };
 
 export const organizationMutations = {
@@ -71,6 +79,31 @@ export const organizationMutations = {
   updateProject: (_: unknown, args: { id: string; input: UpdateProjectInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return organizationService.updateProject(args.id, orgId, args.input, ctx.actorType, ctx.userId);
+  },
+  createProjectFromGoal: (
+    _: unknown,
+    args: { input: CreateProjectFromGoalInput },
+    ctx: Context,
+  ) => {
+    assertOrgAccess(ctx, args.input.organizationId);
+    return projectRunService.createProjectFromGoal(args.input, ctx.actorType, ctx.userId);
+  },
+  createProjectRun: (_: unknown, args: { input: CreateProjectRunInput }, ctx: Context) => {
+    return projectRunService.createProjectRun(args.input, ctx.actorType, ctx.userId);
+  },
+  updateProjectRun: (
+    _: unknown,
+    args: { id: string; input: UpdateProjectRunInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectRunService.updateProjectRun(
+      args.id,
+      orgId,
+      args.input,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   addProjectMember: (_: unknown, args: { input: AddProjectMemberInput }, ctx: Context) => {
     return organizationService.addProjectMember(
@@ -215,6 +248,10 @@ export const organizationTypeResolvers = {
     tickets: (project: { id: string; tickets?: Array<ProjectRelationRow<unknown>> }) => {
       if (project.tickets) return project.tickets.map((link) => link.ticket).filter(Boolean);
       return organizationService.getProjectTickets(project.id);
+    },
+    runs: (project: { id: string; runs?: unknown[] }) => {
+      if (project.runs) return project.runs;
+      return projectRunService.getProjectRunsForProject(project.id);
     },
   },
   ProjectMember: {
