@@ -102,14 +102,6 @@ enum ActorType {
 enum InboxItemType {
   plan
   question
-  agent_escalation
-  agent_suggestion
-  ticket_suggestion
-  link_suggestion
-  session_suggestion
-  field_change_suggestion
-  comment_suggestion
-  message_suggestion
 }
 
 enum InboxItemStatus {
@@ -145,51 +137,6 @@ enum CloudMachineStatus {
   started
   stopped
   destroyed
-}
-
-enum OrgAgentStatus {
-  enabled
-  disabled
-}
-
-enum AutonomyMode {
-  observe
-  suggest
-  act
-}
-
-enum ModelTier {
-  tier2
-  tier3
-}
-
-enum MemoryKind {
-  fact
-  preference
-  decision
-  pattern
-  relationship
-}
-
-enum ExecutionDisposition {
-  ignore
-  suggest
-  act
-  summarize
-  escalate
-}
-
-enum ExecutionStatus {
-  succeeded
-  suggested
-  blocked
-  dropped
-  failed
-}
-
-enum SummaryType {
-  rolling
-  milestone
 }
 
 enum AiConversationVisibility {
@@ -289,13 +236,6 @@ model Organization {
   agentEnvironments AgentEnvironment[]
   orgSecrets    OrgSecret[]
   cloudMachines CloudMachine[]
-  agentIdentity    AgentIdentity?
-  executionLogs    AgentExecutionLog[]
-  processedEvents  ProcessedAgentEvent[]
-  costTrackers     AgentCostTracker[]
-  entitySummaries  EntitySummary[]
-  derivedMemories  DerivedMemory[]
-  memoryExtractionCursors MemoryExtractionCursor[]
   aiConversations  AiConversation[]
 
   createdAt DateTime @default(now())
@@ -312,110 +252,6 @@ model OrgMember {
 
   @@id([userId, organizationId])
   @@index([organizationId])
-}
-
-model AgentIdentity {
-  id             String       @id @default(uuid())
-  organizationId String       @unique
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String       @default("Trace AI")
-  status         OrgAgentStatus  @default(disabled)
-  autonomyMode   AutonomyMode @default(observe)
-  soulFile       String       @default("")
-  dailyLimitCents Int         @default(1000)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model AgentExecutionLog {
-  id                    String               @id @default(uuid())
-  organizationId        String
-  organization          Organization         @relation(fields: [organizationId], references: [id])
-  triggerEventId        String
-  batchSize             Int                  @default(1)
-  agentId               String
-  modelTier             ModelTier
-  model                 String
-  promoted              Boolean              @default(false)
-  promotionReason       String?
-  inputTokens           Int
-  outputTokens          Int
-  estimatedCostCents    Float
-  contextTokenAllocation Json                @default("{}")
-  disposition           ExecutionDisposition
-  confidence            Float
-  plannedActions        Json                 @default("[]")
-  policyDecision        Json                 @default("{}")
-  finalActions          Json                 @default("[]")
-  status                ExecutionStatus
-  inboxItemId           String?
-  latencyMs             Int
-  replayPacket          Json?
-  promptVersions        Json?
-
-  llmCalls  AgentLlmCall[]
-
-  createdAt DateTime @default(now())
-
-  @@index([organizationId, createdAt])
-  @@index([triggerEventId])
-  @@index([organizationId, agentId, status])
-}
-
-model AgentLlmCall {
-  id                 String             @id @default(uuid())
-  executionLogId     String
-  executionLog       AgentExecutionLog  @relation(fields: [executionLogId], references: [id], onDelete: Cascade)
-  turnNumber         Int
-  model              String
-  provider           String
-  systemPrompt       String?            @db.Text
-  messages           Json
-  tools              Json               @default("[]")
-  maxTokens          Int?
-  temperature        Float?
-  responseContent    Json
-  stopReason         String
-  inputTokens        Int
-  outputTokens       Int
-  estimatedCostCents Float
-  latencyMs          Int
-  createdAt          DateTime           @default(now())
-
-  @@index([executionLogId, turnNumber])
-  @@index([createdAt])
-}
-
-model ProcessedAgentEvent {
-  consumerName   String
-  eventId        String
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  resultHash     String?
-
-  processedAt DateTime @default(now())
-
-  @@id([consumerName, eventId])
-  @@index([organizationId, processedAt])
-}
-
-model AgentCostTracker {
-  id             String       @id @default(uuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  date           String       // YYYY-MM-DD
-  totalCostCents Float        @default(0)
-  tier2Calls     Int          @default(0)
-  tier2CostCents Float        @default(0)
-  tier3Calls     Int          @default(0)
-  tier3CostCents Float        @default(0)
-  summaryCalls     Int        @default(0)
-  summaryCostCents Float      @default(0)
-
-  updatedAt DateTime @updatedAt
-
-  @@unique([organizationId, date])
 }
 
 model AgentEnvironment {
@@ -448,29 +284,6 @@ model OrgSecret {
 
   @@unique([organizationId, name])
   @@index([organizationId])
-}
-
-model EntitySummary {
-  id             String       @id @default(uuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  entityType     String       // channel, chat, ticket, session, project, repo
-  entityId       String
-  summaryType    SummaryType  @default(rolling)
-  content        String       @default("")
-  structuredData Json         @default("{}")
-  startEventId   String?
-  endEventId     String?
-  eventCount     Int          @default(0)
-
-  /// pgvector embedding for semantic search (Phase 4). Nullable — populated by embedding worker.
-  embedding      Unsupported("vector(1536)")?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([organizationId, entityType, entityId, summaryType])
-  @@index([organizationId, entityType, entityId])
 }
 
 model User {
@@ -538,7 +351,6 @@ model Project {
   organization   Organization @relation(fields: [organizationId], references: [id])
   repoId         String?
   repo           Repo?        @relation(fields: [repoId], references: [id])
-  aiMode         AutonomyMode?
   soulFile       String       @default("")
 
   channels       ChannelProject[]
@@ -577,7 +389,6 @@ model Channel {
   repoId         String?
   repo           Repo?         @relation(fields: [repoId], references: [id])
   baseBranch     String?
-  aiMode         AutonomyMode?
   setupScript    String?
   runScripts     Json?          @default("[]")
 
@@ -730,7 +541,6 @@ model Ticket {
   originEventId  String?
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
-  aiMode         AutonomyMode?
 
   projects  TicketProject[]
   assignees TicketAssignee[]
@@ -823,20 +633,6 @@ model Event {
   @@index([organizationId, eventType])
   @@index([organizationId, timestamp])
   @@index([parentId])
-}
-
-model MemoryExtractionCursor {
-  organizationId     String
-  organization       Organization @relation(fields: [organizationId], references: [id])
-  scopeType          ScopeType
-  scopeId            String
-  lastEventId        String
-  lastEventTimestamp DateTime
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-
-  @@id([organizationId, scopeType, scopeId])
-  @@index([organizationId, lastEventTimestamp])
 }
 
 model GitCheckpoint {
@@ -1023,7 +819,6 @@ model Chat {
   dmKey          String?      @unique
   createdById    String
   createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
-  aiMode         AutonomyMode?
 
   members ChatMember[]
   messages Message[]
@@ -1138,48 +933,4 @@ model AiTurn {
 
   @@index([branchId, createdAt])
   @@index([parentTurnId])
-}
-
-model DerivedMemory {
-  id              String       @id @default(uuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-
-  // What kind of memory
-  kind            MemoryKind
-
-  // What it's about
-  subjectType     String       // user, project, repo, team, channel
-  subjectId       String
-
-  // Where it was extracted from (provenance)
-  sourceScopeType ScopeType
-  sourceScopeId   String
-  sourceIsDm      Boolean      @default(false)
-  startEventId    String
-  endEventId      String
-  sourceType      String       @default("auto") // "auto" | "summary" | "manual"
-
-  // The actual content
-  content         String
-  structuredData  Json         @default("{}")
-
-  // Confidence and lifecycle
-  confidence      Float        @default(0.7)
-  validFrom       DateTime     @default(now())
-  validTo         DateTime?
-  supersededBy    String?
-
-  /// pgvector embedding for semantic search (Phase 4). Nullable — populated by embedding worker.
-  embedding       Unsupported("vector(1536)")?
-
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  @@index([organizationId, subjectType, subjectId])
-  @@index([organizationId, sourceScopeType, sourceScopeId])
-  @@index([organizationId, kind])
-  @@index([organizationId, validTo])
-  @@index([startEventId])
-  @@index([endEventId])
 }

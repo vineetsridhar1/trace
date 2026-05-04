@@ -5,11 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
-    "dev:agent": "tsx watch --env-file=.env src/agent-worker.ts",
     "build": "tsc -b",
     "start": "node dist/index.js",
     "lint": "tsc -b",
-    "backfill:ambient-memory": "tsx --env-file-if-exists=.env src/agent/backfill-ambient-memory.ts",
     "db:seed": "tsx prisma/seed.ts",
     "test": "pnpm test:unit",
     "test:unit": "vitest run",

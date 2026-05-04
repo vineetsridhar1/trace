@@ -50,13 +50,6 @@ import {
 } from "./participant.js";
 import { threadQueries } from "./thread.js";
 import {
-  agentIdentityQueries,
-  agentIdentityMutations,
-  agentIdentityTypeResolvers,
-} from "./agent-identity.js";
-import { agentDebugQueries, agentDebugTypeResolvers } from "./agent-debug.js";
-import { scopeAutonomyQueries, scopeAutonomyMutations } from "./scope-autonomy.js";
-import {
   aiConversationQueries,
   aiConversationMutations,
   aiConversationSubscriptions,
@@ -79,8 +72,6 @@ export const resolvers = {
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
   ...bridgeAccessTypeResolvers,
-  ...agentIdentityTypeResolvers,
-  ...agentDebugTypeResolvers,
   ...aiConversationTypeResolvers,
 
   User: {
@@ -109,9 +100,6 @@ export const resolvers = {
     ...chatQueries,
     ...participantQueries,
     ...threadQueries,
-    ...agentIdentityQueries,
-    ...agentDebugQueries,
-    ...scopeAutonomyQueries,
     ...aiConversationQueries,
   },
 
@@ -130,8 +118,6 @@ export const resolvers = {
     ...terminalMutations,
     ...chatMutations,
     ...participantMutations,
-    ...agentIdentityMutations,
-    ...scopeAutonomyMutations,
     ...aiConversationMutations,
   },
 

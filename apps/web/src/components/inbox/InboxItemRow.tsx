@@ -1,6 +1,5 @@
 import { useState, useCallback, memo } from "react";
-import { MessageCircleQuestion, Map, Check, Sparkles } from "lucide-react";
-import { toast } from "sonner";
+import { MessageCircleQuestion, Map, Check } from "lucide-react";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -9,37 +8,19 @@ import {
   DISMISS_SESSION_MUTATION,
   DISMISS_INBOX_ITEM_MUTATION,
   TERMINATE_SESSION_MUTATION,
-  ACCEPT_AGENT_SUGGESTION_MUTATION,
-  DISMISS_AGENT_SUGGESTION_MUTATION,
 } from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
-import { InboxSuggestionBody } from "./InboxSuggestionBody";
 import type { QuestionData } from "./InboxQuestionBody";
-
-const SUGGESTION_TYPES = new Set([
-  "ticket_suggestion",
-  "link_suggestion",
-  "session_suggestion",
-  "field_change_suggestion",
-  "comment_suggestion",
-  "message_suggestion",
-  "agent_suggestion",
-]);
-
-function isSuggestionType(itemType: string | undefined): boolean {
-  return !!itemType && SUGGESTION_TYPES.has(itemType);
-}
 
 /** Human-friendly label for inbox item types. */
 function itemTypeLabel(itemType: string | undefined): string {
   if (!itemType) return "";
   if (itemType === "question") return "Question";
   if (itemType === "plan") return "Plan";
-  if (SUGGESTION_TYPES.has(itemType)) return "Suggestion";
   return itemType;
 }
 
@@ -99,7 +80,6 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
   const [sending, setSending] = useState(false);
 
   const isQuestion = itemType === "question";
-  const isSuggestion = isSuggestionType(itemType as string | undefined);
   const isResolved = status === "resolved" || status === "dismissed" || status === "expired";
   const planContent = (payload?.planContent as string) ?? "";
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
@@ -198,44 +178,6 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     }
   }, [sending, id, sourceId]);
 
-  const handleAcceptSuggestion = useCallback(
-    async (edits?: Record<string, unknown>) => {
-      if (sending) return;
-      setSending(true);
-      try {
-        const result = await client
-          .mutation(ACCEPT_AGENT_SUGGESTION_MUTATION, {
-            inboxItemId: id,
-            edits: edits ?? null,
-          })
-          .toPromise();
-        if (result.error) {
-          toast.error(`Failed to accept: ${result.error.message}`);
-        } else {
-          toast.success("Suggestion accepted");
-        }
-      } finally {
-        setSending(false);
-      }
-    },
-    [sending, id],
-  );
-
-  const handleDismissSuggestion = useCallback(async () => {
-    if (sending) return;
-    setSending(true);
-    try {
-      const result = await client
-        .mutation(DISMISS_AGENT_SUGGESTION_MUTATION, { inboxItemId: id })
-        .toPromise();
-      if (result.error) {
-        toast.error(`Failed to dismiss: ${result.error.message}`);
-      }
-    } finally {
-      setSending(false);
-    }
-  }, [sending, id]);
-
   const handleSendMessage = useCallback(
     async (text: string, interactionMode?: string) => {
       if (!text.trim() || sending || !sourceId) return;
@@ -290,12 +232,10 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
       {/* Header */}
       <div
         className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-surface-elevated"
-        onClick={isSuggestion ? undefined : handleNavigate}
+        onClick={handleNavigate}
       >
         <div className="mt-0.5 shrink-0 text-muted-foreground">
-          {isSuggestion ? (
-            <Sparkles size={16} className="text-amber-400" />
-          ) : isQuestion ? (
+          {isQuestion ? (
             <MessageCircleQuestion size={16} />
           ) : (
             <Map size={16} className="text-accent" />
@@ -315,14 +255,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
       </div>
 
       {/* Type-specific body */}
-      {isSuggestion ? (
-        <InboxSuggestionBody
-          payload={payload ?? {}}
-          sending={sending}
-          onAccept={handleAcceptSuggestion}
-          onDismiss={handleDismissSuggestion}
-        />
-      ) : isQuestion ? (
+      {isQuestion ? (
         <InboxQuestionBody
           questions={questions}
           sending={sending}

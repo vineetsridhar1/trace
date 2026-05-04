@@ -38,34 +38,6 @@ export type AddChatMemberInput = {
   userId: Scalars["ID"]["input"];
 };
 
-export type AgentBudgetStatus = {
-  __typename?: "AgentBudgetStatus";
-  dailyLimitCents: Scalars["Int"]["output"];
-  remainingCents: Scalars["Float"]["output"];
-  remainingPercent: Scalars["Float"]["output"];
-  spentCents: Scalars["Float"]["output"];
-};
-
-export type AgentCostEntry = {
-  __typename?: "AgentCostEntry";
-  date: Scalars["String"]["output"];
-  id: Scalars["ID"]["output"];
-  organizationId: Scalars["ID"]["output"];
-  summaryCalls: Scalars["Int"]["output"];
-  summaryCostCents: Scalars["Float"]["output"];
-  tier2Calls: Scalars["Int"]["output"];
-  tier2CostCents: Scalars["Float"]["output"];
-  tier3Calls: Scalars["Int"]["output"];
-  tier3CostCents: Scalars["Float"]["output"];
-  totalCostCents: Scalars["Float"]["output"];
-};
-
-export type AgentCostSummary = {
-  __typename?: "AgentCostSummary";
-  budget: AgentBudgetStatus;
-  dailyCosts: Array<AgentCostEntry>;
-};
-
 export type AgentEnvironment = {
   __typename?: "AgentEnvironment";
   adapterType: AgentEnvironmentAdapterType;
@@ -87,93 +59,7 @@ export type AgentEnvironmentTestResult = {
   ok: Scalars["Boolean"]["output"];
 };
 
-export type AgentExecutionLog = {
-  __typename?: "AgentExecutionLog";
-  agentId: Scalars["String"]["output"];
-  batchSize: Scalars["Int"]["output"];
-  confidence: Scalars["Float"]["output"];
-  contextTokenAllocation?: Maybe<Scalars["JSON"]["output"]>;
-  createdAt: Scalars["DateTime"]["output"];
-  disposition: ExecutionDisposition;
-  estimatedCostCents: Scalars["Float"]["output"];
-  finalActions?: Maybe<Scalars["JSON"]["output"]>;
-  id: Scalars["ID"]["output"];
-  inboxItemId?: Maybe<Scalars["String"]["output"]>;
-  inputTokens: Scalars["Int"]["output"];
-  latencyMs: Scalars["Int"]["output"];
-  llmCalls: Array<AgentLlmCall>;
-  model: Scalars["String"]["output"];
-  modelTier: ModelTier;
-  organizationId: Scalars["ID"]["output"];
-  outputTokens: Scalars["Int"]["output"];
-  plannedActions?: Maybe<Scalars["JSON"]["output"]>;
-  policyDecision?: Maybe<Scalars["JSON"]["output"]>;
-  promoted: Scalars["Boolean"]["output"];
-  promotionReason?: Maybe<Scalars["String"]["output"]>;
-  status: ExecutionStatus;
-  triggerEventId: Scalars["String"]["output"];
-};
-
-export type AgentExecutionLogConnection = {
-  __typename?: "AgentExecutionLogConnection";
-  items: Array<AgentExecutionLog>;
-  totalCount: Scalars["Int"]["output"];
-};
-
-export type AgentIdentity = {
-  __typename?: "AgentIdentity";
-  autonomyMode: AutonomyMode;
-  costBudget: CostBudget;
-  createdAt: Scalars["DateTime"]["output"];
-  id: Scalars["ID"]["output"];
-  name: Scalars["String"]["output"];
-  organizationId: Scalars["ID"]["output"];
-  soulFile: Scalars["String"]["output"];
-  status: OrgAgentStatus;
-  updatedAt: Scalars["DateTime"]["output"];
-};
-
-export type AgentLlmCall = {
-  __typename?: "AgentLlmCall";
-  createdAt: Scalars["DateTime"]["output"];
-  estimatedCostCents: Scalars["Float"]["output"];
-  executionLogId: Scalars["ID"]["output"];
-  id: Scalars["ID"]["output"];
-  inputTokens: Scalars["Int"]["output"];
-  latencyMs: Scalars["Int"]["output"];
-  maxTokens?: Maybe<Scalars["Int"]["output"]>;
-  messages: Scalars["JSON"]["output"];
-  model: Scalars["String"]["output"];
-  outputTokens: Scalars["Int"]["output"];
-  provider: Scalars["String"]["output"];
-  responseContent: Scalars["JSON"]["output"];
-  stopReason: Scalars["String"]["output"];
-  systemPrompt?: Maybe<Scalars["String"]["output"]>;
-  temperature?: Maybe<Scalars["Float"]["output"]>;
-  tools: Scalars["JSON"]["output"];
-  turnNumber: Scalars["Int"]["output"];
-};
-
 export type AgentStatus = "active" | "done" | "failed" | "not_started" | "stopped";
-
-export type AgentTrustLevel = "autonomous" | "blocked" | "suggest";
-
-export type AgentWorkerStatus = {
-  __typename?: "AgentWorkerStatus";
-  activeOrganizations: Scalars["Int"]["output"];
-  openAggregationWindows: Scalars["Int"]["output"];
-  running: Scalars["Boolean"]["output"];
-  uptime?: Maybe<Scalars["Int"]["output"]>;
-};
-
-export type AggregationWindowInfo = {
-  __typename?: "AggregationWindowInfo";
-  eventCount: Scalars["Int"]["output"];
-  lastEventAt: Scalars["DateTime"]["output"];
-  openedAt: Scalars["DateTime"]["output"];
-  organizationId: Scalars["ID"]["output"];
-  scopeKey: Scalars["String"]["output"];
-};
 
 export type AiConversation = {
   __typename?: "AiConversation";
@@ -206,8 +92,6 @@ export type ApiTokenStatus = {
   provider: ApiTokenProvider;
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
-
-export type AutonomyMode = "act" | "observe" | "suggest";
 
 export type Branch = {
   __typename?: "Branch";
@@ -308,7 +192,6 @@ export type BridgeRuntimeAccess = {
 
 export type Channel = {
   __typename?: "Channel";
-  aiMode?: Maybe<AutonomyMode>;
   baseBranch?: Maybe<Scalars["String"]["output"]>;
   groupId?: Maybe<Scalars["ID"]["output"]>;
   id: Scalars["ID"]["output"];
@@ -347,7 +230,6 @@ export type ChannelType = "coding" | "text";
 
 export type Chat = {
   __typename?: "Chat";
-  aiMode?: Maybe<AutonomyMode>;
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
   id: Scalars["ID"]["output"];
@@ -389,11 +271,6 @@ export type ConnectionsRepoEntry = {
   linkedCheckout?: Maybe<LinkedCheckoutStatus>;
   repo: Repo;
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
-};
-
-export type CostBudget = {
-  __typename?: "CostBudget";
-  dailyLimitCents: Scalars["Int"]["output"];
 };
 
 export type CreateAgentEnvironmentInput = {
@@ -546,19 +423,6 @@ export type EventType =
   | "ticket_unlinked"
   | "ticket_updated";
 
-export type ExecutionDisposition = "act" | "escalate" | "ignore" | "suggest" | "summarize";
-
-export type ExecutionLogFilters = {
-  disposition?: InputMaybe<ExecutionDisposition>;
-  endDate?: InputMaybe<Scalars["DateTime"]["input"]>;
-  limit?: InputMaybe<Scalars["Int"]["input"]>;
-  offset?: InputMaybe<Scalars["Int"]["input"]>;
-  startDate?: InputMaybe<Scalars["DateTime"]["input"]>;
-  status?: InputMaybe<ExecutionStatus>;
-};
-
-export type ExecutionStatus = "blocked" | "dropped" | "failed" | "succeeded" | "suggested";
-
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
@@ -599,17 +463,7 @@ export type InboxItem = {
 
 export type InboxItemStatus = "active" | "dismissed" | "expired" | "resolved";
 
-export type InboxItemType =
-  | "agent_escalation"
-  | "agent_suggestion"
-  | "comment_suggestion"
-  | "field_change_suggestion"
-  | "link_suggestion"
-  | "message_suggestion"
-  | "plan"
-  | "question"
-  | "session_suggestion"
-  | "ticket_suggestion";
+export type InboxItemType = "plan" | "question";
 
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
@@ -661,8 +515,6 @@ export type Message = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
-export type ModelTier = "tier2" | "tier3";
-
 export type MoveChannelInput = {
   channelId: Scalars["ID"]["input"];
   groupId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -671,7 +523,6 @@ export type MoveChannelInput = {
 
 export type Mutation = {
   __typename?: "Mutation";
-  acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
@@ -702,7 +553,6 @@ export type Mutation = {
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
   destroyTerminal: Scalars["Boolean"]["output"];
-  dismissAgentSuggestion: InboxItem;
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChannelMessage: Message;
@@ -751,21 +601,14 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars["Boolean"]["output"];
   updateAgentEnvironment: AgentEnvironment;
-  updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
-  updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
   updateTicket: Ticket;
-};
-
-export type MutationAcceptAgentSuggestionArgs = {
-  edits?: InputMaybe<Scalars["JSON"]["input"]>;
-  inboxItemId: Scalars["ID"]["input"];
 };
 
 export type MutationAddChatMemberArgs = {
@@ -904,10 +747,6 @@ export type MutationDenyBridgeAccessRequestArgs = {
 
 export type MutationDestroyTerminalArgs = {
   terminalId: Scalars["ID"]["input"];
-};
-
-export type MutationDismissAgentSuggestionArgs = {
-  inboxItemId: Scalars["ID"]["input"];
 };
 
 export type MutationDismissInboxItemArgs = {
@@ -1159,11 +998,6 @@ export type MutationUpdateAgentEnvironmentArgs = {
   input: UpdateAgentEnvironmentInput;
 };
 
-export type MutationUpdateAgentSettingsArgs = {
-  input: UpdateAgentSettingsInput;
-  organizationId: Scalars["ID"]["input"];
-};
-
 export type MutationUpdateAiConversationTitleArgs = {
   conversationId: Scalars["ID"]["input"];
   title: Scalars["String"]["input"];
@@ -1195,13 +1029,6 @@ export type MutationUpdateRepoArgs = {
   input: UpdateRepoInput;
 };
 
-export type MutationUpdateScopeAiModeArgs = {
-  aiMode?: InputMaybe<AutonomyMode>;
-  organizationId: Scalars["ID"]["input"];
-  scopeId: Scalars["ID"]["input"];
-  scopeType: Scalars["String"]["input"];
-};
-
 export type MutationUpdateSessionConfigArgs = {
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
@@ -1223,8 +1050,6 @@ export type Notification = {
   timestamp: Scalars["DateTime"]["output"];
   type: Scalars["String"]["output"];
 };
-
-export type OrgAgentStatus = "disabled" | "enabled";
 
 export type OrgMember = {
   __typename?: "OrgMember";
@@ -1276,7 +1101,6 @@ export type Priority = "high" | "low" | "medium" | "urgent";
 
 export type Project = {
   __typename?: "Project";
-  aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1289,13 +1113,7 @@ export type PushPlatform = "android" | "ios";
 
 export type Query = {
   __typename?: "Query";
-  agentAggregationWindows: Array<AggregationWindowInfo>;
-  agentCostSummary: AgentCostSummary;
   agentEnvironments: Array<AgentEnvironment>;
-  agentExecutionLog?: Maybe<AgentExecutionLog>;
-  agentExecutionLogs: AgentExecutionLogConnection;
-  agentIdentity?: Maybe<AgentIdentity>;
-  agentWorkerStatus: AgentWorkerStatus;
   aiConversation?: Maybe<AiConversation>;
   aiConversations: Array<AiConversation>;
   availableRuntimes: Array<SessionRuntimeInstance>;
@@ -1326,7 +1144,6 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
-  resolvedAiMode: AutonomyMode;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
@@ -1345,36 +1162,8 @@ export type Query = {
   tickets: Array<Ticket>;
 };
 
-export type QueryAgentAggregationWindowsArgs = {
-  organizationId: Scalars["ID"]["input"];
-};
-
-export type QueryAgentCostSummaryArgs = {
-  endDate: Scalars["String"]["input"];
-  organizationId: Scalars["ID"]["input"];
-  startDate: Scalars["String"]["input"];
-};
-
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
-};
-
-export type QueryAgentExecutionLogArgs = {
-  id: Scalars["ID"]["input"];
-  organizationId: Scalars["ID"]["input"];
-};
-
-export type QueryAgentExecutionLogsArgs = {
-  filters?: InputMaybe<ExecutionLogFilters>;
-  organizationId: Scalars["ID"]["input"];
-};
-
-export type QueryAgentIdentityArgs = {
-  organizationId: Scalars["ID"]["input"];
-};
-
-export type QueryAgentWorkerStatusArgs = {
-  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAiConversationArgs = {
@@ -1503,12 +1292,6 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
-};
-
-export type QueryResolvedAiModeArgs = {
-  organizationId: Scalars["ID"]["input"];
-  scopeId: Scalars["ID"]["input"];
-  scopeType: Scalars["String"]["input"];
 };
 
 export type QuerySearchSessionsArgs = {
@@ -1900,7 +1683,6 @@ export type ThreadSummary = {
 
 export type Ticket = {
   __typename?: "Ticket";
-  aiMode?: Maybe<AutonomyMode>;
   assignees: Array<User>;
   channel?: Maybe<Channel>;
   createdAt: Scalars["DateTime"]["output"];
@@ -1957,14 +1739,6 @@ export type UpdateAgentEnvironmentInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
-export type UpdateAgentSettingsInput = {
-  autonomyMode?: InputMaybe<AutonomyMode>;
-  dailyLimitCents?: InputMaybe<Scalars["Int"]["input"]>;
-  name?: InputMaybe<Scalars["String"]["input"]>;
-  soulFile?: InputMaybe<Scalars["String"]["input"]>;
-  status?: InputMaybe<OrgAgentStatus>;
-};
-
 export type UpdateChannelGroupInput = {
   isCollapsed?: InputMaybe<Scalars["Boolean"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
@@ -2001,180 +1775,6 @@ export type User = {
 };
 
 export type UserRole = "admin" | "member" | "observer";
-
-export type AgentIdentityDebugQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-}>;
-
-export type AgentIdentityDebugQuery = {
-  __typename?: "Query";
-  agentIdentity?: {
-    __typename?: "AgentIdentity";
-    id: string;
-    name: string;
-    status: OrgAgentStatus;
-    autonomyMode: AutonomyMode;
-    soulFile: string;
-    costBudget: { __typename?: "CostBudget"; dailyLimitCents: number };
-  } | null;
-};
-
-export type UpdateAgentSettingsDebugMutationVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-  input: UpdateAgentSettingsInput;
-}>;
-
-export type UpdateAgentSettingsDebugMutation = {
-  __typename?: "Mutation";
-  updateAgentSettings: {
-    __typename?: "AgentIdentity";
-    id: string;
-    name: string;
-    status: OrgAgentStatus;
-    autonomyMode: AutonomyMode;
-    soulFile: string;
-    costBudget: { __typename?: "CostBudget"; dailyLimitCents: number };
-  };
-};
-
-export type AgentCostSummaryQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-  startDate: Scalars["String"]["input"];
-  endDate: Scalars["String"]["input"];
-}>;
-
-export type AgentCostSummaryQuery = {
-  __typename?: "Query";
-  agentCostSummary: {
-    __typename?: "AgentCostSummary";
-    budget: {
-      __typename?: "AgentBudgetStatus";
-      dailyLimitCents: number;
-      spentCents: number;
-      remainingCents: number;
-      remainingPercent: number;
-    };
-    dailyCosts: Array<{
-      __typename?: "AgentCostEntry";
-      date: string;
-      totalCostCents: number;
-      tier2Calls: number;
-      tier2CostCents: number;
-      tier3Calls: number;
-      tier3CostCents: number;
-      summaryCalls: number;
-      summaryCostCents: number;
-    }>;
-  };
-};
-
-export type AgentExecutionLogDetailQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-  id: Scalars["ID"]["input"];
-}>;
-
-export type AgentExecutionLogDetailQuery = {
-  __typename?: "Query";
-  agentExecutionLog?: {
-    __typename?: "AgentExecutionLog";
-    id: string;
-    organizationId: string;
-    triggerEventId: string;
-    batchSize: number;
-    agentId: string;
-    modelTier: ModelTier;
-    model: string;
-    promoted: boolean;
-    promotionReason?: string | null;
-    inputTokens: number;
-    outputTokens: number;
-    estimatedCostCents: number;
-    contextTokenAllocation?: JsonValue | null;
-    disposition: ExecutionDisposition;
-    confidence: number;
-    plannedActions?: JsonValue | null;
-    policyDecision?: JsonValue | null;
-    finalActions?: JsonValue | null;
-    status: ExecutionStatus;
-    inboxItemId?: string | null;
-    latencyMs: number;
-    createdAt: string;
-    llmCalls: Array<{
-      __typename?: "AgentLlmCall";
-      id: string;
-      executionLogId: string;
-      turnNumber: number;
-      model: string;
-      provider: string;
-      systemPrompt?: string | null;
-      messages: JsonValue;
-      tools: JsonValue;
-      maxTokens?: number | null;
-      temperature?: number | null;
-      responseContent: JsonValue;
-      stopReason: string;
-      inputTokens: number;
-      outputTokens: number;
-      estimatedCostCents: number;
-      latencyMs: number;
-      createdAt: string;
-    }>;
-  } | null;
-};
-
-export type AgentExecutionLogsQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-  filters?: InputMaybe<ExecutionLogFilters>;
-}>;
-
-export type AgentExecutionLogsQuery = {
-  __typename?: "Query";
-  agentExecutionLogs: {
-    __typename?: "AgentExecutionLogConnection";
-    totalCount: number;
-    items: Array<{
-      __typename?: "AgentExecutionLog";
-      id: string;
-      triggerEventId: string;
-      batchSize: number;
-      agentId: string;
-      modelTier: ModelTier;
-      model: string;
-      promoted: boolean;
-      promotionReason?: string | null;
-      inputTokens: number;
-      outputTokens: number;
-      estimatedCostCents: number;
-      disposition: ExecutionDisposition;
-      confidence: number;
-      status: ExecutionStatus;
-      latencyMs: number;
-      createdAt: string;
-    }>;
-  };
-};
-
-export type AgentWorkerStatusQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-}>;
-
-export type AgentWorkerStatusQuery = {
-  __typename?: "Query";
-  agentWorkerStatus: {
-    __typename?: "AgentWorkerStatus";
-    running: boolean;
-    uptime?: number | null;
-    openAggregationWindows: number;
-    activeOrganizations: number;
-  };
-  agentAggregationWindows: Array<{
-    __typename?: "AggregationWindowInfo";
-    scopeKey: string;
-    eventCount: number;
-    openedAt: string;
-    lastEventAt: string;
-  }>;
-};
 
 export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
@@ -2597,39 +2197,6 @@ export type SessionGroupDetailQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
-};
-
-export type AgentIdentityQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-}>;
-
-export type AgentIdentityQuery = {
-  __typename?: "Query";
-  agentIdentity?: {
-    __typename?: "AgentIdentity";
-    id: string;
-    name: string;
-    status: OrgAgentStatus;
-    autonomyMode: AutonomyMode;
-    soulFile: string;
-  } | null;
-};
-
-export type UpdateAgentSettingsMutationVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-  input: UpdateAgentSettingsInput;
-}>;
-
-export type UpdateAgentSettingsMutation = {
-  __typename?: "Mutation";
-  updateAgentSettings: {
-    __typename?: "AgentIdentity";
-    id: string;
-    name: string;
-    status: OrgAgentStatus;
-    autonomyMode: AutonomyMode;
-    soulFile: string;
-  };
 };
 
 export type MyApiTokensQueryVariables = Exact<{ [key: string]: never }>;
@@ -3375,475 +2942,6 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
-export const AgentIdentityDebugDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AgentIdentityDebug" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "agentIdentity" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "autonomyMode" } },
-                { kind: "Field", name: { kind: "Name", value: "soulFile" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "costBudget" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "dailyLimitCents" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AgentIdentityDebugQuery, AgentIdentityDebugQueryVariables>;
-export const UpdateAgentSettingsDebugDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "UpdateAgentSettingsDebug" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "UpdateAgentSettingsInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "updateAgentSettings" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "autonomyMode" } },
-                { kind: "Field", name: { kind: "Name", value: "soulFile" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "costBudget" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "dailyLimitCents" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  UpdateAgentSettingsDebugMutation,
-  UpdateAgentSettingsDebugMutationVariables
->;
-export const AgentCostSummaryDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AgentCostSummary" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "startDate" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "endDate" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "agentCostSummary" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "startDate" },
-                value: { kind: "Variable", name: { kind: "Name", value: "startDate" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "endDate" },
-                value: { kind: "Variable", name: { kind: "Name", value: "endDate" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "budget" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "dailyLimitCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "spentCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "remainingCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "remainingPercent" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "dailyCosts" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "date" } },
-                      { kind: "Field", name: { kind: "Name", value: "totalCostCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "tier2Calls" } },
-                      { kind: "Field", name: { kind: "Name", value: "tier2CostCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "tier3Calls" } },
-                      { kind: "Field", name: { kind: "Name", value: "tier3CostCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "summaryCalls" } },
-                      { kind: "Field", name: { kind: "Name", value: "summaryCostCents" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AgentCostSummaryQuery, AgentCostSummaryQueryVariables>;
-export const AgentExecutionLogDetailDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AgentExecutionLogDetail" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "agentExecutionLog" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
-                { kind: "Field", name: { kind: "Name", value: "triggerEventId" } },
-                { kind: "Field", name: { kind: "Name", value: "batchSize" } },
-                { kind: "Field", name: { kind: "Name", value: "agentId" } },
-                { kind: "Field", name: { kind: "Name", value: "modelTier" } },
-                { kind: "Field", name: { kind: "Name", value: "model" } },
-                { kind: "Field", name: { kind: "Name", value: "promoted" } },
-                { kind: "Field", name: { kind: "Name", value: "promotionReason" } },
-                { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
-                { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
-                { kind: "Field", name: { kind: "Name", value: "estimatedCostCents" } },
-                { kind: "Field", name: { kind: "Name", value: "contextTokenAllocation" } },
-                { kind: "Field", name: { kind: "Name", value: "disposition" } },
-                { kind: "Field", name: { kind: "Name", value: "confidence" } },
-                { kind: "Field", name: { kind: "Name", value: "plannedActions" } },
-                { kind: "Field", name: { kind: "Name", value: "policyDecision" } },
-                { kind: "Field", name: { kind: "Name", value: "finalActions" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "inboxItemId" } },
-                { kind: "Field", name: { kind: "Name", value: "latencyMs" } },
-                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "llmCalls" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "executionLogId" } },
-                      { kind: "Field", name: { kind: "Name", value: "turnNumber" } },
-                      { kind: "Field", name: { kind: "Name", value: "model" } },
-                      { kind: "Field", name: { kind: "Name", value: "provider" } },
-                      { kind: "Field", name: { kind: "Name", value: "systemPrompt" } },
-                      { kind: "Field", name: { kind: "Name", value: "messages" } },
-                      { kind: "Field", name: { kind: "Name", value: "tools" } },
-                      { kind: "Field", name: { kind: "Name", value: "maxTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "temperature" } },
-                      { kind: "Field", name: { kind: "Name", value: "responseContent" } },
-                      { kind: "Field", name: { kind: "Name", value: "stopReason" } },
-                      { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "estimatedCostCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "latencyMs" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AgentExecutionLogDetailQuery, AgentExecutionLogDetailQueryVariables>;
-export const AgentExecutionLogsDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AgentExecutionLogs" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "filters" } },
-          type: { kind: "NamedType", name: { kind: "Name", value: "ExecutionLogFilters" } },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "agentExecutionLogs" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "filters" },
-                value: { kind: "Variable", name: { kind: "Name", value: "filters" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "items" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "triggerEventId" } },
-                      { kind: "Field", name: { kind: "Name", value: "batchSize" } },
-                      { kind: "Field", name: { kind: "Name", value: "agentId" } },
-                      { kind: "Field", name: { kind: "Name", value: "modelTier" } },
-                      { kind: "Field", name: { kind: "Name", value: "model" } },
-                      { kind: "Field", name: { kind: "Name", value: "promoted" } },
-                      { kind: "Field", name: { kind: "Name", value: "promotionReason" } },
-                      { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "estimatedCostCents" } },
-                      { kind: "Field", name: { kind: "Name", value: "disposition" } },
-                      { kind: "Field", name: { kind: "Name", value: "confidence" } },
-                      { kind: "Field", name: { kind: "Name", value: "status" } },
-                      { kind: "Field", name: { kind: "Name", value: "latencyMs" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "totalCount" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AgentExecutionLogsQuery, AgentExecutionLogsQueryVariables>;
-export const AgentWorkerStatusDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AgentWorkerStatus" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "agentWorkerStatus" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "running" } },
-                { kind: "Field", name: { kind: "Name", value: "uptime" } },
-                { kind: "Field", name: { kind: "Name", value: "openAggregationWindows" } },
-                { kind: "Field", name: { kind: "Name", value: "activeOrganizations" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "agentAggregationWindows" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "scopeKey" } },
-                { kind: "Field", name: { kind: "Name", value: "eventCount" } },
-                { kind: "Field", name: { kind: "Name", value: "openedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "lastEventAt" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AgentWorkerStatusQuery, AgentWorkerStatusQueryVariables>;
 export const SendChannelMessageDocument = {
   kind: "Document",
   definitions: [
@@ -5093,111 +4191,6 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
-export const AgentIdentityDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AgentIdentity" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "agentIdentity" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "autonomyMode" } },
-                { kind: "Field", name: { kind: "Name", value: "soulFile" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AgentIdentityQuery, AgentIdentityQueryVariables>;
-export const UpdateAgentSettingsDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "UpdateAgentSettings" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "UpdateAgentSettingsInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "updateAgentSettings" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "autonomyMode" } },
-                { kind: "Field", name: { kind: "Name", value: "soulFile" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<UpdateAgentSettingsMutation, UpdateAgentSettingsMutationVariables>;
 export const MyApiTokensDocument = {
   kind: "Document",
   definitions: [

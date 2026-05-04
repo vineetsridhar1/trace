@@ -9,14 +9,6 @@ export async function assertActorOrgAccess(
 ): Promise<void> {
   if (actorType === "system") return;
 
-  if (actorType === "agent") {
-    await tx.agentIdentity.findUniqueOrThrow({
-      where: { organizationId },
-      select: { id: true },
-    });
-    return;
-  }
-
   await tx.orgMember.findUniqueOrThrow({
     where: {
       userId_organizationId: {

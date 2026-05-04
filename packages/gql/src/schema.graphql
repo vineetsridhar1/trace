@@ -158,39 +158,14 @@ enum UserRole {
   observer
 }
 
-enum AgentTrustLevel {
-  autonomous
-  suggest
-  blocked
-}
-
-enum OrgAgentStatus {
-  enabled
-  disabled
-}
-
 enum AgentEnvironmentAdapterType {
   local
   provisioned
 }
 
-enum AutonomyMode {
-  observe
-  suggest
-  act
-}
-
 enum InboxItemType {
   plan
   question
-  agent_escalation
-  agent_suggestion
-  ticket_suggestion
-  link_suggestion
-  session_suggestion
-  field_change_suggestion
-  comment_suggestion
-  message_suggestion
 }
 
 enum InboxItemStatus {
@@ -353,7 +328,6 @@ type Project {
   id: ID!
   name: String!
   repo: Repo
-  aiMode: AutonomyMode
   channels: [Channel!]!
   sessions: [Session!]!
   tickets: [Ticket!]!
@@ -367,7 +341,6 @@ type Channel {
   groupId: ID
   baseBranch: String
   repo: Repo
-  aiMode: AutonomyMode
   setupScript: String
   runScripts: JSON
   members: [ChannelMember!]!
@@ -487,7 +460,6 @@ type Ticket {
   labels: [String!]!
   origin: Event
   channel: Channel
-  aiMode: AutonomyMode
   projects: [Project!]!
   sessions: [Session!]!
   links: [TicketLink!]!
@@ -550,7 +522,6 @@ type Chat {
   id: ID!
   type: ChatType!
   name: String
-  aiMode: AutonomyMode
   members: [ChatMember!]!
   messages(after: DateTime, before: DateTime, limit: Int): [Message!]!
   createdBy: User!
@@ -570,145 +541,6 @@ type Participant {
   scopeId: ID!
   subscribedAt: DateTime!
   muted: Boolean!
-}
-
-type AgentIdentity {
-  id: ID!
-  organizationId: ID!
-  name: String!
-  status: OrgAgentStatus!
-  autonomyMode: AutonomyMode!
-  soulFile: String!
-  costBudget: CostBudget!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-type CostBudget {
-  dailyLimitCents: Int!
-}
-
-# --- Agent Debug Console Types ---
-
-enum ExecutionDisposition {
-  ignore
-  suggest
-  act
-  summarize
-  escalate
-}
-
-enum ExecutionStatus {
-  succeeded
-  suggested
-  blocked
-  dropped
-  failed
-}
-
-enum ModelTier {
-  tier2
-  tier3
-}
-
-type AgentExecutionLog {
-  id: ID!
-  organizationId: ID!
-  triggerEventId: String!
-  batchSize: Int!
-  agentId: String!
-  modelTier: ModelTier!
-  model: String!
-  promoted: Boolean!
-  promotionReason: String
-  inputTokens: Int!
-  outputTokens: Int!
-  estimatedCostCents: Float!
-  contextTokenAllocation: JSON
-  disposition: ExecutionDisposition!
-  confidence: Float!
-  plannedActions: JSON
-  policyDecision: JSON
-  finalActions: JSON
-  status: ExecutionStatus!
-  inboxItemId: String
-  latencyMs: Int!
-  createdAt: DateTime!
-  llmCalls: [AgentLlmCall!]!
-}
-
-type AgentLlmCall {
-  id: ID!
-  executionLogId: ID!
-  turnNumber: Int!
-  model: String!
-  provider: String!
-  systemPrompt: String
-  messages: JSON!
-  tools: JSON!
-  maxTokens: Int
-  temperature: Float
-  responseContent: JSON!
-  stopReason: String!
-  inputTokens: Int!
-  outputTokens: Int!
-  estimatedCostCents: Float!
-  latencyMs: Int!
-  createdAt: DateTime!
-}
-
-type AgentExecutionLogConnection {
-  items: [AgentExecutionLog!]!
-  totalCount: Int!
-}
-
-type AgentCostEntry {
-  id: ID!
-  organizationId: ID!
-  date: String!
-  totalCostCents: Float!
-  tier2Calls: Int!
-  tier2CostCents: Float!
-  tier3Calls: Int!
-  tier3CostCents: Float!
-  summaryCalls: Int!
-  summaryCostCents: Float!
-}
-
-type AgentBudgetStatus {
-  dailyLimitCents: Int!
-  spentCents: Float!
-  remainingCents: Float!
-  remainingPercent: Float!
-}
-
-type AgentCostSummary {
-  budget: AgentBudgetStatus!
-  dailyCosts: [AgentCostEntry!]!
-}
-
-type AgentWorkerStatus {
-  running: Boolean!
-  uptime: Int
-  openAggregationWindows: Int!
-  activeOrganizations: Int!
-}
-
-type AggregationWindowInfo {
-  scopeKey: String!
-  organizationId: ID!
-  eventCount: Int!
-  openedAt: DateTime!
-  lastEventAt: DateTime!
-}
-
-input ExecutionLogFilters {
-  status: ExecutionStatus
-  disposition: ExecutionDisposition
-  startDate: DateTime
-  endDate: DateTime
-  limit: Int
-  offset: Int
 }
 
 type ThreadSummary {
@@ -1075,14 +907,6 @@ input SetApiTokenInput {
   token: String!
 }
 
-input UpdateAgentSettingsInput {
-  name: String
-  status: OrgAgentStatus
-  autonomyMode: AutonomyMode
-  soulFile: String
-  dailyLimitCents: Int
-}
-
 input CreateAiConversationInput {
   title: String
   visibility: AiConversationVisibility
@@ -1179,16 +1003,6 @@ type Query {
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
-  agentIdentity(organizationId: ID!): AgentIdentity
-  resolvedAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!): AutonomyMode!
-  agentExecutionLogs(
-    organizationId: ID!
-    filters: ExecutionLogFilters
-  ): AgentExecutionLogConnection!
-  agentExecutionLog(organizationId: ID!, id: ID!): AgentExecutionLog
-  agentCostSummary(organizationId: ID!, startDate: String!, endDate: String!): AgentCostSummary!
-  agentWorkerStatus(organizationId: ID!): AgentWorkerStatus!
-  agentAggregationWindows(organizationId: ID!): [AggregationWindowInfo!]!
   aiConversations(organizationId: ID!, visibility: AiConversationVisibility): [AiConversation!]!
   aiConversation(id: ID!): AiConversation
   branch(id: ID!): Branch
@@ -1352,8 +1166,6 @@ type Mutation {
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
-  acceptAgentSuggestion(inboxItemId: ID!, edits: JSON): InboxItem!
-  dismissAgentSuggestion(inboxItemId: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
   registerPushToken(token: String!, platform: PushPlatform!): Boolean!
@@ -1383,13 +1195,6 @@ type Mutation {
   unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
   muteScope(scopeType: String!, scopeId: ID!): Participant!
   unmuteScope(scopeType: String!, scopeId: ID!): Participant!
-  updateScopeAiMode(
-    organizationId: ID!
-    scopeType: String!
-    scopeId: ID!
-    aiMode: AutonomyMode
-  ): Boolean!
-  updateAgentSettings(organizationId: ID!, input: UpdateAgentSettingsInput!): AgentIdentity!
   addOrgMember(organizationId: ID!, userId: ID!, role: UserRole): OrgMember!
   removeOrgMember(organizationId: ID!, userId: ID!): Boolean!
   updateOrgMemberRole(organizationId: ID!, userId: ID!, role: UserRole!): OrgMember!

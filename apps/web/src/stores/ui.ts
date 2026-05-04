@@ -13,7 +13,7 @@ import {
   resolveSessionGroupIdForSession,
 } from "./ui-navigation";
 
-export type ActivePage = "main" | "settings" | "inbox" | "connections" | "tickets" | "agent-debug";
+export type ActivePage = "main" | "settings" | "inbox" | "connections" | "tickets";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
 export interface NavigationState {
   channelId: string | null;

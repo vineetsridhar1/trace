@@ -198,26 +198,6 @@ export const DISMISS_INBOX_ITEM_MUTATION = gql`
   }
 `;
 
-export const ACCEPT_AGENT_SUGGESTION_MUTATION = gql`
-  mutation AcceptAgentSuggestion($inboxItemId: ID!, $edits: JSON) {
-    acceptAgentSuggestion(inboxItemId: $inboxItemId, edits: $edits) {
-      id
-      status
-      resolvedAt
-    }
-  }
-`;
-
-export const DISMISS_AGENT_SUGGESTION_MUTATION = gql`
-  mutation DismissAgentSuggestion($inboxItemId: ID!) {
-    dismissAgentSuggestion(inboxItemId: $inboxItemId) {
-      id
-      status
-      resolvedAt
-    }
-  }
-`;
-
 export const REGISTER_PUSH_TOKEN_MUTATION = gql`
   mutation RegisterPushToken($token: String!, $platform: PushPlatform!) {
     registerPushToken(token: $token, platform: $platform)
