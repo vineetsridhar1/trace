@@ -226,7 +226,8 @@ Edit `apps/server/.env`:
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/trace?schema=public"
 GITHUB_CLIENT_ID="your-github-oauth-app-id"
-GITHUB_CLIENT_SECRET="your-github-oauth-app-secret"
+# Only needed for the legacy redirect callback/mobile auth path.
+GITHUB_CLIENT_SECRET=""
 
 PORT=4000
 JWT_SECRET="replace-me"
@@ -237,10 +238,9 @@ TRACE_AUTH_COOKIE_SAME_SITE="lax"
 ```
 
 Create a GitHub OAuth app at
-[github.com/settings/developers](https://github.com/settings/developers):
-
-- Homepage URL: `http://localhost:3000`
-- Authorization callback URL: `http://localhost:4000/auth/github/callback`
+[github.com/settings/developers](https://github.com/settings/developers), then
+enable device flow for the app. The web sign-in flow uses GitHub device auth, so
+it does not require a redirect URI or client secret.
 
 Trace uses `pgvector` for indexing and retrieval features. Enable it before
 migrating:

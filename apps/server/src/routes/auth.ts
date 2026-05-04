@@ -2,6 +2,7 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import jwt from "jsonwebtoken";
 import type { CookieOptions } from "express";
 import type { PushPlatform } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import {
   authenticateAccessToken,
@@ -45,8 +46,29 @@ const MOBILE_ORIGIN = "trace-mobile";
 const MOBILE_REDIRECT_URL = "trace://auth/callback";
 const OAUTH_STATE_TTL_SECONDS = 5 * 60;
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
+const GITHUB_DEVICE_SCOPE = "read:user user:email";
 
 type OAuthStatePayload = { origin: string; tokenType: "oauth_state" };
+type GitHubDeviceAuth = {
+  deviceCode: string;
+  expiresAt: number;
+  intervalSeconds: number;
+};
+type GitHubAccessTokenResponse = { access_token?: string; error?: string };
+type GitHubUserResponse = {
+  id: number;
+  login: string;
+  email: string | null;
+  avatar_url: string;
+  name: string | null;
+};
+type GitHubEmailResponse = {
+  email: string;
+  primary: boolean;
+  verified: boolean;
+};
+
+const githubDeviceAuths = new Map<string, GitHubDeviceAuth>();
 
 // Origins permitted on /auth/github and /auth/github/callback. The popup
 // embeds this as the postMessage target — accepting arbitrary values would
@@ -124,6 +146,53 @@ function getSessionCookieOptions(): CookieOptions {
 
 function setSessionCookie(res: Response, token: string): void {
   res.cookie("trace_token", token, getSessionCookieOptions());
+}
+
+async function upsertUserFromGitHubAccessToken(accessToken: string) {
+  const userRes = await fetch("https://api.github.com/user", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const ghUser = (await userRes.json()) as GitHubUserResponse;
+
+  let email = ghUser.email;
+  if (!email) {
+    const emailsRes = await fetch("https://api.github.com/user/emails", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const emails = (await emailsRes.json()) as GitHubEmailResponse[];
+    const primary = emails.find((e) => e.primary && e.verified);
+    email = primary?.email ?? emails[0]?.email ?? null;
+  }
+
+  if (!email) {
+    throw new Error("Could not retrieve email from GitHub");
+  }
+
+  let user = await prisma.user.findFirst({
+    where: { OR: [{ githubId: ghUser.id }, { email }] },
+  });
+
+  if (user) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        githubId: ghUser.id,
+        avatarUrl: ghUser.avatar_url,
+        name: ghUser.name || ghUser.login,
+      },
+    });
+  } else {
+    user = await prisma.user.create({
+      data: {
+        email,
+        name: ghUser.name || ghUser.login,
+        githubId: ghUser.id,
+        avatarUrl: ghUser.avatar_url,
+      },
+    });
+  }
+
+  return user;
 }
 
 function readOrganizationIdHeader(req: Request): string | null {
@@ -362,6 +431,139 @@ router.delete("/auth/local-mobile/devices/:deviceId", async (req: Request, res: 
   }
 });
 
+function pruneExpiredGitHubDeviceAuths(now = Date.now()): void {
+  for (const [deviceAuthId, record] of githubDeviceAuths) {
+    if (record.expiresAt <= now) {
+      githubDeviceAuths.delete(deviceAuthId);
+    }
+  }
+}
+
+function readDeviceAuthId(req: Request): string {
+  const value = req.body?.deviceAuthId;
+  return typeof value === "string" ? value.trim() : "";
+}
+
+router.post("/auth/github/device/start", async (_req: Request, res: Response) => {
+  if (isLocalMode()) {
+    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
+  }
+
+  pruneExpiredGitHubDeviceAuths();
+
+  const response = await fetch("https://github.com/login/device/code", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      client_id: GITHUB_CLIENT_ID,
+      scope: GITHUB_DEVICE_SCOPE,
+    }),
+  });
+  const payload = (await response.json()) as {
+    device_code?: string;
+    user_code?: string;
+    verification_uri?: string;
+    expires_in?: number;
+    interval?: number;
+    error?: string;
+    error_description?: string;
+  };
+
+  if (
+    !response.ok ||
+    !payload.device_code ||
+    !payload.user_code ||
+    !payload.verification_uri ||
+    typeof payload.expires_in !== "number"
+  ) {
+    return res.status(400).json({
+      error: payload.error_description ?? payload.error ?? "Failed to start GitHub device login",
+    });
+  }
+
+  const deviceAuthId = randomUUID();
+  const intervalSeconds =
+    typeof payload.interval === "number" && payload.interval > 0 ? payload.interval : 5;
+  const expiresAt = Date.now() + payload.expires_in * 1000;
+  githubDeviceAuths.set(deviceAuthId, {
+    deviceCode: payload.device_code,
+    expiresAt,
+    intervalSeconds,
+  });
+
+  res.json({
+    deviceAuthId,
+    userCode: payload.user_code,
+    verificationUri: payload.verification_uri,
+    expiresAt: new Date(expiresAt).toISOString(),
+    interval: intervalSeconds,
+  });
+});
+
+router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
+  if (isLocalMode()) {
+    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
+  }
+
+  const deviceAuthId = readDeviceAuthId(req);
+  const record = deviceAuthId ? githubDeviceAuths.get(deviceAuthId) : undefined;
+  if (!record) {
+    return res.status(404).json({ status: "expired", error: "GitHub device login expired" });
+  }
+
+  if (record.expiresAt <= Date.now()) {
+    githubDeviceAuths.delete(deviceAuthId);
+    return res.status(410).json({ status: "expired", error: "GitHub device login expired" });
+  }
+
+  const response = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      client_id: GITHUB_CLIENT_ID,
+      device_code: record.deviceCode,
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    }),
+  });
+  const payload = (await response.json()) as GitHubAccessTokenResponse;
+
+  if (payload.error === "authorization_pending") {
+    return res.json({ status: "pending", interval: record.intervalSeconds });
+  }
+
+  if (payload.error === "slow_down") {
+    record.intervalSeconds += 5;
+    return res.json({ status: "pending", interval: record.intervalSeconds });
+  }
+
+  if (payload.error === "expired_token") {
+    githubDeviceAuths.delete(deviceAuthId);
+    return res.status(410).json({ status: "expired", error: "GitHub device login expired" });
+  }
+
+  if (payload.error === "access_denied") {
+    githubDeviceAuths.delete(deviceAuthId);
+    return res.status(403).json({ status: "denied", error: "GitHub device login was denied" });
+  }
+
+  if (!payload.access_token) {
+    return res.status(400).json({ status: "error", error: payload.error ?? "GitHub login failed" });
+  }
+
+  const user = await upsertUserFromGitHubAccessToken(payload.access_token);
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+  setSessionCookie(res, token);
+  githubDeviceAuths.delete(deviceAuthId);
+
+  res.json({ status: "success" });
+});
+
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req: Request, res: Response) => {
   if (isLocalMode()) {
@@ -371,7 +573,7 @@ router.get("/auth/github", (req: Request, res: Response) => {
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
     redirect_uri: GITHUB_CALLBACK_URL,
-    scope: "read:user user:email",
+    scope: GITHUB_DEVICE_SCOPE,
   });
   if (origin && isAllowedOrigin(origin)) {
     params.set("state", createOAuthStateToken(origin));
@@ -404,70 +606,13 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
         redirect_uri: GITHUB_CALLBACK_URL,
       }),
     });
-    const tokenData = (await tokenRes.json()) as { access_token?: string; error?: string };
+    const tokenData = (await tokenRes.json()) as GitHubAccessTokenResponse;
 
     if (!tokenData.access_token) {
       return res.status(400).json({ error: "Failed to get access token" });
     }
 
-    // Fetch GitHub user profile
-    const userRes = await fetch("https://api.github.com/user", {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
-    const ghUser = (await userRes.json()) as {
-      id: number;
-      login: string;
-      email: string | null;
-      avatar_url: string;
-      name: string | null;
-    };
-
-    // Fetch primary email if not public
-    let email = ghUser.email;
-    if (!email) {
-      const emailsRes = await fetch("https://api.github.com/user/emails", {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      });
-      const emails = (await emailsRes.json()) as Array<{
-        email: string;
-        primary: boolean;
-        verified: boolean;
-      }>;
-      const primary = emails.find((e) => e.primary && e.verified);
-      email = primary?.email ?? emails[0]?.email ?? null;
-    }
-
-    if (!email) {
-      return res.status(400).json({ error: "Could not retrieve email from GitHub" });
-    }
-
-    // Upsert user - find by githubId first, then by email
-    let user = await prisma.user.findFirst({
-      where: { OR: [{ githubId: ghUser.id }, { email }] },
-    });
-
-    if (user) {
-      // Update GitHub fields
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          githubId: ghUser.id,
-          avatarUrl: ghUser.avatar_url,
-          name: ghUser.name || ghUser.login,
-        },
-      });
-    } else {
-      // New user — create account without any org membership.
-      // Users must be explicitly invited to an organization.
-      user = await prisma.user.create({
-        data: {
-          email,
-          name: ghUser.name || ghUser.login,
-          githubId: ghUser.id,
-          avatarUrl: ghUser.avatar_url,
-        },
-      });
-    }
+    const user = await upsertUserFromGitHubAccessToken(tokenData.access_token);
 
     // Issue JWT (only userId — org is selected via header)
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
