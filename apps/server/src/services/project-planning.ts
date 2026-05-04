@@ -194,12 +194,14 @@ function buildTicketGenerationPrompt(input: {
   cliRelativePath: string;
 }): string {
   return [
-    "The project plan has been approved. Create Trace tickets now.",
+    "The project plan has been approved. Create Trace tickets now by running the injected CLI.",
     "",
-    "Rules:",
+    "This is an execution instruction, not a planning request.",
     "- Do not write another plan.",
+    "- Do not ask for confirmation.",
     "- Do not edit repository files.",
-    "- Tickets must be created by calling the injected Trace CLI.",
+    "- Do not claim tickets were created unless the CLI returns ok.",
+    "- Your next actions must be shell commands that call the injected Trace CLI.",
     "- Create one ticket per meaningful implementation step.",
     "- Each ticket must have a concise title, a detailed description, priority, labels, and acceptanceCriteria.",
     "- After creating the last ticket, run the complete command.",

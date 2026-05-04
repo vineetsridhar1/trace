@@ -64,6 +64,7 @@ const TRACE_ACTION_CLI_DIR = ".trace";
 async function writeTraceActionCli(
   workdir: string,
   action: BridgeTraceActionContext,
+  serverUrlOverride: string,
 ): Promise<string> {
   if (action.type !== "project_ticket_generation") {
     throw new Error(`Unsupported Trace action type: ${action.type}`);
@@ -77,7 +78,7 @@ async function writeTraceActionCli(
   }
 
   await fs.promises.mkdir(path.dirname(cliPath), { recursive: true });
-  const serverUrl = action.serverUrl.replace(/\/+$/, "");
+  const serverUrl = serverUrlOverride.replace(/\/+$/, "");
   const script = `#!/usr/bin/env node
 const SERVER_URL = ${JSON.stringify(serverUrl)};
 const TOKEN = ${JSON.stringify(action.token)};
@@ -699,7 +700,7 @@ export class BridgeClient implements IBridgeClient {
 
     if (traceAction) {
       try {
-        await writeTraceActionCli(workdir, traceAction);
+        await writeTraceActionCli(workdir, traceAction, this.serverUrl);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[bridge] failed to write Trace action CLI for ${sessionId}:`, message);
