@@ -10,6 +10,7 @@ import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 
+// DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
 
 export interface SessionMessageListProps {
@@ -52,6 +53,8 @@ export function SessionMessageList({
   const initialBottomAligningRef = useRef(false);
   const initialScrollTimeoutsRef = useRef<number[]>([]);
   const initialScrollFramesRef = useRef<number[]>([]);
+  const nodeCountRef = useRef(nodes.length);
+  nodeCountRef.current = nodes.length;
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -111,10 +114,11 @@ export function SessionMessageList({
   const alignToBottomAfterMeasure = useCallback(
     (markComplete = false) => {
       const container = scrollContainerRef.current;
-      if (!container || nodes.length === 0) return;
+      const nodeCount = nodeCountRef.current;
+      if (!container || nodeCount === 0) return;
 
       virtualizer.measure();
-      virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
+      virtualizer.scrollToIndex(nodeCount - 1, { align: "end" });
 
       if (markComplete) {
         hasScrolledInitiallyRef.current = true;
@@ -122,7 +126,7 @@ export function SessionMessageList({
         handleScroll();
       }
     },
-    [handleScroll, nodes.length, virtualizer],
+    [handleScroll, virtualizer],
   );
 
   const clearInitialScrollTimers = useCallback(() => {
@@ -168,8 +172,9 @@ export function SessionMessageList({
         frameId = null;
         virtualizer.measure();
 
-        if (nodes.length > 0 && (initialBottomAligningRef.current || isNearBottomRef.current)) {
-          virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
+        const nodeCount = nodeCountRef.current;
+        if (nodeCount > 0 && (initialBottomAligningRef.current || isNearBottomRef.current)) {
+          virtualizer.scrollToIndex(nodeCount - 1, { align: "end" });
         }
       });
     });
@@ -181,7 +186,7 @@ export function SessionMessageList({
       }
       observer.disconnect();
     };
-  }, [nodes.length, virtualizer]);
+  }, [virtualizer]);
 
   // Correct scroll position when measurements change during upward scroll.
   // When items above the viewport are measured for the first time, the total
