@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../ui/textarea";
 import { getDefaultModel, getModelLabel, getModelsForTool } from "../session/modelOptions";
 import { RuntimeSelector, type RuntimeInfo } from "../session/RuntimeSelector";
+import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 
 const REPOS_QUERY = gql`
   query NewProjectRepos($organizationId: ID!) {
@@ -48,7 +49,7 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
   const setActiveProjectId = useUIStore((s) => s.setActiveProjectId);
   const defaultTool = usePreferencesStore((s) => s.defaultTool);
   const defaultModel = usePreferencesStore((s) => s.defaultModel);
-  const planningTool = defaultTool ?? "claude_code";
+  const [planningTool, setPlanningTool] = useState(defaultTool ?? "claude_code");
   const [goal, setGoal] = useState("");
   const [repoId, setRepoId] = useState("__none__");
   const [planningModel, setPlanningModel] = useState(
@@ -73,11 +74,22 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
   const modelOptions = useMemo(() => getModelsForTool(planningTool), [planningTool]);
 
   useEffect(() => {
-    const preferred = defaultModel ?? getDefaultModel(planningTool) ?? modelOptions[0]?.value ?? "";
+    const preferred =
+      defaultModel && modelOptions.some((option) => option.value === defaultModel)
+        ? defaultModel
+        : (getDefaultModel(planningTool) ?? modelOptions[0]?.value ?? "");
     if (!planningModel || !modelOptions.some((option) => option.value === planningModel)) {
       setPlanningModel(preferred);
     }
   }, [defaultModel, modelOptions, planningModel, planningTool]);
+
+  const handlePlanningToolChange = useCallback((value: string | null) => {
+    if (!value) return;
+    setPlanningTool(value);
+    setRuntimeInstanceId(undefined);
+    setRuntimeInfo(null);
+    setPlanningModel(getDefaultModel(value) ?? "");
+  }, []);
 
   const fetchRepos = useCallback(async () => {
     if (!activeOrgId) return;
@@ -144,15 +156,15 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-hidden">
-      <div className="border-b border-border px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-border px-4 py-3">
         <Button variant="ghost" size="sm" className="-ml-2" onClick={onCancel}>
           <ArrowLeft size={16} />
           Projects
         </Button>
       </div>
 
-      <div className="grid h-[calc(100vh-57px)] min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px]">
         <section className="min-h-0 overflow-y-auto border-r border-border bg-background px-6 py-5">
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-muted-foreground" />
@@ -203,6 +215,38 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
           </div>
 
           <div className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Agent</label>
+              <Select value={planningTool} onValueChange={handlePlanningToolChange}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue>
+                    <span className="flex items-center gap-2">
+                      {planningTool === "codex" ? (
+                        <CodexIcon className="size-4" />
+                      ) : (
+                        <ClaudeIcon className="size-4" />
+                      )}
+                      {planningTool === "codex" ? "Codex" : "Claude Code"}
+                    </span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude_code">
+                    <span className="flex items-center gap-2">
+                      <ClaudeIcon className="size-4" />
+                      Claude Code
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="codex">
+                    <span className="flex items-center gap-2">
+                      <CodexIcon className="size-4" />
+                      Codex
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Repository</label>
               <Select value={repoId} onValueChange={(value) => setRepoId(value ?? "__none__")}>
@@ -268,7 +312,7 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
             </Button>
             <Button onClick={handleSubmit} disabled={!canSubmit}>
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              Start planning
+              Next: start planning
             </Button>
           </div>
         </aside>
