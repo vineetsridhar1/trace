@@ -203,6 +203,7 @@ export function createPrismaMock() {
       create: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       update: vi.fn(),
     },
     projectTicketExecution: {

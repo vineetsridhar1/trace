@@ -7,6 +7,15 @@ import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-che
 
 // --- Server → Bridge commands ---
 
+export interface BridgeTraceActionContext {
+  type: "project_ticket_generation";
+  serverUrl: string;
+  token: string;
+  projectRunId: string;
+  generationAttemptId: string;
+  cliRelativePath: string;
+}
+
 export interface BridgeRunCommand {
   type: "run";
   sessionId: string;
@@ -19,6 +28,7 @@ export interface BridgeRunCommand {
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
+  traceAction?: BridgeTraceActionContext | null;
 }
 
 export interface BridgeSendCommand {
@@ -33,6 +43,7 @@ export interface BridgeSendCommand {
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
+  traceAction?: BridgeTraceActionContext | null;
 }
 
 export interface BridgePrepareCommand {

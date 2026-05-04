@@ -217,7 +217,6 @@ export type ApproveProjectPlanInput = {
   planSummary: Scalars["String"]["input"];
   projectRunId: Scalars["ID"]["input"];
   retryFailed?: InputMaybe<Scalars["Boolean"]["input"]>;
-  structuredDrafts?: InputMaybe<Array<TicketDraftInput>>;
 };
 
 export type AutonomyMode = "act" | "observe" | "suggest";
@@ -2276,14 +2275,6 @@ export type Ticket = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
-export type TicketDraftInput = {
-  acceptanceCriteria?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  description: Scalars["String"]["input"];
-  labels?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  priority?: InputMaybe<Priority>;
-  title: Scalars["String"]["input"];
-};
-
 export type TicketFilters = {
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   priority?: InputMaybe<Priority>;
@@ -2892,6 +2883,24 @@ export type ProjectQuery = {
       playbookSnapshot: JsonValue;
       createdAt: string;
       updatedAt: string;
+      ticketGenerationAttempt?: {
+        __typename?: "ProjectTicketGenerationAttempt";
+        id: string;
+        organizationId: string;
+        projectId: string;
+        projectRunId: string;
+        status: ProjectTicketGenerationStatus;
+        approvedPlan: string;
+        draftCount: number;
+        createdTicketIds: Array<string>;
+        error?: string | null;
+        retryCount: number;
+        startedAt?: string | null;
+        completedAt?: string | null;
+        failedAt?: string | null;
+        createdAt: string;
+        updatedAt: string;
+      } | null;
     }>;
   } | null;
 };
@@ -5402,6 +5411,30 @@ export const ProjectDocument = {
                       { kind: "Field", name: { kind: "Name", value: "executionConfig" } },
                       { kind: "Field", name: { kind: "Name", value: "playbookVersionId" } },
                       { kind: "Field", name: { kind: "Name", value: "playbookSnapshot" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "ticketGenerationAttempt" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                            { kind: "Field", name: { kind: "Name", value: "projectId" } },
+                            { kind: "Field", name: { kind: "Name", value: "projectRunId" } },
+                            { kind: "Field", name: { kind: "Name", value: "status" } },
+                            { kind: "Field", name: { kind: "Name", value: "approvedPlan" } },
+                            { kind: "Field", name: { kind: "Name", value: "draftCount" } },
+                            { kind: "Field", name: { kind: "Name", value: "createdTicketIds" } },
+                            { kind: "Field", name: { kind: "Name", value: "error" } },
+                            { kind: "Field", name: { kind: "Name", value: "retryCount" } },
+                            { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "failedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                          ],
+                        },
+                      },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                       { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                     ],

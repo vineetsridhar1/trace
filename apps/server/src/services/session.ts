@@ -10,6 +10,7 @@ import {
   hasPlanBlock,
   isSupportedModel,
   isSupportedReasoningEffort,
+  type BridgeTraceActionContext,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
@@ -188,6 +189,7 @@ type PendingSessionCommand =
       interactionMode?: string | null;
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      traceAction?: BridgeTraceActionContext | null;
       workspaceUpgrade?: boolean;
     }
   | {
@@ -196,6 +198,7 @@ type PendingSessionCommand =
       interactionMode?: string | null;
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      traceAction?: BridgeTraceActionContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
     };
@@ -3549,6 +3552,7 @@ export class SessionService {
     interactionMode,
     clientMutationId,
     clientSource,
+    traceAction,
   }: {
     sessionId: string;
     text: string;
@@ -3558,6 +3562,7 @@ export class SessionService {
     interactionMode?: string;
     clientMutationId?: string;
     clientSource?: string | null;
+    traceAction?: BridgeTraceActionContext | null;
   }) {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
@@ -3638,6 +3643,7 @@ export class SessionService {
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
           checkpointContext: null,
+          traceAction: traceAction ?? null,
           ...(imageKeys?.length ? { imageKeys } : {}),
         };
         const markLocalPreparing = session.hosting === "local";
@@ -3717,6 +3723,7 @@ export class SessionService {
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(clientSource),
         checkpointContext: null,
+        traceAction: traceAction ?? null,
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand, {
@@ -3817,6 +3824,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
       imageUrls,
+      traceAction: traceAction ?? null,
     };
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
@@ -3835,6 +3843,7 @@ export class SessionService {
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
           checkpointContext,
+          traceAction: traceAction ?? null,
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
         {
@@ -6236,6 +6245,29 @@ export class SessionService {
     return connJson({ ...conn, ...patch });
   }
 
+  private parseTraceAction(raw: unknown): BridgeTraceActionContext | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const value = raw as Record<string, unknown>;
+    if (value.type !== "project_ticket_generation") return null;
+    if (
+      typeof value.serverUrl !== "string" ||
+      typeof value.token !== "string" ||
+      typeof value.projectRunId !== "string" ||
+      typeof value.generationAttemptId !== "string" ||
+      typeof value.cliRelativePath !== "string"
+    ) {
+      return null;
+    }
+    return {
+      type: "project_ticket_generation",
+      serverUrl: value.serverUrl,
+      token: value.token,
+      projectRunId: value.projectRunId,
+      generationAttemptId: value.generationAttemptId,
+      cliRelativePath: value.cliRelativePath,
+    };
+  }
+
   private parsePendingCommand(raw: unknown): PendingSessionCommand | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const pending = raw as Record<string, unknown>;
@@ -6247,6 +6279,7 @@ export class SessionService {
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        traceAction: this.parseTraceAction(pending.traceAction),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
@@ -6259,6 +6292,7 @@ export class SessionService {
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        traceAction: this.parseTraceAction(pending.traceAction),
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
@@ -6430,6 +6464,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
+      traceAction: pending.traceAction ?? undefined,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -6442,6 +6477,7 @@ export class SessionService {
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
+      traceAction?: BridgeTraceActionContext;
     };
 
     const conn = this.parseConnection(session.connection);

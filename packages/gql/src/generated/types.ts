@@ -215,7 +215,6 @@ export type ApproveProjectPlanInput = {
   planSummary: Scalars["String"]["input"];
   projectRunId: Scalars["ID"]["input"];
   retryFailed?: InputMaybe<Scalars["Boolean"]["input"]>;
-  structuredDrafts?: InputMaybe<Array<TicketDraftInput>>;
 };
 
 export type AutonomyMode = "act" | "observe" | "suggest";
@@ -2272,14 +2271,6 @@ export type Ticket = {
   status: TicketStatus;
   title: Scalars["String"]["output"];
   updatedAt: Scalars["DateTime"]["output"];
-};
-
-export type TicketDraftInput = {
-  acceptanceCriteria?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  description: Scalars["String"]["input"];
-  labels?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  priority?: InputMaybe<Priority>;
-  title: Scalars["String"]["input"];
 };
 
 export type TicketFilters = {

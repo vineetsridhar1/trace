@@ -75,9 +75,7 @@ export function PlanResponseBar({
         return;
       }
       if (attempt?.status === "pending") {
-        setError(
-          "Ticket generation is pending. Update the plan with implementation steps and try again.",
-        );
+        setError("Ticket generation is queued. Wait for the planning session to reconnect.");
         return;
       }
       if (attempt?.status === "completed" && createdCount === 0) {
@@ -148,8 +146,8 @@ export function PlanResponseBar({
 
       {projectPlanningContext ? (
         <p className="mb-2 text-xs text-muted-foreground">
-          Approval saves this plan and generates durable project tickets through Trace services.
-          Implementation stays paused until ticket execution starts.
+          Approval tells the planning AI to create Trace tickets with the injected ticket CLI.
+          Tickets appear here as the backend emits creation events.
         </p>
       ) : (
         <p className="mb-2 text-xs text-muted-foreground">

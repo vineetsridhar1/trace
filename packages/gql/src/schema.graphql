@@ -1324,18 +1324,9 @@ input UpdateProjectPlanSummaryInput {
   status: ProjectRunStatus
 }
 
-input TicketDraftInput {
-  title: String!
-  description: String!
-  priority: Priority
-  labels: [String!]
-  acceptanceCriteria: [String!]
-}
-
 input ApproveProjectPlanInput {
   projectRunId: ID!
   planSummary: String!
-  structuredDrafts: [TicketDraftInput!]
   retryFailed: Boolean
 }
 

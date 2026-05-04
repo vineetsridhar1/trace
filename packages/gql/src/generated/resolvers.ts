@@ -218,7 +218,6 @@ export type ApproveProjectPlanInput = {
   planSummary: Scalars["String"]["input"];
   projectRunId: Scalars["ID"]["input"];
   retryFailed?: InputMaybe<Scalars["Boolean"]["input"]>;
-  structuredDrafts?: InputMaybe<Array<TicketDraftInput>>;
 };
 
 export type AutonomyMode = "act" | "observe" | "suggest";
@@ -2277,14 +2276,6 @@ export type Ticket = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
-export type TicketDraftInput = {
-  acceptanceCriteria?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  description: Scalars["String"]["input"];
-  labels?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  priority?: InputMaybe<Priority>;
-  title: Scalars["String"]["input"];
-};
-
 export type TicketFilters = {
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   priority?: InputMaybe<Priority>;
@@ -2620,7 +2611,6 @@ export type ResolversTypes = ResolversObject<{
   TerminalEndpoint: ResolverTypeWrapper<TerminalEndpoint>;
   ThreadSummary: ResolverTypeWrapper<ThreadSummary>;
   Ticket: ResolverTypeWrapper<Ticket>;
-  TicketDraftInput: TicketDraftInput;
   TicketFilters: TicketFilters;
   TicketLink: ResolverTypeWrapper<TicketLink>;
   TicketStatus: TicketStatus;
@@ -2743,7 +2733,6 @@ export type ResolversParentTypes = ResolversObject<{
   TerminalEndpoint: TerminalEndpoint;
   ThreadSummary: ThreadSummary;
   Ticket: Ticket;
-  TicketDraftInput: TicketDraftInput;
   TicketFilters: TicketFilters;
   TicketLink: TicketLink;
   Turn: Turn;
