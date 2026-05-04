@@ -1277,6 +1277,8 @@ input CreateProjectFromGoalInput {
   planningModel: String
   planningReasoningEffort: String
   planningHosting: HostingMode
+  planningRuntimeInstanceId: ID
+  planningEnvironmentId: ID
   executionConfig: JSON
 }
 
@@ -1297,6 +1299,8 @@ input StartProjectPlanningSessionInput {
   model: String
   reasoningEffort: String
   hosting: HostingMode
+  runtimeInstanceId: ID
+  environmentId: ID
 }
 
 input RecordProjectPlanningMessageInput {

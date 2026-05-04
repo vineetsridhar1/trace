@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Radio,
   RefreshCw,
-  Users,
 } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project, Ticket } from "@trace/gql";
@@ -277,11 +276,13 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     );
   }
 
-  const members = project.members.filter((member) => !member.leftAt);
-  const planningSession = selectPlanningSession(project.sessions, currentProjectRun?.planningSessionId);
+  const planningSession = selectPlanningSession(
+    project.sessions,
+    currentProjectRun?.planningSessionId,
+  );
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1 overflow-hidden">
       <div className="border-b border-border px-4 py-3">
         <Button
           variant="ghost"
@@ -301,10 +302,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 {project.repo?.name ?? "No repo"}
               </span>
               <span className="inline-flex items-center gap-1">
-                <Users size={14} />
-                {members.length} {members.length === 1 ? "member" : "members"}
-              </span>
-              <span className="inline-flex items-center gap-1">
                 <CalendarClock size={14} />
                 Updated {formatDateTime(project.updatedAt)}
               </span>
@@ -313,17 +310,60 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="flex h-[calc(100vh-176px)] min-h-[620px] flex-col overflow-hidden rounded-md border border-border bg-background">
+      <div className="grid h-[calc(100vh-113px)] min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
+        <section className="min-h-0 overflow-y-auto border-r border-border bg-background p-4">
+          {currentProjectRun ? (
+            <ProjectRunPanel projectRun={currentProjectRun} />
+          ) : (
+            <section className="rounded-md border border-border bg-surface-elevated p-4">
+              <div className="flex items-center gap-2">
+                <FileText size={15} className="text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Readonly plan</h2>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">No active project run.</p>
+            </section>
+          )}
+
+          <div className="mt-4">
+            <ProjectTicketsPanel projectId={project.id} />
+          </div>
+
+          <div className="mt-4 rounded-md border border-border bg-background p-4">
+            <h2 className="text-sm font-semibold text-foreground">Overview</h2>
+            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+              <DetailItem label="Repository" value={project.repo?.name ?? "Not linked"} />
+              <DetailItem label="Default branch" value={project.repo?.defaultBranch ?? "Not set"} />
+              <DetailItem label="Channels" value={String(project.channels.length)} />
+              <DetailItem label="Sessions" value={String(project.sessions.length)} />
+              <DetailItem label="Tickets" value={String(project.tickets.length)} />
+              <DetailItem label="AI mode" value={project.aiMode ?? "Inherited"} />
+            </dl>
+          </div>
+
+          <section className="mt-4 rounded-md border border-border bg-background p-4">
+            <div className="flex items-center gap-2">
+              <Radio size={15} className="text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-foreground">Latest activity</h2>
+            </div>
+            <ProjectActivityList
+              scopeKey={scopeKey}
+              eventIds={eventIds}
+              loading={projectEvents.loading}
+              error={projectEvents.error}
+            />
+          </section>
+        </section>
+
+        <aside className="flex min-h-0 flex-col bg-surface">
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
               <MessageSquare size={16} className="shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-foreground">
-                  Interviewer session
+                  Planning chat
                 </h2>
                 <p className="truncate text-xs text-muted-foreground">
-                  {planningSession?.name ?? "Normal project-linked session"}
+                  {planningSession?.name ?? "Plan mode"}
                 </p>
               </div>
             </div>
@@ -341,20 +381,22 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           </div>
 
           {planningSession ? (
-            <SessionDetailView
-              sessionId={planningSession.id}
-              panelMode
-              hideHeader
-              projectPlanningContext={
-                currentProjectRun
-                  ? {
-                      organizationId: project.organizationId,
-                      projectId: project.id,
-                      projectRunId: currentProjectRun.id,
-                    }
-                  : null
-              }
-            />
+            <div className="min-h-0 flex-1">
+              <SessionDetailView
+                sessionId={planningSession.id}
+                panelMode
+                hideHeader
+                projectPlanningContext={
+                  currentProjectRun
+                    ? {
+                        organizationId: project.organizationId,
+                        projectId: project.id,
+                        projectRunId: currentProjectRun.id,
+                      }
+                    : null
+                }
+              />
+            </div>
           ) : (
             <ProjectSessionEmptyState
               error={startSessionError}
@@ -363,59 +405,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               onStart={startInterviewerSession}
             />
           )}
-        </section>
-
-        <aside className="space-y-4">
-          {currentProjectRun && <ProjectRunPanel projectRun={currentProjectRun} />}
-          <ProjectTicketsPanel projectId={project.id} />
-
-          <div className="rounded-md border border-border bg-background p-4">
-            <h2 className="text-sm font-semibold text-foreground">Overview</h2>
-            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
-              <DetailItem label="Repository" value={project.repo?.name ?? "Not linked"} />
-              <DetailItem label="Default branch" value={project.repo?.defaultBranch ?? "Not set"} />
-              <DetailItem label="Channels" value={String(project.channels.length)} />
-              <DetailItem label="Sessions" value={String(project.sessions.length)} />
-              <DetailItem label="Tickets" value={String(project.tickets.length)} />
-              <DetailItem label="AI mode" value={project.aiMode ?? "Inherited"} />
-            </dl>
-          </div>
-
-          <div className="rounded-md border border-border bg-background p-4">
-            <h2 className="text-sm font-semibold text-foreground">Members</h2>
-            <div className="mt-3 divide-y divide-border">
-              {members.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">No active project members.</p>
-              ) : (
-                members.map((member) => (
-                  <div key={member.user.id} className="flex items-center gap-3 py-2">
-                    <div className="flex size-8 items-center justify-center rounded-full bg-accent/10 text-xs font-semibold text-accent">
-                      {(member.user.name ?? member.user.email).slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-foreground">
-                        {member.user.name ?? member.user.email}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{member.role}</div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <section className="rounded-md border border-border bg-background p-4">
-            <div className="flex items-center gap-2">
-              <Radio size={15} className="text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground">Latest activity</h2>
-            </div>
-            <ProjectActivityList
-              scopeKey={scopeKey}
-              eventIds={eventIds}
-              loading={projectEvents.loading}
-              error={projectEvents.error}
-            />
-          </section>
         </aside>
       </div>
     </div>
@@ -424,25 +413,21 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
 function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
   return (
-    <section className="rounded-md border border-accent/30 bg-surface-elevated p-4">
+    <section className="rounded-md border border-border bg-surface-elevated">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 px-4 py-3">
           <FileText size={15} className="text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Plan</h2>
+          <h2 className="text-sm font-semibold text-foreground">Readonly plan</h2>
         </div>
-        <span className="rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent">
+        <span className="mr-4 rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent">
           {formatStatus(projectRun.status)}
         </span>
       </div>
-      <div className="mt-3">
+      <div className="border-t border-border px-5 py-4 font-mono text-sm leading-7">
         <div className="text-xs font-medium uppercase text-muted-foreground">Initial goal</div>
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground">
-          {projectRun.initialGoal}
-        </p>
-      </div>
-      <div className="mt-3">
-        <div className="text-xs font-medium uppercase text-muted-foreground">Plan summary</div>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-2 whitespace-pre-wrap text-foreground">{projectRun.initialGoal}</p>
+        <div className="mt-8 text-xs font-medium uppercase text-muted-foreground">Plan summary</div>
+        <p className="mt-2 whitespace-pre-wrap text-foreground">
           {projectRun.planSummary || "Planning has not produced a summary yet."}
         </p>
       </div>

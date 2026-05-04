@@ -452,9 +452,11 @@ export type CreateProjectFromGoalInput = {
   goal: Scalars["String"]["input"];
   name?: InputMaybe<Scalars["String"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+  planningEnvironmentId?: InputMaybe<Scalars["ID"]["input"]>;
   planningHosting?: InputMaybe<HostingMode>;
   planningModel?: InputMaybe<Scalars["String"]["input"]>;
   planningReasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  planningRuntimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   planningTool?: InputMaybe<CodingTool>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
 };
@@ -2124,10 +2126,12 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
 export type StartProjectPlanningSessionInput = {
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectRunId: Scalars["ID"]["input"];
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   tool?: InputMaybe<CodingTool>;
 };
 

@@ -166,6 +166,8 @@ export class ProjectRunService {
         model?: string | null;
         reasoningEffort?: string | null;
         hosting?: "cloud" | "local" | null;
+        runtimeInstanceId?: string | null;
+        environmentId?: string | null;
         repoId?: string;
         projectId?: string;
         prompt?: string;
@@ -294,6 +296,8 @@ export class ProjectRunService {
         model: input.planningModel,
         reasoningEffort: input.planningReasoningEffort,
         hosting: input.planningHosting,
+        runtimeInstanceId: input.planningRuntimeInstanceId,
+        environmentId: input.planningEnvironmentId,
       },
       organizationId,
       actorType,
@@ -347,6 +351,8 @@ export class ProjectRunService {
       model: input.model,
       reasoningEffort: input.reasoningEffort,
       hosting: input.hosting,
+      runtimeInstanceId: input.runtimeInstanceId,
+      environmentId: input.environmentId,
       repoId: projectRun.project.repoId ?? undefined,
       projectId: projectRun.projectId,
       prompt: buildPlanningSessionPrompt(projectRun.initialGoal, projectRun.id),

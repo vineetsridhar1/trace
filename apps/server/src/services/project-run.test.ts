@@ -211,6 +211,9 @@ describe("ProjectRunService", () => {
         organizationId: "org-1",
         goal: " Build a project planner ",
         name: "Planner",
+        planningModel: "claude-opus-4-7[1m]",
+        planningHosting: "local",
+        planningRuntimeInstanceId: "runtime-1",
         executionConfig: { maxParallelWorkers: 1 },
       },
       "user",
@@ -222,6 +225,9 @@ describe("ProjectRunService", () => {
       expect.objectContaining({
         projectId: "project-1",
         interactionMode: "plan",
+        model: "claude-opus-4-7[1m]",
+        hosting: "local",
+        runtimeInstanceId: "runtime-1",
       }),
     );
     const projectCreateOrder = prismaMock.project.create.mock.invocationCallOrder[0] ?? 0;
