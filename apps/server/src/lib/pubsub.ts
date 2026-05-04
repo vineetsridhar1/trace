@@ -136,6 +136,7 @@ export const pubsub: TracePubSub = isLocalMode() ? new MemoryPubSub() : new Redi
 export const topics = {
   channelEvents: (channelId: string) => `channel:${channelId}:events`,
   chatEvents: (chatId: string) => `chat:${chatId}:events`,
+  projectEvents: (projectId: string) => `project:${projectId}:events`,
   ticketEvents: (ticketId: string) => `ticket:${ticketId}:events`,
   userNotifications: (orgId: string, userId: string) => `org:${orgId}:user:${userId}:notifications`,
   orgEvents: (orgId: string) => `org:${orgId}:events`,

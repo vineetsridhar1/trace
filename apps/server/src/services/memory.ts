@@ -374,11 +374,12 @@ export class MemoryService {
 
     const chatIds = [...(idsByType.get("chat") ?? new Set<string>())];
     const channelIds = [...(idsByType.get("channel") ?? new Set<string>())];
+    const projectIds = [...(idsByType.get("project") ?? new Set<string>())];
     const sessionIds = [...(idsByType.get("session") ?? new Set<string>())];
     const ticketIds = [...(idsByType.get("ticket") ?? new Set<string>())];
     const systemIds = [...(idsByType.get("system") ?? new Set<string>())];
 
-    const [chats, channels, sessions, tickets] = await Promise.all([
+    const [chats, channels, projects, sessions, tickets] = await Promise.all([
       chatIds.length > 0
         ? prisma.chat.findMany({
             where: { id: { in: chatIds } },
@@ -389,6 +390,12 @@ export class MemoryService {
         ? prisma.channel.findMany({
             where: { id: { in: channelIds } },
             select: { id: true, projects: { select: { projectId: true } } },
+          })
+        : Promise.resolve([]),
+      projectIds.length > 0
+        ? prisma.project.findMany({
+            where: { id: { in: projectIds } },
+            select: { id: true },
           })
         : Promise.resolve([]),
       sessionIds.length > 0
@@ -420,6 +427,15 @@ export class MemoryService {
         id: channel.id,
         isDm: false,
         projectIds: channel.projects.map((project) => project.projectId),
+      });
+    }
+
+    for (const project of projects) {
+      metadata.set(scopeKey("project", project.id), {
+        type: "project",
+        id: project.id,
+        isDm: false,
+        projectIds: [project.id],
       });
     }
 

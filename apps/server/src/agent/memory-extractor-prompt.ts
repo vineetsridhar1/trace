@@ -51,6 +51,8 @@ export const EXTRACTABLE_EVENT_TYPES = new Set([
   "ticket_commented",
   "ticket_assigned",
   "ticket_unassigned",
+  "project_created",
+  "project_updated",
   "session_terminated",
   "entity_linked",
   "ticket_linked",

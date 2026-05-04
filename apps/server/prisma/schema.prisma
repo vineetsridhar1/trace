@@ -88,6 +88,7 @@ enum ChatType {
 enum ScopeType {
   channel
   chat
+  project
   session
   ticket
   system
@@ -243,6 +244,10 @@ enum EventType {
   ticket_unassigned
   ticket_linked
   ticket_unlinked
+  project_created
+  project_updated
+  project_member_added
+  project_member_removed
   chat_created
   chat_member_added
   chat_member_removed
@@ -495,6 +500,7 @@ model User {
   createdChats      Chat[]           @relation("ChatCreator")
   chatMemberships      ChatMember[]
   channelMemberships   ChannelMember[]
+  projectMemberships   ProjectMember[]
   participants         Participant[]
   apiTokens         ApiToken[]
   pushTokens        PushToken[]
@@ -544,9 +550,24 @@ model Project {
   channels       ChannelProject[]
   sessions       SessionProject[]
   tickets        TicketProject[]
+  members        ProjectMember[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ProjectMember {
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      UserRole @default(member)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@index([projectId, leftAt])
 }
 
 model ChannelGroup {

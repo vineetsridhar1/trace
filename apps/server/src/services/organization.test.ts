@@ -17,6 +17,26 @@ import { OrganizationService } from "./organization.js";
 
 const prismaMock = prisma as any;
 const eventServiceMock = eventService as any;
+const projectTimestamp = new Date("2026-05-04T12:00:00.000Z");
+
+function makeProject(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "project-1",
+    organizationId: "org-1",
+    name: "Roadmap",
+    repoId: null,
+    repo: null,
+    aiMode: null,
+    soulFile: "",
+    channels: [],
+    sessions: [],
+    tickets: [],
+    members: [],
+    createdAt: projectTimestamp,
+    updatedAt: projectTimestamp,
+    ...overrides,
+  };
+}
 
 describe("OrganizationService", () => {
   beforeEach(() => {
@@ -212,14 +232,10 @@ describe("OrganizationService", () => {
       defaultBranch: "develop",
       webhookId: "123",
     });
-    prismaMock.project.create.mockResolvedValueOnce({
-      id: "project-1",
-      organizationId: "org-1",
-      name: "Roadmap",
-    });
+    prismaMock.project.create.mockResolvedValueOnce(makeProject({ repoId: "repo-1" }));
     prismaMock.project.findUniqueOrThrow
       .mockResolvedValueOnce({ organizationId: "org-1" })
-      .mockResolvedValueOnce({ id: "project-1", name: "Roadmap" })
+      .mockResolvedValueOnce(makeProject())
       .mockResolvedValueOnce({ organizationId: "org-1" });
     prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({ id: "session-1" });
 
@@ -244,6 +260,128 @@ describe("OrganizationService", () => {
     await expect(
       service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
     ).rejects.toThrow("Chats cannot be linked to projects");
+  });
+
+  it("creates project members and emits project-scoped project events", async () => {
+    prismaMock.project.create.mockResolvedValueOnce(
+      makeProject({
+        members: [
+          {
+            userId: "user-1",
+            role: "admin",
+            joinedAt: projectTimestamp,
+            leftAt: null,
+            user: {
+              id: "user-1",
+              email: "user@example.com",
+              name: "User",
+              avatarUrl: null,
+            },
+          },
+        ],
+      }),
+    );
+
+    const service = new OrganizationService();
+    await service.createProject({ organizationId: "org-1", name: "Roadmap" }, "user", "user-1");
+
+    expect(prismaMock.project.create).toHaveBeenCalledWith({
+      data: {
+        name: "Roadmap",
+        organizationId: "org-1",
+        members: { create: { userId: "user-1", role: "admin" } },
+      },
+      include: expect.objectContaining({
+        members: expect.objectContaining({ where: { leftAt: null } }),
+      }),
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        scopeType: "project",
+        scopeId: "project-1",
+        eventType: "project_created",
+        payload: expect.objectContaining({
+          project: expect.objectContaining({
+            id: "project-1",
+            members: [
+              expect.objectContaining({
+                user: expect.objectContaining({ id: "user-1" }),
+                role: "admin",
+              }),
+            ],
+          }),
+        }),
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeType: "system",
+        eventType: "entity_linked",
+        payload: { type: "project_created", projectId: "project-1", name: "Roadmap" },
+      }),
+      prismaMock,
+    );
+  });
+
+  it("adds and removes project members with project-scoped events", async () => {
+    prismaMock.project.findUniqueOrThrow.mockResolvedValue({ organizationId: "org-1" });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({ userId: "user-2" });
+    prismaMock.projectMember.upsert.mockResolvedValueOnce({
+      projectId: "project-1",
+      userId: "user-2",
+      role: "member",
+      joinedAt: projectTimestamp,
+      leftAt: null,
+      user: {
+        id: "user-2",
+        email: "other@example.com",
+        name: "Other",
+        avatarUrl: null,
+      },
+    });
+    prismaMock.projectMember.update.mockResolvedValueOnce({
+      projectId: "project-1",
+      userId: "user-2",
+      role: "member",
+      joinedAt: projectTimestamp,
+      leftAt: projectTimestamp,
+      user: {
+        id: "user-2",
+        email: "other@example.com",
+        name: "Other",
+        avatarUrl: null,
+      },
+    });
+
+    const service = new OrganizationService();
+    await service.addProjectMember("project-1", "user-2", "member", "user", "user-1");
+    await service.removeProjectMember("project-1", "user-2", "user", "user-1");
+
+    expect(prismaMock.projectMember.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId_userId: { projectId: "project-1", userId: "user-2" } },
+        update: expect.objectContaining({ role: "member", leftAt: null }),
+        create: expect.objectContaining({ projectId: "project-1", userId: "user-2" }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeType: "project",
+        eventType: "project_member_added",
+        payload: expect.objectContaining({ projectId: "project-1" }),
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeType: "project",
+        eventType: "project_member_removed",
+        payload: expect.objectContaining({ projectId: "project-1", userId: "user-2" }),
+      }),
+      prismaMock,
+    );
   });
 
   it("fails closed for cross-org writes when the actor is not a member", async () => {

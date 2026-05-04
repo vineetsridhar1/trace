@@ -509,6 +509,10 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "project_created"
+  | "project_member_added"
+  | "project_member_removed"
+  | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -1276,11 +1280,25 @@ export type Project = {
   __typename?: "Project";
   aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
+  createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  members: Array<ProjectMember>;
   name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
+  repoId?: Maybe<Scalars["ID"]["output"]>;
   sessions: Array<Session>;
+  soulFile: Scalars["String"]["output"];
   tickets: Array<Ticket>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectMember = {
+  __typename?: "ProjectMember";
+  joinedAt: Scalars["DateTime"]["output"];
+  leftAt?: Maybe<Scalars["DateTime"]["output"]>;
+  role: UserRole;
+  user: User;
 };
 
 export type PushPlatform = "android" | "ios";
@@ -1621,7 +1639,7 @@ export type ScopeInput = {
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "project" | "session" | "system" | "ticket";
 
 export type Session = {
   __typename?: "Session";
@@ -1820,6 +1838,7 @@ export type Subscription = {
   chatEvents: Event;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
+  projectEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -1848,6 +1867,12 @@ export type SubscriptionConversationEventsArgs = {
 
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars["ID"]["input"];
+  types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type SubscriptionProjectEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
+  projectId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 

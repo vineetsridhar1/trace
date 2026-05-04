@@ -187,7 +187,13 @@ export function createPrismaMock() {
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
+    },
+    projectMember: {
+      findMany: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn(),
     },
     session: {
       create: vi.fn(),

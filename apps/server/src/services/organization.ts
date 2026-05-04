@@ -5,6 +5,7 @@ import type {
   CreateProjectInput,
   EntityType,
   ActorType,
+  UserRole,
 } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
@@ -18,7 +19,76 @@ const PROJECT_INCLUDE = {
   channels: { include: { channel: true } },
   sessions: { include: { session: true } },
   tickets: { include: { ticket: true } },
+  members: {
+    where: { leftAt: null },
+    include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+  },
 } as const;
+
+type ProjectWithRelations = Prisma.ProjectGetPayload<{ include: typeof PROJECT_INCLUDE }>;
+
+type ProjectMemberWithUser = {
+  userId: string;
+  role: UserRole;
+  joinedAt: Date;
+  leftAt: Date | null;
+  user: { id: string; email: string; name: string | null; avatarUrl: string | null };
+};
+
+function dateToJson(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function projectMemberPayload(member: ProjectMemberWithUser): Prisma.InputJsonObject {
+  return {
+    user: member.user,
+    role: member.role,
+    joinedAt: member.joinedAt.toISOString(),
+    leftAt: member.leftAt ? member.leftAt.toISOString() : null,
+  };
+}
+
+function projectPayload(
+  project: ProjectWithRelations,
+  members: Prisma.InputJsonObject[] = project.members.map(projectMemberPayload),
+): Prisma.InputJsonObject {
+  return {
+    id: project.id,
+    name: project.name,
+    organizationId: project.organizationId,
+    repoId: project.repoId,
+    repo: project.repo
+      ? {
+          id: project.repo.id,
+          name: project.repo.name,
+          remoteUrl: project.repo.remoteUrl,
+          defaultBranch: project.repo.defaultBranch,
+          webhookActive: Boolean(project.repo.webhookId),
+        }
+      : null,
+    aiMode: project.aiMode,
+    soulFile: project.soulFile,
+    members,
+    channels: project.channels.map((link) => ({
+      id: link.channel.id,
+      name: link.channel.name,
+    })),
+    sessions: project.sessions.map((link) => ({
+      id: link.session.id,
+      name: link.session.name,
+      sessionGroupId: link.session.sessionGroupId,
+    })),
+    tickets: project.tickets.map((link) => ({
+      id: link.ticket.id,
+      title: link.ticket.title,
+      status: link.ticket.status,
+      priority: link.ticket.priority,
+    })),
+    createdAt: dateToJson(project.createdAt),
+    updatedAt: dateToJson(project.updatedAt),
+  };
+}
 
 export class OrganizationService {
   async getOrganization(id: string, userId: string) {
@@ -310,11 +380,27 @@ export class OrganizationService {
           name: input.name,
           organizationId: input.organizationId,
           ...(input.repoId && { repoId: input.repoId }),
+          ...(actorType === "user" && {
+            members: { create: { userId: actorId, role: "admin" } },
+          }),
         },
         include: PROJECT_INCLUDE,
       });
 
-      const event = await eventService.create(
+      const projectEvent = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "project",
+          scopeId: project.id,
+          eventType: "project_created",
+          payload: { project: projectPayload(project) },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      const compatibilityEvent = await eventService.create(
         {
           organizationId: input.organizationId,
           scopeType: "system",
@@ -327,10 +413,137 @@ export class OrganizationService {
         tx,
       );
 
-      return [project, event] as const;
+      return [project, projectEvent, compatibilityEvent] as const;
     });
 
     return project;
+  }
+
+  async addProjectMember(
+    projectId: string,
+    userId: string,
+    role: UserRole,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const project = await tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, project.organizationId, actorType, actorId);
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId,
+            organizationId: project.organizationId,
+          },
+        },
+        select: { userId: true },
+      });
+
+      const joinedAt = new Date();
+      const member = await tx.projectMember.upsert({
+        where: { projectId_userId: { projectId, userId } },
+        update: { role, joinedAt, leftAt: null },
+        create: { projectId, userId, role, joinedAt },
+        include: {
+          user: { select: { id: true, email: true, name: true, avatarUrl: true } },
+        },
+      });
+
+      await eventService.create(
+        {
+          organizationId: project.organizationId,
+          scopeType: "project",
+          scopeId: projectId,
+          eventType: "project_member_added",
+          payload: {
+            projectId,
+            member: projectMemberPayload(member),
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return member;
+    });
+  }
+
+  async removeProjectMember(
+    projectId: string,
+    userId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const project = await tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, project.organizationId, actorType, actorId);
+
+      const leftAt = new Date();
+      const member = await tx.projectMember.update({
+        where: { projectId_userId: { projectId, userId } },
+        data: { leftAt },
+        include: {
+          user: { select: { id: true, email: true, name: true, avatarUrl: true } },
+        },
+      });
+
+      await eventService.create(
+        {
+          organizationId: project.organizationId,
+          scopeType: "project",
+          scopeId: projectId,
+          eventType: "project_member_removed",
+          payload: {
+            projectId,
+            userId,
+            leftAt: leftAt.toISOString(),
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return member;
+    });
+  }
+
+  async getProjectMembers(projectId: string) {
+    return prisma.projectMember.findMany({
+      where: { projectId, leftAt: null },
+      include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+    });
+  }
+
+  async getProjectChannels(projectId: string) {
+    const links = await prisma.channelProject.findMany({
+      where: { projectId },
+      include: { channel: true },
+    });
+    return links.map((link) => link.channel);
+  }
+
+  async getProjectSessions(projectId: string) {
+    const links = await prisma.sessionProject.findMany({
+      where: { projectId },
+      include: { session: true },
+    });
+    return links.map((link) => link.session);
+  }
+
+  async getProjectTickets(projectId: string) {
+    const links = await prisma.ticketProject.findMany({
+      where: { projectId },
+      include: { ticket: true },
+    });
+    return links.map((link) => link.ticket);
   }
 
   async linkEntityToProject(
@@ -379,6 +592,29 @@ export class OrganizationService {
 
       await joinOps[entityType]();
 
+      const updatedProject = await tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        include: PROJECT_INCLUDE,
+      });
+
+      await eventService.create(
+        {
+          organizationId: project.organizationId,
+          scopeType: "project",
+          scopeId: projectId,
+          eventType: "entity_linked",
+          payload: {
+            entityType,
+            entityId,
+            projectId,
+            project: projectPayload(updatedProject),
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
       await eventService.create(
         {
           organizationId: project.organizationId,
@@ -392,10 +628,7 @@ export class OrganizationService {
         tx,
       );
 
-      return tx.project.findUniqueOrThrow({
-        where: { id: projectId },
-        include: PROJECT_INCLUDE,
-      });
+      return updatedProject;
     });
   }
 }
