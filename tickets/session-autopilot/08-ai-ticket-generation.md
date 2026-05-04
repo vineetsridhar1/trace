@@ -53,6 +53,7 @@ The AI can turn an approved-enough project plan into durable project tickets wit
 
 - Do not parse freeform markdown as the source of truth.
 - Do not let the model write directly to the database.
+- Ticket-generation actions must be explicitly added to the planning runtime action filter introduced in ticket 06; planning-only packets intentionally hide `ticket.create`.
 - Human approval can be required for large or risky plans.
 - Prefer transactional ticket generation: either the full valid plan is persisted, or the service returns a structured error/gate.
 

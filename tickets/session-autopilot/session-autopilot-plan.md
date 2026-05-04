@@ -452,6 +452,10 @@ Initial action surface:
 - `projectRun.updatePlannedTicket`
 - `projectRun.requestApproval`
 
+Planning-only runtime packets expose only project interview actions until the ticket-generation
+milestone ships. Ticket-generation actions are added back by the ticket 08 prompt/action contract,
+after planned-ticket and dependency services exist.
+
 Execution actions can ship later:
 
 - `projectRun.createTicketExecution`

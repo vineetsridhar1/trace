@@ -1498,7 +1498,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   }
   recordSection("planningContext", estimateObjectTokens(planningContext ?? {}));
 
-  if (planningContext) {
+  if (projectRunId) {
     const planningActionNames = new Set([
       "project.get",
       "project.askQuestion",

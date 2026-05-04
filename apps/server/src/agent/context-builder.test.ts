@@ -268,6 +268,33 @@ describe("buildContext", () => {
     );
   });
 
+  it("keeps project-run action schema planning-only when planning context cannot load", async () => {
+    vi.mocked(projectPlanningService.getContext).mockRejectedValueOnce(new Error("missing run"));
+
+    const packet = await buildContext({
+      batch: makeBatch({
+        scopeKey: "project:project_1",
+        events: [
+          makeEvent({
+            scopeType: "project",
+            scopeId: "project_1",
+            eventType: "project_run_created",
+            payload: { projectRunId: "run_1" },
+          }),
+        ],
+      }),
+      agentSettings: makeAgentSettings(),
+    });
+
+    expect(packet.planningContext).toBeUndefined();
+    expect(packet.permissions.actions.some((action) => action.name === "project.askQuestion")).toBe(
+      true,
+    );
+    expect(packet.permissions.actions.some((action) => action.name === "ticket.create")).toBe(
+      false,
+    );
+  });
+
   it("includes token budget accounting", async () => {
     const packet = await buildContext({
       batch: makeBatch(),
