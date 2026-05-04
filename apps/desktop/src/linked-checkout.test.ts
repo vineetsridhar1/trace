@@ -123,6 +123,7 @@ async function createRepoFixtureWithStaleOrigin(): Promise<{
 
 async function createRepoFixtureWithNarrowOrigin(): Promise<{
   repoPath: string;
+  sourcePath: string;
   traceSha: string;
 }> {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-narrow-origin-"));
@@ -143,11 +144,13 @@ async function createRepoFixtureWithNarrowOrigin(): Promise<{
   await git(sourcePath, ["add", "app.txt"]);
   await git(sourcePath, ["commit", "-m", "trace branch commit"]);
   const traceSha = await git(sourcePath, ["rev-parse", "HEAD"]);
+  await git(sourcePath, ["checkout", "main"]);
 
   await git(rootDir, ["clone", "--bare", sourcePath, originPath]);
+  await git(sourcePath, ["remote", "add", "origin", originPath]);
   await git(rootDir, ["clone", "--single-branch", "--branch", "main", originPath, repoPath]);
 
-  return { repoPath, traceSha };
+  return { repoPath, sourcePath, traceSha };
 }
 
 async function gitRefExists(cwd: string, ref: string): Promise<boolean> {
@@ -346,6 +349,32 @@ describe("linked checkout commit-back", () => {
     expect(result.status.currentCommitSha).toBe(traceSha);
     expect(result.status.lastSyncedCommitSha).toBe(traceSha);
     expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(traceSha);
+  }, 15_000);
+
+  it("does not reuse a stale narrow origin ref after the remote target branch is deleted", async () => {
+    const { repoPath, sourcePath } = await createRepoFixtureWithNarrowOrigin();
+    seedRepo("repo-1", repoPath);
+
+    const initialResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(initialResult.ok).toBe(true);
+    expect(await gitRefExists(repoPath, "origin/trace/raccoon")).toBe(true);
+
+    await git(sourcePath, ["branch", "-D", "trace/raccoon"]);
+    await git(sourcePath, ["push", "origin", ":trace/raccoon"]);
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Branch not found: trace/raccoon");
+    expect(await gitRefExists(repoPath, "origin/trace/raccoon")).toBe(false);
   }, 15_000);
 
   it("continues sync with cached refs when origin fetch fails", async () => {

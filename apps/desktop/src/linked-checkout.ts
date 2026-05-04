@@ -254,6 +254,17 @@ async function fetchOriginIfAvailable(repoPath: string): Promise<void> {
   }
 }
 
+function isMissingRemoteRefError(error: unknown): boolean {
+  return formatGitError(error).includes("couldn't find remote ref");
+}
+
+async function deleteRemoteTrackingRef(repoPath: string, branch: string): Promise<void> {
+  await execFileAsync("git", ["update-ref", "-d", `refs/remotes/origin/${branch}`], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  }).catch(() => undefined);
+}
+
 export async function fetchTargetBranchIfAvailable(repoPath: string, branch: string): Promise<void> {
   assertSafeGitRef(branch);
   if (branch.includes(":") || branch.startsWith("refs/")) {
@@ -275,6 +286,10 @@ export async function fetchTargetBranchIfAvailable(repoPath: string, branch: str
       },
     );
   } catch (error) {
+    if (isMissingRemoteRefError(error)) {
+      await deleteRemoteTrackingRef(repoPath, branch);
+      return;
+    }
     console.warn(
       `[linked-checkout] target branch fetch failed; using cached refs: ${formatGitError(error)}`,
     );
