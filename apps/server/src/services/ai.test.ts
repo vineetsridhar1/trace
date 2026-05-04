@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./api-token.js", () => ({
   apiTokenService: {
@@ -18,6 +18,8 @@ import { aiService } from "./ai.js";
 const apiTokenServiceMock = apiTokenService as any;
 const createLLMAdapterMock = createLLMAdapter as ReturnType<typeof vi.fn>;
 const providerForModelMock = providerForModel as ReturnType<typeof vi.fn>;
+const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 
 // Helper to access the private adapter cache for assertions.
 // This is necessary because cache behavior (eviction, invalidation) can only
@@ -39,6 +41,19 @@ describe("AIService", () => {
     vi.clearAllMocks();
     // Clear the adapter cache between tests
     getCache().clear();
+  });
+
+  afterEach(() => {
+    if (originalAnthropicApiKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+    }
+    if (originalOpenAiApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+    }
   });
 
   describe("getAdapter", () => {
@@ -140,6 +155,34 @@ describe("AIService", () => {
     });
   });
 
+  describe("getServerAdapter", () => {
+    it("uses server credentials instead of user tokens", async () => {
+      process.env.ANTHROPIC_API_KEY = "server-anthropic-key";
+      providerForModelMock.mockReturnValue("anthropic");
+      const adapter = makeAdapter();
+      createLLMAdapterMock.mockReturnValueOnce(adapter);
+
+      const result = await aiService.getServerAdapter("claude-sonnet-4-20250514");
+
+      expect(result).toBe(adapter);
+      expect(apiTokenServiceMock.getDecryptedTokens).not.toHaveBeenCalled();
+      expect(createLLMAdapterMock).toHaveBeenCalledWith({
+        provider: "anthropic",
+        apiKey: "server-anthropic-key",
+      });
+      expect(getCache().has("__server__:anthropic")).toBe(true);
+    });
+
+    it("throws a server configuration error when server credentials are missing", async () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      providerForModelMock.mockReturnValue("anthropic");
+
+      await expect(aiService.getServerAdapter("claude-sonnet-4-20250514")).rejects.toThrow(
+        "No anthropic API key configured on the server.",
+      );
+    });
+  });
+
   describe("invalidateAdapter", () => {
     it("removes adapter from cache", async () => {
       providerForModelMock.mockReturnValue("anthropic");
@@ -211,6 +254,39 @@ describe("AIService", () => {
       });
 
       expect(adapter.complete).toHaveBeenCalledWith(expect.objectContaining({ tools }));
+    });
+  });
+
+  describe("completeWithServerCredentials", () => {
+    it("delegates to the server credential adapter", async () => {
+      process.env.ANTHROPIC_API_KEY = "server-anthropic-key";
+      providerForModelMock.mockReturnValue("anthropic");
+      const adapter = makeAdapter();
+      adapter.complete.mockResolvedValueOnce({
+        content: [{ type: "text", text: "Done" }],
+        stopReason: "end_turn",
+      });
+      createLLMAdapterMock.mockReturnValueOnce(adapter);
+
+      const result = await aiService.completeWithServerCredentials({
+        organizationId: "org-1",
+        model: "claude-sonnet-4-20250514",
+        messages: [{ role: "user", content: "Generate tickets" }],
+      });
+
+      expect(result).toEqual({
+        content: [{ type: "text", text: "Done" }],
+        stopReason: "end_turn",
+      });
+      expect(apiTokenServiceMock.getDecryptedTokens).not.toHaveBeenCalled();
+      expect(adapter.complete).toHaveBeenCalledWith({
+        model: "claude-sonnet-4-20250514",
+        messages: [{ role: "user", content: "Generate tickets" }],
+        tools: undefined,
+        system: undefined,
+        maxTokens: undefined,
+        temperature: undefined,
+      });
     });
   });
 

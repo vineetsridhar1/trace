@@ -24,12 +24,21 @@ interface AIRequestParams {
   temperature?: number;
 }
 
+type ServerAIRequestParams = Omit<AIRequestParams, "userId">;
+
 interface ToolLoopParams extends AIRequestParams {
   executeToolCall: (name: string, input: Record<string, unknown>) => Promise<string>;
   maxIterations?: number;
 }
 
 type AdapterCacheKey = `${string}:${LLMProvider}`;
+
+function getServerApiKey(provider: LLMProvider): string | null {
+  const value =
+    provider === "anthropic" ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY;
+  const trimmed = value?.trim();
+  return trimmed || null;
+}
 
 class AIService {
   private adapterCache = new Map<AdapterCacheKey, LLMAdapter>();
@@ -62,12 +71,49 @@ class AIService {
     return adapter;
   }
 
+  async getServerAdapter(model: string): Promise<LLMAdapter> {
+    const provider = providerForModel(model);
+    const cacheKey: AdapterCacheKey = `__server__:${provider}`;
+
+    const cached = this.adapterCache.get(cacheKey);
+    if (cached) return cached;
+
+    const apiKey = getServerApiKey(provider);
+    if (!apiKey) {
+      throw new Error(`No ${provider} API key configured on the server.`);
+    }
+
+    const adapter = createLLMAdapter({ provider, apiKey });
+
+    if (this.adapterCache.size >= MAX_CACHED_ADAPTERS) {
+      const oldest = this.adapterCache.keys().next().value;
+      if (oldest !== undefined) {
+        this.adapterCache.delete(oldest);
+      }
+    }
+
+    this.adapterCache.set(cacheKey, adapter);
+    return adapter;
+  }
+
   invalidateAdapter(userId: string, provider: LLMProvider): void {
     this.adapterCache.delete(`${userId}:${provider}`);
   }
 
   async complete(params: AIRequestParams): Promise<LLMResponse> {
     const adapter = await this.getAdapter(params.userId, params.model);
+    return adapter.complete({
+      model: params.model,
+      messages: params.messages,
+      tools: params.tools,
+      system: params.system,
+      maxTokens: params.maxTokens,
+      temperature: params.temperature,
+    });
+  }
+
+  async completeWithServerCredentials(params: ServerAIRequestParams): Promise<LLMResponse> {
+    const adapter = await this.getServerAdapter(params.model);
     return adapter.complete({
       model: params.model,
       messages: params.messages,

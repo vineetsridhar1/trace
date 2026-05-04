@@ -221,9 +221,8 @@ class AITicketDraftGenerator implements TicketDraftGenerator {
       typeof config.ticketGenerationModel === "string" && config.ticketGenerationModel.trim()
         ? config.ticketGenerationModel.trim()
         : "claude-sonnet-4-6";
-    const response = await aiService.complete({
+    const response = await aiService.completeWithServerCredentials({
       organizationId: input.organizationId,
-      userId: input.actorId,
       model,
       system:
         "You create concise, executable project tickets from approved Trace project plans. Always call the structured ticket draft tool.",
