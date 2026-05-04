@@ -11,7 +11,7 @@ export function ProjectPlanPanel({ projectRunId }: { projectRunId: string }) {
   const content = planSummary || initialGoal || "";
 
   return (
-    <section className="flex min-h-0 flex-col border-b border-border">
+    <section className="flex min-h-[180px] max-h-[42%] shrink-0 basis-[38%] flex-col border-b border-border">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
         <FileText size={15} className="text-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">Plan</h2>
@@ -19,7 +19,7 @@ export function ProjectPlanPanel({ projectRunId }: { projectRunId: string }) {
           {status ?? "draft"}
         </span>
       </div>
-      <div className="min-h-[220px] overflow-y-auto px-4 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {content ? (
           <Markdown>{content}</Markdown>
         ) : (
