@@ -528,6 +528,8 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "orchestrator_episode_created"
+  | "orchestrator_episode_updated"
   | "organization_created"
   | "project_answer_recorded"
   | "project_created"
@@ -777,6 +779,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  startOrchestratorEpisode: OrchestratorEpisode;
   startSession: Session;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
@@ -1171,6 +1174,10 @@ export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
 };
 
+export type MutationStartOrchestratorEpisodeArgs = {
+  triggerEventId: Scalars["ID"]["input"];
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1311,6 +1318,32 @@ export type Notification = {
   type: Scalars["String"]["output"];
 };
 
+export type OrchestratorEpisode = {
+  __typename?: "OrchestratorEpisode";
+  actionResults: Scalars["JSON"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  contextHash?: Maybe<Scalars["String"]["output"]>;
+  contextSnapshot: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  decisionSummary?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  playbookSnapshot: Scalars["JSON"]["output"];
+  playbookVersionId?: Maybe<Scalars["ID"]["output"]>;
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  retryCount: Scalars["Int"]["output"];
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: OrchestratorEpisodeStatus;
+  triggerEventId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type OrchestratorEpisodeStatus = "completed" | "failed" | "pending" | "running" | "starting";
+
 export type OrgAgentStatus = "disabled" | "enabled";
 
 export type OrgMember = {
@@ -1396,6 +1429,7 @@ export type ProjectRun = {
   initialGoal: Scalars["String"]["output"];
   latestControllerSummaryId?: Maybe<Scalars["ID"]["output"]>;
   latestControllerSummaryText?: Maybe<Scalars["String"]["output"]>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
   organizationId: Scalars["ID"]["output"];
   planSummary?: Maybe<Scalars["String"]["output"]>;
   project: Project;
@@ -1449,6 +1483,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1599,6 +1634,10 @@ export type QueryMySessionsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrchestratorEpisodesArgs = {
+  projectRunId: Scalars["ID"]["input"];
 };
 
 export type QueryOrgSecretsArgs = {

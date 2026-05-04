@@ -236,6 +236,14 @@ enum ProjectRunStatus {
   cancelled
 }
 
+enum OrchestratorEpisodeStatus {
+  pending
+  starting
+  running
+  completed
+  failed
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -269,6 +277,8 @@ enum EventType {
   project_decision_recorded
   project_risk_recorded
   project_plan_summary_updated
+  orchestrator_episode_created
+  orchestrator_episode_updated
   entity_linked
   organization_created
   repo_created
@@ -404,6 +414,30 @@ type ProjectRun {
   latestControllerSummaryId: ID
   latestControllerSummaryText: String
   executionConfig: JSON!
+  orchestratorEpisodes: [OrchestratorEpisode!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type OrchestratorEpisode {
+  id: ID!
+  organizationId: ID!
+  projectId: ID!
+  projectRunId: ID!
+  triggerEventId: ID!
+  sessionId: ID
+  status: OrchestratorEpisodeStatus!
+  playbookVersionId: ID
+  playbookSnapshot: JSON!
+  contextHash: String
+  contextSnapshot: JSON!
+  actionResults: JSON!
+  decisionSummary: String
+  retryCount: Int!
+  lastError: String
+  startedAt: DateTime
+  completedAt: DateTime
+  failedAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -1246,6 +1280,7 @@ type Query {
   projects(organizationId: ID!, repoId: ID): [Project!]!
   project(id: ID!): Project
   projectRuns(projectId: ID!): [ProjectRun!]!
+  orchestratorEpisodes(projectRunId: ID!): [OrchestratorEpisode!]!
   channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
@@ -1474,6 +1509,7 @@ type Mutation {
   createProjectFromGoal(input: CreateProjectFromGoalInput!): Project!
   createProjectRun(input: CreateProjectRunInput!): ProjectRun!
   updateProjectRun(id: ID!, input: UpdateProjectRunInput!): ProjectRun!
+  startOrchestratorEpisode(triggerEventId: ID!): OrchestratorEpisode!
   askProjectQuestion(input: RecordProjectPlanningMessageInput!): Event!
   recordProjectAnswer(input: RecordProjectPlanningMessageInput!): Event!
   recordProjectDecision(input: RecordProjectPlanningDecisionInput!): Event!

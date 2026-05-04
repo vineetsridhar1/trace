@@ -52,6 +52,7 @@ export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
   createdById: string;
   actorType?: ActorType;
+  actorId?: string;
   clientSource?: string | null;
 };
 
@@ -2150,7 +2151,7 @@ export class SessionService {
             input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
           tool: input.tool,
           actorType: input.actorType ?? "user",
-          actorId: input.createdById,
+          actorId: input.actorId ?? input.createdById,
         });
     const hasCompatibilityRuntimeFallback =
       deferRuntimeSelection ||
@@ -2441,8 +2442,8 @@ export class SessionService {
           metadata: initialCheckpointContextId
             ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
             : undefined,
-          actorType: "user",
-          actorId: input.createdById,
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId ?? input.createdById,
         },
         tx,
       );

@@ -58,6 +58,11 @@ import {
 import { agentDebugQueries, agentDebugTypeResolvers } from "./agent-debug.js";
 import { scopeAutonomyQueries, scopeAutonomyMutations } from "./scope-autonomy.js";
 import {
+  orchestratorEpisodeQueries,
+  orchestratorEpisodeMutations,
+  orchestratorEpisodeTypeResolvers,
+} from "./orchestrator-episode.js";
+import {
   aiConversationQueries,
   aiConversationMutations,
   aiConversationSubscriptions,
@@ -82,6 +87,7 @@ export const resolvers = {
   ...bridgeAccessTypeResolvers,
   ...agentIdentityTypeResolvers,
   ...agentDebugTypeResolvers,
+  ...orchestratorEpisodeTypeResolvers,
   ...aiConversationTypeResolvers,
 
   User: {
@@ -113,6 +119,7 @@ export const resolvers = {
     ...agentIdentityQueries,
     ...agentDebugQueries,
     ...scopeAutonomyQueries,
+    ...orchestratorEpisodeQueries,
     ...aiConversationQueries,
   },
 
@@ -133,6 +140,7 @@ export const resolvers = {
     ...participantMutations,
     ...agentIdentityMutations,
     ...scopeAutonomyMutations,
+    ...orchestratorEpisodeMutations,
     ...aiConversationMutations,
   },
 

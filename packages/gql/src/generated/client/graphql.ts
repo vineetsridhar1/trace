@@ -530,6 +530,8 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "orchestrator_episode_created"
+  | "orchestrator_episode_updated"
   | "organization_created"
   | "project_answer_recorded"
   | "project_created"
@@ -779,6 +781,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  startOrchestratorEpisode: OrchestratorEpisode;
   startSession: Session;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
@@ -1173,6 +1176,10 @@ export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
 };
 
+export type MutationStartOrchestratorEpisodeArgs = {
+  triggerEventId: Scalars["ID"]["input"];
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1313,6 +1320,32 @@ export type Notification = {
   type: Scalars["String"]["output"];
 };
 
+export type OrchestratorEpisode = {
+  __typename?: "OrchestratorEpisode";
+  actionResults: Scalars["JSON"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  contextHash?: Maybe<Scalars["String"]["output"]>;
+  contextSnapshot: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  decisionSummary?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  playbookSnapshot: Scalars["JSON"]["output"];
+  playbookVersionId?: Maybe<Scalars["ID"]["output"]>;
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  retryCount: Scalars["Int"]["output"];
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: OrchestratorEpisodeStatus;
+  triggerEventId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type OrchestratorEpisodeStatus = "completed" | "failed" | "pending" | "running" | "starting";
+
 export type OrgAgentStatus = "disabled" | "enabled";
 
 export type OrgMember = {
@@ -1398,6 +1431,7 @@ export type ProjectRun = {
   initialGoal: Scalars["String"]["output"];
   latestControllerSummaryId?: Maybe<Scalars["ID"]["output"]>;
   latestControllerSummaryText?: Maybe<Scalars["String"]["output"]>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
   organizationId: Scalars["ID"]["output"];
   planSummary?: Maybe<Scalars["String"]["output"]>;
   project: Project;
@@ -1451,6 +1485,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1601,6 +1636,10 @@ export type QueryMySessionsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrchestratorEpisodesArgs = {
+  projectRunId: Scalars["ID"]["input"];
 };
 
 export type QueryOrgSecretsArgs = {
@@ -2628,8 +2667,34 @@ export type ProjectQuery = {
       };
     }>;
     channels: Array<{ __typename?: "Channel"; id: string; name: string }>;
-    sessions: Array<{ __typename?: "Session"; id: string; name: string }>;
-    tickets: Array<{ __typename?: "Ticket"; id: string; title: string }>;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      name: string;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+    tickets: Array<{
+      __typename?: "Ticket";
+      id: string;
+      title: string;
+      description: string;
+      status: TicketStatus;
+      priority: Priority;
+      labels: Array<string>;
+      createdAt: string;
+      updatedAt: string;
+      assignees: Array<{
+        __typename?: "User";
+        id: string;
+        name: string;
+        avatarUrl?: string | null;
+      }>;
+      createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+      channel?: { __typename?: "Channel"; id: string } | null;
+    }>;
     runs: Array<{
       __typename?: "ProjectRun";
       id: string;
@@ -2753,6 +2818,40 @@ export type SessionGroupFileContentQueryVariables = Exact<{
 export type SessionGroupFileContentQuery = {
   __typename?: "Query";
   sessionGroupFileContent: string;
+};
+
+export type SaveApprovedProjectPlanMutationVariables = Exact<{
+  input: UpdateProjectPlanSummaryInput;
+}>;
+
+export type SaveApprovedProjectPlanMutation = {
+  __typename?: "Mutation";
+  updateProjectPlanSummary: {
+    __typename?: "ProjectRun";
+    id: string;
+    status: ProjectRunStatus;
+    planSummary?: string | null;
+    updatedAt: string;
+  };
+};
+
+export type CreateProjectPlanTicketMutationVariables = Exact<{
+  input: CreateTicketInput;
+}>;
+
+export type CreateProjectPlanTicketMutation = {
+  __typename?: "Mutation";
+  createTicket: {
+    __typename?: "Ticket";
+    id: string;
+    title: string;
+    description: string;
+    status: TicketStatus;
+    priority: Priority;
+    labels: Array<string>;
+    createdAt: string;
+    updatedAt: string;
+  };
 };
 
 export type SessionDetailQueryVariables = Exact<{
@@ -5023,6 +5122,10 @@ export const ProjectDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
                 },
@@ -5034,6 +5137,44 @@ export const ProjectDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "title" } },
+                      { kind: "Field", name: { kind: "Name", value: "description" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "priority" } },
+                      { kind: "Field", name: { kind: "Name", value: "labels" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "assignees" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "createdBy" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "channel" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                     ],
                   },
                 },
@@ -5451,6 +5592,109 @@ export const SessionGroupFileContentDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupFileContentQuery, SessionGroupFileContentQueryVariables>;
+export const SaveApprovedProjectPlanDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SaveApprovedProjectPlan" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "UpdateProjectPlanSummaryInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateProjectPlanSummary" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SaveApprovedProjectPlanMutation,
+  SaveApprovedProjectPlanMutationVariables
+>;
+export const CreateProjectPlanTicketDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateProjectPlanTicket" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "CreateTicketInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createTicket" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "title" } },
+                { kind: "Field", name: { kind: "Name", value: "description" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "priority" } },
+                { kind: "Field", name: { kind: "Name", value: "labels" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateProjectPlanTicketMutation,
+  CreateProjectPlanTicketMutationVariables
+>;
 export const SessionDetailDocument = {
   kind: "Document",
   definitions: [

@@ -110,6 +110,7 @@ export function createPrismaMock() {
       create: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findUnique: vi.fn(),
       groupBy: vi.fn(),
     },
@@ -197,6 +198,14 @@ export function createPrismaMock() {
       findFirst: vi.fn(),
       findFirstOrThrow: vi.fn(),
       update: vi.fn(),
+    },
+    orchestratorEpisode: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     projectMember: {
       findUnique: vi.fn(),

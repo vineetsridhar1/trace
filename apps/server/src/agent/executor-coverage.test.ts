@@ -697,6 +697,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         organizationId: "org-1",
         createdById: "agent-1",
         actorType: "agent",
+        actorId: "agent-1",
       });
     },
   },

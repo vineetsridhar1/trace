@@ -628,6 +628,32 @@ describe("SessionService", () => {
       );
     });
 
+    it("emits session_started with the supplied actor", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({ sessionGroup });
+
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        actorType: "agent",
+        actorId: "agent-1",
+        tool: "claude_code",
+        prompt: "Orchestrate the next step",
+      } as unknown as StartSessionServiceInput);
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          actorType: "agent",
+          actorId: "agent-1",
+        }),
+        expect.anything(),
+      );
+    });
+
     it("rejects an unsupported reasoning effort on start", async () => {
       isSupportedReasoningEffortMock.mockReturnValueOnce(false);
 

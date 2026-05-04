@@ -216,6 +216,14 @@ enum ProjectRunStatus {
   cancelled
 }
 
+enum OrchestratorEpisodeStatus {
+  pending
+  starting
+  running
+  completed
+  failed
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -269,6 +277,8 @@ enum EventType {
   project_decision_recorded
   project_risk_recorded
   project_plan_summary_updated
+  orchestrator_episode_created
+  orchestrator_episode_updated
   chat_created
   chat_member_added
   chat_member_removed
@@ -305,6 +315,7 @@ model Organization {
   repos                    Repo[]
   projects                 Project[]
   projectRuns              ProjectRun[]
+  orchestratorEpisodes     OrchestratorEpisode[]
   bridgeRuntimes           BridgeRuntime[]
   channelGroups            ChannelGroup[]
   channels                 Channel[]
@@ -569,11 +580,12 @@ model Project {
   aiMode         AutonomyMode?
   soulFile       String        @default("")
 
-  channels ChannelProject[]
-  sessions SessionProject[]
-  tickets  TicketProject[]
-  members  ProjectMember[]
-  runs     ProjectRun[]
+  channels             ChannelProject[]
+  sessions             SessionProject[]
+  tickets              TicketProject[]
+  members              ProjectMember[]
+  runs                 ProjectRun[]
+  orchestratorEpisodes OrchestratorEpisode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -592,6 +604,8 @@ model ProjectRun {
   latestControllerSummaryId   String?
   latestControllerSummaryText String?
   executionConfig             Json             @default("{}")
+
+  orchestratorEpisodes OrchestratorEpisode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -746,8 +760,9 @@ model Session {
   worktreeDeleted   Boolean       @default(false)
   readOnlyWorkspace Boolean       @default(false)
 
-  projects       SessionProject[]
-  queuedMessages QueuedMessage[]
+  projects             SessionProject[]
+  queuedMessages       QueuedMessage[]
+  orchestratorEpisodes OrchestratorEpisode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -780,6 +795,38 @@ model SessionProject {
   project   Project @relation(fields: [projectId], references: [id])
 
   @@id([sessionId, projectId])
+}
+
+model OrchestratorEpisode {
+  id                String                    @id @default(uuid())
+  organizationId    String
+  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRunId      String
+  projectRun        ProjectRun                @relation(fields: [projectRunId], references: [id], onDelete: Cascade)
+  triggerEventId    String                    @unique
+  sessionId         String?
+  session           Session?                  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  status            OrchestratorEpisodeStatus @default(pending)
+  playbookVersionId String?
+  playbookSnapshot  Json                      @default("{}")
+  contextHash       String?
+  contextSnapshot   Json                      @default("{}")
+  actionResults     Json                      @default("[]")
+  decisionSummary   String?
+  retryCount        Int                       @default(0)
+  lastError         String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  failedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, projectRunId, createdAt])
+  @@index([projectId, status])
+  @@index([sessionId])
 }
 
 model Ticket {
