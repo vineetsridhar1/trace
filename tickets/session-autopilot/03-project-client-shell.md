@@ -30,6 +30,8 @@ Users can find, open, and inspect projects as real workspaces before prompt-firs
 - [x] Empty states guide the user to create or start a project.
 - [x] Historical project-link events and new project events both hydrate correctly.
   - Historical project hydration must not synthesize blank `organizationId` values; use current org/event context or keep the legacy record out of the normalized `Project` entity shape.
+- [ ] Project detail loads historical latest activity on refresh/deep link.
+- [ ] Project live-event handling avoids duplicate notification/store side effects when the org-wide subscription is also active.
 
 ## Implementation notes
 
