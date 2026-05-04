@@ -12,6 +12,8 @@ import { agentEnvironmentService } from "../services/agent-environment.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
+import { pubsub, topics } from "../lib/pubsub.js";
+import { assertScopeAccess } from "../services/access.js";
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
@@ -125,6 +127,35 @@ export const organizationMutations = {
   },
 };
 
+export const projectSubscriptions = {
+  projectEvents: {
+    subscribe: async (
+      _: unknown,
+      args: { projectId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      const orgId = requireOrgContext(ctx);
+      if (orgId !== args.organizationId) {
+        throw new Error("Not authorized for this organization");
+      }
+      await assertScopeAccess("project", args.projectId, ctx.userId, orgId);
+      return pubsub.asyncIterator(topics.projectEvents(args.projectId));
+    },
+  },
+};
+
+type ProjectMemberRow = {
+  userId: string;
+  user?: { id: string; name: string; email: string; avatarUrl: string | null };
+  role: UserRole;
+  joinedAt: Date;
+  leftAt?: Date | null;
+};
+
+type ProjectRelationRow<T> = {
+  [key: string]: T | undefined;
+};
+
 export const organizationTypeResolvers = {
   Organization: {
     members: (org: { id: string }) => {
@@ -132,6 +163,35 @@ export const organizationTypeResolvers = {
     },
     agentEnvironments: (org: { id: string }, _args: unknown, ctx: Context) => {
       return agentEnvironmentService.list(org.id, ctx.actorType, ctx.userId);
+    },
+  },
+  Project: {
+    repo: (project: { repo?: unknown; repoId?: string | null }) => {
+      if ("repo" in project) return project.repo ?? null;
+      if (!project.repoId) return null;
+      return organizationService.getRepoById(project.repoId);
+    },
+    members: (project: { id: string; members?: ProjectMemberRow[] }) => {
+      if (project.members) return project.members;
+      return organizationService.getProjectMembers(project.id);
+    },
+    channels: (project: { id: string; channels?: Array<ProjectRelationRow<unknown>> }) => {
+      if (project.channels) return project.channels.map((link) => link.channel).filter(Boolean);
+      return organizationService.getProjectChannels(project.id);
+    },
+    sessions: (project: { id: string; sessions?: Array<ProjectRelationRow<unknown>> }) => {
+      if (project.sessions) return project.sessions.map((link) => link.session).filter(Boolean);
+      return organizationService.getProjectSessions(project.id);
+    },
+    tickets: (project: { id: string; tickets?: Array<ProjectRelationRow<unknown>> }) => {
+      if (project.tickets) return project.tickets.map((link) => link.ticket).filter(Boolean);
+      return organizationService.getProjectTickets(project.id);
+    },
+  },
+  ProjectMember: {
+    user: async (member: ProjectMemberRow) => {
+      if (member.user) return member.user;
+      return organizationService.getUserProfile(member.userId);
     },
   },
   OrgMember: {

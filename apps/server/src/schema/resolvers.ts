@@ -3,6 +3,7 @@ import {
   organizationQueries,
   organizationMutations,
   organizationTypeResolvers,
+  projectSubscriptions,
   repoResolvers,
 } from "./organization.js";
 import {
@@ -139,6 +140,7 @@ export const resolvers = {
     ...channelSubscriptions,
     ...sessionSubscriptions,
     ...ticketSubscriptions,
+    ...projectSubscriptions,
     ...chatSubscriptions,
     ...eventSubscriptions,
     ...aiConversationSubscriptions,

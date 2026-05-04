@@ -394,6 +394,52 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       repo: channel.repo ? { id: channel.repo.id, name: channel.repo.name } : null,
     };
   },
+
+  async project(organizationId, scopeId) {
+    const project = await prisma.project.findFirst({
+      where: { id: scopeId, organizationId },
+      include: {
+        repo: { select: { id: true, name: true, remoteUrl: true } },
+        members: {
+          where: { leftAt: null },
+          include: { user: { select: { id: true, name: true } } },
+        },
+        channels: { include: { channel: { select: { id: true, name: true } } } },
+        sessions: { include: { session: { select: { id: true, name: true } } } },
+        tickets: { include: { ticket: { select: { id: true, title: true, status: true } } } },
+      },
+    });
+    if (!project) return null;
+    return {
+      id: project.id,
+      name: project.name,
+      aiMode: project.aiMode,
+      soulFile: project.soulFile,
+      repo: project.repo
+        ? { id: project.repo.id, name: project.repo.name, remoteUrl: project.repo.remoteUrl }
+        : null,
+      memberCount: project.members.length,
+      members: project.members.map((member: { user: { id: string; name: string | null } }) => ({
+        id: member.user.id,
+        name: member.user.name,
+      })),
+      channels: project.channels.map((link: { channel: { id: string; name: string } }) => ({
+        id: link.channel.id,
+        name: link.channel.name,
+      })),
+      sessions: project.sessions.map((link: { session: { id: string; name: string } }) => ({
+        id: link.session.id,
+        name: link.session.name,
+      })),
+      tickets: project.tickets.map(
+        (link: { ticket: { id: string; title: string; status: string } }) => ({
+          id: link.ticket.id,
+          title: link.ticket.title,
+          status: link.ticket.status,
+        }),
+      ),
+    };
+  },
 };
 
 async function fetchScopeEntity(

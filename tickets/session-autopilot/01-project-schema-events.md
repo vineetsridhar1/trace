@@ -29,12 +29,12 @@ Projects can act as first-class workspaces with members and project-scoped event
 
 ## Completion requirements
 
-- [ ] Existing projects migrate cleanly.
-- [ ] Project members can be created independently of channel members.
-- [ ] Project events can use `ScopeType.project`.
-- [ ] Project event payloads include enough data for client upserts.
-- [ ] Historical project-created/link events remain readable.
-- [ ] Migration runs cleanly on an existing local database.
+- [x] Existing projects migrate cleanly.
+- [x] Project members can be created independently of channel members.
+- [x] Project events can use `ScopeType.project`.
+- [x] Project event payloads include enough data for client upserts.
+- [x] Historical project-created/link events remain readable.
+- [x] Migration runs cleanly on an existing local database.
 
 ## Implementation notes
 

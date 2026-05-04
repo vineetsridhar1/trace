@@ -9,6 +9,7 @@ import type {
   Event,
   EventType,
   InboxItem,
+  Project,
   QueuedMessage,
   Repo,
   ScopeType,
@@ -83,6 +84,78 @@ function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: Jso
   }
 }
 
+function legacyProjectFromEntityLinked(
+  payload: JsonObject,
+  timestamp: string,
+  organizationId: string | null,
+): Project | null {
+  if (payload.type !== "project_created") return null;
+  const id = typeof payload.projectId === "string" ? payload.projectId : null;
+  const name = typeof payload.name === "string" ? payload.name : null;
+  if (!id || !name || !organizationId) return null;
+
+  return {
+    id,
+    name,
+    organizationId,
+    repoId: null,
+    repo: null,
+    aiMode: null,
+    soulFile: "",
+    members: [],
+    channels: [],
+    sessions: [],
+    tickets: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function upsertProjectFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const project = asJsonObject(payload.project);
+  if (!project || typeof project.id !== "string") return;
+
+  const existing = batch.get("projects", project.id);
+  batch.upsert(
+    "projects",
+    project.id,
+    (existing ? { ...existing, ...project } : project) as unknown as Project,
+  );
+}
+
+function patchProjectMemberFromPayload(
+  batch: StoreBatchWriter,
+  payload: JsonObject,
+  eventType: EventType,
+): void {
+  const projectId = typeof payload.projectId === "string" ? payload.projectId : null;
+  if (!projectId) return;
+
+  const existing = batch.get("projects", projectId);
+  if (!existing) return;
+
+  if (eventType === "project_member_removed") {
+    const userId = typeof payload.userId === "string" ? payload.userId : null;
+    if (!userId) return;
+    batch.patch("projects", projectId, {
+      members: existing.members.filter((member) => member.user.id !== userId),
+    } as Partial<Project>);
+    return;
+  }
+
+  const member = asJsonObject(payload.member);
+  const user = asJsonObject(member?.user);
+  const userId = typeof user?.id === "string" ? user.id : null;
+  if (!member || !userId) return;
+
+  batch.patch("projects", projectId, {
+    members: [
+      ...existing.members.filter((item) => item.user.id !== userId),
+      member as unknown as Project["members"][number],
+    ],
+  } as Partial<Project>);
+}
+
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
   if (explicit) return explicit;
@@ -154,6 +227,30 @@ export function handleOrgEvent(event: Event): void {
         "repos",
         repo.id,
         (existing ? { ...existing, ...repo } : repo) as unknown as Repo,
+      );
+    }
+  }
+
+  // Project events
+  if (event.eventType === "project_created" || event.eventType === "project_updated") {
+    upsertProjectFromPayload(batch, payload);
+  }
+  if (event.eventType === "project_member_added" || event.eventType === "project_member_removed") {
+    patchProjectMemberFromPayload(batch, payload, event.eventType);
+  }
+  if (event.eventType === "entity_linked") {
+    upsertProjectFromPayload(batch, payload);
+    const legacyProject = legacyProjectFromEntityLinked(
+      payload,
+      event.timestamp,
+      useAuthStore.getState().activeOrgId,
+    );
+    if (legacyProject) {
+      const existing = batch.get("projects", legacyProject.id);
+      batch.upsert(
+        "projects",
+        legacyProject.id,
+        existing ? { ...legacyProject, ...existing } : legacyProject,
       );
     }
   }

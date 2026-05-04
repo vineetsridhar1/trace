@@ -25,6 +25,7 @@ Clients and agents can create/read/update projects through Trace services and ty
 
 - [ ] All project writes go through services.
 - [ ] All mutations validate organization and actor access.
+  - Membership mutations must enforce an explicit project/org admin rule before GraphQL or agent actions expose add/remove member operations; ordinary org membership is not sufficient authority to edit project membership.
 - [ ] GraphQL resolvers delegate to services only.
 - [ ] Project creation emits a project event with a snapshot.
 - [ ] Historical project-link event behavior is preserved or intentionally adapted.
@@ -35,6 +36,7 @@ Clients and agents can create/read/update projects through Trace services and ty
 
 - Preserve existing `organizationService.createProject` callers or migrate them intentionally.
 - Event payloads should include enough data for Zustand upserts.
+- Project event snapshots should use the generated `Project` shape for nested relations, or expose lightweight linked-entity references under distinct payload fields instead of overloading `Project.channels`, `Project.sessions`, and `Project.tickets`.
 - Do not duplicate generated GraphQL types elsewhere.
 - Do not add project-run service methods in this ticket; those belong to prompt-first project creation.
 - Resolvers should parse input, call services, and format output only.

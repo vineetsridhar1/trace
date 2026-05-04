@@ -512,6 +512,10 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "project_created"
+  | "project_member_added"
+  | "project_member_removed"
+  | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -1279,11 +1283,25 @@ export type Project = {
   __typename?: "Project";
   aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
+  createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  members: Array<ProjectMember>;
   name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
+  repoId?: Maybe<Scalars["ID"]["output"]>;
   sessions: Array<Session>;
+  soulFile: Scalars["String"]["output"];
   tickets: Array<Ticket>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectMember = {
+  __typename?: "ProjectMember";
+  joinedAt: Scalars["DateTime"]["output"];
+  leftAt?: Maybe<Scalars["DateTime"]["output"]>;
+  role: UserRole;
+  user: User;
 };
 
 export type PushPlatform = "android" | "ios";
@@ -1624,7 +1642,7 @@ export type ScopeInput = {
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "project" | "session" | "system" | "ticket";
 
 export type Session = {
   __typename?: "Session";
@@ -1823,6 +1841,7 @@ export type Subscription = {
   chatEvents: Event;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
+  projectEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -1851,6 +1870,12 @@ export type SubscriptionConversationEventsArgs = {
 
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars["ID"]["input"];
+  types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type SubscriptionProjectEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
+  projectId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
@@ -2177,6 +2202,7 @@ export type ResolversTypes = ResolversObject<{
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
+  ProjectMember: ResolverTypeWrapper<ProjectMember>;
   PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
@@ -2286,6 +2312,7 @@ export type ResolversParentTypes = ResolversObject<{
   Participant: Participant;
   PortEndpoint: PortEndpoint;
   Project: Project;
+  ProjectMember: ProjectMember;
   Query: {};
   QueuedMessage: QueuedMessage;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
@@ -3521,11 +3548,28 @@ export type ProjectResolvers<
 > = ResolversObject<{
   aiMode?: Resolver<Maybe<ResolversTypes["AutonomyMode"]>, ParentType, ContextType>;
   channels?: Resolver<Array<ResolversTypes["Channel"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  members?: Resolver<Array<ResolversTypes["ProjectMember"]>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
+  repoId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
+  soulFile?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes["Ticket"]>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ProjectMemberResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ProjectMember"] = ResolversParentTypes["ProjectMember"],
+> = ResolversObject<{
+  joinedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  leftAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  role?: Resolver<ResolversTypes["UserRole"], ParentType, ContextType>;
+  user?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4041,6 +4085,13 @@ export type SubscriptionResolvers<
     ContextType,
     RequireFields<SubscriptionOrgEventsArgs, "organizationId">
   >;
+  projectEvents?: SubscriptionResolver<
+    ResolversTypes["Event"],
+    "projectEvents",
+    ParentType,
+    ContextType,
+    RequireFields<SubscriptionProjectEventsArgs, "organizationId" | "projectId">
+  >;
   sessionEvents?: SubscriptionResolver<
     ResolversTypes["Event"],
     "sessionEvents",
@@ -4216,6 +4267,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Participant?: ParticipantResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;
   Project?: ProjectResolvers<ContextType>;
+  ProjectMember?: ProjectMemberResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   QueuedMessage?: QueuedMessageResolvers<ContextType>;
   Repo?: RepoResolvers<ContextType>;

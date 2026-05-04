@@ -29,6 +29,7 @@ Users can find, open, and inspect projects as real workspaces before prompt-firs
 - [ ] Project members are visible.
 - [ ] Empty states guide the user to create or start a project.
 - [ ] Historical project-link events and new project events both hydrate correctly.
+  - Historical project hydration must not synthesize blank `organizationId` values; use current org/event context or keep the legacy record out of the normalized `Project` entity shape.
 
 ## Implementation notes
 

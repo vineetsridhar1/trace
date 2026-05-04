@@ -70,6 +70,7 @@ describe("pubsub", () => {
 
   it("builds stable topic names", () => {
     expect(topics.channelEvents("c1")).toBe("channel:c1:events");
+    expect(topics.projectEvents("p1")).toBe("project:p1:events");
     expect(topics.orgEvents("o1")).toBe("org:o1:events");
     expect(topics.sessionPorts("s1")).toBe("session:s1:ports");
   });
