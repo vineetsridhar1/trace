@@ -1,812 +1,184 @@
-# Project Orchestration RFC
+# Project Autopilot Plan
 
 ## Summary
 
-Project Orchestration replaces the old session-group-centered Ultraplan model with a project-first workflow for turning a broad user goal into an interview, a durable ticket plan, and eventually coordinated implementation.
+Project Autopilot turns a loose user goal into a project plan, durable tickets, and then a playbook-driven implementation loop. It is explicitly not the ambient agent. Every AI episode is a normal Trace session started for a concrete purpose.
 
-The product starts from a new primitive the user understands: a project.
+The product ships in two major phases:
 
-- A user creates a project by typing a goal into a prompt-first screen.
-- Trace creates project-scoped state and starts a normal project-linked session for the planning interview.
-- The session asks clarifying questions, helps produce a plan, and creates durable tickets after confirmation.
-- Tickets are linked to the project and can be viewed in a project ticket table.
-- A project run can later execute ready tickets through worker sessions and session groups.
-- The orchestrator is durable service-layer state, not a magic long-lived chat.
-- Planning, controller runs, and worker runs use normal Trace sessions as runtimes.
+- **Deliverable 0: Planning to tickets.** A cursor-like planning workspace interviews the user, iterates on the plan, saves the confirmed plan, asks AI to create tickets through the CLI/service layer, and shows the ticket list in the project.
+- **Orchestration phase.** A separate orchestrator starts one ticket at a time. On lifecycle events such as agent completion, review completion, PR creation, merge, or inbox feedback, Trace starts a new Claude session with the project context, lifecycle event, history, diff/session data, and playbook. That episode decides the next step.
 
-The feature must be shippable in layers. The first useful deliverable is not autonomous implementation; it is a project workspace that can interview a user and create structured tickets. Execution, DAG scheduling, parallel workers, branch integration, and advanced guardrails can ship later without invalidating the early work.
+## Non-Negotiable Decisions
 
-## Product Thesis
+- Do not use the ambient agent for project planning or orchestration.
+- Planning chat happens in a normal project-linked session.
+- Ticket generation happens only after the user confirms the plan.
+- Tickets are durable DB records created through services/CLI, not markdown-only artifacts.
+- Orchestration is episodic. Each lifecycle event starts a fresh orchestrator session with a context packet and playbook.
+- The orchestrator can send messages, create inbox items, start sessions, request reviews, and later create/merge PRs through explicit service/CLI actions.
+- Start with sequential ticket execution. Parallel scheduling is out of scope until the sequential loop is excellent.
 
-Trace should make projects the place where planning, tickets, communication, and AI-assisted development converge.
+## Deliverable 0: Planning To Tickets
 
-The user should not need to understand session groups, controller runs, worktrees, or DAG schedulers before getting value. They should be able to say what they want to build, refine the plan with an AI teammate, and get a clear ticket plan that humans and agents can both act on.
+D0 is the first shippable product slice. It includes everything from first prompt through visible project tickets.
 
-The architecture still follows Trace's core model:
+### User Flow
 
-- everything meaningful is an event
-- service methods own validation, authorization, state transitions, and event creation
-- agents and humans use the same service layer
-- GraphQL remains a thin external interface
-- sessions are runtimes and transcripts, not the source of truth
-- relationships are links between peer entities, not hidden containment
+1. The user types an initial project prompt.
+2. Trace creates a project, project run, and normal project-linked planning session.
+3. The user sees a split planning workspace:
+   - plan on the left
+   - chat/interview on the right
+4. The AI interviews the user and updates the plan through normal session turns.
+5. The user clicks **Next** when the plan is acceptable.
+6. Trace saves the plan to the DB.
+7. Trace prompts AI to create tickets through the CLI/service layer.
+8. Tickets are created as durable DB rows linked to the project.
+9. The user lands on or remains in the project ticket list.
 
-## Key Decision
+### D0 Success Criteria
 
-The orchestration anchor is `ProjectRun`, not `SessionGroup`.
+- A user can create a project from one prompt.
+- The planning session is a normal session, not ambient.
+- The split view supports iterative chat and plan review.
+- Confirming the plan persists it to `ProjectRun`.
+- Ticket generation creates real tickets in the DB.
+- Opening a project shows its ticket list.
+- The flow can be refreshed without losing the project, plan, session link, or tickets.
 
-```text
-Project
-  ProjectRun
-    interview state
-    ticket DAG
-    controller runs
-    ticket executions
-    human gates
-    integration policy
-
-    SessionGroup
-      integration branch/worktree
-      worker sessions
-      runtime terminals/checkpoints
-```
-
-The project is the durable workspace. The project run is the orchestration instance. Session groups are execution workspaces created by project runs when code needs to be run.
-
-## Hard Decisions
-
-These decisions are intentionally fixed for v1 so implementation tickets do not make incompatible choices.
-
-- Project planning interviews run in normal project-linked sessions. The ambient agent does not start or continue project planning.
-- `ProjectRun` stores compact current state only: status, initial goal, approved plan summary, active gate pointer, latest controller summary, and execution config. Live interview history lives in the linked session transcript. Ticket ordering and dependencies live in ticket planning tables. Execution attempts live in execution tables.
-- Tickets remain org-scoped peer entities. A ticket can be linked to a project, and `ProjectPlanTicket` can associate that ticket with a project run, but the ticket is not owned by the project.
-- D0 does not ship prompt-first project creation or session-backed planning. D0 is only the durable project workspace foundation.
-- Existing project actions and events must keep working during migration. New project-scoped events may be added without breaking historical `system` scoped project events.
-
-## Goals
-
-- Make projects a first-class product surface beside channels, sessions, and tickets.
-- Let a user start a project from a prompt-first "new project" screen.
-- Support project members, project events, project tickets, and session-backed AI planning.
-- Use the AI first as an interviewer and planner before autonomous execution exists.
-- Create durable tickets with acceptance criteria, test plans, and dependency metadata.
-- Show project tickets in a table similar to the channel session-group table.
-- Preserve the ability to run a DAG orchestrator later without redesigning tickets.
-- Keep orchestration state in services and durable models.
-- Use sessions as runtimes for planning, controller, and worker episodes.
-- Ship incremental deliverables that are useful on their own.
-
-## Non-Goals
-
-- Shipping full autonomous implementation in the first milestone.
-- Replacing channels.
-- Making session groups the project container.
-- Storing plans only in markdown or chat transcripts.
-- Letting agents create events or write database rows directly.
-- Running true parallel ticket workers in the first execution milestone.
-- Autonomous merge to the repository default branch.
-- A generic workflow builder.
-
-## Existing State
-
-Trace already has partial project support:
-
-- `Project` exists with `name`, `repoId`, `aiMode`, and `soulFile`.
-- Projects can link channels, sessions, and tickets.
-- Agents already have basic `project.create`, `project.linkEntity`, and `project.get` actions.
-- Tickets can be linked to projects.
-
-The existing model is not enough for this feature:
-
-- projects do not have members
-- project is not a canonical event scope in the schema
-- project has no first-class home/detail surface
-- ticket filtering is not project-first
-- project planning/interview state is not durable
-- orchestration is currently described around session groups
-
-This RFC elevates project from a grouping helper into a first-class planning and orchestration workspace.
-
-## Core Product Model
-
-### Project
-
-`Project` is the long-lived workspace.
-
-It owns or links:
-
-- members
-- repo association
-- project-scoped event stream
-- project planning conversations
-- tickets
-- project runs
-- linked channels
-- linked sessions and session groups
-- summaries and decisions
-
-Projects remain flat org-scoped entities. A project can link to channels, sessions, tickets, and repos, but those entities do not nest inside the project in a way that prevents reuse.
-
-### Project Member
-
-Projects need channel-like membership.
-
-V1 membership can be simple:
-
-- `projectId`
-- `userId`
-- `role`
-- `joinedAt`
-- `leftAt`
-
-The first deliverable can use project members only for visibility and UI. Fine-grained permissions can follow later.
-
-### Project Events
-
-Projects need their own event scope.
-
-Add `ScopeType.project` and use project-scoped events for:
-
-- project creation and updates
-- project member changes
-- approved planning artifacts
-- optional interview question/answer milestones when explicitly recorded by a service
-- plan summaries
-- ticket plan creation and updates
-- project run lifecycle
-- controller run lifecycle
-- human gates
-
-Project event payloads must carry enough snapshots for client upserts without refetching.
-
-Minimum v1 event payloads:
-
-- `project_created`: `{ project }`
-- `project_updated`: `{ project }`
-- `project_member_added`: `{ projectId, member }`
-- `project_member_removed`: `{ projectId, userId, leftAt }`
-- `project_run_created`: `{ projectRun }`
-- `project_run_updated`: `{ projectRun }`
-- `project_goal_submitted`: `{ projectRun, goal }`
-- `project_question_asked`: `{ projectRunId, message }` when the service explicitly records a durable milestone
-- `project_answer_recorded`: `{ projectRunId, message }` when the service explicitly records a durable milestone
-- `project_decision_recorded`: `{ projectRunId, decision }`
-- `project_risk_recorded`: `{ projectRunId, risk }`
-- `project_plan_summary_updated`: `{ projectRun }`
-- `project_plan_ticket_created`: `{ projectPlanTicket, ticket }`
-- `project_plan_ticket_updated`: `{ projectPlanTicket, ticket }`
-- `ticket_dependency_created`: `{ dependency }`
-- `project_controller_run_created`: `{ controllerRun }`
-- `project_controller_run_started`: `{ controllerRun }`
-- `project_controller_run_completed`: `{ controllerRun, projectRun }`
-- `project_controller_run_failed`: `{ controllerRun, projectRun }`
-- `ticket_execution_created`: `{ ticketExecution, projectRun, ticket }`
-- `ticket_execution_updated`: `{ ticketExecution, projectRun, ticket }`
-- `ticket_execution_integrated`: `{ ticketExecution, projectRun, ticket }`
-- `project_human_gate_requested`: `{ gate, projectRun }`
-
-Snapshots should use the same field names as generated GraphQL/client types. If a new client store slice is needed, define the event payload and Zustand upsert path in the same ticket.
-
-### Project Planning Conversation
-
-The prompt-first project screen should feel like a focused planning surface.
-
-The AI's first job is not to code. Its job is to interview the user and produce a plan.
-
-The planning flow is session-backed and should:
-
-- accept the user's raw project goal
-- start a normal project-linked Trace session
-- ask clarifying questions
-- maintain a plan in the session until the user confirms it
-- identify risks and unknowns
-- request human approval before creating tickets or executing work
-- save the approved plan summary to `ProjectRun`
-- create linked tickets after confirmation
-
-The transcript is inspectable session history. The durable project artifacts are the approved `ProjectRun` plan summary and linked tickets. Project planning should not depend on the ambient agent observing project events.
-
-### ProjectRun
-
-`ProjectRun` is the durable orchestration instance.
-
-It owns:
-
-- status
-- initial goal
-- plan summary
-- active planning gate
-- links to planned tickets
-- links to controller runs
-- execution policy
-- linked session groups
-- final completion state
-
-Recommended statuses:
+### D0 Architecture
 
 ```text
-draft
-interviewing
-planning
-ready
-running
-needs_human
-paused
-completed
-failed
-cancelled
+Project prompt
+  -> projectService / projectRunService
+  -> normal project-linked planning session
+  -> split planning UI
+  -> user confirms plan
+  -> projectRunService saves approved plan
+  -> AI ticket-generation session/CLI command
+  -> ticketService creates linked tickets
+  -> project ticket list
 ```
 
-V1 should allow one active project run per project. Historical runs can remain attached for auditability and retries.
+GraphQL remains a thin client API. The CLI and session runtime must call service-backed commands or mutations. No client, CLI, or agent writes events or database rows directly.
 
-The active-run invariant should be enforced in the service layer first. Add a partial unique database constraint only if the migration can represent the desired statuses cleanly.
+## Orchestration Phase
 
-### ProjectPlanTicket
+After D0, Project Autopilot becomes a playbook-driven loop over tickets.
 
-Tickets are normal Trace tickets. `ProjectPlanTicket` is the durable association between a project run and planned tickets.
+### Sequential Ticket Loop
 
-It records:
+The first orchestrator version is intentionally simple:
 
-- projectRunId
-- ticketId
-- position
-- status
-- generatedByControllerRunId
-- rationale
-- metadata
+1. Orchestrator episode v1 starts for a project run.
+2. It sees all tickets and starts ticket 1.
+3. It goes to sleep.
+4. Ticket 1 emits a lifecycle event, such as agent completed.
+5. Trace starts orchestrator episode v2 as a new Claude session.
+6. The new episode receives:
+   - lifecycle event
+   - project and ticket state
+   - playbook
+   - relevant history
+   - session messages
+   - branch/checkpoint/diff context when available
+   - prior orchestrator decisions
+7. The episode decides the next action from the playbook.
+8. The loop continues until all tickets are done or a human gate blocks progress.
 
-Do not infer planned tickets only from executions. Planning and execution are separate deliverables.
+### Playbooks
 
-### Ticket Planning Fields
+A playbook is a durable guideline for how orchestration should proceed. It is not hardcoded business logic. It tells the orchestrator how to behave for a project or organization.
 
-Tickets need stronger planning structure:
+The default playbook should be close to:
 
-- acceptance criteria
-- test plan
-- optional estimate/size
-- dependency edges
-- generated-by metadata
+- implement the ticket
+- review against the plan
+- fix all review issues
+- if anything needs human QA, put it in the user's inbox
+- if the user gives suggestions, implement them
+- rereview
+- put QA back in the inbox when needed
+- create a PR
+- merge when the configured conditions are satisfied
 
-Dependencies should be general edges, not a hardcoded sequence.
+The user will provide the exact context template later. The plan must leave room for that template without assuming the final shape.
 
-```text
-Ticket A
-  -> Ticket B
-  -> Ticket C
-Ticket D depends on B and C
-```
+### Orchestrator Episodes
 
-V1 can create linear dependencies. The schema should not require linearity.
+An orchestrator episode is a normal Claude session created for one lifecycle event. It is not a daemon and not the ambient agent.
 
-Dependency rules:
+Each episode should:
 
-- A dependency edge can only connect tickets in the same organization.
-- When used inside a project run, both tickets must be linked to that run through `ProjectPlanTicket`.
-- Services must reject cycles before persisting an edge.
-- Readiness means every dependency is completed or integrated according to the current execution milestone.
-- Cross-project dependencies are out of scope for v1.
+- receive a bounded context packet
+- read the playbook
+- inspect current project/ticket/session state
+- decide one or more next actions
+- execute through service/CLI actions
+- record a short decision summary
+- then stop
 
-### ProjectControllerRun
+### Lifecycle Events
 
-The orchestrator uses sessions but is not itself a session.
+Lifecycle events are the wakeup mechanism. Examples:
 
-Each controller run is one thinking/action episode:
+- ticket implementation session started
+- ticket implementation session completed
+- review requested
+- review completed
+- issues found
+- fixes completed
+- QA requested
+- user inbox response received
+- PR created
+- PR merged
+- ticket marked done
 
-1. A project event, manual action, inbox resolution, or worker lifecycle event triggers the run.
-2. The service creates a `ProjectControllerRun`.
-3. The runtime creates a normal Trace session with role `project_controller_run`.
-4. The controller receives a compact context packet.
-5. The controller calls scoped service-backed actions.
-6. The controller emits a required structured summary.
-7. The run completes and the service appends events.
+These events should be service-created and durable. They wake explicit orchestrator sessions; they do not route through the ambient agent.
 
-Durable memory lives in project state, tickets, events, summaries, gates, and executions, not in one forever-growing controller chat.
+## Ticket Roadmap
 
-### TicketExecution
+The implementation is split into ten tickets:
 
-`TicketExecution` is the concrete attempt to implement one ticket.
+### Deliverable 0
 
-It links:
+1. **Planning Workspace**: prompt-first project creation, normal planning session, split plan/chat UI.
+2. **Plan Approval and Ticket Generation**: Next action, save plan, AI/CLI ticket generation, service-created tickets.
+3. **Project Ticket List**: project detail ticket list fed by durable project-linked tickets.
 
-- projectRun
-- ticket
-- worker session
-- session group
-- ticket branch/worktree
-- base checkpoint
-- head checkpoint
-- integration checkpoint
-- review state
-- artifacts
+### Orchestration Foundation
 
-Execution state must not be hidden in ticket JSON or session JSON.
-
-### SessionGroup
-
-A project can have multiple session groups over time.
-
-For v1 execution:
-
-- one active project run
-- one integration session group for that run
-- many worker sessions inside that group
-
-Later, multiple session groups can support:
-
-- multiple execution attempts
-- alternate plans
-- multiple repos
-- parallel workstreams
-- maintenance sessions linked to the project
-
-Session groups own execution workspace details. They do not own the plan.
-
-## UX Shape
-
-### Project Entry Point
-
-Add a Projects entry beside channels/tickets.
-
-The project list should show:
-
-- project name
-- repo
-- status of active run
-- ticket counts
-- latest activity
-- members
-
-### New Project Screen
-
-The initial screen should be prompt-first.
-
-The first viewport should let the user type a project goal immediately. Avoid making the user fill out a form before they can describe the project.
-
-After submit:
-
-- create the project
-- create the first project run
-- record the initial goal
-- start a normal project-linked interviewer session
-- navigate to the project planning surface
-
-### Project Planning Surface
-
-The planning surface should show:
-
-- project prompt/interview thread
-- AI clarifying questions
-- approved plan summary
-- project tickets
-- approval controls that save the plan and create tickets
-
-This surface can ship before execution exists.
-
-### Project Tickets View
-
-Project tickets should be visible in a table, reusing the existing ticket table patterns.
-
-The table should include:
-
-- title
-- status
-- priority
-- assignees
-- labels
-- dependency readiness
-- plan position
-- execution state when available
-
-Clicking a ticket should open the ticket detail panel.
-
-### Project Run View
-
-Once execution exists, the project run view should show:
-
-- ticket DAG/list
-- ready/running/blocked/completed tickets
-- controller activity timeline
-- worker sessions
-- session group integration branch
-- active human gates
-- final QA state
-
-## Architecture
-
-```text
-Web / Mobile / Electron
-  -> GraphQL
-    -> projectService
-    -> projectRunService
-    -> projectPlanningService
-    -> ticketService
-    -> ticketExecutionService
-    -> projectControllerService
-      -> Event Store
-      -> Broker
-
-Normal Session Runtime
-  -> project-linked session transcript
-  -> explicit approval flow
-    -> same services
-```
-
-GraphQL resolvers stay thin. Services own all business logic.
-
-## Runtime Actions
-
-Planning does not use the ambient agent. A normal project-linked session interviews the user, and the explicit approval flow writes the plan and tickets through services.
-
-Controller runs can later act through scoped service-backed runtime actions.
-
-Later controller/action surface:
-
-- `project.get`
-- `project.update`
-- `project.recordDecision`
-- `project.recordRisk`
-- `project.summarizePlan`
-- `ticket.create`
-- `ticket.update`
-- `ticket.addDependency`
-- `projectRun.addPlannedTicket`
-- `projectRun.updatePlannedTicket`
-- `projectRun.requestApproval`
-
-Ticket-generation actions should be invoked by explicit project/session flows, not by ambient routing of project planning events.
-
-Execution actions can ship later:
-
-- `projectRun.createTicketExecution`
-- `projectRun.startWorker`
-- `projectRun.sendWorkerMessage`
-- `projectRun.markExecutionReady`
-- `projectRun.markExecutionBlocked`
-- `integration.mergeTicketBranch`
-- `integration.reportConflict`
-
-Each action must validate organization and actor access, mutate state through services, emit events, and return machine-readable output.
-
-Action contracts must be defined before prompt work ships:
-
-- typed input shape
-- typed result shape
-- allowed scope types
-- actor authorization rule
-- event emitted on success
-- safe failure behavior
-- whether the action can run directly or must create an inbox gate
-
-## Incremental Delivery Strategy
-
-The feature should ship in deliverables that stand alone.
-
-### D0: Project Workspace Foundation
-
-Shippable result:
-
-Users can create, view, update, and join projects through normal services. Projects appear as first-class navigation items. Projects have members and project-scoped events. No prompt-first flow, session-backed planning, ticket generation, or execution is required in D0.
-
-This provides immediate product value without session-backed planning.
-
-### D1: Prompt-First Project Creation
-
-Shippable result:
-
-Users can create a project by typing a goal. The project stores the goal and shows a planning surface, even if the AI flow is initially basic.
-
-### D2: Session-Backed Interview and Planning
-
-Shippable result:
-
-The project starts a normal linked session that asks clarifying questions and produces a proposed plan. Plan approval saves the summary and creates linked tickets. No autonomous execution required.
-
-### D3: Durable Ticket Planning
-
-Shippable result:
-
-The ticket-generation path becomes structured, with acceptance criteria, test plans, and dependencies. Users can view and edit those tickets in a project ticket table.
-
-### D4: Manual Project Execution Links
-
-Shippable result:
-
-Users can start ordinary sessions or session groups from project tickets. Tickets, sessions, and session groups are linked back to the project. This is useful even before autonomous orchestration.
-
-### D5: Sequential Project Orchestration
-
-Shippable result:
-
-A project run can launch one worker ticket at a time, observe completion, create controller runs, and request human review. This replaces the old v1 Ultraplan execution model.
-
-### D6: Integration and Final QA
-
-Shippable result:
-
-Approved ticket branches integrate into a project run's integration branch/session group. Conflicts and final QA flow through inbox gates.
-
-### D7: Parallel DAG Scheduler
-
-Shippable result:
-
-The scheduler can run independent ready tickets in parallel up to a configured limit. Integration remains serialized and service-owned.
-
-## Data Model Additions
-
-Recommended Prisma additions:
-
-```prisma
-enum SessionRole {
-  primary
-  project_controller_run
-  ticket_worker
-}
-
-enum ProjectRunStatus {
-  draft
-  interviewing
-  planning
-  ready
-  running
-  needs_human
-  paused
-  completed
-  failed
-  cancelled
-}
-
-enum ProjectPlanTicketStatus {
-  planned
-  ready
-  running
-  blocked
-  completed
-  skipped
-  cancelled
-}
-
-enum ProjectControllerRunStatus {
-  queued
-  running
-  completed
-  failed
-  cancelled
-}
-
-enum TicketExecutionStatus {
-  queued
-  running
-  reviewing
-  needs_human
-  ready_to_integrate
-  integrating
-  integrated
-  blocked
-  failed
-  cancelled
-}
-```
-
-Recommended models:
-
-```prisma
-model ProjectMember {
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      String   @default("member")
-  joinedAt  DateTime @default(now())
-  leftAt    DateTime?
-
-  @@id([projectId, userId])
-  @@index([userId])
-  @@index([projectId, leftAt])
-}
-
-model ProjectRun {
-  id                    String @id @default(uuid())
-  organizationId        String
-  projectId             String
-  project               Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status                ProjectRunStatus @default(draft)
-  initialGoal           String
-  planSummary           String?
-  activeInboxItemId     String?
-  lastControllerRunId   String?
-  lastControllerSummary String?
-  executionConfig       Json?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  @@index([organizationId, status])
-  @@index([projectId, status])
-}
-
-model ProjectPlanTicket {
-  id                       String @id @default(uuid())
-  organizationId           String
-  projectRunId             String
-  projectRun               ProjectRun @relation(fields: [projectRunId], references: [id], onDelete: Cascade)
-  ticketId                 String
-  ticket                   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  position                 Int
-  status                   ProjectPlanTicketStatus @default(planned)
-  generatedByControllerRunId String?
-  rationale                String?
-  metadata                 Json?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-
-  @@unique([projectRunId, ticketId])
-  @@unique([projectRunId, position])
-  @@index([organizationId, status])
-}
-
-model ProjectControllerRun {
-  id             String @id @default(uuid())
-  organizationId String
-  projectRunId   String
-  projectRun      ProjectRun @relation(fields: [projectRunId], references: [id], onDelete: Cascade)
-  sessionId      String?
-  session        Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  triggerEventId String?
-  triggerType    String
-  status         ProjectControllerRunStatus @default(queued)
-  summaryTitle   String?
-  summary        String?
-  summaryPayload Json?
-  error          String?
-  createdAt      DateTime @default(now())
-  startedAt      DateTime?
-  completedAt    DateTime?
-
-  @@index([organizationId, status])
-  @@index([projectRunId, status])
-}
-
-model TicketDependency {
-  ticketId          String
-  ticket            Ticket @relation("TicketDependencyTicket", fields: [ticketId], references: [id], onDelete: Cascade)
-  dependsOnTicketId String
-  dependsOnTicket   Ticket @relation("TicketDependencyDependsOn", fields: [dependsOnTicketId], references: [id], onDelete: Cascade)
-  reason            String?
-  createdAt         DateTime @default(now())
-
-  @@id([ticketId, dependsOnTicketId])
-  @@index([dependsOnTicketId])
-}
-```
-
-Ticket additions:
-
-```prisma
-model Ticket {
-  ...
-  acceptanceCriteria String[] @default([])
-  testPlan           String?
-}
-```
-
-Execution models can be added in D5/D6 rather than D0.
-
-Schema implementation notes:
-
-- Update `packages/gql/src/schema.graphql` as the GraphQL source of truth, then run `pnpm gql:codegen`.
-- Do not duplicate generated GraphQL enums or object types in app code.
-- Prisma migrations should preserve existing `Project`, `TicketProject`, `SessionProject`, and `ChannelProject` data.
-- Backfill project members conservatively. Existing org admins can see projects until explicit project membership enforcement ships.
-- Existing `system` scoped project-created/link events remain readable. New writes should emit project-scoped events once `ScopeType.project` exists.
-
-## Event Model
-
-Add `ScopeType.project`.
-
-Recommended event families:
-
-```text
-project_created
-project_updated
-project_member_added
-project_member_removed
-project_goal_submitted
-project_question_asked
-project_answer_recorded
-project_decision_recorded
-project_plan_summary_updated
-project_run_created
-project_run_updated
-project_run_approved
-project_run_paused
-project_run_resumed
-project_run_completed
-project_run_failed
-project_plan_ticket_created
-project_plan_ticket_updated
-project_controller_run_created
-project_controller_run_started
-project_controller_run_completed
-project_controller_run_failed
-ticket_dependency_created
-ticket_execution_created
-ticket_execution_updated
-ticket_execution_integrated
-project_human_gate_requested
-```
-
-Events should include snapshots needed by Zustand to upsert projects, runs, tickets, planned tickets, controller runs, executions, and inbox gates.
-
-Event compatibility:
-
-- Do not remove support for historical `entity_linked` project payloads in the same migration that introduces project-scoped events.
-- Client hydration should accept both historical project-link events and new project event families during rollout.
-- Every mutating service method added by this plan must have a test asserting the emitted event payload includes enough data for a direct client upsert.
-
-## Rollout Plan
-
-The implementation ticket set is intentionally resized around coherent shipping slices, not preserved from the old Ultraplan ticket count.
-
-1. Project schema, project members, and project-scoped events.
-2. Project services, GraphQL, and compatibility with existing project actions.
-3. Project client shell and project event hydration.
-4. Prompt-first project creation and initial project-run creation.
-5. Planning conversation service.
-6. Session-backed planning interview.
-7. Ticket planning model.
-8. AI ticket generation.
-9. Project ticket table.
-10. Manual execution links.
-11. Controller run foundation.
-12. Sequential orchestrator.
-13. Human gates and guardrails.
-14. Integration and final QA.
-15. Parallel DAG scheduler.
+4. **Ticket Execution Lifecycle**: start one implementation session per ticket and emit lifecycle events.
+5. **Playbook Model**: store playbooks and provide the default review/QA/PR playbook.
+6. **Orchestrator Episode Runtime**: start a new Claude session for each lifecycle event.
+7. **Orchestrator Context Packet**: provide project, ticket, session, diff, history, and playbook context.
+8. **Orchestrator Action Surface**: allow explicit service/CLI actions for messages, inbox, sessions, ticket updates, PRs, and merges.
+9. **Default Playbook Loop**: implement the sequential implement/review/fix/QA/PR/merge loop.
+10. **Project Autopilot UI**: show ticket progress, orchestrator decisions, inbox gates, and linked sessions.
 
 ## Testing Strategy
 
-Test each deliverable independently.
+D0 tests:
 
-Foundation:
+- create a project from an initial prompt
+- verify the planning session is linked to the project
+- iterate plan text and chat without losing state
+- click Next and verify the plan persists
+- verify AI/CLI ticket generation creates DB tickets linked to the project
+- refresh and verify the project shows the plan and tickets
 
-- project create/update/member services
-- project event hydration
-- project navigation and visibility
-- compatibility with historical project events
+Orchestration tests:
 
-Planning:
+- start the next ticket only when the project is ready
+- emit lifecycle events for implementation completion and review completion
+- start a new orchestrator session from each lifecycle event
+- include playbook and relevant history in the context packet
+- verify the default playbook requests review after implementation
+- verify human QA creates an inbox item
+- verify user feedback resumes the loop
+- verify PR/merge actions are explicit and permissioned
 
-- prompt-first project creation records the initial goal
-- a linked normal session contains the interview transcript
-- plan approval updates project run state
-- generated tickets have acceptance criteria and test plans
-- refresh shows the linked session, approved plan, and linked tickets
+## Open Template Slot
 
-Tickets:
-
-- project ticket filtering
-- dependency creation
-- dependency cycle rejection
-- project table hydration from events
-
-Execution:
-
-- manual ticket-to-session linking
-- controller run creation and summary persistence
-- worker completion wakeup dedupe
-- sequential scheduler chooses the next ready ticket
-- inbox gates pause execution
-- integration conflicts create gates instead of corrupting branches
-
-Parallel:
-
-- ready ticket selection respects dependencies
-- max parallel worker limit is enforced
-- integration remains serialized
-
-## Recommended Decision
-
-Rewrite Ultraplan as Project Orchestration.
-
-The first release should not attempt the full autonomous loop. Ship project foundation, prompt-first creation, session-backed AI interview, and durable ticket creation first. Those are user-visible and architecturally durable. Then add manual execution links, sequential orchestration, integration, and finally parallel DAG scheduling.
-
-This keeps the product Trace-native and avoids turning the feature into a bolted-on mega-session.
+The orchestrator context template is intentionally not fixed yet. The user will provide it later. Until then, tickets should define the data the context packet must be able to include, not the final prose prompt.
