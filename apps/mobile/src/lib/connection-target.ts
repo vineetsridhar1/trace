@@ -5,6 +5,7 @@ const storage = createMMKV({ id: "trace" });
 
 const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 const CONNECTION_MODE_KEY = "trace_connection_mode";
+const HOSTED_API_URL_KEY = "trace_hosted_api_url";
 const LOCAL_API_URL_KEY = "trace_local_api_url";
 const INSTALL_ID_KEY = "trace_local_install_id";
 
@@ -19,7 +20,8 @@ function normalizeApiUrl(input: string): string {
 }
 
 export function getHostedApiUrl(): string {
-  return DEFAULT_API_URL.trim().replace(/\/+$/, "");
+  const override = storage.getString(HOSTED_API_URL_KEY);
+  return (override ?? DEFAULT_API_URL).trim().replace(/\/+$/, "");
 }
 
 export function hasHostedApiUrlConfigured(): boolean {
@@ -53,7 +55,10 @@ export function getGraphqlUrls(): { httpUrl: string; wsUrl: string } {
   };
 }
 
-export function activateHostedConnection(): void {
+export function activateHostedConnection(baseUrl?: string): void {
+  if (baseUrl?.trim()) {
+    storage.set(HOSTED_API_URL_KEY, normalizeApiUrl(baseUrl));
+  }
   storage.set(CONNECTION_MODE_KEY, "hosted");
 }
 
