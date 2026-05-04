@@ -39,6 +39,11 @@ export const sessionActions: AgentActionRegistration[] = [
           description: "Coding tool to use",
           enum: ["claude_code", "codex", "custom"],
         },
+        reasoningEffort: {
+          type: "string",
+          description: "Reasoning effort to use for the coding tool",
+          enum: ["auto", "low", "medium", "high", "xhigh", "max"],
+        },
         sessionGroupId: {
           type: "string",
           description: "Existing session group to add the session to",
@@ -188,6 +193,7 @@ export const sessionDispatchers: Record<string, ActionDispatcher> = {
     return services.sessionService.start({
       tool: (args.tool as StartSessionServiceInput["tool"] | undefined) ?? "claude_code",
       model: args.model as string | undefined,
+      reasoningEffort: args.reasoningEffort as string | undefined,
       hosting: args.hosting as StartSessionServiceInput["hosting"],
       repoId: args.repoId as string | undefined,
       branch: args.branch as string | undefined,

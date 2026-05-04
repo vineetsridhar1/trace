@@ -9,7 +9,15 @@ import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
-import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
+import {
+  getModelsForTool,
+  getDefaultModel,
+  getModelLabel,
+  getReasoningEffortsForTool,
+  getDefaultReasoningEffort,
+  getReasoningEffortLabel,
+  type ReasoningEffortOption,
+} from "./modelOptions";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
@@ -23,8 +31,82 @@ const TOOL_LABELS: Record<string, string> = {
   codex: "Codex",
 };
 
+const EFFORT_LINE_HEIGHT = 16;
+
 function getToolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? tool;
+}
+
+function EffortDots({ index, total }: { index: number; total: number }) {
+  return (
+    <span className="flex flex-col-reverse items-center gap-[2px]" aria-hidden="true">
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "block h-[3px] w-[3px] rounded-full transition-opacity duration-150",
+            i <= index ? "bg-current opacity-100" : "bg-current opacity-30",
+          )}
+        />
+      ))}
+    </span>
+  );
+}
+
+function EffortCycleButton({
+  effort,
+  options,
+  disabled,
+  onChange,
+}: {
+  effort: string;
+  options: readonly ReasoningEffortOption[];
+  disabled: boolean | undefined;
+  onChange: (effort: string) => Promise<void> | void;
+}) {
+  const [pendingEffort, setPendingEffort] = useState<string | null>(null);
+  const displayedEffort = pendingEffort ?? effort;
+  const currentIndex = options.findIndex((option) => option.value === displayedEffort);
+  const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+  const currentOption = options[safeIndex];
+  const currentLabel = currentOption?.label ?? getReasoningEffortLabel(displayedEffort);
+  const nextOption = options[(safeIndex + 1) % options.length];
+  const isPending = pendingEffort !== null;
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        if (!nextOption || isPending) return;
+        setPendingEffort(nextOption.value);
+        try {
+          await onChange(nextOption.value);
+        } finally {
+          setPendingEffort(null);
+        }
+      }}
+      disabled={disabled || isPending}
+      aria-label={`Reasoning effort: ${currentLabel}. Click to cycle.`}
+      className={cn(
+        "flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none",
+        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+      )}
+    >
+      <EffortDots index={safeIndex} total={options.length} />
+      <span
+        className="relative block min-w-[4.25rem] overflow-hidden text-left"
+        style={{ height: EFFORT_LINE_HEIGHT }}
+      >
+        <span
+          key={currentOption?.value ?? displayedEffort}
+          className="block transition-opacity duration-150 ease-out"
+          style={{ height: EFFORT_LINE_HEIGHT, lineHeight: `${EFFORT_LINE_HEIGHT}px` }}
+        >
+          {currentLabel}
+        </span>
+      </span>
+    </button>
+  );
 }
 
 interface SessionInputOptionsProps {
@@ -42,6 +124,9 @@ export function SessionInputOptions({
 }: SessionInputOptionsProps) {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const reasoningEffort = useEntityField("sessions", sessionId, "reasoningEffort") as
+    | string
+    | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
@@ -59,6 +144,8 @@ export function SessionInputOptions({
   const currentTool = tool ?? "claude_code";
   const modelOptions = getModelsForTool(currentTool);
   const currentModel = model ?? getDefaultModel(currentTool);
+  const reasoningEffortOptions = getReasoningEffortsForTool(currentTool);
+  const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
@@ -96,13 +183,18 @@ export function SessionInputOptions({
     async (newTool: string | null) => {
       if (!newTool || isOptimistic) return;
       const newDefault = getDefaultModel(newTool);
+      const newDefaultReasoningEffort = getDefaultReasoningEffort(newTool);
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         tool: newTool as CodingTool,
         model: newDefault ?? null,
+        reasoningEffort: newDefaultReasoningEffort ?? null,
       });
       try {
         const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool, model: newDefault })
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            tool: newTool,
+          })
           .toPromise();
         if (result.error) throw result.error;
       } catch (error) {
@@ -125,6 +217,28 @@ export function SessionInputOptions({
       } catch (error) {
         rollback();
         console.error("Failed to update session model:", error);
+      }
+    },
+    [isOptimistic, sessionId],
+  );
+
+  const handleReasoningEffortChange = useCallback(
+    async (newReasoningEffort: string | null) => {
+      if (!newReasoningEffort || isOptimistic) return;
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        reasoningEffort: newReasoningEffort,
+      });
+      try {
+        const result = await client
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            reasoningEffort: newReasoningEffort,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        rollback();
+        console.error("Failed to update session reasoning effort:", error);
       }
     },
     [isOptimistic, sessionId],
@@ -322,6 +436,15 @@ export function SessionInputOptions({
             ))}
           </SelectContent>
         </Select>
+      )}
+      {reasoningEffortOptions.length > 0 && (
+        <EffortCycleButton
+          key={currentTool}
+          effort={currentReasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
+          options={reasoningEffortOptions}
+          disabled={isActive || isOptimistic}
+          onChange={handleReasoningEffortChange}
+        />
       )}
       {isNotStarted ? (
         <Select

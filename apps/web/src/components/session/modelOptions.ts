@@ -1,2 +1,9 @@
-export type { ModelOption } from "@trace/shared";
-export { getModelsForTool, getDefaultModel, getModelLabel } from "@trace/shared";
+export type { ModelOption, ReasoningEffortOption } from "@trace/shared";
+export {
+  getModelsForTool,
+  getDefaultModel,
+  getModelLabel,
+  getReasoningEffortsForTool,
+  getDefaultReasoningEffort,
+  getReasoningEffortLabel,
+} from "@trace/shared";

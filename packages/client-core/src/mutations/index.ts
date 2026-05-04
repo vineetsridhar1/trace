@@ -573,6 +573,7 @@ export const UPDATE_SESSION_CONFIG_MUTATION = gql`
     $sessionId: ID!
     $tool: CodingTool
     $model: String
+    $reasoningEffort: String
     $hosting: HostingMode
     $runtimeInstanceId: ID
   ) {
@@ -580,12 +581,14 @@ export const UPDATE_SESSION_CONFIG_MUTATION = gql`
       sessionId: $sessionId
       tool: $tool
       model: $model
+      reasoningEffort: $reasoningEffort
       hosting: $hosting
       runtimeInstanceId: $runtimeInstanceId
     ) {
       id
       tool
       model
+      reasoningEffort
       hosting
       connection {
         state

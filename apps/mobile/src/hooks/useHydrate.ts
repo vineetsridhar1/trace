@@ -63,6 +63,7 @@ const MY_SESSIONS_QUERY = gql`
       sessionStatus
       tool
       model
+      reasoningEffort
       hosting
       createdBy {
         id

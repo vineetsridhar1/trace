@@ -235,6 +235,25 @@ async function resolveRefCommitSha(repoPath: string, ref: string): Promise<strin
   return runGit(repoPath, ["rev-parse", `${ref}^{commit}`]);
 }
 
+async function fetchOriginIfAvailable(repoPath: string): Promise<void> {
+  try {
+    await runGit(repoPath, ["remote", "get-url", "origin"]);
+  } catch {
+    return;
+  }
+
+  try {
+    await execFileAsync("git", ["fetch", "origin", "--prune"], {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+  } catch (error) {
+    console.warn(
+      `[linked-checkout] origin fetch failed; using cached refs: ${formatGitError(error)}`,
+    );
+  }
+}
+
 async function listTreePaths(repoPath: string, ref: string): Promise<string[]> {
   const { stdout } = await execFileAsync("git", ["ls-tree", "-r", "-z", "--name-only", ref], {
     cwd: repoPath,
@@ -733,6 +752,7 @@ export function syncLinkedCheckout(
     try {
       const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
       const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
+      await fetchOriginIfAvailable(repoPath);
       let targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
       let rebaseAttachmentPrimed = false;
 

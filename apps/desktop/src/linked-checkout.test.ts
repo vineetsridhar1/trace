@@ -88,6 +88,39 @@ async function createRepoFixture(): Promise<{
   return { repoPath, worktreePath };
 }
 
+async function createRepoFixtureWithStaleOrigin(): Promise<{
+  repoPath: string;
+  latestSha: string;
+}> {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-origin-"));
+  const sourcePath = path.join(rootDir, "source");
+  const originPath = path.join(rootDir, "origin.git");
+  const repoPath = path.join(rootDir, "repo");
+
+  fs.mkdirSync(sourcePath, { recursive: true });
+  await git(sourcePath, ["init", "-b", "main"]);
+  await git(sourcePath, ["config", "user.name", "Trace Test"]);
+  await git(sourcePath, ["config", "user.email", "trace@example.com"]);
+
+  fs.writeFileSync(path.join(sourcePath, "app.txt"), "base\n");
+  await git(sourcePath, ["add", "app.txt"]);
+  await git(sourcePath, ["commit", "-m", "initial commit"]);
+  await git(sourcePath, ["branch", "trace/raccoon"]);
+
+  await git(rootDir, ["clone", "--bare", sourcePath, originPath]);
+  await git(rootDir, ["clone", originPath, repoPath]);
+  await git(sourcePath, ["remote", "add", "origin", originPath]);
+
+  await git(sourcePath, ["checkout", "trace/raccoon"]);
+  fs.writeFileSync(path.join(sourcePath, "app.txt"), "latest remote\n");
+  await git(sourcePath, ["add", "app.txt"]);
+  await git(sourcePath, ["commit", "-m", "advance trace branch"]);
+  const latestSha = await git(sourcePath, ["rev-parse", "HEAD"]);
+  await git(sourcePath, ["push", "origin", "trace/raccoon"]);
+
+  return { repoPath, latestSha };
+}
+
 function seedRepo(repoId: string, repoPath: string): void {
   configMock.__state.repos[repoId] = {
     path: repoPath,
@@ -239,6 +272,47 @@ describe("linked checkout commit-back", () => {
     expect(fs.existsSync(path.join(repoPath, "scratch.txt"))).toBe(false);
     expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
     expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
+  }, 15_000);
+
+  it("fetches origin before resolving the branch for sync", async () => {
+    const { repoPath, latestSha } = await createRepoFixtureWithStaleOrigin();
+    seedRepo("repo-1", repoPath);
+
+    expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).not.toBe(latestSha);
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status.currentCommitSha).toBe(latestSha);
+    expect(result.status.lastSyncedCommitSha).toBe(latestSha);
+    expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(latestSha);
+  }, 15_000);
+
+  it("continues sync with cached refs when origin fetch fails", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+    await git(repoPath, ["remote", "add", "origin", path.join(repoPath, "../missing-origin.git")]);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const result = await syncLinkedCheckout({
+        repoId: "repo-1",
+        sessionGroupId: "group-1",
+        branch: "trace/raccoon",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.status.autoSyncEnabled).toBe(true);
+      expect(result.status.lastSyncError).toBeNull();
+      expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("origin fetch failed"));
+    } finally {
+      warnSpy.mockRestore();
+    }
   }, 15_000);
 
   it("returns a structured error code for dirty-root sync failures", async () => {

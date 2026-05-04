@@ -1201,6 +1201,7 @@ export type MutationUpdateScopeAiModeArgs = {
 export type MutationUpdateSessionConfigArgs = {
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   tool?: InputMaybe<CodingTool>;
@@ -1638,6 +1639,7 @@ export type Session = {
   prUrl?: Maybe<Scalars["String"]["output"]>;
   projects: Array<Project>;
   queuedMessages: Array<QueuedMessage>;
+  reasoningEffort?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupId?: Maybe<Scalars["ID"]["output"]>;
@@ -1798,6 +1800,7 @@ export type StartSessionInput = {
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   restoreCheckpointId?: InputMaybe<Scalars["ID"]["input"]>;
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;

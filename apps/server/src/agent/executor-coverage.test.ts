@@ -557,11 +557,13 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
       repoId: "repo-1",
       sessionGroupId: "group-1",
       sourceSessionId: "session-0",
+      reasoningEffort: "high",
     },
     assertCall: (services) => {
       expect(services.sessionService.start).toHaveBeenCalledWith({
         tool: "claude_code",
         model: undefined,
+        reasoningEffort: "high",
         hosting: undefined,
         repoId: "repo-1",
         branch: undefined,

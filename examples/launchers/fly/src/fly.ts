@@ -135,6 +135,7 @@ export function buildMachineEnv(
     TRACE_TOOL: request.tool,
     TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
     ...(request.model ? { TRACE_MODEL: request.model } : {}),
+    ...(request.reasoningEffort ? { TRACE_REASONING_EFFORT: request.reasoningEffort } : {}),
     ...(request.repo
       ? {
           TRACE_REPO_URL: request.repo.remoteUrl,

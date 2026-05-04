@@ -15,7 +15,17 @@ describe("validateStartSessionRequest", () => {
     });
 
     expect(request.model).toBeNull();
+    expect(request.reasoningEffort).toBe("xhigh");
     expect(request.metadata.launcherMetadata).toEqual({});
+  });
+
+  it("normalizes missing reasoning effort to null", () => {
+    const body: Record<string, unknown> = { ...startRequest() };
+    delete body.reasoningEffort;
+
+    const request = validateStartSessionRequest(body);
+
+    expect(request.reasoningEffort).toBeNull();
   });
 });
 
@@ -32,6 +42,7 @@ function startRequest(): StartSessionRequest {
     repo: null,
     tool: "codex",
     model: "gpt-5",
+    reasoningEffort: "xhigh",
     bootstrapEnv: {
       TRACE_SESSION_ID: "session-1",
       TRACE_ORG_ID: "org-1",

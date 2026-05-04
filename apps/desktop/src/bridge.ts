@@ -572,6 +572,7 @@ export class BridgeClient implements IBridgeClient {
     cwd,
     tool,
     model,
+    reasoningEffort,
     interactionMode,
     toolSessionId,
     checkpointContext,
@@ -582,6 +583,7 @@ export class BridgeClient implements IBridgeClient {
     cwd?: string;
     tool?: string;
     model?: string;
+    reasoningEffort?: string;
     interactionMode?: string;
     toolSessionId?: string;
     checkpointContext?: GitCheckpointContext | null;
@@ -774,6 +776,7 @@ export class BridgeClient implements IBridgeClient {
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
+      reasoningEffort,
       toolSessionId,
     });
   }
@@ -787,6 +790,7 @@ export class BridgeClient implements IBridgeClient {
           cwd: cmd.cwd,
           tool: cmd.tool,
           model: cmd.model,
+          reasoningEffort: cmd.reasoningEffort,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
@@ -801,6 +805,7 @@ export class BridgeClient implements IBridgeClient {
           cwd: cmd.cwd,
           tool: cmd.tool,
           model: cmd.model,
+          reasoningEffort: cmd.reasoningEffort,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,

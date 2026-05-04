@@ -55,14 +55,28 @@ describe("sessionPatchFromOutput", () => {
       type: "config_changed",
       tool: "codex",
       model: "gpt-5.5",
+      reasoningEffort: "xhigh",
       hosting: "local",
       connection: { state: "connected", runtimeInstanceId: "runtime-1" },
     });
     expect(patch).toEqual({
       tool: "codex",
       model: "gpt-5.5",
+      reasoningEffort: "xhigh",
       hosting: "local",
       connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+    });
+  });
+
+  it("preserves explicit null config clears", () => {
+    const patch = sessionPatchFromOutput({
+      type: "config_changed",
+      model: null,
+      reasoningEffort: null,
+    });
+    expect(patch).toEqual({
+      model: null,
+      reasoningEffort: null,
     });
   });
 

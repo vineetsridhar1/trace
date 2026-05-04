@@ -60,6 +60,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         sessionStatus
         tool
         model
+        reasoningEffort
         hosting
         branch
         prUrl

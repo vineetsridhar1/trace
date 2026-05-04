@@ -25,6 +25,7 @@ const SESSION_DETAIL_QUERY = gql`
       sessionStatus
       tool
       model
+      reasoningEffort
       hosting
       branch
       workdir

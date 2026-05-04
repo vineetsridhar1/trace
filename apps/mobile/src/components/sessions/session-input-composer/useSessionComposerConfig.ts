@@ -2,7 +2,14 @@ import { useCallback, useMemo } from "react";
 import type { SFSymbol } from "expo-symbols";
 import { UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
-import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared";
+import {
+  getDefaultModel,
+  getDefaultReasoningEffort,
+  getModelLabel,
+  getModelsForTool,
+  getReasoningEffortLabel,
+  getReasoningEffortsForTool,
+} from "@trace/shared";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
@@ -14,6 +21,7 @@ interface UseSessionComposerConfigOptions {
   isNotStarted: boolean;
   isOptimistic: unknown;
   model: string | null | undefined;
+  reasoningEffort?: string | null | undefined;
   sessionId: string;
   tool: string | null | undefined;
 }
@@ -25,6 +33,7 @@ export function useSessionComposerConfig({
   isNotStarted,
   isOptimistic,
   model,
+  reasoningEffort,
   sessionId,
   tool,
 }: UseSessionComposerConfigOptions) {
@@ -32,9 +41,11 @@ export function useSessionComposerConfig({
     async (newTool: CodingTool) => {
       if (tool === newTool) return true;
       const newDefault = getDefaultModel(newTool) ?? null;
+      const newDefaultReasoningEffort = getDefaultReasoningEffort(newTool) ?? null;
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         tool: newTool,
         model: newDefault,
+        reasoningEffort: newDefaultReasoningEffort,
       });
       try {
         const result = await getClient()
@@ -42,6 +53,7 @@ export function useSessionComposerConfig({
             sessionId,
             tool: newTool,
             model: newDefault,
+            reasoningEffort: newDefaultReasoningEffort,
           })
           .toPromise();
         if (result.error) throw result.error;
@@ -76,10 +88,43 @@ export function useSessionComposerConfig({
     [model, sessionId],
   );
 
+  const handleReasoningEffortChange = useCallback(
+    async (newReasoningEffort: string) => {
+      if (reasoningEffort === newReasoningEffort) return true;
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        reasoningEffort: newReasoningEffort,
+      });
+      try {
+        const result = await getClient()
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            reasoningEffort: newReasoningEffort,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+        return true;
+      } catch (err) {
+        rollback();
+        void haptic.error();
+        console.warn("[updateSessionConfig] reasoning effort change failed", err);
+        return false;
+      }
+    },
+    [reasoningEffort, sessionId],
+  );
+
   const canChangeBridge = isNotStarted && !isOptimistic;
 
   const modelLabel = model ? getModelLabel(model) : "Model";
   const modelOptions = useMemo(() => getModelsForTool(currentTool), [currentTool]);
+  const reasoningEffortOptions = useMemo(
+    () => getReasoningEffortsForTool(currentTool),
+    [currentTool],
+  );
+  const effectiveReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
+  const reasoningEffortLabel = effectiveReasoningEffort
+    ? getReasoningEffortLabel(effectiveReasoningEffort)
+    : "Effort";
   const toolOptions = useMemo(
     () => [
       { value: "claude_code" as const, label: "Claude Code" },
@@ -97,10 +142,14 @@ export function useSessionComposerConfig({
     canChangeBridge,
     modelLabel,
     modelOptions,
+    reasoningEffortLabel,
+    reasoningEffortOptions,
     toolOptions,
     handleModelChange,
+    handleReasoningEffortChange,
     handleToolChange,
     currentTool,
     model,
+    reasoningEffort: effectiveReasoningEffort,
   };
 }

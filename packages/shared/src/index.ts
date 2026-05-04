@@ -147,8 +147,17 @@ export type {
   LLMRequestOptions,
   LLMAdapter,
 } from "./adapters/llm.js";
-export type { ModelOption } from "./models.js";
-export { getModelsForTool, getDefaultModel, getModelLabel, isSupportedModel } from "./models.js";
+export type { ModelOption, ReasoningEffortOption } from "./models.js";
+export {
+  getModelsForTool,
+  getDefaultModel,
+  getModelLabel,
+  isSupportedModel,
+  getReasoningEffortsForTool,
+  getDefaultReasoningEffort,
+  getReasoningEffortLabel,
+  isSupportedReasoningEffort,
+} from "./models.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
 export {
