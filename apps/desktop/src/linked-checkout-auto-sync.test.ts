@@ -27,6 +27,7 @@ vi.mock("./config.js", () => {
 
 vi.mock("./linked-checkout.js", () => ({
   withRepoLock: async <T>(_repoId: string, fn: () => Promise<T>) => fn(),
+  fetchTargetBranchIfAvailable: vi.fn(async () => undefined),
   pauseExistingAttachment: vi.fn(async (repoId: string, error: string) => {
     // Mirror the real helper's effect: flip autoSyncEnabled off + record error.
     const config = await import("./config.js");
@@ -68,6 +69,7 @@ const configMock = config as unknown as {
 };
 
 const linkedCheckoutMock = linkedCheckout as unknown as {
+  fetchTargetBranchIfAvailable: ReturnType<typeof vi.fn>;
   pauseExistingAttachment: ReturnType<typeof vi.fn>;
   resolveTargetCommitSha: ReturnType<typeof vi.fn>;
 };
@@ -125,6 +127,7 @@ function createDeferred<T>(): {
 beforeEach(() => {
   configMock.__reset();
   configMock.setRepoLinkedCheckout.mockClear();
+  linkedCheckoutMock.fetchTargetBranchIfAvailable.mockClear();
   linkedCheckoutMock.pauseExistingAttachment.mockClear();
   linkedCheckoutMock.resolveTargetCommitSha.mockClear();
   runtimeDebugMock.mockClear();
@@ -152,6 +155,10 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     await manager.reconcileAll();
 
     expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "b".repeat(40));
+    expect(linkedCheckoutMock.fetchTargetBranchIfAvailable).toHaveBeenCalledWith(
+      "/tmp/repo-repo-1",
+      "main",
+    );
     expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
       lastSyncedCommitSha: "b".repeat(40),
       lastSyncError: null,

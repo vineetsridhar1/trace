@@ -254,6 +254,48 @@ async function fetchOriginIfAvailable(repoPath: string): Promise<void> {
   }
 }
 
+function isMissingRemoteRefError(error: unknown): boolean {
+  return formatGitError(error).includes("couldn't find remote ref");
+}
+
+async function deleteRemoteTrackingRef(repoPath: string, branch: string): Promise<void> {
+  await execFileAsync("git", ["update-ref", "-d", `refs/remotes/origin/${branch}`], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  }).catch(() => undefined);
+}
+
+export async function fetchTargetBranchIfAvailable(repoPath: string, branch: string): Promise<void> {
+  assertSafeGitRef(branch);
+  if (branch.includes(":") || branch.startsWith("refs/")) {
+    throw new Error(`Unsafe git ref: ${branch}`);
+  }
+  try {
+    await runGit(repoPath, ["remote", "get-url", "origin"]);
+  } catch {
+    return;
+  }
+
+  try {
+    await execFileAsync(
+      "git",
+      ["fetch", "origin", "--prune", `+refs/heads/${branch}:refs/remotes/origin/${branch}`],
+      {
+        cwd: repoPath,
+        maxBuffer: GIT_MAX_BUFFER,
+      },
+    );
+  } catch (error) {
+    if (isMissingRemoteRefError(error)) {
+      await deleteRemoteTrackingRef(repoPath, branch);
+      return;
+    }
+    console.warn(
+      `[linked-checkout] target branch fetch failed; using cached refs: ${formatGitError(error)}`,
+    );
+  }
+}
+
 async function listTreePaths(repoPath: string, ref: string): Promise<string[]> {
   const { stdout } = await execFileAsync("git", ["ls-tree", "-r", "-z", "--name-only", ref], {
     cwd: repoPath,
@@ -753,6 +795,7 @@ export function syncLinkedCheckout(
       const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
       const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
       await fetchOriginIfAvailable(repoPath);
+      await fetchTargetBranchIfAvailable(repoPath, input.branch);
       let targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
       let rebaseAttachmentPrimed = false;
 
