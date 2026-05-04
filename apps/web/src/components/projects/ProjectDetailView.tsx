@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarClock, GitBranch, Radio, Users } from "lucide-react";
+import type { ReactNode } from "react";
+import { ArrowLeft, CalendarClock, GitBranch, Radio, RefreshCw, Users } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project } from "@trace/gql";
 import {
@@ -66,14 +67,21 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const setActiveProjectId = useUIStore((s) => s.setActiveProjectId);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const projectName = useEntityField("projects", projectId, "name");
   const project = useEntityStore((s) => s.projects[projectId]);
   const scopeKey = useMemo(() => eventScopeKey("project", projectId), [projectId]);
   const eventIds = useScopedEventIds(scopeKey);
-  useProjectEvents(projectId);
+  const projectEvents = useProjectEvents(projectId);
 
   const fetchProject = useCallback(async () => {
+    setError(null);
     const result = await client.query(PROJECT_QUERY, { id: projectId }).toPromise();
+    if (result.error) {
+      setError(result.error.message);
+      setLoading(false);
+      return;
+    }
     const fetched = result.data?.project as (Project & { id: string }) | null | undefined;
     if (fetched && (!activeOrgId || fetched.organizationId === activeOrgId)) {
       upsert("projects", fetched.id, fetched);
@@ -87,6 +95,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
+    setError(null);
     fetchProject();
   }, [fetchProject]);
 
@@ -100,19 +109,32 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     );
   }
 
+  if (error && !project) {
+    return (
+      <ProjectDetailState
+        title="Project failed to load"
+        body={error}
+        action={
+          <Button variant="outline" onClick={fetchProject}>
+            <RefreshCw size={16} />
+            Retry
+          </Button>
+        }
+      />
+    );
+  }
+
   if (notFound || !project) {
     return (
-      <div className="flex flex-1 items-center justify-center px-6">
-        <div className="max-w-sm text-center">
-          <h3 className="text-base font-semibold text-foreground">Project not found</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            This project may have been removed or may not belong to the active organization.
-          </p>
-          <Button className="mt-4" variant="outline" onClick={() => setActiveProjectId(null)}>
+      <ProjectDetailState
+        title="Project not found"
+        body="This project may have been removed or may not belong to the active organization."
+        action={
+          <Button variant="outline" onClick={() => setActiveProjectId(null)}>
             Back to projects
           </Button>
-        </div>
-      </div>
+        }
+      />
     );
   }
 
@@ -189,8 +211,33 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             <Radio size={15} className="text-muted-foreground" />
             <h2 className="text-sm font-semibold text-foreground">Latest activity</h2>
           </div>
-          <ProjectActivityList scopeKey={scopeKey} eventIds={eventIds} />
+          <ProjectActivityList
+            scopeKey={scopeKey}
+            eventIds={eventIds}
+            loading={projectEvents.loading}
+            error={projectEvents.error}
+          />
         </section>
+      </div>
+    </div>
+  );
+}
+
+function ProjectDetailState({
+  title,
+  body,
+  action,
+}: {
+  title: string;
+  body: string;
+  action: ReactNode;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-6">
+      <div className="max-w-sm text-center">
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+        <div className="mt-4">{action}</div>
       </div>
     </div>
   );
@@ -205,7 +252,17 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProjectActivityList({ scopeKey, eventIds }: { scopeKey: string; eventIds: string[] }) {
+function ProjectActivityList({
+  scopeKey,
+  eventIds,
+  loading,
+  error,
+}: {
+  scopeKey: string;
+  eventIds: string[];
+  loading: boolean;
+  error: string | null;
+}) {
   const events = useEntityStore((s) =>
     eventIds
       .slice(-8)
@@ -213,6 +270,14 @@ function ProjectActivityList({ scopeKey, eventIds }: { scopeKey: string; eventId
       .map((id) => s.eventsByScope[scopeKey]?.[id])
       .filter((event): event is NonNullable<typeof event> => event !== undefined),
   );
+
+  if (error) {
+    return <p className="mt-3 text-sm text-destructive">{error}</p>;
+  }
+
+  if (loading && events.length === 0) {
+    return <p className="mt-3 text-sm text-muted-foreground">Loading activity...</p>;
+  }
 
   if (events.length === 0) {
     return <p className="mt-3 text-sm text-muted-foreground">No project activity received yet.</p>;

@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { FolderKanban, GitBranch, Users } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { FolderKanban, GitBranch, RefreshCw, Users } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project } from "@trace/gql";
 import { useAuthStore, useEntityIds, useEntityStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
+import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 
 const PROJECTS_QUERY = gql`
@@ -55,10 +58,18 @@ export function ProjectListView() {
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const setActiveProjectId = useUIStore((s) => s.setActiveProjectId);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchProjects = useCallback(async () => {
     if (!activeOrgId) return;
+    setError(null);
     const result = await client.query(PROJECTS_QUERY, { organizationId: activeOrgId }).toPromise();
+    if (result.error) {
+      setError(result.error.message);
+      setLoading(false);
+      return;
+    }
     if (result.data?.projects) {
       upsertMany("projects", result.data.projects as Array<Project & { id: string }>);
     }
@@ -75,6 +86,12 @@ export function ProjectListView() {
     (project) => project.organizationId === activeOrgId,
     (a, b) => b.updatedAt.localeCompare(a.updatedAt),
   );
+  const virtualizer = useVirtualizer({
+    count: projectIds.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 88,
+    overscan: 6,
+  });
 
   if (loading) {
     return (
@@ -86,27 +103,70 @@ export function ProjectListView() {
     );
   }
 
+  if (error) {
+    return (
+      <ProjectListState
+        icon={<RefreshCw size={28} />}
+        title="Projects failed to load"
+        body={error}
+        action={
+          <Button variant="outline" onClick={fetchProjects}>
+            Retry
+          </Button>
+        }
+      />
+    );
+  }
+
   if (projectIds.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center px-6">
-        <div className="max-w-sm text-center">
-          <FolderKanban className="mx-auto mb-3 text-muted-foreground" size={28} />
-          <h3 className="text-base font-semibold text-foreground">No projects yet</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Start by creating a project from the service layer or seed data, then it will appear
-            here as a workspace.
-          </p>
-        </div>
-      </div>
+      <ProjectListState
+        icon={<FolderKanban size={28} />}
+        title="No projects yet"
+        body="Start by creating a project from the service layer or seed data, then it will appear here as a workspace."
+      />
     );
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4">
-      <div className="grid gap-2">
-        {projectIds.map((id) => (
-          <ProjectListItem key={id} projectId={id} onOpen={setActiveProjectId} />
-        ))}
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+        {virtualizer.getVirtualItems().map((item) => {
+          const projectId = projectIds[item.index];
+          if (!projectId) return null;
+          return (
+            <div
+              key={projectId}
+              className="absolute left-0 top-0 w-full pb-2"
+              style={{ transform: `translateY(${item.start}px)` }}
+            >
+              <ProjectListItem projectId={projectId} onOpen={setActiveProjectId} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProjectListState({
+  icon,
+  title,
+  body,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  body: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-6">
+      <div className="max-w-sm text-center">
+        <div className="mx-auto mb-3 flex justify-center text-muted-foreground">{icon}</div>
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+        {action && <div className="mt-4">{action}</div>}
       </div>
     </div>
   );

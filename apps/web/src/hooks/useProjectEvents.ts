@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { eventScopeKey, useAuthStore, useEntityStore } from "@trace/client-core";
@@ -30,12 +30,20 @@ const PROJECT_EVENTS_QUERY = gql`
 export function useProjectEvents(projectId: string | null) {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const upsertManyScopedEvents = useEntityStore((s) => s.upsertManyScopedEvents);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!activeOrgId || !projectId) return;
+    if (!activeOrgId || !projectId) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
     let cancelled = false;
     const scopeKey = eventScopeKey("project", projectId);
+    setLoading(true);
+    setError(null);
 
     client
       .query(PROJECT_EVENTS_QUERY, {
@@ -48,15 +56,19 @@ export function useProjectEvents(projectId: string | null) {
       .then((result) => {
         if (cancelled) return;
         if (result.error) {
-          console.error("[projectEvents] query error:", result.error.message);
+          setError(result.error.message);
+          setLoading(false);
           return;
         }
-        if (!Array.isArray(result.data?.events)) return;
-        upsertManyScopedEvents(scopeKey, result.data.events as Array<Event & { id: string }>);
+        if (Array.isArray(result.data?.events)) {
+          upsertManyScopedEvents(scopeKey, result.data.events as Array<Event & { id: string }>);
+        }
+        setLoading(false);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          console.error("[projectEvents] query failed:", error);
+          setError(error instanceof Error ? error.message : "Failed to load project activity.");
+          setLoading(false);
         }
       });
 
@@ -64,4 +76,6 @@ export function useProjectEvents(projectId: string | null) {
       cancelled = true;
     };
   }, [activeOrgId, projectId, upsertManyScopedEvents]);
+
+  return { loading, error };
 }
