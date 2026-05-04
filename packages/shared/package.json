@@ -43,7 +43,8 @@
   "scripts": {
     "build": "tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
-    "lint": "tsc -b"
+    "lint": "tsc -b",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "node-pty": "^1.1.0"
@@ -56,6 +57,7 @@
   "devDependencies": {
     "@types/node": "^24.5.2",
     "node-pty": "^1.1.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
   }
 }

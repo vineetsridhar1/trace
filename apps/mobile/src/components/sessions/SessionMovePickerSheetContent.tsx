@@ -153,9 +153,16 @@ export function SessionMovePickerSheetContent({
         }
         const result =
           runtimeInstanceId === CLOUD_RUNTIME_ID
-            ? await getClient().mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId }).toPromise()
+            ? await getClient()
+                .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
+                  sessionId,
+                })
+                .toPromise()
             : await getClient()
-                .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, { sessionId, runtimeInstanceId })
+                .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, {
+                  sessionId,
+                  runtimeInstanceId,
+                })
                 .toPromise();
         const movedSession =
           runtimeInstanceId === CLOUD_RUNTIME_ID

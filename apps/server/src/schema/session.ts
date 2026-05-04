@@ -329,7 +329,10 @@ export const sessionMutations = {
   },
   moveSessionToRuntime: (
     _: unknown,
-    args: { sessionId: string; runtimeInstanceId: string },
+    args: {
+      sessionId: string;
+      runtimeInstanceId: string;
+    },
     ctx: Context,
   ) => {
     return sessionService.moveToRuntime(

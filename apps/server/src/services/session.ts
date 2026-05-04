@@ -280,6 +280,15 @@ function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean 
   );
 }
 
+function allowsUnverifiedSourceGitStatusForMove(state: SessionConnectionData["state"]): boolean {
+  return (
+    state === "disconnected" ||
+    state === "failed" ||
+    state === "timed_out" ||
+    state === "deprovision_failed"
+  );
+}
+
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
 }
@@ -678,8 +687,9 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
   return `<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n${lines.join("\n\n")}\n</conversation-history>`;
 }
 
-function buildMigrationPrompt(): string {
-  return "Continue this session on the new runtime.";
+function buildMigrationPrompt(sourceGitStatusVerified: boolean): string {
+  if (sourceGitStatusVerified) return "Continue this session on the new runtime.";
+  return "Continue this session on the new runtime. Source git sync was not verified during the move; inspect the repository state before making changes.";
 }
 
 function buildToolSessionRecoveryPrompt(context: string | null): string {
@@ -4837,6 +4847,7 @@ export class SessionService {
         targetHosting: "cloud",
         targetRuntimeInstanceId: null,
         targetRuntimeLabel: null,
+        allowUnverifiedSourceGitStatus: true,
         actorType,
         actorId,
       });
@@ -5120,13 +5131,46 @@ export class SessionService {
     repoId?: string | null;
     workdir?: string | null;
     runtimeInstanceId?: string | null;
-  }): Promise<BridgeSessionGitSyncStatus | null> {
-    if (!params.repoId || !params.workdir || !params.runtimeInstanceId) return null;
+    allowUnverifiedSourceGitStatus?: boolean;
+  }): Promise<{
+    status: BridgeSessionGitSyncStatus | null;
+    verified: boolean;
+    skippedReason: string | null;
+  }> {
+    if (!params.repoId) return { status: null, verified: true, skippedReason: null };
+    if (!params.workdir) {
+      if (!params.allowUnverifiedSourceGitStatus) {
+        throw new Error(
+          "Cannot move session: source git status could not be verified because the source workdir is unavailable.",
+        );
+      }
+      return { status: null, verified: false, skippedReason: "missing_workdir" };
+    }
+    if (!params.runtimeInstanceId) {
+      if (!params.allowUnverifiedSourceGitStatus) {
+        throw new Error(
+          "Cannot move session: source git status could not be verified because the source runtime is unavailable.",
+        );
+      }
+      return { status: null, verified: false, skippedReason: "source_runtime_unavailable" };
+    }
 
-    const status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
-      sessionId: params.sessionId,
-      workdirHint: params.workdir,
-    });
+    let status: BridgeSessionGitSyncStatus;
+    try {
+      status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
+        sessionId: params.sessionId,
+        workdirHint: params.workdir,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!params.allowUnverifiedSourceGitStatus) {
+        throw new Error(`Cannot move session: source git status could not be verified. ${message}`);
+      }
+      console.warn(
+        `[session-service] skipping move source git sync check for ${params.sessionId}: ${message}`,
+      );
+      return { status: null, verified: false, skippedReason: "inspection_failed" };
+    }
 
     if (status.hasUncommittedChanges) {
       throw new Error(
@@ -5138,7 +5182,7 @@ export class SessionService {
       if (!status.headCommitSha) {
         throw new Error("Cannot move session: unable to resolve the current detached commit.");
       }
-      return status;
+      return { status, verified: true, skippedReason: null };
     }
 
     if (status.remoteBranch && status.remoteCommitSha) {
@@ -5147,7 +5191,7 @@ export class SessionService {
           "Cannot move session: local branch must match its remote branch before moving.",
         );
       }
-      return status;
+      return { status, verified: true, skippedReason: null };
     }
 
     if (!status.upstreamBranch || !status.upstreamCommitSha) {
@@ -5160,7 +5204,7 @@ export class SessionService {
       throw new Error("Cannot move session: local branch must match its upstream before moving.");
     }
 
-    return status;
+    return { status, verified: true, skippedReason: null };
   }
 
   private async moveSessionInPlace(params: {
@@ -5168,6 +5212,7 @@ export class SessionService {
     targetHosting: "cloud" | "local";
     targetRuntimeInstanceId?: string | null;
     targetRuntimeLabel?: string | null;
+    allowUnverifiedSourceGitStatus?: boolean;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -5176,6 +5221,7 @@ export class SessionService {
       targetHosting,
       targetRuntimeInstanceId,
       targetRuntimeLabel,
+      allowUnverifiedSourceGitStatus,
       actorType,
       actorId,
     } = params;
@@ -5199,12 +5245,14 @@ export class SessionService {
       throw new Error("No enabled cloud agent environment is configured");
     }
 
-    const sourceGitStatus = await this.inspectSessionMoveSource({
+    const sourceInspection = await this.inspectSessionMoveSource({
       sessionId: session.id,
       repoId: session.repoId,
       workdir: session.workdir,
       runtimeInstanceId: inspectableSourceRuntimeId,
+      allowUnverifiedSourceGitStatus,
     });
+    const sourceGitStatus = sourceInspection.status;
 
     terminalRelay.destroyAllForSession(session.id);
 
@@ -5221,7 +5269,7 @@ export class SessionService {
 
     sessionRouter.unbindSession(session.id);
 
-    const bootstrapPrompt = buildMigrationPrompt();
+    const bootstrapPrompt = buildMigrationPrompt(sourceInspection.verified);
     const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
     const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
@@ -5283,6 +5331,8 @@ export class SessionService {
         sourceHosting: session.hosting,
         targetHosting,
         targetRuntimeLabel: targetRuntimeLabel ?? null,
+        sourceGitStatusVerified: sourceInspection.verified,
+        sourceGitStatusSkippedReason: sourceInspection.skippedReason,
       } as Prisma.InputJsonValue,
       actorType,
       actorId,
@@ -5380,6 +5430,9 @@ export class SessionService {
       targetHosting: targetRuntime.hostingMode,
       targetRuntimeInstanceId: runtimeInstanceId,
       targetRuntimeLabel: targetRuntime.label,
+      allowUnverifiedSourceGitStatus: allowsUnverifiedSourceGitStatusForMove(
+        this.parseConnection(session.connection).state,
+      ),
       actorType,
       actorId,
     });
@@ -5419,6 +5472,9 @@ export class SessionService {
       targetHosting: "cloud",
       targetRuntimeInstanceId: null,
       targetRuntimeLabel: null,
+      allowUnverifiedSourceGitStatus: allowsUnverifiedSourceGitStatusForMove(
+        this.parseConnection(session.connection).state,
+      ),
       actorType,
       actorId,
     });

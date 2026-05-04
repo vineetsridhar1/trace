@@ -67,7 +67,10 @@ export function SessionRuntimePicker({
       setMoving(runtimeInstanceId);
       try {
         const result = await client
-          .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, { sessionId, runtimeInstanceId })
+          .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, {
+            sessionId,
+            runtimeInstanceId,
+          })
           .toPromise();
         if (result.error) {
           toast.error("Failed to move session", { description: result.error.message });
@@ -97,7 +100,9 @@ export function SessionRuntimePicker({
     setMoving("cloud");
     try {
       const result = await client
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
+        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
+          sessionId,
+        })
         .toPromise();
       if (result.error) {
         toast.error("Failed to move session", { description: result.error.message });

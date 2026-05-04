@@ -611,7 +611,9 @@ function RuntimeLifecycleNotice({
     setAction("cloud");
     try {
       const result = await client
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
+        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
+          sessionId,
+        })
         .toPromise();
       if (result.error) {
         toast.error("Failed to start cloud runtime", { description: result.error.message });
