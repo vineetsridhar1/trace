@@ -60,6 +60,7 @@ type MockedServices = ServiceContainer & {
   };
   organizationService: {
     createProject: MockFn;
+    updateProject: MockFn;
     linkEntityToProject: MockFn;
     getProject: MockFn;
     searchUsers: MockFn;
@@ -149,6 +150,7 @@ function createServices(): MockedServices {
     },
     organizationService: {
       createProject: vi.fn().mockResolvedValue(result("project.create")),
+      updateProject: vi.fn().mockResolvedValue(result("project.update")),
       linkEntityToProject: vi.fn().mockResolvedValue(result("project.linkEntity")),
       getProject: vi.fn().mockResolvedValue(result("project.get")),
       searchUsers: vi.fn().mockResolvedValue([result("users.search")]),
@@ -213,6 +215,7 @@ function getAllMocks(services: MockedServices): MockFn[] {
     services.inboxService.createItem,
     services.inboxService.listAgentSuggestions,
     services.organizationService.createProject,
+    services.organizationService.updateProject,
     services.organizationService.linkEntityToProject,
     services.organizationService.getProject,
     services.organizationService.searchUsers,
@@ -537,6 +540,19 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         "session",
         "session-1",
         "proj-1",
+        "agent",
+        "agent-1",
+      );
+    },
+  },
+  {
+    actionType: "project.update",
+    args: { projectId: "proj-1", name: "Project Atlas v2", aiMode: "suggest" },
+    assertCall: (services) => {
+      expect(services.organizationService.updateProject).toHaveBeenCalledWith(
+        "proj-1",
+        "org-1",
+        { name: "Project Atlas v2", aiMode: "suggest" },
         "agent",
         "agent-1",
       );

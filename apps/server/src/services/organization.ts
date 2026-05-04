@@ -3,6 +3,7 @@ import type {
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
+  UpdateProjectInput,
   EntityType,
   ActorType,
   UserRole,
@@ -495,12 +496,23 @@ export class OrganizationService {
   }
 
   async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Project name is required");
+    }
+
     const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
+      if (input.repoId) {
+        await tx.repo.findFirstOrThrow({
+          where: { id: input.repoId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+      }
 
       const project = await tx.project.create({
         data: {
-          name: input.name,
+          name,
           organizationId: input.organizationId,
           ...(input.repoId && { repoId: input.repoId }),
           ...(actorType === "user" && {
@@ -529,7 +541,7 @@ export class OrganizationService {
           scopeType: "system",
           scopeId: project.id,
           eventType: "entity_linked",
-          payload: { type: "project_created", projectId: project.id, name: project.name },
+          payload: { type: "project_created", projectId: project.id, name },
           actorType,
           actorId,
         },
@@ -537,6 +549,64 @@ export class OrganizationService {
       );
 
       return [project, projectEvent, compatibilityEvent] as const;
+    });
+
+    return project;
+  }
+
+  async updateProject(
+    id: string,
+    organizationId: string,
+    input: UpdateProjectInput,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const name = input.name?.trim();
+    if (input.name != null && !name) {
+      throw new Error("Project name is required");
+    }
+
+    const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+
+      const existingProject = await tx.project.findFirstOrThrow({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+
+      if (input.repoId) {
+        await tx.repo.findFirstOrThrow({
+          where: { id: input.repoId, organizationId },
+          select: { id: true },
+        });
+      }
+
+      const updateData: Prisma.ProjectUncheckedUpdateInput = {};
+      if (name != null) updateData.name = name;
+      if (input.repoId !== undefined) updateData.repoId = input.repoId;
+      if (input.aiMode !== undefined) updateData.aiMode = input.aiMode;
+      if (input.soulFile != null) updateData.soulFile = input.soulFile;
+
+      const project = (await tx.project.update({
+        where: { id: existingProject.id },
+        data: updateData,
+        include: PROJECT_INCLUDE,
+      })) as ProjectWithRelations;
+
+      await eventService.create(
+        {
+          organizationId,
+          scopeType: "project",
+          scopeId: project.id,
+          eventType: "project_updated",
+          payload: { project: projectPayload(project) },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return [project] as const;
     });
 
     return project;
