@@ -10,6 +10,8 @@ import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 
+const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
+
 export interface SessionMessageListProps {
   key?: React.Key;
   nodes: SessionNode[];
@@ -47,6 +49,9 @@ export function SessionMessageList({
   const isScrollingUpRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   const sizeCacheRef = useRef(new Map<string, number>());
+  const initialBottomAligningRef = useRef(false);
+  const initialScrollTimeoutsRef = useRef<number[]>([]);
+  const initialScrollFramesRef = useRef<number[]>([]);
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -102,6 +107,81 @@ export function SessionMessageList({
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
+
+  const alignToBottomAfterMeasure = useCallback(
+    (markComplete = false) => {
+      const container = scrollContainerRef.current;
+      if (!container || nodes.length === 0) return;
+
+      virtualizer.measure();
+      virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
+
+      if (markComplete) {
+        hasScrolledInitiallyRef.current = true;
+        initialBottomAligningRef.current = false;
+        handleScroll();
+      }
+    },
+    [handleScroll, nodes.length, virtualizer],
+  );
+
+  const clearInitialScrollTimers = useCallback(() => {
+    for (const timeoutId of initialScrollTimeoutsRef.current) {
+      window.clearTimeout(timeoutId);
+    }
+    for (const frameId of initialScrollFramesRef.current) {
+      window.cancelAnimationFrame(frameId);
+    }
+    initialScrollTimeoutsRef.current = [];
+    initialScrollFramesRef.current = [];
+  }, []);
+
+  const scheduleInitialBottomAlignment = useCallback(() => {
+    clearInitialScrollTimers();
+    initialBottomAligningRef.current = true;
+
+    INITIAL_SCROLL_SETTLE_DELAYS.forEach((delay, index) => {
+      const timeoutId = window.setTimeout(() => {
+        const frameId = window.requestAnimationFrame(() => {
+          const isFinalPass = index === INITIAL_SCROLL_SETTLE_DELAYS.length - 1;
+          alignToBottomAfterMeasure(isFinalPass);
+        });
+        initialScrollFramesRef.current.push(frameId);
+      }, delay);
+      initialScrollTimeoutsRef.current.push(timeoutId);
+    });
+  }, [alignToBottomAfterMeasure, clearInitialScrollTimers]);
+
+  useEffect(() => clearInitialScrollTimers, [clearInitialScrollTimers]);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+
+    let frameId: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (frameId != null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        virtualizer.measure();
+
+        if (nodes.length > 0 && (initialBottomAligningRef.current || isNearBottomRef.current)) {
+          virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
+        }
+      });
+    });
+
+    observer.observe(container);
+    return () => {
+      if (frameId != null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      observer.disconnect();
+    };
+  }, [nodes.length, virtualizer]);
 
   // Correct scroll position when measurements change during upward scroll.
   // When items above the viewport are measured for the first time, the total
@@ -162,7 +242,7 @@ export function SessionMessageList({
   // Scroll to bottom on initial load — use useLayoutEffect + rAF to ensure
   // the virtualizer has rendered and measured before scrolling
   useLayoutEffect(() => {
-    if (!isInitialLoadRef.current || nodes.length === 0) return;
+    if (!isInitialLoadRef.current || initialLoading || nodes.length === 0) return;
 
     isInitialLoadRef.current = false;
     prevNodeCountRef.current = nodes.length;
@@ -170,18 +250,12 @@ export function SessionMessageList({
     // First pass: jump immediately (before paint) to avoid flash at top
     const container = scrollContainerRef.current;
     if (container) {
+      virtualizer.measure();
       container.scrollTop = container.scrollHeight;
     }
 
-    // Second pass: after the virtualizer measures, scroll precisely to the last item
-    requestAnimationFrame(() => {
-      virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
-      // Mark that initial scroll is complete — sentinel observer can now activate
-      requestAnimationFrame(() => {
-        hasScrolledInitiallyRef.current = true;
-      });
-    });
-  }, [nodes.length, virtualizer]);
+    scheduleInitialBottomAlignment();
+  }, [initialLoading, nodes.length, scheduleInitialBottomAlignment, virtualizer]);
 
   // Auto-scroll when new messages arrive at the end
   useEffect(() => {
