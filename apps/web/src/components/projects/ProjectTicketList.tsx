@@ -62,10 +62,7 @@ export function ProjectTicketList({
         </div>
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-          <div
-            className="relative w-full"
-            style={{ height: `${virtualizer.getTotalSize()}px` }}
-          >
+          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const ticketId = ticketIds[virtualRow.index];
               if (!ticketId) return null;
@@ -119,8 +116,13 @@ function GenerationAttemptNotice({
               ? `Generated ${draftCount} draft${draftCount === 1 ? "" : "s"} with issues`
               : status === "pending"
                 ? "Ticket generation is pending"
-              : "Ticket generation needs attention"}
+                : "Ticket generation needs attention"}
         </p>
+        {running ? (
+          <p className="mt-0.5">
+            The planning AI session on the right is running the injected ticket CLI.
+          </p>
+        ) : null}
         {error ? <p className="mt-0.5 break-words">{error}</p> : null}
       </div>
     </div>

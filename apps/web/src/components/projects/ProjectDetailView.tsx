@@ -247,13 +247,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
     await fetchProject();
     setStartingSession(false);
-  }, [
-    currentProjectRun,
-    defaultModel,
-    defaultTool,
-    fetchProject,
-    startingSession,
-  ]);
+  }, [currentProjectRun, defaultModel, defaultTool, fetchProject, startingSession]);
 
   useEffect(() => {
     if (!project || !currentProjectRun || planningSessionId || startingSession) return;
@@ -348,7 +342,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             <SessionDetailView
               sessionId={planningSessionId}
               panelMode
-              hideHeader
               onProjectPlanApproved={fetchProject}
               projectPlanningContext={
                 currentProjectRun
@@ -433,8 +426,7 @@ function selectActiveProjectRun(
   return (
     runs
       .filter((run) => ACTIVE_PROJECT_RUN_STATUSES.has(run.status))
-      .sort((a, b) => sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)))[0] ??
-    null
+      .sort((a, b) => sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)))[0] ?? null
   );
 }
 
