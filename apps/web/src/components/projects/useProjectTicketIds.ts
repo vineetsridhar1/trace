@@ -1,17 +1,20 @@
 import { useEntityStore } from "@trace/client-core";
+import { useShallow } from "zustand/react/shallow";
 
 export function useProjectTicketIds(projectId: string): string[] {
-  return useEntityStore((state) =>
-    Object.values(state.tickets)
-      .filter((ticket) => ticket.projects?.some((project) => project.id === projectId))
-      .sort((a, b) => {
-        const statusDiff = statusRank(a.status) - statusRank(b.status);
-        if (statusDiff !== 0) return statusDiff;
-        const timeDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        if (timeDiff !== 0) return timeDiff;
-        return a.id.localeCompare(b.id);
-      })
-      .map((ticket) => ticket.id),
+  return useEntityStore(
+    useShallow((state) =>
+      Object.values(state.tickets)
+        .filter((ticket) => ticket.projects?.some((project) => project.id === projectId))
+        .sort((a, b) => {
+          const statusDiff = statusRank(a.status) - statusRank(b.status);
+          if (statusDiff !== 0) return statusDiff;
+          const timeDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return a.id.localeCompare(b.id);
+        })
+        .map((ticket) => ticket.id),
+    ),
   );
 }
 
