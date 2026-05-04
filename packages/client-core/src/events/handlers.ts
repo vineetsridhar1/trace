@@ -9,7 +9,10 @@ import type {
   Event,
   EventType,
   InboxItem,
+  OrchestratorEpisode,
   Project,
+  ProjectTicketExecution,
+  ProjectTicketGenerationAttempt,
   QueuedMessage,
   Repo,
   ScopeType,
@@ -135,6 +138,45 @@ function upsertProjectRunFromPayload(batch: StoreBatchWriter, payload: JsonObjec
     "projectRuns",
     projectRun.id,
     (existing ? { ...existing, ...projectRun } : projectRun) as unknown as ProjectRunEntity,
+  );
+}
+
+function upsertGenerationAttemptFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const attempt = asJsonObject(payload.generationAttempt);
+  if (!attempt || typeof attempt.id !== "string") return;
+
+  const existing = batch.get("projectTicketGenerationAttempts", attempt.id);
+  batch.upsert(
+    "projectTicketGenerationAttempts",
+    attempt.id,
+    (existing ? { ...existing, ...attempt } : attempt) as unknown as ProjectTicketGenerationAttempt,
+  );
+}
+
+function upsertProjectTicketExecutionFromPayload(
+  batch: StoreBatchWriter,
+  payload: JsonObject,
+): void {
+  const execution = asJsonObject(payload.projectTicketExecution);
+  if (!execution || typeof execution.id !== "string") return;
+
+  const existing = batch.get("projectTicketExecutions", execution.id);
+  batch.upsert(
+    "projectTicketExecutions",
+    execution.id,
+    (existing ? { ...existing, ...execution } : execution) as unknown as ProjectTicketExecution,
+  );
+}
+
+function upsertOrchestratorEpisodeFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const episode = asJsonObject(payload.orchestratorEpisode);
+  if (!episode || typeof episode.id !== "string") return;
+
+  const existing = batch.get("orchestratorEpisodes", episode.id);
+  batch.upsert(
+    "orchestratorEpisodes",
+    episode.id,
+    (existing ? { ...existing, ...episode } : episode) as unknown as OrchestratorEpisode,
   );
 }
 
@@ -317,10 +359,12 @@ export function handleOrgEvent(event: Event): void {
   }
 
   if (
+    event.eventType === "project_ticket_generation_started" ||
     event.eventType === "project_ticket_generation_completed" ||
     event.eventType === "project_ticket_generation_failed"
   ) {
     upsertProjectRunFromPayload(batch, payload);
+    upsertGenerationAttemptFromPayload(batch, payload);
     const tickets = payload.tickets;
     if (Array.isArray(tickets)) {
       for (const ticket of tickets) {
@@ -328,6 +372,21 @@ export function handleOrgEvent(event: Event): void {
         if (ticketPayload) upsertTicketFromPayload(batch, { ticket: ticketPayload });
       }
     }
+  }
+
+  if (
+    event.eventType === "project_ticket_execution_created" ||
+    event.eventType === "project_ticket_execution_updated" ||
+    event.eventType === "project_ticket_lifecycle_event"
+  ) {
+    upsertProjectTicketExecutionFromPayload(batch, payload);
+  }
+
+  if (
+    event.eventType === "orchestrator_episode_created" ||
+    event.eventType === "orchestrator_episode_updated"
+  ) {
+    upsertOrchestratorEpisodeFromPayload(batch, payload);
   }
 
   // Chat events

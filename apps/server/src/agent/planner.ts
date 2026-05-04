@@ -35,7 +35,6 @@ import {
   BLOCK_SESSION_PR_UPDATE,
   BLOCK_MENTION_BEHAVIOR,
   BLOCK_CONTEXT_USAGE,
-  BLOCK_PROJECT_PLANNING_BEHAVIOR,
   getBlockVersions,
 } from "./prompt-blocks.js";
 
@@ -293,10 +292,6 @@ function buildScopeSection(ctx: AgentContextPacket): string {
   // Add channel-specific context hints
   if (ctx.scopeType === "channel") {
     scopeLines.push(BLOCK_CHANNEL_BEHAVIOR.content);
-  }
-
-  if (ctx.scopeType === "project") {
-    scopeLines.push(BLOCK_PROJECT_PLANNING_BEHAVIOR.content);
   }
 
   // Add session-specific context hints (terminal events only — ongoing monitoring disabled)

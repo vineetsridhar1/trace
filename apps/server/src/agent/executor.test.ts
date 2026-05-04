@@ -95,7 +95,7 @@ describe("ActionExecutor", () => {
     expect(services.ticketService.create as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
-  it("rejects actions outside their runtime scope", async () => {
+  it("does not expose project planning actions to the ambient executor", async () => {
     const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const result = await executor.execute(
@@ -106,45 +106,9 @@ describe("ActionExecutor", () => {
     expect(result).toEqual({
       status: "failed",
       actionType: "project.askQuestion",
-      error: "Action project.askQuestion is not available in chat scope",
+      error: "Unknown action: project.askQuestion",
     });
     expect(services.projectPlanningService?.askQuestion).not.toHaveBeenCalled();
-  });
-
-  it("dispatches scoped project planning actions through the service layer", async () => {
-    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
-
-    const result = await executor.execute(
-      { actionType: "project.askQuestion", args: { projectRunId: "run-1", message: "Scope?" } },
-      {
-        ...ctx,
-        triggerEventId: "evt-planning",
-        scopeType: "project",
-        scopeId: "project-1",
-      },
-    );
-
-    expect(result).toEqual({
-      status: "success",
-      actionType: "project.askQuestion",
-      result: {
-        eventId: "evt-question",
-        eventType: "project_question_asked",
-        projectRunId: "run-1",
-      },
-    });
-    expect(services.projectPlanningService?.getContext).toHaveBeenCalledWith(
-      "run-1",
-      "org-1",
-      "agent",
-      "agent-1",
-    );
-    expect(services.projectPlanningService?.askQuestion).toHaveBeenCalledWith(
-      { projectRunId: "run-1", message: "Scope?" },
-      "org-1",
-      "agent",
-      "agent-1",
-    );
   });
 
   it("injects agent context into ticket creation", async () => {

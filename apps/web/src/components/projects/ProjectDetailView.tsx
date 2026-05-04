@@ -25,6 +25,8 @@ import { SessionDetailView } from "../session/SessionDetailView";
 import { getDefaultModel } from "../session/modelOptions";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
+import { ProjectPlanPanel } from "./ProjectPlanPanel";
+import { ProjectTicketList } from "./ProjectTicketList";
 
 const ACTIVE_PROJECT_RUN_STATUSES = new Set([
   "draft",
@@ -166,8 +168,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const currentProjectRun =
     activeProjectRun ??
     selectActiveProjectRun((project?.runs ?? []) as Array<ProjectRunEntity & { id: string }>);
-  const planningSession = project
-    ? selectPlanningSession(project.sessions, currentProjectRun?.planningSessionId)
+  const planningSessionId = project
+    ? selectPlanningSessionId(project.sessions, currentProjectRun?.planningSessionId)
     : null;
   const fetchProject = useCallback(async () => {
     setError(null);
@@ -229,14 +231,14 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   ]);
 
   useEffect(() => {
-    if (!project || !currentProjectRun || planningSession || startingSession) return;
+    if (!project || !currentProjectRun || planningSessionId || startingSession) return;
     if (autoStartedRunId === currentProjectRun.id) return;
     setAutoStartedRunId(currentProjectRun.id);
     void startInterviewerSession();
   }, [
     autoStartedRunId,
     currentProjectRun,
-    planningSession,
+    planningSessionId,
     project,
     startInterviewerSession,
     startingSession,
@@ -310,30 +312,37 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 bg-surface">
-        {planningSession ? (
-          <SessionDetailView
-            sessionId={planningSession.id}
-            panelMode
-            hideHeader
-            projectPlanningContext={
-              currentProjectRun
-                ? {
-                    organizationId: project.organizationId,
-                    projectId: project.id,
-                    projectRunId: currentProjectRun.id,
-                  }
-                : null
-            }
-          />
-        ) : (
-          <ProjectSessionEmptyState
-            error={startSessionError}
-            starting={startingSession}
-            canStart={Boolean(currentProjectRun)}
-            onStart={startInterviewerSession}
-          />
-        )}
+      <div className="grid min-h-0 flex-1 grid-cols-1 bg-surface lg:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.05fr)]">
+        <div className="flex min-h-0 flex-col overflow-hidden border-b border-border bg-background lg:border-b-0 lg:border-r">
+          {currentProjectRun ? <ProjectPlanPanel projectRunId={currentProjectRun.id} /> : null}
+          <ProjectTicketList projectId={project.id} />
+        </div>
+
+        <div className="min-h-0 overflow-hidden">
+          {planningSessionId ? (
+            <SessionDetailView
+              sessionId={planningSessionId}
+              panelMode
+              hideHeader
+              projectPlanningContext={
+                currentProjectRun
+                  ? {
+                      organizationId: project.organizationId,
+                      projectId: project.id,
+                      projectRunId: currentProjectRun.id,
+                    }
+                  : null
+              }
+            />
+          ) : (
+            <ProjectSessionEmptyState
+              error={startSessionError}
+              starting={startingSession}
+              canStart={Boolean(currentProjectRun)}
+              onStart={startInterviewerSession}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -375,19 +384,19 @@ function ProjectSessionEmptyState({
   );
 }
 
-function selectPlanningSession(
+function selectPlanningSessionId(
   sessions: Project["sessions"],
   planningSessionId?: string | null,
-): Project["sessions"][number] | null {
+): string | null {
   const linked = planningSessionId
-    ? sessions.find((session) => session.id === planningSessionId)
+    ? sessions.find((session) => session.id === planningSessionId)?.id
     : null;
   if (linked) return linked;
   if (sessions.length === 0) return null;
   return (
     [...sessions].sort((a, b) =>
       sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)),
-    )[0] ?? null
+    )[0]?.id ?? null
   );
 }
 

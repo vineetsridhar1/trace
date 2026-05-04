@@ -1,15 +1,17 @@
 /**
- * Project domain actions — create, update, linkEntity, get, planning runtime
+ * Project domain actions — create, update, linkEntity, get.
+ *
+ * Project Autopilot planning and orchestration are deliberately excluded from
+ * the ambient agent action registry. Coding-tool sessions use explicit
+ * service-backed GraphQL/CLI actions for those workflows.
  */
 
 import type {
   AgentActionRegistration,
   ActionDispatcher,
   EntityType,
-  AgentContext,
 } from "./types.js";
-import type { ProjectRunStatus } from "@trace/gql";
-import { actorInfo, type ServiceContainer } from "./types.js";
+import { actorInfo } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Action registrations
@@ -98,96 +100,6 @@ export const projectActions: AgentActionRegistration[] = [
     },
     scopes: ["project", "channel", "ticket", "session", "chat"],
   },
-  {
-    name: "project.askQuestion",
-    service: "projectPlanningService",
-    method: "askQuestion",
-    description:
-      "Ask a clarifying planning question for the current project run. Emits project_question_asked.",
-    risk: "low",
-    suggestable: false,
-    tier: "core",
-    parameters: {
-      fields: {
-        projectRunId: { type: "string", description: "Current project run", required: true },
-        message: { type: "string", description: "Clarifying question to ask", required: true },
-      },
-    },
-    scopes: ["project"],
-  },
-  {
-    name: "project.recordAnswer",
-    service: "projectPlanningService",
-    method: "recordAnswer",
-    description:
-      "Record a user-provided answer for the current project run. Emits project_answer_recorded.",
-    risk: "low",
-    suggestable: false,
-    tier: "core",
-    parameters: {
-      fields: {
-        projectRunId: { type: "string", description: "Current project run", required: true },
-        message: { type: "string", description: "Answer text to record", required: true },
-      },
-    },
-    scopes: ["project"],
-  },
-  {
-    name: "project.recordDecision",
-    service: "projectPlanningService",
-    method: "recordDecision",
-    description:
-      "Record a durable planning decision for the current project run. Emits project_decision_recorded.",
-    risk: "low",
-    suggestable: false,
-    tier: "core",
-    parameters: {
-      fields: {
-        projectRunId: { type: "string", description: "Current project run", required: true },
-        decision: { type: "string", description: "Decision text to record", required: true },
-      },
-    },
-    scopes: ["project"],
-  },
-  {
-    name: "project.recordRisk",
-    service: "projectPlanningService",
-    method: "recordRisk",
-    description:
-      "Record a durable planning risk for the current project run. Emits project_risk_recorded.",
-    risk: "low",
-    suggestable: false,
-    tier: "core",
-    parameters: {
-      fields: {
-        projectRunId: { type: "string", description: "Current project run", required: true },
-        risk: { type: "string", description: "Risk text to record", required: true },
-      },
-    },
-    scopes: ["project"],
-  },
-  {
-    name: "project.summarizePlan",
-    service: "projectPlanningService",
-    method: "updatePlanSummary",
-    description:
-      "Update the current project run's durable plan summary. Cannot create tickets. Emits project_plan_summary_updated.",
-    risk: "low",
-    suggestable: false,
-    tier: "core",
-    parameters: {
-      fields: {
-        projectRunId: { type: "string", description: "Current project run", required: true },
-        planSummary: { type: "string", description: "Updated plan summary", required: true },
-        status: {
-          type: "string",
-          description: "Optional run status after summary update",
-          enum: ["draft", "interviewing", "planning", "ready", "running", "needs_human", "paused"],
-        },
-      },
-    },
-    scopes: ["project"],
-  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -242,113 +154,4 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
     return services.organizationService.getProject(args.projectId as string, ctx.organizationId);
   },
 
-  "project.askQuestion": async (services, args, ctx) => {
-    await assertPlanningScope(services, args.projectRunId as string, ctx);
-    const { actorType, actorId } = actorInfo(ctx);
-    const event = await requireProjectPlanningService(services).askQuestion(
-      { projectRunId: args.projectRunId as string, message: args.message as string },
-      ctx.organizationId,
-      actorType,
-      actorId,
-    );
-    return eventResult(event, args.projectRunId as string);
-  },
-
-  "project.recordAnswer": async (services, args, ctx) => {
-    await assertPlanningScope(services, args.projectRunId as string, ctx);
-    const { actorType, actorId } = actorInfo(ctx);
-    const event = await requireProjectPlanningService(services).recordAnswer(
-      { projectRunId: args.projectRunId as string, message: args.message as string },
-      ctx.organizationId,
-      actorType,
-      actorId,
-    );
-    return eventResult(event, args.projectRunId as string);
-  },
-
-  "project.recordDecision": async (services, args, ctx) => {
-    await assertPlanningScope(services, args.projectRunId as string, ctx);
-    const { actorType, actorId } = actorInfo(ctx);
-    const event = await requireProjectPlanningService(services).recordDecision(
-      { projectRunId: args.projectRunId as string, decision: args.decision as string },
-      ctx.organizationId,
-      actorType,
-      actorId,
-    );
-    return eventResult(event, args.projectRunId as string);
-  },
-
-  "project.recordRisk": async (services, args, ctx) => {
-    await assertPlanningScope(services, args.projectRunId as string, ctx);
-    const { actorType, actorId } = actorInfo(ctx);
-    const event = await requireProjectPlanningService(services).recordRisk(
-      { projectRunId: args.projectRunId as string, risk: args.risk as string },
-      ctx.organizationId,
-      actorType,
-      actorId,
-    );
-    return eventResult(event, args.projectRunId as string);
-  },
-
-  "project.summarizePlan": async (services, args, ctx) => {
-    await assertPlanningScope(services, args.projectRunId as string, ctx);
-    const { actorType, actorId } = actorInfo(ctx);
-    const projectRun = await requireProjectPlanningService(services).updatePlanSummary(
-      {
-        projectRunId: args.projectRunId as string,
-        planSummary: args.planSummary as string,
-        ...(args.status !== undefined && { status: args.status as ProjectRunStatus }),
-      },
-      ctx.organizationId,
-      actorType,
-      actorId,
-    );
-    return {
-      projectRun: {
-        id: projectRun.id,
-        projectId: projectRun.projectId,
-        status: projectRun.status,
-        planSummary: projectRun.planSummary,
-      },
-    };
-  },
 };
-
-function requireProjectPlanningService(services: ServiceContainer) {
-  if (!services.projectPlanningService) {
-    throw new Error("Project planning service is unavailable");
-  }
-  return services.projectPlanningService;
-}
-
-async function assertPlanningScope(
-  services: ServiceContainer,
-  projectRunId: string,
-  ctx: AgentContext,
-): Promise<void> {
-  if (ctx.scopeType !== "project" || !ctx.scopeId) {
-    throw new Error("Project planning actions require a project scope");
-  }
-  const { actorType, actorId } = actorInfo(ctx);
-  const planningContext = await requireProjectPlanningService(services).getContext(
-    projectRunId,
-    ctx.organizationId,
-    actorType,
-    actorId,
-  );
-  if (planningContext.project.id !== ctx.scopeId) {
-    throw new Error("Project run is outside the scoped project");
-  }
-}
-
-function eventResult(event: unknown, projectRunId: string): Record<string, unknown> {
-  if (typeof event === "object" && event !== null) {
-    const record = event as Record<string, unknown>;
-    return {
-      eventId: record.id,
-      eventType: record.eventType,
-      projectRunId,
-    };
-  }
-  return { projectRunId };
-}

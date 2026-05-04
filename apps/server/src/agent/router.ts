@@ -124,6 +124,25 @@ const LOW_VALUE_EVENT_TYPES = new Set<string>([
   "channel_created", // Not actionable by agent — just a structural event
 ]);
 
+const PROJECT_AUTOPILOT_EVENT_TYPES = new Set<string>([
+  "project_run_created",
+  "project_run_updated",
+  "project_goal_submitted",
+  "project_question_asked",
+  "project_answer_recorded",
+  "project_decision_recorded",
+  "project_risk_recorded",
+  "project_plan_summary_updated",
+  "project_ticket_generation_started",
+  "project_ticket_generation_completed",
+  "project_ticket_generation_failed",
+  "project_ticket_execution_created",
+  "project_ticket_execution_updated",
+  "project_ticket_lifecycle_event",
+  "orchestrator_episode_created",
+  "orchestrator_episode_updated",
+]);
+
 /**
  * Self-trigger allowlist: only terminal session events that the agent should
  * still see when it was the actor (e.g., a session it started completed).
@@ -357,6 +376,10 @@ export function routeEvent(event: AgentEvent, settings: OrgAgentSettings): Routi
   // 4. Low-value events
   if (LOW_VALUE_EVENT_TYPES.has(event.eventType)) {
     return { decision: "drop", reason: "low_value_event" };
+  }
+
+  if (PROJECT_AUTOPILOT_EVENT_TYPES.has(event.eventType)) {
+    return { decision: "drop", reason: "project_autopilot_explicit_session_workflow" };
   }
 
   // 5. Chat membership gate — drop chat-scoped events if agent not a member

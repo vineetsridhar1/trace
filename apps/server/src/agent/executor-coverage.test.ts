@@ -612,66 +612,6 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     },
   },
   {
-    actionType: "project.askQuestion",
-    args: { projectRunId: "run-1", message: "Which repo?" },
-    assertCall: (services) => {
-      expect(services.projectPlanningService.askQuestion).toHaveBeenCalledWith(
-        { projectRunId: "run-1", message: "Which repo?" },
-        "org-1",
-        "agent",
-        "agent-1",
-      );
-    },
-  },
-  {
-    actionType: "project.recordAnswer",
-    args: { projectRunId: "run-1", message: "Use the web app first." },
-    assertCall: (services) => {
-      expect(services.projectPlanningService.recordAnswer).toHaveBeenCalledWith(
-        { projectRunId: "run-1", message: "Use the web app first." },
-        "org-1",
-        "agent",
-        "agent-1",
-      );
-    },
-  },
-  {
-    actionType: "project.recordDecision",
-    args: { projectRunId: "run-1", decision: "Keep ticket generation separate." },
-    assertCall: (services) => {
-      expect(services.projectPlanningService.recordDecision).toHaveBeenCalledWith(
-        { projectRunId: "run-1", decision: "Keep ticket generation separate." },
-        "org-1",
-        "agent",
-        "agent-1",
-      );
-    },
-  },
-  {
-    actionType: "project.recordRisk",
-    args: { projectRunId: "run-1", risk: "Scope may expand." },
-    assertCall: (services) => {
-      expect(services.projectPlanningService.recordRisk).toHaveBeenCalledWith(
-        { projectRunId: "run-1", risk: "Scope may expand." },
-        "org-1",
-        "agent",
-        "agent-1",
-      );
-    },
-  },
-  {
-    actionType: "project.summarizePlan",
-    args: { projectRunId: "run-1", planSummary: "Plan v1", status: "planning" },
-    assertCall: (services) => {
-      expect(services.projectPlanningService.updatePlanSummary).toHaveBeenCalledWith(
-        { projectRunId: "run-1", planSummary: "Plan v1", status: "planning" },
-        "org-1",
-        "agent",
-        "agent-1",
-      );
-    },
-  },
-  {
     actionType: "session.start",
     args: {
       prompt: "Fix the flaky build",
@@ -964,14 +904,6 @@ const REQUIRED_FIELD_CASES = CANONICAL_EXECUTION_CASES.map((testCase) => {
   return requiredField ? { ...testCase, requiredField } : null;
 }).filter((testCase): testCase is ExecutionCase & { requiredField: string } => testCase !== null);
 
-const PLANNING_ACTION_NAMES = [
-  "project.askQuestion",
-  "project.recordAnswer",
-  "project.recordDecision",
-  "project.recordRisk",
-  "project.summarizePlan",
-];
-
 describe("executor coverage", () => {
   it("defines one execution case for every registered action", () => {
     const expectedActions = getAllActions()
@@ -988,14 +920,10 @@ describe("executor coverage", () => {
       const services = createServices();
       const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
       const expectedMock = getExpectedMock(services, actionType);
-      const isPlanningAction = PLANNING_ACTION_NAMES.includes(actionType);
-      const scopedContext = isPlanningAction
-        ? { scopeType: "project", scopeId: "project-1" }
-        : {};
 
       const result = await executor.execute(
         { actionType, args },
-        { ...BASE_CONTEXT, triggerEventId: `evt-${actionType}`, ...scopedContext },
+        { ...BASE_CONTEXT, triggerEventId: `evt-${actionType}` },
       );
 
       expect(result).toMatchObject({ status: "success", actionType });
@@ -1006,12 +934,7 @@ describe("executor coverage", () => {
       }
 
       expect(expectedMock).toBeDefined();
-      if (isPlanningAction) {
-        expect(services.projectPlanningService.getContext).toHaveBeenCalledOnce();
-        expect(expectedMock).toHaveBeenCalledOnce();
-      } else {
-        expectOnlyMockCalled(services, expectedMock!);
-      }
+      expectOnlyMockCalled(services, expectedMock!);
       assertCall(services);
     },
   );
@@ -1042,13 +965,10 @@ describe("executor coverage", () => {
       const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
       const invalidArgs = { ...args };
       delete invalidArgs[requiredField];
-      const scopedContext = PLANNING_ACTION_NAMES.includes(actionType)
-        ? { scopeType: "project", scopeId: "project-1" }
-        : {};
 
       const result = await executor.execute(
         { actionType, args: invalidArgs },
-        { ...BASE_CONTEXT, triggerEventId: `evt-missing-${actionType}`, ...scopedContext },
+        { ...BASE_CONTEXT, triggerEventId: `evt-missing-${actionType}` },
       );
 
       expect(result.status).toBe("failed");

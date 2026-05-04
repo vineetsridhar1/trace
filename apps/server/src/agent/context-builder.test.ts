@@ -261,8 +261,9 @@ describe("buildContext", () => {
     );
     expect(packet.planningContext?.projectRun.id).toBe("run_1");
     expect(packet.permissions.actions.some((action) => action.name === "project.askQuestion")).toBe(
-      true,
+      false,
     );
+    expect(packet.permissions.actions.some((action) => action.name === "project.get")).toBe(true);
     expect(packet.permissions.actions.some((action) => action.name === "ticket.create")).toBe(
       false,
     );
@@ -288,8 +289,9 @@ describe("buildContext", () => {
 
     expect(packet.planningContext).toBeUndefined();
     expect(packet.permissions.actions.some((action) => action.name === "project.askQuestion")).toBe(
-      true,
+      false,
     );
+    expect(packet.permissions.actions.some((action) => action.name === "project.get")).toBe(true);
     expect(packet.permissions.actions.some((action) => action.name === "ticket.create")).toBe(
       false,
     );

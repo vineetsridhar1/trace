@@ -6,6 +6,9 @@ import type {
   Repo,
   Project,
   ProjectRun,
+  ProjectTicketGenerationAttempt,
+  ProjectTicketExecution,
+  OrchestratorEpisode,
   Channel,
   ChannelGroup,
   SessionGroup,
@@ -42,6 +45,9 @@ export type EntityTableMap = {
   repos: Repo;
   projects: Project;
   projectRuns: ProjectRunEntity;
+  projectTicketGenerationAttempts: ProjectTicketGenerationAttempt;
+  projectTicketExecutions: ProjectTicketExecution;
+  orchestratorEpisodes: OrchestratorEpisode;
   channels: Channel;
   channelGroups: ChannelGroup;
   sessionGroups: SessionGroupEntity;
@@ -108,6 +114,9 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   repos: {},
   projects: {},
   projectRuns: {},
+  projectTicketGenerationAttempts: {},
+  projectTicketExecutions: {},
+  orchestratorEpisodes: {},
   channels: {},
   channelGroups: {},
   sessionGroups: {},
@@ -346,6 +355,9 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       repos: {},
       projects: {},
       projectRuns: {},
+      projectTicketGenerationAttempts: {},
+      projectTicketExecutions: {},
+      orchestratorEpisodes: {},
       channels: {},
       channelGroups: {},
       sessionGroups: {},
@@ -678,6 +690,9 @@ const ENTITY_KEYS: EntityType[] = [
   "repos",
   "projects",
   "projectRuns",
+  "projectTicketGenerationAttempts",
+  "projectTicketExecutions",
+  "orchestratorEpisodes",
   "channels",
   "channelGroups",
   "sessionGroups",
