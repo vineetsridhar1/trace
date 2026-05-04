@@ -13,7 +13,7 @@ export const AssistantMessage = memo(function AssistantMessage({ text }: Assista
   const blocks = useMemo(() => splitCopyBlocks(text), [text]);
 
   return (
-    <View style={[styles.wrapper, { paddingVertical: theme.spacing.xs, gap: theme.spacing.xs }]}>
+    <View style={[styles.wrapper, { paddingVertical: theme.spacing.xs }]}>
       {blocks.map((block) => (
         <CopyableMarkdownBlock key={block.id} text={block.text} />
       ))}

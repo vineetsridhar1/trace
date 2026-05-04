@@ -61,9 +61,13 @@ export const UserMessageBubble = memo(function UserMessageBubble({
             </Text>
           </View>
           <MessageImageGallery imageKeys={imageKeys} previewUrls={imagePreviewUrls} />
-          {blocks.map((block) => (
-            <CopyableMarkdownBlock key={block.id} text={block.text} compactSpacing />
-          ))}
+          {blocks.length > 0 ? (
+            <View style={styles.blocks}>
+              {blocks.map((block) => (
+                <CopyableMarkdownBlock key={block.id} text={block.text} compactSpacing />
+              ))}
+            </View>
+          ) : null}
         </View>
         {checkpoints && checkpoints.length > 0 ? (
           <View style={[styles.footer, { gap: theme.spacing.xs, marginTop: theme.spacing.xs }]}>
@@ -89,6 +93,9 @@ const styles = StyleSheet.create({
   },
   bubble: {
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  blocks: {
+    width: "100%",
   },
   meta: {
     flexDirection: "row",
