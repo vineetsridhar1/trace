@@ -20,6 +20,7 @@ Add the service-backed planning/interview flow that turns a raw project goal int
   - `project_question_asked`: `{ projectRunId, message }`
   - `project_answer_recorded`: `{ projectRunId, message }`
   - `project_decision_recorded`: `{ projectRunId, decision }`
+  - `project_risk_recorded`: `{ projectRunId, risk }`
   - `project_plan_summary_updated`: `{ projectRun }`
 
 ## Deliverable
@@ -28,13 +29,13 @@ The project can maintain an interview thread, decisions, risks, and a plan summa
 
 ## Completion requirements
 
-- [ ] User planning messages are recorded in the project scope.
-- [ ] AI questions are recorded in the project scope.
-- [ ] Answers and decisions update project-run planning state.
-- [ ] Plan summary is durable and event-backed.
-- [ ] Planning can request more information instead of prematurely generating tickets.
-- [ ] Refresh can reconstruct the planning surface without transcript parsing.
-- [ ] Service tests cover planning state transitions.
+- [x] User planning messages are recorded in the project scope.
+- [x] AI questions are recorded in the project scope.
+- [x] Answers and decisions update project-run planning state.
+- [x] Plan summary is durable and event-backed.
+- [x] Planning can request more information instead of prematurely generating tickets.
+- [x] Refresh can reconstruct the planning surface without transcript parsing.
+- [x] Service tests cover planning state transitions.
 
 ## Implementation notes
 

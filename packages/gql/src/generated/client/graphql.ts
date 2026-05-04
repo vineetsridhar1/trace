@@ -531,10 +531,15 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "project_answer_recorded"
   | "project_created"
+  | "project_decision_recorded"
   | "project_goal_submitted"
   | "project_member_added"
   | "project_member_removed"
+  | "project_plan_summary_updated"
+  | "project_question_asked"
+  | "project_risk_recorded"
   | "project_run_created"
   | "project_run_updated"
   | "project_updated"
@@ -704,6 +709,7 @@ export type Mutation = {
   addProjectMember: ProjectMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
+  askProjectQuestion: Event;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -748,6 +754,9 @@ export type Mutation = {
   moveSessionToRuntime: Session;
   muteScope: Participant;
   queueSessionMessage: QueuedMessage;
+  recordProjectAnswer: Event;
+  recordProjectDecision: Event;
+  recordProjectRisk: Event;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
@@ -789,6 +798,7 @@ export type Mutation = {
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateProject: Project;
+  updateProjectPlanSummary: ProjectRun;
   updateProjectRun: ProjectRun;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
@@ -825,6 +835,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
 
 export type MutationArchiveSessionGroupArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationAskProjectQuestionArgs = {
+  input: RecordProjectPlanningMessageInput;
 };
 
 export type MutationAssignTicketArgs = {
@@ -1028,6 +1042,18 @@ export type MutationQueueSessionMessageArgs = {
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   text: Scalars["String"]["input"];
+};
+
+export type MutationRecordProjectAnswerArgs = {
+  input: RecordProjectPlanningMessageInput;
+};
+
+export type MutationRecordProjectDecisionArgs = {
+  input: RecordProjectPlanningDecisionInput;
+};
+
+export type MutationRecordProjectRiskArgs = {
+  input: RecordProjectPlanningRiskInput;
 };
 
 export type MutationRegisterPushTokenArgs = {
@@ -1242,6 +1268,10 @@ export type MutationUpdateOrgMemberRoleArgs = {
 export type MutationUpdateProjectArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateProjectInput;
+};
+
+export type MutationUpdateProjectPlanSummaryArgs = {
+  input: UpdateProjectPlanSummaryInput;
 };
 
 export type MutationUpdateProjectRunArgs = {
@@ -1705,6 +1735,21 @@ export type QueuedMessage = {
   text: Scalars["String"]["output"];
 };
 
+export type RecordProjectPlanningDecisionInput = {
+  decision: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningMessageInput = {
+  message: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningRiskInput = {
+  projectRunId: Scalars["ID"]["input"];
+  risk: Scalars["String"]["input"];
+};
+
 export type RemoveProjectMemberInput = {
   projectId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
@@ -2103,6 +2148,12 @@ export type UpdateProjectInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   soulFile?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateProjectPlanSummaryInput = {
+  planSummary: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+  status?: InputMaybe<ProjectRunStatus>;
 };
 
 export type UpdateProjectRunInput = {

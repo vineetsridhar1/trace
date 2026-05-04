@@ -252,7 +252,8 @@ export function handleOrgEvent(event: Event): void {
   if (
     event.eventType === "project_run_created" ||
     event.eventType === "project_run_updated" ||
-    event.eventType === "project_goal_submitted"
+    event.eventType === "project_goal_submitted" ||
+    event.eventType === "project_plan_summary_updated"
   ) {
     upsertProjectRunFromPayload(batch, payload);
   }

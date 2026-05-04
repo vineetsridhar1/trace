@@ -8,6 +8,10 @@ import type {
   CreateProjectRunInput,
   UpdateProjectInput,
   UpdateProjectRunInput,
+  RecordProjectPlanningDecisionInput,
+  RecordProjectPlanningMessageInput,
+  RecordProjectPlanningRiskInput,
+  UpdateProjectPlanSummaryInput,
   AddProjectMemberInput,
   RemoveProjectMemberInput,
   EntityType,
@@ -15,6 +19,7 @@ import type {
 } from "@trace/gql";
 import { organizationService } from "../services/organization.js";
 import { projectRunService } from "../services/project-run.js";
+import { projectPlanningService } from "../services/project-planning.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
@@ -104,6 +109,46 @@ export const organizationMutations = {
       ctx.actorType,
       ctx.userId,
     );
+  },
+  askProjectQuestion: (
+    _: unknown,
+    args: { input: RecordProjectPlanningMessageInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.askQuestion(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  recordProjectAnswer: (
+    _: unknown,
+    args: { input: RecordProjectPlanningMessageInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.recordAnswer(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  recordProjectDecision: (
+    _: unknown,
+    args: { input: RecordProjectPlanningDecisionInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.recordDecision(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  recordProjectRisk: (
+    _: unknown,
+    args: { input: RecordProjectPlanningRiskInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.recordRisk(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  updateProjectPlanSummary: (
+    _: unknown,
+    args: { input: UpdateProjectPlanSummaryInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.updatePlanSummary(args.input, orgId, ctx.actorType, ctx.userId);
   },
   addProjectMember: (_: unknown, args: { input: AddProjectMemberInput }, ctx: Context) => {
     return organizationService.addProjectMember(

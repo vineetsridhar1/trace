@@ -532,10 +532,15 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "project_answer_recorded"
   | "project_created"
+  | "project_decision_recorded"
   | "project_goal_submitted"
   | "project_member_added"
   | "project_member_removed"
+  | "project_plan_summary_updated"
+  | "project_question_asked"
+  | "project_risk_recorded"
   | "project_run_created"
   | "project_run_updated"
   | "project_updated"
@@ -705,6 +710,7 @@ export type Mutation = {
   addProjectMember: ProjectMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
+  askProjectQuestion: Event;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -749,6 +755,9 @@ export type Mutation = {
   moveSessionToRuntime: Session;
   muteScope: Participant;
   queueSessionMessage: QueuedMessage;
+  recordProjectAnswer: Event;
+  recordProjectDecision: Event;
+  recordProjectRisk: Event;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
@@ -790,6 +799,7 @@ export type Mutation = {
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateProject: Project;
+  updateProjectPlanSummary: ProjectRun;
   updateProjectRun: ProjectRun;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
@@ -826,6 +836,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
 
 export type MutationArchiveSessionGroupArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationAskProjectQuestionArgs = {
+  input: RecordProjectPlanningMessageInput;
 };
 
 export type MutationAssignTicketArgs = {
@@ -1029,6 +1043,18 @@ export type MutationQueueSessionMessageArgs = {
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   text: Scalars["String"]["input"];
+};
+
+export type MutationRecordProjectAnswerArgs = {
+  input: RecordProjectPlanningMessageInput;
+};
+
+export type MutationRecordProjectDecisionArgs = {
+  input: RecordProjectPlanningDecisionInput;
+};
+
+export type MutationRecordProjectRiskArgs = {
+  input: RecordProjectPlanningRiskInput;
 };
 
 export type MutationRegisterPushTokenArgs = {
@@ -1243,6 +1269,10 @@ export type MutationUpdateOrgMemberRoleArgs = {
 export type MutationUpdateProjectArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateProjectInput;
+};
+
+export type MutationUpdateProjectPlanSummaryArgs = {
+  input: UpdateProjectPlanSummaryInput;
 };
 
 export type MutationUpdateProjectRunArgs = {
@@ -1706,6 +1736,21 @@ export type QueuedMessage = {
   text: Scalars["String"]["output"];
 };
 
+export type RecordProjectPlanningDecisionInput = {
+  decision: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningMessageInput = {
+  message: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningRiskInput = {
+  projectRunId: Scalars["ID"]["input"];
+  risk: Scalars["String"]["input"];
+};
+
 export type RemoveProjectMemberInput = {
   projectId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
@@ -2106,6 +2151,12 @@ export type UpdateProjectInput = {
   soulFile?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type UpdateProjectPlanSummaryInput = {
+  planSummary: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+  status?: InputMaybe<ProjectRunStatus>;
+};
+
 export type UpdateProjectRunInput = {
   activeGateId?: InputMaybe<Scalars["ID"]["input"]>;
   executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
@@ -2322,6 +2373,9 @@ export type ResolversTypes = ResolversObject<{
   PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
+  RecordProjectPlanningDecisionInput: RecordProjectPlanningDecisionInput;
+  RecordProjectPlanningMessageInput: RecordProjectPlanningMessageInput;
+  RecordProjectPlanningRiskInput: RecordProjectPlanningRiskInput;
   RemoveProjectMemberInput: RemoveProjectMemberInput;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
@@ -2361,6 +2415,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
   UpdateProjectInput: UpdateProjectInput;
+  UpdateProjectPlanSummaryInput: UpdateProjectPlanSummaryInput;
   UpdateProjectRunInput: UpdateProjectRunInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -2438,6 +2493,9 @@ export type ResolversParentTypes = ResolversObject<{
   ProjectRun: ProjectRun;
   Query: {};
   QueuedMessage: QueuedMessage;
+  RecordProjectPlanningDecisionInput: RecordProjectPlanningDecisionInput;
+  RecordProjectPlanningMessageInput: RecordProjectPlanningMessageInput;
+  RecordProjectPlanningRiskInput: RecordProjectPlanningRiskInput;
   RemoveProjectMemberInput: RemoveProjectMemberInput;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
@@ -2468,6 +2526,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
   UpdateProjectInput: UpdateProjectInput;
+  UpdateProjectPlanSummaryInput: UpdateProjectPlanSummaryInput;
   UpdateProjectRunInput: UpdateProjectRunInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -3087,6 +3146,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationArchiveSessionGroupArgs, "id">
   >;
+  askProjectQuestion?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationAskProjectQuestionArgs, "input">
+  >;
   assignTicket?: Resolver<
     ResolversTypes["Ticket"],
     ParentType,
@@ -3354,6 +3419,24 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationQueueSessionMessageArgs, "sessionId" | "text">
   >;
+  recordProjectAnswer?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRecordProjectAnswerArgs, "input">
+  >;
+  recordProjectDecision?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRecordProjectDecisionArgs, "input">
+  >;
+  recordProjectRisk?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRecordProjectRiskArgs, "input">
+  >;
   registerPushToken?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -3599,6 +3682,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUpdateProjectArgs, "id" | "input">
+  >;
+  updateProjectPlanSummary?: Resolver<
+    ResolversTypes["ProjectRun"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateProjectPlanSummaryArgs, "input">
   >;
   updateProjectRun?: Resolver<
     ResolversTypes["ProjectRun"],
