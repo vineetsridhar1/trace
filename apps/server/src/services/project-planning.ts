@@ -218,6 +218,33 @@ function buildTicketGenerationPrompt(input: {
   ].join("\n");
 }
 
+function traceToolInvocationPayload(input: {
+  id: string;
+  name: string;
+  toolInput: Record<string, unknown>;
+  output: Record<string, unknown>;
+}): Prisma.InputJsonObject {
+  const content = [
+    {
+      type: "tool_use",
+      id: input.id,
+      name: input.name,
+      input: input.toolInput as Prisma.InputJsonObject,
+    },
+    {
+      type: "tool_result",
+      tool_use_id: input.id,
+      name: input.name,
+      content: input.output as Prisma.InputJsonObject,
+    },
+  ] as Prisma.InputJsonArray;
+
+  return {
+    type: "assistant",
+    message: { content } as Prisma.InputJsonObject,
+  };
+}
+
 export class ProjectPlanningService {
   getGenerationAttemptForRun(projectRunId: string) {
     return prisma.projectTicketGenerationAttempt.findUnique({ where: { projectRunId } });
@@ -530,6 +557,7 @@ export class ProjectPlanningService {
     projectId: string;
     projectRunId: string;
     generationAttemptId: string;
+    sessionId: string;
     draft: unknown;
     actorType: ActorType;
     actorId: string;
@@ -578,7 +606,36 @@ export class ProjectPlanningService {
         },
         include: TICKET_INCLUDE,
       });
-      if (existing) return existing;
+      if (existing) {
+        await eventService.create(
+          {
+            organizationId: projectRun.organizationId,
+            scopeType: "session",
+            scopeId: input.sessionId,
+            eventType: "session_output",
+            payload: traceToolInvocationPayload({
+              id: `trace-ticket-create:${attempt.id}:${existing.id}`,
+              name: "TraceTicketCreate",
+              toolInput: {
+                title: draft.title,
+                priority: draft.priority,
+                labels: draft.labels,
+                generationAttemptId: attempt.id,
+              },
+              output: {
+                ok: true,
+                duplicate: true,
+                ticketId: existing.id,
+                title: existing.title,
+              },
+            }),
+            actorType: input.actorType,
+            actorId: input.actorId,
+          },
+          tx,
+        );
+        return existing;
+      }
 
       const ticket = await tx.ticket.create({
         data: {
@@ -631,6 +688,33 @@ export class ProjectPlanningService {
       await eventService.create(
         {
           organizationId: projectRun.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "session_output",
+          payload: traceToolInvocationPayload({
+            id: `trace-ticket-create:${attempt.id}:${ticket.id}`,
+            name: "TraceTicketCreate",
+            toolInput: {
+              title: draft.title,
+              priority: draft.priority,
+              labels: draft.labels,
+              generationAttemptId: attempt.id,
+            },
+            output: {
+              ok: true,
+              ticketId: ticket.id,
+              title: ticket.title,
+            },
+          }),
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      await eventService.create(
+        {
+          organizationId: projectRun.organizationId,
           scopeType: "project",
           scopeId: projectRun.projectId,
           eventType: "project_ticket_generation_started",
@@ -653,6 +737,7 @@ export class ProjectPlanningService {
     projectId: string;
     projectRunId: string;
     generationAttemptId: string;
+    sessionId: string;
     actorType: ActorType;
     actorId: string;
   }): Promise<ProjectTicketGenerationAttempt> {
@@ -721,6 +806,31 @@ export class ProjectPlanningService {
         tx,
       );
 
+      await eventService.create(
+        {
+          organizationId: projectRun.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "session_output",
+          payload: traceToolInvocationPayload({
+            id: `trace-ticket-complete:${attempt.id}`,
+            name: "TraceTicketGenerationComplete",
+            toolInput: {
+              generationAttemptId: attempt.id,
+              projectRunId: projectRun.id,
+            },
+            output: {
+              ok: true,
+              ticketCount: tickets.length,
+              ticketIds,
+            },
+          }),
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
       return updatedAttempt;
     });
   }
@@ -730,6 +840,7 @@ export class ProjectPlanningService {
     projectId: string;
     projectRunId: string;
     generationAttemptId: string;
+    sessionId: string;
     error: string;
     actorType: ActorType;
     actorId: string;
@@ -755,13 +866,34 @@ export class ProjectPlanningService {
       await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
       return run;
     });
-    return this.failGenerationAttempt({
+    const failed = await this.failGenerationAttempt({
       attemptId: input.generationAttemptId,
       projectRun,
       error: normalizeText(input.error, "Error"),
       actorType: input.actorType,
       actorId: input.actorId,
     });
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_output",
+      payload: traceToolInvocationPayload({
+        id: `trace-ticket-fail:${input.generationAttemptId}`,
+        name: "TraceTicketGenerationFail",
+        toolInput: {
+          generationAttemptId: input.generationAttemptId,
+          projectRunId: input.projectRunId,
+        },
+        output: {
+          ok: false,
+          error: normalizeText(input.error, "Error"),
+        },
+      }),
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+    return failed;
   }
 
   private async recordMessage(

@@ -37,6 +37,7 @@ router.post("/session-actions/project-ticket-generation/ticket", async (req, res
       projectId: token.projectId,
       projectRunId: token.projectRunId,
       generationAttemptId: token.generationAttemptId,
+      sessionId: token.sessionId,
       draft: req.body,
       actorType: token.actorType,
       actorId: token.actorId,
@@ -57,6 +58,7 @@ router.post("/session-actions/project-ticket-generation/complete", async (req, r
       projectId: token.projectId,
       projectRunId: token.projectRunId,
       generationAttemptId: token.generationAttemptId,
+      sessionId: token.sessionId,
       actorType: token.actorType,
       actorId: token.actorId,
     });
@@ -79,6 +81,7 @@ router.post("/session-actions/project-ticket-generation/fail", async (req, res) 
       projectId: token.projectId,
       projectRunId: token.projectRunId,
       generationAttemptId: token.generationAttemptId,
+      sessionId: token.sessionId,
       error,
       actorType: token.actorType,
       actorId: token.actorId,

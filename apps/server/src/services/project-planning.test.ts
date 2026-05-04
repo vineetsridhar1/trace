@@ -439,6 +439,7 @@ describe("ProjectPlanningService", () => {
       projectId: "project-1",
       projectRunId: "run-1",
       generationAttemptId: "attempt-1",
+      sessionId: "session-1",
       draft: {
         title: "Build ticket list",
         description: "Implement the list.",
@@ -472,6 +473,25 @@ describe("ProjectPlanningService", () => {
       }),
       prismaMock,
     );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_output",
+        payload: expect.objectContaining({
+          type: "assistant",
+          message: expect.objectContaining({
+            content: expect.arrayContaining([
+              expect.objectContaining({
+                type: "tool_use",
+                name: "TraceTicketCreate",
+              }),
+            ]),
+          }),
+        }),
+      }),
+      prismaMock,
+    );
   });
 
   it("completes CLI ticket generation after tickets have been created", async () => {
@@ -501,6 +521,7 @@ describe("ProjectPlanningService", () => {
       projectId: "project-1",
       projectRunId: "run-1",
       generationAttemptId: "attempt-1",
+      sessionId: "session-1",
       actorType: "user",
       actorId: "user-1",
     });
@@ -512,6 +533,25 @@ describe("ProjectPlanningService", () => {
         eventType: "project_ticket_generation_completed",
         payload: expect.objectContaining({
           generationAttempt: expect.objectContaining({ status: "completed" }),
+        }),
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_output",
+        payload: expect.objectContaining({
+          type: "assistant",
+          message: expect.objectContaining({
+            content: expect.arrayContaining([
+              expect.objectContaining({
+                type: "tool_use",
+                name: "TraceTicketGenerationComplete",
+              }),
+            ]),
+          }),
         }),
       }),
       prismaMock,
