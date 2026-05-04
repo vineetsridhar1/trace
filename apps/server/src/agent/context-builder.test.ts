@@ -3,6 +3,7 @@ import { estimateTokens, buildContext } from "./context-builder.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentEvent } from "./router.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
+import { projectPlanningService } from "../services/project-planning.js";
 
 // ---------------------------------------------------------------------------
 // Mock dependencies
@@ -28,6 +29,7 @@ vi.mock("../lib/db.js", () => ({
     },
     project: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
     ticketLink: {
@@ -81,6 +83,12 @@ vi.mock("../services/memory.js", () => ({
   memoryService: {
     hybridSearch: vi.fn().mockResolvedValue([]),
     fetchForContext: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock("../services/project-planning.js", () => ({
+  projectPlanningService: {
+    getContext: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -150,6 +158,7 @@ describe("estimateTokens", () => {
 describe("buildContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(projectPlanningService.getContext).mockResolvedValue(null);
   });
 
   it("produces a valid context packet with all required fields", async () => {
@@ -203,6 +212,60 @@ describe("buildContext", () => {
       agentSettings: makeAgentSettings(),
     });
     expect(ticketPacket.permissions.actions.some((a) => a.name === "message.send")).toBe(false);
+  });
+
+  it("includes canonical planning context for project-run events", async () => {
+    vi.mocked(projectPlanningService.getContext).mockResolvedValueOnce({
+      project: {
+        id: "project_1",
+        name: "Roadmap",
+        organizationId: "org_1",
+        repo: { id: "repo_1", name: "trace", remoteUrl: "git@example.com", defaultBranch: "main" },
+        members: [{ id: "user_1", name: "Vineet", role: "admin" }],
+      },
+      projectRun: {
+        id: "run_1",
+        organizationId: "org_1",
+        projectId: "project_1",
+        status: "interviewing",
+        initialGoal: "Build planning",
+        planSummary: "Need requirements.",
+        executionConfig: {},
+      },
+      questions: [{ eventId: "evt_q", message: "Which repo?", actorType: "agent", actorId: "a" }],
+      answers: [{ eventId: "evt_a", message: "Trace.", actorType: "user", actorId: "u" }],
+      decisions: [],
+      risks: [],
+    });
+
+    const packet = await buildContext({
+      batch: makeBatch({
+        scopeKey: "project:project_1",
+        events: [
+          makeEvent({
+            scopeType: "project",
+            scopeId: "project_1",
+            eventType: "project_run_created",
+            payload: { projectRun: { id: "run_1" } },
+          }),
+        ],
+      }),
+      agentSettings: makeAgentSettings(),
+    });
+
+    expect(projectPlanningService.getContext).toHaveBeenCalledWith(
+      "run_1",
+      "org_1",
+      "agent",
+      "agent_org_1",
+    );
+    expect(packet.planningContext?.projectRun.id).toBe("run_1");
+    expect(packet.permissions.actions.some((action) => action.name === "project.askQuestion")).toBe(
+      true,
+    );
+    expect(packet.permissions.actions.some((action) => action.name === "ticket.create")).toBe(
+      false,
+    );
   });
 
   it("includes token budget accounting", async () => {

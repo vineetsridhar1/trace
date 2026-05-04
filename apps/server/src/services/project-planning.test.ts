@@ -46,6 +46,7 @@ describe("ProjectPlanningService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
+    prismaMock.agentIdentity.findUniqueOrThrow.mockResolvedValue({ id: "agent-1" });
   });
 
   it("records AI questions in the project scope", async () => {
@@ -71,6 +72,68 @@ describe("ProjectPlanningService", () => {
       }),
       prismaMock,
     );
+  });
+
+  it("builds canonical planning context from project run state and events", async () => {
+    prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(
+      makeProjectRun({
+        project: {
+          id: "project-1",
+          organizationId: "org-1",
+          name: "Roadmap",
+          repo: {
+            id: "repo-1",
+            name: "trace",
+            remoteUrl: "git@example.com:trace.git",
+            defaultBranch: "main",
+          },
+          members: [
+            {
+              role: "admin",
+              user: { id: "user-1", name: "Vineet" },
+            },
+          ],
+        },
+      }),
+    );
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      {
+        id: "evt-q",
+        eventType: "project_question_asked",
+        payload: { projectRunId: "run-1", message: "Which repo?" },
+        actorType: "agent",
+        actorId: "agent-1",
+      },
+      {
+        id: "evt-a",
+        eventType: "project_answer_recorded",
+        payload: { projectRunId: "run-1", message: "Trace." },
+        actorType: "user",
+        actorId: "user-1",
+      },
+      {
+        id: "evt-other",
+        eventType: "project_risk_recorded",
+        payload: { projectRunId: "other-run", risk: "Ignore me." },
+        actorType: "agent",
+        actorId: "agent-1",
+      },
+    ]);
+
+    const service = new ProjectPlanningService();
+    const context = await service.getContext("run-1", "org-1", "agent", "agent-1");
+
+    expect(context.project.id).toBe("project-1");
+    expect(context.project.repo?.defaultBranch).toBe("main");
+    expect(context.project.members).toEqual([{ id: "user-1", name: "Vineet", role: "admin" }]);
+    expect(context.projectRun.initialGoal).toBe("Build a project planner");
+    expect(context.questions).toEqual([
+      { eventId: "evt-q", message: "Which repo?", actorType: "agent", actorId: "agent-1" },
+    ]);
+    expect(context.answers).toEqual([
+      { eventId: "evt-a", message: "Trace.", actorType: "user", actorId: "user-1" },
+    ]);
+    expect(context.risks).toEqual([]);
   });
 
   it("records user answers and decisions as durable planning events", async () => {

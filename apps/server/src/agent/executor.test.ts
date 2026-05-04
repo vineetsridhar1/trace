@@ -34,6 +34,20 @@ function createServices(): ServiceContainer {
     eventService: {
       query: vi.fn().mockResolvedValue([]),
     } as unknown as ServiceContainer["eventService"],
+    projectPlanningService: {
+      getContext: vi.fn().mockResolvedValue({
+        project: { id: "project-1" },
+        projectRun: { id: "run-1", projectId: "project-1" },
+        questions: [],
+        answers: [],
+        decisions: [],
+        risks: [],
+      }),
+      askQuestion: vi.fn().mockResolvedValue({
+        id: "evt-question",
+        eventType: "project_question_asked",
+      }),
+    } as unknown as ServiceContainer["projectPlanningService"],
   };
 }
 
@@ -79,6 +93,58 @@ describe("ActionExecutor", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Missing required field: title");
     expect(services.ticketService.create as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+  });
+
+  it("rejects actions outside their runtime scope", async () => {
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "project.askQuestion", args: { projectRunId: "run-1", message: "Scope?" } },
+      { ...ctx, triggerEventId: "evt-scope", scopeType: "chat", scopeId: "chat-1" },
+    );
+
+    expect(result).toEqual({
+      status: "failed",
+      actionType: "project.askQuestion",
+      error: "Action project.askQuestion is not available in chat scope",
+    });
+    expect(services.projectPlanningService?.askQuestion).not.toHaveBeenCalled();
+  });
+
+  it("dispatches scoped project planning actions through the service layer", async () => {
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "project.askQuestion", args: { projectRunId: "run-1", message: "Scope?" } },
+      {
+        ...ctx,
+        triggerEventId: "evt-planning",
+        scopeType: "project",
+        scopeId: "project-1",
+      },
+    );
+
+    expect(result).toEqual({
+      status: "success",
+      actionType: "project.askQuestion",
+      result: {
+        eventId: "evt-question",
+        eventType: "project_question_asked",
+        projectRunId: "run-1",
+      },
+    });
+    expect(services.projectPlanningService?.getContext).toHaveBeenCalledWith(
+      "run-1",
+      "org-1",
+      "agent",
+      "agent-1",
+    );
+    expect(services.projectPlanningService?.askQuestion).toHaveBeenCalledWith(
+      { projectRunId: "run-1", message: "Scope?" },
+      "org-1",
+      "agent",
+      "agent-1",
+    );
   });
 
   it("injects agent context into ticket creation", async () => {

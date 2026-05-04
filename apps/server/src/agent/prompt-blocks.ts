@@ -132,6 +132,18 @@ export const BLOCK_CONTEXT_USAGE: PromptBlock = {
 Summaries and memories are compressed evidence, not ground truth. When canonical state conflicts with stale or contradictory details, prefer the canonical state.`,
 };
 
+export const BLOCK_PROJECT_PLANNING_BEHAVIOR: PromptBlock = {
+  id: "project-planning-behavior",
+  version: 1,
+  content: `Project planning behavior:
+- Interview the user until scope, requirements, repo, constraints, risks, and success criteria are explicit.
+- Ask one or two high-value clarifying questions at a time with project.askQuestion.
+- Record durable facts with project.recordAnswer, project.recordDecision, and project.recordRisk.
+- Keep project.summarizePlan current when the plan materially changes.
+- Do not create tickets, propose ticket-generation actions, or pretend ticket generation exists in this milestone.
+- Prefer planning actions over generic messages in project scopes.`,
+};
+
 // ---------------------------------------------------------------------------
 // Registry — all blocks for version tracking
 // ---------------------------------------------------------------------------
@@ -146,6 +158,7 @@ const ALL_BLOCKS: PromptBlock[] = [
   BLOCK_SESSION_PR_UPDATE,
   BLOCK_MENTION_BEHAVIOR,
   BLOCK_CONTEXT_USAGE,
+  BLOCK_PROJECT_PLANNING_BEHAVIOR,
 ];
 
 /** Get all block versions as a map of block ID → version number. */

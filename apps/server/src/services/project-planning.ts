@@ -17,6 +17,29 @@ type ProjectRunContext = {
   projectId: string;
 };
 
+export type ProjectPlanningContext = {
+  project: {
+    id: string;
+    name: string;
+    organizationId: string;
+    repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
+    members: Array<{ id: string; name: string | null; role: string }>;
+  };
+  projectRun: {
+    id: string;
+    organizationId: string;
+    projectId: string;
+    status: string;
+    initialGoal: string;
+    planSummary: string | null;
+    executionConfig: Record<string, unknown>;
+  };
+  questions: Array<{ eventId: string; message: string; actorType: string; actorId: string }>;
+  answers: Array<{ eventId: string; message: string; actorType: string; actorId: string }>;
+  decisions: Array<{ eventId: string; decision: string; actorType: string; actorId: string }>;
+  risks: Array<{ eventId: string; risk: string; actorType: string; actorId: string }>;
+};
+
 const ACTIVE_PROJECT_RUN_STATUSES = [
   "draft",
   "interviewing",
@@ -36,6 +59,125 @@ function normalizeText(value: string, label: string): string {
 }
 
 export class ProjectPlanningService {
+  async getContext(
+    projectRunId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<ProjectPlanningContext> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const projectRun = await tx.projectRun.findFirstOrThrow({
+        where: { id: projectRunId, organizationId },
+        include: {
+          project: {
+            include: {
+              repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
+              members: {
+                where: { leftAt: null },
+                include: { user: { select: { id: true, name: true } } },
+              },
+            },
+          },
+        },
+      });
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+
+      const events = await tx.event.findMany({
+        where: {
+          organizationId,
+          scopeType: "project",
+          scopeId: projectRun.projectId,
+          eventType: {
+            in: [
+              "project_question_asked",
+              "project_answer_recorded",
+              "project_decision_recorded",
+              "project_risk_recorded",
+            ],
+          },
+        },
+        orderBy: { timestamp: "asc" },
+        take: 80,
+      });
+
+      const questions: ProjectPlanningContext["questions"] = [];
+      const answers: ProjectPlanningContext["answers"] = [];
+      const decisions: ProjectPlanningContext["decisions"] = [];
+      const risks: ProjectPlanningContext["risks"] = [];
+
+      for (const event of events) {
+        const payload =
+          typeof event.payload === "object" && event.payload !== null
+            ? (event.payload as Record<string, unknown>)
+            : {};
+        if (payload.projectRunId !== projectRun.id) continue;
+
+        if (event.eventType === "project_question_asked" && typeof payload.message === "string") {
+          questions.push({
+            eventId: event.id,
+            message: payload.message,
+            actorType: event.actorType,
+            actorId: event.actorId,
+          });
+        } else if (
+          event.eventType === "project_answer_recorded" &&
+          typeof payload.message === "string"
+        ) {
+          answers.push({
+            eventId: event.id,
+            message: payload.message,
+            actorType: event.actorType,
+            actorId: event.actorId,
+          });
+        } else if (
+          event.eventType === "project_decision_recorded" &&
+          typeof payload.decision === "string"
+        ) {
+          decisions.push({
+            eventId: event.id,
+            decision: payload.decision,
+            actorType: event.actorType,
+            actorId: event.actorId,
+          });
+        } else if (event.eventType === "project_risk_recorded" && typeof payload.risk === "string") {
+          risks.push({
+            eventId: event.id,
+            risk: payload.risk,
+            actorType: event.actorType,
+            actorId: event.actorId,
+          });
+        }
+      }
+
+      return {
+        project: {
+          id: projectRun.project.id,
+          name: projectRun.project.name,
+          organizationId: projectRun.project.organizationId,
+          repo: projectRun.project.repo,
+          members: projectRun.project.members.map((member) => ({
+            id: member.user.id,
+            name: member.user.name,
+            role: member.role,
+          })),
+        },
+        projectRun: {
+          id: projectRun.id,
+          organizationId: projectRun.organizationId,
+          projectId: projectRun.projectId,
+          status: projectRun.status,
+          initialGoal: projectRun.initialGoal,
+          planSummary: projectRun.planSummary,
+          executionConfig: normalizeExecutionConfig(projectRun.executionConfig),
+        },
+        questions,
+        answers,
+        decisions,
+        risks,
+      };
+    });
+  }
+
   askQuestion(
     input: RecordProjectPlanningMessageInput,
     organizationId: string,
@@ -243,3 +385,9 @@ export class ProjectPlanningService {
 }
 
 export const projectPlanningService = new ProjectPlanningService();
+
+function normalizeExecutionConfig(value: Prisma.JsonValue): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}

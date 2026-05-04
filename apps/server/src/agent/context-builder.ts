@@ -24,6 +24,10 @@ import type { OrgAgentSettings } from "../services/agent-identity.js";
 import { resolveSoulFile } from "./soul-file-resolver.js";
 import { resolveAutonomyMode, type AutonomyScopeType } from "../services/scope-autonomy.js";
 import { memoryService } from "../services/memory.js";
+import {
+  projectPlanningService,
+  type ProjectPlanningContext,
+} from "../services/project-planning.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -140,6 +144,9 @@ export interface AgentContextPacket {
   /** Actors involved in the batch events. */
   actors: ContextActor[];
 
+  /** Canonical project-run planning state, present only for project planning scopes. */
+  planningContext?: ProjectPlanningContext;
+
   /** Org autonomy mode and available actions filtered by scope. */
   permissions: {
     autonomyMode: string;
@@ -189,6 +196,7 @@ export interface TokenBudgetConfig {
     recentEvents: number;
     recentSignals: number;
     actors: number;
+    planningContext: number;
   };
 }
 
@@ -209,6 +217,7 @@ export const TIER2_TOKEN_BUDGET: TokenBudgetConfig = {
     recentEvents: 4_000,
     recentSignals: 3_500,
     actors: 1_500,
+    planningContext: 6_000,
   },
 };
 
@@ -229,6 +238,7 @@ export const TIER3_TOKEN_BUDGET: TokenBudgetConfig = {
     recentEvents: 6_000,
     recentSignals: 4_000,
     actors: 3_000,
+    planningContext: 10_000,
   },
 };
 
@@ -879,6 +889,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
 
+function extractProjectRunId(events: AgentEvent[]): string | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const payload = events[i]?.payload;
+    const projectRunId = stringifyScalar(payload.projectRunId);
+    if (projectRunId) return projectRunId;
+
+    const projectRun = asRecord(payload.projectRun);
+    const nestedId = projectRun ? stringifyScalar(projectRun.id) : null;
+    if (nestedId) return nestedId;
+  }
+  return null;
+}
+
 function stringifyScalar(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
@@ -1066,6 +1089,13 @@ function deriveDecisionContext(input: {
 
   if (scopeType === "channel") {
     pushFact(canonicalState, "channel", scopeData.name ?? scopeId);
+  }
+
+  if (scopeType === "project") {
+    pushFact(canonicalState, "project", scopeData.name ?? scopeId);
+    constraints.push(
+      "Project planning scope: use only project planning actions; ticket generation is not available yet.",
+    );
   }
 
   return {
@@ -1432,8 +1462,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
 
   // --- 2. Action schema (high priority — planner needs to know what it can do) ---
   const scopeTypeForActions = toScopeType(scopeType);
-  const actions = getActionsByScope(scopeTypeForActions);
-  recordSection("actionSchema", estimateObjectTokens(actions));
+  let actions = getActionsByScope(scopeTypeForActions);
 
   // --- 3. Soul file (resolved from platform default → org → project → repo) ---
   const soulFile = resolveSoulFile({
@@ -1449,6 +1478,39 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   if (scopeEntity) {
     recordSection("scopeEntity", estimateObjectTokens(scopeEntity.data));
   }
+
+  let planningContext: ProjectPlanningContext | undefined;
+  const projectRunId = scopeType === "project" ? extractProjectRunId(events) : null;
+  if (projectRunId) {
+    try {
+      planningContext = await projectPlanningService.getContext(
+        projectRunId,
+        organizationId,
+        "agent",
+        agentSettings.agentId,
+      );
+      if (planningContext.project.id !== scopeId) {
+        planningContext = undefined;
+      }
+    } catch {
+      planningContext = undefined;
+    }
+  }
+  recordSection("planningContext", estimateObjectTokens(planningContext ?? {}));
+
+  if (planningContext) {
+    const planningActionNames = new Set([
+      "project.get",
+      "project.askQuestion",
+      "project.recordAnswer",
+      "project.recordDecision",
+      "project.recordRisk",
+      "project.summarizePlan",
+      "no_op",
+    ]);
+    actions = actions.filter((action) => planningActionNames.has(action.name));
+  }
+  recordSection("actionSchema", estimateObjectTokens(actions));
 
   // --- 5. Event batch ---
   let eventBatch = events;
@@ -1616,6 +1678,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     memories,
     recentSignals,
     actors,
+    ...(planningContext ? { planningContext } : {}),
     permissions: {
       autonomyMode: effectiveAutonomyMode,
       actions,

@@ -43,13 +43,13 @@ The project AI can ask useful clarifying questions and update durable planning s
 
 ## Completion requirements
 
-- [ ] Context packet includes canonical project state.
-- [ ] Prompt is stored in the repo.
-- [ ] Runtime token scopes actions to one project/project run.
-- [ ] Actions call services, not database writes.
-- [ ] Action output is machine-readable.
-- [ ] Invalid project/run/action combinations are rejected.
-- [ ] Prompt cannot create tickets before ticket-generation actions ship.
+- [x] Context packet includes canonical project state.
+- [x] Prompt is stored in the repo.
+- [x] Runtime token scopes actions to one project/project run.
+- [x] Actions call services, not database writes.
+- [x] Action output is machine-readable.
+- [x] Invalid project/run/action combinations are rejected.
+- [x] Prompt cannot create tickets before ticket-generation actions ship.
 
 ## Implementation notes
 
