@@ -108,27 +108,16 @@ export const RETRY_SESSION_GROUP_SETUP_MUTATION = gql`
 `;
 
 export const MOVE_SESSION_TO_RUNTIME_MUTATION = gql`
-  mutation MoveSessionToRuntime(
-    $sessionId: ID!
-    $runtimeInstanceId: ID!
-    $allowUnverifiedSourceGitStatus: Boolean = false
-  ) {
-    moveSessionToRuntime(
-      sessionId: $sessionId
-      runtimeInstanceId: $runtimeInstanceId
-      allowUnverifiedSourceGitStatus: $allowUnverifiedSourceGitStatus
-    ) {
+  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {
+    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {
       id
     }
   }
 `;
 
 export const MOVE_SESSION_TO_CLOUD_MUTATION = gql`
-  mutation MoveSessionToCloud($sessionId: ID!, $allowUnverifiedSourceGitStatus: Boolean = false) {
-    moveSessionToCloud(
-      sessionId: $sessionId
-      allowUnverifiedSourceGitStatus: $allowUnverifiedSourceGitStatus
-    ) {
+  mutation MoveSessionToCloud($sessionId: ID!) {
+    moveSessionToCloud(sessionId: $sessionId) {
       id
     }
   }

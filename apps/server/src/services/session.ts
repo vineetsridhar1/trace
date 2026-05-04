@@ -280,6 +280,15 @@ function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean 
   );
 }
 
+function allowsUnverifiedSourceGitStatusForMove(state: SessionConnectionData["state"]): boolean {
+  return (
+    state === "disconnected" ||
+    state === "failed" ||
+    state === "timed_out" ||
+    state === "deprovision_failed"
+  );
+}
+
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
 }
@@ -5129,7 +5138,14 @@ export class SessionService {
     skippedReason: string | null;
   }> {
     if (!params.repoId) return { status: null, verified: true, skippedReason: null };
-    if (!params.workdir) return { status: null, verified: true, skippedReason: null };
+    if (!params.workdir) {
+      if (!params.allowUnverifiedSourceGitStatus) {
+        throw new Error(
+          "Cannot move session: source git status could not be verified because the source workdir is unavailable.",
+        );
+      }
+      return { status: null, verified: false, skippedReason: "missing_workdir" };
+    }
     if (!params.runtimeInstanceId) {
       if (!params.allowUnverifiedSourceGitStatus) {
         throw new Error(
@@ -5372,7 +5388,6 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType,
     actorId: string,
-    allowUnverifiedSourceGitStatus = false,
   ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
@@ -5415,7 +5430,9 @@ export class SessionService {
       targetHosting: targetRuntime.hostingMode,
       targetRuntimeInstanceId: runtimeInstanceId,
       targetRuntimeLabel: targetRuntime.label,
-      allowUnverifiedSourceGitStatus,
+      allowUnverifiedSourceGitStatus: allowsUnverifiedSourceGitStatusForMove(
+        this.parseConnection(session.connection).state,
+      ),
       actorType,
       actorId,
     });
@@ -5430,7 +5447,6 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType,
     actorId: string,
-    allowUnverifiedSourceGitStatus = false,
   ) {
     if (isLocalMode()) {
       throw new Error("Cloud sessions are disabled in local mode");
@@ -5456,7 +5472,9 @@ export class SessionService {
       targetHosting: "cloud",
       targetRuntimeInstanceId: null,
       targetRuntimeLabel: null,
-      allowUnverifiedSourceGitStatus,
+      allowUnverifiedSourceGitStatus: allowsUnverifiedSourceGitStatusForMove(
+        this.parseConnection(session.connection).state,
+      ),
       actorType,
       actorId,
     });

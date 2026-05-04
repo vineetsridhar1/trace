@@ -24,12 +24,10 @@ interface RuntimeInstance {
 export function SessionRuntimePicker({
   sessionId,
   onClose,
-  allowUnverifiedSourceGitStatus = false,
   className,
 }: {
   sessionId: string;
   onClose: () => void;
-  allowUnverifiedSourceGitStatus?: boolean;
   className?: string;
 }) {
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
@@ -72,7 +70,6 @@ export function SessionRuntimePicker({
           .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, {
             sessionId,
             runtimeInstanceId,
-            allowUnverifiedSourceGitStatus,
           })
           .toPromise();
         if (result.error) {
@@ -92,7 +89,7 @@ export function SessionRuntimePicker({
         setMoving(null);
       }
     },
-    [allowUnverifiedSourceGitStatus, onClose, sessionId],
+    [onClose, sessionId],
   );
 
   const handleMoveToCloud = useCallback(async () => {
@@ -105,7 +102,6 @@ export function SessionRuntimePicker({
       const result = await client
         .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
           sessionId,
-          allowUnverifiedSourceGitStatus,
         })
         .toPromise();
       if (result.error) {
@@ -124,7 +120,7 @@ export function SessionRuntimePicker({
     } finally {
       setMoving(null);
     }
-  }, [allowUnverifiedSourceGitStatus, cloudEnvironmentAvailable, onClose, sessionId]);
+  }, [cloudEnvironmentAvailable, onClose, sessionId]);
 
   const localRuntimes = runtimes.filter(
     (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,

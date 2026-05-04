@@ -12,7 +12,6 @@ import { ListRow, Spinner, Text } from "@/components/design-system";
 import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { canUseMobileCloudHosting } from "@/lib/session-hosting";
-import { shouldAllowUnverifiedSourceGitStatusForMove } from "@/lib/session-move-recovery";
 import { getClient } from "@/lib/urql";
 import { useCloudAgentEnvironmentAvailable } from "@/hooks/useCloudAgentEnvironmentAvailable";
 import { useTheme } from "@/theme";
@@ -62,10 +61,6 @@ export function SessionMovePickerSheetContent({
     connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
   const canMoveSession =
     sessionStatus !== "merged" && !isOptimistic && (connection?.canMove ?? true);
-  const allowUnverifiedSourceGitStatus = shouldAllowUnverifiedSourceGitStatusForMove(
-    connection,
-    groupConnection,
-  );
   const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
   const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(
     canMoveSession && canUseCloudRuntime,
@@ -161,14 +156,12 @@ export function SessionMovePickerSheetContent({
             ? await getClient()
                 .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, {
                   sessionId,
-                  allowUnverifiedSourceGitStatus,
                 })
                 .toPromise()
             : await getClient()
                 .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, {
                   sessionId,
                   runtimeInstanceId,
-                  allowUnverifiedSourceGitStatus,
                 })
                 .toPromise();
         const movedSession =
@@ -188,13 +181,7 @@ export function SessionMovePickerSheetContent({
         setMoving(null);
       }
     },
-    [
-      allowUnverifiedSourceGitStatus,
-      canMoveSession,
-      cloudEnvironmentAvailable,
-      onClose,
-      sessionId,
-    ],
+    [canMoveSession, cloudEnvironmentAvailable, onClose, sessionId],
   );
 
   return (
