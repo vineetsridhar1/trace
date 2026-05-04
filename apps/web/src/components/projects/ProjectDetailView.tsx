@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowLeft, CalendarClock, GitBranch, Radio, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, CalendarClock, GitBranch, Radio, RefreshCw, Send, Users } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project } from "@trace/gql";
 import { useShallow } from "zustand/react/shallow";
@@ -18,6 +18,7 @@ import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
+import { Textarea } from "../ui/textarea";
 
 const PROJECT_QUERY = gql`
   query Project($id: ID!) {
@@ -77,6 +78,21 @@ const PROJECT_QUERY = gql`
     }
   }
 `;
+
+const RECORD_PROJECT_ANSWER_MUTATION = gql`
+  mutation RecordProjectAnswer($input: RecordProjectPlanningMessageInput!) {
+    recordProjectAnswer(input: $input) {
+      id
+    }
+  }
+`;
+
+const PLANNING_EVENT_TYPES = new Set([
+  "project_question_asked",
+  "project_answer_recorded",
+  "project_decision_recorded",
+  "project_risk_recorded",
+]);
 
 export function ProjectDetailView({ projectId }: { projectId: string }) {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
@@ -198,7 +214,13 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
       <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="space-y-4">
-          {activeProjectRun && <ProjectRunPanel projectRun={activeProjectRun} />}
+          {activeProjectRun && (
+            <ProjectRunPanel
+              projectRun={activeProjectRun}
+              scopeKey={scopeKey}
+              eventIds={eventIds}
+            />
+          )}
 
           <div className="rounded-md border border-border bg-background p-4">
             <h2 className="text-sm font-semibold text-foreground">Overview</h2>
@@ -253,7 +275,48 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   );
 }
 
-function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
+function ProjectRunPanel({
+  projectRun,
+  scopeKey,
+  eventIds,
+}: {
+  projectRun: ProjectRunEntity;
+  scopeKey: string;
+  eventIds: string[];
+}) {
+  const [answer, setAnswer] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const planningEvents = useEntityStore(
+    useShallow((s) =>
+      eventIds
+        .map((id) => s.eventsByScope[scopeKey]?.[id])
+        .filter((event): event is NonNullable<typeof event> => {
+          if (!event || !PLANNING_EVENT_TYPES.has(event.eventType)) return false;
+          const payload = asRecord(event.payload);
+          return payload?.projectRunId === projectRun.id;
+        }),
+    ),
+  );
+
+  const submitAnswer = useCallback(async () => {
+    const message = answer.trim();
+    if (!message || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    const result = await client
+      .mutation(RECORD_PROJECT_ANSWER_MUTATION, {
+        input: { projectRunId: projectRun.id, message },
+      })
+      .toPromise();
+    setSubmitting(false);
+    if (result.error) {
+      setSubmitError(result.error.message);
+      return;
+    }
+    setAnswer("");
+  }, [answer, projectRun.id, submitting]);
+
   return (
     <div className="rounded-md border border-accent/30 bg-surface-elevated p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -274,8 +337,88 @@ function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
           {projectRun.planSummary || "Planning has not produced a summary yet."}
         </p>
       </div>
+      <div className="mt-4 border-t border-border pt-4">
+        <div className="text-xs font-medium uppercase text-muted-foreground">
+          Planning conversation
+        </div>
+        {planningEvents.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Trace is preparing the first planning question.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {planningEvents.map((event) => (
+              <PlanningEventItem
+                key={event.id}
+                eventType={event.eventType}
+                payload={event.payload}
+              />
+            ))}
+          </div>
+        )}
+        <div className="mt-3 space-y-2">
+          <Textarea
+            value={answer}
+            onChange={(event) => setAnswer(event.target.value)}
+            placeholder="Answer the latest planning question..."
+            className="min-h-20 resize-none"
+          />
+          {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+          <div className="flex justify-end">
+            <Button size="sm" onClick={submitAnswer} disabled={!answer.trim() || submitting}>
+              <Send size={14} />
+              {submitting ? "Sending..." : "Send answer"}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
+}
+
+function PlanningEventItem({
+  eventType,
+  payload,
+}: {
+  eventType: string;
+  payload: unknown;
+}) {
+  const text = planningEventText(eventType, asRecord(payload) ?? {});
+  if (!text) return null;
+
+  return (
+    <div className="rounded-md border border-border bg-background/70 p-3">
+      <div className="text-xs font-medium uppercase text-muted-foreground">
+        {planningEventLabel(eventType)}
+      </div>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground">{text}</p>
+    </div>
+  );
+}
+
+function planningEventLabel(eventType: string): string {
+  if (eventType === "project_question_asked") return "Trace asked";
+  if (eventType === "project_answer_recorded") return "You answered";
+  if (eventType === "project_decision_recorded") return "Decision";
+  if (eventType === "project_risk_recorded") return "Risk";
+  return formatStatus(eventType);
+}
+
+function planningEventText(eventType: string, payload: Record<string, unknown>): string | null {
+  if (eventType === "project_question_asked" || eventType === "project_answer_recorded") {
+    return typeof payload.message === "string" ? payload.message : null;
+  }
+  if (eventType === "project_decision_recorded") {
+    return typeof payload.decision === "string" ? payload.decision : null;
+  }
+  if (eventType === "project_risk_recorded") {
+    return typeof payload.risk === "string" ? payload.risk : null;
+  }
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
 
 function ProjectDetailState({

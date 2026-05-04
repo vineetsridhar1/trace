@@ -111,6 +111,9 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
   "session_pr_opened",
   "session_pr_merged",
   "session_pr_closed",
+  // Project planning events: start and continue the AI interview loop.
+  "project_goal_submitted",
+  "project_answer_recorded",
 ]);
 
 /**
