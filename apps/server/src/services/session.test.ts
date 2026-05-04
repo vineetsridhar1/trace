@@ -1157,6 +1157,42 @@ describe("SessionService", () => {
       );
     });
 
+    it("treats mobile cloud quick-start without a prompt as deferred runtime selection", async () => {
+      const sessionGroup = makeSessionGroup({ connection: { state: "pending" } });
+      const session = makeSession({ sessionGroup, hosting: "local" });
+      prismaMock.agentEnvironment.findFirst.mockResolvedValue(null);
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        clientSource: "mobile",
+        tool: "claude_code",
+        channelId: "channel-1",
+        hosting: "cloud",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "local",
+            connection: expect.not.objectContaining({
+              environmentId: expect.any(String),
+              runtimeInstanceId: expect.any(String),
+            }),
+          }),
+        }),
+      );
+    });
+
     it("defers runtime selection without resolving the org default environment", async () => {
       const sessionGroup = makeSessionGroup({ connection: { state: "pending" } });
       const session = makeSession({ sessionGroup, hosting: "local" });

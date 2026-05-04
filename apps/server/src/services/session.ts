@@ -2120,12 +2120,26 @@ export class SessionService {
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
-    if (isLocalMode() && input.hosting === "cloud") {
+    // Older mobile quick-starts can send cloud as a default even though no runtime was selected.
+    const shouldDeferMobileCloudQuickStart =
+      normalizeClientSource(input.clientSource) === "mobile" &&
+      input.hosting === "cloud" &&
+      !input.prompt &&
+      !input.environmentId &&
+      !input.runtimeInstanceId &&
+      !input.restoreCheckpointId &&
+      !input.sessionGroupId &&
+      !input.sourceSessionId &&
+      !sharedRuntimeInstanceId &&
+      !restoreGroupRuntimeInstanceId;
+    const requestedHosting = shouldDeferMobileCloudQuickStart ? null : input.hosting;
+
+    if (isLocalMode() && requestedHosting === "cloud") {
       throw new Error("Cloud sessions are disabled in local mode");
     }
 
     const requestedRuntimeSelection =
-      !!input.environmentId || !!input.hosting || !!input.runtimeInstanceId;
+      !!input.environmentId || !!requestedHosting || !!input.runtimeInstanceId;
     const deferRuntimeSelection =
       input.deferRuntimeSelection === true ||
       (!input.restoreCheckpointId &&
@@ -2134,7 +2148,7 @@ export class SessionService {
         !restoreGroupRuntimeInstanceId);
     if (
       input.deferRuntimeSelection === true &&
-      (input.environmentId || input.hosting || input.runtimeInstanceId)
+      (input.environmentId || requestedHosting || input.runtimeInstanceId)
     ) {
       throw new ValidationError(
         "deferRuntimeSelection cannot be combined with an explicit environment or runtime",
@@ -2147,14 +2161,18 @@ export class SessionService {
           organizationId: input.organizationId,
           environmentId: input.environmentId ?? null,
           adapterType:
-            input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
+            requestedHosting === "cloud"
+              ? "provisioned"
+              : requestedHosting === "local"
+                ? "local"
+                : null,
           tool: input.tool,
           actorType: input.actorType ?? "user",
           actorId: input.createdById,
         });
     const hasCompatibilityRuntimeFallback =
       deferRuntimeSelection ||
-      !!input.hosting ||
+      !!requestedHosting ||
       !!input.runtimeInstanceId ||
       !!sharedRuntimeInstanceId ||
       !!restoreGroupRuntimeInstanceId ||
@@ -2173,7 +2191,7 @@ export class SessionService {
 
     let hosting =
       (deferRuntimeSelection ? "local" : environmentHosting) ??
-      input.hosting ??
+      requestedHosting ??
       sourceSession?.hosting ??
       (isLocalMode() ? "local" : "cloud");
     if (isLocalMode() && hosting === "cloud") {
