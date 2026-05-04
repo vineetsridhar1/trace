@@ -8,6 +8,7 @@ function parseNavFromPath(path: string): {
   sessionGroupId: string | null;
   sessionId: string | null;
   chatId: string | null;
+  projectId: string | null;
   page: ActivePage;
   channelSubPage: ChannelSubPage;
 } {
@@ -17,6 +18,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
+      projectId: null,
       page: "settings",
       channelSubPage: null,
     };
@@ -27,6 +29,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
+      projectId: null,
       page: "inbox",
       channelSubPage: null,
     };
@@ -37,6 +40,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
+      projectId: null,
       page: "connections",
       channelSubPage: null,
     };
@@ -47,7 +51,31 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
+      projectId: null,
       page: "tickets",
+      channelSubPage: null,
+    };
+  }
+  const projectMatch = path.match(/^\/projects\/([^/]+)/);
+  if (projectMatch) {
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      projectId: projectMatch[1],
+      page: "projects",
+      channelSubPage: null,
+    };
+  }
+  if (path.startsWith("/projects")) {
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      projectId: null,
+      page: "projects",
       channelSubPage: null,
     };
   }
@@ -59,6 +87,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: chatMatch[1],
+      projectId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -71,6 +100,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: channelGroupSessionMatch[2],
       sessionId: channelGroupSessionMatch[3],
       chatId: null,
+      projectId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -83,6 +113,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: channelGroupMatch[2],
       sessionId: null,
       chatId: null,
+      projectId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -95,6 +126,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: groupSessionMatch[1],
       sessionId: groupSessionMatch[2],
       chatId: null,
+      projectId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -107,6 +139,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: groupMatch[1],
       sessionId: null,
       chatId: null,
+      projectId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -119,6 +152,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
+      projectId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -129,6 +163,7 @@ function parseNavFromPath(path: string): {
     sessionGroupId: null,
     sessionId: null,
     chatId: null,
+    projectId: null,
     page: "main",
     channelSubPage: null,
   };
@@ -143,6 +178,7 @@ export function useHistorySync() {
         sessionId: string | null,
         page?: ActivePage,
         chatId?: string | null,
+        projectId?: string | null,
         channelSubPage?: ChannelSubPage,
       ) => void;
     }) => s._restoreNav,
@@ -154,9 +190,14 @@ export function useHistorySync() {
       parsedNav.sessionGroupId,
       parsedNav.sessionId,
     );
-    const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
+    const { channelId, sessionGroupId, sessionId, chatId, projectId, page } =
+      initialRedirect ?? parsedNav;
     const isTopLevelPage =
-      page === "settings" || page === "inbox" || page === "connections" || page === "tickets";
+      page === "settings" ||
+      page === "inbox" ||
+      page === "connections" ||
+      page === "tickets" ||
+      page === "projects";
     const initialChat =
       isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
@@ -178,6 +219,7 @@ export function useHistorySync() {
       initialSessionId,
       page,
       initialChat,
+      projectId,
     );
 
     history.replaceState(
@@ -187,13 +229,22 @@ export function useHistorySync() {
         sessionId: initialSessionId,
         page,
         chatId: initialChat,
+        projectId,
         channelSubPage: null,
       },
       "",
       path,
     );
 
-    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat, null);
+    restoreNav(
+      initialChannel,
+      initialSessionGroupId,
+      initialSessionId,
+      page,
+      initialChat,
+      projectId,
+      null,
+    );
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
@@ -201,6 +252,7 @@ export function useHistorySync() {
         sessionGroupId: string | null;
         sessionId: string | null;
         chatId?: string | null;
+        projectId?: string | null;
         page?: ActivePage;
         channelSubPage?: ChannelSubPage;
       } | null;
@@ -217,6 +269,7 @@ export function useHistorySync() {
               redirect.sessionId,
               redirect.page,
               redirect.chatId,
+              redirect.projectId,
             ),
           );
           restoreNav(
@@ -225,6 +278,7 @@ export function useHistorySync() {
             redirect.sessionId,
             redirect.page,
             redirect.chatId,
+            redirect.projectId,
             redirect.channelSubPage,
           );
           return;
@@ -236,6 +290,7 @@ export function useHistorySync() {
           state.sessionId,
           state.page,
           state.chatId,
+          state.projectId,
           state.channelSubPage,
         );
         return;
@@ -253,6 +308,7 @@ export function useHistorySync() {
             redirect.sessionId,
             redirect.page,
             redirect.chatId,
+            redirect.projectId,
           ),
         );
         restoreNav(
@@ -261,6 +317,7 @@ export function useHistorySync() {
           redirect.sessionId,
           redirect.page,
           redirect.chatId,
+          redirect.projectId,
           redirect.channelSubPage,
         );
         return;
@@ -271,6 +328,7 @@ export function useHistorySync() {
         nav.sessionId,
         nav.page,
         nav.chatId,
+        nav.projectId,
         nav.channelSubPage,
       );
     }

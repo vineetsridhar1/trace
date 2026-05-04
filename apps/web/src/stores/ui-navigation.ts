@@ -9,11 +9,14 @@ export function buildPath(
   sessionId: string | null,
   page: ActivePage = "main",
   chatId: string | null = null,
+  projectId: string | null = null,
 ): string {
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
   if (page === "connections") return "/connections";
   if (page === "tickets") return "/tickets";
+  if (page === "projects" && projectId) return `/projects/${projectId}`;
+  if (page === "projects") return "/projects";
   if (chatId) return `/dm/${chatId}`;
   if (channelId && sessionGroupId && sessionId) {
     return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
@@ -32,10 +35,11 @@ export function pushNav(
   page: ActivePage = "main",
   chatId: string | null = null,
   channelSubPage: ChannelSubPage = null,
+  projectId: string | null = null,
 ): void {
-  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
+  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId, projectId);
   history.pushState(
-    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
+    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage, projectId },
     "",
     path,
   );
@@ -48,10 +52,11 @@ export function replaceNav(
   page: ActivePage = "main",
   chatId: string | null = null,
   channelSubPage: ChannelSubPage = null,
+  projectId: string | null = null,
 ): void {
-  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
+  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId, projectId);
   history.replaceState(
-    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
+    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage, projectId },
     "",
     path,
   );
