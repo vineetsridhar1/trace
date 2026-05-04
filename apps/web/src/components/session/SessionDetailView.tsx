@@ -549,6 +549,8 @@ export function SessionDetailView({
               bridgeAccess={bridgeAccess}
               sessionGroupId={sessionGroupId ?? null}
               onAccessRequested={refreshBridgeAccess}
+              lockedMode={projectPlanningContext ? "plan" : undefined}
+              hideOptions={Boolean(projectPlanningContext)}
             />
           </>
         )}

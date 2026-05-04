@@ -156,6 +156,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startingSession, setStartingSession] = useState(false);
+  const [autoStartedRunId, setAutoStartedRunId] = useState<string | null>(null);
   const [startSessionError, setStartSessionError] = useState<string | null>(null);
   const projectName = useEntityField("projects", projectId, "name");
   const project = useEntityStore((s) => s.projects[projectId]);
@@ -166,6 +167,9 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const currentProjectRun =
     activeProjectRun ??
     selectActiveProjectRun((project?.runs ?? []) as Array<ProjectRunEntity & { id: string }>);
+  const planningSession = project
+    ? selectPlanningSession(project.sessions, currentProjectRun?.planningSessionId)
+    : null;
   const fetchProject = useCallback(async () => {
     setError(null);
     const result = await client.query(PROJECT_QUERY, { id: projectId }).toPromise();
@@ -225,6 +229,20 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     startingSession,
   ]);
 
+  useEffect(() => {
+    if (!project || !currentProjectRun || planningSession || startingSession) return;
+    if (autoStartedRunId === currentProjectRun.id) return;
+    setAutoStartedRunId(currentProjectRun.id);
+    void startInterviewerSession();
+  }, [
+    autoStartedRunId,
+    currentProjectRun,
+    planningSession,
+    project,
+    startInterviewerSession,
+    startingSession,
+  ]);
+
   if (loading && !project) {
     return (
       <div className="space-y-4 p-4">
@@ -263,11 +281,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       />
     );
   }
-
-  const planningSession = selectPlanningSession(
-    project.sessions,
-    currentProjectRun?.planningSessionId,
-  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -326,17 +339,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 </p>
               </div>
             </div>
-            {!planningSession && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={startInterviewerSession}
-                disabled={!currentProjectRun || startingSession}
-              >
-                {startingSession ? <Loader2 size={14} className="animate-spin" /> : null}
-                Start interviewer
-              </Button>
-            )}
           </div>
 
           {planningSession ? (
@@ -414,10 +416,17 @@ function ProjectSessionEmptyState({
           Start a normal project session to interview the user and draft the plan.
         </p>
         {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
-        <Button className="mt-4" onClick={onStart} disabled={!canStart || starting}>
-          {starting ? <Loader2 size={16} className="animate-spin" /> : null}
-          Start interviewer
-        </Button>
+        {error ? (
+          <Button className="mt-4" onClick={onStart} disabled={!canStart || starting}>
+            {starting ? <Loader2 size={16} className="animate-spin" /> : null}
+            Retry
+          </Button>
+        ) : (
+          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 size={16} className="animate-spin" />
+            Starting planning chat
+          </div>
+        )}
       </div>
     </div>
   );

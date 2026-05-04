@@ -230,6 +230,11 @@ describe("ProjectRunService", () => {
         runtimeInstanceId: "runtime-1",
       }),
     );
+    const planningPrompt = start.mock.calls[0]?.[0]?.prompt;
+    expect(planningPrompt).toContain("<trace-internal>");
+    expect(planningPrompt).toContain("</trace-internal>");
+    expect(planningPrompt).toContain("Project run id: run-1");
+    expect(planningPrompt).toMatch(/<\/trace-internal>\n\nBuild a project planner$/);
     const projectCreateOrder = prismaMock.project.create.mock.invocationCallOrder[0] ?? 0;
     const runCreateOrder = prismaMock.projectRun.create.mock.invocationCallOrder[0] ?? 0;
     expect(projectCreateOrder).toBeLessThan(runCreateOrder);

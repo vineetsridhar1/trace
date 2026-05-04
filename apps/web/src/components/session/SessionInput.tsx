@@ -39,12 +39,16 @@ export function SessionInput({
   bridgeAccess,
   sessionGroupId,
   onAccessRequested,
+  lockedMode,
+  hideOptions,
 }: {
   sessionId: string;
   onStop: () => void;
   bridgeAccess: BridgeRuntimeAccessInfo | null;
   sessionGroupId?: string | null;
   onAccessRequested?: () => void | Promise<void>;
+  lockedMode?: InteractionMode;
+  hideOptions?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
@@ -67,6 +71,7 @@ export function SessionInput({
     () => (useDraftsStore.getState().drafts[sessionId]?.text ?? "").trim().length > 0,
   );
   const [mode, setMode] = useState<InteractionMode>("code");
+  const effectiveMode = lockedMode ?? mode;
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,11 +95,12 @@ export function SessionInput({
   const slashCommands = useSlashCommands(sessionId);
 
   const cycleMode = useCallback(() => {
+    if (lockedMode) return;
     setMode((prev: InteractionMode) => {
       const idx = MODE_CYCLE.indexOf(prev);
       return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
     });
-  }, []);
+  }, [lockedMode]);
 
   const addAttachments = useCallback(
     (files: File[]) => {
@@ -152,7 +158,11 @@ export function SessionInput({
       try {
         const savedImages = [...images];
         const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
-        const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
+        const wrappedText = !text
+          ? ""
+          : text.startsWith("/")
+            ? text
+            : wrapPrompt(effectiveMode, text);
 
         let imageKeys: string[] = [];
         const savedIds = new Set(savedImages.map((img) => img.id));
@@ -181,7 +191,7 @@ export function SessionInput({
                 sessionId,
                 text: wrappedText,
                 attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
-                interactionMode: mode === "code" ? undefined : mode,
+                interactionMode: effectiveMode === "code" ? undefined : effectiveMode,
               })
               .toPromise();
 
@@ -242,7 +252,7 @@ export function SessionInput({
               sessionId,
               text: wrappedText,
               attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
-              interactionMode: mode === "code" ? undefined : mode,
+              interactionMode: effectiveMode === "code" ? undefined : effectiveMode,
               clientMutationId,
             })
             .toPromise();
@@ -273,7 +283,7 @@ export function SessionInput({
         setIsSending(false);
       }
     },
-    [sessionId, mode, canSend, canQueue, images, isNotStarted, hosting, connection],
+    [sessionId, effectiveMode, canSend, canQueue, images, isNotStarted, hosting, connection],
   );
 
   // If the user has bridge access (owner or granted), a disconnected session
@@ -309,7 +319,7 @@ export function SessionInput({
     <div
       className={cn(
         "shrink-0 border-t px-4 py-3 transition-colors",
-        MODE_CONFIG[mode as InteractionMode].containerBorder,
+        MODE_CONFIG[effectiveMode].containerBorder,
       )}
     >
       <ImageAttachmentBar attachments={images} onRemove={handleRemoveImage} />
@@ -322,7 +332,7 @@ export function SessionInput({
                   size={14}
                   className={cn(
                     "transition-colors",
-                    MODE_CONFIG[mode as InteractionMode].iconColor,
+                    MODE_CONFIG[effectiveMode].iconColor,
                   )}
                 />
               ) : (
@@ -330,7 +340,7 @@ export function SessionInput({
                   size={14}
                   className={cn(
                     "transition-colors",
-                    MODE_CONFIG[mode as InteractionMode].iconColor,
+                    MODE_CONFIG[effectiveMode].iconColor,
                   )}
                 />
               )}
@@ -347,7 +357,7 @@ export function SessionInput({
         <div
           className={cn(
             "flex-1 rounded-lg border bg-surface-deep transition-colors",
-            MODE_CONFIG[mode as InteractionMode].inputBorder,
+            MODE_CONFIG[effectiveMode].inputBorder,
           )}
         >
           <div className="session-editor">
@@ -390,7 +400,7 @@ export function SessionInput({
               disabled={(!hasContent && images.length === 0) || !canSend || isSending}
               className={cn(
                 "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-                MODE_CONFIG[mode as InteractionMode].sendButton,
+                MODE_CONFIG[effectiveMode].sendButton,
               )}
               title="Queue message"
             >
@@ -410,7 +420,7 @@ export function SessionInput({
             disabled={(!hasContent && images.length === 0) || !canSend || isSending}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-              MODE_CONFIG[mode as InteractionMode].sendButton,
+              MODE_CONFIG[effectiveMode].sendButton,
             )}
           >
             <Send size={16} />
@@ -419,12 +429,14 @@ export function SessionInput({
       </div>
 
       {isActive && <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />}
-      <SessionInputOptions
-        sessionId={sessionId}
-        mode={mode}
-        onModeChange={cycleMode}
-        isActive={isActive}
-      />
+      {!hideOptions && (
+        <SessionInputOptions
+          sessionId={sessionId}
+          mode={effectiveMode}
+          onModeChange={cycleMode}
+          isActive={isActive}
+        />
+      )}
     </div>
   );
 }

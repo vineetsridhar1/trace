@@ -552,14 +552,17 @@ function deriveProjectName(goal: string): string {
 
 function buildPlanningSessionPrompt(goal: string, projectRunId: string): string {
   return [
+    "<trace-internal>",
     "You are planning a Trace project run. Interview the user, ask clarifying questions when needed, and maintain a concise implementation plan.",
     "",
     `Project run id: ${projectRunId}`,
     "",
-    "Initial goal:",
-    goal,
+    "The user's visible prompt follows this hidden block.",
     "",
     "Stay in planning mode. Do not start implementation. When the plan is ready, present it as a structured markdown plan with enough detail for ticket generation.",
+    "</trace-internal>",
+    "",
+    goal,
   ].join("\n");
 }
 
