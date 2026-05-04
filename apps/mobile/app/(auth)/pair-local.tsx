@@ -7,15 +7,20 @@ import type { BarcodeScanningResult } from "expo-camera";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Screen, Text } from "@/components/design-system";
-import { activatePairedLocalConnection, getOrCreateLocalInstallId } from "@/lib/connection-target";
+import {
+  activateHostedConnection,
+  activatePairedLocalConnection,
+  getHostedApiUrl,
+  getOrCreateLocalInstallId,
+} from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { recreateClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
 
 type PairingPayload = {
   v: number;
-  kind: "trace-local-pair";
-  baseUrl: string;
+  kind: "trace-local-pair" | "trace-account-pair";
+  baseUrl?: string;
   pairingToken: string;
   expiresAt?: string;
 };
@@ -55,19 +60,32 @@ function parsePairingPayload(raw: string): PairingPayload {
   }
 
   const payload = parsed as Partial<PairingPayload>;
-  if (payload.kind !== "trace-local-pair" || payload.v !== 1) {
-    throw new Error("This QR code is not a Trace local pairing code");
+  if (
+    (payload.kind !== "trace-local-pair" && payload.kind !== "trace-account-pair") ||
+    payload.v !== 1
+  ) {
+    throw new Error("This QR code is not a Trace pairing code");
   }
-  if (typeof payload.baseUrl !== "string" || !/^https?:\/\//.test(payload.baseUrl)) {
+  if (
+    payload.kind === "trace-local-pair" &&
+    (typeof payload.baseUrl !== "string" || !/^https?:\/\//.test(payload.baseUrl))
+  ) {
     throw new Error("Pairing code is missing a valid host URL");
+  }
+  if (
+    payload.kind === "trace-account-pair" &&
+    typeof payload.baseUrl === "string" &&
+    !/^https?:\/\//.test(payload.baseUrl)
+  ) {
+    throw new Error("Pairing code includes an invalid host URL");
   }
   if (typeof payload.pairingToken !== "string" || payload.pairingToken.trim().length < 16) {
     throw new Error("Pairing code is missing a valid token");
   }
   return {
     v: 1,
-    kind: "trace-local-pair",
-    baseUrl: payload.baseUrl.replace(/\/+$/, ""),
+    kind: payload.kind,
+    baseUrl: payload.baseUrl?.replace(/\/+$/, ""),
     pairingToken: payload.pairingToken.trim(),
     expiresAt: typeof payload.expiresAt === "string" ? payload.expiresAt : undefined,
   };
@@ -146,7 +164,14 @@ export default function PairLocalScreen() {
 
     try {
       const payload = parsePairingPayload(raw);
-      const response = await fetch(`${payload.baseUrl}/auth/local-mobile/pair`, {
+      const isLocalPair = payload.kind === "trace-local-pair";
+      const baseUrl = payload.baseUrl ?? getHostedApiUrl();
+      if (!baseUrl) {
+        throw new Error("Pairing code is missing the Trace server URL");
+      }
+      const response = await fetch(
+        `${baseUrl}${isLocalPair ? "/auth/local-mobile/pair" : "/auth/mobile/pair"}`,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -156,7 +181,8 @@ export default function PairLocalScreen() {
           platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : undefined,
           appVersion: APP_VERSION,
         }),
-      });
+        },
+      );
 
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -166,7 +192,11 @@ export default function PairLocalScreen() {
         throw new Error(body.error ?? "Pairing failed");
       }
 
-      activatePairedLocalConnection(payload.baseUrl);
+      if (isLocalPair) {
+        activatePairedLocalConnection(baseUrl);
+      } else {
+        activateHostedConnection(baseUrl);
+      }
       recreateClient();
       await signInWithToken(body.token);
       void haptic.success();
@@ -246,10 +276,10 @@ export default function PairLocalScreen() {
             </Text>
           </Pressable>
           <Text variant="title2" color="foreground">
-            Pair with local session
+            Pair mobile app
           </Text>
           <Text variant="body" color="mutedForeground">
-            Scan the QR code from your local Trace app, or paste the raw pairing JSON below.
+            Scan the QR code from Trace on web or desktop, or paste the raw pairing JSON below.
           </Text>
         </View>
 
@@ -321,7 +351,7 @@ export default function PairLocalScreen() {
           <TextInput
             value={manualCode}
             onChangeText={setManualCode}
-            placeholder='{"kind":"trace-local-pair",...}'
+            placeholder='{"kind":"trace-account-pair",...}'
             placeholderTextColor={theme.colors.dimForeground}
             multiline
             autoCapitalize="none"
