@@ -14,6 +14,10 @@ Implement the first end-to-end sequential playbook loop: implement, review, fix,
 - Resume after inbox feedback.
 - Create PR and merge when configured conditions are met.
 - Move to the next ticket after completion.
+- Treat the service state machine as the source of truth. The playbook guides choices among allowed actions; it does not define valid state transitions by itself.
+- Define the first-ticket and next-ticket selection order explicitly, including what happens when a ticket is blocked, cancelled, or already complete.
+- Respect pause/resume/cancel gates before every automated action.
+- Keep PR creation and merge explicit, permissioned, and disableable in run/project/org configuration.
 
 ## Completion requirements
 
@@ -25,7 +29,11 @@ Implement the first end-to-end sequential playbook loop: implement, review, fix,
 - [ ] PR creation/merge are explicit actions.
 - [ ] Completing a ticket advances to the next ticket.
 - [ ] The loop stops cleanly when all tickets are done.
+- [ ] Pausing or cancelling the run prevents new sessions, reviews, PRs, and merges.
+- [ ] Replayed completion/review/inbox events do not duplicate sessions or actions.
+- [ ] Blocked or failed tickets leave the run in an inspectable, recoverable state.
 
 ## Notes
 
 - Keep v1 sequential. Parallel ticket execution should wait until this loop is reliable.
+- Sequential means one active execution per project run, not one active execution globally.
