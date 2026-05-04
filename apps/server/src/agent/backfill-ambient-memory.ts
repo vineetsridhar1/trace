@@ -60,7 +60,7 @@ function printUsage(): void {
 
 Options:
   --org <id>               Backfill one organization
-  --scope-type <type>      Limit to one scope type (channel|chat|session|ticket|system)
+  --scope-type <type>      Limit to one scope type (channel|chat|project|session|ticket|system)
   --scope-id <id>          Limit to one scope id (requires --scope-type)
   --since <iso8601>        Only select scopes with activity at or after this timestamp
   --limit-scopes <n>       Stop after N scopes
@@ -73,7 +73,7 @@ Options:
 
 function parseScopeType(raw: string): ScopeType {
   const value = raw as ScopeType;
-  if (["channel", "chat", "session", "ticket", "system"].includes(value)) {
+  if (["channel", "chat", "project", "session", "ticket", "system"].includes(value)) {
     return value;
   }
   throw new Error(`invalid --scope-type: ${raw}`);

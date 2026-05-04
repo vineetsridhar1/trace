@@ -6,6 +6,7 @@ vi.mock("../lib/pubsub.js", () => ({
   },
   topics: {
     ticketEvents: (id: string) => `ticket:${id}:events`,
+    projectEvents: (id: string) => `project:${id}:events`,
     sessionPorts: (id: string) => `session:${id}:ports`,
     sessionStatus: (id: string) => `session:${id}:status`,
     sessionEvents: (id: string) => `session:${id}:events`,
@@ -83,6 +84,7 @@ import { channelGroupQueries } from "./channelGroup.js";
 import { eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
 import { aiConversationQueries, aiConversationMutations } from "./ai-conversation.js";
+import { projectSubscriptions } from "./organization.js";
 import { assertScopeAccess } from "../services/access.js";
 import { ticketService } from "../services/ticket.js";
 import { sessionService } from "../services/session.js";
@@ -220,6 +222,16 @@ describe("GraphQL authz guards", () => {
     );
 
     expect(assertScopeAccess).toHaveBeenCalledWith("ticket", "ticket-1", "user-1", "org-1");
+  });
+
+  it("guards project event subscriptions by org and scope", async () => {
+    await projectSubscriptions.projectEvents.subscribe(
+      {},
+      { projectId: "project-1", organizationId: "org-1" },
+      ctx,
+    );
+
+    expect(assertScopeAccess).toHaveBeenCalledWith("project", "project-1", "user-1", "org-1");
   });
 
   it("guards session subscriptions by org and scope", async () => {

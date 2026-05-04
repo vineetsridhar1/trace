@@ -25,6 +25,7 @@ export type {
   BridgeClient,
   BridgeCommand,
   BridgeMessage,
+  BridgeTraceActionContext,
   BridgeRunCommand,
   BridgeSendCommand,
   BridgePrepareCommand,

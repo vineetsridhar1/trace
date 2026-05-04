@@ -10,6 +10,7 @@ import {
   hasPlanBlock,
   isSupportedModel,
   isSupportedReasoningEffort,
+  type BridgeTraceActionContext,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
@@ -52,6 +53,7 @@ export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
   createdById: string;
   actorType?: ActorType;
+  actorId?: string;
   clientSource?: string | null;
 };
 
@@ -187,6 +189,9 @@ type PendingSessionCommand =
       interactionMode?: string | null;
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      traceAction?: BridgeTraceActionContext | null;
+      resetToolSession?: boolean;
+      skipConversationContext?: boolean;
       workspaceUpgrade?: boolean;
     }
   | {
@@ -195,6 +200,9 @@ type PendingSessionCommand =
       interactionMode?: string | null;
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      traceAction?: BridgeTraceActionContext | null;
+      resetToolSession?: boolean;
+      skipConversationContext?: boolean;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
     };
@@ -2150,7 +2158,7 @@ export class SessionService {
             input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
           tool: input.tool,
           actorType: input.actorType ?? "user",
-          actorId: input.createdById,
+          actorId: input.actorId ?? input.createdById,
         });
     const hasCompatibilityRuntimeFallback =
       deferRuntimeSelection ||
@@ -2308,10 +2316,7 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const queueInitialRunUntilBridgeAccess =
-      needsRuntimeProvisioning &&
-      !!input.prompt &&
-      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+    const queueInitialRunUntilWorkspaceReady = needsRuntimeProvisioning && !!input.prompt;
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
@@ -2384,7 +2389,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRunUntilBridgeAccess
+          pendingRun: queueInitialRunUntilWorkspaceReady
             ? pendingRunValue([
                 {
                   type: "run",
@@ -2441,8 +2446,8 @@ export class SessionService {
           metadata: initialCheckpointContextId
             ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
             : undefined,
-          actorType: "user",
-          actorId: input.createdById,
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId ?? input.createdById,
         },
         tx,
       );
@@ -3551,6 +3556,9 @@ export class SessionService {
     interactionMode,
     clientMutationId,
     clientSource,
+    traceAction,
+    resetToolSession,
+    skipConversationContext,
   }: {
     sessionId: string;
     text: string;
@@ -3560,6 +3568,9 @@ export class SessionService {
     interactionMode?: string;
     clientMutationId?: string;
     clientSource?: string | null;
+    traceAction?: BridgeTraceActionContext | null;
+    resetToolSession?: boolean;
+    skipConversationContext?: boolean;
   }) {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
@@ -3640,6 +3651,9 @@ export class SessionService {
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
           checkpointContext: null,
+          traceAction: traceAction ?? null,
+          resetToolSession: resetToolSession === true,
+          skipConversationContext: skipConversationContext === true,
           ...(imageKeys?.length ? { imageKeys } : {}),
         };
         const markLocalPreparing = session.hosting === "local";
@@ -3719,6 +3733,9 @@ export class SessionService {
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(clientSource),
         checkpointContext: null,
+        traceAction: traceAction ?? null,
+        resetToolSession: resetToolSession === true,
+        skipConversationContext: skipConversationContext === true,
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand, {
@@ -3748,7 +3765,7 @@ export class SessionService {
     let prompt = text;
     let conversationContext: string | null | undefined;
     let hasPrependedConversationContext = false;
-    if (session.toolChangedAt) {
+    if (!skipConversationContext && session.toolChangedAt) {
       const msgSinceSwitch = await prisma.event.findFirst({
         where: {
           scopeId: sessionId,
@@ -3767,7 +3784,7 @@ export class SessionService {
       }
     }
 
-    if (!session.toolSessionId) {
+    if (!skipConversationContext && !session.toolSessionId) {
       const context =
         conversationContext === undefined
           ? await buildConversationContext(sessionId)
@@ -3816,9 +3833,10 @@ export class SessionService {
       reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
-      toolSessionId: session.toolSessionId ?? undefined,
+      toolSessionId: resetToolSession ? undefined : (session.toolSessionId ?? undefined),
       checkpointContext,
       imageUrls,
+      traceAction: traceAction ?? null,
     };
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
@@ -3837,6 +3855,9 @@ export class SessionService {
           interactionMode: interactionMode ?? null,
           clientSource: normalizeClientSource(clientSource),
           checkpointContext,
+          traceAction: traceAction ?? null,
+          resetToolSession: resetToolSession === true,
+          skipConversationContext: skipConversationContext === true,
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
         {
@@ -6238,6 +6259,29 @@ export class SessionService {
     return connJson({ ...conn, ...patch });
   }
 
+  private parseTraceAction(raw: unknown): BridgeTraceActionContext | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const value = raw as Record<string, unknown>;
+    if (value.type !== "project_ticket_generation") return null;
+    if (
+      typeof value.serverUrl !== "string" ||
+      typeof value.token !== "string" ||
+      typeof value.projectRunId !== "string" ||
+      typeof value.generationAttemptId !== "string" ||
+      typeof value.cliRelativePath !== "string"
+    ) {
+      return null;
+    }
+    return {
+      type: "project_ticket_generation",
+      serverUrl: value.serverUrl,
+      token: value.token,
+      projectRunId: value.projectRunId,
+      generationAttemptId: value.generationAttemptId,
+      cliRelativePath: value.cliRelativePath,
+    };
+  }
+
   private parsePendingCommand(raw: unknown): PendingSessionCommand | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const pending = raw as Record<string, unknown>;
@@ -6249,6 +6293,9 @@ export class SessionService {
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        traceAction: this.parseTraceAction(pending.traceAction),
+        resetToolSession: pending.resetToolSession === true,
+        skipConversationContext: pending.skipConversationContext === true,
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
@@ -6261,6 +6308,9 @@ export class SessionService {
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        traceAction: this.parseTraceAction(pending.traceAction),
+        resetToolSession: pending.resetToolSession === true,
+        skipConversationContext: pending.skipConversationContext === true,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
@@ -6391,7 +6441,7 @@ export class SessionService {
     // If no tool session ID exists, prepend conversation context so the new
     // process has the full history (same pattern as tool-switch).
     let prompt = pending.prompt;
-    if (!session.toolSessionId && prompt) {
+    if (!pending.skipConversationContext && !session.toolSessionId && prompt) {
       const context = await buildConversationContext(sessionId);
       if (context) {
         prompt = `${context}\n\n${prompt}`;
@@ -6429,9 +6479,10 @@ export class SessionService {
       reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
-      toolSessionId: session.toolSessionId ?? undefined,
+      toolSessionId: pending.resetToolSession ? undefined : (session.toolSessionId ?? undefined),
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
+      traceAction: pending.traceAction ?? undefined,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -6444,6 +6495,7 @@ export class SessionService {
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
+      traceAction?: BridgeTraceActionContext;
     };
 
     const conn = this.parseConnection(session.connection);

@@ -36,6 +36,12 @@ export type AddChatMemberInput = {
   userId: Scalars["ID"]["input"];
 };
 
+export type AddProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  role?: InputMaybe<UserRole>;
+  userId: Scalars["ID"]["input"];
+};
+
 export type AgentBudgetStatus = {
   __typename?: "AgentBudgetStatus";
   dailyLimitCents: Scalars["Int"]["output"];
@@ -203,6 +209,12 @@ export type ApiTokenStatus = {
   isSet: Scalars["Boolean"]["output"];
   provider: ApiTokenProvider;
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
+};
+
+export type ApproveProjectPlanInput = {
+  planSummary: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+  retryFailed?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
 export type AutonomyMode = "act" | "observe" | "suggest";
@@ -434,10 +446,30 @@ export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
 
+export type CreateProjectFromGoalInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  goal: Scalars["String"]["input"];
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  planningEnvironmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  planningHosting?: InputMaybe<HostingMode>;
+  planningModel?: InputMaybe<Scalars["String"]["input"]>;
+  planningReasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  planningRuntimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  planningTool?: InputMaybe<CodingTool>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type CreateProjectRunInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  initialGoal: Scalars["String"]["input"];
+  projectId: Scalars["ID"]["input"];
 };
 
 export type CreateRepoInput = {
@@ -508,7 +540,27 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "orchestrator_episode_created"
+  | "orchestrator_episode_updated"
   | "organization_created"
+  | "project_answer_recorded"
+  | "project_created"
+  | "project_decision_recorded"
+  | "project_goal_submitted"
+  | "project_member_added"
+  | "project_member_removed"
+  | "project_plan_summary_updated"
+  | "project_question_asked"
+  | "project_risk_recorded"
+  | "project_run_created"
+  | "project_run_updated"
+  | "project_ticket_execution_created"
+  | "project_ticket_execution_updated"
+  | "project_ticket_generation_completed"
+  | "project_ticket_generation_failed"
+  | "project_ticket_generation_started"
+  | "project_ticket_lifecycle_event"
+  | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -672,8 +724,11 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  addProjectMember: ProjectMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  approveProjectPlan: ProjectTicketGenerationAttempt;
   archiveSessionGroup?: Maybe<SessionGroup>;
+  askProjectQuestion: Event;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -686,6 +741,8 @@ export type Mutation = {
   createChat: Chat;
   createOrganization: OrgMember;
   createProject: Project;
+  createProjectFromGoal: Project;
+  createProjectRun: ProjectRun;
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -716,9 +773,13 @@ export type Mutation = {
   moveSessionToRuntime: Session;
   muteScope: Participant;
   queueSessionMessage: QueuedMessage;
+  recordProjectAnswer: Event;
+  recordProjectDecision: Event;
+  recordProjectRisk: Event;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
+  removeProjectMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
@@ -737,6 +798,9 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  startOrchestratorEpisode: OrchestratorEpisode;
+  startProjectPlanningSession: Session;
+  startProjectTicketExecution: ProjectTicketExecution;
   startSession: Session;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
@@ -755,6 +819,9 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateProject: Project;
+  updateProjectPlanSummary: ProjectRun;
+  updateProjectRun: ProjectRun;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
@@ -776,6 +843,10 @@ export type MutationAddOrgMemberArgs = {
   userId: Scalars["ID"]["input"];
 };
 
+export type MutationAddProjectMemberArgs = {
+  input: AddProjectMemberInput;
+};
+
 export type MutationApproveBridgeAccessRequestArgs = {
   capabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   expiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
@@ -784,8 +855,16 @@ export type MutationApproveBridgeAccessRequestArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationApproveProjectPlanArgs = {
+  input: ApproveProjectPlanInput;
+};
+
 export type MutationArchiveSessionGroupArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationAskProjectQuestionArgs = {
+  input: RecordProjectPlanningMessageInput;
 };
 
 export type MutationAssignTicketArgs = {
@@ -843,6 +922,14 @@ export type MutationCreateOrganizationArgs = {
 
 export type MutationCreateProjectArgs = {
   input: CreateProjectInput;
+};
+
+export type MutationCreateProjectFromGoalArgs = {
+  input: CreateProjectFromGoalInput;
+};
+
+export type MutationCreateProjectRunArgs = {
+  input: CreateProjectRunInput;
 };
 
 export type MutationCreateRepoArgs = {
@@ -983,6 +1070,18 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationRecordProjectAnswerArgs = {
+  input: RecordProjectPlanningMessageInput;
+};
+
+export type MutationRecordProjectDecisionArgs = {
+  input: RecordProjectPlanningDecisionInput;
+};
+
+export type MutationRecordProjectRiskArgs = {
+  input: RecordProjectPlanningRiskInput;
+};
+
 export type MutationRegisterPushTokenArgs = {
   platform: PushPlatform;
   token: Scalars["String"]["input"];
@@ -995,6 +1094,10 @@ export type MutationRegisterRepoWebhookArgs = {
 export type MutationRemoveOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationRemoveProjectMemberArgs = {
+  input: RemoveProjectMemberInput;
 };
 
 export type MutationRemoveQueuedMessageArgs = {
@@ -1096,6 +1199,18 @@ export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
 };
 
+export type MutationStartOrchestratorEpisodeArgs = {
+  triggerEventId: Scalars["ID"]["input"];
+};
+
+export type MutationStartProjectPlanningSessionArgs = {
+  input: StartProjectPlanningSessionInput;
+};
+
+export type MutationStartProjectTicketExecutionArgs = {
+  input: StartProjectTicketExecutionInput;
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1188,6 +1303,20 @@ export type MutationUpdateOrgMemberRoleArgs = {
   userId: Scalars["ID"]["input"];
 };
 
+export type MutationUpdateProjectArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectInput;
+};
+
+export type MutationUpdateProjectPlanSummaryArgs = {
+  input: UpdateProjectPlanSummaryInput;
+};
+
+export type MutationUpdateProjectRunArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectRunInput;
+};
+
 export type MutationUpdateRepoArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateRepoInput;
@@ -1221,6 +1350,32 @@ export type Notification = {
   timestamp: Scalars["DateTime"]["output"];
   type: Scalars["String"]["output"];
 };
+
+export type OrchestratorEpisode = {
+  __typename?: "OrchestratorEpisode";
+  actionResults: Scalars["JSON"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  contextHash?: Maybe<Scalars["String"]["output"]>;
+  contextSnapshot: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  decisionSummary?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  playbookSnapshot: Scalars["JSON"]["output"];
+  playbookVersionId?: Maybe<Scalars["ID"]["output"]>;
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  retryCount: Scalars["Int"]["output"];
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: OrchestratorEpisodeStatus;
+  triggerEventId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type OrchestratorEpisodeStatus = "completed" | "failed" | "pending" | "running" | "starting";
 
 export type OrgAgentStatus = "disabled" | "enabled";
 
@@ -1262,6 +1417,28 @@ export type Participant = {
   userId: Scalars["ID"]["output"];
 };
 
+export type Playbook = {
+  __typename?: "Playbook";
+  createdAt: Scalars["DateTime"]["output"];
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  isBuiltIn: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  organizationId?: Maybe<Scalars["ID"]["output"]>;
+  updatedAt: Scalars["DateTime"]["output"];
+  versions: Array<PlaybookVersion>;
+};
+
+export type PlaybookVersion = {
+  __typename?: "PlaybookVersion";
+  content: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  metadata: Scalars["JSON"]["output"];
+  playbookId: Scalars["ID"]["output"];
+  version: Scalars["Int"]["output"];
+};
+
 export type PortEndpoint = {
   __typename?: "PortEndpoint";
   label: Scalars["String"]["output"];
@@ -1276,12 +1453,124 @@ export type Project = {
   __typename?: "Project";
   aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
+  createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  members: Array<ProjectMember>;
   name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
+  repoId?: Maybe<Scalars["ID"]["output"]>;
+  runs: Array<ProjectRun>;
   sessions: Array<Session>;
+  soulFile: Scalars["String"]["output"];
   tickets: Array<Ticket>;
+  updatedAt: Scalars["DateTime"]["output"];
 };
+
+export type ProjectMember = {
+  __typename?: "ProjectMember";
+  joinedAt: Scalars["DateTime"]["output"];
+  leftAt?: Maybe<Scalars["DateTime"]["output"]>;
+  role: UserRole;
+  user: User;
+};
+
+export type ProjectRun = {
+  __typename?: "ProjectRun";
+  activeGateId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  executionConfig: Scalars["JSON"]["output"];
+  id: Scalars["ID"]["output"];
+  initialGoal: Scalars["String"]["output"];
+  latestControllerSummaryId?: Maybe<Scalars["ID"]["output"]>;
+  latestControllerSummaryText?: Maybe<Scalars["String"]["output"]>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
+  organizationId: Scalars["ID"]["output"];
+  planSummary?: Maybe<Scalars["String"]["output"]>;
+  planningSessionId?: Maybe<Scalars["ID"]["output"]>;
+  playbookSnapshot: Scalars["JSON"]["output"];
+  playbookVersionId?: Maybe<Scalars["ID"]["output"]>;
+  project: Project;
+  projectId: Scalars["ID"]["output"];
+  status: ProjectRunStatus;
+  ticketExecutions: Array<ProjectTicketExecution>;
+  ticketGenerationAttempt?: Maybe<ProjectTicketGenerationAttempt>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectRunStatus =
+  | "cancelled"
+  | "completed"
+  | "draft"
+  | "failed"
+  | "interviewing"
+  | "needs_human"
+  | "paused"
+  | "planning"
+  | "ready"
+  | "running";
+
+export type ProjectTicketExecution = {
+  __typename?: "ProjectTicketExecution";
+  cancelledAt?: Maybe<Scalars["DateTime"]["output"]>;
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  fixSessionId?: Maybe<Scalars["ID"]["output"]>;
+  id: Scalars["ID"]["output"];
+  implementationSessionId?: Maybe<Scalars["ID"]["output"]>;
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  lastLifecycleEventId?: Maybe<Scalars["ID"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  previousStatus?: Maybe<ProjectTicketExecutionStatus>;
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  reviewSessionId?: Maybe<Scalars["ID"]["output"]>;
+  sequence: Scalars["Int"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ProjectTicketExecutionStatus;
+  ticket: Ticket;
+  ticketId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectTicketExecutionStatus =
+  | "blocked"
+  | "cancelled"
+  | "completed"
+  | "failed"
+  | "fixing"
+  | "needs_human"
+  | "queued"
+  | "ready"
+  | "reviewing"
+  | "running";
+
+export type ProjectTicketGenerationAttempt = {
+  __typename?: "ProjectTicketGenerationAttempt";
+  approvedPlan: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdTicketIds: Array<Scalars["ID"]["output"]>;
+  draftCount: Scalars["Int"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  retryCount: Scalars["Int"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ProjectTicketGenerationStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectTicketGenerationStatus =
+  | "completed"
+  | "failed"
+  | "partial_failed"
+  | "pending"
+  | "running";
 
 export type PushPlatform = "android" | "ios";
 
@@ -1316,14 +1605,17 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
+  projectRuns: Array<ProjectRun>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
+  resolveProjectRunPlaybook: ResolvedPlaybook;
   resolvedAiMode: AutonomyMode;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -1467,6 +1759,10 @@ export type QueryMySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryOrchestratorEpisodesArgs = {
+  projectRunId: Scalars["ID"]["input"];
+};
+
 export type QueryOrgSecretsArgs = {
   orgId: Scalars["ID"]["input"];
 };
@@ -1482,6 +1778,10 @@ export type QueryParticipantsArgs = {
 
 export type QueryProjectArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryProjectRunsArgs = {
+  projectId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectsArgs = {
@@ -1501,6 +1801,10 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryResolveProjectRunPlaybookArgs = {
+  projectRunId: Scalars["ID"]["input"];
 };
 
 export type QueryResolvedAiModeArgs = {
@@ -1595,6 +1899,26 @@ export type QueuedMessage = {
   text: Scalars["String"]["output"];
 };
 
+export type RecordProjectPlanningDecisionInput = {
+  decision: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningMessageInput = {
+  message: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningRiskInput = {
+  projectRunId: Scalars["ID"]["input"];
+  risk: Scalars["String"]["input"];
+};
+
+export type RemoveProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  userId: Scalars["ID"]["input"];
+};
+
 export type ReorderChannelGroupsInput = {
   groupIds: Array<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -1616,12 +1940,19 @@ export type Repo = {
   webhookActive: Scalars["Boolean"]["output"];
 };
 
+export type ResolvedPlaybook = {
+  __typename?: "ResolvedPlaybook";
+  playbook?: Maybe<Playbook>;
+  source: Scalars["String"]["output"];
+  version: PlaybookVersion;
+};
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "project" | "session" | "system" | "ticket";
 
 export type Session = {
   __typename?: "Session";
@@ -1793,6 +2124,25 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
+export type StartProjectPlanningSessionInput = {
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  hosting?: InputMaybe<HostingMode>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectRunId: Scalars["ID"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
+export type StartProjectTicketExecutionInput = {
+  hosting?: InputMaybe<HostingMode>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectRunId: Scalars["ID"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  ticketId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1820,6 +2170,7 @@ export type Subscription = {
   chatEvents: Event;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
+  projectEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -1848,6 +2199,12 @@ export type SubscriptionConversationEventsArgs = {
 
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars["ID"]["input"];
+  types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type SubscriptionProjectEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
+  projectId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
@@ -1974,6 +2331,30 @@ export type UpdateChannelInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
   runScripts?: InputMaybe<Scalars["JSON"]["input"]>;
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateProjectInput = {
+  aiMode?: InputMaybe<AutonomyMode>;
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  soulFile?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateProjectPlanSummaryInput = {
+  planSummary: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+  status?: InputMaybe<ProjectRunStatus>;
+};
+
+export type UpdateProjectRunInput = {
+  activeGateId?: InputMaybe<Scalars["ID"]["input"]>;
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  latestControllerSummaryId?: InputMaybe<Scalars["ID"]["input"]>;
+  latestControllerSummaryText?: InputMaybe<Scalars["String"]["input"]>;
+  planSummary?: InputMaybe<Scalars["String"]["input"]>;
+  planningSessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  playbookVersionId?: InputMaybe<Scalars["ID"]["input"]>;
+  status?: InputMaybe<ProjectRunStatus>;
 };
 
 export type UpdateRepoInput = {

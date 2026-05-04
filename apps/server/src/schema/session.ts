@@ -231,6 +231,7 @@ export const sessionMutations = {
       organizationId: orgId,
       createdById: ctx.userId,
       actorType: ctx.actorType,
+      actorId: ctx.userId,
       clientSource: ctx.clientSource,
     });
   },

@@ -169,6 +169,195 @@ describe("handleOrgEvent", () => {
     ]);
   });
 
+  it("hydrates projects from project-scoped events", () => {
+    const event = makeEvent({
+      eventType: "project_created",
+      scopeType: "project",
+      scopeId: "project-1",
+      payload: {
+        project: {
+          id: "project-1",
+          name: "Roadmap",
+          organizationId: "org-1",
+          repoId: null,
+          repo: null,
+          aiMode: null,
+          soulFile: "",
+          members: [],
+          channels: [],
+          sessions: [],
+          tickets: [],
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+
+    handleOrgEvent(event);
+
+    expect(useEntityStore.getState().projects["project-1"]).toMatchObject({
+      id: "project-1",
+      name: "Roadmap",
+    });
+    expect(useEntityStore.getState().eventsByScope["project:project-1"]?.[event.id]).toEqual(event);
+  });
+
+  it("hydrates project runs from project-run events", () => {
+    const event = makeEvent({
+      eventType: "project_goal_submitted",
+      scopeType: "project",
+      scopeId: "project-1",
+      payload: {
+        goal: "Build project planning",
+        projectRun: {
+          id: "run-1",
+          organizationId: "org-1",
+          projectId: "project-1",
+          status: "interviewing",
+          initialGoal: "Build project planning",
+          planSummary: null,
+          activeGateId: null,
+          latestControllerSummaryId: null,
+          latestControllerSummaryText: null,
+          executionConfig: {},
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+
+    handleOrgEvent(event);
+
+    expect(useEntityStore.getState().projectRuns["run-1"]).toMatchObject({
+      id: "run-1",
+      projectId: "project-1",
+      initialGoal: "Build project planning",
+      status: "interviewing",
+    });
+  });
+
+  it("hydrates project run summaries from planning summary events", () => {
+    const event = makeEvent({
+      eventType: "project_plan_summary_updated",
+      scopeType: "project",
+      scopeId: "project-1",
+      payload: {
+        projectRun: {
+          id: "run-1",
+          organizationId: "org-1",
+          projectId: "project-1",
+          status: "planning",
+          initialGoal: "Build project planning",
+          planSummary: "Plan v1",
+          activeGateId: null,
+          latestControllerSummaryId: null,
+          latestControllerSummaryText: null,
+          executionConfig: {},
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+
+    handleOrgEvent(event);
+
+    expect(useEntityStore.getState().projectRuns["run-1"]).toMatchObject({
+      id: "run-1",
+      status: "planning",
+      planSummary: "Plan v1",
+    });
+    expect(useEntityStore.getState().eventsByScope["project:project-1"]?.[event.id]).toEqual(event);
+  });
+
+  it("keeps historical system project-created events readable", () => {
+    useAuthStore.setState({ activeOrgId: "org-1" });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "entity_linked",
+        scopeType: "system",
+        scopeId: "project-1",
+        payload: { type: "project_created", projectId: "project-1", name: "Legacy" },
+      }),
+    );
+
+    expect(useEntityStore.getState().projects["project-1"]).toMatchObject({
+      id: "project-1",
+      name: "Legacy",
+      organizationId: "org-1",
+      members: [],
+    });
+  });
+
+  it("does not hydrate historical project events without an active org", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "entity_linked",
+        scopeType: "system",
+        scopeId: "project-1",
+        payload: { type: "project_created", projectId: "project-1", name: "Legacy" },
+      }),
+    );
+
+    expect(useEntityStore.getState().projects["project-1"]).toBeUndefined();
+  });
+
+  it("patches project members from member events", () => {
+    useEntityStore.setState({
+      projects: {
+        "project-1": {
+          id: "project-1",
+          name: "Roadmap",
+          organizationId: "org-1",
+          repoId: null,
+          repo: null,
+          aiMode: null,
+          soulFile: "",
+          members: [],
+          channels: [],
+          sessions: [],
+          tickets: [],
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        } as never,
+      },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "project_member_added",
+        scopeType: "project",
+        scopeId: "project-1",
+        payload: {
+          projectId: "project-1",
+          member: {
+            user: { id: "user-2", email: "two@example.com", name: "Two", avatarUrl: null },
+            role: "member",
+            joinedAt: "2026-01-01T00:00:00.000Z",
+            leftAt: null,
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().projects["project-1"].members).toHaveLength(1);
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "project_member_removed",
+        scopeType: "project",
+        scopeId: "project-1",
+        payload: {
+          projectId: "project-1",
+          userId: "user-2",
+          leftAt: "2026-01-02T00:00:00.000Z",
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().projects["project-1"].members).toEqual([]);
+  });
+
   it("upserts a new session and its session group on session_started", () => {
     const event = makeEvent({
       eventType: "session_started",

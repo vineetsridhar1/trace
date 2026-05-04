@@ -39,6 +39,12 @@ export type AddChatMemberInput = {
   userId: Scalars["ID"]["input"];
 };
 
+export type AddProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  role?: InputMaybe<UserRole>;
+  userId: Scalars["ID"]["input"];
+};
+
 export type AgentBudgetStatus = {
   __typename?: "AgentBudgetStatus";
   dailyLimitCents: Scalars["Int"]["output"];
@@ -206,6 +212,12 @@ export type ApiTokenStatus = {
   isSet: Scalars["Boolean"]["output"];
   provider: ApiTokenProvider;
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
+};
+
+export type ApproveProjectPlanInput = {
+  planSummary: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+  retryFailed?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
 export type AutonomyMode = "act" | "observe" | "suggest";
@@ -437,10 +449,30 @@ export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
 
+export type CreateProjectFromGoalInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  goal: Scalars["String"]["input"];
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  planningEnvironmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  planningHosting?: InputMaybe<HostingMode>;
+  planningModel?: InputMaybe<Scalars["String"]["input"]>;
+  planningReasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  planningRuntimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  planningTool?: InputMaybe<CodingTool>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type CreateProjectRunInput = {
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  initialGoal: Scalars["String"]["input"];
+  projectId: Scalars["ID"]["input"];
 };
 
 export type CreateRepoInput = {
@@ -511,7 +543,27 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "orchestrator_episode_created"
+  | "orchestrator_episode_updated"
   | "organization_created"
+  | "project_answer_recorded"
+  | "project_created"
+  | "project_decision_recorded"
+  | "project_goal_submitted"
+  | "project_member_added"
+  | "project_member_removed"
+  | "project_plan_summary_updated"
+  | "project_question_asked"
+  | "project_risk_recorded"
+  | "project_run_created"
+  | "project_run_updated"
+  | "project_ticket_execution_created"
+  | "project_ticket_execution_updated"
+  | "project_ticket_generation_completed"
+  | "project_ticket_generation_failed"
+  | "project_ticket_generation_started"
+  | "project_ticket_lifecycle_event"
+  | "project_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -675,8 +727,11 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  addProjectMember: ProjectMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  approveProjectPlan: ProjectTicketGenerationAttempt;
   archiveSessionGroup?: Maybe<SessionGroup>;
+  askProjectQuestion: Event;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -689,6 +744,8 @@ export type Mutation = {
   createChat: Chat;
   createOrganization: OrgMember;
   createProject: Project;
+  createProjectFromGoal: Project;
+  createProjectRun: ProjectRun;
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -719,9 +776,13 @@ export type Mutation = {
   moveSessionToRuntime: Session;
   muteScope: Participant;
   queueSessionMessage: QueuedMessage;
+  recordProjectAnswer: Event;
+  recordProjectDecision: Event;
+  recordProjectRisk: Event;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
+  removeProjectMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
@@ -740,6 +801,9 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  startOrchestratorEpisode: OrchestratorEpisode;
+  startProjectPlanningSession: Session;
+  startProjectTicketExecution: ProjectTicketExecution;
   startSession: Session;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
@@ -758,6 +822,9 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateProject: Project;
+  updateProjectPlanSummary: ProjectRun;
+  updateProjectRun: ProjectRun;
   updateRepo: Repo;
   updateScopeAiMode: Scalars["Boolean"]["output"];
   updateSessionConfig: Session;
@@ -779,6 +846,10 @@ export type MutationAddOrgMemberArgs = {
   userId: Scalars["ID"]["input"];
 };
 
+export type MutationAddProjectMemberArgs = {
+  input: AddProjectMemberInput;
+};
+
 export type MutationApproveBridgeAccessRequestArgs = {
   capabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   expiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
@@ -787,8 +858,16 @@ export type MutationApproveBridgeAccessRequestArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationApproveProjectPlanArgs = {
+  input: ApproveProjectPlanInput;
+};
+
 export type MutationArchiveSessionGroupArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationAskProjectQuestionArgs = {
+  input: RecordProjectPlanningMessageInput;
 };
 
 export type MutationAssignTicketArgs = {
@@ -846,6 +925,14 @@ export type MutationCreateOrganizationArgs = {
 
 export type MutationCreateProjectArgs = {
   input: CreateProjectInput;
+};
+
+export type MutationCreateProjectFromGoalArgs = {
+  input: CreateProjectFromGoalInput;
+};
+
+export type MutationCreateProjectRunArgs = {
+  input: CreateProjectRunInput;
 };
 
 export type MutationCreateRepoArgs = {
@@ -986,6 +1073,18 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationRecordProjectAnswerArgs = {
+  input: RecordProjectPlanningMessageInput;
+};
+
+export type MutationRecordProjectDecisionArgs = {
+  input: RecordProjectPlanningDecisionInput;
+};
+
+export type MutationRecordProjectRiskArgs = {
+  input: RecordProjectPlanningRiskInput;
+};
+
 export type MutationRegisterPushTokenArgs = {
   platform: PushPlatform;
   token: Scalars["String"]["input"];
@@ -998,6 +1097,10 @@ export type MutationRegisterRepoWebhookArgs = {
 export type MutationRemoveOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationRemoveProjectMemberArgs = {
+  input: RemoveProjectMemberInput;
 };
 
 export type MutationRemoveQueuedMessageArgs = {
@@ -1099,6 +1202,18 @@ export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
 };
 
+export type MutationStartOrchestratorEpisodeArgs = {
+  triggerEventId: Scalars["ID"]["input"];
+};
+
+export type MutationStartProjectPlanningSessionArgs = {
+  input: StartProjectPlanningSessionInput;
+};
+
+export type MutationStartProjectTicketExecutionArgs = {
+  input: StartProjectTicketExecutionInput;
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1191,6 +1306,20 @@ export type MutationUpdateOrgMemberRoleArgs = {
   userId: Scalars["ID"]["input"];
 };
 
+export type MutationUpdateProjectArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectInput;
+};
+
+export type MutationUpdateProjectPlanSummaryArgs = {
+  input: UpdateProjectPlanSummaryInput;
+};
+
+export type MutationUpdateProjectRunArgs = {
+  id: Scalars["ID"]["input"];
+  input: UpdateProjectRunInput;
+};
+
 export type MutationUpdateRepoArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateRepoInput;
@@ -1224,6 +1353,32 @@ export type Notification = {
   timestamp: Scalars["DateTime"]["output"];
   type: Scalars["String"]["output"];
 };
+
+export type OrchestratorEpisode = {
+  __typename?: "OrchestratorEpisode";
+  actionResults: Scalars["JSON"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  contextHash?: Maybe<Scalars["String"]["output"]>;
+  contextSnapshot: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  decisionSummary?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  playbookSnapshot: Scalars["JSON"]["output"];
+  playbookVersionId?: Maybe<Scalars["ID"]["output"]>;
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  retryCount: Scalars["Int"]["output"];
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: OrchestratorEpisodeStatus;
+  triggerEventId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type OrchestratorEpisodeStatus = "completed" | "failed" | "pending" | "running" | "starting";
 
 export type OrgAgentStatus = "disabled" | "enabled";
 
@@ -1265,6 +1420,28 @@ export type Participant = {
   userId: Scalars["ID"]["output"];
 };
 
+export type Playbook = {
+  __typename?: "Playbook";
+  createdAt: Scalars["DateTime"]["output"];
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  isBuiltIn: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  organizationId?: Maybe<Scalars["ID"]["output"]>;
+  updatedAt: Scalars["DateTime"]["output"];
+  versions: Array<PlaybookVersion>;
+};
+
+export type PlaybookVersion = {
+  __typename?: "PlaybookVersion";
+  content: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  metadata: Scalars["JSON"]["output"];
+  playbookId: Scalars["ID"]["output"];
+  version: Scalars["Int"]["output"];
+};
+
 export type PortEndpoint = {
   __typename?: "PortEndpoint";
   label: Scalars["String"]["output"];
@@ -1279,12 +1456,124 @@ export type Project = {
   __typename?: "Project";
   aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
+  createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  members: Array<ProjectMember>;
   name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
+  repoId?: Maybe<Scalars["ID"]["output"]>;
+  runs: Array<ProjectRun>;
   sessions: Array<Session>;
+  soulFile: Scalars["String"]["output"];
   tickets: Array<Ticket>;
+  updatedAt: Scalars["DateTime"]["output"];
 };
+
+export type ProjectMember = {
+  __typename?: "ProjectMember";
+  joinedAt: Scalars["DateTime"]["output"];
+  leftAt?: Maybe<Scalars["DateTime"]["output"]>;
+  role: UserRole;
+  user: User;
+};
+
+export type ProjectRun = {
+  __typename?: "ProjectRun";
+  activeGateId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  executionConfig: Scalars["JSON"]["output"];
+  id: Scalars["ID"]["output"];
+  initialGoal: Scalars["String"]["output"];
+  latestControllerSummaryId?: Maybe<Scalars["ID"]["output"]>;
+  latestControllerSummaryText?: Maybe<Scalars["String"]["output"]>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
+  organizationId: Scalars["ID"]["output"];
+  planSummary?: Maybe<Scalars["String"]["output"]>;
+  planningSessionId?: Maybe<Scalars["ID"]["output"]>;
+  playbookSnapshot: Scalars["JSON"]["output"];
+  playbookVersionId?: Maybe<Scalars["ID"]["output"]>;
+  project: Project;
+  projectId: Scalars["ID"]["output"];
+  status: ProjectRunStatus;
+  ticketExecutions: Array<ProjectTicketExecution>;
+  ticketGenerationAttempt?: Maybe<ProjectTicketGenerationAttempt>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectRunStatus =
+  | "cancelled"
+  | "completed"
+  | "draft"
+  | "failed"
+  | "interviewing"
+  | "needs_human"
+  | "paused"
+  | "planning"
+  | "ready"
+  | "running";
+
+export type ProjectTicketExecution = {
+  __typename?: "ProjectTicketExecution";
+  cancelledAt?: Maybe<Scalars["DateTime"]["output"]>;
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  fixSessionId?: Maybe<Scalars["ID"]["output"]>;
+  id: Scalars["ID"]["output"];
+  implementationSessionId?: Maybe<Scalars["ID"]["output"]>;
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  lastLifecycleEventId?: Maybe<Scalars["ID"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  previousStatus?: Maybe<ProjectTicketExecutionStatus>;
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  reviewSessionId?: Maybe<Scalars["ID"]["output"]>;
+  sequence: Scalars["Int"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ProjectTicketExecutionStatus;
+  ticket: Ticket;
+  ticketId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectTicketExecutionStatus =
+  | "blocked"
+  | "cancelled"
+  | "completed"
+  | "failed"
+  | "fixing"
+  | "needs_human"
+  | "queued"
+  | "ready"
+  | "reviewing"
+  | "running";
+
+export type ProjectTicketGenerationAttempt = {
+  __typename?: "ProjectTicketGenerationAttempt";
+  approvedPlan: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdTicketIds: Array<Scalars["ID"]["output"]>;
+  draftCount: Scalars["Int"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  projectId: Scalars["ID"]["output"];
+  projectRunId: Scalars["ID"]["output"];
+  retryCount: Scalars["Int"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ProjectTicketGenerationStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ProjectTicketGenerationStatus =
+  | "completed"
+  | "failed"
+  | "partial_failed"
+  | "pending"
+  | "running";
 
 export type PushPlatform = "android" | "ios";
 
@@ -1319,14 +1608,17 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orchestratorEpisodes: Array<OrchestratorEpisode>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
+  projectRuns: Array<ProjectRun>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
+  resolveProjectRunPlaybook: ResolvedPlaybook;
   resolvedAiMode: AutonomyMode;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -1470,6 +1762,10 @@ export type QueryMySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryOrchestratorEpisodesArgs = {
+  projectRunId: Scalars["ID"]["input"];
+};
+
 export type QueryOrgSecretsArgs = {
   orgId: Scalars["ID"]["input"];
 };
@@ -1485,6 +1781,10 @@ export type QueryParticipantsArgs = {
 
 export type QueryProjectArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type QueryProjectRunsArgs = {
+  projectId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectsArgs = {
@@ -1504,6 +1804,10 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryResolveProjectRunPlaybookArgs = {
+  projectRunId: Scalars["ID"]["input"];
 };
 
 export type QueryResolvedAiModeArgs = {
@@ -1598,6 +1902,26 @@ export type QueuedMessage = {
   text: Scalars["String"]["output"];
 };
 
+export type RecordProjectPlanningDecisionInput = {
+  decision: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningMessageInput = {
+  message: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+};
+
+export type RecordProjectPlanningRiskInput = {
+  projectRunId: Scalars["ID"]["input"];
+  risk: Scalars["String"]["input"];
+};
+
+export type RemoveProjectMemberInput = {
+  projectId: Scalars["ID"]["input"];
+  userId: Scalars["ID"]["input"];
+};
+
 export type ReorderChannelGroupsInput = {
   groupIds: Array<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -1619,12 +1943,19 @@ export type Repo = {
   webhookActive: Scalars["Boolean"]["output"];
 };
 
+export type ResolvedPlaybook = {
+  __typename?: "ResolvedPlaybook";
+  playbook?: Maybe<Playbook>;
+  source: Scalars["String"]["output"];
+  version: PlaybookVersion;
+};
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "project" | "session" | "system" | "ticket";
 
 export type Session = {
   __typename?: "Session";
@@ -1796,6 +2127,25 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
+export type StartProjectPlanningSessionInput = {
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  hosting?: InputMaybe<HostingMode>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectRunId: Scalars["ID"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
+export type StartProjectTicketExecutionInput = {
+  hosting?: InputMaybe<HostingMode>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectRunId: Scalars["ID"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  ticketId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1823,6 +2173,7 @@ export type Subscription = {
   chatEvents: Event;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
+  projectEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -1851,6 +2202,12 @@ export type SubscriptionConversationEventsArgs = {
 
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars["ID"]["input"];
+  types?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export type SubscriptionProjectEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
+  projectId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
@@ -1979,6 +2336,30 @@ export type UpdateChannelInput = {
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type UpdateProjectInput = {
+  aiMode?: InputMaybe<AutonomyMode>;
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  soulFile?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateProjectPlanSummaryInput = {
+  planSummary: Scalars["String"]["input"];
+  projectRunId: Scalars["ID"]["input"];
+  status?: InputMaybe<ProjectRunStatus>;
+};
+
+export type UpdateProjectRunInput = {
+  activeGateId?: InputMaybe<Scalars["ID"]["input"]>;
+  executionConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  latestControllerSummaryId?: InputMaybe<Scalars["ID"]["input"]>;
+  latestControllerSummaryText?: InputMaybe<Scalars["String"]["input"]>;
+  planSummary?: InputMaybe<Scalars["String"]["input"]>;
+  planningSessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  playbookVersionId?: InputMaybe<Scalars["ID"]["input"]>;
+  status?: InputMaybe<ProjectRunStatus>;
+};
+
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
@@ -2093,6 +2474,7 @@ export type ResolversTypes = ResolversObject<{
   Actor: ResolverTypeWrapper<Actor>;
   ActorType: ActorType;
   AddChatMemberInput: AddChatMemberInput;
+  AddProjectMemberInput: AddProjectMemberInput;
   AgentBudgetStatus: ResolverTypeWrapper<AgentBudgetStatus>;
   AgentCostEntry: ResolverTypeWrapper<AgentCostEntry>;
   AgentCostSummary: ResolverTypeWrapper<AgentCostSummary>;
@@ -2112,6 +2494,7 @@ export type ResolversTypes = ResolversObject<{
   AiConversationVisibility: AiConversationVisibility;
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
+  ApproveProjectPlanInput: ApproveProjectPlanInput;
   AutonomyMode: AutonomyMode;
   Boolean: ResolverTypeWrapper<Scalars["Boolean"]["output"]>;
   Branch: ResolverTypeWrapper<Branch>;
@@ -2140,7 +2523,9 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
+  CreateProjectFromGoalInput: CreateProjectFromGoalInput;
   CreateProjectInput: CreateProjectInput;
+  CreateProjectRunInput: CreateProjectRunInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
@@ -2169,20 +2554,36 @@ export type ResolversTypes = ResolversObject<{
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
+  OrchestratorEpisode: ResolverTypeWrapper<OrchestratorEpisode>;
+  OrchestratorEpisodeStatus: OrchestratorEpisodeStatus;
   OrgAgentStatus: OrgAgentStatus;
   OrgMember: ResolverTypeWrapper<OrgMember>;
   OrgSecret: ResolverTypeWrapper<OrgSecret>;
   Organization: ResolverTypeWrapper<Organization>;
   Participant: ResolverTypeWrapper<Participant>;
+  Playbook: ResolverTypeWrapper<Playbook>;
+  PlaybookVersion: ResolverTypeWrapper<PlaybookVersion>;
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
+  ProjectMember: ResolverTypeWrapper<ProjectMember>;
+  ProjectRun: ResolverTypeWrapper<ProjectRun>;
+  ProjectRunStatus: ProjectRunStatus;
+  ProjectTicketExecution: ResolverTypeWrapper<ProjectTicketExecution>;
+  ProjectTicketExecutionStatus: ProjectTicketExecutionStatus;
+  ProjectTicketGenerationAttempt: ResolverTypeWrapper<ProjectTicketGenerationAttempt>;
+  ProjectTicketGenerationStatus: ProjectTicketGenerationStatus;
   PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
+  RecordProjectPlanningDecisionInput: RecordProjectPlanningDecisionInput;
+  RecordProjectPlanningMessageInput: RecordProjectPlanningMessageInput;
+  RecordProjectPlanningRiskInput: RecordProjectPlanningRiskInput;
+  RemoveProjectMemberInput: RemoveProjectMemberInput;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: ResolverTypeWrapper<Repo>;
+  ResolvedPlaybook: ResolverTypeWrapper<ResolvedPlaybook>;
   ScopeInput: ScopeInput;
   ScopeType: ScopeType;
   Session: ResolverTypeWrapper<Session>;
@@ -2201,6 +2602,8 @@ export type ResolversTypes = ResolversObject<{
   SlashCommand: ResolverTypeWrapper<SlashCommand>;
   SlashCommandCategory: SlashCommandCategory;
   SlashCommandSource: SlashCommandSource;
+  StartProjectPlanningSessionInput: StartProjectPlanningSessionInput;
+  StartProjectTicketExecutionInput: StartProjectTicketExecutionInput;
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars["String"]["output"]>;
   Subscription: ResolverTypeWrapper<{}>;
@@ -2217,6 +2620,9 @@ export type ResolversTypes = ResolversObject<{
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateProjectInput: UpdateProjectInput;
+  UpdateProjectPlanSummaryInput: UpdateProjectPlanSummaryInput;
+  UpdateProjectRunInput: UpdateProjectRunInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
@@ -2227,6 +2633,7 @@ export type ResolversTypes = ResolversObject<{
 export type ResolversParentTypes = ResolversObject<{
   Actor: Actor;
   AddChatMemberInput: AddChatMemberInput;
+  AddProjectMemberInput: AddProjectMemberInput;
   AgentBudgetStatus: AgentBudgetStatus;
   AgentCostEntry: AgentCostEntry;
   AgentCostSummary: AgentCostSummary;
@@ -2241,6 +2648,7 @@ export type ResolversParentTypes = ResolversObject<{
   AiConversation: AiConversation;
   AiConversationEvent: AiConversationEvent;
   ApiTokenStatus: ApiTokenStatus;
+  ApproveProjectPlanInput: ApproveProjectPlanInput;
   Boolean: Scalars["Boolean"]["output"];
   Branch: Branch;
   BranchDiffFile: BranchDiffFile;
@@ -2262,7 +2670,9 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateOrganizationInput: CreateOrganizationInput;
+  CreateProjectFromGoalInput: CreateProjectFromGoalInput;
   CreateProjectInput: CreateProjectInput;
+  CreateProjectRunInput: CreateProjectRunInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
@@ -2280,17 +2690,29 @@ export type ResolversParentTypes = ResolversObject<{
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
   Notification: Notification;
+  OrchestratorEpisode: OrchestratorEpisode;
   OrgMember: OrgMember;
   OrgSecret: OrgSecret;
   Organization: Organization;
   Participant: Participant;
+  Playbook: Playbook;
+  PlaybookVersion: PlaybookVersion;
   PortEndpoint: PortEndpoint;
   Project: Project;
+  ProjectMember: ProjectMember;
+  ProjectRun: ProjectRun;
+  ProjectTicketExecution: ProjectTicketExecution;
+  ProjectTicketGenerationAttempt: ProjectTicketGenerationAttempt;
   Query: {};
   QueuedMessage: QueuedMessage;
+  RecordProjectPlanningDecisionInput: RecordProjectPlanningDecisionInput;
+  RecordProjectPlanningMessageInput: RecordProjectPlanningMessageInput;
+  RecordProjectPlanningRiskInput: RecordProjectPlanningRiskInput;
+  RemoveProjectMemberInput: RemoveProjectMemberInput;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: Repo;
+  ResolvedPlaybook: ResolvedPlaybook;
   ScopeInput: ScopeInput;
   Session: Session;
   SessionConnection: SessionConnection;
@@ -2302,6 +2724,8 @@ export type ResolversParentTypes = ResolversObject<{
   SetApiTokenInput: SetApiTokenInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
+  StartProjectPlanningSessionInput: StartProjectPlanningSessionInput;
+  StartProjectTicketExecutionInput: StartProjectTicketExecutionInput;
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
   Subscription: {};
@@ -2316,6 +2740,9 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateProjectInput: UpdateProjectInput;
+  UpdateProjectPlanSummaryInput: UpdateProjectPlanSummaryInput;
+  UpdateProjectRunInput: UpdateProjectRunInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
@@ -2916,17 +3343,35 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationAddOrgMemberArgs, "organizationId" | "userId">
   >;
+  addProjectMember?: Resolver<
+    ResolversTypes["ProjectMember"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationAddProjectMemberArgs, "input">
+  >;
   approveBridgeAccessRequest?: Resolver<
     ResolversTypes["BridgeAccessGrant"],
     ParentType,
     ContextType,
     RequireFields<MutationApproveBridgeAccessRequestArgs, "requestId">
   >;
+  approveProjectPlan?: Resolver<
+    ResolversTypes["ProjectTicketGenerationAttempt"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationApproveProjectPlanArgs, "input">
+  >;
   archiveSessionGroup?: Resolver<
     Maybe<ResolversTypes["SessionGroup"]>,
     ParentType,
     ContextType,
     RequireFields<MutationArchiveSessionGroupArgs, "id">
+  >;
+  askProjectQuestion?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationAskProjectQuestionArgs, "input">
   >;
   assignTicket?: Resolver<
     ResolversTypes["Ticket"],
@@ -3002,6 +3447,18 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateProjectArgs, "input">
+  >;
+  createProjectFromGoal?: Resolver<
+    ResolversTypes["Project"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateProjectFromGoalArgs, "input">
+  >;
+  createProjectRun?: Resolver<
+    ResolversTypes["ProjectRun"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateProjectRunArgs, "input">
   >;
   createRepo?: Resolver<
     ResolversTypes["Repo"],
@@ -3183,6 +3640,24 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationQueueSessionMessageArgs, "sessionId" | "text">
   >;
+  recordProjectAnswer?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRecordProjectAnswerArgs, "input">
+  >;
+  recordProjectDecision?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRecordProjectDecisionArgs, "input">
+  >;
+  recordProjectRisk?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRecordProjectRiskArgs, "input">
+  >;
   registerPushToken?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -3200,6 +3675,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationRemoveOrgMemberArgs, "organizationId" | "userId">
+  >;
+  removeProjectMember?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRemoveProjectMemberArgs, "input">
   >;
   removeQueuedMessage?: Resolver<
     ResolversTypes["Boolean"],
@@ -3309,6 +3790,24 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationSetOrgSecretArgs, "input">
   >;
+  startOrchestratorEpisode?: Resolver<
+    ResolversTypes["OrchestratorEpisode"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationStartOrchestratorEpisodeArgs, "triggerEventId">
+  >;
+  startProjectPlanningSession?: Resolver<
+    ResolversTypes["Session"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationStartProjectPlanningSessionArgs, "input">
+  >;
+  startProjectTicketExecution?: Resolver<
+    ResolversTypes["ProjectTicketExecution"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationStartProjectTicketExecutionArgs, "input">
+  >;
   startSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -3417,6 +3916,24 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationUpdateOrgMemberRoleArgs, "organizationId" | "role" | "userId">
   >;
+  updateProject?: Resolver<
+    ResolversTypes["Project"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateProjectArgs, "id" | "input">
+  >;
+  updateProjectPlanSummary?: Resolver<
+    ResolversTypes["ProjectRun"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateProjectPlanSummaryArgs, "input">
+  >;
+  updateProjectRun?: Resolver<
+    ResolversTypes["ProjectRun"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateProjectRunArgs, "id" | "input">
+  >;
   updateRepo?: Resolver<
     ResolversTypes["Repo"],
     ParentType,
@@ -3451,6 +3968,34 @@ export type NotificationResolvers<
   message?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   timestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   type?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type OrchestratorEpisodeResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["OrchestratorEpisode"] =
+    ResolversParentTypes["OrchestratorEpisode"],
+> = ResolversObject<{
+  actionResults?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  contextHash?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  contextSnapshot?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  decisionSummary?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  failedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  playbookSnapshot?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  playbookVersionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  projectId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  projectRunId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  retryCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  sessionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["OrchestratorEpisodeStatus"], ParentType, ContextType>;
+  triggerEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3504,6 +4049,35 @@ export type ParticipantResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type PlaybookResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["Playbook"] = ResolversParentTypes["Playbook"],
+> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  isBuiltIn?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  versions?: Resolver<Array<ResolversTypes["PlaybookVersion"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type PlaybookVersionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["PlaybookVersion"] =
+    ResolversParentTypes["PlaybookVersion"],
+> = ResolversObject<{
+  content?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  metadata?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  playbookId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  version?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type PortEndpointResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["PortEndpoint"] = ResolversParentTypes["PortEndpoint"],
@@ -3521,11 +4095,122 @@ export type ProjectResolvers<
 > = ResolversObject<{
   aiMode?: Resolver<Maybe<ResolversTypes["AutonomyMode"]>, ParentType, ContextType>;
   channels?: Resolver<Array<ResolversTypes["Channel"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  members?: Resolver<Array<ResolversTypes["ProjectMember"]>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
+  repoId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  runs?: Resolver<Array<ResolversTypes["ProjectRun"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
+  soulFile?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes["Ticket"]>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ProjectMemberResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ProjectMember"] = ResolversParentTypes["ProjectMember"],
+> = ResolversObject<{
+  joinedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  leftAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  role?: Resolver<ResolversTypes["UserRole"], ParentType, ContextType>;
+  user?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ProjectRunResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ProjectRun"] = ResolversParentTypes["ProjectRun"],
+> = ResolversObject<{
+  activeGateId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  executionConfig?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  initialGoal?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  latestControllerSummaryId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  latestControllerSummaryText?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  orchestratorEpisodes?: Resolver<
+    Array<ResolversTypes["OrchestratorEpisode"]>,
+    ParentType,
+    ContextType
+  >;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  planSummary?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  planningSessionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  playbookSnapshot?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  playbookVersionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  project?: Resolver<ResolversTypes["Project"], ParentType, ContextType>;
+  projectId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ProjectRunStatus"], ParentType, ContextType>;
+  ticketExecutions?: Resolver<
+    Array<ResolversTypes["ProjectTicketExecution"]>,
+    ParentType,
+    ContextType
+  >;
+  ticketGenerationAttempt?: Resolver<
+    Maybe<ResolversTypes["ProjectTicketGenerationAttempt"]>,
+    ParentType,
+    ContextType
+  >;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ProjectTicketExecutionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ProjectTicketExecution"] =
+    ResolversParentTypes["ProjectTicketExecution"],
+> = ResolversObject<{
+  cancelledAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  failedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  fixSessionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  implementationSessionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  lastLifecycleEventId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  previousStatus?: Resolver<
+    Maybe<ResolversTypes["ProjectTicketExecutionStatus"]>,
+    ParentType,
+    ContextType
+  >;
+  projectId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  projectRunId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  reviewSessionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  sequence?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ProjectTicketExecutionStatus"], ParentType, ContextType>;
+  ticket?: Resolver<ResolversTypes["Ticket"], ParentType, ContextType>;
+  ticketId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ProjectTicketGenerationAttemptResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ProjectTicketGenerationAttempt"] =
+    ResolversParentTypes["ProjectTicketGenerationAttempt"],
+> = ResolversObject<{
+  approvedPlan?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdTicketIds?: Resolver<Array<ResolversTypes["ID"]>, ParentType, ContextType>;
+  draftCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  error?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  failedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  projectId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  projectRunId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  retryCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ProjectTicketGenerationStatus"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3682,6 +4367,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryMySessionsArgs, "organizationId">
   >;
+  orchestratorEpisodes?: Resolver<
+    Array<ResolversTypes["OrchestratorEpisode"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryOrchestratorEpisodesArgs, "projectRunId">
+  >;
   orgSecrets?: Resolver<
     Array<ResolversTypes["OrgSecret"]>,
     ParentType,
@@ -3706,6 +4397,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryProjectArgs, "id">
   >;
+  projectRuns?: Resolver<
+    Array<ResolversTypes["ProjectRun"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryProjectRunsArgs, "projectId">
+  >;
   projects?: Resolver<
     Array<ResolversTypes["Project"]>,
     ParentType,
@@ -3729,6 +4426,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryReposArgs, "organizationId">
+  >;
+  resolveProjectRunPlaybook?: Resolver<
+    ResolversTypes["ResolvedPlaybook"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryResolveProjectRunPlaybookArgs, "projectRunId">
   >;
   resolvedAiMode?: Resolver<
     ResolversTypes["AutonomyMode"],
@@ -3860,6 +4563,17 @@ export type RepoResolvers<
   remoteUrl?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   webhookActive?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ResolvedPlaybookResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ResolvedPlaybook"] =
+    ResolversParentTypes["ResolvedPlaybook"],
+> = ResolversObject<{
+  playbook?: Resolver<Maybe<ResolversTypes["Playbook"]>, ParentType, ContextType>;
+  source?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  version?: Resolver<ResolversTypes["PlaybookVersion"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4041,6 +4755,13 @@ export type SubscriptionResolvers<
     ContextType,
     RequireFields<SubscriptionOrgEventsArgs, "organizationId">
   >;
+  projectEvents?: SubscriptionResolver<
+    ResolversTypes["Event"],
+    "projectEvents",
+    ParentType,
+    ContextType,
+    RequireFields<SubscriptionProjectEventsArgs, "organizationId" | "projectId">
+  >;
   sessionEvents?: SubscriptionResolver<
     ResolversTypes["Event"],
     "sessionEvents",
@@ -4210,15 +4931,23 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Message?: MessageResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
+  OrchestratorEpisode?: OrchestratorEpisodeResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;
   OrgSecret?: OrgSecretResolvers<ContextType>;
   Organization?: OrganizationResolvers<ContextType>;
   Participant?: ParticipantResolvers<ContextType>;
+  Playbook?: PlaybookResolvers<ContextType>;
+  PlaybookVersion?: PlaybookVersionResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;
   Project?: ProjectResolvers<ContextType>;
+  ProjectMember?: ProjectMemberResolvers<ContextType>;
+  ProjectRun?: ProjectRunResolvers<ContextType>;
+  ProjectTicketExecution?: ProjectTicketExecutionResolvers<ContextType>;
+  ProjectTicketGenerationAttempt?: ProjectTicketGenerationAttemptResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   QueuedMessage?: QueuedMessageResolvers<ContextType>;
   Repo?: RepoResolvers<ContextType>;
+  ResolvedPlaybook?: ResolvedPlaybookResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;

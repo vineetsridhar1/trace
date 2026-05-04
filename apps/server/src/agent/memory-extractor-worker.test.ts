@@ -118,6 +118,8 @@ vi.mock("./memory-extractor-prompt.js", () => ({
     "ticket_commented",
     "ticket_assigned",
     "ticket_unassigned",
+    "project_created",
+    "project_updated",
     "session_terminated",
     "entity_linked",
     "ticket_linked",

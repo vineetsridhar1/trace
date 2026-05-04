@@ -59,6 +59,7 @@ const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
 const scopeTopicMap: Record<string, (id: string) => string> = {
   channel: topics.channelEvents,
   chat: topics.chatEvents,
+  project: topics.projectEvents,
   ticket: topics.ticketEvents,
   // "system" scope has no entity-level topic — events are broadcast on the org topic only
 };

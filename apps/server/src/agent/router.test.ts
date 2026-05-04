@@ -90,6 +90,23 @@ describe("router", () => {
     });
   });
 
+  it("drops project autopilot events instead of routing them to the ambient agent", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "project",
+        scopeId: "project-1",
+        eventType: "project_ticket_lifecycle_event",
+        payload: { projectRunId: "run-1", ticketId: "ticket-1" },
+      }),
+      settings,
+    );
+
+    expect(result).toEqual({
+      decision: "drop",
+      reason: "project_autopilot_explicit_session_workflow",
+    });
+  });
+
   it("suppresses agent self-triggers outside the allowlist", () => {
     seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 

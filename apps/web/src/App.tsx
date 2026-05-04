@@ -12,6 +12,7 @@ import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { ConnectionsView } from "./components/connections/ConnectionsView";
 import { TicketsView } from "./components/tickets/TicketsView";
+import { ProjectsView } from "./components/projects/ProjectsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
@@ -89,6 +90,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useBridgePendingRequestToasts();
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
+  const activeProjectId = useUIStore((s: UIState) => s.activeProjectId);
   const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
   const setActiveChannelId = useUIStore((s: UIState) => s.setActiveChannelId);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
@@ -183,6 +185,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <ConnectionsView />
                 ) : activePage === "tickets" && features.tickets ? (
                   <TicketsView />
+                ) : activePage === "projects" ? (
+                  <ProjectsView projectId={activeProjectId} />
                 ) : shouldRenderChatView ? (
                   <ChatView chatId={activeChatId} />
                 ) : shouldRenderChannelView ? (

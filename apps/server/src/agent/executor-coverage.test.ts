@@ -60,6 +60,7 @@ type MockedServices = ServiceContainer & {
   };
   organizationService: {
     createProject: MockFn;
+    updateProject: MockFn;
     linkEntityToProject: MockFn;
     getProject: MockFn;
     searchUsers: MockFn;
@@ -69,6 +70,14 @@ type MockedServices = ServiceContainer & {
   };
   eventService: {
     query: MockFn;
+  };
+  projectPlanningService: {
+    getContext: MockFn;
+    askQuestion: MockFn;
+    recordAnswer: MockFn;
+    recordDecision: MockFn;
+    recordRisk: MockFn;
+    updatePlanSummary: MockFn;
   };
   summaryService: {
     upsert: MockFn;
@@ -149,6 +158,7 @@ function createServices(): MockedServices {
     },
     organizationService: {
       createProject: vi.fn().mockResolvedValue(result("project.create")),
+      updateProject: vi.fn().mockResolvedValue(result("project.update")),
       linkEntityToProject: vi.fn().mockResolvedValue(result("project.linkEntity")),
       getProject: vi.fn().mockResolvedValue(result("project.get")),
       searchUsers: vi.fn().mockResolvedValue([result("users.search")]),
@@ -158,6 +168,38 @@ function createServices(): MockedServices {
     },
     eventService: {
       query: vi.fn().mockResolvedValue([result("events.query")]),
+    },
+    projectPlanningService: {
+      getContext: vi.fn().mockResolvedValue({
+        project: { id: "project-1" },
+        projectRun: { id: "run-1", projectId: "project-1" },
+        questions: [],
+        answers: [],
+        decisions: [],
+        risks: [],
+      }),
+      askQuestion: vi.fn().mockResolvedValue({
+        id: "evt-question",
+        eventType: "project_question_asked",
+      }),
+      recordAnswer: vi.fn().mockResolvedValue({
+        id: "evt-answer",
+        eventType: "project_answer_recorded",
+      }),
+      recordDecision: vi.fn().mockResolvedValue({
+        id: "evt-decision",
+        eventType: "project_decision_recorded",
+      }),
+      recordRisk: vi.fn().mockResolvedValue({
+        id: "evt-risk",
+        eventType: "project_risk_recorded",
+      }),
+      updatePlanSummary: vi.fn().mockResolvedValue({
+        id: "run-1",
+        projectId: "project-1",
+        status: "planning",
+        planSummary: "Plan v1",
+      }),
     },
     summaryService: {
       upsert: vi.fn().mockResolvedValue(result("summary.update")),
@@ -213,6 +255,7 @@ function getAllMocks(services: MockedServices): MockFn[] {
     services.inboxService.createItem,
     services.inboxService.listAgentSuggestions,
     services.organizationService.createProject,
+    services.organizationService.updateProject,
     services.organizationService.linkEntityToProject,
     services.organizationService.getProject,
     services.organizationService.searchUsers,
@@ -220,6 +263,12 @@ function getAllMocks(services: MockedServices): MockFn[] {
     services.organizationService.listProjects,
     services.organizationService.listRepos,
     services.eventService.query,
+    services.projectPlanningService.getContext,
+    services.projectPlanningService.askQuestion,
+    services.projectPlanningService.recordAnswer,
+    services.projectPlanningService.recordDecision,
+    services.projectPlanningService.recordRisk,
+    services.projectPlanningService.updatePlanSummary,
     services.summaryService.upsert,
     services.memoryService.search,
   ];
@@ -543,6 +592,19 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     },
   },
   {
+    actionType: "project.update",
+    args: { projectId: "proj-1", name: "Project Atlas v2", aiMode: "suggest" },
+    assertCall: (services) => {
+      expect(services.organizationService.updateProject).toHaveBeenCalledWith(
+        "proj-1",
+        "org-1",
+        { name: "Project Atlas v2", aiMode: "suggest" },
+        "agent",
+        "agent-1",
+      );
+    },
+  },
+  {
     actionType: "project.get",
     args: { projectId: "proj-1" },
     assertCall: (services) => {
@@ -575,6 +637,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         organizationId: "org-1",
         createdById: "agent-1",
         actorType: "agent",
+        actorId: "agent-1",
       });
     },
   },

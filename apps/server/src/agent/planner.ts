@@ -342,6 +342,9 @@ function buildCompactContextSection(ctx: AgentContextPacket): string {
   const entitySnapshotSection = buildEntitySnapshotSection(ctx);
   if (entitySnapshotSection) parts.push(entitySnapshotSection);
 
+  const planningContextSection = buildPlanningContextSection(ctx);
+  if (planningContextSection) parts.push(planningContextSection);
+
   const summarySnapshotSection = buildSummarySnapshotSection(ctx);
   if (summarySnapshotSection) parts.push(summarySnapshotSection);
 
@@ -363,6 +366,62 @@ function buildCompactContextSection(ctx: AgentContextPacket): string {
   }
 
   return parts.join("\n\n");
+}
+
+function buildPlanningContextSection(ctx: AgentContextPacket): string | null {
+  if (!ctx.planningContext) return null;
+
+  const planning = ctx.planningContext;
+  const lines = [
+    `project: ${planning.project.name} (${planning.project.id})`,
+    `project_run: ${planning.projectRun.id}`,
+    `status: ${planning.projectRun.status}`,
+    `initial_goal: ${planning.projectRun.initialGoal}`,
+    `plan_summary: ${planning.projectRun.planSummary ?? "(none)"}`,
+  ];
+
+  if (planning.project.repo) {
+    lines.push(
+      `repo: ${planning.project.repo.name} (${planning.project.repo.id}, ${planning.project.repo.defaultBranch})`,
+    );
+  }
+
+  if (planning.project.members.length > 0) {
+    lines.push("members:");
+    for (const member of planning.project.members) {
+      lines.push(`- ${member.name ?? member.id} (${member.role})`);
+    }
+  }
+
+  if (planning.questions.length > 0) {
+    lines.push("questions:");
+    for (const question of planning.questions.slice(-10)) {
+      lines.push(`- ${question.message}`);
+    }
+  }
+
+  if (planning.answers.length > 0) {
+    lines.push("answers:");
+    for (const answer of planning.answers.slice(-10)) {
+      lines.push(`- ${answer.message}`);
+    }
+  }
+
+  if (planning.decisions.length > 0) {
+    lines.push("decisions:");
+    for (const decision of planning.decisions.slice(-10)) {
+      lines.push(`- ${decision.decision}`);
+    }
+  }
+
+  if (planning.risks.length > 0) {
+    lines.push("risks:");
+    for (const risk of planning.risks.slice(-10)) {
+      lines.push(`- ${risk.risk}`);
+    }
+  }
+
+  return `<project_planning_context>\n${lines.join("\n")}\n</project_planning_context>`;
 }
 
 function buildDecisionContextSection(ctx: AgentContextPacket): string {

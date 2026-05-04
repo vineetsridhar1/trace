@@ -7,7 +7,7 @@
  */
 
 import { findAction, getDispatcher, validateActionParams } from "./action-registry.js";
-import type { ServiceContainer, AgentContext } from "./actions/types.js";
+import type { ServiceContainer, AgentContext, ScopeType } from "./actions/types.js";
 import { redis } from "../lib/redis.js";
 
 // ---------------------------------------------------------------------------
@@ -148,6 +148,14 @@ export class ActionExecutor {
       };
     }
     const canonicalActionType = registration.name;
+
+    if (ctx.scopeType && !registration.scopes.includes(ctx.scopeType as ScopeType)) {
+      return {
+        status: "failed",
+        actionType,
+        error: `Action ${canonicalActionType} is not available in ${ctx.scopeType} scope`,
+      };
+    }
 
     // ---- Validate parameters ----
     const validation = validateActionParams(registration, args);

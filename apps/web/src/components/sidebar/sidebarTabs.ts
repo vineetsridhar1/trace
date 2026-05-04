@@ -25,7 +25,8 @@ export function getPreferredSidebarTab(
     activeChannelId ||
     activePage === "inbox" ||
     activePage === "connections" ||
-    activePage === "tickets"
+    activePage === "tickets" ||
+    activePage === "projects"
   )
     return "main";
   return currentTab;

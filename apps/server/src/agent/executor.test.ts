@@ -34,6 +34,20 @@ function createServices(): ServiceContainer {
     eventService: {
       query: vi.fn().mockResolvedValue([]),
     } as unknown as ServiceContainer["eventService"],
+    projectPlanningService: {
+      getContext: vi.fn().mockResolvedValue({
+        project: { id: "project-1" },
+        projectRun: { id: "run-1", projectId: "project-1" },
+        questions: [],
+        answers: [],
+        decisions: [],
+        risks: [],
+      }),
+      askQuestion: vi.fn().mockResolvedValue({
+        id: "evt-question",
+        eventType: "project_question_asked",
+      }),
+    } as unknown as ServiceContainer["projectPlanningService"],
   };
 }
 
@@ -79,6 +93,22 @@ describe("ActionExecutor", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Missing required field: title");
     expect(services.ticketService.create as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+  });
+
+  it("does not expose project planning actions to the ambient executor", async () => {
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "project.askQuestion", args: { projectRunId: "run-1", message: "Scope?" } },
+      { ...ctx, triggerEventId: "evt-scope", scopeType: "chat", scopeId: "chat-1" },
+    );
+
+    expect(result).toEqual({
+      status: "failed",
+      actionType: "project.askQuestion",
+      error: "Unknown action: project.askQuestion",
+    });
+    expect(services.projectPlanningService?.askQuestion).not.toHaveBeenCalled();
   });
 
   it("injects agent context into ticket creation", async () => {

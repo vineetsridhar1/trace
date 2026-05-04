@@ -1,153 +1,73 @@
-# Project Orchestration — Ticket Index
+# Project Autopilot — Ticket Index
 
-This ticket set replaces the old session-group Ultraplan implementation plan with a project-first roadmap.
+This ticket set replaces the older Project Orchestration/Ultraplan roadmap with the current Project Autopilot design.
 
-The folder name remains `session-autopilot` for continuity with existing references. The product scope is now Project Orchestration: prompt-first project creation, AI interviewing, durable ticket planning, and later service-owned execution through sessions and session groups.
+The folder name remains `session-autopilot` for continuity. The product direction is now:
 
-See [session-autopilot-plan.md](session-autopilot-plan.md) for the full RFC. The root-level [SESSION_AUTOPILOT_PLAN.md](../../SESSION_AUTOPILOT_PLAN.md) mirrors the same plan.
+- Deliverable 0: prompt to plan to durable tickets.
+- Orchestration phase: sequential ticket execution driven by explicit normal coding-tool orchestrator episodes and playbooks.
+- No ambient agent involvement.
+
+See [session-autopilot-plan.md](session-autopilot-plan.md) for the full plan. The root-level [SESSION_AUTOPILOT_PLAN.md](../../SESSION_AUTOPILOT_PLAN.md) mirrors the same plan.
 
 ## Delivery Principles
 
-- Every milestone should be independently useful.
-- Planning and ticket generation must ship before autonomous execution.
-- Project/run/ticket state must be durable service-layer state, not transcript parsing.
-- Session groups are execution workspaces, not the orchestration anchor.
-- Agents and humans use the same services.
-- Events carry enough payload for client hydration without refetching.
+- D0 must ship the complete planning-to-ticket flow.
+- Planning chat uses a normal project-linked session.
+- Ticket generation happens after the user confirms the plan.
+- Generated tickets are DB records created through services/CLI.
+- Claude Code/Codex sessions call Trace through a CLI/action surface with dynamically injected scoped credentials.
+- Orchestration is episodic: lifecycle event in, normal coding-tool session out.
+- Playbooks guide orchestrator behavior; they are not hardcoded workflow branches.
+- Start sequentially. Do not add parallel scheduling until the default loop works well.
+- Services own state changes and event creation. GraphQL, CLI, and agent tools stay thin.
+- Events must carry enough full entity state for Zustand to update without mutation-result-driven state.
+- Ticket generation, execution startup, and orchestrator episode creation must be idempotent.
+- Core orchestration must stay adapter-neutral; Claude Code can be an initial coding-tool adapter, not a core dependency.
 
-## Ticket Set
-
-The implementation is split into 15 tickets. The count is intentionally sized around coherent implementation slices, not preserved from the old Ultraplan plan.
-
-## D0 — Project Workspace Foundation
-
-Users can create, view, update, and join projects. Projects become a first-class navigation surface with project-scoped events. Project runs, AI planning, ticket generation, and execution are not part of D0.
-
-| # | Ticket | What it ships |
-| --- | --- | --- |
-| 01 | [Project Schema and Events](01-project-schema-events.md) | Project members, project scope/events, event payload contracts, and compatibility |
-| 02 | [Project Services and GraphQL](02-project-service-graphql.md) | Service-layer project operations and typed GraphQL contract |
-| 03 | [Project Client Shell](03-project-client-shell.md) | Zustand hydration, project navigation, project list, and project detail shell |
-
-## D1 — Prompt-First Project Creation
-
-Users can start a project by typing a goal into a focused prompt-first surface.
+## Deliverable 0 — Planning To Tickets
 
 | # | Ticket | What it ships |
 | --- | --- | --- |
-| 04 | [Prompt-First Project Creation](04-prompt-first-project-creation.md) | Project-run schema/service, new project prompt screen, initial goal capture, and project planning route |
+| 01 | [Planning Workspace](01-planning-workspace.md) | Prompt-first project creation, normal planning session, split plan/chat UI |
+| 02 | [Plan Approval And Ticket Generation](02-plan-approval-ticket-generation.md) | Next action, plan persistence, structured ticket drafts from the planning session, linked tickets |
+| 03 | [Project Ticket List](03-project-ticket-list.md) | Project detail ticket list from durable project-linked tickets |
 
-## D2 — AI Interview and Planning
-
-The project AI interviews the user, records answers and decisions, and maintains a plan summary. This is useful before execution exists.
-
-| # | Ticket | What it ships |
-| --- | --- | --- |
-| 05 | [Planning Conversation Service](05-planning-conversation-service.md) | Durable planning turns, questions, answers, decisions, risks, and summaries |
-| 06 | [Planning AI Runtime](06-planning-ai-runtime.md) | Planning context packets, prompts, scoped runtime actions, and action auth |
-
-## D3 — Durable Ticket Generation
-
-The AI can create real tickets from the plan. Users can review and edit them in a project ticket table.
+## Orchestration Foundation
 
 | # | Ticket | What it ships |
 | --- | --- | --- |
-| 07 | [Ticket Planning Model](07-ticket-planning-model.md) | Ticket acceptance criteria, test plans, dependencies, and planned-ticket membership |
-| 08 | [AI Ticket Generation](08-ai-ticket-generation.md) | Prompt/action contract for turning plans into durable tickets |
-| 09 | [Project Ticket Table](09-project-ticket-table.md) | Project-scoped ticket table with dependency and planning metadata |
+| 04 | [Ticket Execution Lifecycle](04-ticket-execution-lifecycle.md) | One-ticket-at-a-time execution sessions and lifecycle events |
+| 05 | [Playbook Model](05-playbook-model.md) | Durable playbooks and default review/QA/PR playbook |
+| 06 | [Orchestrator Episode Runtime](06-orchestrator-episode-runtime.md) | New normal coding-tool session per lifecycle event |
+| 07 | [Orchestrator Context Packet](07-orchestrator-context-packet.md) | Project, ticket, session, diff, history, event, and playbook context |
+| 08 | [Orchestrator Action Surface](08-orchestrator-action-surface.md) | Trace CLI/action surface, injected credentials, messages, inbox, sessions, tickets, PRs, merges |
+| 09 | [Default Playbook Loop](09-default-playbook-loop.md) | Sequential implement/review/fix/QA/PR/merge loop |
+| 10 | [Orchestration UI And Inbox](10-orchestration-ui-inbox.md) | Progress, decisions, linked sessions, inbox gates, pause/resume/cancel |
 
-## D4 — Manual Project Execution Links
-
-Users can manually start sessions or session groups from project tickets and keep everything linked back to the project.
-
-| # | Ticket | What it ships |
-| --- | --- | --- |
-| 10 | [Manual Execution Links](10-manual-execution-links.md) | Ticket-to-session/session-group links before autonomous orchestration exists |
-
-## D5 — Sequential Project Orchestration
-
-The project run can launch one worker at a time, observe lifecycle events, create controller runs, and request human review.
-
-| # | Ticket | What it ships |
-| --- | --- | --- |
-| 11 | [Controller Run Foundation](11-controller-run-foundation.md) | Durable controller runs, controller sessions, summaries, and transcript links |
-| 12 | [Sequential Orchestrator](12-sequential-orchestrator.md) | One-worker-at-a-time scheduler for ready project tickets |
-| 13 | [Human Gates and Guardrails](13-human-gates-guardrails.md) | Inbox-backed approvals, dedupe, cooldowns, pause/resume, and loop protection |
-
-## D6 — Integration and Final QA
-
-Approved ticket branches integrate into a project run integration branch/session group. Conflicts route through human gates.
-
-| # | Ticket | What it ships |
-| --- | --- | --- |
-| 14 | [Integration and Final QA](14-integration-final-qa.md) | Branch integration, conflict reporting, final QA, metrics, and error surfaces |
-
-## D7 — Parallel DAG Scheduler
-
-The scheduler can run independent ready tickets in parallel while keeping integration serialized.
-
-| # | Ticket | What it ships |
-| --- | --- | --- |
-| 15 | [Parallel DAG Scheduler](15-parallel-dag-scheduler.md) | Dependency-aware parallel worker admission and debug surfaces |
-
-## Dependency Graph
+## Dependency Order
 
 ```text
-D0 Project Foundation
-01 Project Schema and Events
-└─ 02 Project Services and GraphQL
-   └─ 03 Project Client Shell
+D0 Planning To Tickets
+01 Planning Workspace
+└─ 02 Plan Approval And Ticket Generation
+   └─ 03 Project Ticket List
 
-D1 Prompt-First Creation
-04 Prompt-First Project Creation  (needs 01, 02, 03)
-
-D2 AI Interview and Planning
-05 Planning Conversation Service  (needs 04)
-└─ 06 Planning AI Runtime  (needs 05)
-
-D3 Durable Ticket Generation
-07 Ticket Planning Model  (needs 04)
-├─ 08 AI Ticket Generation  (needs 06, 07)
-└─ 09 Project Ticket Table  (needs 03, 07)
-
-D4 Manual Execution Links
-10 Manual Execution Links  (needs 09)
-
-D5 Sequential Orchestration
-11 Controller Run Foundation  (needs 06)
-├─ 12 Sequential Orchestrator  (needs 07, 10, 11)
-└─ 13 Human Gates and Guardrails  (needs 11, 12)
-
-D6 Integration
-14 Integration and Final QA  (needs 12, 13)
-
-D7 Parallel DAG
-15 Parallel DAG Scheduler  (needs 14)
+Orchestration Foundation
+04 Ticket Execution Lifecycle  (needs 03)
+├─ 05 Playbook Model
+├─ 06 Orchestrator Episode Runtime  (needs 04, 05)
+│  └─ 07 Orchestrator Context Packet  (needs 06)
+│     └─ 08 Orchestrator Action Surface  (needs 06, 07)
+│        └─ 09 Default Playbook Loop  (needs 04-08)
+└─ 10 Orchestration UI And Inbox  (needs 04, 06, 09)
 ```
 
-## Scope Guardrails
+## Not In This Ticket Set
 
-The first useful release is project foundation plus prompt-first planning. Do not block those deliverables on worker orchestration.
-
-V1 should ship:
-
-- project as first-class navigation/product entity
-- project members
-- project event scope
-- prompt-first creation
-- project run with initial goal
-- planning/interview flow
-- durable plan summary
-- ticket generation
-- project ticket table
-
-Later releases add:
-
-- manual execution links
-- controller runs
-- sequential workers
-- human gates
-- branch integration
-- parallel DAG scheduling
-
-If the plan changes, update the root plan, mirrored plan, index, and impacted tickets in the same change.
+- Parallel ticket execution.
+- Generic workflow builder.
+- Ambient agent routing for project planning or orchestration.
+- Direct DB writes by agents or clients.
+- Vendor-specific orchestration logic outside adapters.
+- Final orchestrator prompt template. The user will provide that later.

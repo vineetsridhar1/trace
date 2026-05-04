@@ -9,14 +9,20 @@ import type {
   Event,
   EventType,
   InboxItem,
+  OrchestratorEpisode,
+  Project,
+  ProjectTicketExecution,
+  ProjectTicketGenerationAttempt,
   QueuedMessage,
   Repo,
   ScopeType,
   SessionStatus,
+  Ticket,
 } from "@trace/gql";
 import {
   StoreBatchWriter,
   useEntityStore,
+  type ProjectRunEntity,
   type SessionEntity,
   type SessionGroupEntity,
 } from "../stores/entity.js";
@@ -81,6 +87,157 @@ function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: Jso
   if (environment && typeof environment.id === "string") {
     batch.upsert("agentEnvironments", environment.id, environment as unknown as AgentEnvironment);
   }
+}
+
+function legacyProjectFromEntityLinked(
+  payload: JsonObject,
+  timestamp: string,
+  organizationId: string | null,
+): Project | null {
+  if (payload.type !== "project_created") return null;
+  const id = typeof payload.projectId === "string" ? payload.projectId : null;
+  const name = typeof payload.name === "string" ? payload.name : null;
+  if (!id || !name || !organizationId) return null;
+
+  return {
+    id,
+    name,
+    organizationId,
+    repoId: null,
+    repo: null,
+    aiMode: null,
+    soulFile: "",
+    members: [],
+    channels: [],
+    sessions: [],
+    tickets: [],
+    runs: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function upsertProjectFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const project = asJsonObject(payload.project);
+  if (!project || typeof project.id !== "string") return;
+
+  const existing = batch.get("projects", project.id);
+  batch.upsert(
+    "projects",
+    project.id,
+    (existing ? { ...existing, ...project } : project) as unknown as Project,
+  );
+}
+
+function upsertProjectRunFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const projectRun = asJsonObject(payload.projectRun);
+  if (!projectRun || typeof projectRun.id !== "string") return;
+
+  const existing = batch.get("projectRuns", projectRun.id);
+  batch.upsert(
+    "projectRuns",
+    projectRun.id,
+    (existing ? { ...existing, ...projectRun } : projectRun) as unknown as ProjectRunEntity,
+  );
+}
+
+function upsertGenerationAttemptFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const attempt = asJsonObject(payload.generationAttempt);
+  if (!attempt || typeof attempt.id !== "string") return;
+
+  const existing = batch.get("projectTicketGenerationAttempts", attempt.id);
+  batch.upsert(
+    "projectTicketGenerationAttempts",
+    attempt.id,
+    (existing ? { ...existing, ...attempt } : attempt) as unknown as ProjectTicketGenerationAttempt,
+  );
+}
+
+function upsertProjectTicketExecutionFromPayload(
+  batch: StoreBatchWriter,
+  payload: JsonObject,
+): void {
+  const execution = asJsonObject(payload.projectTicketExecution);
+  if (!execution || typeof execution.id !== "string") return;
+
+  const existing = batch.get("projectTicketExecutions", execution.id);
+  batch.upsert(
+    "projectTicketExecutions",
+    execution.id,
+    (existing ? { ...existing, ...execution } : execution) as unknown as ProjectTicketExecution,
+  );
+}
+
+function upsertOrchestratorEpisodeFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const episode = asJsonObject(payload.orchestratorEpisode);
+  if (!episode || typeof episode.id !== "string") return;
+
+  const existing = batch.get("orchestratorEpisodes", episode.id);
+  batch.upsert(
+    "orchestratorEpisodes",
+    episode.id,
+    (existing ? { ...existing, ...episode } : episode) as unknown as OrchestratorEpisode,
+  );
+}
+
+function upsertTicketFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const ticket = asJsonObject(payload.ticket);
+  if (!ticket || typeof ticket.id !== "string") return;
+
+  const existing = batch.get("tickets", ticket.id);
+  batch.upsert(
+    "tickets",
+    ticket.id,
+    (existing ? { ...existing, ...ticket } : ticket) as unknown as Ticket,
+  );
+
+  const projects = Array.isArray(ticket.projects) ? ticket.projects : [];
+  for (const rawProject of projects) {
+    const project = asJsonObject(rawProject);
+    if (!project || typeof project.id !== "string") continue;
+    const existingProject = batch.get("projects", project.id);
+    if (!existingProject) continue;
+    const currentTickets = existingProject.tickets ?? [];
+    batch.patch("projects", project.id, {
+      tickets: [
+        ...(currentTickets as Ticket[]).filter((item) => item.id !== ticket.id),
+        ticket as unknown as Ticket,
+      ],
+    } as Partial<Project>);
+  }
+}
+
+function patchProjectMemberFromPayload(
+  batch: StoreBatchWriter,
+  payload: JsonObject,
+  eventType: EventType,
+): void {
+  const projectId = typeof payload.projectId === "string" ? payload.projectId : null;
+  if (!projectId) return;
+
+  const existing = batch.get("projects", projectId);
+  if (!existing) return;
+
+  if (eventType === "project_member_removed") {
+    const userId = typeof payload.userId === "string" ? payload.userId : null;
+    if (!userId) return;
+    batch.patch("projects", projectId, {
+      members: existing.members.filter((member) => member.user.id !== userId),
+    } as Partial<Project>);
+    return;
+  }
+
+  const member = asJsonObject(payload.member);
+  const user = asJsonObject(member?.user);
+  const userId = typeof user?.id === "string" ? user.id : null;
+  if (!member || !userId) return;
+
+  batch.patch("projects", projectId, {
+    members: [
+      ...existing.members.filter((item) => item.user.id !== userId),
+      member as unknown as Project["members"][number],
+    ],
+  } as Partial<Project>);
 }
 
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
@@ -156,6 +313,80 @@ export function handleOrgEvent(event: Event): void {
         (existing ? { ...existing, ...repo } : repo) as unknown as Repo,
       );
     }
+  }
+
+  // Project events
+  if (event.eventType === "project_created" || event.eventType === "project_updated") {
+    upsertProjectFromPayload(batch, payload);
+  }
+  if (
+    event.eventType === "project_run_created" ||
+    event.eventType === "project_run_updated" ||
+    event.eventType === "project_goal_submitted" ||
+    event.eventType === "project_plan_summary_updated"
+  ) {
+    upsertProjectRunFromPayload(batch, payload);
+  }
+  if (event.eventType === "project_member_added" || event.eventType === "project_member_removed") {
+    patchProjectMemberFromPayload(batch, payload, event.eventType);
+  }
+  if (event.eventType === "entity_linked") {
+    upsertProjectFromPayload(batch, payload);
+    const legacyProject = legacyProjectFromEntityLinked(
+      payload,
+      event.timestamp,
+      useAuthStore.getState().activeOrgId,
+    );
+    if (legacyProject) {
+      const existing = batch.get("projects", legacyProject.id);
+      batch.upsert(
+        "projects",
+        legacyProject.id,
+        existing ? { ...legacyProject, ...existing } : legacyProject,
+      );
+    }
+  }
+
+  if (
+    event.eventType === "ticket_created" ||
+    event.eventType === "ticket_updated" ||
+    event.eventType === "ticket_assigned" ||
+    event.eventType === "ticket_unassigned" ||
+    event.eventType === "ticket_linked" ||
+    event.eventType === "ticket_unlinked"
+  ) {
+    upsertTicketFromPayload(batch, payload);
+  }
+
+  if (
+    event.eventType === "project_ticket_generation_started" ||
+    event.eventType === "project_ticket_generation_completed" ||
+    event.eventType === "project_ticket_generation_failed"
+  ) {
+    upsertProjectRunFromPayload(batch, payload);
+    upsertGenerationAttemptFromPayload(batch, payload);
+    const tickets = payload.tickets;
+    if (Array.isArray(tickets)) {
+      for (const ticket of tickets) {
+        const ticketPayload = asJsonObject(ticket);
+        if (ticketPayload) upsertTicketFromPayload(batch, { ticket: ticketPayload });
+      }
+    }
+  }
+
+  if (
+    event.eventType === "project_ticket_execution_created" ||
+    event.eventType === "project_ticket_execution_updated" ||
+    event.eventType === "project_ticket_lifecycle_event"
+  ) {
+    upsertProjectTicketExecutionFromPayload(batch, payload);
+  }
+
+  if (
+    event.eventType === "orchestrator_episode_created" ||
+    event.eventType === "orchestrator_episode_updated"
+  ) {
+    upsertOrchestratorEpisodeFromPayload(batch, payload);
   }
 
   // Chat events

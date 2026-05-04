@@ -16,6 +16,7 @@ import { resolvers } from "./schema/resolvers.js";
 import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
 import { uploadRouter } from "./routes/upload.js";
+import { sessionActionsRouter } from "./routes/session-actions.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -133,6 +134,7 @@ async function main() {
   });
   app.use(authRouter);
   app.use(uploadRouter);
+  app.use(sessionActionsRouter);
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });

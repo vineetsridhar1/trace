@@ -205,6 +205,7 @@ export const sessionDispatchers: Record<string, ActionDispatcher> = {
       organizationId: ctx.organizationId,
       createdById: ctx.agentId,
       actorType: "agent",
+      actorId: ctx.agentId,
     });
   },
 

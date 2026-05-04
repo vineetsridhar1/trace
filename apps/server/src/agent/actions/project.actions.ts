@@ -1,8 +1,16 @@
 /**
- * Project domain actions — create, linkEntity, get
+ * Project domain actions — create, update, linkEntity, get.
+ *
+ * Project Autopilot planning and orchestration are deliberately excluded from
+ * the ambient agent action registry. Coding-tool sessions use explicit
+ * service-backed GraphQL/CLI actions for those workflows.
  */
 
-import type { AgentActionRegistration, ActionDispatcher, EntityType } from "./types.js";
+import type {
+  AgentActionRegistration,
+  ActionDispatcher,
+  EntityType,
+} from "./types.js";
 import { actorInfo } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -53,6 +61,30 @@ export const projectActions: AgentActionRegistration[] = [
     scopes: ["project", "channel", "ticket", "session"],
   },
   {
+    name: "project.update",
+    service: "organizationService",
+    method: "updateProject",
+    description: "Update project metadata such as name, repository, autonomy mode, or soul file.",
+    catalogDescription: "Update/edit/rename a project (projectId, name, repoId, aiMode, soulFile)",
+    risk: "medium",
+    suggestable: true,
+    tier: "extended",
+    parameters: {
+      fields: {
+        projectId: { type: "string", description: "The project to update", required: true },
+        name: { type: "string", description: "New project name" },
+        repoId: { type: "string", description: "Repository to associate with the project" },
+        aiMode: {
+          type: "string",
+          description: "Project-level autonomy mode",
+          enum: ["observe", "suggest", "act"],
+        },
+        soulFile: { type: "string", description: "Project soul file path" },
+      },
+    },
+    scopes: ["project"],
+  },
+  {
     name: "project.get",
     service: "organizationService",
     method: "getProject",
@@ -99,7 +131,27 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
     );
   },
 
+  "project.update": (services, args, ctx) => {
+    const { actorType, actorId } = actorInfo(ctx);
+    return services.organizationService.updateProject(
+      args.projectId as string,
+      ctx.organizationId,
+      {
+        ...(args.name !== undefined && { name: args.name as string }),
+        ...(args.repoId !== undefined && { repoId: args.repoId as string }),
+        ...(args.aiMode !== undefined && { aiMode: args.aiMode as "observe" | "suggest" | "act" }),
+        ...(args.soulFile !== undefined && { soulFile: args.soulFile as string }),
+      },
+      actorType,
+      actorId,
+    );
+  },
+
   "project.get": (services, args, ctx) => {
+    if (ctx.scopeType === "project" && ctx.scopeId && args.projectId !== ctx.scopeId) {
+      throw new Error("Project action is outside the scoped project");
+    }
     return services.organizationService.getProject(args.projectId as string, ctx.organizationId);
   },
+
 };

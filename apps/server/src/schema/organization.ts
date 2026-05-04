@@ -4,14 +4,33 @@ import type {
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
+  CreateProjectFromGoalInput,
+  CreateProjectRunInput,
+  UpdateProjectInput,
+  UpdateProjectRunInput,
+  StartProjectPlanningSessionInput,
+  ApproveProjectPlanInput,
+  StartProjectTicketExecutionInput,
+  RecordProjectPlanningDecisionInput,
+  RecordProjectPlanningMessageInput,
+  RecordProjectPlanningRiskInput,
+  UpdateProjectPlanSummaryInput,
+  AddProjectMemberInput,
+  RemoveProjectMemberInput,
   EntityType,
   UserRole,
 } from "@trace/gql";
 import { organizationService } from "../services/organization.js";
+import { projectRunService } from "../services/project-run.js";
+import { projectPlanningService } from "../services/project-planning.js";
+import { projectTicketExecutionService } from "../services/project-ticket-execution.js";
+import { playbookService } from "../services/playbook.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
+import { pubsub, topics } from "../lib/pubsub.js";
+import { assertScopeAccess } from "../services/access.js";
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
@@ -45,6 +64,14 @@ export const organizationQueries = {
     const orgId = requireOrgContext(ctx);
     return organizationService.getProject(args.id, orgId);
   },
+  projectRuns: (_: unknown, args: { projectId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return projectRunService.listProjectRuns(args.projectId, orgId);
+  },
+  resolveProjectRunPlaybook: (_: unknown, args: { projectRunId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return playbookService.resolveForProjectRun(args.projectRunId, orgId, ctx.actorType, ctx.userId);
+  },
 };
 
 export const organizationMutations = {
@@ -62,6 +89,127 @@ export const organizationMutations = {
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     assertOrgAccess(ctx, args.input.organizationId);
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
+  },
+  updateProject: (_: unknown, args: { id: string; input: UpdateProjectInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return organizationService.updateProject(args.id, orgId, args.input, ctx.actorType, ctx.userId);
+  },
+  createProjectFromGoal: (
+    _: unknown,
+    args: { input: CreateProjectFromGoalInput },
+    ctx: Context,
+  ) => {
+    assertOrgAccess(ctx, args.input.organizationId);
+    return projectRunService.createProjectFromGoal(args.input, ctx.actorType, ctx.userId);
+  },
+  createProjectRun: (_: unknown, args: { input: CreateProjectRunInput }, ctx: Context) => {
+    return projectRunService.createProjectRun(args.input, ctx.actorType, ctx.userId);
+  },
+  updateProjectRun: (
+    _: unknown,
+    args: { id: string; input: UpdateProjectRunInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectRunService.updateProjectRun(
+      args.id,
+      orgId,
+      args.input,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  startProjectPlanningSession: (
+    _: unknown,
+    args: { input: StartProjectPlanningSessionInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectRunService.startPlanningSession(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  approveProjectPlan: (_: unknown, args: { input: ApproveProjectPlanInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.approvePlanAndGenerateTickets(
+      args.input,
+      orgId,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  startProjectTicketExecution: (
+    _: unknown,
+    args: { input: StartProjectTicketExecutionInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectTicketExecutionService.startNextOrTicket(
+      args.input,
+      orgId,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  askProjectQuestion: (
+    _: unknown,
+    args: { input: RecordProjectPlanningMessageInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.askQuestion(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  recordProjectAnswer: (
+    _: unknown,
+    args: { input: RecordProjectPlanningMessageInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.recordAnswer(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  recordProjectDecision: (
+    _: unknown,
+    args: { input: RecordProjectPlanningDecisionInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.recordDecision(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  recordProjectRisk: (
+    _: unknown,
+    args: { input: RecordProjectPlanningRiskInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.recordRisk(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  updateProjectPlanSummary: (
+    _: unknown,
+    args: { input: UpdateProjectPlanSummaryInput },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return projectPlanningService.updatePlanSummary(args.input, orgId, ctx.actorType, ctx.userId);
+  },
+  addProjectMember: (_: unknown, args: { input: AddProjectMemberInput }, ctx: Context) => {
+    return organizationService.addProjectMember(
+      args.input.projectId,
+      args.input.userId,
+      args.input.role ?? "member",
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  removeProjectMember: async (
+    _: unknown,
+    args: { input: RemoveProjectMemberInput },
+    ctx: Context,
+  ) => {
+    await organizationService.removeProjectMember(
+      args.input.projectId,
+      args.input.userId,
+      ctx.actorType,
+      ctx.userId,
+    );
+    return true;
   },
   linkEntityToProject: (
     _: unknown,
@@ -125,6 +273,35 @@ export const organizationMutations = {
   },
 };
 
+export const projectSubscriptions = {
+  projectEvents: {
+    subscribe: async (
+      _: unknown,
+      args: { projectId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      const orgId = requireOrgContext(ctx);
+      if (orgId !== args.organizationId) {
+        throw new Error("Not authorized for this organization");
+      }
+      await assertScopeAccess("project", args.projectId, ctx.userId, orgId);
+      return pubsub.asyncIterator(topics.projectEvents(args.projectId));
+    },
+  },
+};
+
+type ProjectMemberRow = {
+  userId: string;
+  user?: { id: string; name: string; email: string; avatarUrl: string | null };
+  role: UserRole;
+  joinedAt: Date;
+  leftAt?: Date | null;
+};
+
+type ProjectRelationRow<T> = {
+  [key: string]: T | undefined;
+};
+
 export const organizationTypeResolvers = {
   Organization: {
     members: (org: { id: string }) => {
@@ -132,6 +309,39 @@ export const organizationTypeResolvers = {
     },
     agentEnvironments: (org: { id: string }, _args: unknown, ctx: Context) => {
       return agentEnvironmentService.list(org.id, ctx.actorType, ctx.userId);
+    },
+  },
+  Project: {
+    repo: (project: { repo?: unknown; repoId?: string | null }) => {
+      if ("repo" in project) return project.repo ?? null;
+      if (!project.repoId) return null;
+      return organizationService.getRepoById(project.repoId);
+    },
+    members: (project: { id: string; members?: ProjectMemberRow[] }) => {
+      if (project.members) return project.members;
+      return organizationService.getProjectMembers(project.id);
+    },
+    channels: (project: { id: string; channels?: Array<ProjectRelationRow<unknown>> }) => {
+      if (project.channels) return project.channels.map((link) => link.channel).filter(Boolean);
+      return organizationService.getProjectChannels(project.id);
+    },
+    sessions: (project: { id: string; sessions?: Array<ProjectRelationRow<unknown>> }) => {
+      if (project.sessions) return project.sessions.map((link) => link.session).filter(Boolean);
+      return organizationService.getProjectSessions(project.id);
+    },
+    tickets: (project: { id: string; tickets?: Array<ProjectRelationRow<unknown>> }) => {
+      if (project.tickets) return project.tickets.map((link) => link.ticket).filter(Boolean);
+      return organizationService.getProjectTickets(project.id);
+    },
+    runs: (project: { id: string; runs?: unknown[] }) => {
+      if (project.runs) return project.runs;
+      return projectRunService.getProjectRunsForProject(project.id);
+    },
+  },
+  ProjectMember: {
+    user: async (member: ProjectMemberRow) => {
+      if (member.user) return member.user;
+      return organizationService.getUserProfile(member.userId);
     },
   },
   OrgMember: {
