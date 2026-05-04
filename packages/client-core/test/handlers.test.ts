@@ -236,6 +236,39 @@ describe("handleOrgEvent", () => {
     });
   });
 
+  it("hydrates project run summaries from planning summary events", () => {
+    const event = makeEvent({
+      eventType: "project_plan_summary_updated",
+      scopeType: "project",
+      scopeId: "project-1",
+      payload: {
+        projectRun: {
+          id: "run-1",
+          organizationId: "org-1",
+          projectId: "project-1",
+          status: "planning",
+          initialGoal: "Build project planning",
+          planSummary: "Plan v1",
+          activeGateId: null,
+          latestControllerSummaryId: null,
+          latestControllerSummaryText: null,
+          executionConfig: {},
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+
+    handleOrgEvent(event);
+
+    expect(useEntityStore.getState().projectRuns["run-1"]).toMatchObject({
+      id: "run-1",
+      status: "planning",
+      planSummary: "Plan v1",
+    });
+    expect(useEntityStore.getState().eventsByScope["project:project-1"]?.[event.id]).toEqual(event);
+  });
+
   it("keeps historical system project-created events readable", () => {
     useAuthStore.setState({ activeOrgId: "org-1" });
 

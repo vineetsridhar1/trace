@@ -133,7 +133,7 @@ function promptProjectPayload(project: PromptProjectWithRelations): Prisma.Input
   };
 }
 
-function projectRunPayload(projectRun: ProjectRunWithProject): Prisma.InputJsonObject {
+export function projectRunPayload(projectRun: ProjectRunWithProject): Prisma.InputJsonObject {
   return {
     id: projectRun.id,
     organizationId: projectRun.organizationId,

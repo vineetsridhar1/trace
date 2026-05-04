@@ -21,6 +21,16 @@ vi.mock("../services/project-run.js", () => ({
   },
 }));
 
+vi.mock("../services/project-planning.js", () => ({
+  projectPlanningService: {
+    askQuestion: vi.fn(),
+    recordAnswer: vi.fn(),
+    recordDecision: vi.fn(),
+    recordRisk: vi.fn(),
+    updatePlanSummary: vi.fn(),
+  },
+}));
+
 vi.mock("../services/agent-environment.js", () => ({
   agentEnvironmentService: {
     list: vi.fn(),
@@ -61,6 +71,7 @@ vi.mock("../services/access.js", () => ({
 import { organizationMutations, organizationQueries } from "./organization.js";
 import { organizationService } from "../services/organization.js";
 import { projectRunService } from "../services/project-run.js";
+import { projectPlanningService } from "../services/project-planning.js";
 
 const ctx = {
   userId: "user-1",
@@ -133,6 +144,31 @@ describe("organization GraphQL resolvers", () => {
       { id: "run-1", input: { status: "planning", planSummary: "Plan v1" } },
       ctx,
     );
+    await organizationMutations.askProjectQuestion(
+      {},
+      { input: { projectRunId: "run-1", message: "What is in scope?" } },
+      ctx,
+    );
+    await organizationMutations.recordProjectAnswer(
+      {},
+      { input: { projectRunId: "run-1", message: "Web first." } },
+      ctx,
+    );
+    await organizationMutations.recordProjectDecision(
+      {},
+      { input: { projectRunId: "run-1", decision: "Start with persistence." } },
+      ctx,
+    );
+    await organizationMutations.recordProjectRisk(
+      {},
+      { input: { projectRunId: "run-1", risk: "Scope can expand." } },
+      ctx,
+    );
+    await organizationMutations.updateProjectPlanSummary(
+      {},
+      { input: { projectRunId: "run-1", planSummary: "Plan v1", status: "planning" } },
+      ctx,
+    );
 
     expect(projectRunService.listProjectRuns).toHaveBeenCalledWith("project-1", "org-1");
     expect(projectRunService.createProjectFromGoal).toHaveBeenCalledWith(
@@ -154,6 +190,36 @@ describe("organization GraphQL resolvers", () => {
       "run-1",
       "org-1",
       { status: "planning", planSummary: "Plan v1" },
+      "user",
+      "user-1",
+    );
+    expect(projectPlanningService.askQuestion).toHaveBeenCalledWith(
+      { projectRunId: "run-1", message: "What is in scope?" },
+      "org-1",
+      "user",
+      "user-1",
+    );
+    expect(projectPlanningService.recordAnswer).toHaveBeenCalledWith(
+      { projectRunId: "run-1", message: "Web first." },
+      "org-1",
+      "user",
+      "user-1",
+    );
+    expect(projectPlanningService.recordDecision).toHaveBeenCalledWith(
+      { projectRunId: "run-1", decision: "Start with persistence." },
+      "org-1",
+      "user",
+      "user-1",
+    );
+    expect(projectPlanningService.recordRisk).toHaveBeenCalledWith(
+      { projectRunId: "run-1", risk: "Scope can expand." },
+      "org-1",
+      "user",
+      "user-1",
+    );
+    expect(projectPlanningService.updatePlanSummary).toHaveBeenCalledWith(
+      { projectRunId: "run-1", planSummary: "Plan v1", status: "planning" },
+      "org-1",
       "user",
       "user-1",
     );

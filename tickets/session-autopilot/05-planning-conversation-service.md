@@ -28,13 +28,13 @@ The project can maintain an interview thread, decisions, risks, and a plan summa
 
 ## Completion requirements
 
-- [ ] User planning messages are recorded in the project scope.
-- [ ] AI questions are recorded in the project scope.
-- [ ] Answers and decisions update project-run planning state.
-- [ ] Plan summary is durable and event-backed.
-- [ ] Planning can request more information instead of prematurely generating tickets.
-- [ ] Refresh can reconstruct the planning surface without transcript parsing.
-- [ ] Service tests cover planning state transitions.
+- [x] User planning messages are recorded in the project scope.
+- [x] AI questions are recorded in the project scope.
+- [x] Answers and decisions update project-run planning state.
+- [x] Plan summary is durable and event-backed.
+- [x] Planning can request more information instead of prematurely generating tickets.
+- [x] Refresh can reconstruct the planning surface without transcript parsing.
+- [x] Service tests cover planning state transitions.
 
 ## Implementation notes
 

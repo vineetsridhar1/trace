@@ -264,6 +264,11 @@ enum EventType {
   project_run_created
   project_run_updated
   project_goal_submitted
+  project_question_asked
+  project_answer_recorded
+  project_decision_recorded
+  project_risk_recorded
+  project_plan_summary_updated
   chat_created
   chat_member_added
   chat_member_removed
