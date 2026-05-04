@@ -815,6 +815,7 @@ describe("github oauth callback", () => {
     await new Promise<void>((resolve, reject) =>
       server.close((err) => (err ? reject(err) : resolve())),
     );
+    vi.unstubAllGlobals();
   });
 
   it("redirects to the mobile scheme when state encodes trace-mobile", async () => {
@@ -886,6 +887,175 @@ describe("github oauth callback", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie") ?? "").toContain("trace_token=;");
+  });
+});
+
+describe("github device oauth", () => {
+  let server: Server;
+  let baseUrl: string;
+  const realFetch = globalThis.fetch;
+
+  beforeEach(async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(authRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+
+    prismaMock.user.findFirst.mockResolvedValue({ id: "user-1" });
+    prismaMock.user.update.mockResolvedValue({
+      id: "user-1",
+      email: "octo@example.com",
+      name: "Octo Cat",
+      githubId: 42,
+      avatarUrl: "https://example.com/a.png",
+    });
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("starts device login without exposing the GitHub device code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        expect(init?.body?.toString()).toContain("scope=read%3Auser+user%3Aemail");
+        return new Response(
+          JSON.stringify({
+            device_code: "secret-device-code",
+            user_code: "WDJB-MJHT",
+            verification_uri: "https://github.com/login/device",
+            expires_in: 900,
+            interval: 5,
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    const res = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.deviceAuthId).toEqual(expect.any(String));
+    expect(body.userCode).toBe("WDJB-MJHT");
+    expect(body.verificationUri).toBe("https://github.com/login/device");
+    expect(body).not.toHaveProperty("deviceCode");
+  });
+
+  it("polls GitHub and creates a Trace session cookie after approval", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          expect(init?.body?.toString()).toContain("device_code=secret-device-code");
+          expect(init?.body?.toString()).toContain(
+            "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code",
+          );
+          return new Response(JSON.stringify({ access_token: "gh-access" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.endsWith("/user")) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              login: "octocat",
+              email: "octo@example.com",
+              avatar_url: "https://example.com/a.png",
+              name: "Octo Cat",
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(200);
+    expect(await pollRes.json()).toEqual({ status: "success" });
+    const setCookie = pollRes.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("trace_token=");
+    const cookieToken = /trace_token=([^;]+)/.exec(setCookie)?.[1];
+    expect(cookieToken).toBeTruthy();
+    expect(jwt.verify(cookieToken!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
+  });
+
+  it("keeps polling when GitHub authorization is pending", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          return new Response(JSON.stringify({ error: "authorization_pending" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(200);
+    expect(await pollRes.json()).toEqual({ status: "pending", interval: 5 });
   });
 });
 
