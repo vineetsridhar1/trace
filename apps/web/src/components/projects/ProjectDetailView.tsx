@@ -299,8 +299,8 @@ function ProjectRunPanel({
     ),
   );
 
-  const submitAnswer = useCallback(async () => {
-    const message = answer.trim();
+  const submitAnswer = useCallback(async (messageOverride?: string) => {
+    const message = (messageOverride ?? answer).trim();
     if (!message || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -314,7 +314,7 @@ function ProjectRunPanel({
       setSubmitError(result.error.message);
       return;
     }
-    setAnswer("");
+    if (!messageOverride) setAnswer("");
   }, [answer, projectRun.id, submitting]);
 
   return (
@@ -342,9 +342,21 @@ function ProjectRunPanel({
           Planning conversation
         </div>
         {planningEvents.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Trace is preparing the first planning question.
-          </p>
+          <div className="mt-2 rounded-md border border-border bg-background/70 p-3">
+            <p className="text-sm text-muted-foreground">
+              Trace is preparing the first planning question.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              onClick={() => submitAnswer("Please start planning from the initial goal.")}
+              disabled={submitting}
+            >
+              <Send size={14} />
+              Start planning
+            </Button>
+          </div>
         ) : (
           <div className="mt-2 space-y-2">
             {planningEvents.map((event) => (
@@ -360,12 +372,16 @@ function ProjectRunPanel({
           <Textarea
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="Answer the latest planning question..."
+            placeholder={
+              planningEvents.length === 0
+                ? "Add context for Trace..."
+                : "Answer the latest planning question..."
+            }
             className="min-h-20 resize-none"
           />
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
           <div className="flex justify-end">
-            <Button size="sm" onClick={submitAnswer} disabled={!answer.trim() || submitting}>
+            <Button size="sm" onClick={() => submitAnswer()} disabled={!answer.trim() || submitting}>
               <Send size={14} />
               {submitting ? "Sending..." : "Send answer"}
             </Button>
