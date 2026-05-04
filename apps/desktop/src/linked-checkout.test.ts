@@ -121,6 +121,44 @@ async function createRepoFixtureWithStaleOrigin(): Promise<{
   return { repoPath, latestSha };
 }
 
+async function createRepoFixtureWithNarrowOrigin(): Promise<{
+  repoPath: string;
+  traceSha: string;
+}> {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-narrow-origin-"));
+  const sourcePath = path.join(rootDir, "source");
+  const originPath = path.join(rootDir, "origin.git");
+  const repoPath = path.join(rootDir, "repo");
+
+  fs.mkdirSync(sourcePath, { recursive: true });
+  await git(sourcePath, ["init", "-b", "main"]);
+  await git(sourcePath, ["config", "user.name", "Trace Test"]);
+  await git(sourcePath, ["config", "user.email", "trace@example.com"]);
+
+  fs.writeFileSync(path.join(sourcePath, "app.txt"), "base\n");
+  await git(sourcePath, ["add", "app.txt"]);
+  await git(sourcePath, ["commit", "-m", "initial commit"]);
+  await git(sourcePath, ["checkout", "-b", "trace/raccoon"]);
+  fs.writeFileSync(path.join(sourcePath, "app.txt"), "trace branch\n");
+  await git(sourcePath, ["add", "app.txt"]);
+  await git(sourcePath, ["commit", "-m", "trace branch commit"]);
+  const traceSha = await git(sourcePath, ["rev-parse", "HEAD"]);
+
+  await git(rootDir, ["clone", "--bare", sourcePath, originPath]);
+  await git(rootDir, ["clone", "--single-branch", "--branch", "main", originPath, repoPath]);
+
+  return { repoPath, traceSha };
+}
+
+async function gitRefExists(cwd: string, ref: string): Promise<boolean> {
+  try {
+    await git(cwd, ["rev-parse", "--verify", `${ref}^{commit}`]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function seedRepo(repoId: string, repoPath: string): void {
   configMock.__state.repos[repoId] = {
     path: repoPath,
@@ -290,6 +328,24 @@ describe("linked checkout commit-back", () => {
     expect(result.status.currentCommitSha).toBe(latestSha);
     expect(result.status.lastSyncedCommitSha).toBe(latestSha);
     expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(latestSha);
+  }, 15_000);
+
+  it("fetches the target branch when the local origin refspec is narrow", async () => {
+    const { repoPath, traceSha } = await createRepoFixtureWithNarrowOrigin();
+    seedRepo("repo-1", repoPath);
+
+    expect(await gitRefExists(repoPath, "origin/trace/raccoon")).toBe(false);
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status.currentCommitSha).toBe(traceSha);
+    expect(result.status.lastSyncedCommitSha).toBe(traceSha);
+    expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(traceSha);
   }, 15_000);
 
   it("continues sync with cached refs when origin fetch fails", async () => {
