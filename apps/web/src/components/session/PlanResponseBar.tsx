@@ -36,7 +36,9 @@ function buildTicketGenerationPrompt(projectRunId: string, planContent: string):
     "Generate structured ticket drafts for this approved plan and submit them to Trace.",
     "",
     "<system-instruction>",
-    "The user approved this project plan. Do not ask the user for model provider API credentials.",
+    "The user approved this project plan. Leave plan-review mode for this follow-up, but do not implement the plan or modify workspace files.",
+    "Only generate structured ticket drafts and submit them through the Trace service-backed approval action.",
+    "Do not ask the user for model provider API credentials.",
     "Use the Trace CLI/API credentials available in this session to call the service-backed approveProjectPlan action again with structuredDrafts populated.",
     "Do not create database rows or events directly. The Trace service must validate the drafts and create tickets/events.",
     "",
@@ -93,7 +95,6 @@ export function PlanResponseBar({
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
           text: buildTicketGenerationPrompt(projectPlanningContext.projectRunId, planContent),
-          interactionMode: "plan",
         })
         .toPromise();
       onDismiss();
@@ -158,7 +159,7 @@ export function PlanResponseBar({
 
       {projectPlanningContext ? (
         <p className="mb-2 text-xs text-muted-foreground">
-          Approval saves this plan and asks the planning session to submit structured ticket drafts.
+          Approval saves this plan and starts the planning session to submit structured ticket drafts.
           Implementation stays paused.
         </p>
       ) : (
