@@ -69,3 +69,11 @@ A user can start a project by typing what they want to build.
 3. Verify project and project run appear in the store.
 4. Refresh the resulting route and verify the project loads.
 5. Attempt to create a second active run and verify service rejection.
+
+## Review follow-ups
+
+Review against the ticket 4 implementation surfaced three items to close before considering this ticket complete:
+
+- Add a service-level, atomic prompt-first creation method or explicit rollback so submit cannot leave a project without its first run if run creation fails.
+- Add service or resolver tests for one-active-run rejection, goal validation, event emission, and update/list authorization.
+- Align project-run event/query snapshots with the client store shape so normalized `projectRuns` do not rely on partial casts for required GraphQL fields.
