@@ -2309,10 +2309,7 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const queueInitialRunUntilBridgeAccess =
-      needsRuntimeProvisioning &&
-      !!input.prompt &&
-      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+    const queueInitialRunUntilWorkspaceReady = needsRuntimeProvisioning && !!input.prompt;
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
@@ -2385,7 +2382,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRunUntilBridgeAccess
+          pendingRun: queueInitialRunUntilWorkspaceReady
             ? pendingRunValue([
                 {
                   type: "run",

@@ -1,37 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
   CalendarClock,
   FileText,
   GitBranch,
-  ListChecks,
   Loader2,
   MessageSquare,
-  Radio,
   RefreshCw,
 } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Project, Ticket } from "@trace/gql";
-import { useShallow } from "zustand/react/shallow";
 import {
-  eventScopeKey,
   type ProjectRunEntity,
   type SessionEntity,
   useActiveProjectRunId,
   useAuthStore,
-  useEntityIds,
   useEntityField,
   useEntityStore,
-  useScopedEventIds,
 } from "@trace/client-core";
-import { useProjectEvents } from "../../hooks/useProjectEvents";
 import { useUIStore } from "../../stores/ui";
 import { usePreferencesStore } from "../../stores/preferences";
 import { client } from "../../lib/urql";
 import { SessionDetailView } from "../session/SessionDetailView";
 import { getDefaultModel } from "../session/modelOptions";
-import { ticketPriorityLabel, ticketStatusLabel } from "../tickets/tickets-table-types";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 
@@ -174,10 +166,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const currentProjectRun =
     activeProjectRun ??
     selectActiveProjectRun((project?.runs ?? []) as Array<ProjectRunEntity & { id: string }>);
-  const scopeKey = useMemo(() => eventScopeKey("project", projectId), [projectId]);
-  const eventIds = useScopedEventIds(scopeKey);
-  const projectEvents = useProjectEvents(projectId);
-
   const fetchProject = useCallback(async () => {
     setError(null);
     const result = await client.query(PROJECT_QUERY, { id: projectId }).toPromise();
@@ -282,7 +270,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   );
 
   return (
-    <div className="min-h-0 flex-1 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="border-b border-border px-4 py-3">
         <Button
           variant="ghost"
@@ -310,7 +298,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="grid h-[calc(100vh-113px)] min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
         <section className="min-h-0 overflow-y-auto border-r border-border bg-background p-4">
           {currentProjectRun ? (
             <ProjectRunPanel projectRun={currentProjectRun} />
@@ -323,35 +311,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               <p className="mt-3 text-sm text-muted-foreground">No active project run.</p>
             </section>
           )}
-
-          <div className="mt-4">
-            <ProjectTicketsPanel projectId={project.id} />
-          </div>
-
-          <div className="mt-4 rounded-md border border-border bg-background p-4">
-            <h2 className="text-sm font-semibold text-foreground">Overview</h2>
-            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-              <DetailItem label="Repository" value={project.repo?.name ?? "Not linked"} />
-              <DetailItem label="Default branch" value={project.repo?.defaultBranch ?? "Not set"} />
-              <DetailItem label="Channels" value={String(project.channels.length)} />
-              <DetailItem label="Sessions" value={String(project.sessions.length)} />
-              <DetailItem label="Tickets" value={String(project.tickets.length)} />
-              <DetailItem label="AI mode" value={project.aiMode ?? "Inherited"} />
-            </dl>
-          </div>
-
-          <section className="mt-4 rounded-md border border-border bg-background p-4">
-            <div className="flex items-center gap-2">
-              <Radio size={15} className="text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground">Latest activity</h2>
-            </div>
-            <ProjectActivityList
-              scopeKey={scopeKey}
-              eventIds={eventIds}
-              loading={projectEvents.loading}
-              error={projectEvents.error}
-            />
-          </section>
         </section>
 
         <aside className="flex min-h-0 flex-col bg-surface">
@@ -413,7 +372,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
 function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
   return (
-    <section className="rounded-md border border-border bg-surface-elevated">
+    <section className="min-h-full rounded-md border border-border bg-surface-elevated">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 px-4 py-3">
           <FileText size={15} className="text-muted-foreground" />
@@ -432,70 +391,6 @@ function ProjectRunPanel({ projectRun }: { projectRun: ProjectRunEntity }) {
         </p>
       </div>
     </section>
-  );
-}
-
-function ProjectTicketsPanel({ projectId }: { projectId: string }) {
-  const ticketIds = useEntityIds(
-    "tickets",
-    (ticket) => ticket.projects?.some((project) => project.id === projectId) ?? false,
-    (a, b) => sortableDate(b.updatedAt).localeCompare(sortableDate(a.updatedAt)),
-  );
-
-  return (
-    <section className="rounded-md border border-border bg-background p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <ListChecks size={15} className="text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Tickets</h2>
-        </div>
-        <span className="text-xs text-muted-foreground">{ticketIds.length}</span>
-      </div>
-
-      {ticketIds.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">
-          Approved plans will create linked project tickets here.
-        </p>
-      ) : (
-        <div className="mt-3 max-h-80 divide-y divide-border overflow-y-auto">
-          {ticketIds.map((ticketId) => (
-            <ProjectTicketRow key={ticketId} ticketId={ticketId} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ProjectTicketRow({ ticketId }: { ticketId: string }) {
-  const title = useEntityField("tickets", ticketId, "title") as string | undefined;
-  const status = useEntityField("tickets", ticketId, "status") as keyof typeof ticketStatusLabel | undefined;
-  const priority = useEntityField("tickets", ticketId, "priority") as
-    | keyof typeof ticketPriorityLabel
-    | undefined;
-  const assignees = useEntityField("tickets", ticketId, "assignees") as
-    | Array<{ id: string; name?: string | null }>
-    | undefined;
-
-  return (
-    <div className="py-3 first:pt-0 last:pb-0">
-      <div className="line-clamp-2 text-sm font-medium text-foreground">
-        {title ?? "Untitled ticket"}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
-          {status ? (ticketStatusLabel[status] ?? formatStatus(status)) : "Status pending"}
-        </span>
-        <span className="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
-          {priority ? (ticketPriorityLabel[priority] ?? formatStatus(priority)) : "Priority pending"}
-        </span>
-        {(assignees?.length ?? 0) > 0 && (
-          <span className="truncate text-xs text-muted-foreground">
-            {assignees?.map((assignee) => assignee.name ?? assignee.id).join(", ")}
-          </span>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -576,60 +471,6 @@ function ProjectDetailState({
         <p className="mt-1 text-sm text-muted-foreground">{body}</p>
         <div className="mt-4">{action}</div>
       </div>
-    </div>
-  );
-}
-
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium uppercase text-muted-foreground">{label}</dt>
-      <dd className="mt-1 truncate text-foreground">{value}</dd>
-    </div>
-  );
-}
-
-function ProjectActivityList({
-  scopeKey,
-  eventIds,
-  loading,
-  error,
-}: {
-  scopeKey: string;
-  eventIds: string[];
-  loading: boolean;
-  error: string | null;
-}) {
-  const events = useEntityStore(
-    useShallow((s) =>
-      eventIds
-        .slice(-8)
-        .reverse()
-        .map((id) => s.eventsByScope[scopeKey]?.[id])
-        .filter((event): event is NonNullable<typeof event> => event !== undefined),
-    ),
-  );
-
-  if (error) {
-    return <p className="mt-3 text-sm text-destructive">{error}</p>;
-  }
-
-  if (loading && events.length === 0) {
-    return <p className="mt-3 text-sm text-muted-foreground">Loading activity...</p>;
-  }
-
-  if (events.length === 0) {
-    return <p className="mt-3 text-sm text-muted-foreground">No project activity received yet.</p>;
-  }
-
-  return (
-    <div className="mt-3 divide-y divide-border">
-      {events.map((event) => (
-        <div key={event.id} className="py-2">
-          <div className="text-sm font-medium text-foreground">{event.eventType}</div>
-          <div className="text-xs text-muted-foreground">{formatDateTime(event.timestamp)}</div>
-        </div>
-      ))}
     </div>
   );
 }
