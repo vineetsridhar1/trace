@@ -31,6 +31,38 @@ const APPROVE_PROJECT_PLAN_MUTATION = gql`
   }
 `;
 
+function buildTicketGenerationPrompt(projectRunId: string, planContent: string): string {
+  return [
+    "Generate structured ticket drafts for this approved plan and submit them to Trace.",
+    "",
+    "<system-instruction>",
+    "The user approved this project plan. Do not ask the user for model provider API credentials.",
+    "Use the Trace CLI/API credentials available in this session to call the service-backed approveProjectPlan action again with structuredDrafts populated.",
+    "Do not create database rows or events directly. The Trace service must validate the drafts and create tickets/events.",
+    "",
+    `projectRunId: ${projectRunId}`,
+    "",
+    "Submit drafts with this shape:",
+    "{",
+    '  "projectRunId": "...",',
+    '  "planSummary": "...",',
+    '  "structuredDrafts": [',
+    "    {",
+    '      "title": "short executable ticket title",',
+    '      "description": "implementation detail and scope",',
+    '      "priority": "urgent | high | medium | low",',
+    '      "labels": ["project-plan"],',
+    '      "acceptanceCriteria": ["observable success criteria"]',
+    "    }",
+    "  ]",
+    "}",
+    "",
+    "Approved plan:",
+    planContent,
+    "</system-instruction>",
+  ].join("\n");
+}
+
 export function PlanResponseBar({
   sessionId,
   planContent,
@@ -56,12 +88,21 @@ export function PlanResponseBar({
         .toPromise();
 
       if (result.error) throw result.error;
+
+      await client
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: buildTicketGenerationPrompt(projectPlanningContext.projectRunId, planContent),
+          interactionMode: "plan",
+        })
+        .toPromise();
+      onDismiss();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Project plan could not be approved.");
     } finally {
       setSending(false);
     }
-  }, [planContent, projectPlanningContext, sending]);
+  }, [onDismiss, planContent, projectPlanningContext, sending, sessionId]);
 
   const handleRevise = useCallback(async () => {
     const text = feedback.trim();
@@ -117,8 +158,8 @@ export function PlanResponseBar({
 
       {projectPlanningContext ? (
         <p className="mb-2 text-xs text-muted-foreground">
-          Approval saves this plan to the project and creates linked tickets. Implementation stays
-          paused.
+          Approval saves this plan and asks the planning session to submit structured ticket drafts.
+          Implementation stays paused.
         </p>
       ) : (
         <p className="mb-2 text-xs text-muted-foreground">

@@ -386,6 +386,41 @@ describe("ProjectPlanningService", () => {
     );
   });
 
+  it("approves a plan without server-side ticket draft generation", async () => {
+    prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(
+      makeProjectRun({
+        project: { id: "project-1", name: "Autopilot", repoId: null },
+      }),
+    );
+    prismaMock.$executeRaw.mockResolvedValue(0);
+    prismaMock.projectRun.update.mockResolvedValueOnce(makeProjectRun({ planSummary: "Plan v1" }));
+    prismaMock.projectTicketGenerationAttempt.findUnique.mockResolvedValueOnce(null);
+    prismaMock.projectTicketGenerationAttempt.create.mockResolvedValueOnce(
+      makeGenerationAttempt({ status: "pending", startedAt: null }),
+    );
+
+    const service = new ProjectPlanningService();
+    const attempt = await service.approvePlanAndGenerateTickets(
+      { projectRunId: "run-1", planSummary: " Plan v1 " },
+      "org-1",
+      "user",
+      "user-1",
+    );
+
+    expect(attempt.status).toBe("pending");
+    expect(prismaMock.ticket.create).not.toHaveBeenCalled();
+    expect(prismaMock.projectTicketGenerationAttempt.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "project_ticket_generation_started",
+        payload: expect.objectContaining({
+          generationAttempt: expect.objectContaining({ status: "pending" }),
+        }),
+      }),
+      prismaMock,
+    );
+  });
+
   it("returns a completed generation attempt without creating duplicate tickets", async () => {
     prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(
       makeProjectRun({

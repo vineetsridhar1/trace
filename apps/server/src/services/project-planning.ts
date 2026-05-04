@@ -6,14 +6,12 @@ import type {
   RecordProjectPlanningRiskInput,
   UpdateProjectPlanSummaryInput,
 } from "@trace/gql";
-import type { LLMToolDefinition } from "@trace/shared";
 import type { Prisma, ProjectTicketGenerationAttempt } from "@prisma/client";
 import { asJsonObject } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { projectRunPayload } from "./project-run.js";
-import { aiService } from "./ai.js";
 import { TICKET_INCLUDE, ticketPayload, type TicketWithRelations } from "./ticket.js";
 
 type ProjectRunContext = {
@@ -39,17 +37,6 @@ type TicketDraft = {
   labels: string[];
   acceptanceCriteria: string[];
 };
-
-type TicketDraftGeneratorInput = {
-  organizationId: string;
-  actorId: string;
-  projectRun: ProjectRunApprovalContext;
-  approvedPlan: string;
-};
-
-export interface TicketDraftGenerator {
-  generate(input: TicketDraftGeneratorInput): Promise<unknown>;
-}
 
 export type ProjectPlanningContext = {
   project: {
@@ -83,31 +70,6 @@ const ACTIVE_PROJECT_RUN_STATUSES = [
   "needs_human",
   "paused",
 ] as const;
-
-const TICKET_DRAFT_TOOL: LLMToolDefinition = {
-  name: "submit_project_ticket_drafts",
-  description: "Submit structured ticket drafts for an approved Trace project plan.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      tickets: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            description: { type: "string" },
-            priority: { type: "string", enum: ["urgent", "high", "medium", "low"] },
-            labels: { type: "array", items: { type: "string" } },
-            acceptanceCriteria: { type: "array", items: { type: "string" } },
-          },
-          required: ["title", "description"],
-        },
-      },
-    },
-    required: ["tickets"],
-  },
-};
 
 function normalizeText(value: string, label: string): string {
   const normalized = value.trim();
@@ -203,52 +165,7 @@ function normalizeTicketDrafts(value: unknown): { drafts: TicketDraft[]; errors:
   return { drafts, errors };
 }
 
-function extractTicketDraftToolInput(response: unknown): unknown {
-  const object = asJsonObject(response);
-  const content = object?.content;
-  if (!Array.isArray(content)) return response;
-  const toolUse = content.find((block) => {
-    const item = asJsonObject(block);
-    return item?.type === "tool_use" && item.name === "submit_project_ticket_drafts";
-  });
-  return asJsonObject(toolUse)?.input ?? response;
-}
-
-class AITicketDraftGenerator implements TicketDraftGenerator {
-  async generate(input: TicketDraftGeneratorInput): Promise<unknown> {
-    const config = normalizeExecutionConfig(input.projectRun.executionConfig);
-    const model =
-      typeof config.ticketGenerationModel === "string" && config.ticketGenerationModel.trim()
-        ? config.ticketGenerationModel.trim()
-        : "claude-sonnet-4-6";
-    const response = await aiService.completeWithServerCredentials({
-      organizationId: input.organizationId,
-      model,
-      system:
-        "You create concise, executable project tickets from approved Trace project plans. Always call the structured ticket draft tool.",
-      messages: [
-        {
-          role: "user",
-          content: [
-            `Project: ${input.projectRun.project.name}`,
-            `Initial goal: ${input.projectRun.initialGoal}`,
-            "",
-            "Approved plan:",
-            input.approvedPlan,
-          ].join("\n"),
-        },
-      ],
-      tools: [TICKET_DRAFT_TOOL],
-      maxTokens: 4096,
-      temperature: 0.2,
-    });
-    return extractTicketDraftToolInput(response);
-  }
-}
-
 export class ProjectPlanningService {
-  constructor(private readonly draftGenerator: TicketDraftGenerator = new AITicketDraftGenerator()) {}
-
   getGenerationAttemptForRun(projectRunId: string) {
     return prisma.projectTicketGenerationAttempt.findUnique({ where: { projectRunId } });
   }
@@ -519,6 +436,7 @@ export class ProjectPlanningService {
     actorId: string,
   ): Promise<ProjectTicketGenerationAttempt> {
     const approvedPlan = normalizeText(input.planSummary, "Plan summary");
+    const hasStructuredDrafts = Boolean(input.structuredDrafts?.length);
     const started = await this.beginGenerationAttempt(
       input.projectRunId,
       organizationId,
@@ -526,22 +444,14 @@ export class ProjectPlanningService {
       actorType,
       actorId,
       Boolean(input.retryFailed),
+      hasStructuredDrafts,
     );
 
     if (started.attempt.status === "completed") return started.attempt;
-    if (started.attempt.status === "running" && !started.shouldGenerate) return started.attempt;
+    if (!hasStructuredDrafts || !started.shouldGenerate) return started.attempt;
 
     try {
-      const rawDrafts =
-        input.structuredDrafts && input.structuredDrafts.length > 0
-          ? { tickets: input.structuredDrafts }
-          : await this.draftGenerator.generate({
-              organizationId,
-              actorId,
-              projectRun: started.projectRun,
-              approvedPlan,
-            });
-
+      const rawDrafts = { tickets: input.structuredDrafts };
       const normalized = normalizeTicketDrafts(rawDrafts);
       return this.persistGeneratedTickets({
         attemptId: started.attempt.id,
@@ -617,6 +527,7 @@ export class ProjectPlanningService {
     actorType: ActorType,
     actorId: string,
     retryFailed: boolean,
+    hasStructuredDrafts: boolean,
   ): Promise<{
     attempt: ProjectTicketGenerationAttempt;
     projectRun: ProjectRunApprovalContext;
@@ -644,12 +555,18 @@ export class ProjectPlanningService {
       if (existing?.status === "completed") {
         return { attempt: existing, projectRun, shouldGenerate: false };
       }
-      if (existing && existing.status === "running" && !retryFailed) {
+      if (
+        existing &&
+        (existing.status === "pending" || existing.status === "running") &&
+        !hasStructuredDrafts &&
+        !retryFailed
+      ) {
         return { attempt: existing, projectRun, shouldGenerate: false };
       }
       if (
         existing &&
         (existing.status === "failed" || existing.status === "partial_failed") &&
+        !hasStructuredDrafts &&
         !retryFailed
       ) {
         return { attempt: existing, projectRun, shouldGenerate: false };
@@ -661,16 +578,17 @@ export class ProjectPlanningService {
       });
 
       const now = new Date();
+      const status = hasStructuredDrafts ? "running" : "pending";
       const attempt = existing
         ? await tx.projectTicketGenerationAttempt.update({
             where: { id: existing.id },
             data: {
-              status: "running",
+              status,
               approvedPlan,
               error: null,
               failedAt: null,
               completedAt: null,
-              startedAt: now,
+              startedAt: hasStructuredDrafts ? now : existing.startedAt,
               retryCount: { increment: 1 },
             },
           })
@@ -679,9 +597,9 @@ export class ProjectPlanningService {
               organizationId,
               projectId: projectRun.projectId,
               projectRunId: projectRun.id,
-              status: "running",
+              status,
               approvedPlan,
-              startedAt: now,
+              startedAt: hasStructuredDrafts ? now : undefined,
               retryCount: 1,
             },
           });
@@ -699,7 +617,7 @@ export class ProjectPlanningService {
         tx,
       );
 
-      return { attempt, projectRun, shouldGenerate: true };
+      return { attempt, projectRun, shouldGenerate: hasStructuredDrafts };
     });
   }
 
