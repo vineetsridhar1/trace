@@ -924,7 +924,7 @@ describe("github device oauth", () => {
         if (url.startsWith("http://127.0.0.1")) {
           return realFetch(input, init);
         }
-        expect(init?.body?.toString()).toContain("scope=read%3Auser+user%3Aemail");
+        expect(init?.body?.toString()).not.toContain("scope=");
         return new Response(
           JSON.stringify({
             device_code: "secret-device-code",
@@ -982,7 +982,7 @@ describe("github device oauth", () => {
             JSON.stringify({
               id: 42,
               login: "octocat",
-              email: "octo@example.com",
+              email: null,
               avatar_url: "https://example.com/a.png",
               name: "Octo Cat",
             }),
@@ -1009,6 +1009,11 @@ describe("github device oauth", () => {
     const cookieToken = /trace_token=([^;]+)/.exec(setCookie)?.[1];
     expect(cookieToken).toBeTruthy();
     expect(jwt.verify(cookieToken!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [{ githubId: 42 }, { email: "github-42@trace.local" }],
+      },
+    });
   });
 
   it("keeps polling when GitHub authorization is pending", async () => {
