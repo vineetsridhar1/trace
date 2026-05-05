@@ -3,7 +3,11 @@ import { Button } from "../ui/button";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { MobilePairingQrPanel } from "./MobilePairingQrPanel";
 import { PairedMobileDevicesList } from "./PairedMobileDevicesList";
-import { hostedPairingBaseUrl, useMobilePairing } from "./useMobilePairing";
+import {
+  hostedPairingBaseUrl,
+  requiresReachablePairingUrl,
+  useMobilePairing,
+} from "./useMobilePairing";
 
 export function MobilePairingSection() {
   const pairing = useMobilePairing();
@@ -38,6 +42,7 @@ export function MobilePairingSection() {
         publicUrl={pairing.publicUrl}
         hostedPairingBaseUrl={hostedPairingBaseUrl}
         isLocal={isLocalMode}
+        requiresReachableUrl={requiresReachablePairingUrl}
         generating={pairing.generating}
         qrPayload={pairing.qrPayload}
         qrDataUrl={pairing.qrDataUrl}

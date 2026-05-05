@@ -34,6 +34,8 @@ const CAMERA_UNAVAILABLE_MESSAGE =
   "Camera scanning is not available in this build or on this device. Rebuild the local dev client or install the latest TestFlight build, or paste the pairing code below.";
 const INVALID_QR_MESSAGE = "That QR code is not a valid Trace pairing code.";
 const EXPIRED_QR_MESSAGE = "That pairing code is invalid or expired. Generate a new QR code in Trace.";
+const UNREACHABLE_QR_MESSAGE =
+  "This phone could not reach the Trace server in that QR code. Generate a new code from a reachable Trace URL.";
 
 function loadCameraModule(): CameraModule | null {
   try {
@@ -103,6 +105,15 @@ function getPairingErrorMessage(error: unknown): string {
 
   if (message.includes("invalid or expired") || message.includes("expired")) {
     return EXPIRED_QR_MESSAGE;
+  }
+
+  if (
+    message.includes("network request failed") ||
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("load failed")
+  ) {
+    return UNREACHABLE_QR_MESSAGE;
   }
 
   return error.message;
