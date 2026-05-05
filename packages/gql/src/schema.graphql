@@ -1030,6 +1030,16 @@ type LinkedCheckoutStatus {
   restoreBranch: String
   restoreCommitSha: String
   hasUncommittedChanges: Boolean!
+  changedFiles: [LinkedCheckoutChangedFile!]!
+}
+
+type LinkedCheckoutChangedFile {
+  path: String!
+  status: String!
+  additions: Int!
+  deletions: Int!
+  diff: String!
+  truncated: Boolean!
 }
 
 type LinkedCheckoutActionResult {

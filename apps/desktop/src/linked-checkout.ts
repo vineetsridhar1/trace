@@ -3,6 +3,7 @@ import path from "path";
 import {
   assertValidCommitSha,
   type BridgeLinkedCheckoutActionResultPayload,
+  type BridgeLinkedCheckoutChangedFile,
   type BridgeLinkedCheckoutErrorCode,
   type BridgeLinkedCheckoutStatus,
 } from "@trace/shared";
@@ -108,6 +109,7 @@ interface ChangedPathState {
 
 const LINKED_CHECKOUT_COMMIT_MESSAGE = "Commit linked checkout changes";
 const LINKED_CHECKOUT_REBASE_STASH_MESSAGE = "Trace linked checkout rebase";
+const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 120_000;
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
   return runGit(repoPath, ["rev-parse", "HEAD"]);
@@ -159,6 +161,127 @@ async function listChangedPaths(repoPath: string): Promise<string[]> {
   return [
     ...new Set([...parseNullSeparated(trackedStdout), ...parseNullSeparated(untrackedStdout)]),
   ];
+}
+
+function countDiffLines(diff: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("+")) additions += 1;
+    if (line.startsWith("-")) deletions += 1;
+  }
+
+  return { additions, deletions };
+}
+
+async function readFileDiffPreview(
+  repoPath: string,
+  relativePath: string,
+): Promise<{
+  diff: string;
+  truncated: boolean;
+}> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["diff", "--no-ext-diff", "--no-color", "HEAD", "--", relativePath],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
+
+  if (stdout.length <= LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT) {
+    return { diff: stdout, truncated: false };
+  }
+
+  return {
+    diff: stdout.slice(0, LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT),
+    truncated: true,
+  };
+}
+
+function readUntrackedFileDiffPreview(
+  repoPath: string,
+  relativePath: string,
+): { diff: string; truncated: boolean } {
+  const absPath = path.join(repoPath, relativePath);
+  const stat = fs.existsSync(absPath) ? fs.statSync(absPath) : null;
+  if (!stat?.isFile()) {
+    return {
+      diff: `diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n`,
+      truncated: false,
+    };
+  }
+
+  const content = fs.readFileSync(absPath);
+  if (content.includes(0)) {
+    return {
+      diff: `diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\nBinary file ${relativePath} added\n`,
+      truncated: false,
+    };
+  }
+
+  const text = content.toString("utf8");
+  const diff = [
+    `diff --git a/${relativePath} b/${relativePath}`,
+    "new file mode 100644",
+    "--- /dev/null",
+    `+++ b/${relativePath}`,
+    "@@",
+    ...text.split("\n").map((line) => `+${line}`),
+  ].join("\n");
+
+  if (diff.length <= LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT) {
+    return { diff, truncated: false };
+  }
+
+  return {
+    diff: diff.slice(0, LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT),
+    truncated: true,
+  };
+}
+
+async function getChangedFileStatus(repoPath: string, relativePath: string): Promise<string> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["diff", "--name-status", "--no-renames", "HEAD", "--", relativePath],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
+  const status = stdout.trim().split(/\s+/)[0]?.[0];
+  if (status) return status;
+  return fs.existsSync(path.join(repoPath, relativePath)) ? "M" : "D";
+}
+
+async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutChangedFile[]> {
+  const [changedPaths, untrackedPaths] = await Promise.all([
+    listChangedPaths(repoPath),
+    listUntrackedPaths(repoPath),
+  ]);
+  const untrackedPathSet = new Set(untrackedPaths);
+
+  return Promise.all(
+    changedPaths.map(async (relativePath) => {
+      const untracked = untrackedPathSet.has(relativePath);
+      const { diff, truncated } = untracked
+        ? readUntrackedFileDiffPreview(repoPath, relativePath)
+        : await readFileDiffPreview(repoPath, relativePath);
+      const lineCounts = countDiffLines(diff);
+
+      return {
+        path: relativePath,
+        status: untracked ? "A" : await getChangedFileStatus(repoPath, relativePath),
+        additions: lineCounts.additions,
+        deletions: lineCounts.deletions,
+        diff,
+        truncated,
+      };
+    }),
+  );
 }
 
 async function discardAllChanges(repoPath: string): Promise<void> {
@@ -265,7 +388,10 @@ async function deleteRemoteTrackingRef(repoPath: string, branch: string): Promis
   }).catch(() => undefined);
 }
 
-export async function fetchTargetBranchIfAvailable(repoPath: string, branch: string): Promise<void> {
+export async function fetchTargetBranchIfAvailable(
+  repoPath: string,
+  branch: string,
+): Promise<void> {
   assertSafeGitRef(branch);
   if (branch.includes(":") || branch.startsWith("refs/")) {
     throw new Error(`Unsafe git ref: ${branch}`);
@@ -674,6 +800,7 @@ function buildStatus(
   currentBranch: string | null,
   currentCommitSha: string | null,
   hasUncommittedChangesInRepo: boolean,
+  changedFiles: BridgeLinkedCheckoutChangedFile[],
 ): LinkedCheckoutStatus {
   return {
     repoId,
@@ -689,6 +816,7 @@ function buildStatus(
     restoreBranch: attachment?.originalBranch ?? null,
     restoreCommitSha: attachment?.originalCommitSha ?? null,
     hasUncommittedChanges: hasUncommittedChangesInRepo,
+    changedFiles,
   };
 }
 
@@ -713,14 +841,23 @@ async function readStatus(repoId: string): Promise<LinkedCheckoutStatus> {
   const attachment = repoConfig?.linkedCheckout ?? null;
 
   if (!repoPath) {
-    return buildStatus(repoId, null, attachment, null, null, false);
+    return buildStatus(repoId, null, attachment, null, null, false, []);
   }
 
-  const [{ currentBranch, currentCommitSha }, dirty] = await Promise.all([
+  const [{ currentBranch, currentCommitSha }, dirty, changedFiles] = await Promise.all([
     readCurrentGitState(repoPath),
     hasUncommittedChanges(repoPath).catch(() => false),
+    listChangedFiles(repoPath).catch(() => []),
   ]);
-  return buildStatus(repoId, repoPath, attachment, currentBranch, currentCommitSha, dirty);
+  return buildStatus(
+    repoId,
+    repoPath,
+    attachment,
+    currentBranch,
+    currentCommitSha,
+    dirty,
+    changedFiles,
+  );
 }
 
 async function actionResult(

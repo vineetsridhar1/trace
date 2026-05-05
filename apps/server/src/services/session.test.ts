@@ -3076,13 +3076,7 @@ describe("SessionService", () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(makeSession());
 
       await expect(
-        service.updateConfig(
-          "session-1",
-          "org-1",
-          { reasoningEffort: "   " },
-          "user",
-          "user-1",
-        ),
+        service.updateConfig("session-1", "org-1", { reasoningEffort: "   " }, "user", "user-1"),
       ).rejects.toThrow("Reasoning effort cannot be empty");
 
       expect(prismaMock.session.update).not.toHaveBeenCalled();
@@ -4919,6 +4913,7 @@ describe("SessionService", () => {
         restoreBranch: "main",
         restoreCommitSha: "abc123",
         hasUncommittedChanges: false,
+        changedFiles: [],
       });
 
       await service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1");
@@ -5015,6 +5010,7 @@ describe("SessionService", () => {
         restoreBranch: "main",
         restoreCommitSha: "abc123",
         hasUncommittedChanges: false,
+        changedFiles: [],
       });
 
       await service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1");
@@ -5093,6 +5089,7 @@ describe("SessionService", () => {
           restoreBranch: null,
           restoreCommitSha: null,
           hasUncommittedChanges: false,
+          changedFiles: [],
         },
       });
 
@@ -5161,6 +5158,7 @@ describe("SessionService", () => {
           restoreBranch: "main",
           restoreCommitSha: "abc123",
           hasUncommittedChanges: false,
+          changedFiles: [],
         },
       });
 
@@ -5225,6 +5223,7 @@ describe("SessionService", () => {
           restoreBranch: "main",
           restoreCommitSha: "abc123",
           hasUncommittedChanges: false,
+          changedFiles: [],
         },
       });
 
@@ -5285,6 +5284,7 @@ describe("SessionService", () => {
           restoreBranch: "main",
           restoreCommitSha: "abc123",
           hasUncommittedChanges: false,
+          changedFiles: [],
         },
       });
 

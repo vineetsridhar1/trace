@@ -66,6 +66,7 @@ function emptyStatus(repoId: string): DesktopLinkedCheckoutStatus {
     restoreBranch: null,
     restoreCommitSha: null,
     hasUncommittedChanges: false,
+    changedFiles: [],
   };
 }
 

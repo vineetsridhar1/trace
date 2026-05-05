@@ -471,6 +471,16 @@ export type LinkedCheckoutActionResult = {
   status: LinkedCheckoutStatus;
 };
 
+export type LinkedCheckoutChangedFile = {
+  __typename?: "LinkedCheckoutChangedFile";
+  additions: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  diff: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  status: Scalars["String"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
 export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
 
 export type LinkedCheckoutStatus = {
@@ -478,6 +488,7 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroup?: Maybe<SessionGroup>;
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
+  changedFiles: Array<LinkedCheckoutChangedFile>;
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];

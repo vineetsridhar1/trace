@@ -88,6 +88,7 @@ describe("connectionsService", () => {
               restoreBranch: null,
               restoreCommitSha: null,
               hasUncommittedChanges: false,
+              changedFiles: [],
             },
           ],
         ]),
