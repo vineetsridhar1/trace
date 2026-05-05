@@ -924,7 +924,7 @@ describe("github device oauth", () => {
         if (url.startsWith("http://127.0.0.1")) {
           return realFetch(input, init);
         }
-        expect(init?.body?.toString()).not.toContain("scope=");
+        expect(new URLSearchParams(init?.body?.toString()).get("scope")).toBe("");
         return new Response(
           JSON.stringify({
             device_code: "secret-device-code",
@@ -973,7 +973,7 @@ describe("github device oauth", () => {
           expect(init?.body?.toString()).toContain(
             "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code",
           );
-          return new Response(JSON.stringify({ access_token: "gh-access" }), {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
             headers: { "Content-Type": "application/json" },
           });
         }
@@ -1014,6 +1014,53 @@ describe("github device oauth", () => {
         OR: [{ githubId: 42 }, { email: "github-42@trace.local" }],
       },
     });
+  });
+
+  it("rejects access tokens with GitHub scopes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          expect(init?.body?.toString()).toContain("device_code=secret-device-code");
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "user:email" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(400);
+    expect(await pollRes.json()).toEqual({
+      status: "error",
+      error: "GitHub granted permissions Trace did not request",
+    });
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
   });
 
   it("keeps polling when GitHub authorization is pending", async () => {
