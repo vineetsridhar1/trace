@@ -1,201 +1,12 @@
-import { useEffect, useState } from "react";
-import { getAuthHeaders } from "@trace/client-core";
-import { QrCode, RefreshCw, ShieldX, Smartphone } from "lucide-react";
-import * as QRCode from "qrcode";
-import { toast } from "sonner";
+import { QrCode, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { isLocalMode } from "../../lib/runtime-mode";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "";
-const PUBLIC_URL_KEY = "trace_mobile_pairing_public_url";
-const hostedPairingBaseUrl =
-  API_URL.trim().length > 0 ? API_URL.replace(/\/+$/, "") : window.location.origin;
-
-type MobileDevice = {
-  id: string;
-  installId: string;
-  deviceName?: string | null;
-  platform?: "ios" | "android" | null;
-  appVersion?: string | null;
-  lastSeenAt?: string | null;
-  createdAt: string;
-};
-
-function formatDate(value?: string | null): string {
-  if (!value) return "Never";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return date.toLocaleString();
-}
-
-function normalizePublicUrl(value: string): string {
-  const trimmed = value.trim();
-  if (!/^https?:\/\//.test(trimmed)) {
-    throw new Error("Public URL must start with http:// or https://");
-  }
-  return trimmed.replace(/\/+$/, "");
-}
-
-function deviceLabel(device: MobileDevice): string {
-  if (device.deviceName?.trim()) return device.deviceName;
-  if (device.platform === "ios") return "iPhone";
-  if (device.platform === "android") return "Android device";
-  return `Install ${device.installId.slice(0, 8)}`;
-}
+import { MobilePairingQrPanel } from "./MobilePairingQrPanel";
+import { PairedMobileDevicesList } from "./PairedMobileDevicesList";
+import { hostedPairingBaseUrl, useMobilePairing } from "./useMobilePairing";
 
 export function MobilePairingSection() {
-  const [publicUrl, setPublicUrl] = useState(() => localStorage.getItem(PUBLIC_URL_KEY) ?? "");
-  const [devices, setDevices] = useState<MobileDevice[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [qrPayload, setQrPayload] = useState<string | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  async function loadDevices() {
-    setLoadingDevices(true);
-    try {
-      const response = await fetch(
-        `${API_URL}/auth/mobile/devices`,
-        {
-          headers: getAuthHeaders(),
-          credentials: "include",
-        },
-      );
-      const body = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        devices?: MobileDevice[];
-      };
-      if (!response.ok) {
-        throw new Error(body.error ?? "Failed to load paired devices");
-      }
-      setDevices(body.devices ?? []);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load paired devices");
-    } finally {
-      setLoadingDevices(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadDevices();
-  }, []);
-
-  useEffect(() => {
-    if (!qrPayload) {
-      setQrDataUrl(null);
-      return;
-    }
-
-    let cancelled = false;
-    QRCode.toDataURL(qrPayload, { margin: 1, width: 320 })
-      .then((next) => {
-        if (!cancelled) setQrDataUrl(next);
-      })
-      .catch((error: unknown) => {
-        console.error("[mobile-pairing] qr generation failed", error);
-        if (!cancelled) {
-          setQrDataUrl(null);
-          toast.error("Failed to render pairing QR");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [qrPayload]);
-
-  async function handleGenerateQr() {
-    let normalizedUrl = hostedPairingBaseUrl;
-    if (isLocalMode) {
-      try {
-        normalizedUrl = normalizePublicUrl(publicUrl);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Enter a valid public URL");
-        return;
-      }
-    }
-
-    setGenerating(true);
-    try {
-      const response = await fetch(
-        `${API_URL}/auth/mobile/pairing-token`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
-          credentials: "include",
-        },
-      );
-      const body = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        pairingToken?: string;
-        expiresAt?: string;
-      };
-      if (!response.ok || typeof body.pairingToken !== "string") {
-        throw new Error(body.error ?? "Failed to create pairing code");
-      }
-
-      if (isLocalMode) {
-        localStorage.setItem(PUBLIC_URL_KEY, normalizedUrl);
-        setPublicUrl(normalizedUrl);
-      }
-      setExpiresAt(body.expiresAt ?? null);
-      setQrPayload(
-        JSON.stringify({
-          v: 1,
-          kind: "trace-mobile-pair",
-          mode: isLocalMode ? "local" : "hosted",
-          baseUrl: normalizedUrl,
-          pairingToken: body.pairingToken,
-          expiresAt: body.expiresAt ?? undefined,
-        }),
-      );
-      toast.success("Pairing QR ready");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create pairing code");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function handleCopyPayload() {
-    if (!qrPayload) return;
-    try {
-      await navigator.clipboard.writeText(qrPayload);
-      toast.success("Pairing code copied");
-    } catch {
-      toast.error("Failed to copy pairing code");
-    }
-  }
-
-  async function handleRevoke(deviceId: string) {
-    setRevokingId(deviceId);
-    try {
-      const response = await fetch(
-        `${API_URL}/auth/mobile/devices/${deviceId}`,
-        {
-          method: "DELETE",
-          headers: getAuthHeaders(),
-          credentials: "include",
-        },
-      );
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        throw new Error(body.error ?? "Failed to revoke paired device");
-      }
-      toast.success("Paired device revoked");
-      await loadDevices();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to revoke paired device");
-    } finally {
-      setRevokingId(null);
-    }
-  }
+  const pairing = useMobilePairing();
 
   return (
     <div className="mb-6 rounded-xl border border-border bg-surface-deep p-4">
@@ -214,143 +25,40 @@ export function MobilePairingSection() {
           variant="secondary"
           className="gap-2"
           onClick={() => {
-            void loadDevices();
+            void pairing.loadDevices();
           }}
-          disabled={loadingDevices}
+          disabled={pairing.loadingDevices}
         >
           <RefreshCw size={14} />
           Refresh Devices
         </Button>
       </div>
 
-      <div className="mt-4 grid min-w-0 gap-4">
-        <div className="min-w-0 space-y-4">
-          <div className="space-y-2">
-            {isLocalMode ? (
-              <>
-                <label
-                  htmlFor="mobile-pairing-public-url"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Public server URL
-                </label>
-                <div className="flex min-w-0 flex-col gap-3 md:flex-row">
-                  <Input
-                    id="mobile-pairing-public-url"
-                    value={publicUrl}
-                    onChange={(event) => setPublicUrl(event.target.value)}
-                    placeholder="https://your-trace.ngrok-free.app"
-                    className="min-w-0 flex-1"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                  <Button
-                    className="w-full md:w-auto"
-                    onClick={handleGenerateQr}
-                    disabled={generating || !publicUrl.trim()}
-                  >
-                    {generating ? "Generating..." : "Generate QR"}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <Button className="w-full md:w-auto" onClick={handleGenerateQr} disabled={generating}>
-                {generating ? "Generating..." : "Generate QR"}
-              </Button>
-            )}
-            <div className="text-xs text-muted-foreground">
-              {isLocalMode ? (
-                "This should be the public URL that your phone can reach. The generated QR expires in 5 minutes and can only be used once."
-              ) : (
-                <>
-                  The generated QR expires in 5 minutes and can only be used once. Mobile will
-                  connect to <span className="font-mono">{hostedPairingBaseUrl}</span>.
-                </>
-              )}
-            </div>
-          </div>
+      <MobilePairingQrPanel
+        publicUrl={pairing.publicUrl}
+        hostedPairingBaseUrl={hostedPairingBaseUrl}
+        isLocal={isLocalMode}
+        generating={pairing.generating}
+        qrPayload={pairing.qrPayload}
+        qrDataUrl={pairing.qrDataUrl}
+        expiresAt={pairing.expiresAt}
+        onPublicUrlChange={pairing.setPublicUrl}
+        onGenerateQr={() => {
+          void pairing.generateQr();
+        }}
+        onCopyPayload={() => {
+          void pairing.copyPayload();
+        }}
+      />
 
-          {qrPayload ? (
-            <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Pairing payload</div>
-                  <div className="text-xs text-muted-foreground">
-                    Expires {formatDate(expiresAt)}
-                  </div>
-                </div>
-                <Button variant="secondary" onClick={() => void handleCopyPayload()}>
-                  Copy JSON
-                </Button>
-              </div>
-              <pre className="max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface px-3 py-2 text-xs text-muted-foreground">
-                {qrPayload}
-              </pre>
-            </div>
-          ) : null}
-
-          <div className="min-w-0 rounded-lg border border-border bg-background p-3">
-            <div className="mb-3 flex items-center gap-2">
-              <Smartphone size={15} className="text-muted-foreground" />
-              <div className="text-sm font-medium text-foreground">Paired devices</div>
-            </div>
-            {loadingDevices ? (
-              <div className="text-sm text-muted-foreground">Loading paired devices...</div>
-            ) : devices.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No mobile devices are paired yet.</div>
-            ) : (
-              <div className="space-y-3">
-                {devices.map((device) => (
-                  <div
-                    key={device.id}
-                    className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-surface-deep p-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-foreground">
-                        {deviceLabel(device)}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Paired {formatDate(device.createdAt)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Last seen {formatDate(device.lastSeenAt)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {device.platform ?? "mobile"}{" "}
-                        {device.appVersion ? `· ${device.appVersion}` : ""}
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      className="gap-2 text-destructive hover:text-destructive"
-                      onClick={() => void handleRevoke(device.id)}
-                      disabled={revokingId === device.id}
-                    >
-                      <ShieldX size={14} />
-                      {revokingId === device.id ? "Revoking..." : "Revoke"}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex min-h-64 min-w-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-background p-4">
-          {qrDataUrl ? (
-            <img
-              src={qrDataUrl}
-              alt="Trace mobile pairing QR code"
-              className="box-border h-auto w-full max-w-[min(18rem,100%)] rounded-lg bg-white p-3"
-            />
-          ) : (
-            <div className="max-w-56 text-center text-sm text-muted-foreground">
-              Generate a pairing code to show the QR here.
-            </div>
-          )}
-        </div>
-      </div>
+      <PairedMobileDevicesList
+        devices={pairing.devices}
+        loading={pairing.loadingDevices}
+        revokingId={pairing.revokingId}
+        onRevoke={(deviceId) => {
+          void pairing.revokeDevice(deviceId);
+        }}
+      />
     </div>
   );
 }

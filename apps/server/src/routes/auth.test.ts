@@ -24,15 +24,16 @@ vi.mock("../lib/db.js", async () => {
   };
 });
 
+vi.mock("../lib/redis.js", async () => {
+  const { createRedisMock } = await import("../../test/helpers.js");
+  return { redis: createRedisMock() };
+});
+
 import { prisma } from "../lib/db.js";
+import { redis } from "../lib/redis.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { isLoopbackAddress } from "../lib/auth.js";
-import {
-  authRouter,
-  createOAuthStateToken,
-  getAllowedOAuthOrigins,
-  verifyOAuthStateToken,
-} from "./auth.js";
+import { authRouter } from "./auth.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 type PrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrismaMock> & {
@@ -46,30 +47,23 @@ type PrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrisma
   };
 };
 const prismaMock = prisma as unknown as PrismaMock;
+const redisMock = redis as ReturnType<typeof import("../../test/helpers.js").createRedisMock>;
+const redisStore = new Map<string, string>();
 
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe("oauth state token", () => {
-  it("round-trips an origin through a signed state", () => {
-    const state = createOAuthStateToken("trace-mobile");
-    expect(verifyOAuthStateToken(state)).toEqual({ origin: "trace-mobile" });
+  redisStore.clear();
+  redisMock.set.mockImplementation(async (key: string, value: string) => {
+    redisStore.set(key, value);
+    return "OK";
   });
-
-  it("rejects a tampered state", () => {
-    const state = createOAuthStateToken("trace-mobile");
-    const tampered = state.slice(0, -2) + (state.endsWith("A") ? "BB" : "AA");
-    expect(verifyOAuthStateToken(tampered)).toBeNull();
-  });
-
-  it("rejects tokens signed with the wrong token type", () => {
-    const foreign = jwt.sign({ origin: "trace-mobile", tokenType: "session" }, JWT_SECRET);
-    expect(verifyOAuthStateToken(foreign)).toBeNull();
-  });
-
-  it("rejects unsigned / garbage input", () => {
-    expect(verifyOAuthStateToken("not-a-jwt")).toBeNull();
+  redisMock.get.mockImplementation(async (key: string) => redisStore.get(key) ?? null);
+  redisMock.del.mockImplementation(async (...keys: string[]) => {
+    let count = 0;
+    for (const key of keys) {
+      if (redisStore.delete(key)) count += 1;
+    }
+    return count;
   });
 });
 
@@ -594,6 +588,19 @@ describe("bridge auth tokens", () => {
       },
     });
   });
+
+  it("clears the browser session cookie on logout", async () => {
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Cookie: `trace_token=${token}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie") ?? "").toContain("trace_token=;");
+  });
 });
 
 describe("mobile pairing in local mode", () => {
@@ -650,23 +657,15 @@ describe("mobile pairing in local mode", () => {
   });
 
   it("redeems a pairing token into a revocable device secret", async () => {
-    prismaMock.mobilePairingToken.findUnique
-      .mockResolvedValueOnce({
-        id: "pair-1",
-        ownerUserId: "user-1",
-        organizationId: "org-1",
-        expiresAt: new Date(Date.now() + 60_000),
-        usedAt: null,
-      })
-      .mockResolvedValueOnce({
-        id: "pair-1",
-        ownerUserId: "user-1",
-        organizationId: "org-1",
-        expiresAt: new Date(Date.now() + 60_000),
-        usedAt: null,
-      });
+    prismaMock.mobilePairingToken.findUnique.mockResolvedValueOnce({
+      id: "pair-1",
+      ownerUserId: "user-1",
+      organizationId: "org-1",
+      expiresAt: new Date(Date.now() + 60_000),
+      usedAt: null,
+    });
     prismaMock.mobileDevice.upsert.mockResolvedValue({ id: "device-1" });
-    prismaMock.mobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
+    prismaMock.mobilePairingToken.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await fetch(`${baseUrl}/auth/mobile/pair`, {
       method: "POST",
@@ -689,6 +688,14 @@ describe("mobile pairing in local mode", () => {
     expect(body.token.length).toBeGreaterThan(20);
     expect(body.deviceId).toBe("device-1");
     expect(body.organizationId).toBe("org-1");
+    expect(prismaMock.mobilePairingToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "pair-1",
+        usedAt: null,
+        expiresAt: { gt: expect.any(Date) },
+      },
+      data: { usedAt: expect.any(Date) },
+    });
     expect(prismaMock.mobileDevice.upsert).toHaveBeenCalledWith({
       where: {
         ownerUserId_organizationId_installId: {
@@ -712,6 +719,30 @@ describe("mobile pairing in local mode", () => {
         id: true,
       },
     });
+  });
+
+  it("rejects a pairing token when another request already claimed it", async () => {
+    prismaMock.mobilePairingToken.findUnique.mockResolvedValueOnce({
+      id: "pair-1",
+      ownerUserId: "user-1",
+      organizationId: "org-1",
+      expiresAt: new Date(Date.now() + 60_000),
+      usedAt: null,
+    });
+    prismaMock.mobilePairingToken.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await fetch(`${baseUrl}/auth/mobile/pair`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pairingToken: "pair-token-1234567890",
+        installId: "install-12345678",
+      }),
+    });
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({ error: "Pairing code is invalid or expired" });
+    expect(prismaMock.mobileDevice.upsert).not.toHaveBeenCalled();
   });
 
   it("revokes mobile device secrets on logout", async () => {
@@ -809,23 +840,15 @@ describe("mobile pairing in hosted mode", () => {
   });
 
   it("redeems a hosted pairing token into a mobile device secret", async () => {
-    prismaMock.mobilePairingToken.findUnique
-      .mockResolvedValueOnce({
-        id: "pair-1",
-        ownerUserId: "user-1",
-        organizationId: "org-1",
-        expiresAt: new Date(Date.now() + 60_000),
-        usedAt: null,
-      })
-      .mockResolvedValueOnce({
-        id: "pair-1",
-        ownerUserId: "user-1",
-        organizationId: "org-1",
-        expiresAt: new Date(Date.now() + 60_000),
-        usedAt: null,
-      });
+    prismaMock.mobilePairingToken.findUnique.mockResolvedValueOnce({
+      id: "pair-1",
+      ownerUserId: "user-1",
+      organizationId: "org-1",
+      expiresAt: new Date(Date.now() + 60_000),
+      usedAt: null,
+    });
     prismaMock.mobileDevice.upsert.mockResolvedValue({ id: "device-1" });
-    prismaMock.mobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
+    prismaMock.mobilePairingToken.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await fetch(`${baseUrl}/auth/mobile/pair`, {
       method: "POST",
@@ -848,137 +871,6 @@ describe("mobile pairing in hosted mode", () => {
     expect(body.token.length).toBeGreaterThan(20);
     expect(body.deviceId).toBe("device-1");
     expect(body.organizationId).toBe("org-1");
-  });
-});
-
-describe("github oauth callback", () => {
-  let server: Server;
-  let baseUrl: string;
-  const realFetch = globalThis.fetch;
-
-  beforeEach(async () => {
-    const app = express();
-    app.use(authRouter);
-
-    server = createServer(app);
-    await new Promise<void>((resolve) => server.listen(0, resolve));
-    const { port } = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${port}`;
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.toString();
-        if (url.startsWith("http://127.0.0.1")) {
-          return realFetch(input, init);
-        }
-        if (url.includes("/login/oauth/access_token")) {
-          return new Response(JSON.stringify({ access_token: "gh-access" }), {
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (url.endsWith("/user")) {
-          return new Response(
-            JSON.stringify({
-              id: 42,
-              login: "octocat",
-              email: "octo@example.com",
-              avatar_url: "https://example.com/a.png",
-              name: "Octo Cat",
-            }),
-            { headers: { "Content-Type": "application/json" } },
-          );
-        }
-        throw new Error(`unexpected fetch: ${url}`);
-      }),
-    );
-
-    prismaMock.user.findFirst.mockResolvedValue({ id: "user-1" });
-    prismaMock.user.update.mockResolvedValue({
-      id: "user-1",
-      email: "octo@example.com",
-      name: "Octo Cat",
-      githubId: 42,
-      avatarUrl: "https://example.com/a.png",
-    });
-  });
-
-  afterEach(async () => {
-    await new Promise<void>((resolve, reject) =>
-      server.close((err) => (err ? reject(err) : resolve())),
-    );
-    vi.unstubAllGlobals();
-  });
-
-  it("redirects to the mobile scheme when state encodes trace-mobile", async () => {
-    const state = createOAuthStateToken("trace-mobile");
-    const res = await fetch(
-      `${baseUrl}/auth/github/callback?code=abc&state=${encodeURIComponent(state)}`,
-      { redirect: "manual" },
-    );
-
-    expect(res.status).toBe(302);
-    const location = res.headers.get("location") ?? "";
-    expect(location.startsWith("trace://auth/callback?token=")).toBe(true);
-
-    const token = new URL(location).searchParams.get("token");
-    expect(token).toBeTruthy();
-    expect(jwt.verify(token!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
-  });
-
-  it("falls back to popup HTML for web origins", async () => {
-    const state = createOAuthStateToken("http://localhost:3000");
-    const res = await fetch(
-      `${baseUrl}/auth/github/callback?code=abc&state=${encodeURIComponent(state)}`,
-      { redirect: "manual" },
-    );
-
-    expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(res.headers.get("set-cookie") ?? "").toContain("trace_token=");
-    expect(body).toContain("window.opener.postMessage");
-    expect(body).toContain('BroadcastChannel("trace_auth")');
-    expect(body).toContain("http://localhost:3000");
-    expect(body).not.toContain("trace://auth/callback");
-    expect(body).not.toContain("localStorage.setItem");
-    expect(body).not.toContain("token:");
-  });
-
-  it("ignores an invalid state and defaults to web origin", async () => {
-    const res = await fetch(`${baseUrl}/auth/github/callback?code=abc&state=bogus`, {
-      redirect: "manual",
-    });
-
-    expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("window.opener.postMessage");
-    expect(body).not.toContain("trace://auth/callback");
-  });
-
-  it("falls back to WEB_URL when the signed state carries a non-allowlisted origin", async () => {
-    const state = createOAuthStateToken("http://evil.example.com");
-    const res = await fetch(
-      `${baseUrl}/auth/github/callback?code=abc&state=${encodeURIComponent(state)}`,
-      { redirect: "manual" },
-    );
-
-    expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("window.opener.postMessage");
-    expect(body).not.toContain("evil.example.com");
-  });
-
-  it("clears the browser session cookie on logout", async () => {
-    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
-    const res = await fetch(`${baseUrl}/auth/logout`, {
-      method: "POST",
-      headers: {
-        Cookie: `trace_token=${token}`,
-      },
-    });
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("set-cookie") ?? "").toContain("trace_token=;");
   });
 });
 
@@ -1012,6 +904,16 @@ describe("github device oauth", () => {
       server.close((err) => (err ? reject(err) : resolve())),
     );
     vi.unstubAllGlobals();
+  });
+
+  it("does not expose the legacy redirect OAuth endpoints", async () => {
+    const startRes = await fetch(`${baseUrl}/auth/github`, { redirect: "manual" });
+    const callbackRes = await fetch(`${baseUrl}/auth/github/callback?code=abc`, {
+      redirect: "manual",
+    });
+
+    expect(startRes.status).toBe(404);
+    expect(callbackRes.status).toBe(404);
   });
 
   it("starts device login without exposing the GitHub device code", async () => {
@@ -1148,24 +1050,5 @@ describe("github device oauth", () => {
 
     expect(pollRes.status).toBe(200);
     expect(await pollRes.json()).toEqual({ status: "pending", interval: 5 });
-  });
-});
-
-describe("oauth origin allowlist", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("always permits the mobile sentinel and the configured web url", () => {
-    const origins = getAllowedOAuthOrigins();
-    expect(origins.has("trace-mobile")).toBe(true);
-    expect(origins.size).toBeGreaterThanOrEqual(2);
-  });
-
-  it("includes CORS_ALLOWED_ORIGINS when set", () => {
-    vi.stubEnv("CORS_ALLOWED_ORIGINS", "https://example.com, https://staging.example.com");
-    const origins = getAllowedOAuthOrigins();
-    expect(origins.has("https://example.com")).toBe(true);
-    expect(origins.has("https://staging.example.com")).toBe(true);
   });
 });

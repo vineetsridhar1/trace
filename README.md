@@ -226,8 +226,6 @@ Edit `apps/server/.env`:
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/trace?schema=public"
 GITHUB_CLIENT_ID="your-github-oauth-app-id"
-# Only needed for the legacy redirect callback/mobile auth path.
-GITHUB_CLIENT_SECRET=""
 
 PORT=4000
 JWT_SECRET="replace-me"
