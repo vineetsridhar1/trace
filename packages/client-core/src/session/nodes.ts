@@ -1,7 +1,6 @@
 import type { Event } from "@trace/gql";
 import { asJsonObject, parseQuestion, type JsonObject, type Question } from "@trace/shared";
 import { HIDDEN_SESSION_PAYLOAD_TYPE_SET } from "./event-filters.js";
-import { statusRowForSessionOutput } from "./status-rows.js";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
 const AGENT_NAMES = new Set(["agent", "task"]);
@@ -313,15 +312,6 @@ export function buildSessionNodes(
       if (typeof payloadType === "string" && HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(payloadType)) {
         continue;
       }
-      if (
-        payload &&
-        typeof payloadType === "string" &&
-        payloadType !== "assistant" &&
-        payloadType !== "user" &&
-        !statusRowForSessionOutput(payload)
-      ) {
-        continue;
-      }
       if (typeof payloadType === "string" && BUCKET_TRANSPARENT_TYPES.has(payloadType)) {
         result.push({ kind: "event", id });
         continue;
@@ -350,7 +340,7 @@ function deduplicateResultEvents(
   events: Record<string, Event>,
 ): SessionNode[] {
   const result: SessionNode[] = [];
-  let lastWasSuccessfulResult = false;
+  let lastWasResult = false;
 
   for (const node of nodes) {
     if (node.kind === "event") {
@@ -358,13 +348,11 @@ function deduplicateResultEvents(
       const payload =
         event?.eventType === "session_output" ? asJsonObject(event.payload) : undefined;
       const isResult = payload?.type === "result";
-      const isErrorResult = isResult && payload.subtype === "error";
-      const isSuccessfulResult = isResult && !isErrorResult;
 
-      if (isSuccessfulResult && lastWasSuccessfulResult) continue;
-      lastWasSuccessfulResult = isSuccessfulResult;
+      if (isResult && lastWasResult) continue;
+      lastWasResult = isResult;
     } else {
-      lastWasSuccessfulResult = false;
+      lastWasResult = false;
     }
     result.push(node);
   }

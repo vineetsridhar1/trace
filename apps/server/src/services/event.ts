@@ -6,8 +6,6 @@ import { redis } from "../lib/redis.js";
 import { isLocalMode } from "../lib/mode.js";
 import { pushNotificationService } from "./pushNotificationService.js";
 
-const AUTO_RETRYABLE_CONNECTION_LOST_FILTER = "connection_lost:auto_retryable";
-
 export interface CreateEventInput {
   organizationId: string;
   scopeType: ScopeType;
@@ -198,30 +196,20 @@ export class EventService {
     if (opts.types?.length) where.eventType = { in: opts.types };
     if (opts.excludeReplies) where.parentId = null;
     if (opts.excludePayloadTypes?.length) {
-      const payloadTypes = opts.excludePayloadTypes.filter(
-        (type) => type !== AUTO_RETRYABLE_CONNECTION_LOST_FILTER,
-      );
-      const outputExclusions: Prisma.EventWhereInput[] = payloadTypes.map((type) => ({
-        payload: { path: ["type"], equals: type },
-      }));
-      if (opts.excludePayloadTypes.includes(AUTO_RETRYABLE_CONNECTION_LOST_FILTER)) {
-        outputExclusions.push({
-          AND: [
-            { payload: { path: ["type"], equals: "connection_lost" } },
-            { payload: { path: ["connection", "autoRetryable"], equals: true } },
-          ],
-        });
-      }
-
-      // Only exclude matching session_output events.
+      // Only exclude session_output events by payload.type discriminator.
       // Using a bare NOT with JSON path filtering would exclude ALL events
       // where payload.type is missing (NULL = 'x' → NULL, NOT NULL → NULL → excluded),
       // silently dropping message_sent, session_started, etc.
-      if (outputExclusions.length > 0) {
-        where.NOT = {
-          AND: [{ eventType: "session_output" }, { OR: outputExclusions }],
-        };
-      }
+      where.NOT = {
+        AND: [
+          { eventType: "session_output" },
+          {
+            OR: opts.excludePayloadTypes.map((t) => ({
+              payload: { path: ["type"], equals: t },
+            })),
+          },
+        ],
+      };
     }
     const timestampFilter: Record<string, Date> = {};
     if (opts.after) timestampFilter.gt = opts.after;
