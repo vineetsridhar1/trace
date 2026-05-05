@@ -45,6 +45,7 @@ vi.mock("./repo-hooks.js", () => ({
 import * as config from "./config.js";
 import {
   commitLinkedCheckoutChanges,
+  getLinkedCheckoutChangedFile,
   getLinkedCheckoutStatus,
   syncLinkedCheckout,
 } from "./linked-checkout.js";
@@ -418,15 +419,20 @@ describe("linked checkout commit-back", () => {
       {
         path: "app.txt",
         status: "M",
-        additions: 1,
-        deletions: 1,
+        additions: 0,
+        deletions: 0,
         truncated: false,
       },
     ]);
-    expect(result.status.changedFiles[0]?.diff).toContain("+dirty");
-    expect(result.status.changedFiles[0]?.originalContent).toBe("base\n");
-    expect(result.status.changedFiles[0]?.modifiedContent).toBe("dirty\n");
-    expect(result.status.changedFiles[0]?.contentTruncated).toBe(false);
+    expect(result.status.changedFiles[0]?.diff).toBe("");
+
+    const preview = await getLinkedCheckoutChangedFile("repo-1", "app.txt");
+    expect(preview.additions).toBe(1);
+    expect(preview.deletions).toBe(1);
+    expect(preview.diff).toContain("+dirty");
+    expect(preview.originalContent).toBe("base\n");
+    expect(preview.modifiedContent).toBe("dirty\n");
+    expect(preview.contentTruncated).toBe(false);
   }, 15_000);
 
   it("returns a structured error code for untracked files that would be overwritten by sync", async () => {
@@ -450,15 +456,20 @@ describe("linked checkout commit-back", () => {
       {
         path: "notes.txt",
         status: "M",
-        additions: 1,
-        deletions: 1,
+        additions: 0,
+        deletions: 0,
         truncated: false,
       },
     ]);
-    expect(result.status.changedFiles[0]?.diff).toContain("+local untracked file");
-    expect(result.status.changedFiles[0]?.originalContent).toBe("notes base\n");
-    expect(result.status.changedFiles[0]?.modifiedContent).toBe("local untracked file\n");
-    expect(result.status.changedFiles[0]?.contentTruncated).toBe(false);
+    expect(result.status.changedFiles[0]?.diff).toBe("");
+
+    const preview = await getLinkedCheckoutChangedFile("repo-1", "notes.txt");
+    expect(preview.additions).toBe(1);
+    expect(preview.deletions).toBe(1);
+    expect(preview.diff).toContain("+local untracked file");
+    expect(preview.originalContent).toBe("notes base\n");
+    expect(preview.modifiedContent).toBe("local untracked file\n");
+    expect(preview.contentTruncated).toBe(false);
   }, 15_000);
 
   it("does not pause the attachment when sync stops for conflict resolution", async () => {

@@ -371,28 +371,47 @@ async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutC
   return Promise.all(
     changedPaths.map(async (relativePath) => {
       const untracked = untrackedPathSet.has(relativePath);
-      const { diff, truncated } = await Promise.resolve(
-        untracked
-          ? readUntrackedFileDiffPreview(repoPath, relativePath)
-          : readFileDiffPreview(repoPath, relativePath),
-      ).catch((error: unknown) => ({
-        diff: `Unable to load diff for ${relativePath}: ${formatGitError(error)}`,
-        truncated: false,
-      }));
-      const lineCounts = countDiffLines(diff);
-      const contents = await readChangedFileContents(repoPath, relativePath, untracked);
 
       return {
         path: relativePath,
         status: untracked ? "A" : await getChangedFileStatus(repoPath, relativePath),
-        additions: lineCounts.additions,
-        deletions: lineCounts.deletions,
-        diff,
-        truncated,
-        ...contents,
+        additions: 0,
+        deletions: 0,
+        diff: "",
+        truncated: false,
+        originalContent: "",
+        modifiedContent: "",
+        contentTruncated: false,
       };
     }),
   );
+}
+
+async function readChangedFilePreview(
+  repoPath: string,
+  relativePath: string,
+): Promise<BridgeLinkedCheckoutChangedFile> {
+  const untracked = new Set(await listUntrackedPaths(repoPath)).has(relativePath);
+  const { diff, truncated } = await Promise.resolve(
+    untracked
+      ? readUntrackedFileDiffPreview(repoPath, relativePath)
+      : readFileDiffPreview(repoPath, relativePath),
+  ).catch((error: unknown) => ({
+    diff: `Unable to load diff for ${relativePath}: ${formatGitError(error)}`,
+    truncated: false,
+  }));
+  const lineCounts = countDiffLines(diff);
+  const contents = await readChangedFileContents(repoPath, relativePath, untracked);
+
+  return {
+    path: relativePath,
+    status: untracked ? "A" : await getChangedFileStatus(repoPath, relativePath),
+    additions: lineCounts.additions,
+    deletions: lineCounts.deletions,
+    diff,
+    truncated,
+    ...contents,
+  };
 }
 
 async function discardAllChanges(repoPath: string): Promise<void> {
@@ -1004,6 +1023,24 @@ export async function pauseExistingAttachment(repoId: string, error: string): Pr
 
 export async function getLinkedCheckoutStatus(repoId: string): Promise<LinkedCheckoutStatus> {
   return readStatus(repoId);
+}
+
+export async function getLinkedCheckoutChangedFile(
+  repoId: string,
+  filePath: string,
+): Promise<BridgeLinkedCheckoutChangedFile> {
+  const repoConfig = getRepoConfig(repoId);
+  const repoPath = repoConfig?.path;
+  if (!repoPath) {
+    throw new Error("Link this repo to a local checkout before reading changed files.");
+  }
+
+  const changedPaths = await listChangedPaths(repoPath);
+  if (!changedPaths.includes(filePath)) {
+    throw new Error("File is not changed in the linked checkout.");
+  }
+
+  return readChangedFilePreview(repoPath, filePath);
 }
 
 export function linkLinkedCheckoutRepo(

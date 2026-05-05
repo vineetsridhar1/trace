@@ -10,6 +10,9 @@ interface LinkedCheckoutSyncConflictDialogProps {
   open: boolean;
   error: string | null;
   changedFiles: DesktopLinkedCheckoutChangedFile[];
+  repoId: string | null | undefined;
+  sessionGroupId: string;
+  runtimeInstanceId: string | null;
   pending: boolean;
   onClose: () => void;
   onResolve: (input: {
@@ -22,6 +25,9 @@ export function LinkedCheckoutSyncConflictDialog({
   open,
   error,
   changedFiles,
+  repoId,
+  sessionGroupId,
+  runtimeInstanceId,
   pending,
   onClose,
   onResolve,
@@ -111,7 +117,12 @@ export function LinkedCheckoutSyncConflictDialog({
                 ) : null}
               </div>
               <div className="h-[40dvh] lg:h-[calc(100dvh-9.75rem)]">
-                <LinkedCheckoutDiffViewer file={selectedFile} />
+                <LinkedCheckoutDiffViewer
+                  file={selectedFile}
+                  repoId={repoId}
+                  sessionGroupId={sessionGroupId}
+                  runtimeInstanceId={runtimeInstanceId}
+                />
               </div>
             </div>
           </div>

@@ -632,11 +632,32 @@ const LINKED_CHECKOUT_STATUS_FIELDS = `
     status
     additions
     deletions
-    diff
-    truncated
-    originalContent
-    modifiedContent
-    contentTruncated
+  }
+`;
+
+export const LINKED_CHECKOUT_CHANGED_FILE_QUERY = gql`
+  query LinkedCheckoutChangedFile(
+    $sessionGroupId: ID!
+    $repoId: ID!
+    $filePath: String!
+    $runtimeInstanceId: ID
+  ) {
+    linkedCheckoutChangedFile(
+      sessionGroupId: $sessionGroupId
+      repoId: $repoId
+      filePath: $filePath
+      runtimeInstanceId: $runtimeInstanceId
+    ) {
+      path
+      status
+      additions
+      deletions
+      diff
+      truncated
+      originalContent
+      modifiedContent
+      contentTruncated
+    }
   }
 `;
 

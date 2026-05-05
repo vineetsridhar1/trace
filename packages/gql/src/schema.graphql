@@ -991,6 +991,12 @@ type Query {
     repoId: ID!
     runtimeInstanceId: ID
   ): LinkedCheckoutStatus!
+  linkedCheckoutChangedFile(
+    sessionGroupId: ID!
+    repoId: ID!
+    filePath: String!
+    runtimeInstanceId: ID
+  ): LinkedCheckoutChangedFile!
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
