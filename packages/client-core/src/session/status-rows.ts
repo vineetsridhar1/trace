@@ -51,6 +51,17 @@ function connectionError(payload: JsonObject): string | undefined {
   return firstString(connection?.lastError, payload.message, payload.reason);
 }
 
+function isActionableConnectionLost(payload: JsonObject): boolean {
+  const connection = asJsonObject(payload.connection);
+  return (
+    payload.autoRetryable === false ||
+    connection?.autoRetryable === false ||
+    payload.agentStatus === "failed" ||
+    payload.sessionStatus === "failed" ||
+    payload.reason === "home_runtime_offline"
+  );
+}
+
 export function statusRowForSessionOutput(payload: JsonObject): SessionStatusRow | null {
   switch (payload.type) {
     case "result":
@@ -69,6 +80,7 @@ export function statusRowForSessionOutput(payload: JsonObject): SessionStatusRow
         detail: extractSessionErrorMessage(payload.message ?? payload.error),
       };
     case "connection_lost":
+      if (!isActionableConnectionLost(payload)) return null;
       return {
         tone: "error",
         title: "Runtime disconnected",
