@@ -84,13 +84,13 @@ export class TerminalSocket {
   private openSocket(): void {
     const token = getToken();
     const wsBase = getTerminalWsBaseUrl();
-    const url = token
-      ? `${wsBase}/terminal?token=${encodeURIComponent(token)}`
-      : `${wsBase}/terminal`;
-    this.ws = new WebSocket(url);
+    this.ws = new WebSocket(`${wsBase}/terminal`);
 
     this.ws.onopen = () => {
       this.awaitingReconnectReady = this.reconnectAttempts > 0;
+      if (token) {
+        this.ws?.send(JSON.stringify({ type: "auth", token }));
+      }
       this.ws?.send(JSON.stringify({ type: "attach", terminalId: this.terminalId }));
     };
 

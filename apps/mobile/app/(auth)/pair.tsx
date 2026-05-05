@@ -71,7 +71,7 @@ function parsePairingPayload(raw: string): PairingPayload {
   if (payload.mode !== "hosted" && payload.mode !== "local") {
     throw new Error("Pairing code is missing a valid mode");
   }
-  if (typeof payload.baseUrl !== "string" || !/^https?:\/\//.test(payload.baseUrl)) {
+  if (typeof payload.baseUrl !== "string" || !/^https:\/\//.test(payload.baseUrl)) {
     throw new Error("Pairing code is missing a valid host URL");
   }
   if (typeof payload.pairingToken !== "string" || payload.pairingToken.trim().length < 16) {

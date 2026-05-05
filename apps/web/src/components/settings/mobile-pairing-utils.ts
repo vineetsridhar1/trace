@@ -17,8 +17,8 @@ export function formatMobilePairingDate(value?: string | null): string {
 
 export function normalizePairingPublicUrl(value: string): string {
   const trimmed = value.trim();
-  if (!/^https?:\/\//.test(trimmed)) {
-    throw new Error("Public URL must start with http:// or https://");
+  if (!/^https:\/\//.test(trimmed)) {
+    throw new Error("Public URL must start with https://");
   }
   if (isLoopbackPairingUrl(trimmed)) {
     throw new Error("Use a URL your phone can reach, not localhost");

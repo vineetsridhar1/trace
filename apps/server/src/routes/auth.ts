@@ -35,6 +35,8 @@ const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
 const JWT_SECRET = resolveJwtSecret();
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
+const RATE_LIMIT_KEY_PREFIX = "auth:rate";
+const localRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
 type GitHubDeviceAuth = {
   deviceCode: string;
@@ -48,6 +50,32 @@ type GitHubUserResponse = {
   email: string | null;
   avatar_url: string;
   name: string | null;
+};
+type RateLimitConfig = {
+  keyPrefix: string;
+  max: number;
+  windowSeconds: number;
+};
+
+const githubDeviceStartRateLimit: RateLimitConfig = {
+  keyPrefix: "github-device-start",
+  max: 10,
+  windowSeconds: 60,
+};
+const githubDevicePollIpRateLimit: RateLimitConfig = {
+  keyPrefix: "github-device-poll-ip",
+  max: 120,
+  windowSeconds: 60,
+};
+const githubDevicePollRecordRateLimit: RateLimitConfig = {
+  keyPrefix: "github-device-poll-record",
+  max: 30,
+  windowSeconds: 60,
+};
+const mobilePairRateLimit: RateLimitConfig = {
+  keyPrefix: "mobile-pair",
+  max: 30,
+  windowSeconds: 60,
 };
 
 function githubOAuthGrantUrl(): string {
@@ -96,6 +124,65 @@ function setSessionCookie(res: Response, token: string): void {
   res.cookie("trace_token", token, getSessionCookieOptions());
 }
 
+function readFirstHeader(req: Request, headerName: string): string | null {
+  const value = req.headers[headerName.toLowerCase()];
+  const first = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" && first.trim() ? first.trim() : null;
+}
+
+function rateLimitClientKey(req: Request): string {
+  const forwardedFor = readFirstHeader(req, "x-forwarded-for");
+  const forwardedClient = forwardedFor?.split(",")[0]?.trim();
+  return forwardedClient || req.ip || req.socket.remoteAddress || "unknown";
+}
+
+function applyLocalRateLimit(key: string, config: RateLimitConfig): { limited: boolean; retryAfter: number } {
+  const now = Date.now();
+  const existing = localRateLimitBuckets.get(key);
+  const bucket =
+    existing && existing.resetAt > now
+      ? existing
+      : { count: 0, resetAt: now + config.windowSeconds * 1000 };
+  bucket.count += 1;
+  localRateLimitBuckets.set(key, bucket);
+  return {
+    limited: bucket.count > config.max,
+    retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
+  };
+}
+
+async function consumeRateLimit(
+  req: Request,
+  res: Response,
+  config: RateLimitConfig,
+  subject = rateLimitClientKey(req),
+): Promise<boolean> {
+  const key = `${RATE_LIMIT_KEY_PREFIX}:${config.keyPrefix}:${subject}`;
+  let limited = false;
+  let retryAfter = config.windowSeconds;
+
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, config.windowSeconds);
+    }
+    limited = count > config.max;
+    if (limited) {
+      const ttl = await redis.ttl(key);
+      retryAfter = ttl > 0 ? ttl : config.windowSeconds;
+    }
+  } catch {
+    const fallback = applyLocalRateLimit(key, config);
+    limited = fallback.limited;
+    retryAfter = fallback.retryAfter;
+  }
+
+  if (!limited) return false;
+  res.setHeader("Retry-After", String(retryAfter));
+  res.status(429).json({ error: "Too many requests" });
+  return true;
+}
+
 function isGitHubUserResponse(value: unknown): value is GitHubUserResponse {
   if (!value || typeof value !== "object") return false;
   const user = value as Partial<GitHubUserResponse>;
@@ -116,10 +203,10 @@ async function upsertUserFromGitHubAccessToken(accessToken: string) {
   if (!userRes.ok || !isGitHubUserResponse(ghUser)) {
     throw new Error("Could not verify GitHub identity");
   }
-  const email = ghUser.email ?? `github-${ghUser.id}@trace.local`;
+  const email = `github-${ghUser.id}@trace.local`;
 
-  let user = await prisma.user.findFirst({
-    where: { OR: [{ githubId: ghUser.id }, { email }] },
+  let user = await prisma.user.findUnique({
+    where: { githubId: ghUser.id },
   });
 
   if (user) {
@@ -285,6 +372,16 @@ async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<
   const deviceName = typeof req.body?.deviceName === "string" ? req.body.deviceName : undefined;
   const appVersion = typeof req.body?.appVersion === "string" ? req.body.appVersion : undefined;
   const platform = parsePushPlatform(req.body?.platform);
+  if (
+    await consumeRateLimit(
+      req,
+      res,
+      mobilePairRateLimit,
+      `${rateLimitClientKey(req)}:${installId || "missing"}`,
+    )
+  ) {
+    return;
+  }
 
   try {
     const result = await pairMobileDevice({
@@ -432,9 +529,12 @@ function readDeviceAuthId(req: Request): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-router.post("/auth/github/device/start", async (_req: Request, res: Response) => {
+router.post("/auth/github/device/start", async (req: Request, res: Response) => {
   if (isLocalMode()) {
     return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
+  }
+  if (await consumeRateLimit(req, res, githubDeviceStartRateLimit)) {
+    return;
   }
 
   const response = await fetch("https://github.com/login/device/code", {
@@ -493,8 +593,17 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
   if (isLocalMode()) {
     return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
   }
+  if (await consumeRateLimit(req, res, githubDevicePollIpRateLimit)) {
+    return;
+  }
 
   const deviceAuthId = readDeviceAuthId(req);
+  if (
+    deviceAuthId &&
+    (await consumeRateLimit(req, res, githubDevicePollRecordRateLimit, deviceAuthId))
+  ) {
+    return;
+  }
   const record = deviceAuthId ? await readGitHubDeviceAuth(deviceAuthId) : null;
   if (!record) {
     return res.status(404).json({ status: "expired", error: "GitHub device login expired" });

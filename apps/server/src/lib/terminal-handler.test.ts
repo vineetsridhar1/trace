@@ -101,19 +101,48 @@ describe("terminal handler auth", () => {
     expect(mocks.authenticateAccessToken).toHaveBeenCalledWith("cookie-token");
   });
 
-  it("authenticates mobile terminal sockets from the bearer-style query token", async () => {
+  it("authenticates mobile terminal sockets from an auth message", async () => {
     const ws = createMockWs();
 
     handleTerminalConnection(ws as never, {
       headers: {},
-      url: "/terminal?token=mobile-token",
+      url: "/terminal",
       socket: { remoteAddress: "127.0.0.1" },
     });
+    ws.emitMessage({ type: "auth", token: "mobile-token" });
 
     await Promise.resolve();
 
     expect(mocks.authenticateAccessToken).toHaveBeenCalledWith("mobile-token");
-    expect(mocks.parseCookieToken).not.toHaveBeenCalled();
+    expect(mocks.parseCookieToken).toHaveBeenCalledWith(undefined);
+  });
+
+  it("buffers attach messages while mobile auth is pending", async () => {
+    mocks.getTerminalAuthContext.mockReturnValue({
+      kind: "session",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      runtimeInstanceId: "runtime-1",
+      ownerUserId: "user-1",
+    });
+    prismaMock.session.findFirst.mockResolvedValue({
+      id: "session-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+    });
+    const ws = createMockWs();
+
+    handleTerminalConnection(ws as never, {
+      headers: {},
+      url: "/terminal",
+      socket: { remoteAddress: "127.0.0.1" },
+    });
+    ws.emitMessage({ type: "auth", token: "mobile-token" });
+    ws.emitMessage({ type: "attach", terminalId: "term-1" });
+
+    await vi.waitFor(() => {
+      expect(mocks.attachFrontend).toHaveBeenCalledWith("term-1", ws, "user-1");
+    });
   });
 
   it("denies attach when the authenticated user did not create the terminal", async () => {
