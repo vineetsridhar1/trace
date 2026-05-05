@@ -333,16 +333,6 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
-  } else if (authSubject?.kind === "mobile") {
-    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
-      throw new AuthenticationError("This mobile device is only paired for one organization");
-    }
-    const membership = await resolveOrgMembership(user.id, authSubject.organizationId);
-    if (!membership) {
-      throw new AuthenticationError("Not a member of this organization");
-    }
-    organizationId = authSubject.organizationId;
-    role = membership.role as Context["role"];
   } else if (requestedOrgId) {
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
     if (!membership) {
@@ -416,16 +406,6 @@ export async function buildWsContext(
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
-  } else if (authSubject.kind === "mobile") {
-    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
-      throw new AuthenticationError("This mobile device is only paired for one organization");
-    }
-    const membership = await resolveOrgMembership(user.id, authSubject.organizationId);
-    if (!membership) {
-      throw new AuthenticationError("Not a member of this organization");
-    }
-    organizationId = authSubject.organizationId;
-    role = membership.role as Context["role"];
   } else if (requestedOrgId) {
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
     if (membership) {

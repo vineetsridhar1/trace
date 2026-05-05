@@ -626,16 +626,6 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   if (!organizationId) {
     return res.status(403).json({ error: "No active organization found" });
   }
-  if (
-    !isLocalMode() &&
-    authenticated.auth.kind === "mobile" &&
-    authenticated.auth.organizationId !== organizationId
-  ) {
-    return res
-      .status(403)
-      .json({ error: "This mobile device is not paired for that organization" });
-  }
-
   const instanceId = typeof req.query.instanceId === "string" ? req.query.instanceId.trim() : "";
   if (!instanceId) {
     return res.status(400).json({ error: "instanceId is required" });

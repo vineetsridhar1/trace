@@ -141,7 +141,7 @@ describe("auth helpers", () => {
     await expect(authenticateAccessToken("opaque-device-secret")).resolves.toEqual({
       kind: "mobile",
       userId: "user-1",
-      organizationId: "org-1",
+      pairedOrganizationId: "org-1",
       deviceId: "device-1",
     });
   });
@@ -352,11 +352,11 @@ describe("auth helpers", () => {
     expect(context.role).toBe("observer");
   });
 
-  it("pins mobile websocket auth to its paired organization", async () => {
+  it("allows mobile websocket auth to use any requested member organization", async () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-2",
       ownerUserId: "user-4",
-      organizationId: "org-local",
+      organizationId: "org-paired-from",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
