@@ -113,7 +113,29 @@ export function useLinkedCheckoutHeaderState({
   const sessionRuntimeBridge = runtimeInstanceId
     ? (connectedLocalBridges.find((bridge) => bridge.instanceId === runtimeInstanceId) ?? null)
     : null;
-  const preferredBridge = currentDesktopBridge ?? sessionRuntimeBridge;
+  const attachedBridge = sessionGroupId
+    ? (connectedLocalBridges.find((bridge) =>
+        bridge.linkedCheckouts.some((checkout) => checkout.sessionGroup.id === sessionGroupId),
+      ) ?? null)
+    : null;
+  const currentDesktopRepoBridge =
+    currentDesktopBridge && repoId && currentDesktopBridge.registeredRepoIds.includes(repoId)
+      ? currentDesktopBridge
+      : null;
+  const sessionRuntimeRepoBridge =
+    sessionRuntimeBridge && repoId && sessionRuntimeBridge.registeredRepoIds.includes(repoId)
+      ? sessionRuntimeBridge
+      : null;
+  const registeredRepoBridge = repoId
+    ? (connectedLocalBridges.find((bridge) => bridge.registeredRepoIds.includes(repoId)) ?? null)
+    : null;
+  const preferredBridge =
+    attachedBridge ??
+    currentDesktopRepoBridge ??
+    sessionRuntimeRepoBridge ??
+    registeredRepoBridge ??
+    currentDesktopBridge ??
+    sessionRuntimeBridge;
   const selectedBridge = selectedTargetRuntimeId
     ? (connectedLocalBridges.find((bridge) => bridge.instanceId === selectedTargetRuntimeId) ??
       null)
