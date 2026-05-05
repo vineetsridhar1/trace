@@ -80,7 +80,7 @@ export function useMobilePairing() {
     let normalizedUrl = hostedPairingBaseUrl;
     if (requiresReachablePairingUrl) {
       try {
-        normalizedUrl = normalizePairingPublicUrl(publicUrl);
+        normalizedUrl = normalizePairingPublicUrl(publicUrl, { allowLocalHttp: isLocalMode });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Enter a valid public URL");
         return;
