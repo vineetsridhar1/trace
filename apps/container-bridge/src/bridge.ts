@@ -9,6 +9,7 @@ import type {
   BridgeClient as IBridgeClient,
   BridgeCommand,
   BridgeMessage,
+  BridgeTraceActionContext,
   CodingToolAdapter,
   GitCheckpointBridgePayload,
   GitCheckpointTrigger,
@@ -30,6 +31,7 @@ import {
   isMissingToolSessionError,
   parseGitShowOutput,
   inspectSessionGitSyncStatus,
+  writeTraceActionCli,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
@@ -327,6 +329,7 @@ export class ContainerBridge implements IBridgeClient {
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           resetToolSession: cmd.resetToolSession,
+          traceAction: cmd.traceAction,
           imageUrls: cmd.imageUrls,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
@@ -642,6 +645,7 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode,
     toolSessionId,
     resetToolSession,
+    traceAction,
     imageUrls,
   }: {
     sessionId: string;
@@ -653,10 +657,26 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode?: string;
     toolSessionId?: string;
     resetToolSession?: boolean;
+    traceAction?: BridgeTraceActionContext | null;
     imageUrls?: string[];
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
+
+    if (traceAction) {
+      try {
+        await writeTraceActionCli(cwd, traceAction);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[container-bridge] failed to write Trace action CLI for ${sessionId}:`,
+          message,
+        );
+        this.send({ type: "session_output", sessionId, data: { type: "error", message } });
+        this.send({ type: "session_complete", sessionId });
+        return;
+      }
+    }
 
     // If tool changed or the server requested a fresh tool session, abort the
     // old adapter and create a fresh one.
