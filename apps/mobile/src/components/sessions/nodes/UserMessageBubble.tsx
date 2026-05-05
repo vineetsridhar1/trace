@@ -1,16 +1,15 @@
 import { memo, useCallback, useMemo } from "react";
-import { StyleSheet, View } from "react-native";
-import * as Clipboard from "expo-clipboard";
+import { StyleSheet, View, type NativeSyntheticEvent } from "react-native";
 import ContextMenu, { type ContextMenuOnPressNativeEvent } from "react-native-context-menu-view";
 import type { GitCheckpoint } from "@trace/gql";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
-import { haptic } from "@/lib/haptics";
 import { CheckpointMarker } from "./CheckpointMarker";
+import { COPY_ACTION_INDEX, COPY_CONTEXT_MENU, copyTextToClipboard } from "./copy-menu";
 import { MessageImageGallery } from "./MessageImageGallery";
 import { Markdown } from "./Markdown";
-import { COPY_CONTEXT_MENU, stripPromptWrapping } from "./utils";
+import { stripPromptWrapping } from "./utils";
 
 interface UserMessageBubbleProps {
   text: string;
@@ -22,9 +21,10 @@ interface UserMessageBubbleProps {
 }
 
 /**
- * Right-aligned user prompt bubble. Long-press opens a native context menu
- * with a Copy action. Git-checkpoint chips render as a footer below the
- * bubble when the prompt produced one or more commits.
+ * Right-aligned user prompt bubble. Long-press targets the full bubble so the
+ * native context-menu preview highlights the blue rounded bubble instead of
+ * a transparent markdown text child. Git-checkpoint chips render as a footer
+ * below the bubble when the prompt produced one or more commits.
  */
 export const UserMessageBubble = memo(function UserMessageBubble({
   text,
@@ -41,41 +41,48 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   const displayText = useMemo(() => stripPromptWrapping(text), [text]);
 
   const handleContextMenuPress = useCallback(
-    (event: { nativeEvent: ContextMenuOnPressNativeEvent }) => {
-      if (event.nativeEvent.index === 0) {
-        void Clipboard.setStringAsync(displayText);
-        void haptic.light();
-      }
+    (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
+      if (event.nativeEvent.index === COPY_ACTION_INDEX) void copyTextToClipboard(displayText);
     },
     [displayText],
+  );
+
+  const bubble = (
+    <View
+      collapsable={false}
+      style={[
+        styles.bubble,
+        {
+          backgroundColor: alpha(theme.colors.accent, 0.18),
+          borderColor: alpha(theme.colors.accent, 0.32),
+          borderRadius: theme.radius.lg,
+          paddingHorizontal: theme.spacing.md,
+          paddingTop: theme.spacing.sm,
+          paddingBottom: theme.spacing.xs,
+          gap: theme.spacing.xs,
+        },
+      ]}
+    >
+      <View style={styles.meta}>
+        <Text variant="caption1" style={{ color: theme.colors.accent, fontWeight: "600" }}>
+          {displayName}
+        </Text>
+      </View>
+      <MessageImageGallery imageKeys={imageKeys} previewUrls={imagePreviewUrls} />
+      {displayText ? <Markdown compactSpacing>{displayText}</Markdown> : null}
+    </View>
   );
 
   return (
     <View style={styles.wrapper}>
       <View style={styles.column}>
-        <ContextMenu actions={COPY_CONTEXT_MENU} onPress={handleContextMenuPress}>
-          <View
-            style={[
-              styles.bubble,
-              {
-                backgroundColor: alpha(theme.colors.accent, 0.18),
-                borderColor: alpha(theme.colors.accent, 0.32),
-                borderRadius: theme.radius.lg,
-                paddingHorizontal: theme.spacing.md,
-                paddingTop: theme.spacing.sm,
-                paddingBottom: theme.spacing.xs,
-                gap: theme.spacing.xs,
-              },
-            ]}
-          >
-            <View style={styles.meta}>
-              <Text variant="caption1" style={{ color: theme.colors.accent, fontWeight: "600" }}>
-                {displayName}
-              </Text>
-            </View>
-            <MessageImageGallery imageKeys={imageKeys} previewUrls={imagePreviewUrls} />
-            {displayText ? <Markdown compactSpacing>{displayText}</Markdown> : null}
-          </View>
+        <ContextMenu
+          actions={COPY_CONTEXT_MENU}
+          borderRadius={theme.radius.lg}
+          onPress={handleContextMenuPress}
+          previewBackgroundColor="transparent"
+        >
+          {bubble}
         </ContextMenu>
         {checkpoints && checkpoints.length > 0 ? (
           <View style={[styles.footer, { gap: theme.spacing.xs, marginTop: theme.spacing.xs }]}>
