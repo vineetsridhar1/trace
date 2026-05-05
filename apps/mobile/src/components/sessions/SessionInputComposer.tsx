@@ -121,6 +121,7 @@ export function SessionInputComposer({
   const setAttachments = useDraftsStore((s) => s.setAttachments);
 
   const inputRef = useRef<TextInput>(null);
+  const attachmentPickerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoreKeyboardAfterSheetCloseRef = useRef(false);
   const modelSheetOpenedWithKeyboardRef = useRef(false);
   useEffect(() => {
@@ -129,6 +130,14 @@ export function SessionInputComposer({
       inputRef.current?.focus();
     });
   }, [focusRequest]);
+  useEffect(
+    () => () => {
+      if (attachmentPickerTimerRef.current) {
+        clearTimeout(attachmentPickerTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const applySelectionOverride = useCallback((next: ComposerSelection) => {
     setSelection(next);
@@ -259,6 +268,20 @@ export function SessionInputComposer({
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);
   }, []);
+
+  const runAfterAttachmentSheetCloses = useCallback(
+    (launchPicker: () => void) => {
+      handleCloseSheet();
+      if (attachmentPickerTimerRef.current) {
+        clearTimeout(attachmentPickerTimerRef.current);
+      }
+      attachmentPickerTimerRef.current = setTimeout(() => {
+        attachmentPickerTimerRef.current = null;
+        launchPicker();
+      }, theme.motion.durations.fast + 80);
+    },
+    [handleCloseSheet, theme.motion.durations.fast],
+  );
 
   const handleOpenModelSheet = useCallback(() => {
     if (!canInteract) return;
@@ -393,9 +416,8 @@ export function SessionInputComposer({
     }
   }, [attachments.length, dismissClipboard, pastingImage, sessionId, setAttachments]);
 
-  const handlePickFromLibrary = useCallback(async () => {
+  const launchImagePicker = useCallback(async () => {
     if (pickingAttachment || attachments.length >= MAX_ATTACHMENTS) return;
-    handleCloseSheet();
     setPickingAttachment(true);
     void haptic.selection();
     try {
@@ -434,11 +456,10 @@ export function SessionInputComposer({
     } finally {
       setPickingAttachment(false);
     }
-  }, [attachments.length, handleCloseSheet, pickingAttachment, sessionId, setAttachments]);
+  }, [attachments.length, pickingAttachment, sessionId, setAttachments]);
 
-  const handlePickFiles = useCallback(async () => {
+  const launchFilePicker = useCallback(async () => {
     if (pickingAttachment || attachments.length >= MAX_ATTACHMENTS) return;
-    handleCloseSheet();
     setPickingAttachment(true);
     void haptic.selection();
     try {
@@ -473,7 +494,15 @@ export function SessionInputComposer({
     } finally {
       setPickingAttachment(false);
     }
-  }, [attachments.length, handleCloseSheet, pickingAttachment, sessionId, setAttachments]);
+  }, [attachments.length, pickingAttachment, sessionId, setAttachments]);
+
+  const handlePickFromLibrary = useCallback(() => {
+    runAfterAttachmentSheetCloses(() => void launchImagePicker());
+  }, [launchImagePicker, runAfterAttachmentSheetCloses]);
+
+  const handlePickFiles = useCallback(() => {
+    runAfterAttachmentSheetCloses(() => void launchFilePicker());
+  }, [launchFilePicker, runAfterAttachmentSheetCloses]);
 
   const handleRemoveAttachment = useCallback(
     (id: string) => {

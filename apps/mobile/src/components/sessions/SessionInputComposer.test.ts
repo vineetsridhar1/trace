@@ -39,7 +39,7 @@ declare global {
 
 async function flushAsyncWork(): Promise<void> {
   await Promise.resolve();
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => setTimeout(resolve, 100));
   await Promise.resolve();
 }
 
