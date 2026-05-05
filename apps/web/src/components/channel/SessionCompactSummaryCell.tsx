@@ -4,6 +4,7 @@ import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { getSessionBranch, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
+import { SessionSaveForLaterButton } from "./SessionSaveForLaterButton";
 import { SessionStatusIndicator } from "./SessionStatusIndicator";
 
 export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
@@ -35,6 +36,7 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
         {hasActiveTerminal && (
           <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
+        <SessionSaveForLaterButton row={row} />
       </div>
       <div className="mt-2.5 flex w-full min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
         <div className="min-w-0 flex-1">

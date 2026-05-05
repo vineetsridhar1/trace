@@ -3,6 +3,7 @@ import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
 import type { SessionGroupRow } from "./sessions-table-types";
+import { SessionSaveForLaterButton } from "./SessionSaveForLaterButton";
 import { SessionStatusIndicator } from "./SessionStatusIndicator";
 
 export function SessionNameCell({ row }: { row?: SessionGroupRow }) {
@@ -31,6 +32,7 @@ export function SessionNameCell({ row }: { row?: SessionGroupRow }) {
       {hasActiveTerminal && (
         <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
+      <SessionSaveForLaterButton row={row} />
     </div>
   );
 }

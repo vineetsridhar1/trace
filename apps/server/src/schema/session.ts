@@ -296,6 +296,14 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  unsaveSessionGroupForLater: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.unsaveGroupForLater(
+      args.id,
+      requireOrgContext(ctx),
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
   deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },

@@ -447,6 +447,19 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "session_group_unsaved_for_later") {
+    upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: true });
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (sessionGroupId) {
+      batch.patch("sessionGroups", sessionGroupId, {
+        savedAt: null,
+        updatedAt: event.timestamp,
+        _sortTimestamp: event.timestamp,
+      });
+    }
+  }
+
   // Route session status events
   if (
     SESSION_STATUS_EVENTS.has(event.eventType) &&

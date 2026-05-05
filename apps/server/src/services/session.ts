@@ -6920,6 +6920,47 @@ export class SessionService {
     return sessionGroup;
   }
 
+  async unsaveGroupForLater(
+    groupId: string,
+    organizationId: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        organizationId: true,
+        sessions: { select: { id: true }, orderBy: { updatedAt: "desc" } },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.organizationId !== organizationId) throw new Error("Session group not found");
+
+    await prisma.sessionGroup.update({
+      where: { id: groupId },
+      data: { savedAt: null },
+    });
+
+    const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
+    const latestSessionId = group.sessions[0]?.id;
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: latestSessionId ?? groupId,
+      eventType: "session_group_unsaved_for_later",
+      payload: {
+        sessionGroupId: groupId,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType,
+      actorId,
+    });
+
+    return sessionGroup;
+  }
+
   /** Transition all sessions in the group to merged when the group's PR is merged. */
   async markPrMerged(params: {
     sessionGroupId: string;

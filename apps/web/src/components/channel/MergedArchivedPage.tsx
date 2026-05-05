@@ -4,7 +4,11 @@ import { gql } from "@urql/core";
 import type { CellContextMenuEvent } from "ag-grid-community";
 import type { SessionGroup } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { useEntityStore, type EntityState } from "@trace/client-core";
+import {
+  UNSAVE_SESSION_GROUP_FOR_LATER_MUTATION,
+  useEntityStore,
+  type EntityState,
+} from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { Button } from "../ui/button";
@@ -190,6 +194,15 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
     });
   }, []);
 
+  const handleRestore = useCallback(async (group: SessionGroupRow) => {
+    const result = await client
+      .mutation(UNSAVE_SESSION_GROUP_FOR_LATER_MUTATION, { id: group.id })
+      .toPromise();
+    if (result.error) {
+      console.warn("[unsaveSessionGroupForLater] failed", result.error);
+    }
+  }, []);
+
   const handleCellContextMenu = useCallback((event: CellContextMenuEvent<SessionGridRow>) => {
     const row = event.data;
     if (!row || isSessionStatusHeaderRow(row)) return;
@@ -253,6 +266,7 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
           menu={contextMenu}
           onClose={() => setContextMenu(null)}
           onDelete={handleDelete}
+          onRestore={tab === "later" ? handleRestore : undefined}
         />
       )}
     </>

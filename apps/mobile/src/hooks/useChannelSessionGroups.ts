@@ -8,7 +8,7 @@ import {
 } from "@trace/client-core";
 
 export type ActiveSegment = "all" | "mine";
-export type MergedArchivedSegment = "merged" | "archived";
+export type MergedArchivedSegment = "later" | "merged" | "archived";
 
 export type SessionGroupSectionStatus =
   | "needs_input"
@@ -183,6 +183,7 @@ export function useMergedArchivedSessionGroupIds(
         .filter((g) => g.channel?.id === channelId)
         .filter((g) => {
           if (scope === "archived") return isArchived(g);
+          if (scope === "later") return !isArchived(g) && isSavedForLater(g);
           return !isArchived(g) && !isSavedForLater(g) && g.status === "merged";
         })
         .sort((a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id));

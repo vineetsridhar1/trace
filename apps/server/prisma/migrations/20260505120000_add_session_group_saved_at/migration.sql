@@ -1,4 +1,5 @@
 ALTER TYPE "EventType" ADD VALUE 'session_group_saved_for_later';
+ALTER TYPE "EventType" ADD VALUE 'session_group_unsaved_for_later';
 
 ALTER TABLE "SessionGroup" ADD COLUMN "savedAt" TIMESTAMP(3);
 

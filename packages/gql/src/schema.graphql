@@ -239,6 +239,7 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_saved_for_later
+  session_group_unsaved_for_later
   chat_created
   chat_member_added
   chat_member_removed
@@ -1097,6 +1098,7 @@ type Mutation {
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
   saveSessionGroupForLater(id: ID!): SessionGroup
+  unsaveSessionGroupForLater(id: ID!): SessionGroup
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!

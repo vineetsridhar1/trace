@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Trash2 } from "lucide-react";
+import { RotateCcw, Trash2 } from "lucide-react";
 import type { SessionGroupRow } from "./sessions-table-types";
 
 export type SessionRowDeleteContextMenuState = {
@@ -13,10 +13,12 @@ export function SessionRowDeleteContextMenu({
   menu,
   onClose,
   onDelete,
+  onRestore,
 }: {
   menu: SessionRowDeleteContextMenuState;
   onClose: () => void;
   onDelete: (row: SessionGroupRow) => void;
+  onRestore?: (row: SessionGroupRow) => void;
 }) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -43,6 +45,20 @@ export function SessionRowDeleteContextMenu({
         onPointerDown={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()}
       >
+        {onRestore && (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-surface-hover focus:bg-surface-hover"
+            onClick={() => {
+              onRestore(menu.row);
+              onClose();
+            }}
+          >
+            <RotateCcw className="size-4 text-muted-foreground" />
+            Move back to channel
+          </button>
+        )}
         <button
           type="button"
           role="menuitem"

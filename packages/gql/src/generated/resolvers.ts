@@ -398,6 +398,7 @@ export type EventType =
   | "session_deleted"
   | "session_group_archived"
   | "session_group_saved_for_later"
+  | "session_group_unsaved_for_later"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -616,6 +617,7 @@ export type Mutation = {
   unmuteScope: Participant;
   unregisterPushToken: Scalars["Boolean"]["output"];
   unregisterRepoWebhook: Repo;
+  unsaveSessionGroupForLater?: Maybe<SessionGroup>;
   unsubscribe: Scalars["Boolean"]["output"];
   updateAgentEnvironment: AgentEnvironment;
   updateAiConversationTitle: AiConversation;
@@ -1008,6 +1010,10 @@ export type MutationUnregisterPushTokenArgs = {
 
 export type MutationUnregisterRepoWebhookArgs = {
   repoId: Scalars["ID"]["input"];
+};
+
+export type MutationUnsaveSessionGroupForLaterArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationUnsubscribeArgs = {
@@ -3002,6 +3008,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUnregisterRepoWebhookArgs, "repoId">
+  >;
+  unsaveSessionGroupForLater?: Resolver<
+    Maybe<ResolversTypes["SessionGroup"]>,
+    ParentType,
+    ContextType,
+    RequireFields<MutationUnsaveSessionGroupForLaterArgs, "id">
   >;
   unsubscribe?: Resolver<
     ResolversTypes["Boolean"],

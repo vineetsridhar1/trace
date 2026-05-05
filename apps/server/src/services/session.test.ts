@@ -3856,6 +3856,69 @@ describe("SessionService", () => {
     });
   });
 
+  describe("saveGroupForLater", () => {
+    it("marks a group saved without stopping sessions", async () => {
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({
+          id: "group-1",
+          organizationId: "org-1",
+          sessions: [{ id: "session-1" }],
+        })
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            id: "group-1",
+            savedAt: new Date("2024-01-02T00:00:00.000Z"),
+            sessions: [makeSession({ id: "session-1", sessionGroupId: "group-1" })],
+          }),
+        );
+
+      const result = await service.saveGroupForLater("group-1", "org-1");
+
+      expect(result?.id).toBe("group-1");
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { savedAt: expect.any(Date) },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_group_saved_for_later",
+          payload: expect.objectContaining({ sessionGroupId: "group-1" }),
+        }),
+      );
+    });
+
+    it("clears savedAt when moving a group back to the channel", async () => {
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({
+          id: "group-1",
+          organizationId: "org-1",
+          sessions: [{ id: "session-1" }],
+        })
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            id: "group-1",
+            savedAt: null,
+            sessions: [makeSession({ id: "session-1", sessionGroupId: "group-1" })],
+          }),
+        );
+
+      const result = await service.unsaveGroupForLater("group-1", "org-1");
+
+      expect(result?.id).toBe("group-1");
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { savedAt: null },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_group_unsaved_for_later",
+          payload: expect.objectContaining({ sessionGroupId: "group-1" }),
+        }),
+      );
+    });
+  });
+
   describe("moveToRuntime", () => {
     it("rebinds the same session inside the same group", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(

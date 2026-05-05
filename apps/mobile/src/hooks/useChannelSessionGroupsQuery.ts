@@ -9,9 +9,10 @@ const SESSION_GROUPS_QUERY = gql`
   query MobileChannelSessionGroups(
     $channelId: ID!
     $archived: Boolean
+    $saved: Boolean
     $status: SessionGroupStatus
   ) {
-    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {
+    sessionGroups(channelId: $channelId, archived: $archived, saved: $saved, status: $status) {
       id
       name
       slug
@@ -60,10 +61,11 @@ const SESSION_GROUPS_QUERY = gql`
   }
 `;
 
-export type SessionGroupsView = "active" | "merged" | "archived";
+export type SessionGroupsView = "active" | "later" | "merged" | "archived";
 
 function variablesForView(channelId: string, view: SessionGroupsView): Record<string, unknown> {
   if (view === "archived") return { channelId, archived: true };
+  if (view === "later") return { channelId, saved: true };
   if (view === "merged") return { channelId, archived: false, status: "merged" };
   return { channelId, archived: false };
 }
