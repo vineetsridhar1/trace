@@ -92,6 +92,7 @@ export function createPrismaMock() {
       create: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     mobileDevice: {
       findUnique: vi.fn(),

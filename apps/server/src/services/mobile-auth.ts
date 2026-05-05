@@ -104,18 +104,16 @@ export async function pairMobileDevice(input: {
   }
 
   return prisma.$transaction(async (tx) => {
-    const current = await tx.mobilePairingToken.findUnique({
-      where: { id: pairingRecord.id },
-      select: {
-        id: true,
-        ownerUserId: true,
-        organizationId: true,
-        expiresAt: true,
-        usedAt: true,
+    const claim = await tx.mobilePairingToken.updateMany({
+      where: {
+        id: pairingRecord.id,
+        usedAt: null,
+        expiresAt: { gt: now },
       },
+      data: { usedAt: now },
     });
 
-    if (!current || current.usedAt || current.expiresAt <= now) {
+    if (claim.count !== 1) {
       throw new MobileAuthError("Pairing code is invalid or expired", 401);
     }
 
@@ -123,8 +121,8 @@ export async function pairMobileDevice(input: {
     const device = await tx.mobileDevice.upsert({
       where: {
         ownerUserId_organizationId_installId: {
-          ownerUserId: current.ownerUserId,
-          organizationId: current.organizationId,
+          ownerUserId: pairingRecord.ownerUserId,
+          organizationId: pairingRecord.organizationId,
           installId,
         },
       },
@@ -137,8 +135,8 @@ export async function pairMobileDevice(input: {
         lastSeenAt: now,
       },
       create: {
-        ownerUserId: current.ownerUserId,
-        organizationId: current.organizationId,
+        ownerUserId: pairingRecord.ownerUserId,
+        organizationId: pairingRecord.organizationId,
         installId,
         deviceName: sanitizeDeviceName(input.deviceName),
         platform: input.platform ?? null,
@@ -151,15 +149,10 @@ export async function pairMobileDevice(input: {
       },
     });
 
-    await tx.mobilePairingToken.update({
-      where: { id: current.id },
-      data: { usedAt: now },
-    });
-
     return {
       token: secret,
       deviceId: device.id,
-      organizationId: current.organizationId,
+      organizationId: pairingRecord.organizationId,
     };
   });
 }

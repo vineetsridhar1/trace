@@ -4,6 +4,7 @@ import type { CookieOptions } from "express";
 import type { PushPlatform } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
+import { redis } from "../lib/redis.js";
 import {
   authenticateAccessToken,
   createBridgeAuthToken,
@@ -31,24 +32,11 @@ import { resolveJwtSecret } from "../lib/jwt-secret.js";
 const router: RouterType = Router();
 
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
-const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!;
 const JWT_SECRET = resolveJwtSecret();
-const WEB_URL =
-  process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
-const SERVER_PUBLIC_URL = process.env.TRACE_SERVER_PUBLIC_URL || WEB_URL;
-const GITHUB_CALLBACK_URL = `${SERVER_PUBLIC_URL.replace(/\/$/, "")}/auth/github/callback`;
-
-// Mobile uses ASWebAuthenticationSession which only terminates when the server
-// redirects to a registered custom URL scheme. Web origins can't satisfy that
-// requirement, so we recognise a sentinel origin value and swap the final
-// redirect to the mobile scheme while the rest of the OAuth flow stays identical.
-const MOBILE_ORIGIN = "trace-mobile";
-const MOBILE_REDIRECT_URL = "trace://auth/callback";
-const OAUTH_STATE_TTL_SECONDS = 5 * 60;
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 const GITHUB_DEVICE_SCOPE = "read:user user:email";
+const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
 
-type OAuthStatePayload = { origin: string; tokenType: "oauth_state" };
 type GitHubDeviceAuth = {
   deviceCode: string;
   expiresAt: number;
@@ -68,67 +56,11 @@ type GitHubEmailResponse = {
   verified: boolean;
 };
 
-const githubDeviceAuths = new Map<string, GitHubDeviceAuth>();
-
-// Origins permitted on /auth/github and /auth/github/callback. The popup
-// embeds this as the postMessage target — accepting arbitrary values would
-// let an attacker-chosen origin receive the token.
-export function getAllowedOAuthOrigins(): Set<string> {
-  const origins = new Set<string>([WEB_URL, MOBILE_ORIGIN]);
-  const extra = process.env.CORS_ALLOWED_ORIGINS;
-  if (extra) {
-    for (const value of extra.split(",")) {
-      const trimmed = value.trim();
-      if (trimmed) origins.add(trimmed);
-    }
-  }
-  return origins;
-}
-
-function isAllowedOrigin(origin: string): boolean {
-  return getAllowedOAuthOrigins().has(origin);
-}
-
 function logoutPushToken(req: Request): string | null {
   const body = req.body as unknown;
   if (!body || typeof body !== "object") return null;
   const token = (body as { pushToken?: unknown }).pushToken;
   return typeof token === "string" && token.length > 0 ? token : null;
-}
-
-export function createOAuthStateToken(origin: string): string {
-  return jwt.sign({ origin, tokenType: "oauth_state" } satisfies OAuthStatePayload, JWT_SECRET, {
-    expiresIn: OAUTH_STATE_TTL_SECONDS,
-  });
-}
-
-export function verifyOAuthStateToken(state: string): { origin: string } | null {
-  try {
-    const payload = jwt.verify(state, JWT_SECRET) as OAuthStatePayload;
-    if (
-      !payload ||
-      typeof payload !== "object" ||
-      payload.tokenType !== "oauth_state" ||
-      typeof payload.origin !== "string"
-    ) {
-      return null;
-    }
-    return { origin: payload.origin };
-  } catch {
-    return null;
-  }
-}
-
-// Safely embed a string inside a <script> block. JSON.stringify handles
-// quote/backslash/unicode escaping; the `<` / `>` / `&` escapes stop a
-// pathological payload from closing the script tag.
-function escapeJsString(value: string): string {
-  return JSON.stringify(value)
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
 }
 
 function getSessionCookieOptions(): CookieOptions {
@@ -443,12 +375,57 @@ router.delete("/auth/mobile/devices/:deviceId", async (req: Request, res: Respon
   await revokeMobileDeviceForRequest(req, res);
 });
 
-function pruneExpiredGitHubDeviceAuths(now = Date.now()): void {
-  for (const [deviceAuthId, record] of githubDeviceAuths) {
-    if (record.expiresAt <= now) {
-      githubDeviceAuths.delete(deviceAuthId);
+function githubDeviceAuthKey(deviceAuthId: string): string {
+  return `${GITHUB_DEVICE_AUTH_KEY_PREFIX}${deviceAuthId}`;
+}
+
+function gitHubDeviceAuthTtlSeconds(record: GitHubDeviceAuth, now = Date.now()): number {
+  return Math.max(1, Math.ceil((record.expiresAt - now) / 1000));
+}
+
+function parseGitHubDeviceAuth(raw: string | null): GitHubDeviceAuth | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<GitHubDeviceAuth>;
+    if (
+      typeof parsed.deviceCode !== "string" ||
+      typeof parsed.expiresAt !== "number" ||
+      typeof parsed.intervalSeconds !== "number"
+    ) {
+      return null;
     }
+    return {
+      deviceCode: parsed.deviceCode,
+      expiresAt: parsed.expiresAt,
+      intervalSeconds: parsed.intervalSeconds,
+    };
+  } catch {
+    return null;
   }
+}
+
+async function saveGitHubDeviceAuth(deviceAuthId: string, record: GitHubDeviceAuth): Promise<void> {
+  await redis.set(
+    githubDeviceAuthKey(deviceAuthId),
+    JSON.stringify(record),
+    "EX",
+    gitHubDeviceAuthTtlSeconds(record),
+  );
+}
+
+async function readGitHubDeviceAuth(deviceAuthId: string): Promise<GitHubDeviceAuth | null> {
+  const key = githubDeviceAuthKey(deviceAuthId);
+  const record = parseGitHubDeviceAuth(await redis.get(key));
+  if (!record) return null;
+  if (record.expiresAt <= Date.now()) {
+    await redis.del(key);
+    return null;
+  }
+  return record;
+}
+
+async function deleteGitHubDeviceAuth(deviceAuthId: string): Promise<void> {
+  await redis.del(githubDeviceAuthKey(deviceAuthId));
 }
 
 function readDeviceAuthId(req: Request): string {
@@ -460,8 +437,6 @@ router.post("/auth/github/device/start", async (_req: Request, res: Response) =>
   if (isLocalMode()) {
     return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
   }
-
-  pruneExpiredGitHubDeviceAuths();
 
   const response = await fetch("https://github.com/login/device/code", {
     method: "POST",
@@ -500,7 +475,7 @@ router.post("/auth/github/device/start", async (_req: Request, res: Response) =>
   const intervalSeconds =
     typeof payload.interval === "number" && payload.interval > 0 ? payload.interval : 5;
   const expiresAt = Date.now() + payload.expires_in * 1000;
-  githubDeviceAuths.set(deviceAuthId, {
+  await saveGitHubDeviceAuth(deviceAuthId, {
     deviceCode: payload.device_code,
     expiresAt,
     intervalSeconds,
@@ -521,14 +496,9 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
   }
 
   const deviceAuthId = readDeviceAuthId(req);
-  const record = deviceAuthId ? githubDeviceAuths.get(deviceAuthId) : undefined;
+  const record = deviceAuthId ? await readGitHubDeviceAuth(deviceAuthId) : null;
   if (!record) {
     return res.status(404).json({ status: "expired", error: "GitHub device login expired" });
-  }
-
-  if (record.expiresAt <= Date.now()) {
-    githubDeviceAuths.delete(deviceAuthId);
-    return res.status(410).json({ status: "expired", error: "GitHub device login expired" });
   }
 
   const response = await fetch("https://github.com/login/oauth/access_token", {
@@ -551,16 +521,17 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
 
   if (payload.error === "slow_down") {
     record.intervalSeconds += 5;
+    await saveGitHubDeviceAuth(deviceAuthId, record);
     return res.json({ status: "pending", interval: record.intervalSeconds });
   }
 
   if (payload.error === "expired_token") {
-    githubDeviceAuths.delete(deviceAuthId);
+    await deleteGitHubDeviceAuth(deviceAuthId);
     return res.status(410).json({ status: "expired", error: "GitHub device login expired" });
   }
 
   if (payload.error === "access_denied") {
-    githubDeviceAuths.delete(deviceAuthId);
+    await deleteGitHubDeviceAuth(deviceAuthId);
     return res.status(403).json({ status: "denied", error: "GitHub device login was denied" });
   }
 
@@ -571,114 +542,10 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
   const user = await upsertUserFromGitHubAccessToken(payload.access_token);
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
   setSessionCookie(res, token);
-  githubDeviceAuths.delete(deviceAuthId);
+  await deleteGitHubDeviceAuth(deviceAuthId);
 
   res.json({ status: "success" });
 });
-
-// Redirect to GitHub OAuth
-router.get("/auth/github", (req: Request, res: Response) => {
-  if (isLocalMode()) {
-    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
-  }
-  const origin = req.query.origin as string | undefined;
-  const params = new URLSearchParams({
-    client_id: GITHUB_CLIENT_ID,
-    redirect_uri: GITHUB_CALLBACK_URL,
-    scope: GITHUB_DEVICE_SCOPE,
-  });
-  if (origin && isAllowedOrigin(origin)) {
-    params.set("state", createOAuthStateToken(origin));
-  }
-  res.redirect(`https://github.com/login/oauth/authorize?${params}`);
-});
-
-// GitHub OAuth callback
-router.get("/auth/github/callback", async (req: Request, res: Response) => {
-  if (isLocalMode()) {
-    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
-  }
-  const { code } = req.query;
-  if (!code || typeof code !== "string") {
-    return res.status(400).json({ error: "Missing code parameter" });
-  }
-
-  try {
-    // Exchange code for access token
-    const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        client_id: GITHUB_CLIENT_ID,
-        client_secret: GITHUB_CLIENT_SECRET,
-        code,
-        redirect_uri: GITHUB_CALLBACK_URL,
-      }),
-    });
-    const tokenData = (await tokenRes.json()) as GitHubAccessTokenResponse;
-
-    if (!tokenData.access_token) {
-      return res.status(400).json({ error: "Failed to get access token" });
-    }
-
-    const user = await upsertUserFromGitHubAccessToken(tokenData.access_token);
-
-    // Issue JWT (only userId — org is selected via header)
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
-
-    setSessionCookie(res, token);
-
-    const origin = resolveStateOrigin(req.query.state);
-
-    if (origin === MOBILE_ORIGIN) {
-      const target = new URL(MOBILE_REDIRECT_URL);
-      target.searchParams.set("token", token);
-      return res.redirect(302, target.toString());
-    }
-
-    const redirectOrigin = origin ?? WEB_URL;
-    const originLiteral = escapeJsString(redirectOrigin);
-
-    // Signal the opener window and same-origin listeners without ever
-    // exposing the session token to browser JavaScript.
-    res.send(`<!DOCTYPE html><html><body><script>
-      try {
-        var bc = new BroadcastChannel("trace_auth");
-        bc.postMessage({ type: "auth:success" });
-        bc.close();
-      } catch(e) {}
-      if (window.opener) {
-        window.opener.postMessage({ type: "auth:success" }, ${originLiteral});
-      }
-      window.close();
-    </script></body></html>`);
-  } catch (err) {
-    console.error("GitHub OAuth error:", err);
-    const origin = resolveStateOrigin(req.query.state);
-    if (origin === MOBILE_ORIGIN) {
-      return res.redirect(302, `${MOBILE_REDIRECT_URL}?error=auth_failed`);
-    }
-    const errorOrigin = origin ?? WEB_URL;
-    const errorOriginLiteral = escapeJsString(errorOrigin);
-    res.send(`<!DOCTYPE html><html><body><script>
-      if (window.opener) {
-        window.opener.postMessage({ type: "auth:error" }, ${errorOriginLiteral});
-        window.close();
-      } else {
-        document.body.textContent = "Authentication failed";
-      }
-    </script></body></html>`);
-  }
-});
-
-function resolveStateOrigin(rawState: unknown): string | null {
-  if (typeof rawState !== "string" || rawState.length === 0) return null;
-  const origin = verifyOAuthStateToken(rawState)?.origin ?? null;
-  return origin && isAllowedOrigin(origin) ? origin : null;
-}
 
 // Get current user with org memberships
 router.get("/auth/me", async (req: Request, res: Response) => {
