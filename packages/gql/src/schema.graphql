@@ -1040,6 +1040,9 @@ type LinkedCheckoutChangedFile {
   deletions: Int!
   diff: String!
   truncated: Boolean!
+  originalContent: String!
+  modifiedContent: String!
+  contentTruncated: Boolean!
 }
 
 type LinkedCheckoutActionResult {

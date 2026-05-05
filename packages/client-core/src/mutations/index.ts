@@ -634,6 +634,9 @@ const LINKED_CHECKOUT_STATUS_FIELDS = `
     deletions
     diff
     truncated
+    originalContent
+    modifiedContent
+    contentTruncated
   }
 `;
 

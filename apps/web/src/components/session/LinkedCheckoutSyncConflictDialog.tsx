@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { cn } from "../../lib/utils";
+import { LinkedCheckoutDiffViewer } from "./LinkedCheckoutDiffViewer";
 
 interface LinkedCheckoutSyncConflictDialogProps {
   open: boolean;
@@ -105,13 +106,13 @@ export function LinkedCheckoutSyncConflictDialog({
                 <span className="min-w-0 truncate font-mono">
                   {selectedFile?.path ?? "No file selected"}
                 </span>
-                {selectedFile?.truncated ? (
+                {selectedFile?.truncated || selectedFile?.contentTruncated ? (
                   <span className="shrink-0 text-amber-300">Preview truncated</span>
                 ) : null}
               </div>
-              <pre className="h-[40dvh] overflow-auto p-4 font-mono text-xs leading-5 text-white/85 lg:h-[calc(100dvh-9.75rem)]">
-                {selectedFile?.diff || "No diff preview available for this file."}
-              </pre>
+              <div className="h-[40dvh] lg:h-[calc(100dvh-9.75rem)]">
+                <LinkedCheckoutDiffViewer file={selectedFile} />
+              </div>
             </div>
           </div>
 
