@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo } from "react";
-import { StyleSheet, View, type NativeSyntheticEvent } from "react-native";
+import { StyleSheet, View, useWindowDimensions, type NativeSyntheticEvent } from "react-native";
 import ContextMenu, { type ContextMenuOnPressNativeEvent } from "react-native-context-menu-view";
 import type { GitCheckpoint } from "@trace/gql";
 import { useAuthStore, type AuthState } from "@trace/client-core";
@@ -35,10 +35,12 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   checkpoints,
 }: UserMessageBubbleProps) {
   const theme = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
   const displayText = useMemo(() => stripPromptWrapping(text), [text]);
+  const previewMaxWidth = windowWidth * 0.88;
 
   const handleContextMenuPress = useCallback(
     (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
@@ -47,32 +49,44 @@ export const UserMessageBubble = memo(function UserMessageBubble({
     [displayText],
   );
 
+  const renderBubble = (preview = false) => (
+    <View
+      pointerEvents={preview ? "none" : "auto"}
+      style={[
+        styles.bubble,
+        {
+          backgroundColor: alpha(theme.colors.accent, 0.18),
+          borderColor: alpha(theme.colors.accent, 0.32),
+          borderRadius: theme.radius.lg,
+          paddingHorizontal: theme.spacing.md,
+          paddingTop: theme.spacing.sm,
+          paddingBottom: theme.spacing.xs,
+          gap: theme.spacing.xs,
+        },
+        preview ? { maxWidth: previewMaxWidth } : null,
+      ]}
+    >
+      <View style={styles.meta}>
+        <Text variant="caption1" style={{ color: theme.colors.accent, fontWeight: "600" }}>
+          {displayName}
+        </Text>
+      </View>
+      <MessageImageGallery imageKeys={imageKeys} previewUrls={imagePreviewUrls} />
+      {displayText ? <Markdown compactSpacing>{displayText}</Markdown> : null}
+    </View>
+  );
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.column}>
-        <ContextMenu actions={COPY_CONTEXT_MENU} onPress={handleContextMenuPress}>
-          <View
-            style={[
-              styles.bubble,
-              {
-                backgroundColor: alpha(theme.colors.accent, 0.18),
-                borderColor: alpha(theme.colors.accent, 0.32),
-                borderRadius: theme.radius.lg,
-                paddingHorizontal: theme.spacing.md,
-                paddingTop: theme.spacing.sm,
-                paddingBottom: theme.spacing.xs,
-                gap: theme.spacing.xs,
-              },
-            ]}
-          >
-            <View style={styles.meta}>
-              <Text variant="caption1" style={{ color: theme.colors.accent, fontWeight: "600" }}>
-                {displayName}
-              </Text>
-            </View>
-            <MessageImageGallery imageKeys={imageKeys} previewUrls={imagePreviewUrls} />
-            {displayText ? <Markdown compactSpacing>{displayText}</Markdown> : null}
-          </View>
+        <ContextMenu
+          actions={COPY_CONTEXT_MENU}
+          borderRadius={theme.radius.lg}
+          onPress={handleContextMenuPress}
+          preview={renderBubble(true)}
+          previewBackgroundColor="transparent"
+        >
+          {renderBubble()}
         </ContextMenu>
         {checkpoints && checkpoints.length > 0 ? (
           <View style={[styles.footer, { gap: theme.spacing.xs, marginTop: theme.spacing.xs }]}>
