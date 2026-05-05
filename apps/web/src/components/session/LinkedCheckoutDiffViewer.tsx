@@ -133,14 +133,18 @@ function resolveDiffContent(file: DesktopLinkedCheckoutChangedFile | null): {
   modified: string;
 } {
   if (!file) return { original: "", modified: "" };
-  if (file.originalContent !== "" || file.modifiedContent !== "" || file.diff === "") {
+  const originalContent = file.originalContent ?? "";
+  const modifiedContent = file.modifiedContent ?? "";
+  const diff = file.diff ?? "";
+
+  if (originalContent !== "" || modifiedContent !== "" || diff === "") {
     return {
-      original: file.originalContent,
-      modified: file.modifiedContent,
+      original: originalContent,
+      modified: modifiedContent,
     };
   }
 
-  return contentFromUnifiedDiff(file.diff, file.path);
+  return contentFromUnifiedDiff(diff, file.path);
 }
 
 function contentFromUnifiedDiff(
