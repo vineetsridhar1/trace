@@ -26,6 +26,13 @@ function makeRun() {
     projectId: "project-1",
     initialGoal: "Ship autopilot",
     planSummary: "Plan",
+    executionConfig: {},
+    planningSession: {
+      tool: "codex",
+      model: "gpt-5.2-codex",
+      reasoningEffort: "high",
+      hosting: "local",
+    },
     project: { id: "project-1", name: "Autopilot", repoId: "repo-1" },
   };
 }
@@ -110,7 +117,14 @@ describe("ProjectTicketExecutionService", () => {
 
     expect(execution.implementationSessionId).toBe("session-1");
     expect(start).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: "project-1", ticketId: "ticket-1" }),
+      expect.objectContaining({
+        projectId: "project-1",
+        ticketId: "ticket-1",
+        tool: "codex",
+        model: "gpt-5.2-codex",
+        reasoningEffort: "high",
+        hosting: "local",
+      }),
     );
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({

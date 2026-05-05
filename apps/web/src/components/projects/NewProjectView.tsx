@@ -140,7 +140,11 @@ export function NewProjectView({ onCancel }: { onCancel: () => void }) {
           planningModel: planningModel || null,
           planningHosting: runtimeInfo?.hostingMode ?? null,
           planningRuntimeInstanceId: runtimeInstanceId ?? null,
-          executionConfig: {},
+          executionConfig: {
+            executionTool: planningTool,
+            executionModel: planningModel || null,
+            executionHosting: runtimeInfo?.hostingMode ?? null,
+          },
         },
       })
       .toPromise();

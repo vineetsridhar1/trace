@@ -5,9 +5,7 @@ import { gql } from "@urql/core";
 import { useEntityStore } from "@trace/client-core";
 import { useShallow } from "zustand/react/shallow";
 import { client } from "../../lib/urql";
-import { usePreferencesStore } from "../../stores/preferences";
 import { Button } from "../ui/button";
-import { getDefaultModel } from "../session/modelOptions";
 import { TicketDetailPanel } from "../tickets/TicketDetailPanel";
 import { ProjectTicketRow } from "./ProjectTicketRow";
 import { useProjectTicketIds } from "./useProjectTicketIds";
@@ -40,8 +38,6 @@ export function ProjectTicketList({
   projectRunId: string | null;
 }) {
   const ticketIds = useProjectTicketIds(projectId);
-  const defaultTool = usePreferencesStore((s) => s.defaultTool);
-  const defaultModel = usePreferencesStore((s) => s.defaultModel);
   const generationAttempt = useEntityStore((state) => {
     if (!projectRunId) return null;
     return (
@@ -91,13 +87,10 @@ export function ProjectTicketList({
     setStartingExecution(true);
     setExecutionError(null);
 
-    const tool = defaultTool ?? "claude_code";
     const result = await client
       .mutation(START_PROJECT_TICKET_EXECUTION_MUTATION, {
         input: {
           projectRunId,
-          tool,
-          model: defaultModel ?? getDefaultModel(tool),
         },
       })
       .toPromise();
@@ -106,7 +99,7 @@ export function ProjectTicketList({
       setExecutionError(result.error.message);
     }
     setStartingExecution(false);
-  }, [defaultModel, defaultTool, projectRunId, startingExecution]);
+  }, [projectRunId, startingExecution]);
 
   return (
     <section className="relative flex min-h-0 flex-1 flex-col">

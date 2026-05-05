@@ -6,6 +6,7 @@ import type {
   ProjectTicketExecutionStatus,
   SessionStatus,
 } from "@prisma/client";
+import { asJsonObject } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { eventService } from "./event.js";
@@ -57,6 +58,13 @@ type ProjectRunForExecution = {
   projectId: string;
   initialGoal: string;
   planSummary: string | null;
+  executionConfig: Prisma.JsonValue;
+  planningSession: {
+    tool: string;
+    model: string | null;
+    reasoningEffort: string | null;
+    hosting: string;
+  } | null;
   project: { id: string; name: string; repoId: string | null };
 };
 
@@ -200,6 +208,15 @@ export class ProjectTicketExecutionService {
           projectId: true,
           initialGoal: true,
           planSummary: true,
+          executionConfig: true,
+          planningSession: {
+            select: {
+              tool: true,
+              model: true,
+              reasoningEffort: true,
+              hosting: true,
+            },
+          },
           project: { select: { id: true, name: true, repoId: true } },
         },
       });
@@ -397,16 +414,17 @@ export class ProjectTicketExecutionService {
       execution: ProjectTicketExecution;
     };
   }): Promise<{ id: string }> {
+    const config = resolveExecutionSessionConfig(input.input, input.prepared.projectRun);
     try {
       return await this.sessions.start({
         organizationId: input.organizationId,
         createdById: input.actorId,
         actorType: input.actorType,
         actorId: input.actorId,
-        tool: input.input.tool ?? "claude_code",
-        model: input.input.model,
-        reasoningEffort: input.input.reasoningEffort,
-        hosting: input.input.hosting,
+        tool: config.tool,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        hosting: config.hosting,
         repoId: input.prepared.projectRun.project.repoId ?? undefined,
         projectId: input.prepared.projectRun.projectId,
         ticketId: input.prepared.ticket.id,
@@ -498,6 +516,76 @@ export class ProjectTicketExecutionService {
       );
     });
   }
+}
+
+type SessionTool = "claude_code" | "codex" | "custom";
+type SessionHosting = "cloud" | "local";
+
+type ExecutionSessionConfig = {
+  tool: SessionTool;
+  model: string | null;
+  reasoningEffort: string | null;
+  hosting: SessionHosting | null;
+};
+
+function resolveExecutionSessionConfig(
+  input: StartProjectTicketExecutionInput,
+  projectRun: ProjectRunForExecution,
+): ExecutionSessionConfig {
+  const config = asJsonObject(projectRun.executionConfig) ?? {};
+  const planningSession = projectRun.planningSession;
+  const tool =
+    readSessionTool(input.tool) ??
+    readConfigTool(config, "executionTool") ??
+    readConfigTool(config, "tool") ??
+    readSessionTool(planningSession?.tool) ??
+    "claude_code";
+
+  return {
+    tool,
+    model:
+      readNonEmptyString(input.model) ??
+      readConfigString(config, "executionModel") ??
+      readConfigString(config, "model") ??
+      readNonEmptyString(planningSession?.model) ??
+      null,
+    reasoningEffort:
+      readNonEmptyString(input.reasoningEffort) ??
+      readConfigString(config, "executionReasoningEffort") ??
+      readConfigString(config, "reasoningEffort") ??
+      readNonEmptyString(planningSession?.reasoningEffort) ??
+      null,
+    hosting:
+      readSessionHosting(input.hosting) ??
+      readConfigHosting(config, "executionHosting") ??
+      readConfigHosting(config, "hosting") ??
+      readSessionHosting(planningSession?.hosting) ??
+      null,
+  };
+}
+
+function readConfigTool(config: Record<string, unknown>, key: string): SessionTool | null {
+  return readSessionTool(config[key]);
+}
+
+function readSessionTool(value: unknown): SessionTool | null {
+  return value === "claude_code" || value === "codex" || value === "custom" ? value : null;
+}
+
+function readConfigHosting(config: Record<string, unknown>, key: string): SessionHosting | null {
+  return readSessionHosting(config[key]);
+}
+
+function readSessionHosting(value: unknown): SessionHosting | null {
+  return value === "cloud" || value === "local" ? value : null;
+}
+
+function readConfigString(config: Record<string, unknown>, key: string): string | null {
+  return readNonEmptyString(config[key]);
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function buildImplementationPrompt(
