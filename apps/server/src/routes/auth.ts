@@ -41,7 +41,7 @@ type GitHubDeviceAuth = {
   expiresAt: number;
   intervalSeconds: number;
 };
-type GitHubAccessTokenResponse = { access_token?: string; error?: string };
+type GitHubAccessTokenResponse = { access_token?: string; error?: string; scope?: string };
 type GitHubUserResponse = {
   id: number;
   login: string;
@@ -427,6 +427,7 @@ router.post("/auth/github/device/start", async (_req: Request, res: Response) =>
     },
     body: new URLSearchParams({
       client_id: GITHUB_CLIENT_ID,
+      scope: "",
     }),
   });
   const payload = (await response.json()) as {
@@ -517,6 +518,14 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
 
   if (!payload.access_token) {
     return res.status(400).json({ status: "error", error: payload.error ?? "GitHub login failed" });
+  }
+
+  if (payload.scope && payload.scope.trim().length > 0) {
+    await deleteGitHubDeviceAuth(deviceAuthId);
+    return res.status(400).json({
+      status: "error",
+      error: "GitHub granted permissions Trace did not request",
+    });
   }
 
   const user = await upsertUserFromGitHubAccessToken(payload.access_token);
