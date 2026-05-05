@@ -34,6 +34,10 @@ vi.mock("expo-clipboard", () => ({
   getImageAsync: vi.fn(),
 }));
 
+vi.mock("expo-document-picker", () => ({
+  getDocumentAsync: vi.fn(),
+}));
+
 vi.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: vi.fn(),
 }));
@@ -150,7 +154,8 @@ vi.mock("@/stores/drafts", () => ({
   useDraftsStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       images: {},
-      setImages: vi.fn(),
+      attachments: {},
+      setAttachments: vi.fn(),
     }),
 }));
 
@@ -189,8 +194,12 @@ vi.mock("./ComposerPasteButton", () => ({
   ComposerPasteButton: () => null,
 }));
 
-vi.mock("./ImageAttachmentBar", () => ({
-  ImageAttachmentBar: () => null,
+vi.mock("./AttachmentBar", () => ({
+  AttachmentBar: () => null,
+}));
+
+vi.mock("./AttachmentPickerSheetContent", () => ({
+  AttachmentPickerSheetContent: () => null,
 }));
 
 vi.mock("./SessionModelPickerSheetContent", () => ({

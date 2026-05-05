@@ -18,6 +18,7 @@ import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit"
 import { useClipboardImage } from "@/hooks/useClipboardImage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
+import { extensionForMimeType } from "@/lib/attachment-utils";
 import { haptic } from "@/lib/haptics";
 import { recordPerf } from "@/lib/perf";
 import {
@@ -28,15 +29,20 @@ import {
 } from "@/lib/slashCommands";
 import { getClient } from "@/lib/urql";
 import { createQuickSession } from "@/lib/createQuickSession";
-import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
+import { useDraftsStore, type FileAttachment } from "@/stores/drafts";
 import { alpha, useTheme } from "@/theme";
+import { AttachmentBar } from "./AttachmentBar";
+import { AttachmentPickerSheetContent } from "./AttachmentPickerSheetContent";
 import { ComposerAttachButton } from "./ComposerAttachButton";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
 import { ComposerPasteButton } from "./ComposerPasteButton";
-import { ImageAttachmentBar } from "./ImageAttachmentBar";
 import { SessionModelPickerSheetContent } from "./SessionModelPickerSheetContent";
 import { SessionRuntimePickerSheetContent } from "./SessionRuntimePickerSheetContent";
-import { MAX_IMAGES, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT } from "./session-input-composer/constants";
+import {
+  MAX_ATTACHMENTS,
+  MAX_INPUT_HEIGHT,
+  MIN_INPUT_HEIGHT,
+} from "./session-input-composer/constants";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
@@ -54,8 +60,8 @@ interface SessionInputComposerProps {
   keyboardVisible?: boolean;
 }
 
-const EMPTY_IMAGES: ImageAttachment[] = [];
-type ComposerSheet = "model" | "runtime" | null;
+const EMPTY_ATTACHMENTS: FileAttachment[] = [];
+type ComposerSheet = "attach" | "model" | "runtime" | null;
 const composerMotionEasing = Easing.inOut(Easing.ease);
 const composerMotionDuration = 150;
 
@@ -108,11 +114,11 @@ export function SessionInputComposer({
   const [pastingImage, setPastingImage] = useState(false);
   const [focused, setFocused] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
-  const [pickingImage, setPickingImage] = useState(false);
+  const [pickingAttachment, setPickingAttachment] = useState(false);
   const [activeSheet, setActiveSheet] = useState<ComposerSheet>(null);
 
-  const images = useDraftsStore((s) => s.images[sessionId] ?? EMPTY_IMAGES);
-  const setImages = useDraftsStore((s) => s.setImages);
+  const attachments = useDraftsStore((s) => s.attachments[sessionId] ?? EMPTY_ATTACHMENTS);
+  const setAttachments = useDraftsStore((s) => s.setAttachments);
 
   const inputRef = useRef<TextInput>(null);
   const restoreKeyboardAfterSheetCloseRef = useRef(false);
@@ -171,9 +177,9 @@ export function SessionInputComposer({
 
   const trimmed = text.trim();
   const canInteract = !isTerminal && !sending && !stopping && !isDisconnected && !isOptimistic;
-  const canSubmit = canInteract && (trimmed.length > 0 || images.length > 0);
+  const canSubmit = canInteract && (trimmed.length > 0 || attachments.length > 0);
   const canStop = isActive && !stopping;
-  const canAttach = canInteract && !pickingImage && images.length < MAX_IMAGES;
+  const canAttach = canInteract && !pickingAttachment && attachments.length < MAX_ATTACHMENTS;
 
   const {
     hasImage: clipboardHasImage,
@@ -185,14 +191,14 @@ export function SessionInputComposer({
     inputFocused &&
     keyboardVisible &&
     clipboardHasImage &&
-    images.length === 0 &&
+    attachments.length === 0 &&
     !pastingImage;
 
   // Expanded controls should only show while the input is focused and the
   // software keyboard is up. Once the keyboard starts dismissing, fall back
   // to the collapsed row immediately instead of waiting for a later blur.
   const expanded = focused && keyboardVisible;
-  const hasSendable = trimmed.length > 0 || images.length > 0;
+  const hasSendable = trimmed.length > 0 || attachments.length > 0;
   const showSend = (isActive && focused) || (!isActive && hasSendable);
   const showStop = isActive;
   const showFocusedStop = isActive && focused;
@@ -261,6 +267,13 @@ export function SessionInputComposer({
     Keyboard.dismiss();
     setActiveSheet("model");
   }, [canInteract, keyboardVisible]);
+
+  const handleOpenAttachmentSheet = useCallback(() => {
+    if (!canAttach) return;
+    void haptic.selection();
+    Keyboard.dismiss();
+    setActiveSheet("attach");
+  }, [canAttach]);
 
   const handleModelSelected = useCallback(() => {
     restoreKeyboardAfterSheetCloseRef.current = modelSheetOpenedWithKeyboardRef.current;
@@ -340,7 +353,7 @@ export function SessionInputComposer({
   );
 
   const handlePasteImage = useCallback(async () => {
-    if (pastingImage || images.length >= MAX_IMAGES) return;
+    if (pastingImage || attachments.length >= MAX_ATTACHMENTS) return;
     setPastingImage(true);
     void haptic.selection();
     try {
@@ -354,8 +367,10 @@ export function SessionInputComposer({
         throw new Error("expo-clipboard returned an unexpected data shape");
       }
       const [, mimeType, rawBase64] = prefixMatch;
-      const attachment: ImageAttachment = {
+      const extension = extensionForMimeType(mimeType);
+      const attachment: FileAttachment = {
         id: generateUUID(),
+        filename: `pasted-image-${Date.now()}.${extension}`,
         mimeType,
         base64: rawBase64,
         previewUri: result.data,
@@ -364,8 +379,8 @@ export function SessionInputComposer({
         s3Key: null,
         uploading: false,
       };
-      setImages(sessionId, (prev) => {
-        if (prev.length >= MAX_IMAGES) return prev;
+      setAttachments(sessionId, (prev) => {
+        if (prev.length >= MAX_ATTACHMENTS) return prev;
         return [...prev, attachment];
       });
       dismissClipboard();
@@ -376,14 +391,15 @@ export function SessionInputComposer({
     } finally {
       setPastingImage(false);
     }
-  }, [dismissClipboard, images.length, pastingImage, sessionId, setImages]);
+  }, [attachments.length, dismissClipboard, pastingImage, sessionId, setAttachments]);
 
   const handlePickFromLibrary = useCallback(async () => {
-    if (pickingImage || images.length >= MAX_IMAGES) return;
-    setPickingImage(true);
+    if (pickingAttachment || attachments.length >= MAX_ATTACHMENTS) return;
+    handleCloseSheet();
+    setPickingAttachment(true);
     void haptic.selection();
     try {
-      const remaining = MAX_IMAGES - images.length;
+      const remaining = MAX_ATTACHMENTS - attachments.length;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         quality: 0.9,
@@ -391,36 +407,79 @@ export function SessionInputComposer({
         selectionLimit: remaining,
       });
       if (result.canceled) return;
-      const attachments: ImageAttachment[] = result.assets.map((asset) => ({
-        id: generateUUID(),
-        mimeType: asset.mimeType ?? "image/jpeg",
-        fileUri: asset.uri,
-        previewUri: asset.uri,
-        width: asset.width || null,
-        height: asset.height || null,
-        s3Key: null,
-        uploading: false,
-      }));
-      if (attachments.length === 0) return;
-      setImages(sessionId, (prev) => {
-        const room = MAX_IMAGES - prev.length;
+      const nextAttachments: FileAttachment[] = result.assets.map((asset) => {
+        const mimeType = asset.mimeType ?? "image/jpeg";
+        return {
+          id: generateUUID(),
+          filename: imageFilename(asset, mimeType),
+          mimeType,
+          fileUri: asset.uri,
+          previewUri: asset.uri,
+          width: asset.width || null,
+          height: asset.height || null,
+          s3Key: null,
+          uploading: false,
+        };
+      });
+      if (nextAttachments.length === 0) return;
+      setAttachments(sessionId, (prev) => {
+        const room = MAX_ATTACHMENTS - prev.length;
         if (room <= 0) return prev;
-        return [...prev, ...attachments.slice(0, room)];
+        return [...prev, ...nextAttachments.slice(0, room)];
       });
       void haptic.light();
     } catch (err) {
       void haptic.error();
       console.warn("[composer] image library pick failed", err);
     } finally {
-      setPickingImage(false);
+      setPickingAttachment(false);
     }
-  }, [images.length, pickingImage, sessionId, setImages]);
+  }, [attachments.length, handleCloseSheet, pickingAttachment, sessionId, setAttachments]);
 
-  const handleRemoveImage = useCallback(
+  const handlePickFiles = useCallback(async () => {
+    if (pickingAttachment || attachments.length >= MAX_ATTACHMENTS) return;
+    handleCloseSheet();
+    setPickingAttachment(true);
+    void haptic.selection();
+    try {
+      const remaining = MAX_ATTACHMENTS - attachments.length;
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const nextAttachments: FileAttachment[] = result.assets.slice(0, remaining).map((asset) => ({
+        id: generateUUID(),
+        filename: asset.name || filenameFromUri(asset.uri, "attachment"),
+        mimeType: asset.mimeType || "application/octet-stream",
+        fileUri: asset.uri,
+        width: null,
+        height: null,
+        s3Key: null,
+        uploading: false,
+      }));
+      if (nextAttachments.length === 0) return;
+      setAttachments(sessionId, (prev) => {
+        const room = MAX_ATTACHMENTS - prev.length;
+        if (room <= 0) return prev;
+        return [...prev, ...nextAttachments.slice(0, room)];
+      });
+      void haptic.light();
+    } catch (err) {
+      void haptic.error();
+      console.warn("[composer] file picker failed", err);
+    } finally {
+      setPickingAttachment(false);
+    }
+  }, [attachments.length, handleCloseSheet, pickingAttachment, sessionId, setAttachments]);
+
+  const handleRemoveAttachment = useCallback(
     (id: string) => {
-      setImages(sessionId, (prev) => prev.filter((img) => img.id !== id));
+      setAttachments(sessionId, (prev) => prev.filter((attachment) => attachment.id !== id));
     },
-    [sessionId, setImages],
+    [sessionId, setAttachments],
   );
 
   const handleRetry = useCallback(() => {
@@ -474,7 +533,7 @@ export function SessionInputComposer({
       ) : null}
 
       <ComposerPasteButton visible={showPasteButton} onPress={() => void handlePasteImage()} />
-      <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
+      <AttachmentBar attachments={attachments} onRemove={handleRemoveAttachment} />
 
       <View style={styles.composerStack}>
         <Animated.View layout={composerRowTransition} style={styles.inputActionRow}>
@@ -532,10 +591,7 @@ export function SessionInputComposer({
 
           {!showFocusedStop ? (
             <Animated.View layout={composerRowTransition} style={styles.attachButtonSlot}>
-              <ComposerAttachButton
-                enabled={canAttach}
-                onPress={() => void handlePickFromLibrary()}
-              />
+              <ComposerAttachButton enabled={canAttach} onPress={handleOpenAttachmentSheet} />
             </Animated.View>
           ) : null}
 
@@ -585,6 +641,13 @@ export function SessionInputComposer({
         onClose={handleCloseSheet}
         onDismissed={handleSheetDismissed}
       >
+        {activeSheet === "attach" ? (
+          <AttachmentPickerSheetContent
+            disabled={!canAttach}
+            onPickFiles={() => void handlePickFiles()}
+            onPickImages={() => void handlePickFromLibrary()}
+          />
+        ) : null}
         {activeSheet === "model" ? (
           <SessionModelPickerSheetContent
             sessionId={sessionId}
@@ -602,4 +665,21 @@ export function SessionInputComposer({
       </SessionComposerBottomSheet>
     </View>
   );
+}
+
+function imageFilename(asset: ImagePicker.ImagePickerAsset, mimeType: string): string {
+  if (asset.fileName?.trim()) return asset.fileName.trim();
+  return filenameFromUri(asset.uri, `image-${Date.now()}.${extensionForMimeType(mimeType)}`);
+}
+
+function filenameFromUri(uri: string, fallback: string): string {
+  const cleanUri = uri.split("?")[0] ?? uri;
+  let decoded = cleanUri;
+  try {
+    decoded = decodeURIComponent(cleanUri);
+  } catch {
+    decoded = cleanUri;
+  }
+  const filename = decoded.split("/").pop()?.trim();
+  return filename || fallback;
 }

@@ -25,5 +25,5 @@ export const MIN_INPUT_HEIGHT = 28;
 export const MAX_INPUT_HEIGHT = 300;
 export const ACTION_SIZE = 46;
 export const INPUT_ACTION_GAP = 8;
-export const MAX_IMAGES = 5;
+export const MAX_ATTACHMENTS = 5;
 export const MODEL_CHIP_SIZE = ACTION_SIZE;

@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@trace/client-core";
+import { isPreviewableImageMimeType } from "./attachment-utils";
 import { getActiveApiUrl } from "./connection-target";
 import { UploadedImageUrlCache } from "./upload-url-cache";
 
@@ -10,21 +11,10 @@ interface UploadArgs {
   base64?: string;
   /** Local `file://` or `content://` URI — the gallery picker path uses this. */
   fileUri?: string;
+  filename: string;
   /** e.g. `image/png` — also used as the S3 PUT `Content-Type`. */
   mimeType: string;
   organizationId: string;
-}
-
-function extensionFor(mimeType: string): string {
-  const lower = mimeType.toLowerCase();
-  if (lower === "image/jpeg" || lower === "image/jpg") return "jpg";
-  if (lower === "image/png") return "png";
-  if (lower === "image/gif") return "gif";
-  if (lower === "image/webp") return "webp";
-  if (lower === "image/heic") return "heic";
-  if (lower === "application/pdf") return "pdf";
-  if (lower === "text/plain") return "txt";
-  return "bin";
 }
 
 async function bodyFromArgs(args: UploadArgs): Promise<Blob> {
@@ -44,7 +34,7 @@ async function bodyFromArgs(args: UploadArgs): Promise<Blob> {
 
 /**
  * Uploads a file to S3 via the presign endpoint and returns the S3 key.
- * Accepts either raw base64 (clipboard path) or a local URI (gallery picker
+ * Accepts either raw base64 (clipboard path) or a local URI (system picker
  * path). Reads bytes lazily so a URI-only attachment doesn't need base64
  * buffered in JS memory until send time.
  */
@@ -54,7 +44,6 @@ export async function uploadFile(args: UploadArgs): Promise<string> {
     throw new Error("File must be 5MB or smaller");
   }
 
-  const filename = `attachment-${Date.now()}.${extensionFor(args.mimeType)}`;
   const apiUrl = getActiveApiUrl();
   if (!apiUrl) {
     throw new Error("No active Trace host is configured");
@@ -67,7 +56,7 @@ export async function uploadFile(args: UploadArgs): Promise<string> {
       ...getAuthHeaders(),
     },
     body: JSON.stringify({
-      filename,
+      filename: args.filename,
       contentType: args.mimeType,
       contentLength: blob.size,
       organizationId: args.organizationId,
@@ -159,12 +148,9 @@ export async function getUploadedFileDownloadUrl(key: string): Promise<string> {
     throw new Error("No active Trace host is configured");
   }
 
-  const response = await fetch(
-    `${apiUrl}/uploads/url?download=1&key=${encodeURIComponent(key)}`,
-    {
-      headers: getAuthHeaders(),
-    },
-  );
+  const response = await fetch(`${apiUrl}/uploads/url?download=1&key=${encodeURIComponent(key)}`, {
+    headers: getAuthHeaders(),
+  });
   if (!response.ok) {
     throw new Error("Failed to load file URL");
   }
