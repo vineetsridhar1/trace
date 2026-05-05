@@ -162,4 +162,10 @@ export const bridgeAccessTypeResolvers = {
       return repo;
     },
   },
+  LinkedCheckoutChangedFile: {
+    originalContent: (file: { originalContent?: string | null }) => file.originalContent ?? "",
+    modifiedContent: (file: { modifiedContent?: string | null }) => file.modifiedContent ?? "",
+    contentTruncated: (file: { contentTruncated?: boolean | null }) =>
+      file.contentTruncated ?? false,
+  },
 };
