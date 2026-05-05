@@ -66,10 +66,13 @@ function resolveDiffContent(file: DesktopLinkedCheckoutChangedFile | null): {
     };
   }
 
-  return contentFromUnifiedDiff(file.diff);
+  return contentFromUnifiedDiff(file.diff, file.path);
 }
 
-function contentFromUnifiedDiff(diff: string): { original: string; modified: string } {
+function contentFromUnifiedDiff(
+  diff: string,
+  filePath: string,
+): { original: string; modified: string } {
   const original: string[] = [];
   const modified: string[] = [];
   let oldCursor: number | null = null;
@@ -83,7 +86,7 @@ function contentFromUnifiedDiff(diff: string): { original: string; modified: str
       if (oldCursor !== null && newCursor !== null) {
         const hiddenLines = Math.max(oldStart - oldCursor, newStart - newCursor);
         if (hiddenLines > 0) {
-          const marker = `... ${hiddenLines} unchanged lines hidden ...`;
+          const marker = hiddenLinesMarker(filePath, hiddenLines);
           original.push(marker);
           modified.push(marker);
         }
@@ -128,4 +131,23 @@ function contentFromUnifiedDiff(diff: string): { original: string; modified: str
     original: original.join("\n"),
     modified: modified.join("\n"),
   };
+}
+
+function hiddenLinesMarker(filePath: string, hiddenLines: number): string {
+  const label = `${hiddenLines} unchanged ${hiddenLines === 1 ? "line" : "lines"} hidden`;
+  const extension = filePath.toLowerCase().split(".").pop() ?? "";
+
+  if (["py", "rb", "sh", "bash", "zsh", "yml", "yaml", "toml"].includes(extension)) {
+    return `# ... ${label} ...`;
+  }
+
+  if (["html", "md", "mdx", "xml", "svg"].includes(extension)) {
+    return `<!-- ... ${label} ... -->`;
+  }
+
+  if (["css", "scss", "sass"].includes(extension)) {
+    return `/* ... ${label} ... */`;
+  }
+
+  return `// ... ${label} ...`;
 }
