@@ -1,8 +1,7 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useTheme } from "@/theme";
-import { CopyableMarkdownBlock } from "./CopyableMarkdownBlock";
-import { splitCopyBlocks } from "./copy-blocks";
+import { Markdown } from "./Markdown";
 
 interface AssistantMessageProps {
   text: string;
@@ -10,13 +9,12 @@ interface AssistantMessageProps {
 
 export const AssistantMessage = memo(function AssistantMessage({ text }: AssistantMessageProps) {
   const theme = useTheme();
-  const blocks = useMemo(() => splitCopyBlocks(text), [text]);
 
   return (
     <View style={[styles.wrapper, { paddingVertical: theme.spacing.xs }]}>
-      {blocks.map((block) => (
-        <CopyableMarkdownBlock key={block.id} text={block.text} />
-      ))}
+      <View>
+        <Markdown copyBlocks>{text}</Markdown>
+      </View>
     </View>
   );
 });

@@ -1,11 +1,24 @@
-import { memo, useMemo } from "react";
-import { Linking, Platform, StyleSheet, Text as NativeText } from "react-native";
-import MarkdownLib from "react-native-markdown-display";
+import { memo, useCallback, useMemo, type ReactNode } from "react";
+import {
+  ActionSheetIOS,
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text as NativeText,
+  View,
+} from "react-native";
+import * as Clipboard from "expo-clipboard";
+import MarkdownLib, { type ASTNode, type RenderRules } from "react-native-markdown-display";
 import { alpha, useTheme, type Theme } from "@/theme";
+import { haptic } from "@/lib/haptics";
+import { splitCopyBlocks, type CopyBlock } from "./copy-blocks";
 
 interface MarkdownProps {
   children: string;
   compactSpacing?: boolean;
+  copyBlocks?: boolean;
 }
 
 // Assistant content is LLM-generated, so we only open links whose scheme we
@@ -14,6 +27,9 @@ interface MarkdownProps {
 const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
 const MARKDOWN_HINTS =
   /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|```|~~~)|[*_`[\]]|!\[|https?:\/\/|mailto:/i;
+const COPY_ACTION_INDEX = 0;
+const CANCEL_ACTION_INDEX = 1;
+const ACTION_SHEET_OPTIONS = ["Copy", "Cancel"];
 
 /**
  * Theme-aware markdown renderer. Mirrors the subset used by web's `Markdown`
@@ -23,16 +39,34 @@ const MARKDOWN_HINTS =
 export const Markdown = memo(function Markdown({
   children,
   compactSpacing = false,
+  copyBlocks = false,
 }: MarkdownProps) {
   const theme = useTheme();
   const styles = useMemo(() => buildStyles(theme, compactSpacing), [compactSpacing, theme]);
+  const sourceBlocks = useMemo(
+    () => (copyBlocks ? splitCopyBlocks(children) : []),
+    [children, copyBlocks],
+  );
+  const handlePlainTextLongPress = useCallback(() => showCopyAction(children), [children]);
 
   if (!MARKDOWN_HINTS.test(children)) {
-    return <NativeText style={styles.plainText}>{children}</NativeText>;
+    return (
+      <NativeText
+        onLongPress={copyBlocks ? handlePlainTextLongPress : undefined}
+        style={styles.plainText}
+        suppressHighlighting={copyBlocks}
+      >
+        {children}
+      </NativeText>
+    );
   }
 
   return (
-    <MarkdownLib style={styles} onLinkPress={openTrustedMarkdownLink}>
+    <MarkdownLib
+      style={styles}
+      rules={copyBlocks ? createCopyRules(sourceBlocks) : undefined}
+      onLinkPress={openTrustedMarkdownLink}
+    >
       {children}
     </MarkdownLib>
   );
@@ -42,6 +76,155 @@ function openTrustedMarkdownLink(url: string): boolean {
   if (!ALLOWED_LINK_SCHEMES.test(url)) return false;
   void Linking.openURL(url);
   return true;
+}
+
+function showCopyAction(text: string) {
+  const copyText = text.trim();
+  if (!copyText) return;
+  void haptic.selection();
+
+  if (Platform.OS === "ios") {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: ACTION_SHEET_OPTIONS,
+        cancelButtonIndex: CANCEL_ACTION_INDEX,
+        userInterfaceStyle: "dark",
+      },
+      (buttonIndex) => {
+        if (buttonIndex === COPY_ACTION_INDEX) void copyBlock(copyText);
+      },
+    );
+    return;
+  }
+
+  Alert.alert("Copy block", undefined, [
+    { text: "Copy", onPress: () => void copyBlock(copyText) },
+    { text: "Cancel", style: "cancel" },
+  ]);
+}
+
+async function copyBlock(text: string) {
+  await Clipboard.setStringAsync(text);
+  void haptic.light();
+}
+
+function createCopyRules(sourceBlocks: CopyBlock[]): RenderRules {
+  const state = { index: 0, sourceBlocks };
+
+  return {
+    heading1: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_heading1, state),
+    heading2: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_heading2, state),
+    heading3: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_heading3, state),
+    heading4: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_heading4, state),
+    heading5: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_heading5, state),
+    heading6: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_heading6, state),
+    paragraph: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_paragraph, state),
+    blockquote: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_blockquote, state),
+    bullet_list: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_bullet_list, state),
+    ordered_list: (node, children, parent, styles) =>
+      renderCopyableView(node, children, parent, styles._VIEW_SAFE_ordered_list, state),
+    code_block: (node, _children, parent, styles, inheritedStyles = {}) =>
+      renderCopyableCodeText(node, parent, [inheritedStyles, styles.code_block], state),
+    fence: (node, _children, parent, styles, inheritedStyles = {}) =>
+      renderCopyableCodeText(node, parent, [inheritedStyles, styles.fence], state),
+  };
+}
+
+function renderCopyableView(
+  node: ASTNode,
+  children: ReactNode[],
+  parent: ASTNode[],
+  style: object,
+  state: { index: number; sourceBlocks: CopyBlock[] },
+) {
+  if (!isTopLevelBlock(parent)) {
+    return (
+      <View key={node.key} style={style}>
+        {children}
+      </View>
+    );
+  }
+
+  const copyText = nextCopyText(node, state);
+  return (
+    <Pressable
+      key={node.key}
+      accessible={false}
+      delayLongPress={320}
+      onLongPress={() => showCopyAction(copyText)}
+      style={style}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+function renderCopyableCodeText(
+  node: ASTNode,
+  parent: ASTNode[],
+  style: object[],
+  state: { index: number; sourceBlocks: CopyBlock[] },
+) {
+  const content = trimTrailingNewline(node.content);
+
+  if (!isTopLevelBlock(parent)) {
+    return (
+      <NativeText key={node.key} style={style}>
+        {content}
+      </NativeText>
+    );
+  }
+
+  const copyText = nextCopyText(node, state);
+  return (
+    <NativeText
+      key={node.key}
+      onLongPress={() => showCopyAction(copyText)}
+      style={style}
+      suppressHighlighting
+    >
+      {content}
+    </NativeText>
+  );
+}
+
+function isTopLevelBlock(parent: ASTNode[]): boolean {
+  return parent.length === 1 && parent[0]?.type === "body";
+}
+
+function nextCopyText(node: ASTNode, state: { index: number; sourceBlocks: CopyBlock[] }): string {
+  const sourceBlock = state.sourceBlocks[state.index]?.text;
+  state.index += 1;
+  return sourceBlock ?? astNodeToText(node);
+}
+
+function astNodeToText(node: ASTNode): string {
+  if (node.type === "code_block" || node.type === "fence") {
+    return trimTrailingNewline(node.content);
+  }
+  if (node.type === "bullet_list") {
+    return node.children.map((child) => `- ${astNodeToText(child).trim()}`).join("\n");
+  }
+  if (node.type === "ordered_list") {
+    return node.children
+      .map((child, index) => `${index + 1}. ${astNodeToText(child).trim()}`)
+      .join("\n");
+  }
+  if (node.content) return node.content;
+  return node.children.map(astNodeToText).join("");
+}
+
+function trimTrailingNewline(text: string): string {
+  return text.endsWith("\n") ? text.slice(0, -1) : text;
 }
 
 const mono = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });

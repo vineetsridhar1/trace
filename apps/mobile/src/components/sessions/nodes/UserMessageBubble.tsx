@@ -5,9 +5,8 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import { CheckpointMarker } from "./CheckpointMarker";
-import { CopyableMarkdownBlock } from "./CopyableMarkdownBlock";
 import { MessageImageGallery } from "./MessageImageGallery";
-import { splitCopyBlocks } from "./copy-blocks";
+import { Markdown } from "./Markdown";
 import { stripPromptWrapping } from "./utils";
 
 interface UserMessageBubbleProps {
@@ -36,7 +35,6 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
   const displayText = useMemo(() => stripPromptWrapping(text), [text]);
-  const blocks = useMemo(() => splitCopyBlocks(displayText), [displayText]);
 
   return (
     <View style={styles.wrapper}>
@@ -61,12 +59,10 @@ export const UserMessageBubble = memo(function UserMessageBubble({
             </Text>
           </View>
           <MessageImageGallery imageKeys={imageKeys} previewUrls={imagePreviewUrls} />
-          {blocks.length > 0 ? (
-            <View style={styles.blocks}>
-              {blocks.map((block) => (
-                <CopyableMarkdownBlock key={block.id} text={block.text} compactSpacing />
-              ))}
-            </View>
+          {displayText ? (
+            <Markdown compactSpacing copyBlocks>
+              {displayText}
+            </Markdown>
           ) : null}
         </View>
         {checkpoints && checkpoints.length > 0 ? (
@@ -93,9 +89,6 @@ const styles = StyleSheet.create({
   },
   bubble: {
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  blocks: {
-    width: "100%",
   },
   meta: {
     flexDirection: "row",
