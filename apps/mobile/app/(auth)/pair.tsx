@@ -15,7 +15,7 @@ import {
 } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { recreateClient } from "@/lib/urql";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 
 type PairingPayload = {
   v: number;
@@ -32,6 +32,8 @@ type CameraModule = typeof import("expo-camera");
 const APP_VERSION = Constants.expoConfig?.version ?? "0.0.1";
 const CAMERA_UNAVAILABLE_MESSAGE =
   "Camera scanning is not available in this build or on this device. Rebuild the local dev client or install the latest TestFlight build, or paste the pairing code below.";
+const INVALID_QR_MESSAGE = "That QR code is not a valid Trace pairing code.";
+const EXPIRED_QR_MESSAGE = "That pairing code is invalid or expired. Generate a new QR code in Trace.";
 
 function loadCameraModule(): CameraModule | null {
   try {
@@ -83,19 +85,53 @@ function parsePairingPayload(raw: string): PairingPayload {
   };
 }
 
+function getPairingErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Pairing failed";
+  }
+
+  const message = error.message.toLowerCase();
+  if (
+    message.includes("not valid json") ||
+    message.includes("pairing code is invalid") ||
+    message.includes("not a trace pairing code") ||
+    message.includes("missing a valid") ||
+    message.includes("missing the trace server url")
+  ) {
+    return INVALID_QR_MESSAGE;
+  }
+
+  if (message.includes("invalid or expired") || message.includes("expired")) {
+    return EXPIRED_QR_MESSAGE;
+  }
+
+  return error.message;
+}
+
 export default function PairScreen() {
   const router = useRouter();
   const theme = useTheme();
   const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
   const scanningRef = useRef(false);
+  const lastScannedQrRef = useRef<string | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cameraPermission, setCameraPermission] = useState<CameraPermissionStatus>(
     cameraModule ? "checking" : "unsupported",
   );
   const [manualCode, setManualCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const cameraSupported = CameraView !== null && cameraPermission !== "unsupported";
   const cameraGranted = cameraPermission === "granted";
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!cameraModule || !CameraView) {
@@ -148,7 +184,18 @@ export default function PairScreen() {
     };
   }, []);
 
-  async function pairFromPayload(raw: string) {
+  function showToast(message: string) {
+    setToastMessage(message);
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimeoutRef.current = null;
+    }, 3600);
+  }
+
+  async function pairFromPayload(raw: string, options?: { showToastOnError?: boolean }) {
     if (submitting) return;
 
     setSubmitting(true);
@@ -189,7 +236,11 @@ export default function PairScreen() {
       await signInWithToken(body.token);
       void haptic.success();
     } catch (pairError) {
-      setError(pairError instanceof Error ? pairError.message : "Pairing failed");
+      const message = getPairingErrorMessage(pairError);
+      setError(message);
+      if (options?.showToastOnError) {
+        showToast(message);
+      }
       void haptic.error();
     } finally {
       setSubmitting(false);
@@ -232,10 +283,15 @@ export default function PairScreen() {
   }
 
   function handleBarcodeScanned(result: BarcodeScanningResult) {
-    if (submitting || scanningRef.current) return;
+    const qrData = result.data.trim();
+    if (!qrData || submitting || scanningRef.current || lastScannedQrRef.current === qrData) {
+      return;
+    }
+
+    lastScannedQrRef.current = qrData;
     scanningRef.current = true;
-    setManualCode(result.data);
-    void pairFromPayload(result.data).finally(() => {
+    setManualCode(qrData);
+    void pairFromPayload(qrData, { showToastOnError: true }).finally(() => {
       scanningRef.current = false;
     });
   }
@@ -270,6 +326,24 @@ export default function PairScreen() {
             Scan the QR code from Trace on web or desktop, or paste the raw pairing JSON below.
           </Text>
         </View>
+
+        {toastMessage ? (
+          <View
+            pointerEvents="none"
+            accessibilityRole="alert"
+            style={[
+              styles.toast,
+              {
+                backgroundColor: theme.colors.destructiveMuted,
+                borderColor: alpha(theme.colors.destructive, 0.35),
+              },
+            ]}
+          >
+            <Text variant="footnote" color="destructive" align="center">
+              {toastMessage}
+            </Text>
+          </View>
+        ) : null}
 
         <View
           style={[
@@ -380,6 +454,12 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: 8,
+  },
+  toast: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   card: {
     borderWidth: StyleSheet.hairlineWidth,
