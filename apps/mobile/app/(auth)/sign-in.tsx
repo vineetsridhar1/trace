@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { getPairedLocalApiUrl } from "@/lib/connection-target";
+import { TraceLogo } from "@/components/TraceLogo";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -9,7 +10,10 @@ export default function SignInScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-        <Text style={styles.wordmark}>trace</Text>
+        <View style={styles.brand}>
+          <TraceLogo size={84} />
+          <Text style={styles.wordmark}>trace</Text>
+        </View>
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
@@ -54,6 +58,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 32,
+  },
+  brand: {
+    alignItems: "center",
+    gap: 16,
   },
   actions: {
     width: "100%",
