@@ -146,7 +146,7 @@ function parseNullSeparated(output: string): string[] {
   return output.split("\0").filter((value) => value.length > 0);
 }
 
-async function listChangedPaths(repoPath: string): Promise<string[]> {
+async function listDiffChangedPaths(repoPath: string): Promise<string[]> {
   const [{ stdout: trackedStdout }, { stdout: untrackedStdout }] = await Promise.all([
     execFileAsync("git", ["diff", "--name-only", "-z", "--no-renames", "HEAD"], {
       cwd: repoPath,
@@ -163,7 +163,7 @@ async function listChangedPaths(repoPath: string): Promise<string[]> {
   ];
 }
 
-async function listStatusChangedPaths(repoPath: string): Promise<string[]> {
+async function listChangedPaths(repoPath: string): Promise<string[]> {
   const { stdout } = await execFileAsync(
     "git",
     ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
@@ -187,7 +187,10 @@ async function listStatusChangedPaths(repoPath: string): Promise<string[]> {
     }
   }
 
-  return [...new Set(paths)];
+  const statusPaths = [...new Set(paths)];
+  if (statusPaths.length > 0) return statusPaths;
+
+  return listDiffChangedPaths(repoPath);
 }
 
 function countDiffLines(diff: string): { additions: number; deletions: number } {
@@ -286,7 +289,7 @@ async function getChangedFileStatus(repoPath: string, relativePath: string): Pro
 
 async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutChangedFile[]> {
   const [changedPaths, untrackedPaths] = await Promise.all([
-    listStatusChangedPaths(repoPath),
+    listChangedPaths(repoPath),
     listUntrackedPaths(repoPath),
   ]);
   const untrackedPathSet = new Set(untrackedPaths);
