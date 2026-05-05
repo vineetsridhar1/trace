@@ -15,6 +15,8 @@ import type {
   SessionStatus,
 } from "@trace/gql";
 import {
+  appendStreamingSessionOutput,
+  clearStreamingSessionOutput,
   StoreBatchWriter,
   useEntityStore,
   type SessionEntity,
@@ -588,5 +590,20 @@ export function handleOrgEvent(event: Event): void {
  * are replaced atomically by the canonical event.
  */
 export function handleSessionEvent(sessionId: string, event: Event & { id: string }): void {
+  const payload = asJsonObject(event.payload);
+  if (
+    event.eventType === "session_output" &&
+    payload?.type === "assistant_delta" &&
+    typeof payload.text === "string"
+  ) {
+    appendStreamingSessionOutput(sessionId, payload.text, event.timestamp);
+    return;
+  }
+  if (
+    event.eventType === "session_output" &&
+    (payload?.type === "assistant" || payload?.type === "result" || payload?.type === "error")
+  ) {
+    clearStreamingSessionOutput(sessionId);
+  }
   upsertSessionEventWithOptimisticResolution(sessionId, event);
 }

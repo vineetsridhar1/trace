@@ -2,11 +2,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import {
-  eventScopeKey,
   handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
   useScopedEventIds,
+  eventScopeKey,
 } from "@trace/client-core";
 import { client } from "../lib/urql";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
@@ -131,7 +131,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
   useEffect(() => {
     if (skip || !activeOrgId) return;
 
-    const subscription = client
+    const eventSubscription = client
       .subscription(SESSION_EVENTS_SUBSCRIPTION, {
         sessionId,
         organizationId: activeOrgId,
@@ -141,7 +141,9 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         handleSessionEvent(sessionId, result.data.sessionEvents as Event & { id: string });
       });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      eventSubscription.unsubscribe();
+    };
   }, [activeOrgId, sessionId, skip]);
 
   // Load an older page of events (called when user scrolls to top)

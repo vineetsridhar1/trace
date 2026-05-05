@@ -7,9 +7,12 @@ export type {
   EntityType,
   SessionEntity,
   SessionGroupEntity,
+  StreamingSessionOutput,
 } from "./stores/entity.js";
 export {
   StoreBatchWriter,
+  appendStreamingSessionOutput,
+  clearStreamingSessionOutput,
   eventScopeKey,
   messageScopeKey,
   useEntitiesByIds,
@@ -24,6 +27,7 @@ export {
   useScopedEventIdsByParentId,
   useScopedEvents,
   useSessionIdsByGroup,
+  useStreamingSessionOutput,
 } from "./stores/entity.js";
 
 export type { AuthState, OrgMembership } from "./stores/auth.js";

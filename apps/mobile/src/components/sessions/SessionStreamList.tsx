@@ -11,10 +11,12 @@ import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { ConnectionLostBanner } from "./nodes/ConnectionLostBanner";
+import { AssistantMessage } from "./nodes/AssistantMessage";
 import { renderNode, type NodeRenderContext } from "./nodes";
 import { SessionTypingIndicator } from "./SessionTypingIndicator";
 import { TimestampRevealRow } from "./TimestampRevealRow";
 import type { SessionStreamListItem } from "./sessionStreamItems";
+import type { StreamingSessionOutput } from "@trace/client-core";
 
 // Subtle rise-into-place for a freshly-arrived last bubble. Default `FadeInDown`
 // translates from ~300px below which reads as a flash — this is a small,
@@ -34,6 +36,7 @@ interface SessionStreamListProps {
   hasOlder: boolean;
   disconnected: boolean;
   disconnectReason?: string | null;
+  streamingOutput?: StreamingSessionOutput;
   showTypingIndicator: boolean;
   /** Extra top padding so content can scroll behind an overlay header. */
   topInset?: number;
@@ -64,6 +67,7 @@ export function SessionStreamList({
   hasOlder,
   disconnected,
   disconnectReason,
+  streamingOutput,
   showTypingIndicator,
   topInset = 0,
   bottomInset = 0,
@@ -164,11 +168,12 @@ export function SessionStreamList({
         ) : null
       }
       ListFooterComponent={
-        disconnected || showTypingIndicator ? (
+        disconnected || streamingOutput || showTypingIndicator ? (
           <View style={[styles.footer, { paddingHorizontal: theme.spacing.lg }]}>
             {disconnected ? (
               <ConnectionLostBanner sessionId={sessionId} reason={disconnectReason ?? null} />
             ) : null}
+            {streamingOutput ? <AssistantMessage text={streamingOutput.text} /> : null}
             {showTypingIndicator ? <SessionTypingIndicator /> : null}
           </View>
         ) : null

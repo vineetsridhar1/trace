@@ -15,6 +15,7 @@ import { runtimeAccessService } from "../services/runtime-access.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
+import { pubsub, topics } from "./pubsub.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -611,6 +612,34 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.recordOutput(sessionId, data);
+        });
+      } else if (msg.type === "session_output_delta" && msg.sessionId) {
+        void (async () => {
+          const sessionId = await resolveSessionBoundToThisRuntime(msg.sessionId);
+          if (!sessionId) return;
+          const data = msg.data && typeof msg.data === "object" ? msg.data : {};
+          const text = (data as Record<string, unknown>).text;
+          if (typeof text !== "string" || text.length === 0) return;
+          pubsub.publish(topics.sessionEvents(sessionId), {
+            sessionEvents: {
+              id: `stream:${randomUUID()}`,
+              scopeType: "session",
+              scopeId: sessionId,
+              eventType: "session_output",
+              payload: {
+                type: "assistant_delta",
+                text,
+              },
+              actorType: "system",
+              actorId: "system",
+              parentId: null,
+              timestamp: new Date().toISOString(),
+              metadata: {},
+              sessionId,
+            },
+          });
+        })().catch((err: unknown) => {
+          console.error("[bridge] error publishing session output delta:", err);
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {

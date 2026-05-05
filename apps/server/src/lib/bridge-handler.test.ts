@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   restoreTerminals: vi.fn(() => Promise.resolve()),
   relayFromBridge: vi.fn(),
   sessionFindFirst: vi.fn(() => Promise.resolve(null)),
+  publish: vi.fn(),
 }));
 
 vi.mock("./session-router.js", () => ({
@@ -59,6 +60,15 @@ vi.mock("./db.js", () => ({
   },
 }));
 
+vi.mock("./pubsub.js", () => ({
+  pubsub: {
+    publish: mocks.publish,
+  },
+  topics: {
+    sessionEvents: (sessionId: string) => `session:${sessionId}:events`,
+  },
+}));
+
 import { handleBridgeConnection } from "./bridge-handler.js";
 import { AuthorizationError } from "./errors.js";
 
@@ -80,6 +90,28 @@ function createMockWs() {
       handlers.get("message")?.(JSON.stringify(payload));
     },
   };
+}
+
+async function registerCloudBridge(ws: ReturnType<typeof createMockWs>) {
+  handleBridgeConnection(ws as never, {
+    bridgeAuth: {
+      kind: "cloud",
+      instanceId: "cloud-machine-owned",
+      organizationId: "org-1",
+      userId: "user-1",
+    },
+  });
+  ws.emitMessage({
+    type: "runtime_hello",
+    instanceId: "cloud-machine-owned",
+    label: "owned cloud",
+    hostingMode: "cloud",
+    protocolVersion: 1,
+    agentVersion: "0.1.0",
+    supportedTools: ["codex"],
+    registeredRepoIds: [],
+  });
+  await Promise.resolve();
 }
 
 describe("bridge handler auth", () => {
@@ -468,6 +500,108 @@ describe("bridge handler auth", () => {
       });
     });
     expect(mocks.registerRuntime).toHaveBeenCalled();
+  });
+
+  it("publishes session output deltas for sessions bound to this bridge runtime", async () => {
+    const ws = createMockWs();
+    mocks.getRuntimeForSession.mockReturnValue({
+      id: "cloud-machine-owned",
+      key: "cloud-machine-owned",
+      ws,
+      organizationId: "org-1",
+    });
+    await registerCloudBridge(ws);
+
+    ws.emitMessage({
+      type: "session_output_delta",
+      sessionId: "session-1",
+      data: { type: "assistant_text_delta", text: "hello" },
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.publish).toHaveBeenCalledWith(
+        "session:session-1:events",
+        expect.objectContaining({
+          sessionEvents: expect.objectContaining({
+            id: expect.stringMatching(/^stream:/),
+            scopeType: "session",
+            scopeId: "session-1",
+            eventType: "session_output",
+            payload: { type: "assistant_delta", text: "hello" },
+            sessionId: "session-1",
+          }),
+        }),
+      );
+    });
+  });
+
+  it("ignores session output deltas for sessions bound to another bridge runtime", async () => {
+    const ws = createMockWs();
+    mocks.getRuntimeForSession.mockReturnValue({
+      id: "cloud-machine-other",
+      key: "cloud-machine-other",
+      ws: createMockWs(),
+      organizationId: "org-1",
+    });
+    await registerCloudBridge(ws);
+
+    ws.emitMessage({
+      type: "session_output_delta",
+      sessionId: "victim-session",
+      data: { type: "assistant_text_delta", text: "spoofed" },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.publish).not.toHaveBeenCalled();
+  });
+
+  it("publishes session output deltas without waiting for durable output recording", async () => {
+    const ws = createMockWs();
+    const calls: string[] = [];
+    let releaseRecordOutput: (() => void) | null = null;
+    mocks.getRuntimeForSession.mockReturnValue({
+      id: "cloud-machine-owned",
+      key: "cloud-machine-owned",
+      ws,
+      organizationId: "org-1",
+    });
+    mocks.recordOutput.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseRecordOutput = () => {
+            calls.push("record");
+            resolve();
+          };
+        }),
+    );
+    mocks.publish.mockImplementationOnce(() => {
+      calls.push("delta");
+    });
+    await registerCloudBridge(ws);
+
+    ws.emitMessage({
+      type: "session_output",
+      sessionId: "session-1",
+      data: { type: "assistant", message: { content: [] } },
+    });
+    ws.emitMessage({
+      type: "session_output_delta",
+      sessionId: "session-1",
+      data: { type: "assistant_text_delta", text: "late" },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await vi.waitFor(() => {
+      expect(calls).toEqual(["delta"]);
+    });
+
+    releaseRecordOutput?.();
+
+    await vi.waitFor(() => {
+      expect(calls).toEqual(["delta", "record"]);
+    });
   });
 
   it("relays provisioned terminal output and exit by terminalId from the source runtime", async () => {

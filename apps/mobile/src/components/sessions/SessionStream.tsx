@@ -8,7 +8,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { useEntityField } from "@trace/client-core";
+import { useEntityField, useStreamingSessionOutput } from "@trace/client-core";
 import { useNewActivityTracker } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { useSessionNodes } from "@/hooks/useSessionNodes";
@@ -92,6 +92,7 @@ export function SessionStream({
     gitCheckpointsByPromptEventId,
     events: scopedEvents,
   } = useSessionNodes(sessionId, { enabled: renderEvents, frozen: isScrollActive });
+  const streamingOutput = useStreamingSessionOutput(sessionId);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const connection = useEntityField("sessions", sessionId, "connection");
 
@@ -206,10 +207,16 @@ export function SessionStream({
   // A not_started session has no events yet by design — the initial events
   // query commonly 404s for optimistic/pending session ids. Fall through to
   // the friendly empty state instead of surfacing a retry banner.
-  if (!loading && nodes.length === 0 && error && agentStatus !== "not_started") {
+  if (
+    !loading &&
+    nodes.length === 0 &&
+    !streamingOutput &&
+    error &&
+    agentStatus !== "not_started"
+  ) {
     return <SessionStreamError error={error} onRetry={() => void fetchEvents()} />;
   }
-  if (!loading && nodes.length === 0) {
+  if (!loading && nodes.length === 0 && !streamingOutput) {
     return <SessionStreamEmpty agentStatus={agentStatus} bottomInset={bottomInset} />;
   }
 
@@ -229,7 +236,8 @@ export function SessionStream({
             hasOlder={hasOlder}
             disconnected={disconnected}
             disconnectReason={connection?.lastError ?? null}
-            showTypingIndicator={agentStatus === "active"}
+            streamingOutput={streamingOutput}
+            showTypingIndicator={agentStatus === "active" && !streamingOutput}
             topInset={topInset}
             bottomInset={bottomInset}
             isNearBottomRef={isNearBottomRef}
