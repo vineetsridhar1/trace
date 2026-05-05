@@ -221,8 +221,8 @@ model Organization {
 
   orgMembers OrgMember[]
   pushTokens PushToken[]
-  localMobilePairingTokens LocalMobilePairingToken[]
-  localMobileDevices LocalMobileDevice[]
+  mobilePairingTokens MobilePairingToken[]
+  mobileDevices MobileDevice[]
   repos    Repo[]
   projects Project[]
   bridgeRuntimes BridgeRuntime[]
@@ -294,8 +294,8 @@ model User {
   githubId       Int?         @unique
 
   orgMemberships    OrgMember[]
-  localMobilePairingTokens LocalMobilePairingToken[] @relation("LocalMobilePairingTokenOwner")
-  localMobileDevices LocalMobileDevice[] @relation("LocalMobileDeviceOwner")
+  mobilePairingTokens MobilePairingToken[] @relation("MobilePairingTokenOwner")
+  mobileDevices MobileDevice[] @relation("MobileDeviceOwner")
   ownedBridgeRuntimes BridgeRuntime[] @relation("BridgeRuntimeOwner")
   bridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantee")
   grantedBridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantedBy")
@@ -705,10 +705,10 @@ model BridgeRuntime {
   @@index([organizationId, connectedAt])
 }
 
-model LocalMobilePairingToken {
+model MobilePairingToken {
   id             String       @id @default(uuid())
   ownerUserId    String
-  ownerUser      User         @relation("LocalMobilePairingTokenOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  ownerUser      User         @relation("MobilePairingTokenOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tokenHash      String       @unique
@@ -721,10 +721,10 @@ model LocalMobilePairingToken {
   @@index([ownerUserId, organizationId, usedAt, expiresAt])
 }
 
-model LocalMobileDevice {
+model MobileDevice {
   id             String       @id @default(uuid())
   ownerUserId    String
-  ownerUser      User         @relation("LocalMobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  ownerUser      User         @relation("MobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   installId      String

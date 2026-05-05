@@ -8,11 +8,11 @@ import { Input } from "../ui/input";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
-const PUBLIC_URL_KEY = "trace_local_mobile_public_url";
+const PUBLIC_URL_KEY = "trace_mobile_pairing_public_url";
 const hostedPairingBaseUrl =
   API_URL.trim().length > 0 ? API_URL.replace(/\/+$/, "") : window.location.origin;
 
-type LocalMobileDevice = {
+type MobileDevice = {
   id: string;
   installId: string;
   deviceName?: string | null;
@@ -37,16 +37,16 @@ function normalizePublicUrl(value: string): string {
   return trimmed.replace(/\/+$/, "");
 }
 
-function deviceLabel(device: LocalMobileDevice): string {
+function deviceLabel(device: MobileDevice): string {
   if (device.deviceName?.trim()) return device.deviceName;
   if (device.platform === "ios") return "iPhone";
   if (device.platform === "android") return "Android device";
   return `Install ${device.installId.slice(0, 8)}`;
 }
 
-export function LocalMobilePairingSection() {
+export function MobilePairingSection() {
   const [publicUrl, setPublicUrl] = useState(() => localStorage.getItem(PUBLIC_URL_KEY) ?? "");
-  const [devices, setDevices] = useState<LocalMobileDevice[]>([]);
+  const [devices, setDevices] = useState<MobileDevice[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [qrPayload, setQrPayload] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export function LocalMobilePairingSection() {
     setLoadingDevices(true);
     try {
       const response = await fetch(
-        `${API_URL}${isLocalMode ? "/auth/local-mobile/devices" : "/auth/mobile/devices"}`,
+        `${API_URL}/auth/mobile/devices`,
         {
           headers: getAuthHeaders(),
           credentials: "include",
@@ -66,7 +66,7 @@ export function LocalMobilePairingSection() {
       );
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
-        devices?: LocalMobileDevice[];
+        devices?: MobileDevice[];
       };
       if (!response.ok) {
         throw new Error(body.error ?? "Failed to load paired devices");
@@ -95,7 +95,7 @@ export function LocalMobilePairingSection() {
         if (!cancelled) setQrDataUrl(next);
       })
       .catch((error: unknown) => {
-        console.error("[local-mobile-pairing] qr generation failed", error);
+        console.error("[mobile-pairing] qr generation failed", error);
         if (!cancelled) {
           setQrDataUrl(null);
           toast.error("Failed to render pairing QR");
@@ -121,9 +121,7 @@ export function LocalMobilePairingSection() {
     setGenerating(true);
     try {
       const response = await fetch(
-        `${API_URL}${
-          isLocalMode ? "/auth/local-mobile/pairing-token" : "/auth/mobile/pairing-token"
-        }`,
+        `${API_URL}/auth/mobile/pairing-token`,
         {
           method: "POST",
           headers: {
@@ -150,7 +148,8 @@ export function LocalMobilePairingSection() {
       setQrPayload(
         JSON.stringify({
           v: 1,
-          kind: isLocalMode ? "trace-local-pair" : "trace-account-pair",
+          kind: "trace-mobile-pair",
+          mode: isLocalMode ? "local" : "hosted",
           baseUrl: normalizedUrl,
           pairingToken: body.pairingToken,
           expiresAt: body.expiresAt ?? undefined,
@@ -178,9 +177,7 @@ export function LocalMobilePairingSection() {
     setRevokingId(deviceId);
     try {
       const response = await fetch(
-        `${API_URL}${
-          isLocalMode ? "/auth/local-mobile/devices" : "/auth/mobile/devices"
-        }/${deviceId}`,
+        `${API_URL}/auth/mobile/devices/${deviceId}`,
         {
           method: "DELETE",
           headers: getAuthHeaders(),
@@ -232,14 +229,14 @@ export function LocalMobilePairingSection() {
             {isLocalMode ? (
               <>
                 <label
-                  htmlFor="local-mobile-public-url"
+                  htmlFor="mobile-pairing-public-url"
                   className="text-sm font-medium text-foreground"
                 >
                   Public server URL
                 </label>
                 <div className="flex min-w-0 flex-col gap-3 md:flex-row">
                   <Input
-                    id="local-mobile-public-url"
+                    id="mobile-pairing-public-url"
                     value={publicUrl}
                     onChange={(event) => setPublicUrl(event.target.value)}
                     placeholder="https://your-trace.ngrok-free.app"

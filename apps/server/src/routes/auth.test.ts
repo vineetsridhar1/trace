@@ -401,13 +401,13 @@ describe("local-mode external auth", () => {
   });
 
   it("allows external auth/me requests with a paired mobile token", async () => {
-    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+    prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-1",
       ownerUserId: "user-1",
       organizationId: "org-1",
       revokedAt: null,
     });
-    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: "user-1",
       email: "local@trace.dev",
@@ -437,13 +437,13 @@ describe("local-mode external auth", () => {
 
   it("returns only the canonical organization in local mode auth/me", async () => {
     prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-1" });
-    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+    prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-1",
       ownerUserId: "user-1",
       organizationId: "org-2",
       revokedAt: null,
     });
-    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: "user-1",
       email: "local@trace.dev",
@@ -596,7 +596,7 @@ describe("bridge auth tokens", () => {
   });
 });
 
-describe("local mobile pairing", () => {
+describe("mobile pairing in local mode", () => {
   let server: Server;
   let baseUrl: string;
 
@@ -624,11 +624,11 @@ describe("local mobile pairing", () => {
     vi.unstubAllEnvs();
   });
 
-  it("creates a one-time pairing token for an authenticated local session", async () => {
+  it("creates a one-time pairing token for an authenticated local-mode session", async () => {
     prismaMock.orgMember.findUnique.mockResolvedValue({ organizationId: "org-1" });
 
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
-    const res = await fetch(`${baseUrl}/auth/local-mobile/pairing-token`, {
+    const res = await fetch(`${baseUrl}/auth/mobile/pairing-token`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -640,7 +640,7 @@ describe("local mobile pairing", () => {
     const body = (await res.json()) as { pairingToken: string; expiresAt: string };
     expect(body.pairingToken.length).toBeGreaterThan(20);
     expect(new Date(body.expiresAt).toString()).not.toBe("Invalid Date");
-    expect(prismaMock.localMobilePairingToken.create).toHaveBeenCalledWith({
+    expect(prismaMock.mobilePairingToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         ownerUserId: "user-1",
         organizationId: "org-1",
@@ -650,7 +650,7 @@ describe("local mobile pairing", () => {
   });
 
   it("redeems a pairing token into a revocable device secret", async () => {
-    prismaMock.localMobilePairingToken.findUnique
+    prismaMock.mobilePairingToken.findUnique
       .mockResolvedValueOnce({
         id: "pair-1",
         ownerUserId: "user-1",
@@ -665,10 +665,10 @@ describe("local mobile pairing", () => {
         expiresAt: new Date(Date.now() + 60_000),
         usedAt: null,
       });
-    prismaMock.localMobileDevice.upsert.mockResolvedValue({ id: "device-1" });
-    prismaMock.localMobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
+    prismaMock.mobileDevice.upsert.mockResolvedValue({ id: "device-1" });
+    prismaMock.mobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
 
-    const res = await fetch(`${baseUrl}/auth/local-mobile/pair`, {
+    const res = await fetch(`${baseUrl}/auth/mobile/pair`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -689,7 +689,7 @@ describe("local mobile pairing", () => {
     expect(body.token.length).toBeGreaterThan(20);
     expect(body.deviceId).toBe("device-1");
     expect(body.organizationId).toBe("org-1");
-    expect(prismaMock.localMobileDevice.upsert).toHaveBeenCalledWith({
+    expect(prismaMock.mobileDevice.upsert).toHaveBeenCalledWith({
       where: {
         ownerUserId_organizationId_installId: {
           ownerUserId: "user-1",
@@ -714,14 +714,14 @@ describe("local mobile pairing", () => {
     });
   });
 
-  it("revokes local mobile device secrets on logout", async () => {
-    prismaMock.localMobileDevice.findUnique.mockResolvedValue({
+  it("revokes mobile device secrets on logout", async () => {
+    prismaMock.mobileDevice.findUnique.mockResolvedValue({
       id: "device-1",
       ownerUserId: "user-1",
       organizationId: "org-1",
       revokedAt: null,
     });
-    prismaMock.localMobileDevice.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.mobileDevice.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.pushToken.deleteMany.mockResolvedValue({ count: 1 });
 
     const res = await fetch(`${baseUrl}/auth/logout`, {
@@ -734,20 +734,20 @@ describe("local mobile pairing", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.localMobileDevice.updateMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.mobileDevice.updateMany).toHaveBeenCalledTimes(2);
     expect(prismaMock.pushToken.deleteMany).toHaveBeenCalledWith({
       where: { userId: "user-1", token: "ExponentPushToken[current-device]" },
     });
   });
 
   it("does not remove every push token when logout omits a current push token", async () => {
-    prismaMock.localMobileDevice.findUnique.mockResolvedValue({
+    prismaMock.mobileDevice.findUnique.mockResolvedValue({
       id: "device-1",
       ownerUserId: "user-1",
       organizationId: "org-1",
       revokedAt: null,
     });
-    prismaMock.localMobileDevice.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.mobileDevice.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await fetch(`${baseUrl}/auth/logout`, {
       method: "POST",
@@ -759,7 +759,7 @@ describe("local mobile pairing", () => {
   });
 });
 
-describe("hosted mobile pairing", () => {
+describe("mobile pairing in hosted mode", () => {
   let server: Server;
   let baseUrl: string;
 
@@ -799,7 +799,7 @@ describe("hosted mobile pairing", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { pairingToken: string; expiresAt: string };
     expect(body.pairingToken.length).toBeGreaterThan(20);
-    expect(prismaMock.localMobilePairingToken.create).toHaveBeenCalledWith({
+    expect(prismaMock.mobilePairingToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         ownerUserId: "user-1",
         organizationId: "org-1",
@@ -809,7 +809,7 @@ describe("hosted mobile pairing", () => {
   });
 
   it("redeems a hosted pairing token into a mobile device secret", async () => {
-    prismaMock.localMobilePairingToken.findUnique
+    prismaMock.mobilePairingToken.findUnique
       .mockResolvedValueOnce({
         id: "pair-1",
         ownerUserId: "user-1",
@@ -824,8 +824,8 @@ describe("hosted mobile pairing", () => {
         expiresAt: new Date(Date.now() + 60_000),
         usedAt: null,
       });
-    prismaMock.localMobileDevice.upsert.mockResolvedValue({ id: "device-1" });
-    prismaMock.localMobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
+    prismaMock.mobileDevice.upsert.mockResolvedValue({ id: "device-1" });
+    prismaMock.mobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
 
     const res = await fetch(`${baseUrl}/auth/mobile/pair`, {
       method: "POST",

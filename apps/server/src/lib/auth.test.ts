@@ -129,17 +129,17 @@ describe("auth helpers", () => {
     });
   });
 
-  it("authenticates opaque local mobile device secrets", async () => {
-    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+  it("authenticates opaque mobile device secrets", async () => {
+    prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-1",
       ownerUserId: "user-1",
       organizationId: "org-1",
       revokedAt: null,
     });
-    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
 
     await expect(authenticateAccessToken("opaque-device-secret")).resolves.toEqual({
-      kind: "local_mobile",
+      kind: "mobile",
       userId: "user-1",
       organizationId: "org-1",
       deviceId: "device-1",
@@ -352,14 +352,14 @@ describe("auth helpers", () => {
     expect(context.role).toBe("observer");
   });
 
-  it("pins local mobile websocket auth to its paired organization", async () => {
-    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+  it("pins mobile websocket auth to its paired organization", async () => {
+    prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-2",
       ownerUserId: "user-4",
       organizationId: "org-local",
       revokedAt: null,
     });
-    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-4", email: "local@trace.dev" });
     prismaMock.orgMember.findUnique.mockResolvedValueOnce({
       role: "admin",

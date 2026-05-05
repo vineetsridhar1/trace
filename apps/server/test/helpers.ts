@@ -88,12 +88,12 @@ export function createPrismaMock() {
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
-    localMobilePairingToken: {
+    mobilePairingToken: {
       create: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
     },
-    localMobileDevice: {
+    mobileDevice: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
       upsert: vi.fn(),
