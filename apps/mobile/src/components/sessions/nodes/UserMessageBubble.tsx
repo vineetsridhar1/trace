@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo } from "react";
-import { StyleSheet, View, useWindowDimensions, type NativeSyntheticEvent } from "react-native";
+import { StyleSheet, View, type NativeSyntheticEvent } from "react-native";
 import ContextMenu, { type ContextMenuOnPressNativeEvent } from "react-native-context-menu-view";
 import type { GitCheckpoint } from "@trace/gql";
 import { useAuthStore, type AuthState } from "@trace/client-core";
@@ -35,12 +35,10 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   checkpoints,
 }: UserMessageBubbleProps) {
   const theme = useTheme();
-  const { width: windowWidth } = useWindowDimensions();
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
   const displayText = useMemo(() => stripPromptWrapping(text), [text]);
-  const previewMaxWidth = windowWidth * 0.88;
 
   const handleContextMenuPress = useCallback(
     (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
@@ -49,9 +47,9 @@ export const UserMessageBubble = memo(function UserMessageBubble({
     [displayText],
   );
 
-  const renderBubble = (preview = false) => (
+  const bubble = (
     <View
-      pointerEvents={preview ? "none" : "auto"}
+      collapsable={false}
       style={[
         styles.bubble,
         {
@@ -63,7 +61,6 @@ export const UserMessageBubble = memo(function UserMessageBubble({
           paddingBottom: theme.spacing.xs,
           gap: theme.spacing.xs,
         },
-        preview ? { maxWidth: previewMaxWidth } : null,
       ]}
     >
       <View style={styles.meta}>
@@ -83,10 +80,9 @@ export const UserMessageBubble = memo(function UserMessageBubble({
           actions={COPY_CONTEXT_MENU}
           borderRadius={theme.radius.lg}
           onPress={handleContextMenuPress}
-          preview={renderBubble(true)}
           previewBackgroundColor="transparent"
         >
-          {renderBubble()}
+          {bubble}
         </ContextMenu>
         {checkpoints && checkpoints.length > 0 ? (
           <View style={[styles.footer, { gap: theme.spacing.xs, marginTop: theme.spacing.xs }]}>
