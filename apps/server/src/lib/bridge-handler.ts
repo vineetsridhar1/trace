@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import type { CodingTool } from "@trace/gql";
 import type {
   BridgeLinkedCheckoutStatus,
+  BridgeLinkedCheckoutChangedFilePreview,
   BridgeLinkedCheckoutActionResultPayload,
   GitCheckpointContext,
 } from "@trace/shared";
@@ -457,6 +458,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveLinkedCheckoutStatusRequest(
           msg.requestId,
           msg.status as BridgeLinkedCheckoutStatus,
+          runtimeKey,
+        );
+        return;
+      }
+
+      if (msg.type === "linked_checkout_changed_file_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveLinkedCheckoutChangedFileRequest(
+          msg.requestId,
+          msg.file as BridgeLinkedCheckoutChangedFilePreview | undefined,
+          typeof msg.error === "string" ? msg.error : undefined,
           runtimeKey,
         );
         return;

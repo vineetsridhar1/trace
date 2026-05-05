@@ -146,6 +146,13 @@ export interface BridgeLinkedCheckoutStatusCommand {
   repoId: string;
 }
 
+export interface BridgeLinkedCheckoutChangedFileCommand {
+  type: "linked_checkout_changed_file";
+  requestId: string;
+  repoId: string;
+  filePath: string;
+}
+
 export interface BridgeLinkLinkedCheckoutRepoCommand {
   type: "linked_checkout_link_repo";
   requestId: string;
@@ -238,6 +245,7 @@ export type BridgeCommand =
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
   | BridgeLinkedCheckoutStatusCommand
+  | BridgeLinkedCheckoutChangedFileCommand
   | BridgeLinkLinkedCheckoutRepoCommand
   | BridgeSyncLinkedCheckoutCommand
   | BridgeCommitLinkedCheckoutCommand
@@ -360,6 +368,8 @@ export interface BridgeLinkedCheckoutChangedFile {
   contentTruncated: boolean;
 }
 
+export type BridgeLinkedCheckoutChangedFilePreview = BridgeLinkedCheckoutChangedFile;
+
 export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
 
 export interface BridgeLinkedCheckoutActionResultPayload {
@@ -373,6 +383,13 @@ export interface BridgeLinkedCheckoutStatusResult {
   type: "linked_checkout_status_result";
   requestId: string;
   status: BridgeLinkedCheckoutStatus;
+}
+
+export interface BridgeLinkedCheckoutChangedFileResult {
+  type: "linked_checkout_changed_file_result";
+  requestId: string;
+  file?: BridgeLinkedCheckoutChangedFilePreview;
+  error?: string;
 }
 
 export interface BridgeLinkedCheckoutActionResult {
@@ -496,6 +513,7 @@ export type BridgeMessage =
   | BridgeGitCheckpoint
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult
+  | BridgeLinkedCheckoutChangedFileResult
   | BridgeLinkedCheckoutActionResult
   | BridgeSessionGitSyncStatusResult
   | BridgeBranchesResult

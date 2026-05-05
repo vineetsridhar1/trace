@@ -1144,6 +1144,7 @@ export type Query = {
   chats: Array<Chat>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
+  linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
@@ -1257,6 +1258,13 @@ export type QueryEventsArgs = {
 export type QueryInboxItemsArgs = {
   organizationId: Scalars["ID"]["input"];
   status?: InputMaybe<InboxItemStatus>;
+};
+
+export type QueryLinkedCheckoutChangedFileArgs = {
+  filePath: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryLinkedCheckoutStatusArgs = {

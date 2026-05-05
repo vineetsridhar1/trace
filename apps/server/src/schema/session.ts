@@ -145,6 +145,27 @@ export const sessionQueries = {
       args.runtimeInstanceId ?? undefined,
     );
   },
+  linkedCheckoutChangedFile: (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      repoId: string;
+      filePath: string;
+      runtimeInstanceId?: string | null;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.getLinkedCheckoutChangedFile(
+      args.sessionGroupId,
+      args.repoId,
+      args.filePath,
+      orgId,
+      ctx.userId,
+      args.runtimeInstanceId ?? undefined,
+    );
+  },
   sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
 

@@ -14,6 +14,7 @@ import type {
   BridgeBranchDiffFile,
   BridgeListSkillsCommand,
   BridgeSkillInfo,
+  BridgeLinkedCheckoutChangedFilePreview,
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
   BridgeSessionGitSyncStatus,
@@ -300,6 +301,14 @@ export class SessionRouter {
     {
       runtimeId: string;
       resolve: (status: BridgeLinkedCheckoutStatus) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  private pendingLinkedCheckoutChangedFileRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (file: BridgeLinkedCheckoutChangedFilePreview) => void;
       reject: (err: Error) => void;
     }
   >();
@@ -1183,6 +1192,60 @@ export class SessionRouter {
     this.pendingLinkedCheckoutStatusRequests.delete(requestId);
     this.cacheLinkedCheckoutStatus(pending.runtimeId, status);
     pending.resolve(status);
+  }
+
+  getLinkedCheckoutChangedFile(
+    runtimeId: string,
+    repoId: string,
+    filePath: string,
+    timeoutMs = 15_000,
+  ): Promise<BridgeLinkedCheckoutChangedFilePreview> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "linked_checkout_changed_file",
+      requestId,
+      repoId,
+      filePath,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeLinkedCheckoutChangedFilePreview>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingLinkedCheckoutChangedFileRequests.delete(requestId);
+        reject(new Error("Linked checkout changed file request timed out"));
+      }, timeoutMs);
+
+      this.pendingLinkedCheckoutChangedFileRequests.set(requestId, {
+        runtimeId,
+        resolve: (file) => {
+          clearTimeout(timer);
+          resolve(file);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveLinkedCheckoutChangedFileRequest(
+    requestId: string,
+    file?: BridgeLinkedCheckoutChangedFilePreview,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingLinkedCheckoutChangedFileRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingLinkedCheckoutChangedFileRequests.delete(requestId);
+    if (error || !file) {
+      pending.reject(new Error(error ?? "Missing linked checkout changed file"));
+    } else {
+      pending.resolve(file);
+    }
   }
 
   /**

@@ -128,6 +128,9 @@ export function LinkedCheckoutActions({ state }: Props) {
         open={state.syncConflictOpen}
         error={state.syncConflictError}
         changedFiles={state.changedFiles}
+        repoId={state.repoId}
+        sessionGroupId={state.sessionGroupId}
+        runtimeInstanceId={state.targetRuntimeInstanceId}
         pending={pending}
         onClose={onCloseSyncConflict}
         onResolve={onResolveSyncConflict}

@@ -37,6 +37,7 @@ import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
   commitLinkedCheckoutChanges,
+  getLinkedCheckoutChangedFile,
   getLinkedCheckoutStatus,
   linkLinkedCheckoutRepo,
   restoreLinkedCheckout,
@@ -1020,6 +1021,24 @@ export class BridgeClient implements IBridgeClient {
               type: "linked_checkout_status_result",
               requestId: cmd.requestId,
               status: emptyLinkedCheckoutStatus(cmd.repoId),
+            });
+          });
+        break;
+      }
+      case "linked_checkout_changed_file": {
+        void getLinkedCheckoutChangedFile(cmd.repoId, cmd.filePath)
+          .then((file) => {
+            this.send({
+              type: "linked_checkout_changed_file_result",
+              requestId: cmd.requestId,
+              file,
+            });
+          })
+          .catch((error: unknown) => {
+            this.send({
+              type: "linked_checkout_changed_file_result",
+              requestId: cmd.requestId,
+              error: error instanceof Error ? error.message : String(error),
             });
           });
         break;

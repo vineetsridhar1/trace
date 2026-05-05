@@ -5697,6 +5697,25 @@ export class SessionService {
     return sessionRouter.getLinkedCheckoutStatus(runtimeId, repoId);
   }
 
+  async getLinkedCheckoutChangedFile(
+    sessionGroupId: string,
+    repoId: string,
+    filePath: string,
+    organizationId: string,
+    userId: string,
+    runtimeInstanceId?: string,
+  ) {
+    await this.assertRepoExists(repoId, organizationId);
+    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+      { runtimeInstanceId, requireRegisteredRepo: true },
+    );
+    return sessionRouter.getLinkedCheckoutChangedFile(runtimeId, repoId, filePath);
+  }
+
   async linkLinkedCheckoutRepo(
     sessionGroupId: string,
     repoId: string,

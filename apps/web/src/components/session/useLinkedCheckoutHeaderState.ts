@@ -19,6 +19,8 @@ interface UseLinkedCheckoutHeaderStateProps {
 }
 
 export interface LinkedCheckoutHeaderState {
+  repoId: string | null | undefined;
+  sessionGroupId: string;
   targetRuntimeInstanceId: string | null;
   targetDisplayLabel: string;
   sessionRuntimeLabel: string | null;
@@ -368,6 +370,8 @@ export function useLinkedCheckoutHeaderState({
   };
 
   return {
+    repoId,
+    sessionGroupId,
     targetRuntimeInstanceId: effectiveRuntimeInstanceId,
     targetDisplayLabel: runtimeDisplayLabel,
     sessionRuntimeLabel,

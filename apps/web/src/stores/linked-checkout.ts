@@ -5,6 +5,7 @@ import { client } from "../lib/urql";
 import { useUIStore, type UIState } from "./ui";
 import {
   COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION,
+  LINKED_CHECKOUT_CHANGED_FILE_QUERY,
   LINKED_CHECKOUT_STATUS_QUERY,
   LINK_LINKED_CHECKOUT_REPO_MUTATION,
   RESTORE_LINKED_CHECKOUT_MUTATION,
@@ -18,6 +19,10 @@ export interface LinkedCheckoutSyncRequest extends DesktopLinkedCheckoutSyncInpu
 
 type LinkedCheckoutQueryData = {
   linkedCheckoutStatus?: DesktopLinkedCheckoutStatus | null;
+};
+
+type LinkedCheckoutChangedFileQueryData = {
+  linkedCheckoutChangedFile?: DesktopLinkedCheckoutChangedFile | null;
 };
 
 type LinkedCheckoutMutationField =
@@ -88,6 +93,32 @@ async function queryLinkedCheckoutStatus(
   }
 
   return (result.data as LinkedCheckoutQueryData | undefined)?.linkedCheckoutStatus ?? null;
+}
+
+export async function queryLinkedCheckoutChangedFile(
+  sessionGroupId: string,
+  repoId: string,
+  runtimeInstanceId: string,
+  filePath: string,
+): Promise<DesktopLinkedCheckoutChangedFile> {
+  const result = await client
+    .query(
+      LINKED_CHECKOUT_CHANGED_FILE_QUERY,
+      { sessionGroupId, repoId, runtimeInstanceId, filePath },
+      { requestPolicy: "network-only" },
+    )
+    .toPromise();
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  const file = (result.data as LinkedCheckoutChangedFileQueryData | undefined)
+    ?.linkedCheckoutChangedFile;
+  if (!file) {
+    throw new Error("Linked checkout changed file returned no result.");
+  }
+  return file;
 }
 
 async function runLinkedCheckoutMutation(
