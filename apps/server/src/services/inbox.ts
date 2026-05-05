@@ -53,7 +53,7 @@ export class InboxService {
     resolution?: string;
   }) {
     const items = await prisma.inboxItem.findMany({
-      where: { sourceType, sourceId, status: "active" },
+      where: { organizationId: orgId, sourceType, sourceId, status: "active" },
     });
 
     const now = new Date();
@@ -125,14 +125,18 @@ export class InboxService {
   }
 
   async countForUser(orgId: string, userId: string) {
-    const items = await prisma.inboxItem.findMany({
-      where: {
-        organizationId: orgId,
-        userId,
-        status: "active",
-      },
-    });
-    return (await this.excludeArchivedSessionItems(items, orgId)).length;
+    const baseWhere = { organizationId: orgId, userId, status: "active" as const };
+    const [nonSessionCount, sessionItems] = await Promise.all([
+      prisma.inboxItem.count({
+        where: { ...baseWhere, sourceType: { not: "session" } },
+      }),
+      prisma.inboxItem.findMany({
+        where: { ...baseWhere, sourceType: "session" },
+        select: { sourceType: true, sourceId: true },
+      }),
+    ]);
+
+    return nonSessionCount + (await this.excludeArchivedSessionItems(sessionItems, orgId)).length;
   }
 
   private async excludeArchivedSessionItems<T extends { sourceType: string; sourceId: string }>(
