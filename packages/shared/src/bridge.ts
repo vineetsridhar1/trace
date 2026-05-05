@@ -355,6 +355,9 @@ export interface BridgeLinkedCheckoutChangedFile {
   deletions: number;
   diff: string;
   truncated: boolean;
+  originalContent: string;
+  modifiedContent: string;
+  contentTruncated: boolean;
 }
 
 export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";

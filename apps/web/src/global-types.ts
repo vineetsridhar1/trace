@@ -67,6 +67,9 @@ declare global {
     deletions: number;
     diff: string;
     truncated: boolean;
+    originalContent: string;
+    modifiedContent: string;
+    contentTruncated: boolean;
   };
 
   type DesktopLinkedCheckoutActionResult = {

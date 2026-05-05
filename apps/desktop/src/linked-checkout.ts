@@ -110,6 +110,7 @@ interface ChangedPathState {
 const LINKED_CHECKOUT_COMMIT_MESSAGE = "Commit linked checkout changes";
 const LINKED_CHECKOUT_REBASE_STASH_MESSAGE = "Trace linked checkout rebase";
 const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 120_000;
+const LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT = 300_000;
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
   return runGit(repoPath, ["rev-parse", "HEAD"]);
@@ -273,6 +274,53 @@ function readUntrackedFileDiffPreview(
   };
 }
 
+function formatBinaryContent(relativePath: string): string {
+  return `Binary file ${relativePath} cannot be previewed.`;
+}
+
+function truncateContent(content: string): { content: string; truncated: boolean } {
+  if (content.length <= LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT) {
+    return { content, truncated: false };
+  }
+  return {
+    content: content.slice(0, LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT),
+    truncated: true,
+  };
+}
+
+async function readHeadContentPreview(
+  repoPath: string,
+  relativePath: string,
+): Promise<{ content: string; truncated: boolean }> {
+  const { stdout } = await execFileAsync("git", ["show", `HEAD:${relativePath}`], {
+    cwd: repoPath,
+    encoding: "buffer",
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+
+  if (stdout.includes(0)) {
+    return { content: formatBinaryContent(relativePath), truncated: false };
+  }
+
+  return truncateContent(stdout.toString("utf8"));
+}
+
+function readWorkingContentPreview(
+  repoPath: string,
+  relativePath: string,
+): { content: string; truncated: boolean } {
+  const absPath = path.join(repoPath, relativePath);
+  const stat = fs.existsSync(absPath) ? fs.statSync(absPath) : null;
+  if (!stat?.isFile()) return { content: "", truncated: false };
+
+  const content = fs.readFileSync(absPath);
+  if (content.includes(0)) {
+    return { content: formatBinaryContent(relativePath), truncated: false };
+  }
+
+  return truncateContent(content.toString("utf8"));
+}
+
 async function getChangedFileStatus(repoPath: string, relativePath: string): Promise<string> {
   const { stdout } = await execFileAsync(
     "git",
@@ -285,6 +333,32 @@ async function getChangedFileStatus(repoPath: string, relativePath: string): Pro
   const status = stdout.trim().split(/\s+/)[0]?.[0];
   if (status) return status;
   return fs.existsSync(path.join(repoPath, relativePath)) ? "M" : "D";
+}
+
+async function readChangedFileContents(
+  repoPath: string,
+  relativePath: string,
+  untracked: boolean,
+): Promise<{
+  originalContent: string;
+  modifiedContent: string;
+  contentTruncated: boolean;
+}> {
+  const [original, modified] = await Promise.all([
+    untracked
+      ? Promise.resolve({ content: "", truncated: false })
+      : readHeadContentPreview(repoPath, relativePath).catch(() => ({
+          content: "",
+          truncated: false,
+        })),
+    Promise.resolve(readWorkingContentPreview(repoPath, relativePath)),
+  ]);
+
+  return {
+    originalContent: original.content,
+    modifiedContent: modified.content,
+    contentTruncated: original.truncated || modified.truncated,
+  };
 }
 
 async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutChangedFile[]> {
@@ -306,6 +380,7 @@ async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutC
         truncated: false,
       }));
       const lineCounts = countDiffLines(diff);
+      const contents = await readChangedFileContents(repoPath, relativePath, untracked);
 
       return {
         path: relativePath,
@@ -314,6 +389,7 @@ async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutC
         deletions: lineCounts.deletions,
         diff,
         truncated,
+        ...contents,
       };
     }),
   );

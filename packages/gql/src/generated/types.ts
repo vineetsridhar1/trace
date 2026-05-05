@@ -474,8 +474,11 @@ export type LinkedCheckoutActionResult = {
 export type LinkedCheckoutChangedFile = {
   __typename?: "LinkedCheckoutChangedFile";
   additions: Scalars["Int"]["output"];
+  contentTruncated: Scalars["Boolean"]["output"];
   deletions: Scalars["Int"]["output"];
   diff: Scalars["String"]["output"];
+  modifiedContent: Scalars["String"]["output"];
+  originalContent: Scalars["String"]["output"];
   path: Scalars["String"]["output"];
   status: Scalars["String"]["output"];
   truncated: Scalars["Boolean"]["output"];
