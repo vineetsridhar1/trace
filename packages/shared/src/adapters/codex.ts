@@ -285,7 +285,7 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     if (!data.method) return;
-    this.processNotification(data.method, data.params, onOutput, onOutputDelta, complete);
+    this.processNotification(data.method, data.params, onOutput, onOutputDelta, complete, fail);
   }
 
   private processNotification(
@@ -294,9 +294,16 @@ export class CodexAdapter implements CodingToolAdapter {
     onOutput: (event: ToolOutput) => void,
     onOutputDelta: OutputDeltaCallback | undefined,
     complete: () => void,
+    fail: (message: string) => void,
   ) {
     const params = asRecord(paramsValue);
     if (!params) return;
+
+    if (method === "error") {
+      const error = asRecord(params.error);
+      fail(stringField(error, "message") ?? "Codex app-server error");
+      return;
+    }
 
     if (method === "item/agentMessage/delta") {
       const delta = stringField(params, "delta");

@@ -4,6 +4,7 @@ import { handleOrgEvent } from "../src/events/handlers.js";
 import { useEntityStore } from "../src/stores/entity.js";
 import { useAuthStore } from "../src/stores/auth.js";
 import { setOrgEventUIBindings, type OrgEventUIBindings } from "../src/events/ui-bindings.js";
+import { upsertFetchedSessionEventsWithOptimisticResolution } from "../src/mutations/optimistic-message.js";
 
 function resetStores() {
   useEntityStore.setState({
@@ -26,6 +27,7 @@ function resetStores() {
     _messageIdsByScope: {},
     _eventIdsByParentId: {},
     _queuedMessageIdsBySession: {},
+    streamingSessionOutputs: {},
   });
   useAuthStore.setState({
     user: null,
@@ -509,5 +511,26 @@ describe("handleOrgEvent", () => {
     );
 
     expect(harness.setActiveSessionId).toHaveBeenCalledWith("session-new");
+  });
+
+  it("clears stale streaming output when fetched events include final assistant output", () => {
+    useEntityStore.getState().appendStreamingSessionOutput(
+      "session-1",
+      "draft",
+      "2026-01-01T00:00:00.000Z",
+    );
+
+    upsertFetchedSessionEventsWithOptimisticResolution("session-1", [
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "final" }] },
+        },
+      }) as Event & { id: string },
+    ]);
+
+    expect(useEntityStore.getState().streamingSessionOutputs["session-1"]).toBeUndefined();
   });
 });
