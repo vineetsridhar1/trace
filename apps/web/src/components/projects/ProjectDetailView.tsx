@@ -9,7 +9,12 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { gql } from "@urql/core";
-import type { Project, ProjectTicketGenerationAttempt, Ticket } from "@trace/gql";
+import type {
+  Project,
+  ProjectTicketExecution,
+  ProjectTicketGenerationAttempt,
+  Ticket,
+} from "@trace/gql";
 import {
   type ProjectRunEntity,
   type SessionEntity,
@@ -36,6 +41,16 @@ const ACTIVE_PROJECT_RUN_STATUSES = new Set([
   "running",
   "needs_human",
   "paused",
+]);
+
+const VISIBLE_TICKET_EXECUTION_STATUSES = new Set([
+  "queued",
+  "ready",
+  "running",
+  "reviewing",
+  "fixing",
+  "needs_human",
+  "blocked",
 ]);
 
 const PROJECT_QUERY = gql`
@@ -141,6 +156,27 @@ const PROJECT_QUERY = gql`
           createdAt
           updatedAt
         }
+        ticketExecutions {
+          id
+          organizationId
+          projectId
+          projectRunId
+          ticketId
+          status
+          sequence
+          implementationSessionId
+          reviewSessionId
+          fixSessionId
+          previousStatus
+          lastLifecycleEventId
+          lastError
+          startedAt
+          completedAt
+          failedAt
+          cancelledAt
+          createdAt
+          updatedAt
+        }
         createdAt
         updatedAt
       }
@@ -185,11 +221,28 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const currentProjectRun =
     activeProjectRun ??
     selectActiveProjectRun((project?.runs ?? []) as Array<ProjectRunEntity & { id: string }>);
+  const activeTicketExecution = useEntityStore((s) => {
+    if (!currentProjectRun?.id) return null;
+    return (
+      Object.values(s.projectTicketExecutions)
+        .filter(
+          (execution) =>
+            execution.projectRunId === currentProjectRun.id &&
+            VISIBLE_TICKET_EXECUTION_STATUSES.has(execution.status),
+        )
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
+    );
+  });
   const planningSessionId = project
     ? selectPlanningSessionId(project.sessions, currentProjectRun?.planningSessionId)
     : null;
+  const implementationSessionId = activeTicketExecution?.implementationSessionId ?? null;
+  const visibleSessionId = implementationSessionId ?? planningSessionId;
+  const showingImplementationSession = Boolean(implementationSessionId);
   const projectPlanningInputLocked =
-    Boolean(currentProjectRun) && !currentProjectRun?.ticketGenerationAttempt;
+    !showingImplementationSession &&
+    Boolean(currentProjectRun) &&
+    !currentProjectRun?.ticketGenerationAttempt;
   const fetchProject = useCallback(async () => {
     setError(null);
     const result = await client.query(PROJECT_QUERY, { id: projectId }).toPromise();
@@ -202,6 +255,14 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     if (fetched && (!activeOrgId || fetched.organizationId === activeOrgId)) {
       upsert("projects", fetched.id, fetched);
       upsertMany("projectRuns", fetched.runs as Array<ProjectRunEntity & { id: string }>);
+      upsertMany(
+        "projectTicketExecutions",
+        fetched.runs.flatMap(
+          (run) =>
+            ((run as { ticketExecutions?: Array<ProjectTicketExecution & { id: string }> })
+              .ticketExecutions ?? []) as Array<ProjectTicketExecution & { id: string }>,
+        ),
+      );
       upsertMany(
         "projectTicketGenerationAttempts",
         fetched.runs
@@ -340,14 +401,15 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
 
         <div className="min-h-0 overflow-hidden">
-          {planningSessionId ? (
+          {visibleSessionId ? (
             <SessionDetailView
-              sessionId={planningSessionId}
+              key={visibleSessionId}
+              sessionId={visibleSessionId}
               panelMode
-              onProjectPlanApproved={fetchProject}
+              onProjectPlanApproved={showingImplementationSession ? undefined : fetchProject}
               projectPlanningInputLocked={projectPlanningInputLocked}
               projectPlanningContext={
-                currentProjectRun
+                !showingImplementationSession && currentProjectRun
                   ? {
                       organizationId: project.organizationId,
                       projectId: project.id,

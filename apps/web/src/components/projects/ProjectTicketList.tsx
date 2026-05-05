@@ -1,12 +1,36 @@
 import { useCallback, useRef, useState } from "react";
-import { AlertCircle, ListChecks, Loader2 } from "lucide-react";
+import { AlertCircle, ListChecks, Loader2, Play } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { gql } from "@urql/core";
 import { useEntityStore } from "@trace/client-core";
+import { useShallow } from "zustand/react/shallow";
+import { client } from "../../lib/urql";
+import { usePreferencesStore } from "../../stores/preferences";
+import { Button } from "../ui/button";
+import { getDefaultModel } from "../session/modelOptions";
 import { TicketDetailPanel } from "../tickets/TicketDetailPanel";
 import { ProjectTicketRow } from "./ProjectTicketRow";
 import { useProjectTicketIds } from "./useProjectTicketIds";
 
 const ROW_HEIGHT = 52;
+
+const BLOCKING_EXECUTION_STATUSES = new Set([
+  "queued",
+  "ready",
+  "running",
+  "reviewing",
+  "fixing",
+  "needs_human",
+  "blocked",
+]);
+
+const START_PROJECT_TICKET_EXECUTION_MUTATION = gql`
+  mutation StartProjectTicketExecution($input: StartProjectTicketExecutionInput!) {
+    startProjectTicketExecution(input: $input) {
+      id
+    }
+  }
+`;
 
 export function ProjectTicketList({
   projectId,
@@ -16,6 +40,8 @@ export function ProjectTicketList({
   projectRunId: string | null;
 }) {
   const ticketIds = useProjectTicketIds(projectId);
+  const defaultTool = usePreferencesStore((s) => s.defaultTool);
+  const defaultModel = usePreferencesStore((s) => s.defaultModel);
   const generationAttempt = useEntityStore((state) => {
     if (!projectRunId) return null;
     return (
@@ -24,7 +50,23 @@ export function ProjectTicketList({
       ) ?? null
     );
   });
+  const blockingExecution = useEntityStore(
+    useShallow((state) => {
+      if (!projectRunId) return null;
+      return (
+        Object.values(state.projectTicketExecutions)
+          .filter(
+            (execution) =>
+              execution.projectRunId === projectRunId &&
+              BLOCKING_EXECUTION_STATUSES.has(execution.status),
+          )
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
+      );
+    }),
+  );
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [startingExecution, setStartingExecution] = useState(false);
+  const [executionError, setExecutionError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const virtualizer = useVirtualizer({
     count: ticketIds.length,
@@ -37,12 +79,50 @@ export function ProjectTicketList({
     setSelectedTicketId((current) => (current === ticketId ? null : ticketId));
   }, []);
 
+  const canStartNext =
+    Boolean(projectRunId) &&
+    ticketIds.length > 0 &&
+    !blockingExecution &&
+    generationAttempt?.status !== "running" &&
+    generationAttempt?.status !== "pending";
+
+  const handleStartNext = useCallback(async () => {
+    if (!projectRunId || startingExecution) return;
+    setStartingExecution(true);
+    setExecutionError(null);
+
+    const tool = defaultTool ?? "claude_code";
+    const result = await client
+      .mutation(START_PROJECT_TICKET_EXECUTION_MUTATION, {
+        input: {
+          projectRunId,
+          tool,
+          model: defaultModel ?? getDefaultModel(tool),
+        },
+      })
+      .toPromise();
+
+    if (result.error) {
+      setExecutionError(result.error.message);
+    }
+    setStartingExecution(false);
+  }, [defaultModel, defaultTool, projectRunId, startingExecution]);
+
   return (
     <section className="relative flex min-h-0 flex-1 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
         <ListChecks size={15} className="text-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">Tickets</h2>
         <span className="ml-auto text-xs text-muted-foreground">{ticketIds.length}</span>
+        <Button
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={!canStartNext || startingExecution}
+          onClick={handleStartNext}
+        >
+          {startingExecution ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+          Start next
+        </Button>
       </div>
 
       {generationAttempt ? (
@@ -51,6 +131,19 @@ export function ProjectTicketList({
           error={generationAttempt.error ?? null}
           draftCount={generationAttempt.draftCount}
         />
+      ) : null}
+
+      {blockingExecution ? (
+        <ExecutionNotice
+          status={blockingExecution.status}
+          ticketId={blockingExecution.ticketId}
+          hasSession={Boolean(blockingExecution.implementationSessionId)}
+        />
+      ) : executionError ? (
+        <div className="flex shrink-0 items-start gap-2 border-b border-border bg-destructive/5 px-4 py-2 text-xs text-destructive">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          <p className="min-w-0 break-words">{executionError}</p>
+        </div>
       ) : null}
 
       {ticketIds.length === 0 ? (
@@ -86,6 +179,33 @@ export function ProjectTicketList({
 
       <TicketDetailPanel ticketId={selectedTicketId} onClose={() => setSelectedTicketId(null)} />
     </section>
+  );
+}
+
+function ExecutionNotice({
+  status,
+  ticketId,
+  hasSession,
+}: {
+  status: string;
+  ticketId: string;
+  hasSession: boolean;
+}) {
+  return (
+    <div className="flex shrink-0 items-start gap-2 border-b border-border bg-surface px-4 py-2 text-xs text-muted-foreground">
+      <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin text-accent" />
+      <div className="min-w-0">
+        <p className="font-medium text-foreground">
+          {hasSession ? "Executing project ticket" : "Starting ticket execution"}
+        </p>
+        <p className="mt-0.5 break-words">
+          {hasSession
+            ? "The implementation session is open on the right."
+            : "Trace is creating the implementation session."}{" "}
+          Ticket {ticketId.slice(0, 8)} is {status.replace(/_/g, " ")}.
+        </p>
+      </div>
+    </div>
   );
 }
 

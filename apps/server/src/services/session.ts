@@ -36,6 +36,7 @@ import {
   type BridgeAccessApprovedHandlerInput,
 } from "./runtime-access.js";
 import { agentEnvironmentService } from "./agent-environment.js";
+import { projectTicketExecutionService } from "./project-ticket-execution.js";
 import {
   alertAgentEnvironmentOperator,
   logAgentEnvironmentTelemetry,
@@ -2086,6 +2087,12 @@ export class SessionService {
           select: { ticketId: true },
         })
       : [];
+    const linkedTicketIds = Array.from(
+      new Set([
+        ...sourceTicketLinks.map((ticketLink: { ticketId: string }) => ticketLink.ticketId),
+        ...(input.ticketId ? [input.ticketId] : []),
+      ]),
+    );
 
     if (input.restoreCheckpointId && !resolvedRepoId) {
       throw new Error("Checkpoint is not associated with a repo");
@@ -2413,10 +2420,10 @@ export class SessionService {
         include: SESSION_INCLUDE,
       });
 
-      if (sourceTicketLinks.length > 0) {
+      if (linkedTicketIds.length > 0) {
         await tx.ticketLink.createMany({
-          data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
-            ticketId: ticketLink.ticketId,
+          data: linkedTicketIds.map((ticketId: string) => ({
+            ticketId,
             entityType: "session",
             entityId: session.id,
           })),
@@ -3025,6 +3032,16 @@ export class SessionService {
       actorId,
     });
 
+    await projectTicketExecutionService.handleImplementationSessionTerminated({
+      sessionId: id,
+      organizationId: session.organizationId,
+      agentStatus: newAgentStatus,
+      sessionStatus: newSessionStatus,
+      reason: typeof payloadExtras?.reason === "string" ? payloadExtras.reason : null,
+      actorType,
+      actorId,
+    });
+
     return session;
   }
 
@@ -3515,6 +3532,16 @@ export class SessionService {
         sessionStatus: newSessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    await projectTicketExecutionService.handleImplementationSessionTerminated({
+      sessionId: id,
+      organizationId: session.organizationId,
+      agentStatus: newAgentStatus,
+      sessionStatus: newSessionStatus,
+      reason: "bridge_complete",
       actorType: "system",
       actorId: "system",
     });
@@ -4367,6 +4394,16 @@ export class SessionService {
         worktreeDeleted: true,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    await projectTicketExecutionService.handleImplementationSessionTerminated({
+      sessionId,
+      organizationId: session.organizationId,
+      agentStatus: session.agentStatus,
+      sessionStatus: session.sessionStatus,
+      reason: "workspace_failed",
       actorType: "system",
       actorId: "system",
     });

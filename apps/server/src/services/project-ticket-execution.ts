@@ -1,10 +1,18 @@
 import type { ActorType, StartProjectTicketExecutionInput } from "@trace/gql";
-import type { Prisma, ProjectTicketExecution, ProjectTicketExecutionStatus } from "@prisma/client";
+import type {
+  AgentStatus,
+  Prisma,
+  ProjectTicketExecution,
+  ProjectTicketExecutionStatus,
+  SessionStatus,
+} from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { eventService } from "./event.js";
 
 const ACTIVE_EXECUTION_STATUSES: ProjectTicketExecutionStatus[] = [
+  "queued",
+  "ready",
   "running",
   "reviewing",
   "fixing",
@@ -91,6 +99,92 @@ export class ProjectTicketExecutionService {
     });
   }
 
+  async handleImplementationSessionTerminated(input: {
+    sessionId: string;
+    organizationId: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    reason?: string | null;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<ProjectTicketExecution | null> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const current = await tx.projectTicketExecution.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          implementationSessionId: input.sessionId,
+          status: { in: ACTIVE_EXECUTION_STATUSES },
+        },
+      });
+      if (!current) return null;
+
+      const nextStatus = mapTerminatedSessionToExecutionStatus(
+        input.agentStatus,
+        input.sessionStatus,
+        input.reason,
+      );
+      if (current.status === nextStatus) return current;
+
+      const now = new Date();
+      const updated = await tx.projectTicketExecution.update({
+        where: { id: current.id },
+        data: {
+          previousStatus: current.status,
+          status: nextStatus,
+          ...(nextStatus === "completed" ? { completedAt: now } : {}),
+          ...(nextStatus === "failed" ? { failedAt: now, lastError: input.reason ?? null } : {}),
+          ...(nextStatus === "cancelled" ? { cancelledAt: now } : {}),
+        },
+      });
+
+      const lifecycleEvent = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "project",
+          scopeId: current.projectId,
+          eventType: "project_ticket_lifecycle_event",
+          payload: {
+            projectRunId: current.projectRunId,
+            ticketId: current.ticketId,
+            executionId: current.id,
+            previousStatus: current.status,
+            nextStatus: updated.status,
+            linkedSessionIds: [input.sessionId],
+            reason: input.reason ?? null,
+            projectTicketExecution: projectTicketExecutionPayload(updated),
+          },
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      const withLifecycle = await tx.projectTicketExecution.update({
+        where: { id: updated.id },
+        data: { lastLifecycleEventId: lifecycleEvent.id },
+      });
+
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "project",
+          scopeId: current.projectId,
+          eventType: "project_ticket_execution_updated",
+          payload: {
+            projectTicketExecution: projectTicketExecutionPayload(withLifecycle),
+            projectRunId: current.projectRunId,
+            ticketId: current.ticketId,
+          },
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      return withLifecycle;
+    });
+  }
+
   async startNextOrTicket(
     input: StartProjectTicketExecutionInput,
     organizationId: string,
@@ -112,11 +206,19 @@ export class ProjectTicketExecutionService {
       await assertActorOrgAccess(tx, organizationId, actorType, actorId);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${projectRun.id}))`;
 
-      const ticket = await this.resolveTicket(tx, projectRun.projectId, input.ticketId);
+      const ticket = await this.resolveTicket(
+        tx,
+        projectRun.projectId,
+        projectRun.id,
+        input.ticketId,
+      );
       const existing = await tx.projectTicketExecution.findUnique({
         where: { projectRunId_ticketId: { projectRunId: projectRun.id, ticketId: ticket.id } },
       });
       if (existing?.implementationSessionId) {
+        return { projectRun, ticket, execution: existing, shouldStart: false };
+      }
+      if (existing && ACTIVE_EXECUTION_STATUSES.includes(existing.status)) {
         return { projectRun, ticket, execution: existing, shouldStart: false };
       }
 
@@ -132,55 +234,49 @@ export class ProjectTicketExecutionService {
       }
 
       const sequence = await this.nextSequence(tx, projectRun.id);
-      const execution =
-        existing ??
-        (await tx.projectTicketExecution.create({
-          data: {
-            organizationId,
-            projectId: projectRun.projectId,
-            projectRunId: projectRun.id,
-            ticketId: ticket.id,
-            status: "ready",
-            sequence,
-          },
-        }));
+      const execution = existing
+        ? existing
+        : await tx.projectTicketExecution.create({
+            data: {
+              organizationId,
+              projectId: projectRun.projectId,
+              projectRunId: projectRun.id,
+              ticketId: ticket.id,
+              status: "ready",
+              sequence,
+            },
+          });
 
-      await eventService.create(
-        {
-          organizationId,
-          scopeType: "project",
-          scopeId: projectRun.projectId,
-          eventType: "project_ticket_execution_created",
-          payload: {
-            projectTicketExecution: projectTicketExecutionPayload(execution),
-            projectRunId: projectRun.id,
-            ticketId: ticket.id,
+      if (!existing) {
+        await eventService.create(
+          {
+            organizationId,
+            scopeType: "project",
+            scopeId: projectRun.projectId,
+            eventType: "project_ticket_execution_created",
+            payload: {
+              projectTicketExecution: projectTicketExecutionPayload(execution),
+              projectRunId: projectRun.id,
+              ticketId: ticket.id,
+            },
+            actorType,
+            actorId,
           },
-          actorType,
-          actorId,
-        },
-        tx,
-      );
+          tx,
+        );
+      }
 
       return { projectRun, ticket, execution, shouldStart: true };
     });
 
     if (!prepared.shouldStart) return prepared.execution;
 
-    const session = await this.sessions.start({
+    const session = await this.startImplementationSession({
+      input,
       organizationId,
-      createdById: actorId,
-      actorType,
       actorId,
-      tool: input.tool ?? "claude_code",
-      model: input.model,
-      reasoningEffort: input.reasoningEffort,
-      hosting: input.hosting,
-      repoId: prepared.projectRun.project.repoId ?? undefined,
-      projectId: prepared.projectRun.projectId,
-      ticketId: prepared.ticket.id,
-      prompt: buildImplementationPrompt(prepared.projectRun, prepared.ticket),
-      interactionMode: "code",
+      actorType,
+      prepared,
     });
 
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -249,6 +345,7 @@ export class ProjectTicketExecutionService {
   private async resolveTicket(
     tx: Prisma.TransactionClient,
     projectId: string,
+    projectRunId: string,
     ticketId?: string | null,
   ): Promise<TicketForExecution> {
     if (ticketId) {
@@ -265,7 +362,10 @@ export class ProjectTicketExecutionService {
     const links = await tx.ticketProject.findMany({
       where: {
         projectId,
-        ticket: { status: { notIn: ["done", "cancelled"] } },
+        ticket: {
+          status: { notIn: ["done", "cancelled"] },
+          projectExecutions: { none: { projectRunId } },
+        },
       },
       include: { ticket: true },
       orderBy: { ticket: { createdAt: "asc" } },
@@ -284,6 +384,119 @@ export class ProjectTicketExecutionService {
       take: 1,
     });
     return (executions[0]?.sequence ?? 0) + 1;
+  }
+
+  private async startImplementationSession(input: {
+    input: StartProjectTicketExecutionInput;
+    organizationId: string;
+    actorId: string;
+    actorType: ActorType;
+    prepared: {
+      projectRun: ProjectRunForExecution;
+      ticket: TicketForExecution;
+      execution: ProjectTicketExecution;
+    };
+  }): Promise<{ id: string }> {
+    try {
+      return await this.sessions.start({
+        organizationId: input.organizationId,
+        createdById: input.actorId,
+        actorType: input.actorType,
+        actorId: input.actorId,
+        tool: input.input.tool ?? "claude_code",
+        model: input.input.model,
+        reasoningEffort: input.input.reasoningEffort,
+        hosting: input.input.hosting,
+        repoId: input.prepared.projectRun.project.repoId ?? undefined,
+        projectId: input.prepared.projectRun.projectId,
+        ticketId: input.prepared.ticket.id,
+        prompt: buildImplementationPrompt(input.prepared.projectRun, input.prepared.ticket),
+        interactionMode: "code",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.markStartFailed(
+        input.prepared,
+        input.organizationId,
+        input.actorType,
+        input.actorId,
+        message,
+      );
+      throw error;
+    }
+  }
+
+  private async markStartFailed(
+    prepared: {
+      projectRun: ProjectRunForExecution;
+      ticket: TicketForExecution;
+      execution: ProjectTicketExecution;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+    message: string,
+  ): Promise<void> {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const current = await tx.projectTicketExecution.findUnique({
+        where: { id: prepared.execution.id },
+      });
+      if (!current || current.implementationSessionId || current.status === "failed") return;
+
+      const updated = await tx.projectTicketExecution.update({
+        where: { id: current.id },
+        data: {
+          previousStatus: current.status,
+          status: "failed",
+          failedAt: new Date(),
+          lastError: message,
+        },
+      });
+
+      const lifecycleEvent = await eventService.create(
+        {
+          organizationId,
+          scopeType: "project",
+          scopeId: prepared.projectRun.projectId,
+          eventType: "project_ticket_lifecycle_event",
+          payload: {
+            projectRunId: prepared.projectRun.id,
+            ticketId: prepared.ticket.id,
+            executionId: updated.id,
+            previousStatus: current.status,
+            nextStatus: updated.status,
+            linkedSessionIds: [],
+            reason: message,
+            projectTicketExecution: projectTicketExecutionPayload(updated),
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      const withLifecycle = await tx.projectTicketExecution.update({
+        where: { id: updated.id },
+        data: { lastLifecycleEventId: lifecycleEvent.id },
+      });
+
+      await eventService.create(
+        {
+          organizationId,
+          scopeType: "project",
+          scopeId: prepared.projectRun.projectId,
+          eventType: "project_ticket_execution_updated",
+          payload: {
+            projectTicketExecution: projectTicketExecutionPayload(withLifecycle),
+            projectRunId: prepared.projectRun.id,
+            ticketId: prepared.ticket.id,
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+    });
   }
 }
 
@@ -304,6 +517,17 @@ function buildImplementationPrompt(
     "Ticket description:",
     ticket.description,
   ].join("\n");
+}
+
+function mapTerminatedSessionToExecutionStatus(
+  agentStatus: AgentStatus,
+  sessionStatus: SessionStatus,
+  reason?: string | null,
+): ProjectTicketExecutionStatus {
+  if (sessionStatus === "needs_input") return "needs_human";
+  if (agentStatus === "failed" || reason === "workspace_failed") return "failed";
+  if (agentStatus === "stopped" || reason === "manual_stop") return "cancelled";
+  return "completed";
 }
 
 export const projectTicketExecutionService = new ProjectTicketExecutionService();
