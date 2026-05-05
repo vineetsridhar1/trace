@@ -133,7 +133,7 @@ describe("auth helpers", () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-1",
       ownerUserId: "user-1",
-      organizationId: "org-1",
+      pairedOrganizationId: "org-1",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
@@ -356,7 +356,7 @@ describe("auth helpers", () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-2",
       ownerUserId: "user-4",
-      organizationId: "org-paired-from",
+      pairedOrganizationId: "org-paired-from",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });

@@ -222,7 +222,7 @@ model Organization {
   orgMembers OrgMember[]
   pushTokens PushToken[]
   mobilePairingTokens MobilePairingToken[]
-  mobileDevices MobileDevice[]
+  pairedMobileDevices MobileDevice[]
   repos    Repo[]
   projects Project[]
   bridgeRuntimes BridgeRuntime[]
@@ -725,8 +725,8 @@ model MobileDevice {
   id             String       @id @default(uuid())
   ownerUserId    String
   ownerUser      User         @relation("MobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pairedOrganizationId String?
+  pairedOrganization   Organization? @relation(fields: [pairedOrganizationId], references: [id], onDelete: SetNull)
   installId      String
   deviceName     String?
   platform       PushPlatform?
@@ -738,8 +738,8 @@ model MobileDevice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([ownerUserId, organizationId, installId])
-  @@index([organizationId, ownerUserId, revokedAt, lastSeenAt])
+  @@unique([ownerUserId, installId])
+  @@index([ownerUserId, revokedAt, lastSeenAt])
 }
 
 model BridgeAccessGrant {

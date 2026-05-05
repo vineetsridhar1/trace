@@ -96,11 +96,26 @@ function setSessionCookie(res: Response, token: string): void {
   res.cookie("trace_token", token, getSessionCookieOptions());
 }
 
+function isGitHubUserResponse(value: unknown): value is GitHubUserResponse {
+  if (!value || typeof value !== "object") return false;
+  const user = value as Partial<GitHubUserResponse>;
+  return (
+    typeof user.id === "number" &&
+    typeof user.login === "string" &&
+    (typeof user.email === "string" || user.email === null) &&
+    typeof user.avatar_url === "string" &&
+    (typeof user.name === "string" || user.name === null)
+  );
+}
+
 async function upsertUserFromGitHubAccessToken(accessToken: string) {
   const userRes = await fetch("https://api.github.com/user", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const ghUser = (await userRes.json()) as GitHubUserResponse;
+  const ghUser = (await userRes.json().catch(() => null)) as unknown;
+  if (!userRes.ok || !isGitHubUserResponse(ghUser)) {
+    throw new Error("Could not verify GitHub identity");
+  }
   const email = ghUser.email ?? `github-${ghUser.id}@trace.local`;
 
   let user = await prisma.user.findFirst({
@@ -307,18 +322,8 @@ async function listMobileDevicesForRequest(req: Request, res: Response): Promise
     return;
   }
 
-  const organizationId = await resolveRequestedOrganizationId(
-    authenticated.auth.userId,
-    readOrganizationIdHeader(req),
-  );
-  if (!organizationId) {
-    res.status(403).json({ error: "No active organization found" });
-    return;
-  }
-
   const devices = await listMobileDevices({
     ownerUserId: authenticated.auth.userId,
-    organizationId,
   });
   res.json({ devices });
 }
@@ -341,14 +346,6 @@ async function revokeMobileDeviceForRequest(req: Request, res: Response): Promis
     return;
   }
 
-  const organizationId = await resolveRequestedOrganizationId(
-    authenticated.auth.userId,
-    readOrganizationIdHeader(req),
-  );
-  if (!organizationId) {
-    res.status(403).json({ error: "No active organization found" });
-    return;
-  }
   const deviceId =
     typeof req.params.deviceId === "string"
       ? req.params.deviceId
@@ -361,7 +358,6 @@ async function revokeMobileDeviceForRequest(req: Request, res: Response): Promis
   try {
     await revokeMobileDevice({
       ownerUserId: authenticated.auth.userId,
-      organizationId,
       deviceId,
     });
     res.json({ ok: true });
@@ -553,7 +549,16 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
     });
   }
 
-  const user = await upsertUserFromGitHubAccessToken(payload.access_token);
+  let user: Awaited<ReturnType<typeof upsertUserFromGitHubAccessToken>>;
+  try {
+    user = await upsertUserFromGitHubAccessToken(payload.access_token);
+  } catch {
+    await deleteGitHubDeviceAuth(deviceAuthId);
+    return res.status(400).json({
+      status: "error",
+      error: "Could not verify GitHub identity. Start GitHub login again.",
+    });
+  }
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
   setSessionCookie(res, token);
   await deleteGitHubDeviceAuth(deviceAuthId);

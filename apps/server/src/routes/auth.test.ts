@@ -398,7 +398,7 @@ describe("local-mode external auth", () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-1",
       ownerUserId: "user-1",
-      organizationId: "org-1",
+      pairedOrganizationId: "org-1",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
@@ -434,7 +434,7 @@ describe("local-mode external auth", () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-1",
       ownerUserId: "user-1",
-      organizationId: "org-2",
+      pairedOrganizationId: "org-2",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
@@ -565,7 +565,7 @@ describe("bridge auth tokens", () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-1",
       ownerUserId: "user-1",
-      organizationId: "org-paired-from",
+      pairedOrganizationId: "org-paired-from",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
@@ -727,13 +727,13 @@ describe("mobile pairing in local mode", () => {
     });
     expect(prismaMock.mobileDevice.upsert).toHaveBeenCalledWith({
       where: {
-        ownerUserId_organizationId_installId: {
+        ownerUserId_installId: {
           ownerUserId: "user-1",
-          organizationId: "org-1",
           installId: "install-12345678",
         },
       },
       update: expect.objectContaining({
+        pairedOrganizationId: "org-1",
         deviceName: "Vineet's iPhone",
         platform: "ios",
         appVersion: "0.0.1",
@@ -741,7 +741,7 @@ describe("mobile pairing in local mode", () => {
       }),
       create: expect.objectContaining({
         ownerUserId: "user-1",
-        organizationId: "org-1",
+        pairedOrganizationId: "org-1",
         installId: "install-12345678",
       }),
       select: {
@@ -778,7 +778,7 @@ describe("mobile pairing in local mode", () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValue({
       id: "device-1",
       ownerUserId: "user-1",
-      organizationId: "org-1",
+      pairedOrganizationId: "org-1",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValue({ count: 1 });
@@ -804,7 +804,7 @@ describe("mobile pairing in local mode", () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValue({
       id: "device-1",
       ownerUserId: "user-1",
-      organizationId: "org-1",
+      pairedOrganizationId: "org-1",
       revokedAt: null,
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValue({ count: 1 });
@@ -900,6 +900,69 @@ describe("mobile pairing in hosted mode", () => {
     expect(body.token.length).toBeGreaterThan(20);
     expect(body.deviceId).toBe("device-1");
     expect(body.organizationId).toBe("org-1");
+  });
+
+  it("lists mobile devices across all organizations for the signed-in user", async () => {
+    prismaMock.mobileDevice.findMany.mockResolvedValue([
+      {
+        id: "device-1",
+        installId: "install-1",
+        deviceName: "iPhone",
+        platform: "ios",
+        appVersion: "0.0.1",
+        lastSeenAt: new Date("2026-05-01T00:00:00.000Z"),
+        createdAt: new Date("2026-05-01T00:00:00.000Z"),
+      },
+    ]);
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/mobile/devices`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Organization-Id": "org-2",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.mobileDevice.findMany).toHaveBeenCalledWith({
+      where: {
+        ownerUserId: "user-1",
+        revokedAt: null,
+      },
+      orderBy: [{ lastSeenAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        installId: true,
+        deviceName: true,
+        platform: true,
+        appVersion: true,
+        lastSeenAt: true,
+        createdAt: true,
+      },
+    });
+  });
+
+  it("revokes a mobile device by owner without requiring the paired organization", async () => {
+    prismaMock.mobileDevice.updateMany.mockResolvedValue({ count: 1 });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/mobile/devices/device-1`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Organization-Id": "org-2",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.mobileDevice.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "device-1",
+        ownerUserId: "user-1",
+        revokedAt: null,
+      },
+      data: { revokedAt: expect.any(Date) },
+    });
   });
 });
 
@@ -1044,6 +1107,60 @@ describe("github device oauth", () => {
         OR: [{ githubId: 42 }, { email: "github-42@trace.local" }],
       },
     });
+  });
+
+  it("fails closed when GitHub user identity cannot be verified", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.endsWith("/user")) {
+          return new Response(JSON.stringify({ message: "Bad credentials" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(400);
+    expect(await pollRes.json()).toEqual({
+      status: "error",
+      error: "Could not verify GitHub identity. Start GitHub login again.",
+    });
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
   it("rejects access tokens with GitHub scopes", async () => {

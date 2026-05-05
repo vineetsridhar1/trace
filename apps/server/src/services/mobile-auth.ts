@@ -18,7 +18,7 @@ export class MobileAuthError extends Error {
 export type MobileAuthSubject = {
   kind: "mobile";
   userId: string;
-  pairedOrganizationId: string;
+  pairedOrganizationId: string | null;
   deviceId: string;
 };
 
@@ -120,13 +120,13 @@ export async function pairMobileDevice(input: {
     const { secret, secretHash } = createSecret();
     const device = await tx.mobileDevice.upsert({
       where: {
-        ownerUserId_organizationId_installId: {
+        ownerUserId_installId: {
           ownerUserId: pairingRecord.ownerUserId,
-          organizationId: pairingRecord.organizationId,
           installId,
         },
       },
       update: {
+        pairedOrganizationId: pairingRecord.organizationId,
         deviceName: sanitizeDeviceName(input.deviceName),
         platform: input.platform ?? null,
         appVersion: sanitizeAppVersion(input.appVersion),
@@ -136,7 +136,7 @@ export async function pairMobileDevice(input: {
       },
       create: {
         ownerUserId: pairingRecord.ownerUserId,
-        organizationId: pairingRecord.organizationId,
+        pairedOrganizationId: pairingRecord.organizationId,
         installId,
         deviceName: sanitizeDeviceName(input.deviceName),
         platform: input.platform ?? null,
@@ -169,7 +169,7 @@ export async function authenticateMobileSecret(
     select: {
       id: true,
       ownerUserId: true,
-      organizationId: true,
+      pairedOrganizationId: true,
       revokedAt: true,
     },
   });
@@ -186,19 +186,15 @@ export async function authenticateMobileSecret(
   return {
     kind: "mobile",
     userId: device.ownerUserId,
-    pairedOrganizationId: device.organizationId,
+    pairedOrganizationId: device.pairedOrganizationId,
     deviceId: device.id,
   };
 }
 
-export async function listMobileDevices(input: {
-  ownerUserId: string;
-  organizationId: string;
-}) {
+export async function listMobileDevices(input: { ownerUserId: string }) {
   return prisma.mobileDevice.findMany({
     where: {
       ownerUserId: input.ownerUserId,
-      organizationId: input.organizationId,
       revokedAt: null,
     },
     orderBy: [{ lastSeenAt: "desc" }, { createdAt: "desc" }],
@@ -216,14 +212,12 @@ export async function listMobileDevices(input: {
 
 export async function revokeMobileDevice(input: {
   ownerUserId: string;
-  organizationId: string;
   deviceId: string;
 }): Promise<void> {
   const result = await prisma.mobileDevice.updateMany({
     where: {
       id: input.deviceId,
       ownerUserId: input.ownerUserId,
-      organizationId: input.organizationId,
       revokedAt: null,
     },
     data: { revokedAt: new Date() },
