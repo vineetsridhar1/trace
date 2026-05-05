@@ -178,7 +178,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <InboxView />
                 ) : activePage === "connections" ? (
                   <ConnectionsView />
-                ) : activePage === "tickets" ? (
+                ) : activePage === "tickets" && features.tickets ? (
                   <TicketsView />
                 ) : shouldRenderChatView ? (
                   <ChatView chatId={activeChatId} />
