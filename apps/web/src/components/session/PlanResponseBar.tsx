@@ -84,7 +84,9 @@ export function PlanResponseBar({
         );
         return;
       }
-      onDismiss();
+      if (!projectPlanningContext) {
+        onDismiss();
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Project plan could not be approved.");
     } finally {
