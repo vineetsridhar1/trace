@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
+import { File as ExpoFile } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import Animated, {
   Easing,
@@ -465,24 +466,45 @@ export function SessionInputComposer({
     void haptic.selection();
     try {
       const remaining = MAX_ATTACHMENTS - attachments.length;
-      const DocumentPicker = await import("expo-document-picker");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const nextAttachments: FileAttachment[] = result.assets.slice(0, remaining).map((asset) => ({
-        id: generateUUID(),
-        filename: asset.name || filenameFromUri(asset.uri, "attachment"),
-        mimeType: asset.mimeType || "application/octet-stream",
-        fileUri: asset.uri,
-        size: asset.size,
-        width: null,
-        height: null,
-        s3Key: null,
-        uploading: false,
-      }));
+      let nextAttachments: FileAttachment[];
+      try {
+        const DocumentPicker = await import("expo-document-picker");
+        const result = await DocumentPicker.getDocumentAsync({
+          type: "*/*",
+          multiple: true,
+          copyToCacheDirectory: true,
+        });
+        if (result.canceled) return;
+        nextAttachments = result.assets.slice(0, remaining).map((asset) => ({
+          id: generateUUID(),
+          filename: asset.name || filenameFromUri(asset.uri, "attachment"),
+          mimeType: asset.mimeType || "application/octet-stream",
+          fileUri: asset.uri,
+          size: asset.size,
+          width: null,
+          height: null,
+          s3Key: null,
+          uploading: false,
+        }));
+      } catch (documentPickerError) {
+        console.warn(
+          "[composer] document picker unavailable, using file-system picker",
+          documentPickerError,
+        );
+        const picked = await ExpoFile.pickFileAsync(undefined, "*/*");
+        const pickedFiles = Array.isArray(picked) ? picked : [picked];
+        nextAttachments = pickedFiles.slice(0, remaining).map((file) => ({
+          id: generateUUID(),
+          filename: filenameFromUri(file.uri, "attachment"),
+          mimeType: file.type || "application/octet-stream",
+          fileUri: file.uri,
+          size: file.size > 0 ? file.size : undefined,
+          width: null,
+          height: null,
+          s3Key: null,
+          uploading: false,
+        }));
+      }
       if (nextAttachments.length === 0) return;
       setAttachments(sessionId, (prev) => {
         const room = MAX_ATTACHMENTS - prev.length;

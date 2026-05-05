@@ -81,6 +81,12 @@ vi.mock("expo-document-picker", () => ({
   getDocumentAsync: vi.fn(),
 }));
 
+vi.mock("expo-file-system", () => ({
+  File: {
+    pickFileAsync: vi.fn(),
+  },
+}));
+
 vi.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: vi.fn(),
 }));
@@ -407,6 +413,43 @@ describe("SessionInputComposer", () => {
         size: 1234,
       },
     ]);
+  });
+
+  it("falls back to the file-system picker when document picker is unavailable", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const DocumentPicker = await import("expo-document-picker");
+    const FileSystem = await import("expo-file-system");
+    vi.mocked(DocumentPicker.getDocumentAsync).mockRejectedValueOnce(new Error("native missing"));
+    vi.mocked(FileSystem.File.pickFileAsync).mockResolvedValueOnce({
+      uri: "file:///tmp/fallback.zip",
+      type: "application/zip",
+      size: 321,
+    } as Awaited<ReturnType<typeof FileSystem.File.pickFileAsync>>);
+
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    await act(async () => {
+      latestAttachButtonProps?.onPress();
+    });
+
+    await act(async () => {
+      latestAttachmentSheetProps?.onPickFiles();
+    });
+    await waitForDraftAttachmentCount(1);
+
+    expect(draftAttachments).toMatchObject([
+      {
+        filename: "fallback.zip",
+        mimeType: "application/zip",
+        fileUri: "file:///tmp/fallback.zip",
+        size: 321,
+      },
+    ]);
+    warnSpy.mockRestore();
   });
 
   it("adds a MIME-derived extension for picked image URIs without filenames", async () => {
