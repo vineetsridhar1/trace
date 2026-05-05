@@ -164,7 +164,7 @@ export {
 } from "./models.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
-export { writeTraceActionCli } from "./trace-action-cli.js";
+export { traceActionStartedOutput, writeTraceActionCli } from "./trace-action-cli.js";
 export {
   CLOUD_MACHINE_RUNTIME_PREFIX,
   PROVISIONED_RUNTIME_PREFIX,

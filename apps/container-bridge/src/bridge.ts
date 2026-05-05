@@ -31,6 +31,7 @@ import {
   isMissingToolSessionError,
   parseGitShowOutput,
   inspectSessionGitSyncStatus,
+  traceActionStartedOutput,
   writeTraceActionCli,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
@@ -661,11 +662,15 @@ export class ContainerBridge implements IBridgeClient {
     imageUrls?: string[];
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
-    await ensureToolReady(resolvedTool);
 
     if (traceAction) {
       try {
         await writeTraceActionCli(cwd, traceAction);
+        this.send({
+          type: "session_output",
+          sessionId,
+          data: traceActionStartedOutput(traceAction),
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(
@@ -677,6 +682,8 @@ export class ContainerBridge implements IBridgeClient {
         return;
       }
     }
+
+    await ensureToolReady(resolvedTool);
 
     // If tool changed or the server requested a fresh tool session, abort the
     // old adapter and create a fresh one.

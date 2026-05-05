@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { BridgeTraceActionContext } from "./bridge.js";
+import type { ToolOutput } from "./adapters/coding-tool.js";
 
 const TRACE_ACTION_CLI_DIR = ".trace";
 
@@ -91,4 +92,23 @@ main().catch((error) => {
   await fs.promises.writeFile(cliPath, script, { mode: 0o700 });
   await fs.promises.chmod(cliPath, 0o700);
   return relativePath;
+}
+
+export function traceActionStartedOutput(action: BridgeTraceActionContext): ToolOutput {
+  return {
+    type: "assistant",
+    message: {
+      content: [
+        {
+          type: "tool_use",
+          name: "TraceTicketGenerationStart",
+          input: {
+            projectRunId: action.projectRunId,
+            generationAttemptId: action.generationAttemptId,
+            cliRelativePath: action.cliRelativePath,
+          },
+        },
+      ],
+    },
+  };
 }

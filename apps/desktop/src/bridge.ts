@@ -32,6 +32,7 @@ import {
   isMissingToolSessionError,
   parseGitShowOutput,
   inspectSessionGitSyncStatus,
+  traceActionStartedOutput,
   writeTraceActionCli,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
@@ -614,6 +615,11 @@ export class BridgeClient implements IBridgeClient {
     if (traceAction) {
       try {
         await writeTraceActionCli(workdir, traceAction, this.serverUrl);
+        this.send({
+          type: "session_output",
+          sessionId,
+          data: traceActionStartedOutput(traceAction),
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[bridge] failed to write Trace action CLI for ${sessionId}:`, message);
