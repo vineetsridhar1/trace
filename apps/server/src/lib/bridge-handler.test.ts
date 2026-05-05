@@ -556,7 +556,7 @@ describe("bridge handler auth", () => {
     expect(mocks.publish).not.toHaveBeenCalled();
   });
 
-  it("serializes session output deltas through the session event queue", async () => {
+  it("publishes session output deltas without waiting for durable output recording", async () => {
     const ws = createMockWs();
     const calls: string[] = [];
     let releaseRecordOutput: (() => void) | null = null;
@@ -593,11 +593,14 @@ describe("bridge handler auth", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(calls).toEqual([]);
+    await vi.waitFor(() => {
+      expect(calls).toEqual(["delta"]);
+    });
+
     releaseRecordOutput?.();
 
     await vi.waitFor(() => {
-      expect(calls).toEqual(["record", "delta"]);
+      expect(calls).toEqual(["delta", "record"]);
     });
   });
 

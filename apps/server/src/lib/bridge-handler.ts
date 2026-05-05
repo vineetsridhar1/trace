@@ -603,7 +603,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           await sessionService.recordOutput(sessionId, data);
         });
       } else if (msg.type === "session_output_delta" && msg.sessionId) {
-        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+        void (async () => {
+          const sessionId = await resolveSessionBoundToThisRuntime(msg.sessionId);
+          if (!sessionId) return;
           const data = msg.data && typeof msg.data === "object" ? msg.data : {};
           const text = (data as Record<string, unknown>).text;
           if (typeof text !== "string" || text.length === 0) return;
@@ -625,6 +627,8 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               sessionId,
             },
           });
+        })().catch((err: unknown) => {
+          console.error("[bridge] error publishing session output delta:", err);
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
