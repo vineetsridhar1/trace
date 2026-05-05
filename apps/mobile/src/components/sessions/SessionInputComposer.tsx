@@ -668,8 +668,10 @@ export function SessionInputComposer({
 }
 
 function imageFilename(asset: ImagePicker.ImagePickerAsset, mimeType: string): string {
-  if (asset.fileName?.trim()) return asset.fileName.trim();
-  return filenameFromUri(asset.uri, `image-${Date.now()}.${extensionForMimeType(mimeType)}`);
+  const extension = extensionForMimeType(mimeType);
+  const fallback = `image-${Date.now()}.${extension}`;
+  const filename = asset.fileName?.trim() || filenameFromUri(asset.uri, fallback);
+  return filenameHasExtension(filename) ? filename : `${filename}.${extension}`;
 }
 
 function filenameFromUri(uri: string, fallback: string): string {
@@ -682,4 +684,8 @@ function filenameFromUri(uri: string, fallback: string): string {
   }
   const filename = decoded.split("/").pop()?.trim();
   return filename || fallback;
+}
+
+function filenameHasExtension(filename: string): boolean {
+  return /\.[a-z0-9]+$/i.test(filename);
 }

@@ -10,12 +10,54 @@ interface MockComposerProps {
   text: string;
 }
 
+interface MockAttachButtonProps {
+  enabled: boolean;
+  onPress: () => void;
+}
+
+interface MockAttachmentSheetProps {
+  disabled?: boolean;
+  onPickFiles: () => void;
+  onPickImages: () => void;
+}
+
+interface MockDraftAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  fileUri?: string;
+  previewUri?: string;
+  width: number | null;
+  height: number | null;
+  s3Key: string | null;
+  uploading: boolean;
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
+async function flushAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+}
+
+async function waitForDraftAttachmentCount(count: number): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await act(async () => {
+      await flushAsyncWork();
+    });
+    if (draftAttachments.length === count) return;
+  }
+  throw new Error(`Expected ${count} draft attachment(s), found ${draftAttachments.length}`);
+}
+
 let latestComposerProps: MockComposerProps | null = null;
+let latestAttachButtonProps: MockAttachButtonProps | null = null;
+let latestAttachmentSheetProps: MockAttachmentSheetProps | null = null;
 let latestOnSuccess: (() => void) | null = null;
+let draftAttachments: MockDraftAttachment[] = [];
 
 vi.mock("react-native", () => ({
   AccessibilityInfo: {
@@ -151,11 +193,20 @@ vi.mock("@/lib/createQuickSession", () => ({
 }));
 
 vi.mock("@/stores/drafts", () => ({
-  useDraftsStore: (selector: (state: Record<string, unknown>) => unknown) =>
+  useDraftsStore: (
+    selector: (state: {
+      attachments: Record<string, MockDraftAttachment[]>;
+      setAttachments: (
+        sessionId: string,
+        update: MockDraftAttachment[] | ((prev: MockDraftAttachment[]) => MockDraftAttachment[]),
+      ) => void;
+    }) => unknown,
+  ) =>
     selector({
-      images: {},
-      attachments: {},
-      setAttachments: vi.fn(),
+      attachments: { "session-1": draftAttachments },
+      setAttachments: (_sessionId, update) => {
+        draftAttachments = typeof update === "function" ? update(draftAttachments) : update;
+      },
     }),
 }));
 
@@ -183,7 +234,10 @@ vi.mock("@/theme", () => ({
 }));
 
 vi.mock("./ComposerAttachButton", () => ({
-  ComposerAttachButton: () => null,
+  ComposerAttachButton: (props: MockAttachButtonProps) => {
+    latestAttachButtonProps = props;
+    return React.createElement("ComposerAttachButton", props);
+  },
 }));
 
 vi.mock("./ComposerConnectionNotice", () => ({
@@ -199,7 +253,10 @@ vi.mock("./AttachmentBar", () => ({
 }));
 
 vi.mock("./AttachmentPickerSheetContent", () => ({
-  AttachmentPickerSheetContent: () => null,
+  AttachmentPickerSheetContent: (props: MockAttachmentSheetProps) => {
+    latestAttachmentSheetProps = props;
+    return React.createElement("AttachmentPickerSheetContent", props);
+  },
 }));
 
 vi.mock("./SessionModelPickerSheetContent", () => ({
@@ -271,7 +328,10 @@ vi.mock("./session-input-composer/useSessionComposerConfig", () => ({
 describe("SessionInputComposer", () => {
   beforeEach(() => {
     latestComposerProps = null;
+    latestAttachButtonProps = null;
+    latestAttachmentSheetProps = null;
     latestOnSuccess = null;
+    draftAttachments = [];
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0);
@@ -302,5 +362,87 @@ describe("SessionInputComposer", () => {
 
     expect(latestComposerProps?.inputHeight).toBe(MIN_INPUT_HEIGHT);
     expect(latestComposerProps?.text).toBe("");
+  });
+
+  it("opens an attachment sheet and stores picked files", async () => {
+    const DocumentPicker = await import("expo-document-picker");
+    vi.mocked(DocumentPicker.getDocumentAsync).mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          name: "notes.docx",
+          uri: "file:///tmp/notes.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          size: 1234,
+          lastModified: Date.now(),
+        },
+      ],
+    });
+
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    expect(latestAttachButtonProps?.enabled).toBe(true);
+
+    await act(async () => {
+      latestAttachButtonProps?.onPress();
+    });
+
+    expect(latestAttachmentSheetProps).not.toBeNull();
+
+    await act(async () => {
+      latestAttachmentSheetProps?.onPickFiles();
+    });
+    await waitForDraftAttachmentCount(1);
+
+    expect(draftAttachments).toMatchObject([
+      {
+        filename: "notes.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        fileUri: "file:///tmp/notes.docx",
+      },
+    ]);
+  });
+
+  it("adds a MIME-derived extension for picked image URIs without filenames", async () => {
+    const ImagePicker = await import("expo-image-picker");
+    vi.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          uri: "content://media/external/images/12345",
+          width: 320,
+          height: 240,
+          mimeType: "image/png",
+        },
+      ],
+    });
+
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    await act(async () => {
+      latestAttachButtonProps?.onPress();
+    });
+
+    await act(async () => {
+      latestAttachmentSheetProps?.onPickImages();
+    });
+    await waitForDraftAttachmentCount(1);
+
+    expect(draftAttachments).toMatchObject([
+      {
+        filename: "12345.png",
+        mimeType: "image/png",
+        fileUri: "content://media/external/images/12345",
+        previewUri: "content://media/external/images/12345",
+      },
+    ]);
   });
 });
