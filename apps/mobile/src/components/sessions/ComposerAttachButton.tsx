@@ -10,10 +10,6 @@ interface Props {
 
 const SIZE = 46;
 
-/**
- * Round Liquid-glass button that sits left of the send/stop cluster.
- * Opens the system photo library via `expo-image-picker` in the parent.
- */
 export function ComposerAttachButton({ enabled, onPress }: Props) {
   const theme = useTheme();
   return (
@@ -22,14 +18,14 @@ export function ComposerAttachButton({ enabled, onPress }: Props) {
         onPress={onPress}
         disabled={!enabled}
         accessibilityRole="button"
-        accessibilityLabel="Attach image from library"
+        accessibilityLabel="Attach file or image"
         style={({ pressed }) => [
           styles.pressable,
           { opacity: enabled ? (pressed ? 0.78 : 1) : 0.45 },
         ]}
       >
         <SymbolView
-          name="photo.on.rectangle"
+          name="paperclip"
           size={18}
           tintColor={theme.colors.foreground}
           weight="medium"

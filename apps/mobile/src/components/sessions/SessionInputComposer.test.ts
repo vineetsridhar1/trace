@@ -4,18 +4,66 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MIN_INPUT_HEIGHT } from "./session-input-composer/constants";
 
 interface MockComposerProps {
+  errorDraft: string | null;
+  errorMessage: string | null;
   inputHeight: number;
   onChangeText: (text: string) => void;
   onContentHeightChange: (height: number) => void;
+  onRetry: () => void;
   text: string;
+}
+
+interface MockAttachButtonProps {
+  enabled: boolean;
+  onPress: () => void;
+}
+
+interface MockAttachmentSheetProps {
+  disabled?: boolean;
+  onPickFiles: () => void;
+  onPickImages: () => void;
+}
+
+interface MockDraftAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  fileUri?: string;
+  size?: number;
+  previewUri?: string;
+  width: number | null;
+  height: number | null;
+  s3Key: string | null;
+  uploading: boolean;
 }
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
+async function flushAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  await Promise.resolve();
+}
+
+async function waitForDraftAttachmentCount(count: number): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await act(async () => {
+      await flushAsyncWork();
+    });
+    if (draftAttachments.length === count) return;
+  }
+  throw new Error(`Expected ${count} draft attachment(s), found ${draftAttachments.length}`);
+}
+
 let latestComposerProps: MockComposerProps | null = null;
+let latestAttachButtonProps: MockAttachButtonProps | null = null;
+let latestAttachmentSheetProps: MockAttachmentSheetProps | null = null;
+let latestOnFailure: ((draft: string, message: string) => void) | null = null;
 let latestOnSuccess: (() => void) | null = null;
+let draftAttachments: MockDraftAttachment[] = [];
+const submitMock = vi.fn();
 
 vi.mock("react-native", () => ({
   AccessibilityInfo: {
@@ -32,6 +80,16 @@ vi.mock("react-native-safe-area-context", () => ({
 
 vi.mock("expo-clipboard", () => ({
   getImageAsync: vi.fn(),
+}));
+
+vi.mock("expo-document-picker", () => ({
+  getDocumentAsync: vi.fn(),
+}));
+
+vi.mock("expo-file-system", () => ({
+  File: {
+    pickFileAsync: vi.fn(),
+  },
 }));
 
 vi.mock("expo-image-picker", () => ({
@@ -98,10 +156,14 @@ vi.mock("@trace/client-core", () => ({
 }));
 
 vi.mock("@/hooks/useComposerSubmit", () => ({
-  useComposerSubmit: (options: { onSuccess: () => void }) => {
+  useComposerSubmit: (options: {
+    onFailure: (draft: string, message: string) => void;
+    onSuccess: () => void;
+  }) => {
+    latestOnFailure = options.onFailure;
     latestOnSuccess = options.onSuccess;
     return {
-      submit: vi.fn(),
+      submit: submitMock,
       sending: false,
     };
   },
@@ -147,10 +209,20 @@ vi.mock("@/lib/createQuickSession", () => ({
 }));
 
 vi.mock("@/stores/drafts", () => ({
-  useDraftsStore: (selector: (state: Record<string, unknown>) => unknown) =>
+  useDraftsStore: (
+    selector: (state: {
+      attachments: Record<string, MockDraftAttachment[]>;
+      setAttachments: (
+        sessionId: string,
+        update: MockDraftAttachment[] | ((prev: MockDraftAttachment[]) => MockDraftAttachment[]),
+      ) => void;
+    }) => unknown,
+  ) =>
     selector({
-      images: {},
-      setImages: vi.fn(),
+      attachments: { "session-1": draftAttachments },
+      setAttachments: (_sessionId, update) => {
+        draftAttachments = typeof update === "function" ? update(draftAttachments) : update;
+      },
     }),
 }));
 
@@ -178,7 +250,10 @@ vi.mock("@/theme", () => ({
 }));
 
 vi.mock("./ComposerAttachButton", () => ({
-  ComposerAttachButton: () => null,
+  ComposerAttachButton: (props: MockAttachButtonProps) => {
+    latestAttachButtonProps = props;
+    return React.createElement("ComposerAttachButton", props);
+  },
 }));
 
 vi.mock("./ComposerConnectionNotice", () => ({
@@ -189,8 +264,15 @@ vi.mock("./ComposerPasteButton", () => ({
   ComposerPasteButton: () => null,
 }));
 
-vi.mock("./ImageAttachmentBar", () => ({
-  ImageAttachmentBar: () => null,
+vi.mock("./AttachmentBar", () => ({
+  AttachmentBar: () => null,
+}));
+
+vi.mock("./AttachmentPickerSheetContent", () => ({
+  AttachmentPickerSheetContent: (props: MockAttachmentSheetProps) => {
+    latestAttachmentSheetProps = props;
+    return React.createElement("AttachmentPickerSheetContent", props);
+  },
 }));
 
 vi.mock("./SessionModelPickerSheetContent", () => ({
@@ -262,7 +344,12 @@ vi.mock("./session-input-composer/useSessionComposerConfig", () => ({
 describe("SessionInputComposer", () => {
   beforeEach(() => {
     latestComposerProps = null;
+    latestAttachButtonProps = null;
+    latestAttachmentSheetProps = null;
+    latestOnFailure = null;
     latestOnSuccess = null;
+    draftAttachments = [];
+    submitMock.mockClear();
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0);
@@ -293,5 +380,147 @@ describe("SessionInputComposer", () => {
 
     expect(latestComposerProps?.inputHeight).toBe(MIN_INPUT_HEIGHT);
     expect(latestComposerProps?.text).toBe("");
+  });
+
+  it("keeps attachment-only failures retryable", async () => {
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    await act(async () => {
+      latestOnFailure?.("", "Failed to send attachment");
+    });
+
+    expect(latestComposerProps?.errorDraft).toBe("");
+    expect(latestComposerProps?.errorMessage).toBe("Failed to send attachment");
+
+    await act(async () => {
+      latestComposerProps?.onRetry();
+    });
+
+    expect(submitMock).toHaveBeenCalledWith("", "code");
+  });
+
+  it("opens an attachment sheet and stores picked files", async () => {
+    const DocumentPicker = await import("expo-document-picker");
+    vi.mocked(DocumentPicker.getDocumentAsync).mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          name: "notes.docx",
+          uri: "file:///tmp/notes.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          size: 1234,
+          lastModified: Date.now(),
+        },
+      ],
+    });
+
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    expect(latestAttachButtonProps?.enabled).toBe(true);
+
+    await act(async () => {
+      latestAttachButtonProps?.onPress();
+    });
+
+    expect(latestAttachmentSheetProps).not.toBeNull();
+
+    await act(async () => {
+      latestAttachmentSheetProps?.onPickFiles();
+    });
+    await waitForDraftAttachmentCount(1);
+
+    expect(draftAttachments).toMatchObject([
+      {
+        filename: "notes.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        fileUri: "file:///tmp/notes.docx",
+        size: 1234,
+      },
+    ]);
+  });
+
+  it("falls back to the file-system picker when document picker is unavailable", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const DocumentPicker = await import("expo-document-picker");
+    const FileSystem = await import("expo-file-system");
+    vi.mocked(DocumentPicker.getDocumentAsync).mockRejectedValueOnce(new Error("native missing"));
+    vi.mocked(FileSystem.File.pickFileAsync).mockResolvedValueOnce({
+      uri: "file:///tmp/fallback.zip",
+      type: "application/zip",
+      size: 321,
+    } as Awaited<ReturnType<typeof FileSystem.File.pickFileAsync>>);
+
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    await act(async () => {
+      latestAttachButtonProps?.onPress();
+    });
+
+    await act(async () => {
+      latestAttachmentSheetProps?.onPickFiles();
+    });
+    await waitForDraftAttachmentCount(1);
+
+    expect(draftAttachments).toMatchObject([
+      {
+        filename: "fallback.zip",
+        mimeType: "application/zip",
+        fileUri: "file:///tmp/fallback.zip",
+        size: 321,
+      },
+    ]);
+    expect(FileSystem.File.pickFileAsync).toHaveBeenCalledWith();
+    warnSpy.mockRestore();
+  });
+
+  it("adds a MIME-derived extension for picked image URIs without filenames", async () => {
+    const ImagePicker = await import("expo-image-picker");
+    vi.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          uri: "content://media/external/images/12345",
+          width: 320,
+          height: 240,
+          mimeType: "image/png",
+        },
+      ],
+    });
+
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    await act(async () => {
+      latestAttachButtonProps?.onPress();
+    });
+
+    await act(async () => {
+      latestAttachmentSheetProps?.onPickImages();
+    });
+    await waitForDraftAttachmentCount(1);
+
+    expect(draftAttachments).toMatchObject([
+      {
+        filename: "12345.png",
+        mimeType: "image/png",
+        fileUri: "content://media/external/images/12345",
+        previewUri: "content://media/external/images/12345",
+      },
+    ]);
   });
 });

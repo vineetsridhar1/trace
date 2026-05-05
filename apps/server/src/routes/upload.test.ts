@@ -101,7 +101,7 @@ describe("upload routes in local mode", () => {
     });
   });
 
-  it("presigns non-image file uploads", async () => {
+  it("presigns generic non-image file uploads", async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
     prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
     prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
@@ -118,8 +118,8 @@ describe("upload routes in local mode", () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        filename: "notes.pdf",
-        contentType: "application/pdf",
+        filename: "notes.docx",
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         contentLength: 2048,
         organizationId: "org-local",
       }),
@@ -128,10 +128,45 @@ describe("upload routes in local mode", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { uploadUrl: string; key: string };
     expect(body.uploadUrl).toBe("https://upload.example/put");
-    expect(body.key).toMatch(/^uploads\/org-local\/.+-notes\.pdf$/);
+    expect(body.key).toMatch(/^uploads\/org-local\/.+-notes\.docx$/);
     expect(storageMock.getUploadTarget).toHaveBeenCalledWith(
       body.key,
-      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      5 * 1024 * 1024,
+    );
+  });
+
+  it("presigns uploads with generic octet-stream content types", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
+    storageMock.getUploadTarget.mockResolvedValueOnce({
+      method: "PUT",
+      url: "https://upload.example/octet",
+    });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/uploads/presign`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filename: "archive.bin",
+        contentType: "application/octet-stream",
+        contentLength: 2048,
+        organizationId: "org-local",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { uploadUrl: string; key: string };
+    expect(body.uploadUrl).toBe("https://upload.example/octet");
+    expect(body.key).toMatch(/^uploads\/org-local\/.+-archive\.bin$/);
+    expect(storageMock.getUploadTarget).toHaveBeenCalledWith(
+      body.key,
+      "application/octet-stream",
       5 * 1024 * 1024,
     );
   });
@@ -161,7 +196,7 @@ describe("upload routes in local mode", () => {
     expect(storageMock.getUploadTarget).not.toHaveBeenCalled();
   });
 
-  it("rejects unsupported upload content types", async () => {
+  it("rejects malformed upload content types", async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
     prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
     prismaMock.orgMember.findUnique.mockResolvedValueOnce({ role: "admin" });
@@ -175,7 +210,7 @@ describe("upload routes in local mode", () => {
       },
       body: JSON.stringify({
         filename: "binary.bin",
-        contentType: "application/octet-stream",
+        contentType: "not-a-mime-type",
         contentLength: 1024,
         organizationId: "org-local",
       }),

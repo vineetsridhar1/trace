@@ -2,22 +2,23 @@ import { useEntityStore } from "@trace/client-core";
 import { create } from "zustand";
 
 /**
- * Mobile image draft. Unlike the web version, mobile attachments don't
- * carry a `File` — RN doesn't have one. The gallery picker gives us a
- * local file URI that stays in the platform's image cache; the clipboard
- * only exposes base64 data. We store whichever the source produced and
- * convert at upload time, so a 5MB screenshot picked from the library
- * doesn't balloon Zustand state by ~7MB of base64.
+ * Mobile attachment draft. Unlike the web version, mobile attachments don't
+ * carry a `File` — RN doesn't have one. Pickers give us local URIs while the
+ * clipboard only exposes base64 data. We store whichever the source produced
+ * and convert at upload time.
  */
-export interface ImageAttachment {
+export interface FileAttachment {
   id: string;
+  filename: string;
   mimeType: string;
   /** Raw base64 (no `data:` prefix). Set when the image came from clipboard. */
   base64?: string;
-  /** Local file URI. Set when the image came from the gallery picker. */
+  /** Local file URI. Set when the attachment came from a system picker. */
   fileUri?: string;
-  /** `data:` URL or `file://` URI — both work as `<Image source={{ uri }}>`. */
-  previewUri: string;
+  /** File size in bytes when reported by the picker. */
+  size?: number;
+  /** `data:` URL or `file://` URI for image previews. */
+  previewUri?: string;
   width: number | null;
   height: number | null;
   s3Key: string | null;
@@ -25,35 +26,35 @@ export interface ImageAttachment {
 }
 
 interface DraftsState {
-  images: Record<string, ImageAttachment[]>;
-  setImages: (
+  attachments: Record<string, FileAttachment[]>;
+  setAttachments: (
     sessionId: string,
-    update: ImageAttachment[] | ((prev: ImageAttachment[]) => ImageAttachment[]),
+    update: FileAttachment[] | ((prev: FileAttachment[]) => FileAttachment[]),
   ) => void;
   clear: (sessionId: string) => void;
 }
 
-const EMPTY: ImageAttachment[] = [];
+const EMPTY: FileAttachment[] = [];
 
 export const useDraftsStore = create<DraftsState>((set) => ({
-  images: {},
-  setImages: (sessionId, update) => {
+  attachments: {},
+  setAttachments: (sessionId, update) => {
     set((state) => {
-      const prev = state.images[sessionId] ?? EMPTY;
+      const prev = state.attachments[sessionId] ?? EMPTY;
       const next = typeof update === "function" ? update(prev) : update;
       if (next.length === 0) {
-        if (!state.images[sessionId]) return state;
-        const { [sessionId]: _removed, ...rest } = state.images;
-        return { images: rest };
+        if (!state.attachments[sessionId]) return state;
+        const { [sessionId]: _removed, ...rest } = state.attachments;
+        return { attachments: rest };
       }
-      return { images: { ...state.images, [sessionId]: next } };
+      return { attachments: { ...state.attachments, [sessionId]: next } };
     });
   },
   clear: (sessionId) => {
     set((state) => {
-      if (!state.images[sessionId]) return state;
-      const { [sessionId]: _removed, ...rest } = state.images;
-      return { images: rest };
+      if (!state.attachments[sessionId]) return state;
+      const { [sessionId]: _removed, ...rest } = state.attachments;
+      return { attachments: rest };
     });
   },
 }));
@@ -65,7 +66,7 @@ export const useDraftsStore = create<DraftsState>((set) => ({
 // case where sessions didn't move.
 useEntityStore.subscribe((state, prevState) => {
   if (state.sessions === prevState.sessions) return;
-  const draftIds = Object.keys(useDraftsStore.getState().images);
+  const draftIds = Object.keys(useDraftsStore.getState().attachments);
   if (draftIds.length === 0) return;
   for (const id of draftIds) {
     if (prevState.sessions[id] && !state.sessions[id]) {

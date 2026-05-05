@@ -15,24 +15,14 @@ const MAX_FILENAME_LENGTH = 100;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const FALLBACK_BASENAME = "file";
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
-const ALLOWED_EXACT_CONTENT_TYPES = new Set([
-  "application/json",
-  "application/pdf",
-  "application/zip",
-  "image/gif",
-  "image/heic",
-  "image/heif",
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-  "text/csv",
-  "text/markdown",
-  "text/plain",
-]);
+const BLOCKED_BROWSER_RENDERED_CONTENT_TYPES = new Set(["image/svg+xml", "text/html"]);
+const CONTENT_TYPE_PATTERN = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
 
-function isAllowedContentType(contentType: string): boolean {
-  return ALLOWED_EXACT_CONTENT_TYPES.has(contentType.toLowerCase());
+function normalizeUploadContentType(contentType: string): string | null {
+  const normalized = contentType.trim().toLowerCase().split(";")[0]?.trim();
+  if (!normalized || !CONTENT_TYPE_PATTERN.test(normalized)) return null;
+  if (BLOCKED_BROWSER_RENDERED_CONTENT_TYPES.has(normalized)) return null;
+  return normalized;
 }
 
 function sanitizeFilename(filename: string): string {
@@ -111,8 +101,8 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "contentType is required" });
   }
 
-  const normalizedContentType = contentType.trim().toLowerCase();
-  if (!isAllowedContentType(normalizedContentType)) {
+  const normalizedContentType = normalizeUploadContentType(contentType);
+  if (!normalizedContentType) {
     return res.status(400).json({ error: "contentType is not supported" });
   }
 
