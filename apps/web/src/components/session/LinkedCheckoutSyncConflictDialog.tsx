@@ -73,8 +73,9 @@ export function LinkedCheckoutSyncConflictDialog({
               </div>
               <div className="max-h-52 overflow-auto p-2 lg:max-h-none">
                 {changedFiles.length === 0 ? (
-                  <div className="px-2 py-6 text-center text-xs text-muted-foreground">
-                    No changed files were reported by the checkout.
+                  <div className="px-2 py-6 text-left text-xs text-muted-foreground">
+                    File details were not included in this bridge response. Restart Trace Desktop
+                    and try Sync again to load the working-change diff.
                   </div>
                 ) : (
                   changedFiles.map((file) => (

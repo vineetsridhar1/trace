@@ -163,6 +163,33 @@ async function listChangedPaths(repoPath: string): Promise<string[]> {
   ];
 }
 
+async function listStatusChangedPaths(repoPath: string): Promise<string[]> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
+  const entries = parseNullSeparated(stdout);
+  const paths: string[] = [];
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry.length < 4) continue;
+
+    const statusCode = entry.slice(0, 2);
+    paths.push(entry.slice(3));
+
+    if (statusCode.includes("R") || statusCode.includes("C")) {
+      index += 1;
+    }
+  }
+
+  return [...new Set(paths)];
+}
+
 function countDiffLines(diff: string): { additions: number; deletions: number } {
   let additions = 0;
   let deletions = 0;
@@ -259,7 +286,7 @@ async function getChangedFileStatus(repoPath: string, relativePath: string): Pro
 
 async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutChangedFile[]> {
   const [changedPaths, untrackedPaths] = await Promise.all([
-    listChangedPaths(repoPath),
+    listStatusChangedPaths(repoPath),
     listUntrackedPaths(repoPath),
   ]);
   const untrackedPathSet = new Set(untrackedPaths);
@@ -267,9 +294,14 @@ async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutC
   return Promise.all(
     changedPaths.map(async (relativePath) => {
       const untracked = untrackedPathSet.has(relativePath);
-      const { diff, truncated } = untracked
-        ? readUntrackedFileDiffPreview(repoPath, relativePath)
-        : await readFileDiffPreview(repoPath, relativePath);
+      const { diff, truncated } = await Promise.resolve(
+        untracked
+          ? readUntrackedFileDiffPreview(repoPath, relativePath)
+          : readFileDiffPreview(repoPath, relativePath),
+      ).catch((error: unknown) => ({
+        diff: `Unable to load diff for ${relativePath}: ${formatGitError(error)}`,
+        truncated: false,
+      }));
       const lineCounts = countDiffLines(diff);
 
       return {
