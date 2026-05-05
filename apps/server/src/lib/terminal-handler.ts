@@ -326,7 +326,7 @@ export function handleTerminalConnection(
         sendFatalError("Invalid token");
         return;
       }
-      if (isExternalLocalModeRequest(req) && auth.kind !== "local_mobile") {
+      if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
         sendFatalError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
         return;
       }

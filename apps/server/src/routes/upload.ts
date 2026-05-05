@@ -50,7 +50,7 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
   if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
   }
-  if (isExternalLocalModeRequest(req) && auth.kind !== "local_mobile") {
+  if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
     return res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
   }
 
@@ -131,7 +131,7 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
   if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
   }
-  if (isExternalLocalModeRequest(req) && auth.kind !== "local_mobile") {
+  if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
     return res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
   }
 

@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { LocalMobilePairingSection } from "./LocalMobilePairingSection";
+import { MobilePairingSection } from "./MobilePairingSection";
 import { CurrentBridgeSection } from "./CurrentBridgeSection";
 
 type BridgeUser = {
@@ -196,7 +196,7 @@ export function BridgeAccessSection() {
 
   return (
     <div>
-      <LocalMobilePairingSection />
+      <MobilePairingSection />
       <CurrentBridgeSection onRenamed={fetchRuntimes} />
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">Bridge Access</h2>

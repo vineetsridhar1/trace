@@ -18,13 +18,13 @@ import {
   normalizeLocalLoginName,
 } from "../services/local-bootstrap.js";
 import {
-  createLocalMobilePairingToken,
-  listLocalMobileDevices,
-  LocalMobileAuthError,
-  pairLocalMobileDevice,
-  revokeLocalMobileDevice,
-  revokeLocalMobileDeviceByToken,
-} from "../services/local-mobile-auth.js";
+  createMobilePairingToken,
+  listMobileDevices,
+  MobileAuthError,
+  pairMobileDevice,
+  revokeMobileDevice,
+  revokeMobileDeviceByToken,
+} from "../services/mobile-auth.js";
 import { pushTokenService } from "../services/pushTokenService.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
 
@@ -224,7 +224,7 @@ function rejectExternalLocalModeRequest(
     res.status(401).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
     return true;
   }
-  if (authenticated.auth.kind !== "local_mobile") {
+  if (authenticated.auth.kind !== "mobile") {
     res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
     return true;
   }
@@ -318,7 +318,7 @@ async function createMobilePairingTokenForRequest(req: Request, res: Response): 
     return;
   }
 
-  const pairing = await createLocalMobilePairingToken({
+  const pairing = await createMobilePairingToken({
     ownerUserId: authenticated.auth.userId,
     organizationId,
   });
@@ -326,14 +326,6 @@ async function createMobilePairingTokenForRequest(req: Request, res: Response): 
 }
 
 router.post("/auth/mobile/pairing-token", async (req: Request, res: Response) => {
-  await createMobilePairingTokenForRequest(req, res);
-});
-
-router.post("/auth/local-mobile/pairing-token", async (req: Request, res: Response) => {
-  if (!isLocalMode()) {
-    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
-  }
-
   await createMobilePairingTokenForRequest(req, res);
 });
 
@@ -345,7 +337,7 @@ async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<
   const platform = parsePushPlatform(req.body?.platform);
 
   try {
-    const result = await pairLocalMobileDevice({
+    const result = await pairMobileDevice({
       pairingToken,
       installId,
       deviceName,
@@ -354,7 +346,7 @@ async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<
     });
     res.json(result);
   } catch (error) {
-    if (error instanceof LocalMobileAuthError) {
+    if (error instanceof MobileAuthError) {
       res.status(error.statusCode).json({ error: error.message });
       return;
     }
@@ -363,14 +355,6 @@ async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<
 }
 
 router.post("/auth/mobile/pair", async (req: Request, res: Response) => {
-  await pairMobileDeviceForRequest(req, res);
-});
-
-router.post("/auth/local-mobile/pair", async (req: Request, res: Response) => {
-  if (!isLocalMode()) {
-    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
-  }
-
   await pairMobileDeviceForRequest(req, res);
 });
 
@@ -397,7 +381,7 @@ async function listMobileDevicesForRequest(req: Request, res: Response): Promise
     return;
   }
 
-  const devices = await listLocalMobileDevices({
+  const devices = await listMobileDevices({
     ownerUserId: authenticated.auth.userId,
     organizationId,
   });
@@ -405,14 +389,6 @@ async function listMobileDevicesForRequest(req: Request, res: Response): Promise
 }
 
 router.get("/auth/mobile/devices", async (req: Request, res: Response) => {
-  await listMobileDevicesForRequest(req, res);
-});
-
-router.get("/auth/local-mobile/devices", async (req: Request, res: Response) => {
-  if (!isLocalMode()) {
-    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
-  }
-
   await listMobileDevicesForRequest(req, res);
 });
 
@@ -448,14 +424,14 @@ async function revokeMobileDeviceForRequest(req: Request, res: Response): Promis
   }
 
   try {
-    await revokeLocalMobileDevice({
+    await revokeMobileDevice({
       ownerUserId: authenticated.auth.userId,
       organizationId,
       deviceId,
     });
     res.json({ ok: true });
   } catch (error) {
-    if (error instanceof LocalMobileAuthError) {
+    if (error instanceof MobileAuthError) {
       res.status(error.statusCode).json({ error: error.message });
       return;
     }
@@ -464,14 +440,6 @@ async function revokeMobileDeviceForRequest(req: Request, res: Response): Promis
 }
 
 router.delete("/auth/mobile/devices/:deviceId", async (req: Request, res: Response) => {
-  await revokeMobileDeviceForRequest(req, res);
-});
-
-router.delete("/auth/local-mobile/devices/:deviceId", async (req: Request, res: Response) => {
-  if (!isLocalMode()) {
-    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
-  }
-
   await revokeMobileDeviceForRequest(req, res);
 });
 
@@ -779,7 +747,7 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   }
   if (
     !isLocalMode() &&
-    authenticated.auth.kind === "local_mobile" &&
+    authenticated.auth.kind === "mobile" &&
     authenticated.auth.organizationId !== organizationId
   ) {
     return res
@@ -823,8 +791,8 @@ router.post("/auth/logout", async (req: Request, res: Response) => {
   if (rejectExternalLocalModeRequest(req, res, authenticated)) {
     return;
   }
-  if (authenticated?.auth.kind === "local_mobile") {
-    await revokeLocalMobileDeviceByToken(authenticated.token);
+  if (authenticated?.auth.kind === "mobile") {
+    await revokeMobileDeviceByToken(authenticated.token);
   }
   if (authenticated && pushToken) {
     await pushTokenService.unregister({ userId: authenticated.auth.userId, token: pushToken });

@@ -19,8 +19,9 @@ import { useTheme } from "@/theme";
 
 type PairingPayload = {
   v: number;
-  kind: "trace-local-pair" | "trace-account-pair";
-  baseUrl?: string;
+  kind: "trace-mobile-pair";
+  mode: "hosted" | "local";
+  baseUrl: string;
   pairingToken: string;
   expiresAt?: string;
 };
@@ -39,7 +40,7 @@ function loadCameraModule(): CameraModule | null {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("expo-camera") as CameraModule;
   } catch (error) {
-    console.warn("[pair-local] expo-camera unavailable", error);
+    console.warn("[pair] expo-camera unavailable", error);
     return null;
   }
 }
@@ -60,38 +61,29 @@ function parsePairingPayload(raw: string): PairingPayload {
   }
 
   const payload = parsed as Partial<PairingPayload>;
-  if (
-    (payload.kind !== "trace-local-pair" && payload.kind !== "trace-account-pair") ||
-    payload.v !== 1
-  ) {
+  if (payload.kind !== "trace-mobile-pair" || payload.v !== 1) {
     throw new Error("This QR code is not a Trace pairing code");
   }
-  if (
-    payload.kind === "trace-local-pair" &&
-    (typeof payload.baseUrl !== "string" || !/^https?:\/\//.test(payload.baseUrl))
-  ) {
-    throw new Error("Pairing code is missing a valid host URL");
+  if (payload.mode !== "hosted" && payload.mode !== "local") {
+    throw new Error("Pairing code is missing a valid mode");
   }
-  if (
-    payload.kind === "trace-account-pair" &&
-    typeof payload.baseUrl === "string" &&
-    !/^https?:\/\//.test(payload.baseUrl)
-  ) {
-    throw new Error("Pairing code includes an invalid host URL");
+  if (typeof payload.baseUrl !== "string" || !/^https?:\/\//.test(payload.baseUrl)) {
+    throw new Error("Pairing code is missing a valid host URL");
   }
   if (typeof payload.pairingToken !== "string" || payload.pairingToken.trim().length < 16) {
     throw new Error("Pairing code is missing a valid token");
   }
   return {
     v: 1,
-    kind: payload.kind,
-    baseUrl: payload.baseUrl?.replace(/\/+$/, ""),
+    kind: "trace-mobile-pair",
+    mode: payload.mode,
+    baseUrl: payload.baseUrl.replace(/\/+$/, ""),
     pairingToken: payload.pairingToken.trim(),
     expiresAt: typeof payload.expiresAt === "string" ? payload.expiresAt : undefined,
   };
 }
 
-export default function PairLocalScreen() {
+export default function PairScreen() {
   const router = useRouter();
   const theme = useTheme();
   const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
@@ -164,14 +156,11 @@ export default function PairLocalScreen() {
 
     try {
       const payload = parsePairingPayload(raw);
-      const isLocalPair = payload.kind === "trace-local-pair";
-      const baseUrl = payload.baseUrl ?? getHostedApiUrl();
+      const baseUrl = payload.baseUrl || getHostedApiUrl();
       if (!baseUrl) {
         throw new Error("Pairing code is missing the Trace server URL");
       }
-      const response = await fetch(
-        `${baseUrl}${isLocalPair ? "/auth/local-mobile/pair" : "/auth/mobile/pair"}`,
-        {
+      const response = await fetch(`${baseUrl}/auth/mobile/pair`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -181,8 +170,7 @@ export default function PairLocalScreen() {
           platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : undefined,
           appVersion: APP_VERSION,
         }),
-        },
-      );
+      });
 
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -192,7 +180,7 @@ export default function PairLocalScreen() {
         throw new Error(body.error ?? "Pairing failed");
       }
 
-      if (isLocalPair) {
+      if (payload.mode === "local") {
         activatePairedLocalConnection(baseUrl);
       } else {
         activateHostedConnection(baseUrl);
@@ -351,7 +339,7 @@ export default function PairLocalScreen() {
           <TextInput
             value={manualCode}
             onChangeText={setManualCode}
-            placeholder='{"kind":"trace-account-pair",...}'
+            placeholder='{"kind":"trace-mobile-pair",...}'
             placeholderTextColor={theme.colors.dimForeground}
             multiline
             autoCapitalize="none"

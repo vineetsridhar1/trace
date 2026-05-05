@@ -4,9 +4,9 @@ import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
 import {
-  authenticateLocalMobileSecret,
-  type LocalMobileAuthSubject,
-} from "../services/local-mobile-auth.js";
+  authenticateMobileSecret,
+  type MobileAuthSubject,
+} from "../services/mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
@@ -47,7 +47,7 @@ type SessionAuthSubject = {
   userId: string;
 };
 
-export type AccessTokenAuthSubject = SessionAuthSubject | LocalMobileAuthSubject;
+export type AccessTokenAuthSubject = SessionAuthSubject | MobileAuthSubject;
 
 type RequestAuthSource = {
   headers: IncomingHttpHeaders;
@@ -205,7 +205,7 @@ export async function authenticateAccessToken(
     };
   }
 
-  return authenticateLocalMobileSecret(token);
+  return authenticateMobileSecret(token);
 }
 
 export function createBridgeAuthToken(input: {
@@ -304,7 +304,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   }
 
   if (isExternalLocalModeRequest(req)) {
-    if (authSubject?.kind !== "local_mobile") {
+    if (authSubject?.kind !== "mobile") {
       throw new AuthenticationError("External local-mode access requires a paired mobile token");
     }
   }
@@ -333,7 +333,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
-  } else if (authSubject?.kind === "local_mobile") {
+  } else if (authSubject?.kind === "mobile") {
     if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
       throw new AuthenticationError("This mobile device is only paired for one organization");
     }
@@ -395,7 +395,7 @@ export async function buildWsContext(
   if (!authSubject) {
     throw new AuthenticationError("Invalid token");
   }
-  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "local_mobile") {
+  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "mobile") {
     throw new AuthenticationError("External local-mode access requires a paired mobile token");
   }
   const userId = authSubject.userId;
@@ -416,7 +416,7 @@ export async function buildWsContext(
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
-  } else if (authSubject.kind === "local_mobile") {
+  } else if (authSubject.kind === "mobile") {
     if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
       throw new AuthenticationError("This mobile device is only paired for one organization");
     }

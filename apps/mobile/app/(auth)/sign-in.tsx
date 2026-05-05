@@ -14,7 +14,7 @@ export default function SignInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Pair with Trace"
-            onPress={() => router.push("/pair-local")}
+            onPress={() => router.push("/pair")}
             style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           >
             <Text style={styles.buttonText}>Pair with Trace</Text>
@@ -26,7 +26,7 @@ export default function SignInScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Scan a pairing code"
-          onPress={() => router.push("/pair-local")}
+          onPress={() => router.push("/pair")}
           hitSlop={12}
           style={({ pressed }) => [styles.footerAction, pressed && styles.buttonPressed]}
         >
