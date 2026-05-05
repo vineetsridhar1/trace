@@ -4,6 +4,7 @@ import * as QRCode from "qrcode";
 import { toast } from "sonner";
 import { isLocalMode } from "../../lib/runtime-mode";
 import {
+  isLocalHttpPairingUrl,
   isLoopbackPairingUrl,
   normalizePairingPublicUrl,
   type MobileDevice,
@@ -80,7 +81,9 @@ export function useMobilePairing() {
     let normalizedUrl = hostedPairingBaseUrl;
     if (requiresReachablePairingUrl) {
       try {
-        normalizedUrl = normalizePairingPublicUrl(publicUrl, { allowLocalHttp: isLocalMode });
+        normalizedUrl = normalizePairingPublicUrl(publicUrl, {
+          allowLocalHttp: requiresReachablePairingUrl,
+        });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Enter a valid public URL");
         return;
@@ -115,7 +118,7 @@ export function useMobilePairing() {
         JSON.stringify({
           v: 1,
           kind: "trace-mobile-pair",
-          mode: isLocalMode ? "local" : "hosted",
+          mode: isLocalMode || isLocalHttpPairingUrl(normalizedUrl) ? "local" : "hosted",
           baseUrl: normalizedUrl,
           pairingToken: body.pairingToken,
           expiresAt: body.expiresAt ?? undefined,

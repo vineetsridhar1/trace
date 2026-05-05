@@ -26,16 +26,29 @@ export function normalizePairingPublicUrl(
   } catch {
     throw new Error("Enter a valid public URL");
   }
-  if (
-    url.protocol !== "https:" &&
-    !(options.allowLocalHttp && url.protocol === "http:" && isLocalNetworkHostname(url.hostname))
-  ) {
-    throw new Error("Public URL must start with https:// unless it is a local network URL");
-  }
   if (isLoopbackPairingUrl(trimmed)) {
     throw new Error("Use a URL your phone can reach, not localhost");
   }
+  if (
+    url.protocol !== "https:" &&
+    !(options.allowLocalHttp && isLocalHttpPairingUrl(trimmed))
+  ) {
+    throw new Error("Public URL must start with https:// unless it is a local network URL");
+  }
   return trimmed.replace(/\/+$/, "");
+}
+
+export function isLocalHttpPairingUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "http:" &&
+      isLocalNetworkHostname(url.hostname) &&
+      !isLoopbackPairingUrl(value)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function isLocalNetworkHostname(hostname: string): boolean {
