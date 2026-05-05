@@ -44,6 +44,7 @@ const SESSION_GROUPS_QUERY = gql`
         prUrl
         worktreeDeleted
         sessionGroupId
+        lastUserMessageAt
         lastMessageAt
         connection {
           state
@@ -102,7 +103,10 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           // Cold-start approximation: seed sort order from the newest known
           // conversational message and only fall back to generic timestamps.
           _sortTimestamp:
-            group.sessions?.[0]?.lastMessageAt ?? group.sessions?.[0]?.updatedAt ?? group.updatedAt,
+            group.sessions?.[0]?.lastMessageAt ??
+            group.sessions?.[0]?.lastUserMessageAt ??
+            group.sessions?.[0]?.updatedAt ??
+            group.updatedAt,
         })) as Array<SessionGroupEntity & { id: string }>,
       );
       upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);

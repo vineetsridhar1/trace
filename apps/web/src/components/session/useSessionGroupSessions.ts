@@ -2,6 +2,28 @@ import { useMemo } from "react";
 import { useEntitiesByIds, useSessionIdsByGroup } from "@trace/client-core";
 import type { SessionEntity } from "@trace/client-core";
 
+function sessionMessageTimestamp(session: SessionEntity): string | null {
+  return session.lastMessageAt ?? session.lastUserMessageAt ?? null;
+}
+
+function compareSessionsByRecency(a: SessionEntity, b: SessionEntity): number {
+  const aMessageAt = sessionMessageTimestamp(a);
+  const bMessageAt = sessionMessageTimestamp(b);
+
+  if (aMessageAt && bMessageAt) {
+    const diff = new Date(bMessageAt).getTime() - new Date(aMessageAt).getTime();
+    if (diff !== 0) return diff;
+  } else if (aMessageAt) {
+    return -1;
+  } else if (bMessageAt) {
+    return 1;
+  }
+
+  const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  if (updatedDiff !== 0) return updatedDiff;
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+}
+
 export function useSessionGroupSessions(
   sessionGroupId: string,
   openTabIds: string[] | undefined,
@@ -16,13 +38,7 @@ export function useSessionGroupSessions(
   );
 
   const sessionsByRecency = useMemo(() => {
-    return [...groupSessions].sort((a, b) => {
-      const aRecency = a.lastMessageAt ?? a.updatedAt;
-      const bRecency = b.lastMessageAt ?? b.updatedAt;
-      const diff = new Date(bRecency).getTime() - new Date(aRecency).getTime();
-      if (diff !== 0) return diff;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+    return [...groupSessions].sort(compareSessionsByRecency);
   }, [groupSessions]);
 
   const sessionTabs = useMemo(() => {

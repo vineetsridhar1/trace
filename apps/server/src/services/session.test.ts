@@ -369,6 +369,30 @@ describe("SessionService", () => {
       expect(result[0].sessions[1]?.lastMessageAt?.toISOString()).toBe("2024-01-01T00:00:00.000Z");
     });
 
+    it("keeps sessions with messages ahead of infrastructure-only sessions", async () => {
+      const infrastructureOnlySession = makeSession({
+        id: "session-infra",
+        updatedAt: new Date("2024-01-08T00:00:00.000Z"),
+        lastMessageAt: null,
+      });
+      const conversationSession = makeSession({
+        id: "session-conversation",
+        updatedAt: new Date("2024-01-04T00:00:00.000Z"),
+        lastMessageAt: new Date("2024-01-02T00:00:00.000Z"),
+      });
+
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        makeSessionGroup({ sessions: [infrastructureOnlySession, conversationSession] }),
+      ]);
+
+      const result = await service.listGroups("channel-1", "org-1");
+
+      expect(result[0].sessions.map((session) => session.id)).toEqual([
+        "session-conversation",
+        "session-infra",
+      ]);
+    });
+
     it("excludes merged groups by default", async () => {
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
         makeSessionGroup({

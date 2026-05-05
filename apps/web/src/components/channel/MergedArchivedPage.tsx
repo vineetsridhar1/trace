@@ -52,6 +52,7 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         prUrl
         worktreeDeleted
         sessionGroupId
+        lastUserMessageAt
         lastMessageAt
         connection {
           state
@@ -139,7 +140,10 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
         groups.map((group) => ({
           ...group,
           _sortTimestamp:
-            group.sessions?.[0]?.lastMessageAt ?? group.sessions?.[0]?.updatedAt ?? group.updatedAt,
+            group.sessions?.[0]?.lastMessageAt ??
+            group.sessions?.[0]?.lastUserMessageAt ??
+            group.sessions?.[0]?.updatedAt ??
+            group.updatedAt,
         })) as Array<SessionGroupEntity & { id: string }>,
       );
       upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);
