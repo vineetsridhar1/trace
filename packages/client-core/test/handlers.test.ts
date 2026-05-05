@@ -470,6 +470,10 @@ describe("handleOrgEvent", () => {
   });
 
   it("upserts inbox items for a non-rendered V1 event so the store stays consistent", () => {
+    useAuthStore.setState({
+      user: { id: "user-1", name: "User One", email: "one@example.com", avatarUrl: null },
+    });
+
     handleOrgEvent(
       makeEvent({
         eventType: "inbox_item_created" as EventType,
@@ -490,6 +494,30 @@ describe("handleOrgEvent", () => {
       id: "inbox-1",
       itemType: "question",
     });
+  });
+
+  it("ignores inbox item events for other users", () => {
+    useAuthStore.setState({
+      user: { id: "user-1", name: "User One", email: "one@example.com", avatarUrl: null },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "inbox_item_created" as EventType,
+        scopeType: "user",
+        scopeId: "user-2",
+        payload: {
+          inboxItem: {
+            id: "inbox-2",
+            userId: "user-2",
+            itemType: "question",
+            title: "Someone else's item",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().inboxItems["inbox-2"]).toBeUndefined();
   });
 
   it("session_output session_rehomed redirects active session", () => {
