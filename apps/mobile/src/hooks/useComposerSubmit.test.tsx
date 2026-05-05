@@ -9,6 +9,7 @@ interface MockDraftAttachment {
   mimeType: string;
   base64?: string;
   fileUri?: string;
+  size?: number;
   previewUri?: string;
   width: number | null;
   height: number | null;
@@ -114,6 +115,7 @@ describe("useComposerSubmit", () => {
             filename: "notes.docx",
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             fileUri: "file:///tmp/notes.docx",
+            size: 1024,
             width: null,
             height: null,
             s3Key: null,
@@ -150,6 +152,7 @@ describe("useComposerSubmit", () => {
       fileUri: "file:///tmp/notes.docx",
       filename: "notes.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 1024,
       organizationId: "org-1",
     });
     expect(mutationVariables).toMatchObject({

@@ -15,6 +15,8 @@ export interface FileAttachment {
   base64?: string;
   /** Local file URI. Set when the attachment came from a system picker. */
   fileUri?: string;
+  /** File size in bytes when reported by the picker. */
+  size?: number;
   /** `data:` URL or `file://` URI for image previews. */
   previewUri?: string;
   width: number | null;

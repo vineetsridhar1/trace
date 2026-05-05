@@ -26,6 +26,7 @@ interface MockDraftAttachment {
   filename: string;
   mimeType: string;
   fileUri?: string;
+  size?: number;
   previewUri?: string;
   width: number | null;
   height: number | null;
@@ -403,6 +404,7 @@ describe("SessionInputComposer", () => {
         filename: "notes.docx",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         fileUri: "file:///tmp/notes.docx",
+        size: 1234,
       },
     ]);
   });

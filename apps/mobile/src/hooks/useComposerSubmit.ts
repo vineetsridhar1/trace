@@ -84,6 +84,7 @@ export function useComposerSubmit({
                   fileUri: attachment.fileUri,
                   filename: attachment.filename,
                   mimeType: attachment.mimeType,
+                  size: attachment.size,
                   organizationId: orgId,
                 }),
               ),

@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@trace/client-core";
+import { File } from "expo-file-system";
 import { isPreviewableImageMimeType } from "./attachment-utils";
 import { getActiveApiUrl } from "./connection-target";
 import { UploadedImageUrlCache } from "./upload-url-cache";
@@ -14,22 +15,70 @@ interface UploadArgs {
   filename: string;
   /** e.g. `image/png` — also used as the S3 PUT `Content-Type`. */
   mimeType: string;
+  /** File size in bytes when the picker reported it. */
+  size?: number;
   organizationId: string;
 }
 
-async function bodyFromArgs(args: UploadArgs): Promise<Blob> {
+type UploadBody =
+  | {
+      kind: "blob";
+      blob: Blob;
+      size: number;
+    }
+  | {
+      kind: "fileUri";
+      file: File;
+      filePart: ReactNativeFormDataFile;
+      size: number;
+    };
+
+interface ReactNativeFormDataFile {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+async function bodyFromArgs(args: UploadArgs): Promise<UploadBody> {
   if (args.fileUri) {
-    // RN's fetch handles both `file://` (iOS cached asset from the picker)
-    // and `content://` (Android) URIs and returns a real Blob we can PUT.
-    const res = await fetch(args.fileUri);
-    if (!res.ok) throw new Error("Could not read picked file");
-    return await res.blob();
+    const file = new File(args.fileUri);
+    const size = await readableFileSize(file, args.size);
+    return {
+      kind: "fileUri",
+      file,
+      filePart: { uri: args.fileUri, name: args.filename, type: args.mimeType },
+      size,
+    };
   }
   if (args.base64) {
     const dataUrl = `data:${args.mimeType};base64,${args.base64}`;
-    return await (await fetch(dataUrl)).blob();
+    const blob = await (await fetch(dataUrl)).blob();
+    if (blob.size <= 0) throw new Error("Could not read picked file");
+    return { kind: "blob", blob, size: blob.size };
   }
   throw new Error("uploadFile requires base64 or fileUri");
+}
+
+async function readableFileSize(file: File, pickerSize: number | undefined): Promise<number> {
+  if (typeof pickerSize === "number" && Number.isFinite(pickerSize) && pickerSize > 0) {
+    return pickerSize;
+  }
+  if (file.size > 0) {
+    return file.size;
+  }
+  const bytes = await file.bytes();
+  if (bytes.byteLength <= 0) {
+    throw new Error("Could not read picked file");
+  }
+  return bytes.byteLength;
+}
+
+async function blobFromFile(file: File, contentType: string): Promise<Blob> {
+  const bytes = await file.bytes();
+  if (bytes.byteLength <= 0) {
+    throw new Error("Could not read picked file");
+  }
+  return new Blob([bytes], { type: contentType });
 }
 
 /**
@@ -39,8 +88,8 @@ async function bodyFromArgs(args: UploadArgs): Promise<Blob> {
  * buffered in JS memory until send time.
  */
 export async function uploadFile(args: UploadArgs): Promise<string> {
-  const blob = await bodyFromArgs(args);
-  if (blob.size > MAX_BYTES) {
+  const body = await bodyFromArgs(args);
+  if (body.size > MAX_BYTES) {
     throw new Error("File must be 5MB or smaller");
   }
 
@@ -58,7 +107,7 @@ export async function uploadFile(args: UploadArgs): Promise<string> {
     body: JSON.stringify({
       filename: args.filename,
       contentType: args.mimeType,
-      contentLength: blob.size,
+      contentLength: body.size,
       organizationId: args.organizationId,
     }),
   });
@@ -77,11 +126,11 @@ export async function uploadFile(args: UploadArgs): Promise<string> {
   }
 
   const uploadResponse = uploadTarget
-    ? await uploadToTarget(uploadTarget, blob, args.mimeType)
+    ? await uploadToTarget(uploadTarget, body, args.mimeType, args.filename)
     : await fetch(uploadUrl as string, {
         method: "PUT",
         headers: { "Content-Type": args.mimeType },
-        body: blob,
+        body: body.kind === "blob" ? body.blob : await blobFromFile(body.file, args.mimeType),
       });
   if (!uploadResponse.ok) {
     throw new Error("Failed to upload file");
@@ -96,16 +145,26 @@ type UploadTarget =
   | { method: "PUT"; url: string }
   | { method: "POST"; url: string; fields: Record<string, string> };
 
-function uploadToTarget(target: UploadTarget, blob: Blob, contentType: string): Promise<Response> {
+async function uploadToTarget(
+  target: UploadTarget,
+  body: UploadBody,
+  contentType: string,
+  filename: string,
+): Promise<Response> {
   if (target.method === "POST") {
     const formData = new FormData();
     for (const [key, value] of Object.entries(target.fields)) {
       formData.append(key, value);
     }
-    formData.append("file", blob);
+    if (body.kind === "fileUri") {
+      formData.append("file", body.filePart as unknown as Blob);
+    } else {
+      formData.append("file", body.blob, filename);
+    }
     return fetch(target.url, { method: "POST", body: formData });
   }
 
+  const blob = body.kind === "blob" ? body.blob : await blobFromFile(body.file, contentType);
   return fetch(target.url, {
     method: "PUT",
     headers: { "Content-Type": contentType },
