@@ -101,6 +101,43 @@ describe("EventService", () => {
     expect(results).toEqual([older, newer]);
   });
 
+  it("filters only auto-retryable connection loss from session event queries", async () => {
+    prismaMock.event.findMany.mockResolvedValueOnce([]);
+
+    const service = new EventService();
+    await service.query("org-1", {
+      scopeType: "session",
+      scopeId: "session-1",
+      excludePayloadTypes: ["connection_lost:auto_retryable", "workspace_ready"],
+    });
+
+    expect(prismaMock.event.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        scopeType: "session",
+        scopeId: "session-1",
+        NOT: {
+          AND: [
+            { eventType: "session_output" },
+            {
+              OR: [
+                { payload: { path: ["type"], equals: "workspace_ready" } },
+                {
+                  AND: [
+                    { payload: { path: ["type"], equals: "connection_lost" } },
+                    { payload: { path: ["connection", "autoRetryable"], equals: true } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      orderBy: { timestamp: "asc" },
+      take: 200,
+    });
+  });
+
   it("skips Redis stream appends in local mode", async () => {
     vi.stubEnv("TRACE_LOCAL_MODE", "1");
     prismaMock.event.create.mockResolvedValueOnce({

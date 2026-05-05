@@ -1,11 +1,12 @@
 /**
- * Payload types that are never rendered in the session event log.
+ * Payload filters for events that are never rendered in the session event log.
  * Used both for server-side query filtering (excludePayloadTypes)
  * and client-side node building (skipped in buildSessionNodes).
  *
  * Keeping a single source of truth avoids drift between the two.
  */
 export const HIDDEN_SESSION_PAYLOAD_TYPES = [
+  "connection_lost:auto_retryable",
   "connection_restored",
   "git_checkpoint",
   "git_checkpoint_rewrite",
