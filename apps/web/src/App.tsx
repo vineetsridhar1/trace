@@ -12,7 +12,6 @@ import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { ConnectionsView } from "./components/connections/ConnectionsView";
 import { TicketsView } from "./components/tickets/TicketsView";
-import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset } from "./components/ui/sidebar";
@@ -175,8 +174,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {activePage === "settings" ? (
                   <SettingsPage />
-                ) : activePage === "agent-debug" && features.agentDebug ? (
-                  <AgentDebugPage />
                 ) : activePage === "inbox" ? (
                   <InboxView />
                 ) : activePage === "connections" ? (

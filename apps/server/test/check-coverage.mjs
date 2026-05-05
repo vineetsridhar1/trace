@@ -5,18 +5,6 @@ const summaryPath = path.resolve(process.cwd(), "coverage", "coverage-summary.js
 const summary = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
 
 const hotspotThresholds = {
-  "src/agent/aggregator.ts": {
-    statements: 85,
-    lines: 85,
-    functions: 90,
-    branches: 70,
-  },
-  "src/agent/executor.ts": {
-    statements: 70,
-    lines: 70,
-    functions: 100,
-    branches: 70,
-  },
   "src/services/chat.ts": {
     statements: 55,
     lines: 55,

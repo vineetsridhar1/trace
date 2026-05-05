@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   GitBranch,
-  Bot,
   SlidersHorizontal,
   Bell,
   Key,
@@ -17,7 +16,6 @@ import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { SidebarTrigger } from "../ui/sidebar";
 import { RepositoriesSection } from "./RepositoriesSection";
-import { AgentSettingsSection } from "./AgentSettingsSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { ApiTokensSection } from "./ApiTokensSection";
@@ -30,7 +28,6 @@ import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
   | "repositories"
-  | "ai"
   | "session-defaults"
   | "notifications"
   | "api-keys"
@@ -43,7 +40,6 @@ type SettingsTab =
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
   { id: "members", label: "Members", icon: Users },
-  { id: "ai", label: "AI Agent", icon: Bot },
   { id: "session-defaults", label: "Session Defaults", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "api-keys", label: "API Keys", icon: Key },
@@ -67,7 +63,6 @@ export function SettingsPage() {
   const visibleTabs = useMemo(
     () =>
       TABS.filter((tab) => {
-        if (tab.id === "ai") return !isLocalMode;
         if (tab.id === "api-keys") return !isLocalMode;
         return true;
       }),
@@ -141,7 +136,6 @@ export function SettingsPage() {
           <div className={contentWidthClass}>
             {activeTab === "repositories" && <RepositoriesSection />}
             {activeTab === "members" && <MembersSection />}
-            {activeTab === "ai" && <AgentSettingsSection />}
             {activeTab === "session-defaults" && <SessionDefaultsSection />}
             {activeTab === "notifications" && <NotificationsSection />}
             {activeTab === "api-keys" && <ApiTokensSection />}

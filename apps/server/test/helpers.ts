@@ -61,13 +61,6 @@ export function createPrismaMock() {
       update: vi.fn(),
       deleteMany: vi.fn(),
     },
-    agentIdentity: {
-      findUnique: vi.fn(),
-      findUniqueOrThrow: vi.fn(),
-      findMany: vi.fn(),
-      upsert: vi.fn(),
-      update: vi.fn(),
-    },
     apiToken: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -287,22 +280,6 @@ export function createPrismaMock() {
     },
     ticketProject: {
       create: vi.fn(),
-      findMany: vi.fn(),
-    },
-    agentExecutionLog: {
-      create: vi.fn(),
-      findMany: vi.fn(),
-    },
-    processedAgentEvent: {
-      findUnique: vi.fn(),
-      upsert: vi.fn(),
-      findMany: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    agentCostTracker: {
-      upsert: vi.fn(),
-      update: vi.fn(),
-      findUnique: vi.fn(),
       findMany: vi.fn(),
     },
     $queryRaw: vi.fn(),

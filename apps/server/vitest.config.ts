@@ -18,7 +18,6 @@ export default defineConfig({
       exclude: [
         "src/**/*.test.ts",
         "src/index.ts",
-        "src/agent-worker.ts",
         "src/context.ts",
         "src/lib/db.ts",
         // Runtime/bootstrap integration surfaces are better covered by a dedicated

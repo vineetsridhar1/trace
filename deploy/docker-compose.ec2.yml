@@ -80,28 +80,6 @@ services:
       retries: 5
       start_period: 30s
 
-  worker:
-    image: ${ECR_REGISTRY:-registry.example.com}/trace:${IMAGE_TAG:-latest}
-    environment:
-      ROLE: worker
-      NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
-      STORAGE_MODE: ${STORAGE_MODE:-s3}
-      S3_BUCKET: ${S3_BUCKET}
-      AWS_REGION: ${AWS_REGION}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      TRACE_AGENT_VERBOSE_EVENT_LOGS: ${TRACE_AGENT_VERBOSE_EVENT_LOGS:-0}
-    logging: *default-logging
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-
 volumes:
   caddy_data:
   caddy_config:

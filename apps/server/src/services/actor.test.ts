@@ -33,7 +33,7 @@ describe("actor service helpers", () => {
   });
 
   it("resolves agent identities from prisma with a default fallback", async () => {
-    prismaMock.agentIdentity.findUnique.mockResolvedValueOnce(null);
+    prismaMock.user.findUnique.mockResolvedValueOnce(null);
 
     await expect(resolveActor({ actorType: "agent", actorId: "a1" })).resolves.toEqual({
       type: "agent",
