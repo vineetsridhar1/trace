@@ -7,14 +7,12 @@ import {
   View,
   type NativeSyntheticEvent,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import MarkdownLib, { type ASTNode, type RenderRules } from "react-native-markdown-display";
 import ContextMenu, {
-  type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
 import { alpha, useTheme, type Theme } from "@/theme";
-import { haptic } from "@/lib/haptics";
+import { COPY_ACTION_INDEX, COPY_CONTEXT_MENU, copyTextToClipboard } from "./copy-menu";
 import { splitCopyBlocks, type CopyBlock } from "./copy-blocks";
 
 interface MarkdownProps {
@@ -29,8 +27,6 @@ interface MarkdownProps {
 const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
 const MARKDOWN_HINTS =
   /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|```|~~~)|[*_`[\]]|!\[|https?:\/\/|mailto:/i;
-const COPY_ACTION_INDEX = 0;
-const COPY_CONTEXT_MENU: ContextMenuAction[] = [{ title: "Copy" }];
 
 /**
  * Theme-aware markdown renderer. Mirrors the subset used by web's `Markdown`
@@ -81,7 +77,7 @@ function renderCopyContextMenu(
   if (!text) return children;
 
   const handlePress = (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
-    if (event.nativeEvent.index === COPY_ACTION_INDEX) void copyBlock(text);
+    if (event.nativeEvent.index === COPY_ACTION_INDEX) void copyTextToClipboard(text);
   };
 
   return (
@@ -89,13 +85,6 @@ function renderCopyContextMenu(
       {children}
     </ContextMenu>
   );
-}
-
-async function copyBlock(text: string) {
-  const copyText = text.trim();
-  if (!copyText) return;
-  await Clipboard.setStringAsync(copyText);
-  void haptic.light();
 }
 
 function createCopyRules(sourceBlocks: CopyBlock[]): RenderRules {
