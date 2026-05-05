@@ -50,6 +50,28 @@ type GitHubUserResponse = {
   name: string | null;
 };
 
+function githubOAuthGrantUrl(): string {
+  return `https://github.com/settings/connections/applications/${GITHUB_CLIENT_ID}`;
+}
+
+async function revokeGitHubOAuthGrant(accessToken: string): Promise<boolean> {
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+  if (!clientSecret) return false;
+
+  const response = await fetch(`https://api.github.com/applications/${GITHUB_CLIENT_ID}/grant`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Basic ${Buffer.from(`${GITHUB_CLIENT_ID}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: JSON.stringify({ access_token: accessToken }),
+  });
+
+  return response.ok;
+}
+
 function logoutPushToken(req: Request): string | null {
   const body = req.body as unknown;
   if (!body || typeof body !== "object") return null;
@@ -521,10 +543,13 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
   }
 
   if (payload.scope && payload.scope.trim().length > 0) {
+    const revoked = await revokeGitHubOAuthGrant(payload.access_token);
     await deleteGitHubDeviceAuth(deviceAuthId);
     return res.status(400).json({
       status: "error",
-      error: "GitHub granted permissions Trace did not request",
+      error: revoked
+        ? "Removed old GitHub permissions for Trace. Start GitHub login again."
+        : `GitHub still has old permissions for Trace. Revoke Trace at ${githubOAuthGrantUrl()}, then try again.`,
     });
   }
 

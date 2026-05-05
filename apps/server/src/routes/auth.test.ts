@@ -904,6 +904,7 @@ describe("github device oauth", () => {
       server.close((err) => (err ? reject(err) : resolve())),
     );
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("does not expose the legacy redirect OAuth endpoints", async () => {
@@ -1017,6 +1018,9 @@ describe("github device oauth", () => {
   });
 
   it("rejects access tokens with GitHub scopes", async () => {
+    vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
+    let revokedGrant = false;
+
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1042,6 +1046,15 @@ describe("github device oauth", () => {
             headers: { "Content-Type": "application/json" },
           });
         }
+        if (url.includes("/applications/") && url.endsWith("/grant")) {
+          expect(init?.method).toBe("DELETE");
+          expect(init?.headers).toMatchObject({
+            Authorization: expect.stringMatching(/^Basic /),
+          });
+          expect(init?.body).toBe(JSON.stringify({ access_token: "gh-access" }));
+          revokedGrant = true;
+          return new Response(null, { status: 204 });
+        }
         throw new Error(`unexpected fetch: ${url}`);
       }),
     );
@@ -1058,8 +1071,9 @@ describe("github device oauth", () => {
     expect(pollRes.status).toBe(400);
     expect(await pollRes.json()).toEqual({
       status: "error",
-      error: "GitHub granted permissions Trace did not request",
+      error: "Removed old GitHub permissions for Trace. Start GitHub login again.",
     });
+    expect(revokedGrant).toBe(true);
     expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
   });
 
