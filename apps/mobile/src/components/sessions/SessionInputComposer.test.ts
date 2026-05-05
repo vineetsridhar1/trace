@@ -449,6 +449,7 @@ describe("SessionInputComposer", () => {
         size: 321,
       },
     ]);
+    expect(FileSystem.File.pickFileAsync).toHaveBeenCalledWith();
     warnSpy.mockRestore();
   });
 

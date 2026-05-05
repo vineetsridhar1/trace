@@ -491,7 +491,7 @@ export function SessionInputComposer({
           "[composer] document picker unavailable, using file-system picker",
           documentPickerError,
         );
-        const picked = await ExpoFile.pickFileAsync(undefined, "*/*");
+        const picked = await ExpoFile.pickFileAsync();
         const pickedFiles = Array.isArray(picked) ? picked : [picked];
         nextAttachments = pickedFiles.slice(0, remaining).map((file) => ({
           id: generateUUID(),
