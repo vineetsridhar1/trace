@@ -1,16 +1,18 @@
-import { memo, useCallback, useMemo, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import {
-  ActionSheetIOS,
-  Alert,
   Linking,
   Platform,
-  Pressable,
   StyleSheet,
   Text as NativeText,
   View,
+  type NativeSyntheticEvent,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import MarkdownLib, { type ASTNode, type RenderRules } from "react-native-markdown-display";
+import ContextMenu, {
+  type ContextMenuAction,
+  type ContextMenuOnPressNativeEvent,
+} from "react-native-context-menu-view";
 import { alpha, useTheme, type Theme } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { splitCopyBlocks, type CopyBlock } from "./copy-blocks";
@@ -28,8 +30,7 @@ const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
 const MARKDOWN_HINTS =
   /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|```|~~~)|[*_`[\]]|!\[|https?:\/\/|mailto:/i;
 const COPY_ACTION_INDEX = 0;
-const CANCEL_ACTION_INDEX = 1;
-const ACTION_SHEET_OPTIONS = ["Copy", "Cancel"];
+const COPY_CONTEXT_MENU: ContextMenuAction[] = [{ title: "Copy" }];
 
 /**
  * Theme-aware markdown renderer. Mirrors the subset used by web's `Markdown`
@@ -47,18 +48,10 @@ export const Markdown = memo(function Markdown({
     () => (copyBlocks ? splitCopyBlocks(children) : []),
     [children, copyBlocks],
   );
-  const handlePlainTextLongPress = useCallback(() => showCopyAction(children), [children]);
 
   if (!MARKDOWN_HINTS.test(children)) {
-    return (
-      <NativeText
-        onLongPress={copyBlocks ? handlePlainTextLongPress : undefined}
-        style={styles.plainText}
-        suppressHighlighting={copyBlocks}
-      >
-        {children}
-      </NativeText>
-    );
+    const plainText = <NativeText style={styles.plainText}>{children}</NativeText>;
+    return copyBlocks ? renderCopyContextMenu(children, plainText) : plainText;
   }
 
   return (
@@ -78,33 +71,30 @@ function openTrustedMarkdownLink(url: string): boolean {
   return true;
 }
 
-function showCopyAction(text: string) {
-  const copyText = text.trim();
-  if (!copyText) return;
-  void haptic.selection();
+function renderCopyContextMenu(
+  copyText: string,
+  children: ReactNode,
+  key?: string,
+  style?: object,
+) {
+  const text = copyText.trim();
+  if (!text) return children;
 
-  if (Platform.OS === "ios") {
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: ACTION_SHEET_OPTIONS,
-        cancelButtonIndex: CANCEL_ACTION_INDEX,
-        userInterfaceStyle: "dark",
-      },
-      (buttonIndex) => {
-        if (buttonIndex === COPY_ACTION_INDEX) void copyBlock(copyText);
-      },
-    );
-    return;
-  }
+  const handlePress = (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
+    if (event.nativeEvent.index === COPY_ACTION_INDEX) void copyBlock(text);
+  };
 
-  Alert.alert("Copy block", undefined, [
-    { text: "Copy", onPress: () => void copyBlock(copyText) },
-    { text: "Cancel", style: "cancel" },
-  ]);
+  return (
+    <ContextMenu key={key} actions={COPY_CONTEXT_MENU} onPress={handlePress} style={style}>
+      {children}
+    </ContextMenu>
+  );
 }
 
 async function copyBlock(text: string) {
-  await Clipboard.setStringAsync(text);
+  const copyText = text.trim();
+  if (!copyText) return;
+  await Clipboard.setStringAsync(copyText);
   void haptic.light();
 }
 
@@ -155,17 +145,7 @@ function renderCopyableView(
   }
 
   const copyText = nextCopyText(node, state);
-  return (
-    <Pressable
-      key={node.key}
-      accessible={false}
-      delayLongPress={320}
-      onLongPress={() => showCopyAction(copyText)}
-      style={style}
-    >
-      {children}
-    </Pressable>
-  );
+  return renderCopyContextMenu(copyText, <View>{children}</View>, node.key, style);
 }
 
 function renderCopyableCodeText(
@@ -185,16 +165,7 @@ function renderCopyableCodeText(
   }
 
   const copyText = nextCopyText(node, state);
-  return (
-    <NativeText
-      key={node.key}
-      onLongPress={() => showCopyAction(copyText)}
-      style={style}
-      suppressHighlighting
-    >
-      {content}
-    </NativeText>
-  );
+  return renderCopyContextMenu(copyText, <NativeText style={style}>{content}</NativeText>, node.key);
 }
 
 function isTopLevelBlock(parent: ASTNode[]): boolean {
