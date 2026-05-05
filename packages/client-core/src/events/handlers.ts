@@ -564,13 +564,15 @@ export function handleOrgEvent(event: Event): void {
   // Inbox item events
   if (event.eventType === ("inbox_item_created" as EventType)) {
     const item = asJsonObject(payload.inboxItem);
-    if (item && typeof item.id === "string") {
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (item && typeof item.id === "string" && item.userId === currentUserId) {
       batch.upsert("inboxItems", item.id, item as unknown as InboxItem);
     }
   }
   if (event.eventType === ("inbox_item_resolved" as EventType)) {
     const item = asJsonObject(payload.inboxItem);
-    if (item && typeof item.id === "string") {
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (item && typeof item.id === "string" && item.userId === currentUserId) {
       batch.upsert("inboxItems", item.id, item as unknown as InboxItem);
     }
   }

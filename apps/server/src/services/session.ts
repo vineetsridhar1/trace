@@ -6807,6 +6807,15 @@ export class SessionService {
       data: { archivedAt: new Date() },
     });
 
+    for (const session of group.sessions) {
+      await inboxService.resolveBySource({
+        sourceType: "session",
+        sourceId: session.id,
+        orgId: organizationId,
+        resolution: "session_archived",
+      });
+    }
+
     // fullyUnloadSession reads workdir from DB before nullifying it, and calls syncGroupWorkspaceState internally.
     const latestSessionId = group.sessions[0]?.id;
     if (latestSessionId) {

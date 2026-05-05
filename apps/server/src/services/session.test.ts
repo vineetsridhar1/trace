@@ -101,6 +101,7 @@ import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { inboxService } from "./inbox.js";
 import { getDefaultReasoningEffort, isSupportedReasoningEffort } from "@trace/shared";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
@@ -120,6 +121,7 @@ const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminal
 const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
   typeof runtimeAccessService
 >;
+const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
 const isSupportedReasoningEffortMock = vi.mocked(isSupportedReasoningEffort);
 
@@ -3774,6 +3776,18 @@ describe("SessionService", () => {
       expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
         where: { id: "group-1" },
         data: { archivedAt: expect.any(Date) },
+      });
+      expect(inboxServiceMock.resolveBySource).toHaveBeenCalledWith({
+        sourceType: "session",
+        sourceId: "session-2",
+        orgId: "org-1",
+        resolution: "session_archived",
+      });
+      expect(inboxServiceMock.resolveBySource).toHaveBeenCalledWith({
+        sourceType: "session",
+        sourceId: "session-1",
+        orgId: "org-1",
+        resolution: "session_archived",
       });
       expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
         "session-2",

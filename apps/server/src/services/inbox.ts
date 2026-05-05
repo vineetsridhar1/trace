@@ -113,7 +113,7 @@ export class InboxService {
   }
 
   async listForUser(orgId: string, userId: string, status?: InboxItemStatus) {
-    return prisma.inboxItem.findMany({
+    const items = await prisma.inboxItem.findMany({
       where: {
         organizationId: orgId,
         userId,
@@ -121,18 +121,46 @@ export class InboxService {
       },
       orderBy: { createdAt: "desc" },
     });
+    return this.excludeArchivedSessionItems(items, orgId);
   }
 
   async countForUser(orgId: string, userId: string) {
-    return prisma.inboxItem.count({
+    const items = await prisma.inboxItem.findMany({
       where: {
         organizationId: orgId,
         userId,
         status: "active",
       },
     });
+    return (await this.excludeArchivedSessionItems(items, orgId)).length;
   }
 
+  private async excludeArchivedSessionItems<T extends { sourceType: string; sourceId: string }>(
+    items: T[],
+    orgId: string,
+  ): Promise<T[]> {
+    const sessionIds = [
+      ...new Set(
+        items.filter((item) => item.sourceType === "session").map((item) => item.sourceId),
+      ),
+    ];
+    if (sessionIds.length === 0) return items;
+
+    const archivedSessions = await prisma.session.findMany({
+      where: {
+        organizationId: orgId,
+        id: { in: sessionIds },
+        sessionGroup: { archivedAt: { not: null } },
+      },
+      select: { id: true },
+    });
+    if (archivedSessions.length === 0) return items;
+
+    const archivedSessionIds = new Set(archivedSessions.map((session) => session.id));
+    return items.filter(
+      (item) => item.sourceType !== "session" || !archivedSessionIds.has(item.sourceId),
+    );
+  }
 }
 
 export const inboxService = new InboxService();

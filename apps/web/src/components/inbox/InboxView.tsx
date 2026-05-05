@@ -6,6 +6,7 @@ import { InboxItemRow } from "./InboxItemRow";
 import { Inbox } from "lucide-react";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
+import { useAuthStore } from "@trace/client-core";
 
 const MAX_RESOLVED = 20;
 
@@ -18,16 +19,17 @@ type VirtualItem =
 
 export function InboxView() {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const activeIds = useEntityIds(
     "inboxItems",
-    (item) => (item.status as InboxItemStatus) === "active",
+    (item) => item.userId === currentUserId && (item.status as InboxItemStatus) === "active",
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
   const allResolvedIds = useEntityIds(
     "inboxItems",
-    (item) => (item.status as InboxItemStatus) !== "active",
+    (item) => item.userId === currentUserId && (item.status as InboxItemStatus) !== "active",
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 

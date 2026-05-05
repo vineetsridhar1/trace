@@ -1,5 +1,5 @@
 import { Inbox } from "lucide-react";
-import { useEntityIds } from "@trace/client-core";
+import { useAuthStore, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import type { InboxItemStatus } from "@trace/gql";
 import { cn } from "../../lib/utils";
@@ -7,10 +7,11 @@ import { cn } from "../../lib/utils";
 export function InboxButton() {
   const activePage = useUIStore((s) => s.activePage);
   const setActivePage = useUIStore((s) => s.setActivePage);
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const activeIds = useEntityIds(
     "inboxItems",
-    (item) => (item.status as InboxItemStatus) === "active",
+    (item) => item.userId === currentUserId && (item.status as InboxItemStatus) === "active",
   );
   const count = activeIds.length;
 
