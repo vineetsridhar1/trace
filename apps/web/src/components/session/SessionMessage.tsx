@@ -1,11 +1,7 @@
 import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
 import { asJsonObject, type JsonObject } from "@trace/shared";
-import {
-  statusRowForSessionOutput,
-  statusRowForSessionTermination,
-  useScopedEventField,
-} from "@trace/client-core";
+import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -50,18 +46,6 @@ function agentResultToString(content: unknown): string | undefined {
   if (typeof content === "string") return content;
   if (content != null && typeof content === "object") return serializeUnknown(content, 3000);
   return undefined;
-}
-
-function renderStatusRow(row: ReturnType<typeof statusRowForSessionOutput>, timestamp: string) {
-  return row ? (
-    <CompletionRow
-      timestamp={timestamp}
-      title={row.title}
-      result={row.detail}
-      tone={row.tone}
-      isUserStop={row.tone === "stop"}
-    />
-  ) : null;
 }
 
 /**
@@ -151,7 +135,15 @@ function renderSessionOutput(
     );
   }
 
-  return renderStatusRow(statusRowForSessionOutput(payload), ts);
+  if (type === "result") {
+    return <CompletionRow timestamp={ts} />;
+  }
+
+  if (type === "error") {
+    return <CompletionRow timestamp={ts} result={str(payload.message, "Error")} isUserStop />;
+  }
+
+  return null;
 }
 
 function runtimeMoveText(payload: JsonObject): string {
@@ -237,8 +229,27 @@ export const SessionMessage = memo(function SessionMessage({
       );
 
     case "session_terminated": {
-      const row = payload ? statusRowForSessionTermination(payload) : null;
-      return renderStatusRow(row, timestamp);
+      if (payload?.reason === "bridge_complete") return null;
+      if (payload?.reason === "workspace_failed") {
+        const error = str(payload?.error);
+        return <SystemBadge text={error || "Workspace preparation failed"} />;
+      }
+      if (payload?.reason === "manual_stop") {
+        return <SystemBadge text="Session stopped" />;
+      }
+      if (payload?.sessionStatus === "merged") {
+        return <SystemBadge text="Session merged" />;
+      }
+      if (payload?.agentStatus === "failed") {
+        return <SystemBadge text="Session failed" />;
+      }
+      if (payload?.agentStatus === "stopped") {
+        return <SystemBadge text="Session stopped" />;
+      }
+      if (payload?.agentStatus === "done") {
+        return <SystemBadge text="Session completed" />;
+      }
+      return <SystemBadge text="Session terminated" />;
     }
 
     default:

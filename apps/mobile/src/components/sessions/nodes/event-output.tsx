@@ -1,5 +1,4 @@
 import { Fragment, type ReactNode } from "react";
-import { statusRowForSessionOutput } from "@trace/client-core";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { AssistantMessage } from "./AssistantMessage";
 import { CompletionRow } from "./CompletionRow";
@@ -16,15 +15,12 @@ export function renderSessionOutput(payload: JsonObject, context: NodeRenderCont
   if (type === "assistant" || type === "user") {
     return renderAssistantContent(payload, context);
   }
-  const row = statusRowForSessionOutput(payload);
-  return row ? (
-    <CompletionRow
-      title={row.title}
-      result={row.detail}
-      tone={row.tone}
-      isUserStop={row.tone === "stop"}
-    />
-  ) : null;
+  if (type === "result") return <CompletionRow />;
+  if (type === "error") {
+    const message = typeof payload.message === "string" ? payload.message : "Error";
+    return <CompletionRow result={message} isUserStop />;
+  }
+  return null;
 }
 
 function renderAssistantContent(payload: JsonObject, context: NodeRenderContext): ReactNode {

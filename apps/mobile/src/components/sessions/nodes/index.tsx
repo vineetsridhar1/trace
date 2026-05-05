@@ -1,14 +1,8 @@
 import { memo, type ReactNode } from "react";
-import {
-  eventScopeKey,
-  statusRowForSessionTermination,
-  useScopedEventField,
-  type SessionNode,
-} from "@trace/client-core";
+import { eventScopeKey, useScopedEventField, type SessionNode } from "@trace/client-core";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { CommandExecutionRow } from "./CommandExecutionRow";
-import { CompletionRow } from "./CompletionRow";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { PRCard, type PRCardKind } from "./PRCard";
 import { ReadGlobGroup } from "./ReadGlobGroup";
@@ -100,18 +94,6 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
 
     case "session_output":
       return payload ? renderSessionOutput(payload, context) : null;
-
-    case "session_terminated": {
-      const row = payload ? statusRowForSessionTermination(payload) : null;
-      return row ? (
-        <CompletionRow
-          title={row.title}
-          result={row.detail}
-          tone={row.tone}
-          isUserStop={row.tone === "stop"}
-        />
-      ) : null;
-    }
 
     case "session_pr_opened":
       return <PRCard kind="opened" prUrl={prUrlFrom(payload)} />;

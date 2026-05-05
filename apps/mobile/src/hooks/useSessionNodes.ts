@@ -2,8 +2,6 @@ import { useMemo, useRef } from "react";
 import {
   buildSessionNodes,
   eventScopeKey,
-  statusRowForSessionOutput,
-  statusRowForSessionTermination,
   useEntityStore,
   useEntityField,
   type AgentToolResult,
@@ -197,11 +195,7 @@ function willEventRender(event: Event | undefined): boolean {
       const payload = asJsonObject(event.payload);
       if (!payload) return false;
       const type = payload.type;
-      return type === "assistant" || type === "user" || !!statusRowForSessionOutput(payload);
-    }
-    case "session_terminated": {
-      const payload = asJsonObject(event.payload);
-      return payload ? !!statusRowForSessionTermination(payload) : false;
+      return type === "assistant" || type === "user" || type === "result" || type === "error";
     }
     default:
       return false;

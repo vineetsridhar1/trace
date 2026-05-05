@@ -1,6 +1,5 @@
 import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import type { SessionStatusRowTone } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { Markdown } from "./Markdown";
@@ -8,12 +7,10 @@ import { Markdown } from "./Markdown";
 interface CompletionRowProps {
   result?: string;
   isUserStop?: boolean;
-  title?: string;
-  tone?: SessionStatusRowTone;
 }
 
 /** Session end marker — `result` vs `error` payloads on `session_output`. */
-export function CompletionRow({ result, isUserStop, title, tone = "success" }: CompletionRowProps) {
+export function CompletionRow({ result, isUserStop }: CompletionRowProps) {
   const theme = useTheme();
 
   if (isUserStop) {
@@ -27,32 +24,24 @@ export function CompletionRow({ result, isUserStop, title, tone = "success" }: C
           style={styles.icon10}
         />
         <Text variant="caption1" color="mutedForeground">
-          {title ?? "Stopped by user"}
+          Stopped by user
         </Text>
       </View>
     );
   }
 
-  const iconName =
-    tone === "error"
-      ? "exclamationmark.triangle"
-      : tone === "info"
-        ? "info.circle"
-        : "checkmark.circle";
-  const iconColor = tone === "error" ? theme.colors.destructive : theme.colors.mutedForeground;
-
   return (
     <View style={[styles.wrapper, { gap: theme.spacing.xs, paddingVertical: 4 }]}>
       <View style={[styles.row, { gap: 8 }]}>
         <SymbolView
-          name={iconName}
+          name="checkmark.circle"
           size={14}
-          tintColor={iconColor}
+          tintColor={theme.colors.mutedForeground}
           resizeMode="scaleAspectFit"
           style={styles.icon14}
         />
         <Text variant="footnote" style={{ color: theme.colors.foreground, fontWeight: "600" }}>
-          {title ?? "Run ended"}
+          Run ended
         </Text>
       </View>
       {result ? (
