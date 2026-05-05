@@ -178,7 +178,6 @@ export function LoginPage() {
       };
       setDeviceLogin(login);
       setDeviceStatus("pending");
-      window.open(login.verificationUri, "_blank", "noopener,noreferrer");
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Failed to start GitHub login");
     } finally {
@@ -237,17 +236,27 @@ export function LoginPage() {
   return (
     <div className="flex h-dvh items-center justify-center bg-surface-deep">
       <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4">
-        <h1 className="text-3xl font-bold text-foreground">Trace</h1>
-        <p className="text-muted-foreground">
-          AI-native project management and development platform
-        </p>
+        <div className="space-y-2 text-center">
+          <h1 className="text-3xl font-bold text-foreground">Trace</h1>
+          <p className="text-muted-foreground">
+            AI-native project management and development platform
+          </p>
+          <p className="text-sm leading-5 text-muted-foreground">
+            We use GitHub only to confirm it is you. Trace requests no GitHub permissions
+            and never asks for repository access.
+          </p>
+        </div>
         {deviceLogin ? (
           <div className="w-full rounded-xl border border-border bg-background p-5 shadow-sm">
-            <div className="space-y-2 text-center">
+            <div className="space-y-3 text-center">
               <p className="text-sm font-medium text-muted-foreground">Enter this GitHub code</p>
               <div className="rounded-lg border border-border bg-surface-deep px-4 py-3 font-mono text-2xl font-semibold tracking-widest text-foreground">
                 {deviceLogin.userCode}
               </div>
+              <p className="text-sm leading-5 text-muted-foreground">
+                Copy the code, then open GitHub to finish signing in. This only verifies
+                your identity and does not grant Trace access to your repositories.
+              </p>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -260,7 +269,7 @@ export function LoginPage() {
                 onClick={() => window.open(deviceLogin.verificationUri, "_blank", "noreferrer")}
               >
                 <ExternalLink size={16} />
-                GitHub
+                Open GitHub
               </Button>
             </div>
 
