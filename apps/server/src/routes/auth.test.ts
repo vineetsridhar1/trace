@@ -561,6 +561,35 @@ describe("bridge auth tokens", () => {
     expect(Date.parse(body.expiresAt)).not.toBeNaN();
   });
 
+  it("mints bridge auth from a mobile token for any requested member organization", async () => {
+    prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
+      id: "device-1",
+      ownerUserId: "user-1",
+      organizationId: "org-paired-from",
+      revokedAt: null,
+    });
+    prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.orgMember.findUnique
+      .mockResolvedValueOnce({ organizationId: "org-2" })
+      .mockResolvedValueOnce({ userId: "user-1" });
+
+    const res = await fetch(`${baseUrl}/auth/bridge-token?instanceId=bridge-1`, {
+      headers: {
+        Authorization: "Bearer opaque-device-secret",
+        "X-Organization-Id": "org-2",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string; expiresAt: string };
+    expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-2",
+      instanceId: "bridge-1",
+      tokenType: "bridge_auth",
+    });
+  });
+
   it("reads auth/me from the browser session cookie without echoing the token", async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: "user-1",

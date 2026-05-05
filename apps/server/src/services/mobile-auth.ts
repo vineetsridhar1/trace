@@ -18,7 +18,7 @@ export class MobileAuthError extends Error {
 export type MobileAuthSubject = {
   kind: "mobile";
   userId: string;
-  organizationId: string;
+  pairedOrganizationId: string;
   deviceId: string;
 };
 
@@ -186,7 +186,7 @@ export async function authenticateMobileSecret(
   return {
     kind: "mobile",
     userId: device.ownerUserId,
-    organizationId: device.organizationId,
+    pairedOrganizationId: device.organizationId,
     deviceId: device.id,
   };
 }
