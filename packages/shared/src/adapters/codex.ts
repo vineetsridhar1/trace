@@ -15,6 +15,8 @@ type JsonRpcMessage = {
   error?: { message?: string };
 };
 
+const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value != null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -43,8 +45,10 @@ export class CodexAdapter implements CodingToolAdapter {
   private lastTextContent: string | null = null;
   private processGeneration = 0;
   private nextRequestId = 1;
+  private pendingInitializeRequestId: number | null = null;
   private pendingRunRequestId: number | null = null;
   private pendingTurnRequestId: number | null = null;
+  private requestTimeout: ReturnType<typeof setTimeout> | null = null;
   private stderrChunks: string[] = [];
 
   run({
@@ -63,6 +67,7 @@ export class CodexAdapter implements CodingToolAdapter {
     this.lastTextContent = null;
     this.stderrChunks = [];
     this.nextRequestId = 1;
+    this.pendingInitializeRequestId = null;
     this.pendingRunRequestId = null;
     this.pendingTurnRequestId = null;
 
@@ -97,6 +102,14 @@ export class CodexAdapter implements CodingToolAdapter {
       complete();
     };
 
+    const startRequestTimeout = (description: string) => {
+      this.clearRequestTimeout();
+      this.requestTimeout = setTimeout(() => {
+        if (!isCurrentProcess()) return;
+        fail(`Codex app-server timed out waiting for ${description}`);
+      }, CODEX_APP_SERVER_REQUEST_TIMEOUT_MS);
+    };
+
     child.stdout?.on("error", () => {});
     child.stderr?.on("error", () => {});
     child.stdin?.on("error", () => {});
@@ -115,6 +128,7 @@ export class CodexAdapter implements CodingToolAdapter {
             reasoningEffort,
             onOutput,
             onOutputDelta,
+            startRequestTimeout,
             complete,
             fail,
           });
@@ -133,6 +147,7 @@ export class CodexAdapter implements CodingToolAdapter {
 
     child.on("close", (code: number | null) => {
       if (!isCurrentProcess()) return;
+      this.clearRequestTimeout();
       if (!this.resultEmitted) {
         if (code !== 0 && code !== null && this.stderrChunks.length > 0) {
           onOutput({ type: "error", message: this.stderrChunks.join("\n") });
@@ -145,16 +160,18 @@ export class CodexAdapter implements CodingToolAdapter {
 
     child.on("error", (err: Error) => {
       if (!isCurrentProcess()) return;
+      this.clearRequestTimeout();
       onOutput({ type: "error", message: err.message });
       this.emitResult(onOutput, "error");
       onComplete();
       this.process = null;
     });
 
-    this.sendRequest("initialize", {
+    this.pendingInitializeRequestId = this.sendRequest("initialize", {
       clientInfo: { name: "trace", title: "Trace", version: "0.1.0" },
       capabilities: { experimentalApi: true },
     });
+    startRequestTimeout("initialize");
     this.sendNotification("initialized");
   }
 
@@ -166,6 +183,7 @@ export class CodexAdapter implements CodingToolAdapter {
     reasoningEffort,
     onOutput,
     onOutputDelta,
+    startRequestTimeout,
     complete,
     fail,
   }: {
@@ -176,6 +194,7 @@ export class CodexAdapter implements CodingToolAdapter {
     reasoningEffort?: string;
     onOutput: (event: ToolOutput) => void;
     onOutputDelta: OutputDeltaCallback | undefined;
+    startRequestTimeout: (description: string) => void;
     complete: () => void;
     fail: (message: string) => void;
   }) {
@@ -184,7 +203,10 @@ export class CodexAdapter implements CodingToolAdapter {
       return;
     }
 
-    if (data.id === 1) {
+    if (data.id === this.pendingInitializeRequestId) {
+      this.clearRequestTimeout();
+      this.pendingInitializeRequestId = null;
+      const runRequestDescription = this.threadId ? "thread resume" : "thread start";
       this.pendingRunRequestId = this.threadId
         ? this.sendRequest("thread/resume", {
             threadId: this.threadId,
@@ -221,10 +243,12 @@ export class CodexAdapter implements CodingToolAdapter {
             experimentalRawEvents: false,
             persistExtendedHistory: false,
           });
+      startRequestTimeout(runRequestDescription);
       return;
     }
 
     if (data.id === this.pendingRunRequestId) {
+      this.clearRequestTimeout();
       const result = asRecord(data.result);
       const thread = asRecord(result?.thread);
       const threadId = stringField(thread, "id") ?? stringField(result, "threadId");
@@ -250,10 +274,12 @@ export class CodexAdapter implements CodingToolAdapter {
         outputSchema: null,
         collaborationMode: null,
       });
+      startRequestTimeout("turn start");
       return;
     }
 
     if (data.id === this.pendingTurnRequestId) {
+      this.clearRequestTimeout();
       this.pendingTurnRequestId = null;
       return;
     }
@@ -389,6 +415,7 @@ export class CodexAdapter implements CodingToolAdapter {
   }
 
   private shutdownProcess(child: ChildProcess): void {
+    this.clearRequestTimeout();
     try {
       process.kill(-child.pid!, "SIGTERM");
     } catch {
@@ -399,5 +426,11 @@ export class CodexAdapter implements CodingToolAdapter {
       }
     }
     if (this.process === child) this.process = null;
+  }
+
+  private clearRequestTimeout(): void {
+    if (!this.requestTimeout) return;
+    clearTimeout(this.requestTimeout);
+    this.requestTimeout = null;
   }
 }
