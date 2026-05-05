@@ -57,7 +57,11 @@ describe("buildSessionNodes", () => {
       id: "connection-1",
       eventType: "session_output",
       timestamp: "2026-01-01T00:00:01.000Z",
-      payload: { type: "connection_lost", reason: "runtime_disconnected" },
+      payload: {
+        type: "connection_lost",
+        reason: "runtime_disconnected",
+        connection: { autoRetryable: false },
+      },
     });
     const recoveryFailed = makeEvent({
       id: "recovery-1",
@@ -92,6 +96,25 @@ describe("buildSessionNodes", () => {
       { kind: "event", id: recoveryFailed.id },
       { kind: "event", id: terminated.id },
     ]);
+  });
+
+  it("filters transient auto-retryable connection loss events", () => {
+    const transientConnectionLost = makeEvent({
+      id: "connection-1",
+      eventType: "session_output",
+      timestamp: "2026-01-01T00:00:00.000Z",
+      payload: {
+        type: "connection_lost",
+        reason: "delivery_failed",
+        connection: { autoRetryable: true },
+      },
+    });
+
+    const result = buildSessionNodes([transientConnectionLost.id], {
+      [transientConnectionLost.id]: transientConnectionLost,
+    });
+
+    expect(result.nodes).toEqual([]);
   });
 
   it("does not dedupe error result events after successful result events", () => {
@@ -145,6 +168,30 @@ describe("session status rows", () => {
       tone: "error",
       title: "Run failed",
       detail: undefined,
+    });
+  });
+
+  it("only labels actionable connection loss events", () => {
+    expect(
+      statusRowForSessionOutput({
+        type: "connection_lost",
+        reason: "runtime_disconnected",
+        connection: { autoRetryable: true },
+      }),
+    ).toBeNull();
+    expect(
+      statusRowForSessionOutput({
+        type: "connection_lost",
+        reason: "runtime_disconnected",
+        connection: {
+          autoRetryable: false,
+          lastError: "Laptop A is offline - use Move to continue on another bridge",
+        },
+      }),
+    ).toEqual({
+      tone: "error",
+      title: "Runtime disconnected",
+      detail: "Laptop A is offline - use Move to continue on another bridge",
     });
   });
 
