@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Channel, ChannelGroup } from "@trace/gql";
 import type { TopLevelItem } from "../../hooks/useSidebarData";
-import { features } from "../../lib/features";
 import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { HomeButton } from "./HomeButton";
@@ -50,7 +49,7 @@ export function SidebarChannelsPane({
         <div className="space-y-0.5 pt-0.5 pb-1">
           <HomeButton />
           <InboxButton />
-          {features.tickets && <TicketsButton />}
+          <TicketsButton />
         </div>
 
         <div className="mb-1 flex items-center justify-between px-2">
