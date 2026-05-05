@@ -6,6 +6,7 @@ type MobilePairingQrPanelProps = {
   publicUrl: string;
   hostedPairingBaseUrl: string;
   isLocal: boolean;
+  requiresReachableUrl: boolean;
   generating: boolean;
   qrPayload: string | null;
   qrDataUrl: string | null;
@@ -19,6 +20,7 @@ export function MobilePairingQrPanel({
   publicUrl,
   hostedPairingBaseUrl,
   isLocal,
+  requiresReachableUrl,
   generating,
   qrPayload,
   qrDataUrl,
@@ -31,20 +33,20 @@ export function MobilePairingQrPanel({
     <div className="mt-4 grid min-w-0 gap-4">
       <div className="min-w-0 space-y-4">
         <div className="space-y-2">
-          {isLocal ? (
+          {requiresReachableUrl ? (
             <>
               <label
                 htmlFor="mobile-pairing-public-url"
                 className="text-sm font-medium text-foreground"
               >
-                Public server URL
+                Reachable Trace URL
               </label>
               <div className="flex min-w-0 flex-col gap-3 md:flex-row">
                 <Input
                   id="mobile-pairing-public-url"
                   value={publicUrl}
                   onChange={(event) => onPublicUrlChange(event.target.value)}
-                  placeholder="https://your-trace.ngrok-free.app"
+                  placeholder="http://192.168.1.20:3000 or https://your-trace.ngrok-free.app"
                   className="min-w-0 flex-1"
                   autoCapitalize="none"
                   autoCorrect="off"
@@ -65,8 +67,12 @@ export function MobilePairingQrPanel({
             </Button>
           )}
           <div className="text-xs text-muted-foreground">
-            {isLocal ? (
-              "This should be the public URL that your phone can reach. The generated QR expires in 5 minutes and can only be used once."
+            {requiresReachableUrl ? (
+              isLocal ? (
+                "This should be the public URL that your phone can reach. The generated QR expires in 5 minutes and can only be used once."
+              ) : (
+                "Your current Trace URL is localhost, which your phone cannot reach. Enter the LAN or tunnel URL for this Trace window."
+              )
             ) : (
               <>
                 The generated QR expires in 5 minutes and can only be used once. Mobile will connect

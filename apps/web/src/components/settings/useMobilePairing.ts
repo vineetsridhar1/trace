@@ -4,6 +4,7 @@ import * as QRCode from "qrcode";
 import { toast } from "sonner";
 import { isLocalMode } from "../../lib/runtime-mode";
 import {
+  isLoopbackPairingUrl,
   normalizePairingPublicUrl,
   type MobileDevice,
 } from "./mobile-pairing-utils";
@@ -12,6 +13,8 @@ const API_URL = import.meta.env.VITE_API_URL ?? "";
 const PUBLIC_URL_KEY = "trace_mobile_pairing_public_url";
 export const hostedPairingBaseUrl =
   API_URL.trim().length > 0 ? API_URL.replace(/\/+$/, "") : window.location.origin;
+export const requiresReachablePairingUrl =
+  isLocalMode || isLoopbackPairingUrl(hostedPairingBaseUrl);
 
 export function useMobilePairing() {
   const [publicUrl, setPublicUrl] = useState(() => localStorage.getItem(PUBLIC_URL_KEY) ?? "");
@@ -75,7 +78,7 @@ export function useMobilePairing() {
 
   async function generateQr() {
     let normalizedUrl = hostedPairingBaseUrl;
-    if (isLocalMode) {
+    if (requiresReachablePairingUrl) {
       try {
         normalizedUrl = normalizePairingPublicUrl(publicUrl);
       } catch (error) {
@@ -103,7 +106,7 @@ export function useMobilePairing() {
         throw new Error(body.error ?? "Failed to create pairing code");
       }
 
-      if (isLocalMode) {
+      if (requiresReachablePairingUrl) {
         localStorage.setItem(PUBLIC_URL_KEY, normalizedUrl);
         setPublicUrl(normalizedUrl);
       }

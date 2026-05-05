@@ -20,7 +20,25 @@ export function normalizePairingPublicUrl(value: string): string {
   if (!/^https?:\/\//.test(trimmed)) {
     throw new Error("Public URL must start with http:// or https://");
   }
+  if (isLoopbackPairingUrl(trimmed)) {
+    throw new Error("Use a URL your phone can reach, not localhost");
+  }
   return trimmed.replace(/\/+$/, "");
+}
+
+export function isLoopbackPairingUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function mobileDeviceLabel(device: MobileDevice): string {
