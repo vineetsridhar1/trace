@@ -58,6 +58,13 @@ beforeEach(() => {
     return "OK";
   });
   redisMock.get.mockImplementation(async (key: string) => redisStore.get(key) ?? null);
+  redisMock.incr.mockImplementation(async (key: string) => {
+    const next = Number(redisStore.get(key) ?? "0") + 1;
+    redisStore.set(key, String(next));
+    return next;
+  });
+  redisMock.expire.mockResolvedValue(1);
+  redisMock.ttl.mockResolvedValue(60);
   redisMock.del.mockImplementation(async (...keys: string[]) => {
     let count = 0;
     for (const key of keys) {
@@ -981,7 +988,7 @@ describe("github device oauth", () => {
     const { port } = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${port}`;
 
-    prismaMock.user.findFirst.mockResolvedValue({ id: "user-1" });
+    prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
     prismaMock.user.update.mockResolvedValue({
       id: "user-1",
       email: "octo@example.com",
@@ -1102,9 +1109,76 @@ describe("github device oauth", () => {
     const cookieToken = /trace_token=([^;]+)/.exec(setCookie)?.[1];
     expect(cookieToken).toBeTruthy();
     expect(jwt.verify(cookieToken!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
-    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
-      where: {
-        OR: [{ githubId: 42 }, { email: "github-42@trace.local" }],
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({ where: { githubId: 42 } });
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("does not link GitHub login by public profile email", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce(null);
+    prismaMock.user.create.mockResolvedValueOnce({
+      id: "user-2",
+      email: "github-42@trace.local",
+      name: "Octo Cat",
+      githubId: 42,
+      avatarUrl: "https://example.com/a.png",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.endsWith("/user")) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              login: "octocat",
+              email: "victim@example.com",
+              avatar_url: "https://example.com/a.png",
+              name: "Octo Cat",
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(200);
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({ where: { githubId: 42 } });
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).toHaveBeenCalledWith({
+      data: {
+        email: "github-42@trace.local",
+        name: "Octo Cat",
+        githubId: 42,
+        avatarUrl: "https://example.com/a.png",
       },
     });
   });
@@ -1158,7 +1232,7 @@ describe("github device oauth", () => {
       status: "error",
       error: "Could not verify GitHub identity. Start GitHub login again.",
     });
-    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.user.update).not.toHaveBeenCalled();
     expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
@@ -1220,7 +1294,7 @@ describe("github device oauth", () => {
       error: "Removed old GitHub permissions for Trace. Start GitHub login again.",
     });
     expect(revokedGrant).toBe(true);
-    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
   });
 
   it("keeps polling when GitHub authorization is pending", async () => {
@@ -1262,5 +1336,36 @@ describe("github device oauth", () => {
 
     expect(pollRes.status).toBe(200);
     expect(await pollRes.json()).toEqual({ status: "pending", interval: 5 });
+  });
+
+  it("rate limits repeated GitHub device login starts", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        return new Response(
+          JSON.stringify({
+            device_code: "secret-device-code",
+            user_code: "WDJB-MJHT",
+            verification_uri: "https://github.com/login/device",
+            expires_in: 900,
+            interval: 5,
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    let res: Response | null = null;
+    for (let i = 0; i < 11; i += 1) {
+      res = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    }
+
+    if (!res) throw new Error("Expected a response");
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toEqual({ error: "Too many requests" });
   });
 });

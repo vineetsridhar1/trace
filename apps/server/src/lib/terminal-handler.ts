@@ -23,6 +23,7 @@ import { AuthorizationError } from "./errors.js";
 
 /** Interval between server→client pings to keep the WebSocket alive. */
 const PING_INTERVAL_MS = 30_000;
+const AUTH_TIMEOUT_MS = 5_000;
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 
 export function handleTerminalConnection(
@@ -40,17 +41,17 @@ export function handleTerminalConnection(
 
   let attachedTerminalId: string | null = null;
   let attachPending = false;
+  let authPending = false;
   let authReady = false;
   let userId: string | null = null;
   let commandQueue = Promise.resolve();
 
-  // Authenticate from query param (preferred) or cookie fallback
   const url = new URL(req.url ?? "", "http://localhost");
-  const token = url.searchParams.get("token") ?? parseCookieToken(req.headers.cookie);
-  if (!token) {
-    sendFatalError("Unauthorized");
-    return;
-  }
+  const initialToken = url.searchParams.get("token") ?? parseCookieToken(req.headers.cookie);
+  let authTimeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    authTimeout = null;
+    if (!authReady) sendFatalError("Unauthorized");
+  }, AUTH_TIMEOUT_MS);
 
   // Keep-alive: periodically ping the client to prevent idle timeout
   let pongReceived = true;
@@ -79,7 +80,11 @@ export function handleTerminalConnection(
     while (pendingMessages.length > 0 && authReady && !attachPending) {
       const msg = pendingMessages.shift();
       if (!msg) return;
-      enqueueMessage(msg);
+      if (msg.type === "attach") {
+        handleAttachMessage(msg);
+      } else {
+        enqueueMessage(msg);
+      }
     }
   }
 
@@ -89,6 +94,44 @@ export function handleTerminalConnection(
       .catch((err: unknown) => {
         console.error("[terminal-handler] error handling queued terminal message:", err);
       });
+  }
+
+  function clearAuthTimeout(): void {
+    if (!authTimeout) return;
+    clearTimeout(authTimeout);
+    authTimeout = null;
+  }
+
+  async function authenticateConnectionToken(token: string): Promise<void> {
+    if (authReady || authPending) return;
+    authPending = true;
+    try {
+      const auth = await authenticateAccessToken(token);
+      if (!auth) {
+        clearAuthTimeout();
+        sendFatalError("Invalid token");
+        return;
+      }
+      if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
+        clearAuthTimeout();
+        sendFatalError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
+        return;
+      }
+      userId = auth.userId;
+      authReady = true;
+      clearAuthTimeout();
+      processPending();
+    } catch (err) {
+      console.error("[terminal-handler] authentication failed:", err);
+      clearAuthTimeout();
+      sendFatalError("Authorization check failed");
+    } finally {
+      authPending = false;
+    }
+  }
+
+  if (initialToken) {
+    void authenticateConnectionToken(initialToken);
   }
 
   async function assertCurrentTerminalAccess(terminalId: string): Promise<boolean> {
@@ -179,127 +222,140 @@ export function handleTerminalConnection(
     }
   }
 
+  function handleAttachMessage(msg: { type: string; [key: string]: unknown }): void {
+    const terminalId = msg.terminalId as string;
+    if (!terminalId) {
+      ws.send(JSON.stringify({ type: "error", message: "Missing terminalId" }));
+      return;
+    }
+
+    const authContext = terminalRelay.getTerminalAuthContext(terminalId);
+    if (!authContext) {
+      ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
+      return;
+    }
+
+    attachPending = true;
+
+    (async () => {
+      try {
+        if (!userId) {
+          ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
+          return;
+        }
+        if (authContext.ownerUserId !== userId) {
+          ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+          return;
+        }
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true },
+        });
+        if (!user) {
+          ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+          return;
+        }
+        if (authContext.kind === "session") {
+          const session = await prisma.session.findFirst({
+            where: {
+              id: authContext.sessionId,
+              organization: { orgMembers: { some: { userId: user.id } } },
+            },
+            select: {
+              id: true,
+              organizationId: true,
+              sessionGroupId: true,
+            },
+          });
+          if (!session) {
+            ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+            return;
+          }
+          try {
+            // Authorize against the runtime the terminal was pinned to at
+            // creation time, not the session's current DB connection.
+            await runtimeAccessService.assertAccess({
+              userId,
+              organizationId: session.organizationId,
+              runtimeInstanceId: authContext.runtimeInstanceId,
+              sessionGroupId: session.sessionGroupId,
+              capability: "terminal",
+            });
+          } catch (err) {
+            if (!(err instanceof AuthorizationError)) throw err;
+            console.warn(
+              `[terminal-handler] user ${userId} denied terminal access to session ${authContext.sessionId}`,
+            );
+            ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+            return;
+          }
+        } else {
+          const channel = await prisma.channel.findFirst({
+            where: {
+              id: authContext.channelId,
+              organizationId: authContext.organizationId,
+              members: { some: { userId: user.id } },
+            },
+            select: { id: true, organizationId: true },
+          });
+          if (!channel) {
+            ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+            return;
+          }
+          try {
+            await runtimeAccessService.assertAccess({
+              userId,
+              organizationId: channel.organizationId,
+              runtimeInstanceId: authContext.runtimeInstanceId,
+              capability: "terminal",
+            });
+          } catch (err) {
+            if (!(err instanceof AuthorizationError)) throw err;
+            console.warn(
+              `[terminal-handler] user ${userId} denied terminal access to channel ${authContext.channelId}`,
+            );
+            ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+            return;
+          }
+        }
+        const attached = terminalRelay.attachFrontend(terminalId, ws, userId);
+        if (!attached) {
+          ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
+          return;
+        }
+        attachedTerminalId = terminalId;
+      } catch (err: unknown) {
+        console.error("[terminal-handler] authorization check failed:", err);
+        ws.send(JSON.stringify({ type: "error", message: "Authorization check failed" }));
+      } finally {
+        attachPending = false;
+        processPending();
+      }
+    })();
+  }
+
   ws.on("message", (raw: Buffer | string) => {
     try {
       const msg = JSON.parse(raw.toString());
 
-      if (msg.type === "attach") {
-        const terminalId = msg.terminalId as string;
-        if (!terminalId) {
-          ws.send(JSON.stringify({ type: "error", message: "Missing terminalId" }));
+      if (msg.type === "auth") {
+        const token = typeof msg.token === "string" ? msg.token : "";
+        if (!token) {
+          ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
           return;
         }
-
-        const authContext = terminalRelay.getTerminalAuthContext(terminalId);
-        if (!authContext) {
-          ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
-          return;
-        }
-
-        attachPending = true;
-
-        (async () => {
-          try {
-            if (!userId) {
-              ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
-              return;
-            }
-            if (authContext.ownerUserId !== userId) {
-              ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
-              return;
-            }
-            const user = await prisma.user.findUnique({
-              where: { id: userId },
-              select: { id: true },
-            });
-            if (!user) {
-              ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
-              return;
-            }
-            if (authContext.kind === "session") {
-              const session = await prisma.session.findFirst({
-                where: {
-                  id: authContext.sessionId,
-                  organization: { orgMembers: { some: { userId: user.id } } },
-                },
-                select: {
-                  id: true,
-                  organizationId: true,
-                  sessionGroupId: true,
-                },
-              });
-              if (!session) {
-                ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
-                return;
-              }
-              try {
-                // Authorize against the runtime the terminal was pinned to at
-                // creation time — NOT the session's current DB connection (which
-                // can be null or stale and would silently bypass the check).
-                await runtimeAccessService.assertAccess({
-                  userId,
-                  organizationId: session.organizationId,
-                  runtimeInstanceId: authContext.runtimeInstanceId,
-                  sessionGroupId: session.sessionGroupId,
-                  capability: "terminal",
-                });
-              } catch (err) {
-                if (!(err instanceof AuthorizationError)) throw err;
-                console.warn(
-                  `[terminal-handler] user ${userId} denied terminal access to session ${authContext.sessionId}`,
-                );
-                ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
-                return;
-              }
-            } else {
-              const channel = await prisma.channel.findFirst({
-                where: {
-                  id: authContext.channelId,
-                  organizationId: authContext.organizationId,
-                  members: { some: { userId: user.id } },
-                },
-                select: { id: true, organizationId: true },
-              });
-              if (!channel) {
-                ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
-                return;
-              }
-              try {
-                await runtimeAccessService.assertAccess({
-                  userId,
-                  organizationId: channel.organizationId,
-                  runtimeInstanceId: authContext.runtimeInstanceId,
-                  capability: "terminal",
-                });
-              } catch (err) {
-                if (!(err instanceof AuthorizationError)) throw err;
-                console.warn(
-                  `[terminal-handler] user ${userId} denied terminal access to channel ${authContext.channelId}`,
-                );
-                ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
-                return;
-              }
-            }
-            const attached = terminalRelay.attachFrontend(terminalId, ws, userId);
-            if (!attached) {
-              ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
-              return;
-            }
-            attachedTerminalId = terminalId;
-          } catch (err: unknown) {
-            console.error("[terminal-handler] authorization check failed:", err);
-            ws.send(JSON.stringify({ type: "error", message: "Authorization check failed" }));
-          } finally {
-            attachPending = false;
-            processPending();
-          }
-        })();
+        void authenticateConnectionToken(token);
         return;
       }
 
       // Buffer messages until the connection auth and attach auth complete.
-      if (!authReady || attachPending) {
+      if (!authReady || authPending || attachPending) {
         pendingMessages.push(msg);
+        return;
+      }
+
+      if (msg.type === "attach") {
+        handleAttachMessage(msg);
         return;
       }
 
@@ -315,27 +371,8 @@ export function handleTerminalConnection(
 
   ws.on("close", () => {
     clearInterval(pingInterval);
+    clearAuthTimeout();
     pendingMessages = [];
     terminalRelay.detachAllForFrontend(ws);
   });
-
-  void (async () => {
-    try {
-      const auth = await authenticateAccessToken(token);
-      if (!auth) {
-        sendFatalError("Invalid token");
-        return;
-      }
-      if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
-        sendFatalError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
-        return;
-      }
-      userId = auth.userId;
-      authReady = true;
-      processPending();
-    } catch (err) {
-      console.error("[terminal-handler] authentication failed:", err);
-      sendFatalError("Authorization check failed");
-    }
-  })();
 }
