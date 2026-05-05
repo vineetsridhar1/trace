@@ -34,6 +34,11 @@ export function LinkedCheckoutDiffViewer({ file }: LinkedCheckoutDiffViewerProps
           fontSize: 13,
           minimap: { enabled: false },
           padding: { top: 8 },
+          hideUnchangedRegions: {
+            enabled: true,
+            contextLineCount: 4,
+            minimumLineCount: 12,
+          },
           scrollbar: {
             verticalScrollbarSize: 10,
             horizontalScrollbarSize: 10,
@@ -67,8 +72,27 @@ function resolveDiffContent(file: DesktopLinkedCheckoutChangedFile | null): {
 function contentFromUnifiedDiff(diff: string): { original: string; modified: string } {
   const original: string[] = [];
   const modified: string[] = [];
+  let oldCursor: number | null = null;
+  let newCursor: number | null = null;
 
   for (const line of diff.replace(/\n$/, "").split("\n")) {
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+    if (hunk) {
+      const oldStart = Number.parseInt(hunk[1] ?? "0", 10);
+      const newStart = Number.parseInt(hunk[2] ?? "0", 10);
+      if (oldCursor !== null && newCursor !== null) {
+        const hiddenLines = Math.max(oldStart - oldCursor, newStart - newCursor);
+        if (hiddenLines > 0) {
+          const marker = `... ${hiddenLines} unchanged lines hidden ...`;
+          original.push(marker);
+          modified.push(marker);
+        }
+      }
+      oldCursor = oldStart;
+      newCursor = newStart;
+      continue;
+    }
+
     if (
       line.startsWith("diff --git ") ||
       line.startsWith("index ") ||
@@ -76,7 +100,6 @@ function contentFromUnifiedDiff(diff: string): { original: string; modified: str
       line.startsWith("deleted file mode ") ||
       line.startsWith("--- ") ||
       line.startsWith("+++ ") ||
-      line.startsWith("@@") ||
       line.startsWith("\\ No newline")
     ) {
       continue;
@@ -84,17 +107,21 @@ function contentFromUnifiedDiff(diff: string): { original: string; modified: str
 
     if (line.startsWith("+")) {
       modified.push(line.slice(1));
+      newCursor = (newCursor ?? 0) + 1;
       continue;
     }
 
     if (line.startsWith("-")) {
       original.push(line.slice(1));
+      oldCursor = (oldCursor ?? 0) + 1;
       continue;
     }
 
     const context = line.startsWith(" ") ? line.slice(1) : line;
     original.push(context);
     modified.push(context);
+    oldCursor = (oldCursor ?? 0) + 1;
+    newCursor = (newCursor ?? 0) + 1;
   }
 
   return {
