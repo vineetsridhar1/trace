@@ -52,6 +52,41 @@ function loadCameraModule(): CameraModule | null {
 const cameraModule = loadCameraModule();
 const CameraView = cameraModule?.CameraView ?? null;
 
+function isLocalNetworkHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (normalized.endsWith(".local")) return true;
+  if (normalized === "::1") return false;
+  if (
+    normalized.includes(":") &&
+    (normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:"))
+  ) {
+    return true;
+  }
+
+  const parts = normalized.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "0.0.0.0" ||
+    normalized === "::1"
+  );
+}
+
 function parsePairingPayload(raw: string): PairingPayload {
   let parsed: unknown;
   try {
@@ -71,7 +106,21 @@ function parsePairingPayload(raw: string): PairingPayload {
   if (payload.mode !== "hosted" && payload.mode !== "local") {
     throw new Error("Pairing code is missing a valid mode");
   }
-  if (typeof payload.baseUrl !== "string" || !/^https:\/\//.test(payload.baseUrl)) {
+  if (typeof payload.baseUrl !== "string") {
+    throw new Error("Pairing code is missing a valid host URL");
+  }
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(payload.baseUrl);
+  } catch {
+    throw new Error("Pairing code is missing a valid host URL");
+  }
+  const localHttp =
+    payload.mode === "local" &&
+    baseUrl.protocol === "http:" &&
+    isLocalNetworkHostname(baseUrl.hostname) &&
+    !isLoopbackHostname(baseUrl.hostname);
+  if (baseUrl.protocol !== "https:" && !localHttp) {
     throw new Error("Pairing code is missing a valid host URL");
   }
   if (typeof payload.pairingToken !== "string" || payload.pairingToken.trim().length < 16) {
@@ -81,7 +130,7 @@ function parsePairingPayload(raw: string): PairingPayload {
     v: 1,
     kind: "trace-mobile-pair",
     mode: payload.mode,
-    baseUrl: payload.baseUrl.replace(/\/+$/, ""),
+    baseUrl: baseUrl.toString().replace(/\/+$/, ""),
     pairingToken: payload.pairingToken.trim(),
     expiresAt: typeof payload.expiresAt === "string" ? payload.expiresAt : undefined,
   };
