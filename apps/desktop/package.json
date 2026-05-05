@@ -11,9 +11,9 @@
   "scripts": {
     "dev": "pnpm --filter @trace/shared build && tsc -b && electron-forge start",
     "build": "pnpm --filter @trace/shared build && tsc -b",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
-    "publish:mac": "electron-forge publish --platform=darwin",
+    "package": "node scripts/forge-release.mjs package",
+    "make": "node scripts/forge-release.mjs make",
+    "publish:mac": "node scripts/forge-release.mjs publish",
     "lint": "tsc -b",
     "test": "vitest run",
     "test:unit": "vitest run",

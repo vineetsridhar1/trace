@@ -12,6 +12,7 @@ apps/web/.env
 .vite/
 **/.vite/
 coverage/
+out/
 .DS_Store
 tmp/
 
