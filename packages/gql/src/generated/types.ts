@@ -1748,13 +1748,6 @@ export type SessionGroupStatus =
   | "needs_input"
   | "stopped";
 
-export type SessionOutputDelta = {
-  __typename?: "SessionOutputDelta";
-  sessionId: Scalars["ID"]["output"];
-  text: Scalars["String"]["output"];
-  type: Scalars["String"]["output"];
-};
-
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
   access: BridgeRuntimeAccess;
@@ -1828,7 +1821,6 @@ export type Subscription = {
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionEvents: Event;
-  sessionOutputDeltas: SessionOutputDelta;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -1860,11 +1852,6 @@ export type SubscriptionOrgEventsArgs = {
 };
 
 export type SubscriptionSessionEventsArgs = {
-  organizationId: Scalars["ID"]["input"];
-  sessionId: Scalars["ID"]["input"];
-};
-
-export type SubscriptionSessionOutputDeltasArgs = {
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };

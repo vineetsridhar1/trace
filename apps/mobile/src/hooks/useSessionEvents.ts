@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
-  appendStreamingSessionOutput,
   handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
@@ -17,7 +16,6 @@ import { PendingFetchedEvents, SessionEventBuffer } from "./session-events-buffe
 import {
   SESSION_EVENTS_QUERY,
   SESSION_EVENTS_SUBSCRIPTION,
-  SESSION_OUTPUT_DELTAS_SUBSCRIPTION,
   SESSION_STATUS_SUBSCRIPTION,
 } from "./session-events-gql";
 
@@ -217,31 +215,9 @@ export function useSessionEvents(
         useEntityStore.getState().patch("sessions", next.id, next);
       });
 
-    const deltaSub = client
-      .subscription(SESSION_OUTPUT_DELTAS_SUBSCRIPTION, { sessionId, organizationId: activeOrgId })
-      .subscribe(
-        (result: {
-          error?: unknown;
-          data?: { sessionOutputDeltas?: { type?: string; text?: string } | null };
-        }) => {
-          if (isUnauthorized(result.error)) {
-            void handleUnauthorized();
-            return;
-          }
-          if (result.error) {
-            console.error("[sessionOutputDeltas] subscription error:", result.error);
-            return;
-          }
-          const delta = result.data?.sessionOutputDeltas;
-          if (delta?.type !== "assistant_text_delta" || typeof delta.text !== "string") return;
-          appendStreamingSessionOutput(sessionId, delta.text, new Date().toISOString());
-        },
-      );
-
     return () => {
       eventSub.unsubscribe();
       statusSub.unsubscribe();
-      deltaSub.unsubscribe();
     };
   }, [activeOrgId, commitLiveEvent, fetchEnabled, sessionId]);
 

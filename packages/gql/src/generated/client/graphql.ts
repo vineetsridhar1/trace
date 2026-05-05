@@ -1750,13 +1750,6 @@ export type SessionGroupStatus =
   | "needs_input"
   | "stopped";
 
-export type SessionOutputDelta = {
-  __typename?: "SessionOutputDelta";
-  sessionId: Scalars["ID"]["output"];
-  text: Scalars["String"]["output"];
-  type: Scalars["String"]["output"];
-};
-
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
   access: BridgeRuntimeAccess;
@@ -1830,7 +1823,6 @@ export type Subscription = {
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionEvents: Event;
-  sessionOutputDeltas: SessionOutputDelta;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -1862,11 +1854,6 @@ export type SubscriptionOrgEventsArgs = {
 };
 
 export type SubscriptionSessionEventsArgs = {
-  organizationId: Scalars["ID"]["input"];
-  sessionId: Scalars["ID"]["input"];
-};
-
-export type SubscriptionSessionOutputDeltasArgs = {
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
@@ -3267,21 +3254,6 @@ export type SessionEventsLiveSubscription = {
       name?: string | null;
       avatarUrl?: string | null;
     };
-  };
-};
-
-export type SessionOutputDeltasLiveSubscriptionVariables = Exact<{
-  sessionId: Scalars["ID"]["input"];
-  organizationId: Scalars["ID"]["input"];
-}>;
-
-export type SessionOutputDeltasLiveSubscription = {
-  __typename?: "Subscription";
-  sessionOutputDeltas: {
-    __typename?: "SessionOutputDelta";
-    sessionId: string;
-    type: string;
-    text: string;
   };
 };
 
@@ -7379,66 +7351,6 @@ export const SessionEventsLiveDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionEventsLiveSubscription, SessionEventsLiveSubscriptionVariables>;
-export const SessionOutputDeltasLiveDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "subscription",
-      name: { kind: "Name", value: "SessionOutputDeltasLive" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionOutputDeltas" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                { kind: "Field", name: { kind: "Name", value: "type" } },
-                { kind: "Field", name: { kind: "Name", value: "text" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  SessionOutputDeltasLiveSubscription,
-  SessionOutputDeltasLiveSubscriptionVariables
->;
 export const ChannelsDocument = {
   kind: "Document",
   definitions: [

@@ -609,11 +609,22 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           const data = msg.data && typeof msg.data === "object" ? msg.data : {};
           const text = (data as Record<string, unknown>).text;
           if (typeof text !== "string" || text.length === 0) return;
-          pubsub.publish(topics.sessionOutputDeltas(sessionId), {
-            sessionOutputDeltas: {
+          pubsub.publish(topics.sessionEvents(sessionId), {
+            sessionEvents: {
+              id: `stream:${sessionId}:${Date.now()}`,
+              scopeType: "session",
+              scopeId: sessionId,
+              eventType: "session_output",
+              payload: {
+                type: "assistant_delta",
+                text,
+              },
+              actorType: "system",
+              actorId: "system",
+              parentId: null,
+              timestamp: new Date().toISOString(),
+              metadata: {},
               sessionId,
-              type: "assistant_text_delta",
-              text,
             },
           });
         })().catch((err: unknown) => {
