@@ -26,6 +26,7 @@ export interface BridgeRunCommand {
   reasoningEffort?: string;
   interactionMode?: string;
   toolSessionId?: string;
+  resetToolSession?: boolean;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
   traceAction?: BridgeTraceActionContext | null;
@@ -41,6 +42,7 @@ export interface BridgeSendCommand {
   reasoningEffort?: string;
   interactionMode?: string;
   toolSessionId?: string;
+  resetToolSession?: boolean;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
   traceAction?: BridgeTraceActionContext | null;

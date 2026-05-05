@@ -188,6 +188,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const planningSessionId = project
     ? selectPlanningSessionId(project.sessions, currentProjectRun?.planningSessionId)
     : null;
+  const projectPlanningInputLocked =
+    Boolean(currentProjectRun) && !currentProjectRun?.ticketGenerationAttempt;
   const fetchProject = useCallback(async () => {
     setError(null);
     const result = await client.query(PROJECT_QUERY, { id: projectId }).toPromise();
@@ -343,6 +345,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               sessionId={planningSessionId}
               panelMode
               onProjectPlanApproved={fetchProject}
+              projectPlanningInputLocked={projectPlanningInputLocked}
               projectPlanningContext={
                 currentProjectRun
                   ? {

@@ -3833,7 +3833,10 @@ export class SessionService {
       reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
-      toolSessionId: resetToolSession ? undefined : (session.toolSessionId ?? undefined),
+      ...(!resetToolSession && session.toolSessionId
+        ? { toolSessionId: session.toolSessionId }
+        : {}),
+      resetToolSession: resetToolSession === true,
       checkpointContext,
       imageUrls,
       traceAction: traceAction ?? null,
@@ -3909,6 +3912,7 @@ export class SessionService {
             runtimeLabel: boundRuntime.label,
           }),
         }),
+        ...(resetToolSession ? { toolSessionId: null } : {}),
         pendingRun: Prisma.DbNull,
         lastMessageAt: new Date(),
         ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
@@ -6479,7 +6483,10 @@ export class SessionService {
       reasoningEffort: session.reasoningEffort ?? undefined,
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
-      toolSessionId: pending.resetToolSession ? undefined : (session.toolSessionId ?? undefined),
+      ...(!pending.resetToolSession && session.toolSessionId
+        ? { toolSessionId: session.toolSessionId }
+        : {}),
+      resetToolSession: pending.resetToolSession === true,
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
       traceAction: pending.traceAction ?? undefined,
@@ -6493,6 +6500,7 @@ export class SessionService {
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;
+      resetToolSession?: boolean;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
       traceAction?: BridgeTraceActionContext;
@@ -6514,6 +6522,7 @@ export class SessionService {
         agentStatus: "active",
         sessionStatus: "in_progress",
         pendingRun: pendingRunValue(remainingCommands),
+        ...(pending.resetToolSession ? { toolSessionId: null } : {}),
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),

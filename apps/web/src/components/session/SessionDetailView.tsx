@@ -165,6 +165,7 @@ export function SessionDetailView({
   scrollToEventId,
   onScrollComplete,
   projectPlanningContext,
+  projectPlanningInputLocked,
   onProjectPlanApproved,
 }: {
   key?: React.Key;
@@ -174,6 +175,7 @@ export function SessionDetailView({
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
   projectPlanningContext?: ProjectPlanningSessionContext | null;
+  projectPlanningInputLocked?: boolean;
   onProjectPlanApproved?: () => void | Promise<void>;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
@@ -552,8 +554,8 @@ export function SessionDetailView({
               bridgeAccess={bridgeAccess}
               sessionGroupId={sessionGroupId ?? null}
               onAccessRequested={refreshBridgeAccess}
-              lockedMode={projectPlanningContext ? "plan" : undefined}
-              hideOptions={Boolean(projectPlanningContext)}
+              lockedMode={projectPlanningInputLocked ? "plan" : undefined}
+              hideOptions={projectPlanningInputLocked === true}
             />
           </>
         )}

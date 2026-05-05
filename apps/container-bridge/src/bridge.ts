@@ -326,6 +326,7 @@ export class ContainerBridge implements IBridgeClient {
           reasoningEffort: cmd.reasoningEffort,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
+          resetToolSession: cmd.resetToolSession,
           imageUrls: cmd.imageUrls,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
@@ -640,6 +641,7 @@ export class ContainerBridge implements IBridgeClient {
     reasoningEffort,
     interactionMode,
     toolSessionId,
+    resetToolSession,
     imageUrls,
   }: {
     sessionId: string;
@@ -650,17 +652,23 @@ export class ContainerBridge implements IBridgeClient {
     reasoningEffort?: string;
     interactionMode?: string;
     toolSessionId?: string;
+    resetToolSession?: boolean;
     imageUrls?: string[];
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
 
-    // If tool changed, abort old adapter and create a fresh one
+    // If tool changed or the server requested a fresh tool session, abort the
+    // old adapter and create a fresh one.
     const prevTool = this.sessionTools.get(sessionId);
-    if (resolvedTool && prevTool && prevTool !== resolvedTool) {
+    if (resetToolSession || (resolvedTool && prevTool && prevTool !== resolvedTool)) {
       const oldAdapter = this.adapters.get(sessionId);
       if (oldAdapter) oldAdapter.abort();
       this.adapters.delete(sessionId);
+      if (resetToolSession) {
+        this.reportedToolSessionIds.delete(sessionId);
+        this.pendingInputToolUseIds.delete(sessionId);
+      }
     }
 
     // Reuse existing adapter for session continuity (--resume)

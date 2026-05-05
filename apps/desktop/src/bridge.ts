@@ -666,6 +666,7 @@ export class BridgeClient implements IBridgeClient {
     reasoningEffort,
     interactionMode,
     toolSessionId,
+    resetToolSession,
     checkpointContext,
     imageUrls,
     traceAction,
@@ -678,6 +679,7 @@ export class BridgeClient implements IBridgeClient {
     reasoningEffort?: string;
     interactionMode?: string;
     toolSessionId?: string;
+    resetToolSession?: boolean;
     checkpointContext?: GitCheckpointContext | null;
     imageUrls?: string[];
     traceAction?: BridgeTraceActionContext | null;
@@ -710,12 +712,17 @@ export class BridgeClient implements IBridgeClient {
       }
     }
 
-    // If tool changed, abort old adapter and create a fresh one
+    // If tool changed or the server requested a fresh tool session, abort the
+    // old adapter and create a fresh one.
     const prevTool = this.sessionTools.get(sessionId);
-    if (tool && prevTool && prevTool !== tool) {
+    if (resetToolSession || (tool && prevTool && prevTool !== tool)) {
       const oldAdapter = this.adapters.get(sessionId);
       if (oldAdapter) oldAdapter.abort();
       this.adapters.delete(sessionId);
+      if (resetToolSession) {
+        this.reportedToolSessionIds.delete(sessionId);
+        this.pendingInputToolUseIds.delete(sessionId);
+      }
     }
 
     // Reuse existing adapter (retains session state for --resume)
@@ -898,6 +905,7 @@ export class BridgeClient implements IBridgeClient {
           reasoningEffort: cmd.reasoningEffort,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
+          resetToolSession: cmd.resetToolSession,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
           traceAction: cmd.traceAction,
@@ -914,6 +922,7 @@ export class BridgeClient implements IBridgeClient {
           reasoningEffort: cmd.reasoningEffort,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
+          resetToolSession: cmd.resetToolSession,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
           traceAction: cmd.traceAction,

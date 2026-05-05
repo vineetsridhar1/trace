@@ -1077,7 +1077,7 @@ export class ProjectPlanningService {
       cliRelativePath,
     };
 
-    await sessionService.sendMessage({
+    const event = await sessionService.sendMessage({
       sessionId,
       text: buildTicketGenerationPrompt({
         plan: input.approvedPlan,
@@ -1093,6 +1093,10 @@ export class ProjectPlanningService {
       resetToolSession: true,
       skipConversationContext: true,
     });
+    const payload = asJsonObject(event.payload as Prisma.JsonValue);
+    if (payload?.deliveryFailed === true) {
+      throw new Error("Ticket generation prompt could not be delivered to the planning session.");
+    }
   }
 
   private async failGenerationAttempt(input: {

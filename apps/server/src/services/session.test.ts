@@ -2393,6 +2393,54 @@ describe("SessionService", () => {
       expect(resumedCalls.length).toBe(1);
     });
 
+    it("resets the bridge tool session when requested", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        workdir: "/tmp/worktree",
+        toolSessionId: "plan-tool-session",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Create tickets",
+        actorType: "user",
+        actorId: "user-1",
+        interactionMode: "code",
+        resetToolSession: true,
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "send",
+          interactionMode: "code",
+          resetToolSession: true,
+        }),
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+      const sendCommand = sessionRouterMock.send.mock.calls[0]?.[1] as
+        | Record<string, unknown>
+        | undefined;
+      expect(sendCommand).not.toHaveProperty("toolSessionId");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ toolSessionId: null }),
+        }),
+      );
+    });
+
     it("does not prepend conversation history twice after a tool switch", async () => {
       const session = makeSession({
         agentStatus: "done",

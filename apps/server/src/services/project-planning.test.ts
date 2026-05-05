@@ -593,6 +593,57 @@ describe("ProjectPlanningService", () => {
     );
   });
 
+  it("fails ticket generation when the planning session prompt is not delivered", async () => {
+    prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(
+      makeProjectRun({
+        project: { id: "project-1", name: "Autopilot", repoId: null },
+      }),
+    );
+    prismaMock.$executeRaw.mockResolvedValue(0);
+    prismaMock.projectRun.update.mockResolvedValueOnce(makeProjectRun({ planSummary: "Plan v1" }));
+    prismaMock.projectTicketGenerationAttempt.findUnique.mockResolvedValueOnce(null);
+    prismaMock.projectTicketGenerationAttempt.create.mockResolvedValueOnce(makeGenerationAttempt());
+    prismaMock.projectTicketGenerationAttempt.update.mockResolvedValueOnce(
+      makeGenerationAttempt({
+        status: "failed",
+        error: "Ticket generation prompt could not be delivered to the planning session.",
+        failedAt: timestamp,
+      }),
+    );
+    sessionServiceMock.sendMessage.mockResolvedValueOnce({
+      id: "message-event-1",
+      payload: { deliveryFailed: true },
+    });
+
+    const service = new ProjectPlanningService();
+    const attempt = await service.approvePlanAndGenerateTickets(
+      { projectRunId: "run-1", planSummary: " Plan v1 " },
+      "org-1",
+      "user",
+      "user-1",
+    );
+
+    expect(attempt.status).toBe("failed");
+    expect(prismaMock.projectTicketGenerationAttempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "attempt-1" },
+        data: expect.objectContaining({
+          status: "failed",
+          error: "Ticket generation prompt could not be delivered to the planning session.",
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "project_ticket_generation_failed",
+        payload: expect.objectContaining({
+          error: "Ticket generation prompt could not be delivered to the planning session.",
+        }),
+      }),
+      prismaMock,
+    );
+  });
+
   it("returns a completed generation attempt without creating duplicate tickets", async () => {
     prismaMock.projectRun.findFirstOrThrow.mockResolvedValueOnce(
       makeProjectRun({
