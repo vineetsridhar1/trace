@@ -414,6 +414,16 @@ describe("linked checkout commit-back", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errorCode).toBe("DIRTY_ROOT_CHECKOUT");
+    expect(result.status.changedFiles).toMatchObject([
+      {
+        path: "app.txt",
+        status: "M",
+        additions: 1,
+        deletions: 1,
+        truncated: false,
+      },
+    ]);
+    expect(result.status.changedFiles[0]?.diff).toContain("+dirty");
   }, 15_000);
 
   it("returns a structured error code for untracked files that would be overwritten by sync", async () => {
@@ -433,6 +443,16 @@ describe("linked checkout commit-back", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errorCode).toBe("DIRTY_ROOT_CHECKOUT");
+    expect(result.status.changedFiles).toMatchObject([
+      {
+        path: "notes.txt",
+        status: "M",
+        additions: 1,
+        deletions: 1,
+        truncated: false,
+      },
+    ]);
+    expect(result.status.changedFiles[0]?.diff).toContain("+local untracked file");
   }, 15_000);
 
   it("does not pause the attachment when sync stops for conflict resolution", async () => {

@@ -345,6 +345,16 @@ export interface BridgeLinkedCheckoutStatus {
   restoreBranch: string | null;
   restoreCommitSha: string | null;
   hasUncommittedChanges: boolean;
+  changedFiles: BridgeLinkedCheckoutChangedFile[];
+}
+
+export interface BridgeLinkedCheckoutChangedFile {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  diff: string;
+  truncated: boolean;
 }
 
 export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";

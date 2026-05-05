@@ -474,6 +474,16 @@ export type LinkedCheckoutActionResult = {
   status: LinkedCheckoutStatus;
 };
 
+export type LinkedCheckoutChangedFile = {
+  __typename?: "LinkedCheckoutChangedFile";
+  additions: Scalars["Int"]["output"];
+  deletions: Scalars["Int"]["output"];
+  diff: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  status: Scalars["String"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
 export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
 
 export type LinkedCheckoutStatus = {
@@ -481,6 +491,7 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroup?: Maybe<SessionGroup>;
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
+  changedFiles: Array<LinkedCheckoutChangedFile>;
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];
@@ -1919,6 +1930,7 @@ export type ResolversTypes = ResolversObject<{
   Int: ResolverTypeWrapper<Scalars["Int"]["output"]>;
   JSON: ResolverTypeWrapper<Scalars["JSON"]["output"]>;
   LinkedCheckoutActionResult: ResolverTypeWrapper<LinkedCheckoutActionResult>;
+  LinkedCheckoutChangedFile: ResolverTypeWrapper<LinkedCheckoutChangedFile>;
   LinkedCheckoutErrorCode: LinkedCheckoutErrorCode;
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
@@ -2018,6 +2030,7 @@ export type ResolversParentTypes = ResolversObject<{
   Int: Scalars["Int"]["output"];
   JSON: Scalars["JSON"]["output"];
   LinkedCheckoutActionResult: LinkedCheckoutActionResult;
+  LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   LinkedCheckoutStatus: LinkedCheckoutStatus;
   Message: Message;
   MoveChannelInput: MoveChannelInput;
@@ -2435,6 +2448,20 @@ export type LinkedCheckoutActionResultResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type LinkedCheckoutChangedFileResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["LinkedCheckoutChangedFile"] =
+    ResolversParentTypes["LinkedCheckoutChangedFile"],
+> = ResolversObject<{
+  additions?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  deletions?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  diff?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  truncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type LinkedCheckoutStatusResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["LinkedCheckoutStatus"] =
@@ -2443,6 +2470,11 @@ export type LinkedCheckoutStatusResolvers<
   attachedSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   attachedSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   autoSyncEnabled?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  changedFiles?: Resolver<
+    Array<ResolversTypes["LinkedCheckoutChangedFile"]>,
+    ParentType,
+    ContextType
+  >;
   currentBranch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   currentCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   hasUncommittedChanges?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
@@ -3714,6 +3746,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   InboxItem?: InboxItemResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
+  LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;

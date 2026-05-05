@@ -34,6 +34,7 @@ export interface LinkedCheckoutHeaderState {
   pending: boolean;
   autoSyncEnabled: boolean;
   hasUncommittedChanges: boolean;
+  changedFiles: DesktopLinkedCheckoutChangedFile[];
   summaryBranch: string | null | undefined;
   syncedCommitSha: string | null;
   lastSyncError: string | null | undefined;
@@ -360,6 +361,7 @@ export function useLinkedCheckoutHeaderState({
     pending,
     autoSyncEnabled: !!status?.autoSyncEnabled,
     hasUncommittedChanges: !!status?.hasUncommittedChanges,
+    changedFiles: status?.changedFiles ?? [],
     summaryBranch,
     syncedCommitSha,
     lastSyncError: status?.lastSyncError,

@@ -627,6 +627,14 @@ const LINKED_CHECKOUT_STATUS_FIELDS = `
   restoreBranch
   restoreCommitSha
   hasUncommittedChanges
+  changedFiles {
+    path
+    status
+    additions
+    deletions
+    diff
+    truncated
+  }
 `;
 
 export const LINKED_CHECKOUT_STATUS_QUERY = gql`

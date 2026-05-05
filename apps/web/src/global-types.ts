@@ -57,6 +57,16 @@ declare global {
     restoreBranch: string | null;
     restoreCommitSha: string | null;
     hasUncommittedChanges: boolean;
+    changedFiles: DesktopLinkedCheckoutChangedFile[];
+  };
+
+  type DesktopLinkedCheckoutChangedFile = {
+    path: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    diff: string;
+    truncated: boolean;
   };
 
   type DesktopLinkedCheckoutActionResult = {
