@@ -536,7 +536,7 @@ export function SessionInputComposer({
   );
 
   const handleRetry = useCallback(() => {
-    if (errorDraft && !isTerminal) void runSubmit(errorDraft, mode);
+    if (errorDraft !== null && !isTerminal) void runSubmit(errorDraft, mode);
   }, [errorDraft, isTerminal, mode, runSubmit]);
 
   const handleSelectionChange = useCallback((next: ComposerSelection) => {

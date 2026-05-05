@@ -31,6 +31,8 @@ declare global {
 
 let submit: ((draft: string, mode: ComposerMode) => Promise<void>) | null = null;
 let draftState: MockDraftState;
+let isActive = false;
+let mutationName: unknown = null;
 let mutationVariables: Record<string, unknown> | null = null;
 const onFailure = vi.fn();
 const onSuccess = vi.fn();
@@ -71,10 +73,14 @@ vi.mock("@/lib/upload", () => ({
 
 vi.mock("@/lib/urql", () => ({
   getClient: () => ({
-    mutation: (_mutation: unknown, variables: Record<string, unknown>) => {
+    mutation: (mutation: unknown, variables: Record<string, unknown>) => {
+      mutationName = mutation;
       mutationVariables = variables;
       return {
-        toPromise: async () => ({ data: { sendSessionMessage: { id: "real-event" } } }),
+        toPromise: async () =>
+          mutation === "queueSessionMessage"
+            ? { data: { queueSessionMessage: { id: "queued-message" } } }
+            : { data: { sendSessionMessage: { id: "real-event" } } },
       };
     },
   }),
@@ -89,7 +95,7 @@ vi.mock("@/stores/drafts", () => ({
 function Harness() {
   const result = useComposerSubmit({
     sessionId: "session-1",
-    isActive: false,
+    isActive,
     onFailure,
     onSuccess,
   });
@@ -101,6 +107,8 @@ describe("useComposerSubmit", () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     submit = null;
+    isActive = false;
+    mutationName = null;
     mutationVariables = null;
     onFailure.mockClear();
     onSuccess.mockClear();
@@ -169,5 +177,37 @@ describe("useComposerSubmit", () => {
       "optimistic-event",
       "real-event",
     );
+  });
+
+  it("uploads attachments and passes attachment keys when queueing active session messages", async () => {
+    isActive = true;
+    uploadFileMock.mockResolvedValueOnce("uploads/org-1/key-notes.docx");
+
+    await act(async () => {
+      TestRenderer.create(<Harness />);
+    });
+
+    await act(async () => {
+      await submit?.("", "code");
+    });
+
+    expect(mutationName).toBe("queueSessionMessage");
+    expect(uploadFileMock).toHaveBeenCalledWith({
+      base64: undefined,
+      fileUri: "file:///tmp/notes.docx",
+      filename: "notes.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 1024,
+      organizationId: "org-1",
+    });
+    expect(mutationVariables).toMatchObject({
+      sessionId: "session-1",
+      text: "",
+      attachmentKeys: ["uploads/org-1/key-notes.docx"],
+    });
+    expect(draftState.attachments["session-1"]).toBeUndefined();
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(reconcileOptimisticSessionMessageMock).not.toHaveBeenCalled();
   });
 });

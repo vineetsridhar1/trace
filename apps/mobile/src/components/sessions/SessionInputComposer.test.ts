@@ -4,9 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MIN_INPUT_HEIGHT } from "./session-input-composer/constants";
 
 interface MockComposerProps {
+  errorDraft: string | null;
+  errorMessage: string | null;
   inputHeight: number;
   onChangeText: (text: string) => void;
   onContentHeightChange: (height: number) => void;
+  onRetry: () => void;
   text: string;
 }
 
@@ -57,8 +60,10 @@ async function waitForDraftAttachmentCount(count: number): Promise<void> {
 let latestComposerProps: MockComposerProps | null = null;
 let latestAttachButtonProps: MockAttachButtonProps | null = null;
 let latestAttachmentSheetProps: MockAttachmentSheetProps | null = null;
+let latestOnFailure: ((draft: string, message: string) => void) | null = null;
 let latestOnSuccess: (() => void) | null = null;
 let draftAttachments: MockDraftAttachment[] = [];
+const submitMock = vi.fn();
 
 vi.mock("react-native", () => ({
   AccessibilityInfo: {
@@ -151,10 +156,14 @@ vi.mock("@trace/client-core", () => ({
 }));
 
 vi.mock("@/hooks/useComposerSubmit", () => ({
-  useComposerSubmit: (options: { onSuccess: () => void }) => {
+  useComposerSubmit: (options: {
+    onFailure: (draft: string, message: string) => void;
+    onSuccess: () => void;
+  }) => {
+    latestOnFailure = options.onFailure;
     latestOnSuccess = options.onSuccess;
     return {
-      submit: vi.fn(),
+      submit: submitMock,
       sending: false,
     };
   },
@@ -337,8 +346,10 @@ describe("SessionInputComposer", () => {
     latestComposerProps = null;
     latestAttachButtonProps = null;
     latestAttachmentSheetProps = null;
+    latestOnFailure = null;
     latestOnSuccess = null;
     draftAttachments = [];
+    submitMock.mockClear();
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0);
@@ -369,6 +380,27 @@ describe("SessionInputComposer", () => {
 
     expect(latestComposerProps?.inputHeight).toBe(MIN_INPUT_HEIGHT);
     expect(latestComposerProps?.text).toBe("");
+  });
+
+  it("keeps attachment-only failures retryable", async () => {
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    await act(async () => {
+      latestOnFailure?.("", "Failed to send attachment");
+    });
+
+    expect(latestComposerProps?.errorDraft).toBe("");
+    expect(latestComposerProps?.errorMessage).toBe("Failed to send attachment");
+
+    await act(async () => {
+      latestComposerProps?.onRetry();
+    });
+
+    expect(submitMock).toHaveBeenCalledWith("", "code");
   });
 
   it("opens an attachment sheet and stores picked files", async () => {

@@ -47,20 +47,6 @@ export function useComposerSubmit({
       // either as it lands in the queue, or as the optimistic bubble appears.
       // `onFailure(draft)` restores it on error.
       try {
-        if (isActive) {
-          // Queue path still submits text only; attachments remain in the draft.
-          onSuccess();
-          const result = await getClient()
-            .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
-              sessionId,
-              text: wrapped,
-              interactionMode,
-            })
-            .toPromise();
-          if (result.error) throw result.error;
-          return;
-        }
-
         const savedAttachments: FileAttachment[] = [...attachments];
         const savedIds = new Set(savedAttachments.map((attachment) => attachment.id));
         const previewUris = savedAttachments.map((attachment) => attachment.previewUri ?? "");
@@ -99,6 +85,25 @@ export function useComposerSubmit({
               );
             throw err;
           }
+        }
+
+        if (isActive) {
+          const result = await getClient()
+            .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+              sessionId,
+              text: wrapped,
+              attachmentKeys: attachmentKeys.length > 0 ? attachmentKeys : undefined,
+              interactionMode,
+            })
+            .toPromise();
+          if (result.error) throw result.error;
+          useDraftsStore
+            .getState()
+            .setAttachments(sessionId, (prev) =>
+              prev.filter((attachment) => !savedIds.has(attachment.id)),
+            );
+          onSuccess();
+          return;
         }
 
         const { eventId, clientMutationId } = optimisticallyInsertSessionMessage(
@@ -141,6 +146,13 @@ export function useComposerSubmit({
           throw err;
         }
       } catch (err) {
+        useDraftsStore
+          .getState()
+          .setAttachments(sessionId, (prev) =>
+            prev.map((attachment) =>
+              attachment.uploading ? { ...attachment, uploading: false } : attachment,
+            ),
+          );
         onFailure(draft, userFacingError(err, "Failed to send. Tap to retry."));
       } finally {
         setSending(false);

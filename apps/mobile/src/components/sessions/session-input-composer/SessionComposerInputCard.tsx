@@ -87,7 +87,7 @@ export function SessionComposerInputCard({
       layout={layoutTransition}
       style={[styles.inputCard, cardBorderAnimatedStyle]}
     >
-      {errorDraft ? (
+      {errorDraft !== null && errorMessage ? (
         <Pressable
           onPress={onRetry}
           accessibilityRole="button"
