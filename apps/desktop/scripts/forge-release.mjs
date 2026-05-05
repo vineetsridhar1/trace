@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,9 +12,14 @@ const command = process.argv[2];
 const forgeArgs = process.argv.slice(3);
 
 const forgeCommands = new Set(["package", "make", "publish"]);
+const fromDryRun =
+  command === "publish" &&
+  forgeArgs.some((arg) => arg === "--from-dry-run" || arg === "--from-dry-run=true");
 
 if (!forgeCommands.has(command)) {
-  console.error("Usage: node scripts/forge-release.mjs <package|make|publish> [forge args]");
+  console.error(
+    "Usage: node scripts/forge-release.mjs <package|make|publish> [forge args]",
+  );
   process.exit(1);
 }
 
@@ -33,8 +39,18 @@ function run(cmd, args) {
   }
 }
 
-await rm(releaseDir, { recursive: true, force: true });
+if (fromDryRun) {
+  if (!existsSync(releaseDir)) {
+    console.error(
+      "No desktop release dry-run state found. Run publish:mac --dry-run first.",
+    );
+    process.exit(1);
+  }
+} else {
+  await rm(releaseDir, { recursive: true, force: true });
 
-run("pnpm", ["--filter", "@trace/desktop", "build"]);
-run("pnpm", ["--filter", "@trace/desktop", "deploy", "--legacy", releaseDir]);
+  run("pnpm", ["--filter", "@trace/desktop", "build"]);
+  run("pnpm", ["--filter", "@trace/desktop", "deploy", "--legacy", releaseDir]);
+}
+
 run("pnpm", ["exec", "electron-forge", command, ...forgeArgs, releaseDir]);

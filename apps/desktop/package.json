@@ -37,38 +37,6 @@
     "vitest": "^3.2.4"
   },
   "config": {
-    "forge": {
-      "packagerConfig": {
-        "asar": true,
-        "icon": "assets/icon"
-      },
-      "makers": [
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        }
-      ],
-      "publishers": [
-        {
-          "name": "@electron-forge/publisher-github",
-          "config": {
-            "repository": {
-              "owner": "vineetsridhar1",
-              "name": "trace"
-            },
-            "draft": false,
-            "prerelease": false
-          }
-        }
-      ],
-      "plugins": [
-        {
-          "name": "@electron-forge/plugin-auto-unpack-natives",
-          "config": {}
-        }
-      ]
-    }
+    "forge": "./forge.config.mjs"
   }
 }
