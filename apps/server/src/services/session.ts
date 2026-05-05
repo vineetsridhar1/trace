@@ -559,10 +559,15 @@ function sortSessionsByRecency<
   },
 >(sessions: T[]): T[] {
   return [...sessions].sort((a, b) => {
-    const aRecency = (a.lastMessageAt ?? a.updatedAt).getTime();
-    const bRecency = (b.lastMessageAt ?? b.updatedAt).getTime();
-    const recencyDiff = bRecency - aRecency;
-    if (recencyDiff !== 0) return recencyDiff;
+    if (a.lastMessageAt && b.lastMessageAt) {
+      const recencyDiff = b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+      if (recencyDiff !== 0) return recencyDiff;
+    } else if (a.lastMessageAt) {
+      return -1;
+    } else if (b.lastMessageAt) {
+      return 1;
+    }
+
     const updatedDiff = b.updatedAt.getTime() - a.updatedAt.getTime();
     if (updatedDiff !== 0) return updatedDiff;
     return b.createdAt.getTime() - a.createdAt.getTime();

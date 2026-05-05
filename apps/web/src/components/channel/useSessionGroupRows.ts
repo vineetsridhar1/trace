@@ -18,6 +18,26 @@ function getSessionSortTimestamp(session: SessionEntity | undefined): string | u
   return getSessionMessageTimestamp(session) ?? session?.updatedAt ?? session?.createdAt;
 }
 
+function compareSessionsByRecency(a: SessionEntity, b: SessionEntity): number {
+  const aMessageAt = getSessionMessageTimestamp(a);
+  const bMessageAt = getSessionMessageTimestamp(b);
+
+  if (aMessageAt && bMessageAt) {
+    const diff = new Date(bMessageAt).getTime() - new Date(aMessageAt).getTime();
+    if (diff !== 0) return diff;
+  } else if (aMessageAt) {
+    return -1;
+  } else if (bMessageAt) {
+    return 1;
+  }
+
+  const aSort = getSessionSortTimestamp(a) ?? "";
+  const bSort = getSessionSortTimestamp(b) ?? "";
+  const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
+  if (diff !== 0) return diff;
+  return a.id.localeCompare(b.id);
+}
+
 function buildRowSignature(row: SessionGroupRow): string {
   const latestSession = row.latestSession;
   const latestRepo =
@@ -86,14 +106,8 @@ export function useSessionGroupRows(
         const groupSessionIds = state._sessionIdsByGroup[group.id] ?? [];
         const groupSessions = groupSessionIds
           .map((id: string) => state.sessions[id])
-          .filter(Boolean)
-          .sort((a: SessionEntity, b: SessionEntity) => {
-            const aSort = getSessionSortTimestamp(a) ?? "";
-            const bSort = getSessionSortTimestamp(b) ?? "";
-            const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
-            if (diff !== 0) return diff;
-            return a.id.localeCompare(b.id);
-          });
+          .filter((session): session is SessionEntity => Boolean(session))
+          .sort(compareSessionsByRecency);
 
         if (getSessionGroupChannelId(group, groupSessions) !== channelId) {
           continue;

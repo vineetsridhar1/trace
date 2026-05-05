@@ -82,6 +82,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         branch
         worktreeDeleted
         sessionGroupId
+        lastUserMessageAt
+        lastMessageAt
         connection {
           state
           runtimeInstanceId
