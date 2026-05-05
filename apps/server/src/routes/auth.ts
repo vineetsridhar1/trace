@@ -34,7 +34,6 @@ const router: RouterType = Router();
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
 const JWT_SECRET = resolveJwtSecret();
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
-const GITHUB_DEVICE_SCOPE = "read:user user:email";
 const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
 
 type GitHubDeviceAuth = {
@@ -49,11 +48,6 @@ type GitHubUserResponse = {
   email: string | null;
   avatar_url: string;
   name: string | null;
-};
-type GitHubEmailResponse = {
-  email: string;
-  primary: boolean;
-  verified: boolean;
 };
 
 function logoutPushToken(req: Request): string | null {
@@ -85,20 +79,7 @@ async function upsertUserFromGitHubAccessToken(accessToken: string) {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const ghUser = (await userRes.json()) as GitHubUserResponse;
-
-  let email = ghUser.email;
-  if (!email) {
-    const emailsRes = await fetch("https://api.github.com/user/emails", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const emails = (await emailsRes.json()) as GitHubEmailResponse[];
-    const primary = emails.find((e) => e.primary && e.verified);
-    email = primary?.email ?? emails[0]?.email ?? null;
-  }
-
-  if (!email) {
-    throw new Error("Could not retrieve email from GitHub");
-  }
+  const email = ghUser.email ?? `github-${ghUser.id}@trace.local`;
 
   let user = await prisma.user.findFirst({
     where: { OR: [{ githubId: ghUser.id }, { email }] },
@@ -446,7 +427,6 @@ router.post("/auth/github/device/start", async (_req: Request, res: Response) =>
     },
     body: new URLSearchParams({
       client_id: GITHUB_CLIENT_ID,
-      scope: GITHUB_DEVICE_SCOPE,
     }),
   });
   const payload = (await response.json()) as {
