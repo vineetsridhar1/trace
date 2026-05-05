@@ -20,6 +20,7 @@ const SESSION_GROUPS_QUERY = gql`
       prUrl
       worktreeDeleted
       archivedAt
+      savedAt
       createdAt
       updatedAt
       channel {

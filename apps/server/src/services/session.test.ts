@@ -132,6 +132,7 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     agentStatus: "not_started",
     status: "in_progress",
     archivedAt: null,
+    savedAt: null,
     organizationId: "org-1",
     channelId: "channel-1",
     repoId: "repo-1",
@@ -334,7 +335,12 @@ describe("SessionService", () => {
       const result = await service.listGroups("channel-1", "org-1");
 
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
-        where: { channelId: "channel-1", organizationId: "org-1", archivedAt: null },
+        where: {
+          channelId: "channel-1",
+          organizationId: "org-1",
+          archivedAt: null,
+          savedAt: null,
+        },
         include: expect.any(Object),
       });
       expect(result[0].sessions.map((session) => session.id)).toEqual([
@@ -431,6 +437,29 @@ describe("SessionService", () => {
       });
       expect(result[0]?.status).toBe("archived");
     });
+
+    it("returns saved groups when requested", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        makeSessionGroup({
+          id: "group-saved",
+          savedAt: new Date("2024-01-03T00:00:00.000Z"),
+          sessions: [makeSession({ id: "session-saved" })],
+        }),
+      ]);
+
+      const result = await service.listGroups("channel-1", "org-1", { saved: true });
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
+        where: {
+          channelId: "channel-1",
+          organizationId: "org-1",
+          archivedAt: null,
+          savedAt: { not: null },
+        },
+        include: expect.any(Object),
+      });
+      expect(result.map((group) => group.id)).toEqual(["group-saved"]);
+    });
   });
 
   describe("listByUser", () => {
@@ -453,6 +482,7 @@ describe("SessionService", () => {
               sessionGroup: {
                 is: {
                   archivedAt: null,
+                  savedAt: null,
                   sessions: { none: { sessionStatus: "merged" } },
                 },
               },

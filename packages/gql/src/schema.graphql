@@ -238,6 +238,7 @@ enum EventType {
   session_pr_merged
   session_pr_closed
   session_group_archived
+  session_group_saved_for_later
   chat_created
   chat_member_added
   chat_member_removed
@@ -376,6 +377,7 @@ type SessionGroup {
   prUrl: String
   worktreeDeleted: Boolean!
   archivedAt: DateTime
+  savedAt: DateTime
   setupStatus: SetupStatus!
   setupError: String
   createdAt: DateTime!
@@ -954,7 +956,12 @@ type Query {
   channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
-  sessionGroups(channelId: ID!, archived: Boolean, status: SessionGroupStatus): [SessionGroup!]!
+  sessionGroups(
+    channelId: ID!
+    archived: Boolean
+    saved: Boolean
+    status: SessionGroupStatus
+  ): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
@@ -1089,6 +1096,7 @@ type Mutation {
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
+  saveSessionGroupForLater(id: ID!): SessionGroup
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!

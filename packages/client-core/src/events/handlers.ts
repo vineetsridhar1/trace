@@ -430,6 +430,23 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "session_group_saved_for_later") {
+    upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: true });
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (sessionGroupId) {
+      const sessionGroup = asJsonObject(payload.sessionGroup);
+      batch.patch("sessionGroups", sessionGroupId, {
+        savedAt: typeof sessionGroup?.savedAt === "string" ? sessionGroup.savedAt : event.timestamp,
+        updatedAt: event.timestamp,
+        _sortTimestamp: event.timestamp,
+      });
+      if (ui.getActiveSessionGroupId() === sessionGroupId) {
+        ui.setActiveSessionGroupId(null);
+      }
+    }
+  }
+
   // Route session status events
   if (
     SESSION_STATUS_EVENTS.has(event.eventType) &&

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CellContextMenuEvent, GridApi } from "ag-grid-community";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
+import { SaveSessionGroupForLaterDialog } from "../session/SaveSessionGroupForLaterDialog";
 import { motion } from "framer-motion";
 import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
 import { FILTER_STORAGE_KEY_PREFIX, isSessionStatusHeaderRow } from "./sessions-table-types";
@@ -23,6 +24,10 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     id: string;
     name: string;
     sessionCount: number;
+  } | null>(null);
+  const [saveForLaterTarget, setSaveForLaterTarget] = useState<{
+    id: string;
+    name: string;
   } | null>(null);
   const [contextMenu, setContextMenu] = useState<SessionRowContextMenuState | null>(null);
 
@@ -63,6 +68,13 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       id: group.id,
       name: group.name,
       sessionCount: group._sessionCount,
+    });
+  }, []);
+
+  const handleSaveForLater = useCallback((group: SessionGroupRow) => {
+    setSaveForLaterTarget({
+      id: group.id,
+      name: group.name,
     });
   }, []);
 
@@ -121,12 +133,23 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           }}
         />
       )}
+      {saveForLaterTarget && (
+        <SaveSessionGroupForLaterDialog
+          groupId={saveForLaterTarget.id}
+          groupName={saveForLaterTarget.name}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setSaveForLaterTarget(null);
+          }}
+        />
+      )}
       {contextMenu && (
         <SessionRowContextMenu
           menu={contextMenu}
           onArchive={handleArchive}
           onClose={() => setContextMenu(null)}
           onCopyLink={handleCopyLink}
+          onSaveForLater={handleSaveForLater}
         />
       )}
     </div>

@@ -15,6 +15,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       slug
       status
       archivedAt
+      savedAt
       branch
       prUrl
       workdir

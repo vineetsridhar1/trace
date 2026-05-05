@@ -396,6 +396,7 @@ export type EventType =
   | "repo_updated"
   | "session_deleted"
   | "session_group_archived"
+  | "session_group_saved_for_later"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -595,6 +596,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
+  saveSessionGroupForLater?: Maybe<SessionGroup>;
   sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
@@ -899,6 +901,10 @@ export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationSaveSessionGroupForLaterArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationSendChannelMessageArgs = {
@@ -1355,6 +1361,7 @@ export type QuerySessionGroupFilesArgs = {
 export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
   channelId: Scalars["ID"]["input"];
+  saved?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
 };
 
@@ -1536,6 +1543,7 @@ export type SessionGroup = {
   name: Scalars["String"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
+  savedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessions: Array<Session>;
   setupError?: Maybe<Scalars["String"]["output"]>;
   setupStatus: SetupStatus;
@@ -1825,6 +1833,7 @@ export type SessionGroupsQuery = {
     prUrl?: string | null;
     worktreeDeleted: boolean;
     archivedAt?: string | null;
+    savedAt?: string | null;
     setupStatus: SetupStatus;
     setupError?: string | null;
     createdAt: string;
@@ -1844,6 +1853,7 @@ export type SessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -1868,6 +1878,7 @@ export type SessionGroupsQuery = {
 export type FilteredSessionGroupsQueryVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
+  saved?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
 }>;
 
@@ -1881,6 +1892,7 @@ export type FilteredSessionGroupsQuery = {
     prUrl?: string | null;
     worktreeDeleted: boolean;
     archivedAt?: string | null;
+    savedAt?: string | null;
     setupStatus: SetupStatus;
     setupError?: string | null;
     createdAt: string;
@@ -1900,6 +1912,7 @@ export type FilteredSessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -2155,6 +2168,7 @@ export type SessionGroupDetailQuery = {
     slug?: string | null;
     status: SessionGroupStatus;
     archivedAt?: string | null;
+    savedAt?: string | null;
     branch?: string | null;
     prUrl?: string | null;
     workdir?: string | null;
@@ -2201,6 +2215,8 @@ export type SessionGroupDetailQuery = {
       branch?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
+      lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -3074,6 +3090,7 @@ export const SessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "savedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "setupStatus" } },
                 { kind: "Field", name: { kind: "Name", value: "setupError" } },
                 {
@@ -3104,6 +3121,7 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -3189,6 +3207,11 @@ export const FilteredSessionGroupsDocument = {
         },
         {
           kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "saved" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+        },
+        {
+          kind: "VariableDefinition",
           variable: { kind: "Variable", name: { kind: "Name", value: "status" } },
           type: { kind: "NamedType", name: { kind: "Name", value: "SessionGroupStatus" } },
         },
@@ -3212,6 +3235,11 @@ export const FilteredSessionGroupsDocument = {
               },
               {
                 kind: "Argument",
+                name: { kind: "Name", value: "saved" },
+                value: { kind: "Variable", name: { kind: "Name", value: "saved" } },
+              },
+              {
+                kind: "Argument",
                 name: { kind: "Name", value: "status" },
                 value: { kind: "Variable", name: { kind: "Name", value: "status" } },
               },
@@ -3225,6 +3253,7 @@ export const FilteredSessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "savedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "setupStatus" } },
                 { kind: "Field", name: { kind: "Name", value: "setupError" } },
                 {
@@ -3255,6 +3284,7 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -4072,6 +4102,7 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "savedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "branch" } },
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "workdir" } },
@@ -4152,6 +4183,8 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },

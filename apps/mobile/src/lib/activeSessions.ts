@@ -16,7 +16,7 @@ function collectActiveSessionIds(state: EntityState, userId?: string): readonly 
     if (session.agentStatus === "failed") continue;
     if (session.sessionGroupId) {
       const group = state.sessionGroups[session.sessionGroupId];
-      if (group && (group.archivedAt || group.status === "archived")) continue;
+      if (group && (group.archivedAt || group.savedAt || group.status === "archived")) continue;
     }
     (out ??= []).push({ id, ts: session._sortTimestamp ?? "" });
   }

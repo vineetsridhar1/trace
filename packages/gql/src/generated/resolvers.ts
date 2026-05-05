@@ -397,6 +397,7 @@ export type EventType =
   | "repo_updated"
   | "session_deleted"
   | "session_group_archived"
+  | "session_group_saved_for_later"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -596,6 +597,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
+  saveSessionGroupForLater?: Maybe<SessionGroup>;
   sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
@@ -900,6 +902,10 @@ export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationSaveSessionGroupForLaterArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationSendChannelMessageArgs = {
@@ -1356,6 +1362,7 @@ export type QuerySessionGroupFilesArgs = {
 export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
   channelId: Scalars["ID"]["input"];
+  saved?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
 };
 
@@ -1537,6 +1544,7 @@ export type SessionGroup = {
   name: Scalars["String"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
+  savedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessions: Array<Session>;
   setupError?: Maybe<Scalars["String"]["output"]>;
   setupStatus: SetupStatus;
@@ -2881,6 +2889,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRunSessionArgs, "id">
   >;
+  saveSessionGroupForLater?: Resolver<
+    Maybe<ResolversTypes["SessionGroup"]>,
+    ParentType,
+    ContextType,
+    RequireFields<MutationSaveSessionGroupForLaterArgs, "id">
+  >;
   sendChannelMessage?: Resolver<
     ResolversTypes["Message"],
     ParentType,
@@ -3525,6 +3539,7 @@ export type SessionGroupResolvers<
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
+  savedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   setupError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   setupStatus?: Resolver<ResolversTypes["SetupStatus"], ParentType, ContextType>;

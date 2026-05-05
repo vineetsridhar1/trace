@@ -24,14 +24,20 @@ import { useSessionStatusGrouping } from "./useSessionStatusGrouping";
 import { cn } from "../../lib/utils";
 
 const FILTERED_SESSION_GROUPS_QUERY = gql`
-  query FilteredSessionGroups($channelId: ID!, $archived: Boolean, $status: SessionGroupStatus) {
-    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {
+  query FilteredSessionGroups(
+    $channelId: ID!
+    $archived: Boolean
+    $saved: Boolean
+    $status: SessionGroupStatus
+  ) {
+    sessionGroups(channelId: $channelId, archived: $archived, saved: $saved, status: $status) {
       id
       name
       status
       prUrl
       worktreeDeleted
       archivedAt
+      savedAt
       setupStatus
       setupError
       channel {
@@ -97,14 +103,25 @@ const archivedTableInstance = createTable<SessionGridRow>({
 const ArchivedGridTable = archivedTableInstance.Table;
 const useArchivedTable = archivedTableInstance.useTable;
 
-type Tab = "merged" | "archived";
+const laterTableInstance = createTable<SessionGridRow>({
+  id: "later-sessions",
+  columns: sessionColumns,
+});
+const LaterGridTable = laterTableInstance.Table;
+const useLaterTable = laterTableInstance.useTable;
+
+type Tab = "later" | "merged" | "archived";
 
 function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; active: boolean }) {
   const upsertMany = useEntityStore((s: EntityState) => s.upsertMany);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const rows = useSessionGroupRows(
     channelId,
-    tab === "merged" ? { status: "merged" } : { archived: true },
+    tab === "merged"
+      ? { status: "merged" }
+      : tab === "archived"
+        ? { archived: true }
+        : { saved: true },
   );
   const { gridRows, onFilterModelChanged, onToggleStatusGroup } = useSessionStatusGrouping(rows);
   const [loading, setLoading] = useState(true);
@@ -117,8 +134,11 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
   const [contextMenu, setContextMenu] = useState<SessionRowDeleteContextMenuState | null>(null);
   const setMergedRows = useMergedTable((s: TableState<SessionGridRow>) => s.setRows);
   const setArchivedRows = useArchivedTable((s: TableState<SessionGridRow>) => s.setRows);
-  const setRows = tab === "merged" ? setMergedRows : setArchivedRows;
-  const GridTable = tab === "merged" ? MergedGridTable : ArchivedGridTable;
+  const setLaterRows = useLaterTable((s: TableState<SessionGridRow>) => s.setRows);
+  const setRows =
+    tab === "merged" ? setMergedRows : tab === "archived" ? setArchivedRows : setLaterRows;
+  const GridTable =
+    tab === "merged" ? MergedGridTable : tab === "archived" ? ArchivedGridTable : LaterGridTable;
   const queryKey = `${channelId}:${tab}`;
 
   useEffect(() => {
@@ -128,7 +148,11 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
   const fetchData = useCallback(async () => {
     setLoading(true);
     const variables =
-      tab === "merged" ? { channelId, status: "merged" } : { channelId, archived: true };
+      tab === "merged"
+        ? { channelId, status: "merged" }
+        : tab === "archived"
+          ? { channelId, archived: true }
+          : { channelId, saved: true };
 
     const result = await client.query(FILTERED_SESSION_GROUPS_QUERY, variables).toPromise();
     if (result.data?.sessionGroups) {
@@ -242,7 +266,7 @@ export function MergedArchivedPage({
   channelId: string;
   onBack: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>("merged");
+  const [activeTab, setActiveTab] = useState<Tab>("later");
 
   return (
     <div className="flex h-full flex-col">
@@ -250,9 +274,20 @@ export function MergedArchivedPage({
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onBack}>
           <ArrowLeft size={15} />
         </Button>
-        <h2 className="text-sm font-semibold text-foreground">Merged & Archived</h2>
+        <h2 className="text-sm font-semibold text-foreground">Later, Merged & Archived</h2>
       </div>
       <div className="flex gap-1 border-b border-border px-4">
+        <button
+          className={cn(
+            "px-3 py-1.5 text-xs font-medium transition-colors",
+            activeTab === "later"
+              ? "border-b-2 border-foreground text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+          onClick={() => setActiveTab("later")}
+        >
+          Later
+        </button>
         <button
           className={cn(
             "px-3 py-1.5 text-xs font-medium transition-colors",
@@ -277,6 +312,7 @@ export function MergedArchivedPage({
         </button>
       </div>
       <div className="flex-1 overflow-hidden">
+        <TabTable channelId={channelId} tab="later" active={activeTab === "later"} />
         <TabTable channelId={channelId} tab="merged" active={activeTab === "merged"} />
         <TabTable channelId={channelId} tab="archived" active={activeTab === "archived"} />
       </div>
