@@ -9,10 +9,6 @@ const execFileAsync = promisify(execFile);
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = "/workspaces";
 
-function gitArgsWithoutHooks(args: string[]): string[] {
-  return ["-c", "core.hooksPath=/dev/null", ...args];
-}
-
 /** Get the local path for a repo by ID. Returns undefined if not cloned yet. */
 export function getRepoPath(repoId: string): string | undefined {
   const p = `${REPOS_DIR}/${repoId}`;
@@ -125,17 +121,9 @@ export async function createWorktree({
   );
 
   if (branchExists) {
-    await execFileAsync("git", gitArgsWithoutHooks(["worktree", "add", worktreePath, branchName]), {
-      cwd: repoPath,
-    });
+    await addWorktree(repoPath, worktreePath, [worktreePath, branchName]);
   } else {
-    await execFileAsync(
-      "git",
-      gitArgsWithoutHooks(["worktree", "add", "-b", branchName, worktreePath, baseRef]),
-      {
-        cwd: repoPath,
-      },
-    );
+    await addWorktree(repoPath, worktreePath, ["-b", branchName, worktreePath, baseRef]);
   }
   await resetWorktreeToRef(worktreePath, baseRef);
   await setUpstreamIfRemote(repoPath, branchName, baseRef);
@@ -173,6 +161,31 @@ async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<vo
   // reprovisioned or a container is reused.
   await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
   await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
+}
+
+async function isUsableWorktree(worktreePath: string): Promise<boolean> {
+  return execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: worktreePath }).then(
+    ({ stdout }) => stdout.trim() === "true",
+    () => false,
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function addWorktree(repoPath: string, worktreePath: string, args: string[]): Promise<void> {
+  try {
+    await execFileAsync("git", ["worktree", "add", ...args], { cwd: repoPath });
+  } catch (error) {
+    if (await isUsableWorktree(worktreePath)) {
+      console.warn(
+        `[workspace] git worktree add reported an error after creating ${worktreePath}: ${getErrorMessage(error)}`,
+      );
+      return;
+    }
+    throw error;
+  }
 }
 
 async function setUpstreamIfRemote(
