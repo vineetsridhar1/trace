@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Archive,
   Circle,
   GitBranch,
   GitPullRequest,
@@ -18,6 +19,7 @@ import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
+import { ArchiveSessionGroupDialog } from "./ArchiveSessionGroupDialog";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -42,6 +44,7 @@ interface GroupHeaderProps {
   canContinueSessionGroup: boolean;
   continuingSessionGroup: boolean;
   onContinueSessionGroup: () => void;
+  canArchiveSessionGroup: boolean;
 }
 
 export function GroupHeader({
@@ -67,8 +70,10 @@ export function GroupHeader({
   canContinueSessionGroup,
   continuingSessionGroup,
   onContinueSessionGroup,
+  canArchiveSessionGroup,
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
   const linkedCheckout = useLinkedCheckoutHeaderState({
@@ -115,18 +120,6 @@ export function GroupHeader({
         <X size={16} />
       </button>
 
-      {selectedSessionId && (
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-1.5 text-xs",
-            sessionStatusColor[selectedSessionStatus],
-          )}
-        >
-          <Circle size={6} className="fill-current" />
-          {label}
-        </span>
-      )}
-
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-semibold text-foreground">
           {groupName ?? "Session Group"}
@@ -135,18 +128,6 @@ export function GroupHeader({
       </div>
 
       <LinkedCheckoutActions state={linkedCheckout} />
-
-      {canContinueSessionGroup && (
-        <button
-          onClick={onContinueSessionGroup}
-          disabled={continuingSessionGroup}
-          className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
-          title="Continue on a new branch"
-        >
-          <GitBranch size={14} className={continuingSessionGroup ? "animate-pulse" : undefined} />
-          <span>Continue</span>
-        </button>
-      )}
 
       {hasRunScripts && (
         <button
@@ -198,11 +179,47 @@ export function GroupHeader({
           href={groupPrUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
+          className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-xs text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
           title="View Pull Request"
         >
           <GitPullRequest size={14} />
+          <span>{formatPrLabel(groupPrUrl)}</span>
         </a>
+      )}
+
+      {selectedSessionId && (
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 text-xs",
+            sessionStatusColor[selectedSessionStatus],
+          )}
+        >
+          <Circle size={6} className="fill-current" />
+          {label}
+        </span>
+      )}
+
+      {canContinueSessionGroup && (
+        <button
+          onClick={onContinueSessionGroup}
+          disabled={continuingSessionGroup}
+          className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
+          title="Continue on a new branch"
+        >
+          <GitBranch size={14} className={continuingSessionGroup ? "animate-pulse" : undefined} />
+          <span>Continue</span>
+        </button>
+      )}
+
+      {canArchiveSessionGroup && (
+        <button
+          onClick={() => setShowArchiveDialog(true)}
+          className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-2 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+          title="Archive workspace"
+        >
+          <Archive size={14} />
+          <span>Archive</span>
+        </button>
       )}
 
       {panelMode && (
@@ -214,6 +231,20 @@ export function GroupHeader({
           {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         </button>
       )}
+
+      {canArchiveSessionGroup && (
+        <ArchiveSessionGroupDialog
+          groupId={sessionGroupId}
+          groupName={groupName ?? "Session Group"}
+          open={showArchiveDialog}
+          onOpenChange={setShowArchiveDialog}
+        />
+      )}
     </div>
   );
+}
+
+function formatPrLabel(prUrl: string): string {
+  const match = prUrl.match(/\/pull\/(\d+)(?:[/?#]|$)/);
+  return match ? `#${match[1]}` : "PR";
 }

@@ -567,6 +567,7 @@ export function SessionGroupDetailView({
             canContinueSessionGroup={canContinueSessionGroup}
             continuingSessionGroup={continuingGroup}
             onContinueSessionGroup={handleContinueSessionGroup}
+            canArchiveSessionGroup={canContinueSessionGroup}
           />
 
           <GroupTabStrip
