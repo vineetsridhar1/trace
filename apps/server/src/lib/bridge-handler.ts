@@ -448,6 +448,17 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       if (msg.type === "repo_linked" && msg.repoId) {
         const repoId = msg.repoId as string;
         sessionRouter.addRegisteredRepo(runtimeKey, repoId, ws);
+        if (bridgeAuth?.kind === "local") {
+          runtimeAccessService
+            .addRegisteredRepoToLocalRuntime({
+              instanceId: runtimeId,
+              organizationId: bridgeAuth.organizationId,
+              repoId,
+            })
+            .catch((err: unknown) => {
+              console.error("[bridge] error persisting repo_linked:", err);
+            });
+        }
         // Warm the linked-checkout cache for the freshly-linked repo (no-op
         // if no checkout is configured for it).
         sessionRouter.getLinkedCheckoutStatus(runtimeKey, repoId).catch(() => {});
