@@ -137,6 +137,15 @@ export const DELETE_SESSION_GROUP_MUTATION = gql`
   }
 `;
 
+export const CONTINUE_SESSION_GROUP_MUTATION = gql`
+  mutation ContinueSessionGroup($id: ID!) {
+    continueSessionGroup(id: $id) {
+      id
+      sessionGroupId
+    }
+  }
+`;
+
 export const ARCHIVE_SESSION_GROUP_MUTATION = gql`
   mutation ArchiveSessionGroup($id: ID!) {
     archiveSessionGroup(id: $id) {

@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
+import {
+  CONTINUE_SESSION_GROUP_MUTATION,
+  SESSION_TERMINALS_QUERY,
+  START_SESSION_MUTATION,
+} from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
-import { useUIStore } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
@@ -190,6 +194,7 @@ export function SessionGroupDetailView({
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
+  const [continuingGroup, setContinuingGroup] = useState(false);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const renameTerminal = useTerminalStore(
     (s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal,
@@ -338,6 +343,8 @@ export function SessionGroupDetailView({
         groupArchivedAt ?? null,
       )
     : "in_progress";
+  const canContinueSessionGroup =
+    selectedSessionStatus === "merged" && !!selectedSession && !selectedSessionIsOptimistic;
   const canMoveSelectedSession =
     !!selectedSession && !selectedSessionIsOptimistic && selectedSession.sessionStatus !== "merged";
   const linkedCheckoutRepoId =
@@ -477,6 +484,48 @@ export function SessionGroupDetailView({
     setActiveSessionId,
   ]);
 
+  const handleContinueSessionGroup = useCallback(async () => {
+    if (!canContinueSessionGroup || continuingGroup || !selectedSession) return;
+
+    setContinuingGroup(true);
+    try {
+      const result = await client
+        .mutation(CONTINUE_SESSION_GROUP_MUTATION, { id: sessionGroupId })
+        .toPromise();
+
+      if (result.error) {
+        toast.error("Failed to continue session", { description: result.error.message });
+        return;
+      }
+
+      const newSessionId = result.data?.continueSessionGroup?.id;
+      const newSessionGroupId = result.data?.continueSessionGroup?.sessionGroupId;
+      if (!newSessionId || !newSessionGroupId) {
+        toast.error("Failed to continue session");
+        return;
+      }
+
+      const resolvedChannelId =
+        getSessionGroupChannelId(
+          useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
+          groupSessions,
+        ) ?? getSessionChannelId(selectedSession);
+      openSessionTab(newSessionGroupId, newSessionId);
+      setActiveSessionId(newSessionId);
+      navigateToSession(resolvedChannelId ?? null, newSessionGroupId, newSessionId);
+    } finally {
+      setContinuingGroup(false);
+    }
+  }, [
+    canContinueSessionGroup,
+    continuingGroup,
+    groupSessions,
+    openSessionTab,
+    selectedSession,
+    sessionGroupId,
+    setActiveSessionId,
+  ]);
+
   const handleSelectSession = useCallback(
     (sessionId: string) => {
       setActiveSessionId(sessionId);
@@ -515,6 +564,9 @@ export function SessionGroupDetailView({
             onClose={() => setActiveSessionId(null)}
             onToggleFullscreen={toggleFullscreen}
             onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+            canContinueSessionGroup={canContinueSessionGroup}
+            continuingSessionGroup={continuingGroup}
+            onContinueSessionGroup={handleContinueSessionGroup}
           />
 
           <GroupTabStrip

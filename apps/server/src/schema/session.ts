@@ -279,6 +279,10 @@ export const sessionMutations = {
     await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
   },
+  continueSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.continueGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
+  },
   archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.archiveGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },

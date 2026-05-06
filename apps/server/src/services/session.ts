@@ -49,6 +49,7 @@ import { isLocalMode } from "../lib/mode.js";
 export type StartSessionServiceInput = StartSessionInput & {
   sessionGroupId?: string | null;
   sourceSessionId?: string | null;
+  forkSessionGroup?: boolean;
   organizationId: string;
   createdById: string;
   actorType?: ActorType;
@@ -1905,6 +1906,12 @@ export class SessionService {
     if (input.restoreCheckpointId && input.sourceSessionId) {
       throw new Error("restoreCheckpointId cannot be combined with sourceSessionId");
     }
+    if (input.forkSessionGroup && input.sessionGroupId) {
+      throw new Error("forkSessionGroup cannot reuse an existing session group");
+    }
+    if (input.forkSessionGroup && input.restoreCheckpointId) {
+      throw new Error("forkSessionGroup cannot be combined with restoreCheckpointId");
+    }
 
     const restoreCheckpoint = input.restoreCheckpointId
       ? await prisma.gitCheckpoint.findUnique({
@@ -1976,6 +1983,7 @@ export class SessionService {
     }
     if (
       !input.restoreCheckpointId &&
+      !input.forkSessionGroup &&
       input.sessionGroupId &&
       sourceSession?.sessionGroupId &&
       input.sessionGroupId !== sourceSession.sessionGroupId
@@ -1985,7 +1993,9 @@ export class SessionService {
 
     const existingGroupId = input.restoreCheckpointId
       ? null
-      : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
+      : input.forkSessionGroup
+        ? null
+        : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
@@ -1997,7 +2007,8 @@ export class SessionService {
       throw new Error("Session group not found");
     }
 
-    const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
+    const resolvedGroup =
+      existingGroup ?? (input.forkSessionGroup ? null : (sourceSession?.sessionGroup ?? null));
     const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
     const resolvedChannelId =
       input.channelId ?? seedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
@@ -6860,6 +6871,61 @@ export class SessionService {
     });
 
     return sessionGroup;
+  }
+
+  async continueGroup(
+    groupId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: groupId, organizationId },
+      select: {
+        id: true,
+        archivedAt: true,
+        channelId: true,
+        repoId: true,
+        channel: { select: { baseBranch: true } },
+        repo: { select: { defaultBranch: true } },
+        sessions: {
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            agentStatus: true,
+            sessionStatus: true,
+            tool: true,
+            model: true,
+            reasoningEffort: true,
+            hosting: true,
+            repoId: true,
+          },
+        },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.archivedAt) throw new Error("Cannot continue an archived session group");
+    if (!group.sessions.some((session) => session.sessionStatus === "merged")) {
+      throw new Error("Session group is not merged");
+    }
+
+    const sourceSession = group.sessions[0];
+    if (!sourceSession) throw new Error("Session group has no sessions");
+
+    return this.start({
+      organizationId,
+      createdById: actorId,
+      actorType,
+      tool: sourceSession.tool,
+      model: sourceSession.model ?? undefined,
+      reasoningEffort: sourceSession.reasoningEffort ?? undefined,
+      hosting: sourceSession.hosting,
+      channelId: group.channelId ?? undefined,
+      repoId: group.repoId ?? sourceSession.repoId ?? undefined,
+      branch: group.channel?.baseBranch ?? group.repo?.defaultBranch ?? undefined,
+      sourceSessionId: sourceSession.id,
+      forkSessionGroup: true,
+    });
   }
 
   /** Transition all sessions in the group to merged when the group's PR is merged. */

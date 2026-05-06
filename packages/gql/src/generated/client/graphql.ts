@@ -545,6 +545,7 @@ export type Mutation = {
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
+  continueSessionGroup: Session;
   createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -666,6 +667,10 @@ export type MutationCommitLinkedCheckoutChangesArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationContinueSessionGroupArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationCreateAgentEnvironmentArgs = {
@@ -1844,6 +1849,7 @@ export type SessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -1900,6 +1906,7 @@ export type FilteredSessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -2201,6 +2208,8 @@ export type SessionGroupDetailQuery = {
       branch?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
+      lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -3104,6 +3113,7 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -3255,6 +3265,7 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -4152,6 +4163,8 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },

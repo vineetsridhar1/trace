@@ -624,6 +624,72 @@ describe("SessionService", () => {
       );
     });
 
+    it("forks source session context into a new group when requested", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-source",
+        branch: "trace/old",
+        workdir: "/tmp/old",
+        connection: { state: "stopped" },
+      });
+      const newGroup = makeSessionGroup({ id: "group-new", branch: "develop" });
+      const session = makeSession({
+        id: "session-new",
+        sessionGroupId: "group-new",
+        sessionGroup: newGroup,
+        branch: "develop",
+      });
+
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-source",
+          sessionGroupId: "group-source",
+          branch: "trace/old",
+          sessionGroup: sourceGroup,
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+        baseBranch: "develop",
+      });
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(newGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      const result = await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        sourceSessionId: "session-source",
+        forkSessionGroup: true,
+        branch: "develop",
+      } as unknown as StartSessionServiceInput);
+
+      expect(result).toEqual(session);
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          branch: "develop",
+        }),
+        select: expect.any(Object),
+      });
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "group-source" } }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            sourceSessionId: "session-source",
+            sessionGroup: expect.objectContaining({ id: "group-new" }),
+          }),
+        }),
+        expect.anything(),
+      );
+    });
+
     it("stores the default reasoning effort when none is provided", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup });
@@ -3595,6 +3661,78 @@ describe("SessionService", () => {
             success: true,
           }),
         }),
+      );
+    });
+  });
+
+  describe("continueGroup", () => {
+    it("starts a new group from a merged session on the base branch", async () => {
+      const mergedSession = makeSession({
+        id: "session-merged",
+        sessionStatus: "merged",
+        branch: "trace/old",
+      });
+      const newGroup = makeSessionGroup({ id: "group-new", branch: "develop" });
+      const newSession = makeSession({
+        id: "session-new",
+        sessionGroupId: "group-new",
+        sessionGroup: newGroup,
+        branch: "develop",
+      });
+
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-merged",
+        archivedAt: null,
+        channelId: "channel-1",
+        repoId: "repo-1",
+        channel: { baseBranch: "develop" },
+        repo: { defaultBranch: "main" },
+        sessions: [
+          {
+            id: "session-merged",
+            agentStatus: "done",
+            sessionStatus: "merged",
+            tool: "claude_code",
+            model: "claude-sonnet-4-20250514",
+            reasoningEffort: "auto",
+            hosting: "cloud",
+            repoId: "repo-1",
+          },
+        ],
+      });
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        ...mergedSession,
+        projects: [],
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+        baseBranch: "develop",
+      });
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(newGroup);
+      prismaMock.session.create.mockResolvedValueOnce(newSession);
+
+      const result = await service.continueGroup("group-merged", "org-1", "user", "user-1");
+
+      expect(result).toEqual(newSession);
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            branch: "develop",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            sourceSessionId: "session-merged",
+          }),
+        }),
+        expect.anything(),
       );
     });
   });

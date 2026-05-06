@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Circle,
+  GitBranch,
   GitPullRequest,
   PanelRight,
   History,
@@ -38,6 +39,9 @@ interface GroupHeaderProps {
   onClose: () => void;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
+  canContinueSessionGroup: boolean;
+  continuingSessionGroup: boolean;
+  onContinueSessionGroup: () => void;
 }
 
 export function GroupHeader({
@@ -60,6 +64,9 @@ export function GroupHeader({
   onClose,
   onToggleFullscreen,
   onToggleSidebar,
+  canContinueSessionGroup,
+  continuingSessionGroup,
+  onContinueSessionGroup,
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -128,6 +135,18 @@ export function GroupHeader({
       </div>
 
       <LinkedCheckoutActions state={linkedCheckout} />
+
+      {canContinueSessionGroup && (
+        <button
+          onClick={onContinueSessionGroup}
+          disabled={continuingSessionGroup}
+          className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
+          title="Continue on a new branch"
+        >
+          <GitBranch size={14} className={continuingSessionGroup ? "animate-pulse" : undefined} />
+          <span>Continue</span>
+        </button>
+      )}
 
       {hasRunScripts && (
         <button
