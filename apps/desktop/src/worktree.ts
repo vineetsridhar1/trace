@@ -64,6 +64,31 @@ async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<vo
   await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
 }
 
+async function isUsableWorktree(worktreePath: string): Promise<boolean> {
+  return execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: worktreePath }).then(
+    ({ stdout }) => stdout.trim() === "true",
+    () => false,
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function addWorktree(repoPath: string, worktreePath: string, args: string[]): Promise<void> {
+  try {
+    await execFileAsync("git", ["worktree", "add", ...args], { cwd: repoPath });
+  } catch (error) {
+    if (await isUsableWorktree(worktreePath)) {
+      console.warn(
+        `[worktree] git worktree add reported an error after creating ${worktreePath}: ${getErrorMessage(error)}`,
+      );
+      return;
+    }
+    throw error;
+  }
+}
+
 async function setUpstreamIfRemote(
   repoPath: string,
   branch: string | null,
@@ -158,11 +183,9 @@ export async function createWorktree({
 
   if (branchExists) {
     // Reuse existing branch without -b
-    await execFileAsync("git", ["worktree", "add", targetPath, branch], { cwd: repoPath });
+    await addWorktree(repoPath, targetPath, [targetPath, branch]);
   } else {
-    await execFileAsync("git", ["worktree", "add", "-b", branch, targetPath, baseRef], {
-      cwd: repoPath,
-    });
+    await addWorktree(repoPath, targetPath, ["-b", branch, targetPath, baseRef]);
   }
   await resetWorktreeToRef(targetPath, baseRef);
   await setUpstreamIfRemote(repoPath, branch, baseRef);
