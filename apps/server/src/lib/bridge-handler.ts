@@ -445,8 +445,12 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
-      if (msg.type === "repo_linked" && msg.repoId) {
-        const repoId = msg.repoId as string;
+      if (msg.type === "repo_linked") {
+        const repoId = typeof msg.repoId === "string" ? msg.repoId.trim() : "";
+        if (!repoId) {
+          runtimeDebug("bridge ignored invalid repo_linked message", { runtimeId });
+          return;
+        }
         sessionRouter.addRegisteredRepo(runtimeKey, repoId, ws);
         if (bridgeAuth?.kind === "local") {
           runtimeAccessService

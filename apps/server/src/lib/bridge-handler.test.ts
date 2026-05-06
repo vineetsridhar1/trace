@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   registerRuntime: vi.fn(),
   unregisterRuntime: vi.fn(),
+  addRegisteredRepo: vi.fn(),
   bindSession: vi.fn(),
   getRuntime: vi.fn(() => undefined),
   getRuntimeForSession: vi.fn(() => undefined),
@@ -10,15 +11,19 @@ const mocks = vi.hoisted(() => ({
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
   recordOutput: vi.fn(() => Promise.resolve()),
   registerLocalRuntimeConnection: vi.fn(),
+  addRegisteredRepoToLocalRuntime: vi.fn(() => Promise.resolve()),
   restoreTerminals: vi.fn(() => Promise.resolve()),
   relayFromBridge: vi.fn(),
   sessionFindFirst: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock("./session-router.js", () => ({
+  runtimeRouterKey: (runtimeInstanceId: string, organizationId: string) =>
+    `${organizationId}:${runtimeInstanceId}`,
   sessionRouter: {
     registerRuntime: mocks.registerRuntime,
     unregisterRuntime: mocks.unregisterRuntime,
+    addRegisteredRepo: mocks.addRegisteredRepo,
     bindSession: mocks.bindSession,
     getRuntime: mocks.getRuntime,
     getRuntimeForSession: mocks.getRuntimeForSession,
@@ -47,7 +52,14 @@ vi.mock("./terminal-relay.js", () => ({
 vi.mock("../services/runtime-access.js", () => ({
   runtimeAccessService: {
     registerLocalRuntimeConnection: mocks.registerLocalRuntimeConnection,
+    addRegisteredRepoToLocalRuntime: mocks.addRegisteredRepoToLocalRuntime,
     markRuntimeDisconnected: vi.fn(() => Promise.resolve()),
+  },
+}));
+
+vi.mock("../services/agent-environment.js", () => ({
+  agentEnvironmentService: {
+    ensureLocalBridgeEnvironment: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -109,6 +121,41 @@ describe("bridge handler auth", () => {
 
     expect(ws.close).toHaveBeenCalledWith(1008, "Bridge auth mismatch");
     expect(mocks.registerRuntime).not.toHaveBeenCalled();
+  });
+
+  it("ignores repo_linked messages without a string repo id", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
+      id: "bridge-runtime-1",
+      label: "Laptop",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
+    ws.emitMessage({ type: "repo_linked", repoId: { id: "repo-1" } });
+    await Promise.resolve();
+
+    expect(mocks.addRegisteredRepo).not.toHaveBeenCalled();
+    expect(mocks.addRegisteredRepoToLocalRuntime).not.toHaveBeenCalled();
   });
 
   it("closes local bridge authorization failures with a policy violation", async () => {

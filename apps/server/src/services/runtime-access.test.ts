@@ -164,6 +164,39 @@ describe("runtimeAccessService", () => {
     expect(prismaMock.bridgeRuntime.update).not.toHaveBeenCalled();
   });
 
+  it("serializes concurrent repo metadata appends for the same runtime", async () => {
+    let storedMetadata = {
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    };
+    prismaMock.bridgeRuntime.findFirst.mockImplementation(async () => ({
+      id: "bridge-1",
+      metadata: {
+        supportedTools: [...storedMetadata.supportedTools],
+        registeredRepoIds: [...storedMetadata.registeredRepoIds],
+      },
+    }));
+    prismaMock.bridgeRuntime.update.mockImplementation(async (args) => {
+      storedMetadata = args.data.metadata as typeof storedMetadata;
+      return { id: "bridge-1", metadata: storedMetadata };
+    });
+
+    await Promise.all([
+      runtimeAccessService.addRegisteredRepoToLocalRuntime({
+        instanceId: "runtime-1",
+        organizationId: "org-1",
+        repoId: "repo-2",
+      }),
+      runtimeAccessService.addRegisteredRepoToLocalRuntime({
+        instanceId: "runtime-1",
+        organizationId: "org-1",
+        repoId: "repo-3",
+      }),
+    ]);
+
+    expect(storedMetadata.registeredRepoIds).toEqual(["repo-1", "repo-2", "repo-3"]);
+  });
+
   it("grants access to the bridge owner", async () => {
     prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",

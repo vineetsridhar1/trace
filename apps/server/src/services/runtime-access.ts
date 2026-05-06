@@ -240,6 +240,8 @@ function serializeBridgeAccessEventPayload(input: {
 }
 
 class RuntimeAccessService {
+  private registeredRepoWriteQueues = new Map<string, Promise<void>>();
+
   async registerLocalRuntimeConnection(params: {
     instanceId: string;
     organizationId: string;
@@ -312,6 +314,28 @@ class RuntimeAccessService {
   }
 
   async addRegisteredRepoToLocalRuntime(params: {
+    instanceId: string;
+    organizationId: string;
+    repoId: string;
+  }): Promise<void> {
+    const queueKey = `${params.organizationId}:${params.instanceId}`;
+    const previous = this.registeredRepoWriteQueues.get(queueKey) ?? Promise.resolve();
+    const next = previous
+      .catch(() => {
+        // Keep later repo_linked messages moving even if an earlier write failed.
+      })
+      .then(() => this.addRegisteredRepoToLocalRuntimeNow(params));
+    this.registeredRepoWriteQueues.set(queueKey, next);
+    try {
+      await next;
+    } finally {
+      if (this.registeredRepoWriteQueues.get(queueKey) === next) {
+        this.registeredRepoWriteQueues.delete(queueKey);
+      }
+    }
+  }
+
+  private async addRegisteredRepoToLocalRuntimeNow(params: {
     instanceId: string;
     organizationId: string;
     repoId: string;
