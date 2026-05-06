@@ -162,9 +162,9 @@ export function SessionInputOptions({
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
-  useEffect(() => {
-    if (!isNotStarted || isOptimistic) return;
-    client
+  const fetchAvailableRuntimes = useCallback(() => {
+    if (!isNotStarted || isOptimistic) return Promise.resolve();
+    return client
       .query(AVAILABLE_RUNTIMES_QUERY, {
         tool: currentTool,
         sessionGroupId: sessionGroupId ?? null,
@@ -178,6 +178,10 @@ export function SessionInputOptions({
         console.error("Failed to fetch available runtimes:", error);
       });
   }, [isNotStarted, isOptimistic, currentTool, sessionGroupId]);
+
+  useEffect(() => {
+    void fetchAvailableRuntimes();
+  }, [fetchAvailableRuntimes]);
 
   const handleToolChange = useCallback(
     async (newTool: string | null) => {
@@ -450,6 +454,9 @@ export function SessionInputOptions({
         <Select
           value={currentRuntimeValue}
           onValueChange={handleRuntimeChange}
+          onOpenChange={(open) => {
+            if (open) void fetchAvailableRuntimes();
+          }}
           disabled={isOptimistic}
         >
           <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">

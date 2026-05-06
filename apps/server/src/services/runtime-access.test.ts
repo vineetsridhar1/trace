@@ -119,6 +119,51 @@ describe("runtimeAccessService", () => {
     expect(prismaMock.bridgeRuntime.update).not.toHaveBeenCalled();
   });
 
+  it("persists newly linked repo ids into bridge runtime metadata", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+      id: "bridge-1",
+      metadata: {
+        supportedTools: ["codex"],
+        registeredRepoIds: ["repo-1"],
+      },
+    });
+
+    await runtimeAccessService.addRegisteredRepoToLocalRuntime({
+      instanceId: "runtime-1",
+      organizationId: "org-1",
+      repoId: "repo-2",
+    });
+
+    expect(prismaMock.bridgeRuntime.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "bridge-1" },
+        data: expect.objectContaining({
+          metadata: {
+            supportedTools: ["codex"],
+            registeredRepoIds: ["repo-1", "repo-2"],
+          },
+        }),
+      }),
+    );
+  });
+
+  it("does not rewrite bridge runtime metadata for an already linked repo", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+      id: "bridge-1",
+      metadata: {
+        registeredRepoIds: ["repo-1"],
+      },
+    });
+
+    await runtimeAccessService.addRegisteredRepoToLocalRuntime({
+      instanceId: "runtime-1",
+      organizationId: "org-1",
+      repoId: "repo-1",
+    });
+
+    expect(prismaMock.bridgeRuntime.update).not.toHaveBeenCalled();
+  });
+
   it("grants access to the bridge owner", async () => {
     prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
