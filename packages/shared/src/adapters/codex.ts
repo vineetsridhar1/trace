@@ -2,6 +2,8 @@ import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
 
+const EXIT_CLOSE_GRACE_MS = 1_000;
+
 /**
  * Adapter for running OpenAI Codex CLI sessions.
  * Spawns `codex exec --json` for non-interactive, JSONL-streamed output.
@@ -70,6 +72,15 @@ export class CodexAdapter implements CodingToolAdapter {
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
 
+    let finished = false;
+    let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearExitFallbackTimer = () => {
+      if (exitFallbackTimer) {
+        clearTimeout(exitFallbackTimer);
+        exitFallbackTimer = null;
+      }
+    };
+
     if (child.stdout) {
       // Prevent unhandled 'error' events on the pipe from crashing the process
       // when abort() kills the child (the pipe can emit ECONNRESET/EPIPE).
@@ -97,8 +108,11 @@ export class CodexAdapter implements CodingToolAdapter {
       });
     }
 
-    child.on("close", (code: number | null) => {
+    const finish = (code: number | null) => {
+      if (finished) return;
       if (!isCurrentProcess()) return;
+      finished = true;
+      clearExitFallbackTimer();
       // If in plan mode and exited cleanly with text, wrap as PlanBlock.
       // Codex doesn't write plan files to disk, so filePath is omitted.
       if (
@@ -121,9 +135,20 @@ export class CodexAdapter implements CodingToolAdapter {
       }
       onComplete();
       this.process = null;
+    };
+
+    child.on("exit", (code: number | null) => {
+      if (!isCurrentProcess()) return;
+      clearExitFallbackTimer();
+      exitFallbackTimer = setTimeout(() => finish(code), EXIT_CLOSE_GRACE_MS);
     });
 
+    child.on("close", finish);
+
     child.on("error", (err: Error) => {
+      if (finished) return;
+      clearExitFallbackTimer();
+      finished = true;
       if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
