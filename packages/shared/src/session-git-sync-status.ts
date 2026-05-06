@@ -69,16 +69,16 @@ export async function inspectSessionGitSyncStatus(
       maybeReadGitRef(runGit, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
     ]);
 
-  const upstreamCommitSha = upstreamBranch
-    ? await maybeReadGitRef(runGit, ["rev-parse", `${upstreamBranch}^{commit}`])
-    : null;
   const remoteBranch = branch ? `origin/${branch}` : null;
-  const remoteCommitSha = remoteBranch
-    ? await maybeReadGitRef(runGit, ["rev-parse", `${remoteBranch}^{commit}`])
-    : null;
+  const [upstreamCommitSha, remoteCommitSha] = await Promise.all([
+    upstreamBranch ? maybeReadGitRef(runGit, ["rev-parse", `${upstreamBranch}^{commit}`]) : null,
+    remoteBranch ? maybeReadGitRef(runGit, ["rev-parse", `${remoteBranch}^{commit}`]) : null,
+  ]);
 
-  const upstreamDivergence = await countDivergence(runGit, upstreamBranch);
-  const remoteDivergence = await countDivergence(runGit, remoteCommitSha ? remoteBranch : null);
+  const [upstreamDivergence, remoteDivergence] = await Promise.all([
+    countDivergence(runGit, upstreamBranch),
+    countDivergence(runGit, remoteCommitSha ? remoteBranch : null),
+  ]);
 
   return {
     branch,

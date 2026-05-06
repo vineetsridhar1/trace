@@ -4222,6 +4222,7 @@ describe("SessionService", () => {
             sessionId: "session-1",
             workdirHint: "/tmp/trace/worktrees/session-1",
           },
+          45_000,
         );
         expect(prismaMock.session.update).toHaveBeenCalled();
         expect(prismaMock.session.update).toHaveBeenCalledWith(

@@ -69,6 +69,8 @@ type PendingInputInfo = {
   toolUseId: string | null;
 };
 
+const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 45_000;
+
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
   return trimmed ? trimmed : null;
@@ -5210,10 +5212,14 @@ export class SessionService {
 
     let status: BridgeSessionGitSyncStatus;
     try {
-      status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
-        sessionId: params.sessionId,
-        workdirHint: params.workdir,
-      });
+      status = await sessionRouter.inspectSessionGitSyncStatus(
+        params.runtimeInstanceId,
+        {
+          sessionId: params.sessionId,
+          workdirHint: params.workdir,
+        },
+        SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!params.allowUnverifiedSourceGitStatus) {
