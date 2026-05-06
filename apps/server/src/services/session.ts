@@ -69,6 +69,8 @@ type PendingInputInfo = {
   toolUseId: string | null;
 };
 
+const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
+
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
   return trimmed ? trimmed : null;
@@ -279,15 +281,6 @@ function isRuntimeStartupState(state: SessionConnectionData["state"]): boolean {
 function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean {
   return (
     state === "failed" || state === "timed_out" || state === "stopped" || state === "deprovisioned"
-  );
-}
-
-function allowsUnverifiedSourceGitStatusForMove(state: SessionConnectionData["state"]): boolean {
-  return (
-    state === "disconnected" ||
-    state === "failed" ||
-    state === "timed_out" ||
-    state === "deprovision_failed"
   );
 }
 
@@ -5210,10 +5203,14 @@ export class SessionService {
 
     let status: BridgeSessionGitSyncStatus;
     try {
-      status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
-        sessionId: params.sessionId,
-        workdirHint: params.workdir,
-      });
+      status = await sessionRouter.inspectSessionGitSyncStatus(
+        params.runtimeInstanceId,
+        {
+          sessionId: params.sessionId,
+          workdirHint: params.workdir,
+        },
+        SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!params.allowUnverifiedSourceGitStatus) {
@@ -5484,9 +5481,7 @@ export class SessionService {
       targetHosting: targetRuntime.hostingMode,
       targetRuntimeInstanceId: runtimeInstanceId,
       targetRuntimeLabel: targetRuntime.label,
-      allowUnverifiedSourceGitStatus: allowsUnverifiedSourceGitStatusForMove(
-        this.parseConnection(session.connection).state,
-      ),
+      allowUnverifiedSourceGitStatus: true,
       actorType,
       actorId,
     });
@@ -5526,9 +5521,7 @@ export class SessionService {
       targetHosting: "cloud",
       targetRuntimeInstanceId: null,
       targetRuntimeLabel: null,
-      allowUnverifiedSourceGitStatus: allowsUnverifiedSourceGitStatusForMove(
-        this.parseConnection(session.connection).state,
-      ),
+      allowUnverifiedSourceGitStatus: true,
       actorType,
       actorId,
     });
