@@ -15,6 +15,7 @@ const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
 
 export interface SessionMessageListProps {
   key?: React.Key;
+  sessionId: string;
   nodes: SessionNode[];
   gitCheckpoints: GitCheckpoint[];
   initialLoading?: boolean;
@@ -28,6 +29,7 @@ export interface SessionMessageListProps {
 }
 
 export function SessionMessageList({
+  sessionId,
   nodes,
   gitCheckpoints,
   initialLoading = false,
@@ -421,6 +423,7 @@ export function SessionMessageList({
                   />
                 ) : node.kind === "plan-review" ? (
                   <PlanReviewCard
+                    sessionId={sessionId}
                     planContent={node.planContent}
                     planFilePath={node.planFilePath}
                     timestamp={node.timestamp}

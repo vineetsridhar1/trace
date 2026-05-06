@@ -1,8 +1,30 @@
-import type { ComponentPropsWithoutRef, MouseEvent } from "react";
-import { useCallback, useMemo } from "react";
-import ReactMarkdown from "react-markdown";
+import type { ComponentPropsWithoutRef, MouseEvent, ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useFileOpen } from "../session/FileOpenContext";
+import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
+import {
+  createSteerableBlocksPlugin,
+  type MarkdownSteerBlock,
+} from "./markdownSteering";
+
+interface MarkdownProps {
+  children: string;
+  steerableBlocks?: boolean;
+  onSteerBlock?: (block: MarkdownSteerBlock, feedback: string) => Promise<void> | void;
+}
+
+interface SteerableDivProps extends ComponentPropsWithoutRef<"div"> {
+  node?: unknown;
+  "data-steer-block-id"?: unknown;
+  "data-steer-block-markdown"?: unknown;
+  "data-steer-block-type"?: unknown;
+}
+
+function getDataString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
 
 /** Returns true if href looks like a file path (not a URL, anchor, or other scheme). */
 function isFilePath(href: string): boolean {
@@ -47,8 +69,9 @@ function FileAwareLink({
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }
 
-export function Markdown({ children }: { children: string }) {
+export function Markdown({ children, steerableBlocks = false, onSteerBlock }: MarkdownProps) {
   const fileOpen = useFileOpen();
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
 
   const linkComponent = useMemo(() => {
     if (!fileOpen) return ExternalLink;
@@ -57,9 +80,64 @@ export function Markdown({ children }: { children: string }) {
     };
   }, [fileOpen]);
 
+  const handleSubmitSteerBlock = useCallback(
+    async (block: MarkdownSteerBlock, feedback: string) => {
+      if (!onSteerBlock) return;
+      await onSteerBlock(block, feedback);
+      setActiveBlockId(null);
+    },
+    [onSteerBlock],
+  );
+
+  const components = useMemo<Components>(() => {
+    if (!steerableBlocks || !onSteerBlock) {
+      return { a: linkComponent };
+    }
+
+    function SteerableDiv({
+      children: blockChildren,
+      node: _node,
+      "data-steer-block-id": rawBlockId,
+      "data-steer-block-markdown": rawBlockMarkdown,
+      "data-steer-block-type": rawBlockType,
+      ...props
+    }: SteerableDivProps) {
+      const blockId = getDataString(rawBlockId);
+      const blockMarkdown = getDataString(rawBlockMarkdown);
+      const blockType = getDataString(rawBlockType);
+
+      if (!blockId || !blockMarkdown || !blockType) {
+        return <div {...props}>{blockChildren}</div>;
+      }
+
+      return (
+        <SteerableMarkdownBlock
+          block={{ id: blockId, markdown: blockMarkdown, type: blockType }}
+          active={activeBlockId === blockId}
+          onOpen={setActiveBlockId}
+          onCancel={() => setActiveBlockId(null)}
+          onSubmit={handleSubmitSteerBlock}
+        >
+          {blockChildren as ReactNode}
+        </SteerableMarkdownBlock>
+      );
+    }
+
+    return { a: linkComponent, div: SteerableDiv };
+  }, [activeBlockId, handleSubmitSteerBlock, linkComponent, onSteerBlock, steerableBlocks]);
+
+  const rehypePlugins = useMemo(() => {
+    if (!steerableBlocks || !onSteerBlock) return [];
+    return [createSteerableBlocksPlugin(children)];
+  }, [children, onSteerBlock, steerableBlocks]);
+
   return (
     <div className="markdown-body">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: linkComponent }}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={rehypePlugins}
+        components={components}
+      >
         {children}
       </ReactMarkdown>
     </div>
