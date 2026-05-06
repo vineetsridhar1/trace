@@ -7,6 +7,7 @@ import { parseQuestion } from "./coding-tool.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
+const EXIT_CLOSE_GRACE_MS = 1_000;
 
 /**
  * Adapter for running Claude Code CLI sessions.
@@ -73,13 +74,34 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     let exitCode: number | null = null;
     let rlClosed = false;
     let processClosed = false;
+    let finished = false;
+    let stderrEmitted = false;
+    let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
 
-    const maybeFinish = () => {
-      if (!rlClosed || !processClosed) return;
+    const clearExitFallbackTimer = () => {
+      if (exitFallbackTimer) {
+        clearTimeout(exitFallbackTimer);
+        exitFallbackTimer = null;
+      }
+    };
+
+    const emitStderrIfNeeded = () => {
+      if (stderrEmitted) return;
+      stderrEmitted = true;
+      if (exitCode !== 0 && exitCode !== null && stderrChunks.length > 0) {
+        onOutput({ type: "error", message: stderrChunks.join("\n") });
+      }
+    };
+
+    const finish = () => {
+      if (finished) return;
       if (!isCurrentProcess()) return;
+      finished = true;
+      clearExitFallbackTimer();
+      emitStderrIfNeeded();
       if (!this.resultEmitted) {
         onOutput({
           type: "result",
@@ -88,6 +110,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       }
       onComplete();
       this.process = null;
+    };
+
+    const maybeFinish = () => {
+      if (!rlClosed || !processClosed) return;
+      finish();
     };
 
     if (child.stdout) {
@@ -134,14 +161,22 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     child.on("close", (code: number | null) => {
       exitCode = code;
       if (!isCurrentProcess()) return;
-      if (code !== 0 && code !== null && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
-      }
       processClosed = true;
       maybeFinish();
     });
 
+    child.on("exit", (code: number | null) => {
+      exitCode = code;
+      if (!isCurrentProcess()) return;
+      processClosed = true;
+      clearExitFallbackTimer();
+      exitFallbackTimer = setTimeout(finish, EXIT_CLOSE_GRACE_MS);
+    });
+
     child.on("error", (err: Error) => {
+      if (finished) return;
+      clearExitFallbackTimer();
+      finished = true;
       if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
