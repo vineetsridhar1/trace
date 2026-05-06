@@ -121,6 +121,19 @@ function capabilitiesCover(
   return requested.every((capability) => grantedSet.has(capability));
 }
 
+function metadataObject(metadata: Prisma.JsonValue | null): Record<string, unknown> {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+  return { ...(metadata as Record<string, unknown>) };
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
 export type BridgeRuntimeAccessState = {
   runtimeInstanceId: string;
   bridgeRuntimeId: string | null;
@@ -227,6 +240,8 @@ function serializeBridgeAccessEventPayload(input: {
 }
 
 class RuntimeAccessService {
+  private registeredRepoWriteQueues = new Map<string, Promise<void>>();
+
   async registerLocalRuntimeConnection(params: {
     instanceId: string;
     organizationId: string;
@@ -296,6 +311,59 @@ class RuntimeAccessService {
       }
       throw error;
     }
+  }
+
+  async addRegisteredRepoToLocalRuntime(params: {
+    instanceId: string;
+    organizationId: string;
+    repoId: string;
+  }): Promise<void> {
+    const queueKey = `${params.organizationId}:${params.instanceId}`;
+    const previous = this.registeredRepoWriteQueues.get(queueKey) ?? Promise.resolve();
+    const next = previous
+      .catch(() => {
+        // Keep later repo_linked messages moving even if an earlier write failed.
+      })
+      .then(() => this.addRegisteredRepoToLocalRuntimeNow(params));
+    this.registeredRepoWriteQueues.set(queueKey, next);
+    try {
+      await next;
+    } finally {
+      if (this.registeredRepoWriteQueues.get(queueKey) === next) {
+        this.registeredRepoWriteQueues.delete(queueKey);
+      }
+    }
+  }
+
+  private async addRegisteredRepoToLocalRuntimeNow(params: {
+    instanceId: string;
+    organizationId: string;
+    repoId: string;
+  }): Promise<void> {
+    const runtime = await prisma.bridgeRuntime.findFirst({
+      where: {
+        instanceId: params.instanceId,
+        organizationId: params.organizationId,
+        hostingMode: "local",
+      },
+      select: { id: true, metadata: true },
+    });
+    if (!runtime) return;
+
+    const metadata = metadataObject(runtime.metadata);
+    const registeredRepoIds = stringList(metadata.registeredRepoIds);
+    if (registeredRepoIds.includes(params.repoId)) return;
+
+    await prisma.bridgeRuntime.update({
+      where: { id: runtime.id },
+      data: {
+        lastSeenAt: new Date(),
+        metadata: {
+          ...metadata,
+          registeredRepoIds: [...registeredRepoIds, params.repoId],
+        } as Prisma.InputJsonValue,
+      },
+    });
   }
 
   async markRuntimeDisconnected(instanceId: string, organizationId?: string | null): Promise<void> {
