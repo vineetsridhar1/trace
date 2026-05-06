@@ -30,7 +30,7 @@
 # A shared cockpit for AI coding work
 
 Trace is a self-hosted workspace for running, monitoring, and collaborating on
-AI coding sessions. It gives every session a durable home: status, files,
+AI coding sessions. It gives every session a persistent home: status, files,
 terminal output, branch state, checkpoints, runtime access, and history.
 
 Instead of keeping AI coding work scattered across terminal tabs and local
