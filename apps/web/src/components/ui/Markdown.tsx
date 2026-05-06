@@ -6,13 +6,16 @@ import { useFileOpen } from "../session/FileOpenContext";
 import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
 import {
   createSteerableBlocksPlugin,
+  type MarkdownSteerAnnotation,
   type MarkdownSteerBlock,
 } from "./markdownSteering";
 
 interface MarkdownProps {
   children: string;
   steerableBlocks?: boolean;
-  onSteerBlock?: (block: MarkdownSteerBlock, feedback: string) => Promise<void> | void;
+  annotations?: Record<string, MarkdownSteerAnnotation>;
+  onSaveAnnotation?: (block: MarkdownSteerBlock, feedback: string) => void;
+  onRemoveAnnotation?: (blockId: string) => void;
 }
 
 interface SteerableDivProps extends ComponentPropsWithoutRef<"div"> {
@@ -69,9 +72,16 @@ function FileAwareLink({
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }
 
-export function Markdown({ children, steerableBlocks = false, onSteerBlock }: MarkdownProps) {
+export function Markdown({
+  children,
+  steerableBlocks = false,
+  annotations,
+  onSaveAnnotation,
+  onRemoveAnnotation,
+}: MarkdownProps) {
   const fileOpen = useFileOpen();
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const canSteer = steerableBlocks && !!onSaveAnnotation && !!onRemoveAnnotation;
 
   const linkComponent = useMemo(() => {
     if (!fileOpen) return ExternalLink;
@@ -80,17 +90,24 @@ export function Markdown({ children, steerableBlocks = false, onSteerBlock }: Ma
     };
   }, [fileOpen]);
 
-  const handleSubmitSteerBlock = useCallback(
-    async (block: MarkdownSteerBlock, feedback: string) => {
-      if (!onSteerBlock) return;
-      await onSteerBlock(block, feedback);
+  const handleSaveAnnotation = useCallback(
+    (block: MarkdownSteerBlock, feedback: string) => {
+      onSaveAnnotation?.(block, feedback);
       setActiveBlockId(null);
     },
-    [onSteerBlock],
+    [onSaveAnnotation],
+  );
+
+  const handleRemoveAnnotation = useCallback(
+    (blockId: string) => {
+      onRemoveAnnotation?.(blockId);
+      setActiveBlockId(null);
+    },
+    [onRemoveAnnotation],
   );
 
   const components = useMemo<Components>(() => {
-    if (!steerableBlocks || !onSteerBlock) {
+    if (!canSteer) {
       return { a: linkComponent };
     }
 
@@ -113,10 +130,12 @@ export function Markdown({ children, steerableBlocks = false, onSteerBlock }: Ma
       return (
         <SteerableMarkdownBlock
           block={{ id: blockId, markdown: blockMarkdown, type: blockType }}
+          annotation={annotations?.[blockId]?.feedback ?? ""}
           active={activeBlockId === blockId}
           onOpen={setActiveBlockId}
           onCancel={() => setActiveBlockId(null)}
-          onSubmit={handleSubmitSteerBlock}
+          onSave={handleSaveAnnotation}
+          onRemove={handleRemoveAnnotation}
         >
           {blockChildren as ReactNode}
         </SteerableMarkdownBlock>
@@ -124,12 +143,19 @@ export function Markdown({ children, steerableBlocks = false, onSteerBlock }: Ma
     }
 
     return { a: linkComponent, div: SteerableDiv };
-  }, [activeBlockId, handleSubmitSteerBlock, linkComponent, onSteerBlock, steerableBlocks]);
+  }, [
+    activeBlockId,
+    annotations,
+    canSteer,
+    handleRemoveAnnotation,
+    handleSaveAnnotation,
+    linkComponent,
+  ]);
 
   const rehypePlugins = useMemo(() => {
-    if (!steerableBlocks || !onSteerBlock) return [];
+    if (!canSteer) return [];
     return [createSteerableBlocksPlugin(children)];
-  }, [children, onSteerBlock, steerableBlocks]);
+  }, [canSteer, children]);
 
   return (
     <div className="markdown-body">

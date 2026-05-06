@@ -4,6 +4,10 @@ export interface MarkdownSteerBlock {
   type: string;
 }
 
+export interface MarkdownSteerAnnotation extends MarkdownSteerBlock {
+  feedback: string;
+}
+
 interface HastPoint {
   offset?: number;
 }

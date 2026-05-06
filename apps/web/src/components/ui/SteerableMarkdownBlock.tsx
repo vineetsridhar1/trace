@@ -1,6 +1,6 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send, X } from "lucide-react";
+import { Check, MessageSquareText, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
@@ -9,60 +9,63 @@ import type { MarkdownSteerBlock } from "./markdownSteering";
 
 interface SteerableMarkdownBlockProps {
   block: MarkdownSteerBlock;
+  annotation: string;
   active: boolean;
   children: ReactNode;
   onOpen: (blockId: string) => void;
   onCancel: () => void;
-  onSubmit: (block: MarkdownSteerBlock, feedback: string) => Promise<void> | void;
+  onSave: (block: MarkdownSteerBlock, feedback: string) => void;
+  onRemove: (blockId: string) => void;
 }
 
 export function SteerableMarkdownBlock({
   block,
+  annotation,
   active,
   children,
   onOpen,
   onCancel,
-  onSubmit,
+  onSave,
+  onRemove,
 }: SteerableMarkdownBlockProps) {
   const [feedback, setFeedback] = useState("");
-  const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasAnnotation = annotation.trim().length > 0;
 
   useEffect(() => {
     if (!active) {
       setFeedback("");
-      setSending(false);
       return;
     }
 
+    setFeedback(annotation);
     const frameId = window.requestAnimationFrame(() => {
       textareaRef.current?.focus();
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [active]);
+  }, [active, annotation]);
 
   const handleOpen = useCallback(() => {
     onOpen(block.id);
   }, [block.id, onOpen]);
 
   const handleCancel = useCallback(() => {
-    setFeedback("");
+    setFeedback(annotation);
     onCancel();
-  }, [onCancel]);
+  }, [annotation, onCancel]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSave = useCallback(() => {
     const text = feedback.trim();
-    if (!text || sending) return;
+    if (!text) return;
 
-    setSending(true);
-    try {
-      await onSubmit(block, text);
-      setFeedback("");
-    } finally {
-      setSending(false);
-    }
-  }, [block, feedback, onSubmit, sending]);
+    onSave(block, text);
+  }, [block, feedback, onSave]);
+
+  const handleRemove = useCallback(() => {
+    setFeedback("");
+    onRemove(block.id);
+  }, [block.id, onRemove]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -84,10 +87,10 @@ export function SteerableMarkdownBlock({
 
       if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        void handleSubmit();
+        handleSave();
       }
     },
-    [handleCancel, handleSubmit],
+    [handleCancel, handleSave],
   );
 
   return (
@@ -97,6 +100,7 @@ export function SteerableMarkdownBlock({
       className={cn(
         "group/steer relative -mx-2 my-1 rounded-md border border-transparent px-2 py-1.5 transition-colors outline-none",
         "hover:border-accent/20 hover:bg-accent/5 focus-visible:border-accent/40 focus-visible:bg-accent/5 focus-visible:ring-1 focus-visible:ring-accent/40",
+        hasAnnotation && "border-accent/20 bg-accent/5",
         active && "border-accent/30 bg-accent/5",
       )}
     >
@@ -113,42 +117,65 @@ export function SteerableMarkdownBlock({
           active && "pointer-events-auto opacity-100",
         )}
       >
-        Steer
+        {hasAnnotation ? "Edit" : "Steer"}
       </Button>
 
+      {hasAnnotation && !active && (
+        <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-accent/15 bg-accent/5 px-2 py-1 text-xs leading-5 text-muted-foreground">
+          <MessageSquareText size={12} className="mt-1 shrink-0 text-accent" />
+          <span className="max-h-10 overflow-hidden">{annotation}</span>
+        </div>
+      )}
+
       {active && (
-        <div className="mt-2 rounded-md border border-accent/25 bg-surface-deep p-2">
+        <div className="mt-1.5 rounded-md border border-border bg-surface-deep p-1.5">
           <Textarea
             ref={textareaRef}
             value={feedback}
             onChange={(event) => setFeedback(event.target.value)}
             onKeyDown={handleTextareaKeyDown}
-            disabled={sending}
             placeholder="Suggest a revision for this part..."
-            className="min-h-20 resize-y border-border bg-surface text-sm"
+            className="min-h-16 resize-y rounded-md border-border bg-surface px-2 py-1.5 text-xs"
           />
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleCancel}
-              disabled={sending}
-              className="h-7 rounded-md text-xs text-muted-foreground"
-            >
-              <X size={13} />
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void handleSubmit()}
-              disabled={!feedback.trim() || sending}
-              className="h-7 rounded-md bg-accent px-2.5 text-xs text-accent-foreground hover:bg-accent/90"
-            >
-              <Send size={13} />
-              Send
-            </Button>
+          <div className="mt-1.5 flex items-center justify-between gap-1">
+            <div>
+              {hasAnnotation && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleRemove}
+                  title="Remove annotation"
+                  aria-label="Remove annotation"
+                  className="text-muted-foreground hover:text-red-400"
+                >
+                  <Trash2 size={12} />
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={handleCancel}
+                title="Cancel"
+                aria-label="Cancel"
+                className="text-muted-foreground"
+              >
+                <X size={12} />
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                onClick={handleSave}
+                disabled={!feedback.trim()}
+                className="h-6 rounded-md bg-accent px-2 text-[11px] text-accent-foreground hover:bg-accent/90"
+              >
+                <Check size={12} />
+                Save
+              </Button>
+            </div>
           </div>
         </div>
       )}
