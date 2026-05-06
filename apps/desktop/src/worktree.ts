@@ -22,6 +22,10 @@ function execFileAsync(
   });
 }
 
+function gitArgsWithoutHooks(args: string[]): string[] {
+  return ["-c", "core.hooksPath=/dev/null", ...args];
+}
+
 async function refExists(repoPath: string, ref: string): Promise<boolean> {
   return execFileAsync("git", ["rev-parse", "--verify", ref], { cwd: repoPath }).then(
     () => true,
@@ -158,11 +162,17 @@ export async function createWorktree({
 
   if (branchExists) {
     // Reuse existing branch without -b
-    await execFileAsync("git", ["worktree", "add", targetPath, branch], { cwd: repoPath });
-  } else {
-    await execFileAsync("git", ["worktree", "add", "-b", branch, targetPath, baseRef], {
+    await execFileAsync("git", gitArgsWithoutHooks(["worktree", "add", targetPath, branch]), {
       cwd: repoPath,
     });
+  } else {
+    await execFileAsync(
+      "git",
+      gitArgsWithoutHooks(["worktree", "add", "-b", branch, targetPath, baseRef]),
+      {
+        cwd: repoPath,
+      },
+    );
   }
   await resetWorktreeToRef(targetPath, baseRef);
   await setUpstreamIfRemote(repoPath, branch, baseRef);

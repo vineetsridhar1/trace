@@ -122,7 +122,7 @@ describe("createWorktree", () => {
           );
           return {} as ReturnType<typeof execFileMock>;
         }
-        if (args[0] === "worktree" && args[1] === "add") {
+        if (args.includes("worktree") && args.includes("add")) {
           callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }
@@ -151,6 +151,8 @@ describe("createWorktree", () => {
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       [
+        "-c",
+        "core.hooksPath=/dev/null",
         "worktree",
         "add",
         expect.stringContaining("/trace/sessions/repo-1/otter"),
@@ -182,7 +184,7 @@ describe("createWorktree", () => {
           callback(ref === "origin/feature/source" ? null : new Error("missing ref"));
           return {} as ReturnType<typeof execFileMock>;
         }
-        if (args[0] === "worktree" && args[1] === "add") {
+        if (args.includes("worktree") && args.includes("add")) {
           callback(null, "");
           return {} as ReturnType<typeof execFileMock>;
         }
@@ -210,6 +212,8 @@ describe("createWorktree", () => {
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       [
+        "-c",
+        "core.hooksPath=/dev/null",
         "worktree",
         "add",
         "-b",

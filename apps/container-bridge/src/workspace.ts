@@ -9,6 +9,10 @@ const execFileAsync = promisify(execFile);
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = "/workspaces";
 
+function gitArgsWithoutHooks(args: string[]): string[] {
+  return ["-c", "core.hooksPath=/dev/null", ...args];
+}
+
 /** Get the local path for a repo by ID. Returns undefined if not cloned yet. */
 export function getRepoPath(repoId: string): string | undefined {
   const p = `${REPOS_DIR}/${repoId}`;
@@ -121,11 +125,17 @@ export async function createWorktree({
   );
 
   if (branchExists) {
-    await execFileAsync("git", ["worktree", "add", worktreePath, branchName], { cwd: repoPath });
-  } else {
-    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], {
+    await execFileAsync("git", gitArgsWithoutHooks(["worktree", "add", worktreePath, branchName]), {
       cwd: repoPath,
     });
+  } else {
+    await execFileAsync(
+      "git",
+      gitArgsWithoutHooks(["worktree", "add", "-b", branchName, worktreePath, baseRef]),
+      {
+        cwd: repoPath,
+      },
+    );
   }
   await resetWorktreeToRef(worktreePath, baseRef);
   await setUpstreamIfRemote(repoPath, branchName, baseRef);
