@@ -24,6 +24,7 @@ const SESSION_GROUPS_QUERY = gql`
       prUrl
       worktreeDeleted
       archivedAt
+      savedAt
       setupStatus
       setupError
       channel {
@@ -140,7 +141,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           onClick={() =>
             setChannelSubPage(channelSubPage === "merged-archived" ? null : "merged-archived")
           }
-          title="Merged & Archived"
+          title="Later, Merged & Archived"
         >
           <Archive size={15} />
         </Button>

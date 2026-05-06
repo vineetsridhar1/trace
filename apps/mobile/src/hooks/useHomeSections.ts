@@ -53,8 +53,14 @@ function hiddenFromHome(state: EntityState, session: SessionEntity): boolean {
   const sessionGroup = session.sessionGroup;
   const groupStatus = storedGroup?.status ?? sessionGroup?.status;
   const archivedAt = storedGroup?.archivedAt ?? sessionGroup?.archivedAt;
+  const savedAt = storedGroup?.savedAt ?? sessionGroup?.savedAt;
 
-  return Boolean(archivedAt) || groupStatus === "archived" || groupStatus === "merged";
+  return (
+    Boolean(archivedAt) ||
+    Boolean(savedAt) ||
+    groupStatus === "archived" ||
+    groupStatus === "merged"
+  );
 }
 
 interface PendingMeta {

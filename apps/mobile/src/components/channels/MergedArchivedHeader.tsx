@@ -4,8 +4,8 @@ import { SegmentedControl } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import type { MergedArchivedSegment } from "@/hooks/useChannelSessionGroups";
 
-const SEGMENTS: MergedArchivedSegment[] = ["merged", "archived"];
-const SEGMENT_LABELS = ["Merged", "Archived"];
+const SEGMENTS: MergedArchivedSegment[] = ["later", "merged", "archived"];
+const SEGMENT_LABELS = ["Later", "Merged", "Archived"];
 
 export interface MergedArchivedHeaderProps {
   segment: MergedArchivedSegment;

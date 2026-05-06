@@ -85,6 +85,7 @@ const MY_SESSIONS_QUERY = gql`
         prUrl
         worktreeDeleted
         archivedAt
+        savedAt
         setupStatus
         setupError
         createdAt

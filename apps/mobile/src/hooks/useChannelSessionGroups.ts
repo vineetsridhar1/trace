@@ -8,7 +8,7 @@ import {
 } from "@trace/client-core";
 
 export type ActiveSegment = "all" | "mine";
-export type MergedArchivedSegment = "merged" | "archived";
+export type MergedArchivedSegment = "later" | "merged" | "archived";
 
 export type SessionGroupSectionStatus =
   | "needs_input"
@@ -34,8 +34,12 @@ function isArchived(group: SessionGroupEntity): boolean {
   return Boolean(group.archivedAt) || group.status === "archived";
 }
 
+function isSavedForLater(group: SessionGroupEntity): boolean {
+  return Boolean(group.savedAt);
+}
+
 function isActive(group: SessionGroupEntity): boolean {
-  return !isArchived(group) && group.status !== "merged";
+  return !isArchived(group) && !isSavedForLater(group) && group.status !== "merged";
 }
 
 function sortTimestamp(group: SessionGroupEntity): number {
@@ -179,7 +183,8 @@ export function useMergedArchivedSessionGroupIds(
         .filter((g) => g.channel?.id === channelId)
         .filter((g) => {
           if (scope === "archived") return isArchived(g);
-          return !isArchived(g) && g.status === "merged";
+          if (scope === "later") return !isArchived(g) && isSavedForLater(g);
+          return !isArchived(g) && !isSavedForLater(g) && g.status === "merged";
         })
         .sort((a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id));
       return visible.map((g) => g.id);

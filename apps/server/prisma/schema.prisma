@@ -186,6 +186,8 @@ enum EventType {
   session_pr_merged
   session_pr_closed
   session_group_archived
+  session_group_saved_for_later
+  session_group_unsaved_for_later
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -443,6 +445,7 @@ model SessionGroup {
   prUrl          String?
   worktreeDeleted Boolean     @default(false)
   archivedAt      DateTime?
+  savedAt         DateTime?
   setupStatus     String      @default("idle")
   setupError      String?
 
@@ -456,6 +459,7 @@ model SessionGroup {
 
   @@index([organizationId, updatedAt])
   @@index([channelId, updatedAt])
+  @@index([channelId, savedAt])
   @@index([repoId, branch, updatedAt])
 }
 

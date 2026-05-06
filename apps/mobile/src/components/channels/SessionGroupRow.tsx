@@ -7,7 +7,12 @@ import ContextMenu, {
   type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
-import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
+import {
+  ARCHIVE_SESSION_GROUP_MUTATION,
+  SAVE_SESSION_GROUP_FOR_LATER_MUTATION,
+  UNSAVE_SESSION_GROUP_FOR_LATER_MUTATION,
+  useEntityField,
+} from "@trace/client-core";
 import { Avatar, Chip, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { buildSessionRowAccessibilityLabel } from "@/lib/accessibility";
@@ -41,6 +46,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
     | null
     | undefined;
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
+  const savedAt = useEntityField("sessionGroups", groupId, "savedAt");
   const attached = useAttachedCheckoutForGroup(groupId);
 
   const latestSessionId = useLatestSessionIdForGroup(groupId);
@@ -75,27 +81,64 @@ export const SessionGroupRow = memo(function SessionGroupRow({
     }
   }, [groupId]);
 
+  const handleSaveForLater = useCallback(async () => {
+    void haptic.medium();
+    const result = await getClient()
+      .mutation(SAVE_SESSION_GROUP_FOR_LATER_MUTATION, { id: groupId })
+      .toPromise();
+    if (result.error) {
+      void haptic.error();
+      console.warn("[saveSessionGroupForLater] failed", result.error);
+    }
+  }, [groupId]);
+
+  const handleMoveBackToChannel = useCallback(async () => {
+    void haptic.medium();
+    const result = await getClient()
+      .mutation(UNSAVE_SESSION_GROUP_FOR_LATER_MUTATION, { id: groupId })
+      .toPromise();
+    if (result.error) {
+      void haptic.error();
+      console.warn("[unsaveSessionGroupForLater] failed", result.error);
+    }
+  }, [groupId]);
+
   const handleCopyLink = useCallback(async () => {
     await Clipboard.setStringAsync(`trace://sessions/${groupId}`);
     void haptic.light();
   }, [groupId]);
 
   const isArchived = Boolean(archivedAt) || status === "archived";
+  const isSavedForLater = Boolean(savedAt);
 
   const actions = useMemo<ContextMenuAction[]>(() => {
     const items: ContextMenuAction[] = [];
-    if (!isArchived) {
+    if (isSavedForLater) {
+      items.push({ title: "Move back to channel", systemIcon: "arrow.uturn.backward" });
+    } else if (!isArchived) {
+      items.push({ title: "Save for later", systemIcon: "clock" });
       items.push({ title: "Archive workspace", systemIcon: "archivebox", destructive: true });
     }
     items.push({ title: "Copy link", systemIcon: "link" });
     return items;
-  }, [isArchived]);
+  }, [isArchived, isSavedForLater]);
 
   const handleMenuPress = useCallback(
     (e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
       const idx = e.nativeEvent.index;
       let cursor = 0;
-      if (!isArchived) {
+      if (isSavedForLater) {
+        if (idx === cursor) {
+          void handleMoveBackToChannel();
+          return;
+        }
+        cursor += 1;
+      } else if (!isArchived) {
+        if (idx === cursor) {
+          void handleSaveForLater();
+          return;
+        }
+        cursor += 1;
         if (idx === cursor) {
           void handleArchive();
           return;
@@ -104,7 +147,14 @@ export const SessionGroupRow = memo(function SessionGroupRow({
       }
       if (idx === cursor) void handleCopyLink();
     },
-    [isArchived, handleArchive, handleCopyLink],
+    [
+      isArchived,
+      isSavedForLater,
+      handleMoveBackToChannel,
+      handleSaveForLater,
+      handleArchive,
+      handleCopyLink,
+    ],
   );
 
   // Subtle row scale on press — pairs with the bg highlight so the press

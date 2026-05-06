@@ -397,6 +397,8 @@ export type EventType =
   | "repo_updated"
   | "session_deleted"
   | "session_group_archived"
+  | "session_group_saved_for_later"
+  | "session_group_unsaved_for_later"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -596,6 +598,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
+  saveSessionGroupForLater?: Maybe<SessionGroup>;
   sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
@@ -614,6 +617,7 @@ export type Mutation = {
   unmuteScope: Participant;
   unregisterPushToken: Scalars["Boolean"]["output"];
   unregisterRepoWebhook: Repo;
+  unsaveSessionGroupForLater?: Maybe<SessionGroup>;
   unsubscribe: Scalars["Boolean"]["output"];
   updateAgentEnvironment: AgentEnvironment;
   updateAiConversationTitle: AiConversation;
@@ -902,6 +906,10 @@ export type MutationRunSessionArgs = {
   prompt?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type MutationSaveSessionGroupForLaterArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationSendChannelMessageArgs = {
   channelId: Scalars["ID"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
@@ -1002,6 +1010,10 @@ export type MutationUnregisterPushTokenArgs = {
 
 export type MutationUnregisterRepoWebhookArgs = {
   repoId: Scalars["ID"]["input"];
+};
+
+export type MutationUnsaveSessionGroupForLaterArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationUnsubscribeArgs = {
@@ -1356,6 +1368,7 @@ export type QuerySessionGroupFilesArgs = {
 export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
   channelId: Scalars["ID"]["input"];
+  saved?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
 };
 
@@ -1537,6 +1550,7 @@ export type SessionGroup = {
   name: Scalars["String"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
+  savedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessions: Array<Session>;
   setupError?: Maybe<Scalars["String"]["output"]>;
   setupStatus: SetupStatus;
@@ -2881,6 +2895,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRunSessionArgs, "id">
   >;
+  saveSessionGroupForLater?: Resolver<
+    Maybe<ResolversTypes["SessionGroup"]>,
+    ParentType,
+    ContextType,
+    RequireFields<MutationSaveSessionGroupForLaterArgs, "id">
+  >;
   sendChannelMessage?: Resolver<
     ResolversTypes["Message"],
     ParentType,
@@ -2988,6 +3008,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUnregisterRepoWebhookArgs, "repoId">
+  >;
+  unsaveSessionGroupForLater?: Resolver<
+    Maybe<ResolversTypes["SessionGroup"]>,
+    ParentType,
+    ContextType,
+    RequireFields<MutationUnsaveSessionGroupForLaterArgs, "id">
   >;
   unsubscribe?: Resolver<
     ResolversTypes["Boolean"],
@@ -3525,6 +3551,7 @@ export type SessionGroupResolvers<
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
+  savedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   setupError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   setupStatus?: Resolver<ResolversTypes["SetupStatus"], ParentType, ContextType>;

@@ -412,6 +412,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   prUrl: true,
   worktreeDeleted: true,
   archivedAt: true,
+  savedAt: true,
   setupStatus: true,
   setupError: true,
   createdAt: true,
@@ -1692,16 +1693,21 @@ export class SessionService {
   async listGroups(
     channelId: string,
     organizationId: string,
-    options?: { archived?: boolean; status?: string },
+    options?: { archived?: boolean; saved?: boolean; status?: string },
   ) {
     const where: Record<string, unknown> = { channelId, organizationId };
 
     const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
+    const shouldIncludeSaved = options?.saved === true;
     if (shouldIncludeArchived) {
       where.archivedAt = { not: null };
-    } else {
-      // Default: only non-archived groups (covers false, undefined, omitted)
+    } else if (shouldIncludeSaved) {
       where.archivedAt = null;
+      where.savedAt = { not: null };
+    } else {
+      // Default: only groups that should stay on the main channel surface.
+      where.archivedAt = null;
+      where.savedAt = null;
     }
 
     const groups = await prisma.sessionGroup.findMany({
@@ -1727,7 +1733,7 @@ export class SessionService {
     let filtered = mapped;
     if (options?.status) {
       filtered = mapped.filter((g: MappedGroup) => g.status === options.status);
-    } else if (!shouldIncludeArchived) {
+    } else if (!shouldIncludeArchived && !shouldIncludeSaved) {
       // Default main table: exclude merged groups (server-side)
       filtered = mapped.filter((g: MappedGroup) => g.status !== "merged");
     }
@@ -1819,7 +1825,10 @@ export class SessionService {
     if (options?.includeMerged === false) where.sessionStatus = { not: "merged" };
 
     const groupFilter: Prisma.SessionGroupWhereInput = {};
-    if (options?.includeArchived === false) groupFilter.archivedAt = null;
+    if (options?.includeArchived === false) {
+      groupFilter.archivedAt = null;
+      groupFilter.savedAt = null;
+    }
     if (options?.includeMerged === false) {
       groupFilter.sessions = { none: { sessionStatus: "merged" } };
     }
@@ -6851,6 +6860,89 @@ export class SessionService {
       scopeType: "session",
       scopeId: latestSessionId ?? groupId,
       eventType: "session_group_archived",
+      payload: {
+        sessionGroupId: groupId,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType,
+      actorId,
+    });
+
+    return sessionGroup;
+  }
+
+  async saveGroupForLater(
+    groupId: string,
+    organizationId: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        organizationId: true,
+        sessions: { select: { id: true }, orderBy: { updatedAt: "desc" } },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.organizationId !== organizationId) throw new Error("Session group not found");
+
+    const savedAt = new Date();
+    await prisma.sessionGroup.update({
+      where: { id: groupId },
+      data: { savedAt },
+    });
+
+    const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
+    const latestSessionId = group.sessions[0]?.id;
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: latestSessionId ?? groupId,
+      eventType: "session_group_saved_for_later",
+      payload: {
+        sessionGroupId: groupId,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType,
+      actorId,
+    });
+
+    return sessionGroup;
+  }
+
+  async unsaveGroupForLater(
+    groupId: string,
+    organizationId: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        organizationId: true,
+        sessions: { select: { id: true }, orderBy: { updatedAt: "desc" } },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.organizationId !== organizationId) throw new Error("Session group not found");
+
+    await prisma.sessionGroup.update({
+      where: { id: groupId },
+      data: { savedAt: null },
+    });
+
+    const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
+    const latestSessionId = group.sessions[0]?.id;
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: latestSessionId ?? groupId,
+      eventType: "session_group_unsaved_for_later",
       payload: {
         sessionGroupId: groupId,
         ...(sessionGroup ? { sessionGroup } : {}),

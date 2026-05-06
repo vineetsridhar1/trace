@@ -56,6 +56,7 @@ function buildRowSignature(row: SessionGroupRow): string {
     row.branch ?? "",
     row.prUrl ?? "",
     row.archivedAt ?? "",
+    row.savedAt ?? "",
     row.worktreeDeleted ? "1" : "0",
     row.displaySessionStatus,
     row.displayAgentStatus,
@@ -94,12 +95,13 @@ function areRowSelectionsEqual(
 
 export function useSessionGroupRows(
   channelId: string,
-  options?: { archived?: boolean; status?: string },
+  options?: { archived?: boolean; saved?: boolean; status?: string },
 ): SessionGroupRow[] {
   const selectedRows = useStoreWithEqualityFn(
     useEntityStore,
     (state: EntityState): SessionGroupRowSelection[] => {
       const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
+      const shouldIncludeSaved = options?.saved === true;
       const rows: SessionGroupRowSelection[] = [];
 
       for (const group of Object.values(state.sessionGroups) as SessionGroupEntity[]) {
@@ -133,6 +135,7 @@ export function useSessionGroupRows(
         );
         const prUrl = group.prUrl as string | null | undefined;
         const archivedAt = group.archivedAt as string | null | undefined;
+        const savedAt = group.savedAt as string | null | undefined;
         const displaySessionStatus =
           groupSessions.length > 0
             ? getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl, archivedAt)
@@ -156,13 +159,17 @@ export function useSessionGroupRows(
 
         if (shouldIncludeArchived) {
           if (!group.archivedAt) continue;
+        } else if (shouldIncludeSaved) {
+          if (group.archivedAt || !savedAt) continue;
         } else if (group.archivedAt) {
+          continue;
+        } else if (savedAt) {
           continue;
         }
 
         if (options?.status) {
           if (row.displaySessionStatus !== options.status) continue;
-        } else if (row.displaySessionStatus === "merged") {
+        } else if (!shouldIncludeSaved && row.displaySessionStatus === "merged") {
           continue;
         }
 

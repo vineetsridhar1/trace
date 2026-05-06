@@ -315,6 +315,66 @@ describe("handleOrgEvent", () => {
     expect(harness.setActiveSessionGroupId).toHaveBeenCalledWith(null);
   });
 
+  it("saves a session group for later without stopping sessions", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          agentStatus: "active",
+        } as never,
+      },
+      sessionGroups: {
+        "group-1": { id: "group-1", status: "in_progress" } as never,
+      },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+    const harness = installBindings({ activeSessionGroupId: "group-1" });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_group_saved_for_later",
+        scopeType: "sessionGroup",
+        scopeId: "group-1",
+        payload: {
+          sessionGroupId: "group-1",
+          sessionGroup: { id: "group-1", savedAt: "2026-01-02T00:00:00.000Z" },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"].savedAt).toBe(
+      "2026-01-02T00:00:00.000Z",
+    );
+    expect(useEntityStore.getState().sessions["session-1"].agentStatus).toBe("active");
+    expect(harness.setActiveSessionGroupId).toHaveBeenCalledWith(null);
+  });
+
+  it("moves a saved session group back to the channel", () => {
+    useEntityStore.setState({
+      sessionGroups: {
+        "group-1": {
+          id: "group-1",
+          savedAt: "2026-01-02T00:00:00.000Z",
+        } as never,
+      },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_group_unsaved_for_later",
+        scopeType: "sessionGroup",
+        scopeId: "group-1",
+        payload: {
+          sessionGroupId: "group-1",
+          sessionGroup: { id: "group-1", savedAt: null },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"].savedAt).toBeNull();
+  });
+
   it("routes session_output question_pending into needs_input + bumps sort", () => {
     useEntityStore.setState({
       sessions: {

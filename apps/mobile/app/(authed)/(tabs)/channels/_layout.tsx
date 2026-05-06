@@ -45,7 +45,7 @@ export default function ChannelsLayout() {
       <Stack.Screen
         name="[id]/merged-archived"
         options={{
-          title: "Merged & Archived",
+          title: "Later, Merged & Archived",
           headerBackTitle: "Back",
         }}
       />

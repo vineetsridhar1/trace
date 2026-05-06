@@ -147,6 +147,24 @@ export const ARCHIVE_SESSION_GROUP_MUTATION = gql`
   }
 `;
 
+export const SAVE_SESSION_GROUP_FOR_LATER_MUTATION = gql`
+  mutation SaveSessionGroupForLater($id: ID!) {
+    saveSessionGroupForLater(id: $id) {
+      id
+      savedAt
+    }
+  }
+`;
+
+export const UNSAVE_SESSION_GROUP_FOR_LATER_MUTATION = gql`
+  mutation UnsaveSessionGroupForLater($id: ID!) {
+    unsaveSessionGroupForLater(id: $id) {
+      id
+      savedAt
+    }
+  }
+`;
+
 export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
   query AvailableSessionRuntimes($sessionId: ID!) {
     availableSessionRuntimes(sessionId: $sessionId) {

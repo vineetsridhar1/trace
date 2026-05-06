@@ -15,7 +15,7 @@ import { useTheme } from "@/theme";
 export default function MergedArchived() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const [segment, setSegment] = useState<MergedArchivedSegment>("merged");
+  const [segment, setSegment] = useState<MergedArchivedSegment>("later");
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const ids = useMergedArchivedSessionGroupIds(channelId, segment);
@@ -38,7 +38,7 @@ export default function MergedArchived() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Merged & Archived" }} />
+      <Stack.Screen options={{ title: "Later, Merged & Archived" }} />
       <FlashList
         // Re-mount on segment change so scroll resets to zero instead of
         // carrying over from the previous (often differently-sized) list.
@@ -94,6 +94,9 @@ function MergedArchivedEmpty({
   }
   if (segment === "archived") {
     return <EmptyState icon="archivebox" title="Nothing archived" />;
+  }
+  if (segment === "later") {
+    return <EmptyState icon="clock" title="Nothing saved for later" />;
   }
   return <EmptyState icon="checkmark.seal" title="Nothing merged yet" />;
 }
