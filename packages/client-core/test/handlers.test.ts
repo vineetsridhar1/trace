@@ -356,6 +356,41 @@ describe("handleOrgEvent", () => {
     expect(harness.setActiveSessionGroupId).toHaveBeenCalledWith(null);
   });
 
+  it("renames a session group from event payload", () => {
+    useEntityStore.setState({
+      sessionGroups: {
+        "group-1": {
+          id: "group-1",
+          name: "Old workspace",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        } as never,
+      },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_group_renamed",
+        scopeId: "session-1",
+        timestamp: "2026-01-02T00:00:00.000Z",
+        payload: {
+          sessionGroupId: "group-1",
+          name: "New workspace",
+          sessionGroup: {
+            id: "group-1",
+            name: "New workspace",
+            updatedAt: "2026-01-02T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      id: "group-1",
+      name: "New workspace",
+      updatedAt: "2026-01-02T00:00:00.000Z",
+    });
+  });
+
   it("routes session_output question_pending into needs_input + bumps sort", () => {
     useEntityStore.setState({
       sessions: {

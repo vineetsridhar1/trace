@@ -397,6 +397,7 @@ export type EventType =
   | "repo_updated"
   | "session_deleted"
   | "session_group_archived"
+  | "session_group_renamed"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -588,6 +589,7 @@ export type Mutation = {
   removeOrgMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
+  renameSessionGroup: SessionGroup;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
@@ -862,6 +864,11 @@ export type MutationRemoveQueuedMessageArgs = {
 
 export type MutationRenameChatArgs = {
   chatId: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+};
+
+export type MutationRenameSessionGroupArgs = {
+  id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
 };
 
@@ -2849,6 +2856,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationRenameChatArgs, "chatId" | "name">
+  >;
+  renameSessionGroup?: Resolver<
+    ResolversTypes["SessionGroup"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRenameSessionGroupArgs, "id" | "name">
   >;
   reorderChannelGroups?: Resolver<
     Array<ResolversTypes["ChannelGroup"]>,

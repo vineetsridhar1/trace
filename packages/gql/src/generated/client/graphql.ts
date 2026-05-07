@@ -396,6 +396,7 @@ export type EventType =
   | "repo_updated"
   | "session_deleted"
   | "session_group_archived"
+  | "session_group_renamed"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -587,6 +588,7 @@ export type Mutation = {
   removeOrgMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
+  renameSessionGroup: SessionGroup;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
@@ -861,6 +863,11 @@ export type MutationRemoveQueuedMessageArgs = {
 
 export type MutationRenameChatArgs = {
   chatId: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+};
+
+export type MutationRenameSessionGroupArgs = {
+  id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
 };
 
@@ -1858,6 +1865,7 @@ export type SessionGroupsQuery = {
       reasoningEffort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
+      workdir?: string | null;
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
@@ -1915,6 +1923,7 @@ export type FilteredSessionGroupsQuery = {
       reasoningEffort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
+      workdir?: string | null;
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
@@ -2224,6 +2233,7 @@ export type SessionGroupDetailQuery = {
       reasoningEffort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
+      workdir?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
       lastUserMessageAt?: string | null;
@@ -3128,6 +3138,7 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
+                      { kind: "Field", name: { kind: "Name", value: "workdir" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
@@ -3281,6 +3292,7 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
+                      { kind: "Field", name: { kind: "Name", value: "workdir" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
@@ -4184,6 +4196,7 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
+                      { kind: "Field", name: { kind: "Name", value: "workdir" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                       { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },

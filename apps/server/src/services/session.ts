@@ -1850,6 +1850,61 @@ export class SessionService {
     };
   }
 
+  async renameGroup(
+    groupId: string,
+    organizationId: string,
+    name: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new ValidationError("Workspace name cannot be empty");
+    }
+
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: groupId, organizationId },
+      select: {
+        id: true,
+        name: true,
+        sessions: {
+          select: { id: true },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+        },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+
+    if (group.name !== trimmedName) {
+      await prisma.sessionGroup.update({
+        where: { id: groupId },
+        data: { name: trimmedName },
+      });
+    }
+
+    const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
+    if (!sessionGroup) throw new Error("Session group not found");
+
+    if (group.name !== trimmedName) {
+      await eventService.create({
+        organizationId,
+        scopeType: "session",
+        scopeId: group.sessions[0]?.id ?? groupId,
+        eventType: "session_group_renamed",
+        payload: {
+          sessionGroupId: groupId,
+          name: trimmedName,
+          sessionGroup,
+        },
+        actorType,
+        actorId,
+      });
+    }
+
+    return sessionGroup;
+  }
+
   async getGroupStatusSources(sessionGroupId: string) {
     return prisma.session.findMany({
       where: { sessionGroupId },

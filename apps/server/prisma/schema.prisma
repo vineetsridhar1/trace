@@ -182,6 +182,7 @@ enum EventType {
   session_pr_merged
   session_pr_closed
   session_group_archived
+  session_group_renamed
   ticket_assigned
   ticket_unassigned
   ticket_linked

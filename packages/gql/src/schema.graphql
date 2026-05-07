@@ -238,6 +238,7 @@ enum EventType {
   session_pr_merged
   session_pr_closed
   session_group_archived
+  session_group_renamed
   chat_created
   chat_member_added
   chat_member_removed
@@ -1089,6 +1090,7 @@ type Mutation {
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
+  renameSessionGroup(id: ID!, name: String!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!

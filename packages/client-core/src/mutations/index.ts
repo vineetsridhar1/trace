@@ -183,6 +183,15 @@ export const ARCHIVE_SESSION_GROUP_MUTATION = gql`
   }
 `;
 
+export const RENAME_SESSION_GROUP_MUTATION = gql`
+  mutation RenameSessionGroup($id: ID!, $name: String!) {
+    renameSessionGroup(id: $id, name: $name) {
+      id
+      name
+    }
+  }
+`;
+
 export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
   query AvailableSessionRuntimes($sessionId: ID!) {
     availableSessionRuntimes(sessionId: $sessionId) {

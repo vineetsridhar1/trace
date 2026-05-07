@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CellContextMenuEvent, GridApi } from "ag-grid-community";
+import { toast } from "sonner";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
 import { motion } from "framer-motion";
+import { client } from "../../lib/urql";
+import { applyOptimisticPatch } from "../../lib/optimistic-entity";
+import { RENAME_SESSION_GROUP_MUTATION } from "@trace/client-core";
+import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
 import { FILTER_STORAGE_KEY_PREFIX, isSessionStatusHeaderRow } from "./sessions-table-types";
-import { applySessionsColumnMode } from "./sessions-table-columns";
+import { applySessionsColumnMode, SESSION_COLUMN_IDS } from "./sessions-table-columns";
 import { SessionRowContextMenu, type SessionRowContextMenuState } from "./SessionRowContextMenu";
 import { SessionsGridTable } from "./SessionsGridTable";
 import { useCompactTableMode } from "./useCompactTableMode";
@@ -25,6 +30,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     sessionCount: number;
   } | null>(null);
   const [contextMenu, setContextMenu] = useState<SessionRowContextMenuState | null>(null);
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
 
   const filteredGroups = useSessionGroupRows(channelId);
   const { gridRows, onFilterModelChanged, onToggleStatusGroup } =
@@ -66,6 +72,52 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     });
   }, []);
 
+  const handleRename = useCallback((group: SessionGroupRow) => {
+    setRenamingGroupId(group.id);
+  }, []);
+
+  const handleRenameCancel = useCallback(() => {
+    setRenamingGroupId(null);
+  }, []);
+
+  const handleRenameSubmit = useCallback((group: SessionGroupRow, name: string) => {
+    const trimmed = name.trim();
+    setRenamingGroupId(null);
+    if (!trimmed || trimmed === group.name.trim()) return;
+
+    const rollback = applyOptimisticPatch("sessionGroups", group.id, { name: trimmed });
+    void client
+      .mutation(RENAME_SESSION_GROUP_MUTATION, { id: group.id, name: trimmed })
+      .toPromise()
+      .then((result) => {
+        if (!result.error) return;
+        rollback();
+        toast.error("Failed to rename workspace", { description: result.error.message });
+      })
+      .catch((error: unknown) => {
+        rollback();
+        toast.error("Failed to rename workspace", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+      });
+  }, []);
+
+  const renameContext = useMemo<SessionGroupRenameContext>(
+    () => ({
+      renamingGroupId,
+      onRenameCancel: handleRenameCancel,
+      onRenameSubmit: handleRenameSubmit,
+    }),
+    [handleRenameCancel, handleRenameSubmit, renamingGroupId],
+  );
+
+  useEffect(() => {
+    gridApiRef.current?.refreshCells({
+      columns: [SESSION_COLUMN_IDS.compactSummary, SESSION_COLUMN_IDS.name],
+      force: true,
+    });
+  }, [renamingGroupId]);
+
   const handleCellContextMenu = useCallback((event: CellContextMenuEvent<SessionGridRow>) => {
     const row = event.data;
     if (!row || isSessionStatusHeaderRow(row)) return;
@@ -75,7 +127,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       setContextMenu({
         row,
         x: Math.max(8, Math.min(event.event.clientX, window.innerWidth - 184)),
-        y: Math.max(8, Math.min(event.event.clientY, window.innerHeight - 148)),
+        y: Math.max(8, Math.min(event.event.clientY, window.innerHeight - 184)),
       });
     }
   }, []);
@@ -93,6 +145,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       applyColumnMode(event.api);
     },
     onToggleStatusGroup,
+    renameContext,
   });
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
@@ -127,6 +180,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           onArchive={handleArchive}
           onClose={() => setContextMenu(null)}
           onCopyLink={handleCopyLink}
+          onRename={handleRename}
         />
       )}
     </div>

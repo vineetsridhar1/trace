@@ -282,6 +282,15 @@ export const sessionMutations = {
   archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.archiveGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },
+  renameSessionGroup: (_: unknown, args: { id: string; name: string }, ctx: Context) => {
+    return sessionService.renameGroup(
+      args.id,
+      requireOrgContext(ctx),
+      args.name,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
   deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },

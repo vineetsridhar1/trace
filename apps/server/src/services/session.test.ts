@@ -4230,6 +4230,65 @@ describe("SessionService", () => {
     });
   });
 
+  describe("renameGroup", () => {
+    it("renames a workspace and emits session_group_renamed", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        name: "Old workspace",
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ id: "group-1", name: "New workspace" }),
+      );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ id: "group-1", name: "New workspace" }),
+        sessions: [],
+      });
+
+      const result = await service.renameGroup(
+        "group-1",
+        "org-1",
+        "  New workspace  ",
+        "user",
+        "user-1",
+      );
+
+      expect(result.name).toBe("New workspace");
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { name: "New workspace" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: "org-1",
+          scopeType: "session",
+          scopeId: "session-1",
+          eventType: "session_group_renamed",
+          payload: expect.objectContaining({
+            sessionGroupId: "group-1",
+            name: "New workspace",
+            sessionGroup: expect.objectContaining({
+              id: "group-1",
+              name: "New workspace",
+            }),
+          }),
+          actorType: "user",
+          actorId: "user-1",
+        }),
+      );
+    });
+
+    it("rejects empty workspace names", async () => {
+      await expect(service.renameGroup("group-1", "org-1", "   ")).rejects.toThrow(
+        "Workspace name cannot be empty",
+      );
+
+      expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe("delete", () => {
     it("removes the session group when the last session is deleted", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());

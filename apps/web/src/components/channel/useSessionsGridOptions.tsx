@@ -1,6 +1,7 @@
 import type {
   CellContextMenuEvent,
   FilterChangedEvent,
+  GridOptions,
   GridReadyEvent,
 } from "ag-grid-community";
 import { navigateToSessionGroup } from "../../stores/ui";
@@ -16,6 +17,7 @@ export function useSessionsGridOptions({
   onGridReady,
   onFilterModelChanged,
   onToggleStatusGroup,
+  renameContext,
 }: {
   channelId: string;
   filterStorageKey: string;
@@ -24,8 +26,10 @@ export function useSessionsGridOptions({
   onGridReady?: (event: GridReadyEvent<SessionGridRow>) => void;
   onFilterModelChanged: (model: Record<string, unknown> | null) => void;
   onToggleStatusGroup: (status: string) => void;
+  renameContext?: GridOptions<SessionGridRow>["context"];
 }) {
   return {
+    context: renameContext,
     onRowClicked: (event: { data?: SessionGridRow }) => {
       if (isSessionStatusHeaderRow(event.data)) {
         onToggleStatusGroup(event.data._status);
