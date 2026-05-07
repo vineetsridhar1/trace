@@ -1,8 +1,51 @@
-# Trace Kubernetes Job Launcher Reference
+# Trace Kubernetes Job Launcher
 
-This reference describes an org-owned launcher that maps Trace provisioned lifecycle requests to
-Kubernetes Jobs. It is intentionally outside Trace core and can be implemented as a small HTTPS
-service running inside or outside the cluster.
+This example is an org-owned launcher that maps Trace provisioned lifecycle requests to Kubernetes
+Jobs. It is intentionally outside Trace core and runs as a small HTTPS service inside or outside the
+cluster.
+
+## Run Locally
+
+```bash
+cd examples/launchers/kubernetes
+pnpm install --frozen-lockfile
+cp .env.example .env
+pnpm dev
+```
+
+For local development with a kubeconfig, the launcher uses `loadFromDefault()`. In-cluster
+deployments use the mounted service account automatically.
+
+## Configuration
+
+```env
+PORT=8787
+TRACE_LAUNCHER_BEARER_TOKEN=replace-me
+K8S_NAMESPACE=trace-runtimes
+TRACE_RUNTIME_IMAGE=registry.example.com/trace-agent-runtime:latest
+TRACE_RUNTIME_SERVICE_ACCOUNT=trace-runtime
+TRACE_RUNTIME_CPU_REQUEST=1
+TRACE_RUNTIME_MEMORY_REQUEST=2Gi
+TRACE_RUNTIME_CPU_LIMIT=4
+TRACE_RUNTIME_MEMORY_LIMIT=8Gi
+TRACE_RUNTIME_IMAGE_PULL_SECRET_NAMES=registry-credentials
+TRACE_RUNTIME_ENV_SECRET_NAMES=trace-runtime-tool-secrets
+TRACE_RUNTIME_PASSTHROUGH_ENV=OPENAI_API_KEY,ANTHROPIC_API_KEY,GITHUB_TOKEN
+```
+
+`TRACE_RUNTIME_IMAGE_PULL_SECRET_NAMES` is used as image pull secrets for the runtime Pod.
+`TRACE_RUNTIME_ENV_SECRET_NAMES` is added with `envFrom` for tool and repo credentials. For local
+development only, selected launcher env vars can also be copied into the runtime Pod with
+`TRACE_RUNTIME_PASSTHROUGH_ENV`.
+
+## Build
+
+```bash
+pnpm test
+pnpm build
+docker build -t registry.example.com/trace-kubernetes-launcher:latest .
+docker push registry.example.com/trace-kubernetes-launcher:latest
+```
 
 ## Shape
 
@@ -90,21 +133,43 @@ For `POST /trace/session-status`, read the Job and its Pods.
 
 Map Kubernetes state to Trace status:
 
-| Kubernetes state | Trace status |
-| --- | --- |
-| Job exists, no Pod scheduled | `provisioning` |
-| Pod `Pending` or containers waiting | `booting` |
-| Pod `Running` | `connected` |
-| Job deletion timestamp set | `stopping` |
+| Kubernetes state                    | Trace status                               |
+| ----------------------------------- | ------------------------------------------ |
+| Job exists, no Pod scheduled        | `provisioning`                             |
+| Pod `Pending` or containers waiting | `booting`                                  |
+| Pod `Running`                       | `connected`                                |
+| Job deletion timestamp set          | `stopping`                                 |
 | Job succeeded, failed, or not found | `stopped` or `failed` based on exit reason |
-| unreadable/ambiguous state | `unknown` |
+| unreadable/ambiguous state          | `unknown`                                  |
 
 Trace still waits for runtime bridge readiness. A running Pod is not enough to mark the agent ready
 unless the bridge has connected.
 
 ## RBAC
 
-Scope the launcher service account to one namespace whenever possible:
+Scope the launcher service account to one namespace whenever possible.
+
+Launcher service account:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trace-kubernetes-launcher
+  namespace: trace
+```
+
+Runtime service account:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trace-runtime
+  namespace: trace
+```
+
+Launcher Role:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -122,6 +187,24 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["create", "get", "delete"]
+```
+
+RoleBinding:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trace-runtime-launcher
+  namespace: trace
+subjects:
+  - kind: ServiceAccount
+    name: trace-kubernetes-launcher
+    namespace: trace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trace-runtime-launcher
 ```
 
 Avoid cluster-wide permissions unless the launcher intentionally manages runtimes across namespaces.

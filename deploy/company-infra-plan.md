@@ -116,7 +116,8 @@ Runtime Pods need these secrets or env vars depending on enabled tools/repos:
 
 ## 3. Build The EKS Launcher Service
 
-Implement a small HTTPS service reachable by the Trace backend:
+Use or adapt the executable example in `examples/launchers/kubernetes`. It is a small HTTPS service
+reachable by the Trace backend:
 
 - `POST /trace/start-session`
 - `POST /trace/stop-session`
@@ -267,7 +268,6 @@ The current code does not bake company endpoints into the packaged app by itself
 
 ## Open Implementation Gaps
 
-- There is only a Kubernetes launcher reference doc today; there is no executable EKS launcher
-  service in the repo.
-- There are no Kubernetes manifests or Helm chart for the Trace server, launcher, or runtime RBAC.
+- There is an executable Kubernetes launcher example, but no production Helm chart yet for the
+  Trace server, launcher, or runtime RBAC.
 - The desktop package has runtime endpoint env vars but no build-time company endpoint config.
