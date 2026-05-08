@@ -4,6 +4,7 @@ import { Check, MessageSquarePlus, MessageSquareText, Trash2, X } from "lucide-r
 
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Textarea } from "./textarea";
 import type { MarkdownSteerBlock } from "./markdownSteering";
 
@@ -49,6 +50,17 @@ export function SteerableMarkdownBlock({
   const handleOpen = useCallback(() => {
     onOpen(block.id);
   }, [block.id, onOpen]);
+
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        handleOpen();
+      } else {
+        onCancel();
+      }
+    },
+    [handleOpen, onCancel],
+  );
 
   const handleCancel = useCallback(() => {
     setDraft(comment);
@@ -98,53 +110,47 @@ export function SteerableMarkdownBlock({
       tabIndex={0}
       onKeyDown={handleKeyDown}
       className={cn(
-        "group/steer relative -mx-2 my-1 rounded-md border border-transparent px-2 py-1.5 transition-colors outline-none",
-        "hover:border-accent/20 hover:bg-surface-elevated/40 focus-visible:border-accent/40 focus-visible:bg-surface-elevated/40 focus-visible:ring-1 focus-visible:ring-accent/40",
-        hasComment && "border-accent/20 bg-surface-elevated/40",
-        active && "border-accent/30 bg-surface-elevated/50",
+        "group/steer relative -mx-2 my-1 rounded-md px-2 py-1.5 outline-none transition-colors",
+        "focus-visible:ring-1 focus-visible:ring-accent/40",
       )}
     >
       <div className="min-w-0 pr-24">{children}</div>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        onClick={handleOpen}
-        className={cn(
-          "absolute right-1.5 top-1.5 h-6 rounded-md border border-border bg-surface-deep/95 px-2 text-[11px] text-muted-foreground shadow-sm transition-opacity hover:bg-surface-elevated hover:text-foreground",
-          "opacity-0 pointer-events-none group-hover/steer:pointer-events-auto group-hover/steer:opacity-100 group-focus-within/steer:pointer-events-auto group-focus-within/steer:opacity-100",
-          active && "pointer-events-auto opacity-100",
-        )}
-      >
-        <MessageSquarePlus size={12} />
-        {hasComment ? "Edit" : "Comment"}
-      </Button>
+      <Popover open={active} onOpenChange={handleOpenChange}>
+        <PopoverTrigger
+          title={hasComment ? "Edit comment" : "Add comment"}
+          aria-label={hasComment ? "Edit comment" : "Add comment"}
+          className={cn(
+            "absolute right-0 top-1.5 z-10 flex h-6 translate-x-1/2 items-center justify-center gap-1 rounded-full border text-[11px] shadow-sm transition-all outline-none",
+            "focus-visible:ring-2 focus-visible:ring-accent/40",
+            hasComment
+              ? "min-w-8 border-accent/40 bg-accent px-2 text-accent-foreground opacity-100 hover:bg-accent/90"
+              : "pointer-events-none w-6 border-border bg-surface-deep text-muted-foreground opacity-0 hover:bg-surface-elevated hover:text-foreground group-hover/steer:pointer-events-auto group-hover/steer:opacity-100 group-focus-within/steer:pointer-events-auto group-focus-within/steer:opacity-100",
+            active && "pointer-events-auto opacity-100",
+          )}
+        >
+          {hasComment ? <MessageSquareText size={12} /> : <MessageSquarePlus size={12} />}
+          {hasComment && <span>1</span>}
+        </PopoverTrigger>
 
-      {hasComment && !active && (
-        <div className="ml-4 mt-1.5 border-l border-accent/25 pl-2">
-          <div className="rounded-md border border-border bg-surface px-2 py-1.5 shadow-sm">
-            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              <MessageSquareText size={11} className="text-accent" />
-              Comment
-            </div>
-            <p className="max-h-16 overflow-hidden text-xs leading-5 text-foreground/90">
-              {comment}
-            </p>
+        <PopoverContent
+          side="right"
+          align="start"
+          sideOffset={10}
+          className="w-80 gap-2 rounded-md border border-border bg-surface p-2 shadow-xl ring-1 ring-foreground/10"
+        >
+          <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
+            <MessageSquareText size={13} className="text-accent" />
+            {hasComment ? "Edit comment" : "Add comment"}
           </div>
-        </div>
-      )}
-
-      {active && (
-        <div className="ml-4 mt-1.5 border-l border-accent/25 pl-2">
-          <div className="rounded-md border border-border bg-surface p-2 shadow-sm">
+          <div>
             <Textarea
               ref={textareaRef}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleTextareaKeyDown}
               placeholder="Add a comment..."
-              className="min-h-16 resize-y rounded-md border-border bg-surface-deep px-2 py-1.5 text-xs"
+              className="min-h-20 resize-y rounded-md border-border bg-surface-deep px-2 py-1.5 text-xs"
             />
             <div className="mt-1.5 flex items-center justify-between gap-1">
               <div>
@@ -187,8 +193,8 @@ export function SteerableMarkdownBlock({
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
