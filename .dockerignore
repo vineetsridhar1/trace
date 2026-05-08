@@ -21,5 +21,8 @@ coverage/
 !apps/container-bridge/
 !apps/container-bridge/Dockerfile
 !apps/container-bridge/package.json
+!apps/container-bridge/tsconfig.json
+!apps/container-bridge/src/
+!apps/container-bridge/src/**
 !apps/container-bridge/dist/
 !apps/container-bridge/dist/**

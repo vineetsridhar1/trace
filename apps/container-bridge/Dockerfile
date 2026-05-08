@@ -1,3 +1,17 @@
+FROM node:22-slim AS base
+RUN corepack enable && corepack prepare pnpm@10.7.0 --activate
+WORKDIR /repo
+
+FROM base AS build
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/container-bridge/package.json apps/container-bridge/
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+COPY packages/shared/ packages/shared/
+COPY apps/container-bridge/ apps/container-bridge/
+RUN pnpm --filter @trace/shared build && pnpm --filter @trace/container-bridge build
+
 FROM node:22-slim
 
 RUN apt-get update && \
@@ -20,12 +34,12 @@ WORKDIR /app
 RUN npm init -y && npm install ws node-pty && \
     (chmod +x node_modules/node-pty/prebuilds/linux-*/spawn-helper 2>/dev/null || true)
 
-# Copy pre-built shared package as a node_modules dependency
-COPY packages/shared/dist/ ./node_modules/@trace/shared/dist/
-COPY packages/shared/package.json ./node_modules/@trace/shared/
+# Copy built shared package as a node_modules dependency
+COPY --from=build /repo/packages/shared/dist/ ./node_modules/@trace/shared/dist/
+COPY --from=build /repo/packages/shared/package.json ./node_modules/@trace/shared/
 
-# Copy pre-built container-bridge
-COPY apps/container-bridge/dist/ ./dist/
+# Copy built container-bridge
+COPY --from=build /repo/apps/container-bridge/dist/ ./dist/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root
 RUN useradd -m -s /bin/bash coder && \

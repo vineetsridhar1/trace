@@ -94,14 +94,13 @@ the web build can leave `VITE_API_URL` empty. If they are split across domains, 
 ## 2. Build And Publish Runtime Image
 
 The EKS Jobs should run the container bridge image from `apps/container-bridge/Dockerfile`.
-That Dockerfile expects TypeScript output to already exist.
+That Dockerfile builds `apps/container-bridge/src/index.ts` into `/app/dist/index.js` inside the
+image. The launcher never needs the Trace repo or `dist/index.js`; it only needs the final image
+reference.
 
 Build flow:
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm --filter @trace/shared build
-pnpm --filter @trace/container-bridge build
 docker build -f apps/container-bridge/Dockerfile -t <registry>/trace-agent-runtime:<tag> .
 docker push <registry>/trace-agent-runtime:<tag>
 ```
