@@ -5,8 +5,11 @@ export interface MarkdownSteerBlock {
 }
 
 export interface MarkdownSteerComment extends MarkdownSteerBlock {
+  commentId: string;
   text: string;
 }
+
+export type MarkdownSteerCommentsByBlock = Record<string, MarkdownSteerComment[]>;
 
 interface HastPoint {
   offset?: number;

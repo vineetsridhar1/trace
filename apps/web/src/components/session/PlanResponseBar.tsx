@@ -11,29 +11,31 @@ import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
-import type { MarkdownSteerComment } from "../ui/markdownSteering";
+import type { MarkdownSteerComment, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 
 interface PlanResponseBarProps {
   sessionId: string;
   planContent: string;
-  planComments?: Record<string, MarkdownSteerComment>;
+  planComments?: MarkdownSteerCommentsByBlock;
   onClearPlanComments?: () => void;
   onDismiss: () => void;
 }
 
 const PRESETS = ["Approve (new session)", "Approve (keep context)"];
 
-function getCommentIndex(comment: MarkdownSteerComment): number {
-  const [index] = comment.id.split("-");
+function getCommentGroupIndex(comments: MarkdownSteerComment[]): number {
+  const [index] = comments[0]?.id.split("-") ?? [];
   const parsed = Number(index);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function buildCommentPrompt(comments: MarkdownSteerComment[], note: string): string {
-  const commentText = comments
+function buildCommentPrompt(commentGroups: MarkdownSteerComment[][], note: string): string {
+  const commentText = commentGroups
     .map(
-      (comment, index) =>
-        `Comment ${index + 1}\n\nSelected plan block:\n${comment.markdown}\n\nComment:\n${comment.text}`,
+      (comments, index) =>
+        `Block ${index + 1}\n\nSelected plan block:\n${comments[0]?.markdown ?? ""}\n\nComments:\n${comments
+          .map((comment, commentIndex) => `${commentIndex + 1}. ${comment.text}`)
+          .join("\n")}`,
     )
     .join("\n\n---\n\n");
   const noteText = note ? `\n\nOverall note:\n${note}` : "";
@@ -51,12 +53,14 @@ export function PlanResponseBar({
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
-  const commentList = useMemo(
+  const commentGroups = useMemo(
     () =>
-      Object.values(planComments ?? {}).sort((a, b) => getCommentIndex(a) - getCommentIndex(b)),
+      Object.values(planComments ?? {})
+        .filter((comments) => comments.length > 0)
+        .sort((a, b) => getCommentGroupIndex(a) - getCommentGroupIndex(b)),
     [planComments],
   );
-  const commentCount = commentList.length;
+  const commentCount = commentGroups.reduce((sum, comments) => sum + comments.length, 0);
   const hasComments = commentCount > 0;
   const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
   const openSessionTab = useUIStore(
@@ -160,7 +164,7 @@ export function PlanResponseBar({
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
           text: hasComments
-            ? buildCommentPrompt(commentList, text)
+            ? buildCommentPrompt(commentGroups, text)
             : `Please revise the plan: ${text}`,
           interactionMode: "plan",
         })
@@ -170,7 +174,7 @@ export function PlanResponseBar({
     } finally {
       setSending(false);
     }
-  }, [commentList, feedback, hasComments, onClearPlanComments, sending, sessionId]);
+  }, [commentGroups, feedback, hasComments, onClearPlanComments, sending, sessionId]);
 
   const handleSubmit = useCallback(() => {
     if (selected === "Approve (new session)") {

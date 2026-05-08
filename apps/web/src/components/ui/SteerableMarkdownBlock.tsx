@@ -6,32 +6,34 @@ import { cn } from "@/lib/utils";
 import { Button } from "./button";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Textarea } from "./textarea";
-import type { MarkdownSteerBlock } from "./markdownSteering";
+import type { MarkdownSteerBlock, MarkdownSteerComment } from "./markdownSteering";
 
 interface SteerableMarkdownBlockProps {
   block: MarkdownSteerBlock;
-  comment: string;
+  comments: MarkdownSteerComment[];
   active: boolean;
   children: ReactNode;
   onOpen: (blockId: string) => void;
   onCancel: () => void;
-  onSave: (block: MarkdownSteerBlock, text: string) => void;
-  onRemove: (blockId: string) => void;
+  onAdd: (block: MarkdownSteerBlock, text: string) => void;
+  onRemove: (blockId: string, commentId: string) => void;
 }
 
 export function SteerableMarkdownBlock({
   block,
-  comment,
+  comments,
   active,
   children,
   onOpen,
   onCancel,
-  onSave,
+  onAdd,
   onRemove,
 }: SteerableMarkdownBlockProps) {
   const [draft, setDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const hasComment = comment.trim().length > 0;
+  const commentCount = comments.length;
+  const hasComments = commentCount > 0;
+  const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
 
   useEffect(() => {
     if (!active) {
@@ -39,13 +41,13 @@ export function SteerableMarkdownBlock({
       return;
     }
 
-    setDraft(comment);
+    setDraft("");
     const frameId = window.requestAnimationFrame(() => {
       textareaRef.current?.focus();
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [active, comment]);
+  }, [active]);
 
   const handleOpen = useCallback(() => {
     onOpen(block.id);
@@ -63,21 +65,24 @@ export function SteerableMarkdownBlock({
   );
 
   const handleCancel = useCallback(() => {
-    setDraft(comment);
+    setDraft("");
     onCancel();
-  }, [comment, onCancel]);
+  }, [onCancel]);
 
   const handleSave = useCallback(() => {
     const text = draft.trim();
     if (!text) return;
 
-    onSave(block, text);
-  }, [block, draft, onSave]);
-
-  const handleRemove = useCallback(() => {
+    onAdd(block, text);
     setDraft("");
-    onRemove(block.id);
-  }, [block.id, onRemove]);
+  }, [block, draft, onAdd]);
+
+  const handleRemove = useCallback(
+    (commentId: string) => {
+      onRemove(block.id, commentId);
+    },
+    [block.id, onRemove],
+  );
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -118,19 +123,19 @@ export function SteerableMarkdownBlock({
 
       <Popover open={active} onOpenChange={handleOpenChange}>
         <PopoverTrigger
-          title={hasComment ? "Edit comment" : "Add comment"}
-          aria-label={hasComment ? "Edit comment" : "Add comment"}
+          title={hasComments ? "View comments" : "Add comment"}
+          aria-label={hasComments ? "View comments" : "Add comment"}
           className={cn(
             "absolute right-0 top-1.5 z-10 flex h-6 translate-x-1/2 items-center justify-center gap-1 rounded-full border text-[11px] shadow-sm transition-all outline-none",
             "focus-visible:ring-2 focus-visible:ring-accent/40",
-            hasComment
+            hasComments
               ? "min-w-8 border-accent/40 bg-accent px-2 text-accent-foreground opacity-100 hover:bg-accent/90"
               : "pointer-events-none w-6 border-border bg-surface-deep text-muted-foreground opacity-0 hover:bg-surface-elevated hover:text-foreground group-hover/steer:pointer-events-auto group-hover/steer:opacity-100 group-focus-within/steer:pointer-events-auto group-focus-within/steer:opacity-100",
             active && "pointer-events-auto opacity-100",
           )}
         >
-          {hasComment ? <MessageSquareText size={12} /> : <MessageSquarePlus size={12} />}
-          {hasComment && <span>1</span>}
+          {hasComments ? <MessageSquareText size={12} /> : <MessageSquarePlus size={12} />}
+          {hasComments && <span>{commentCount}</span>}
         </PopoverTrigger>
 
         <PopoverContent
@@ -141,8 +146,33 @@ export function SteerableMarkdownBlock({
         >
           <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
             <MessageSquareText size={13} className="text-accent" />
-            {hasComment ? "Edit comment" : "Add comment"}
+            {hasComments ? commentLabel : "Add comment"}
           </div>
+          {hasComments && (
+            <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-surface-deep/60 p-1">
+              {comments.map((comment) => (
+                <div
+                  key={comment.commentId}
+                  className="group/comment flex items-start gap-2 rounded-md px-2 py-1.5 text-xs leading-5 text-foreground/90 hover:bg-surface-elevated"
+                >
+                  <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+                    {comment.text}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => handleRemove(comment.commentId)}
+                    title="Remove comment"
+                    aria-label="Remove comment"
+                    className="opacity-0 text-muted-foreground hover:text-red-400 group-hover/comment:opacity-100"
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
           <div>
             <Textarea
               ref={textareaRef}
@@ -153,21 +183,7 @@ export function SteerableMarkdownBlock({
               className="min-h-20 resize-y rounded-md border-border bg-surface-deep px-2 py-1.5 text-xs"
             />
             <div className="mt-1.5 flex items-center justify-between gap-1">
-              <div>
-                {hasComment && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={handleRemove}
-                    title="Remove comment"
-                    aria-label="Remove comment"
-                    className="text-muted-foreground hover:text-red-400"
-                  >
-                    <Trash2 size={12} />
-                  </Button>
-                )}
-              </div>
+              <div />
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -188,7 +204,7 @@ export function SteerableMarkdownBlock({
                   className="h-6 rounded-md bg-accent px-2 text-[11px] text-accent-foreground hover:bg-accent/90"
                 >
                   <Check size={12} />
-                  Save
+                  Add
                 </Button>
               </div>
             </div>

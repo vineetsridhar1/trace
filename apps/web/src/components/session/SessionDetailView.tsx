@@ -28,7 +28,7 @@ import { isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
-import type { MarkdownSteerBlock, MarkdownSteerComment } from "../ui/markdownSteering";
+import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
 import {
   DISMISS_SESSION_MUTATION,
@@ -372,26 +372,35 @@ export function SessionDetailView({
     return null;
   }, [nodes, sessionStatus]);
 
-  const [planComments, setPlanComments] = useState<Record<string, MarkdownSteerComment>>({});
+  const [planComments, setPlanComments] = useState<MarkdownSteerCommentsByBlock>({});
 
   useEffect(() => {
     setPlanComments({});
   }, [activePlan?.node.id]);
 
-  const handleSavePlanComment = useCallback((block: MarkdownSteerBlock, text: string) => {
+  const handleAddPlanComment = useCallback((block: MarkdownSteerBlock, text: string) => {
     setPlanComments((current) => ({
       ...current,
-      [block.id]: {
-        ...block,
-        text,
-      },
+      [block.id]: [
+        ...(current[block.id] ?? []),
+        {
+          ...block,
+          commentId: `${block.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+          text,
+        },
+      ],
     }));
   }, []);
 
-  const handleRemovePlanComment = useCallback((blockId: string) => {
+  const handleRemovePlanComment = useCallback((blockId: string, commentId: string) => {
     setPlanComments((current) => {
       const next = { ...current };
-      delete next[blockId];
+      const blockComments = next[blockId]?.filter((comment) => comment.commentId !== commentId);
+      if (blockComments && blockComments.length > 0) {
+        next[blockId] = blockComments;
+      } else {
+        delete next[blockId];
+      }
       return next;
     });
   }, []);
@@ -469,7 +478,7 @@ export function SessionDetailView({
                 onScrollComplete={onScrollComplete}
                 activePlanId={activePlan?.node.id}
                 planComments={planComments}
-                onSavePlanComment={handleSavePlanComment}
+                onAddPlanComment={handleAddPlanComment}
                 onRemovePlanComment={handleRemovePlanComment}
               />
             )}

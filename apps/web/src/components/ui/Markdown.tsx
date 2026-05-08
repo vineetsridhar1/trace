@@ -6,16 +6,16 @@ import { useFileOpen } from "../session/FileOpenContext";
 import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
 import {
   createSteerableBlocksPlugin,
-  type MarkdownSteerComment,
+  type MarkdownSteerCommentsByBlock,
   type MarkdownSteerBlock,
 } from "./markdownSteering";
 
 interface MarkdownProps {
   children: string;
   steerableBlocks?: boolean;
-  comments?: Record<string, MarkdownSteerComment>;
-  onSaveComment?: (block: MarkdownSteerBlock, text: string) => void;
-  onRemoveComment?: (blockId: string) => void;
+  comments?: MarkdownSteerCommentsByBlock;
+  onAddComment?: (block: MarkdownSteerBlock, text: string) => void;
+  onRemoveComment?: (blockId: string, commentId: string) => void;
 }
 
 interface SteerableDivProps extends ComponentPropsWithoutRef<"div"> {
@@ -76,12 +76,12 @@ export function Markdown({
   children,
   steerableBlocks = false,
   comments,
-  onSaveComment,
+  onAddComment,
   onRemoveComment,
 }: MarkdownProps) {
   const fileOpen = useFileOpen();
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
-  const canSteer = steerableBlocks && !!onSaveComment && !!onRemoveComment;
+  const canSteer = steerableBlocks && !!onAddComment && !!onRemoveComment;
 
   const linkComponent = useMemo(() => {
     if (!fileOpen) return ExternalLink;
@@ -90,18 +90,16 @@ export function Markdown({
     };
   }, [fileOpen]);
 
-  const handleSaveComment = useCallback(
+  const handleAddComment = useCallback(
     (block: MarkdownSteerBlock, text: string) => {
-      onSaveComment?.(block, text);
-      setActiveBlockId(null);
+      onAddComment?.(block, text);
     },
-    [onSaveComment],
+    [onAddComment],
   );
 
   const handleRemoveComment = useCallback(
-    (blockId: string) => {
-      onRemoveComment?.(blockId);
-      setActiveBlockId(null);
+    (blockId: string, commentId: string) => {
+      onRemoveComment?.(blockId, commentId);
     },
     [onRemoveComment],
   );
@@ -130,11 +128,11 @@ export function Markdown({
       return (
         <SteerableMarkdownBlock
           block={{ id: blockId, markdown: blockMarkdown, type: blockType }}
-          comment={comments?.[blockId]?.text ?? ""}
+          comments={comments?.[blockId] ?? []}
           active={activeBlockId === blockId}
           onOpen={setActiveBlockId}
           onCancel={() => setActiveBlockId(null)}
-          onSave={handleSaveComment}
+          onAdd={handleAddComment}
           onRemove={handleRemoveComment}
         >
           {blockChildren as ReactNode}
@@ -147,8 +145,8 @@ export function Markdown({
     activeBlockId,
     comments,
     canSteer,
+    handleAddComment,
     handleRemoveComment,
-    handleSaveComment,
     linkComponent,
   ]);
 

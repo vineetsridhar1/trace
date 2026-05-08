@@ -9,7 +9,7 @@ import { PlanReviewCard } from "./messages/PlanReviewCard";
 import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
-import type { MarkdownSteerBlock, MarkdownSteerComment } from "../ui/markdownSteering";
+import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
@@ -27,9 +27,9 @@ export interface SessionMessageListProps {
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
   activePlanId?: string | null;
-  planComments?: Record<string, MarkdownSteerComment>;
-  onSavePlanComment?: (block: MarkdownSteerBlock, text: string) => void;
-  onRemovePlanComment?: (blockId: string) => void;
+  planComments?: MarkdownSteerCommentsByBlock;
+  onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
+  onRemovePlanComment?: (blockId: string, commentId: string) => void;
 }
 
 export function SessionMessageList({
@@ -45,7 +45,7 @@ export function SessionMessageList({
   onScrollComplete,
   activePlanId,
   planComments,
-  onSavePlanComment,
+  onAddPlanComment,
   onRemovePlanComment,
 }: SessionMessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -432,7 +432,7 @@ export function SessionMessageList({
                   <PlanReviewCard
                     commentable={node.id === activePlanId}
                     comments={node.id === activePlanId ? planComments : undefined}
-                    onSaveComment={onSavePlanComment}
+                    onAddComment={onAddPlanComment}
                     onRemoveComment={onRemovePlanComment}
                     planContent={node.planContent}
                     planFilePath={node.planFilePath}
