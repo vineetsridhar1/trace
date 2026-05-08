@@ -9,13 +9,13 @@ import { PlanReviewCard } from "./messages/PlanReviewCard";
 import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
+import type { MarkdownSteerBlock, MarkdownSteerComment } from "../ui/markdownSteering";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
 
 export interface SessionMessageListProps {
   key?: React.Key;
-  sessionId: string;
   nodes: SessionNode[];
   gitCheckpoints: GitCheckpoint[];
   initialLoading?: boolean;
@@ -26,10 +26,13 @@ export interface SessionMessageListProps {
   toolResultByUseId: Map<string, unknown>;
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
+  activePlanId?: string | null;
+  planComments?: Record<string, MarkdownSteerComment>;
+  onSavePlanComment?: (block: MarkdownSteerBlock, text: string) => void;
+  onRemovePlanComment?: (blockId: string) => void;
 }
 
 export function SessionMessageList({
-  sessionId,
   nodes,
   gitCheckpoints,
   initialLoading = false,
@@ -40,6 +43,10 @@ export function SessionMessageList({
   toolResultByUseId,
   scrollToEventId,
   onScrollComplete,
+  activePlanId,
+  planComments,
+  onSavePlanComment,
+  onRemovePlanComment,
 }: SessionMessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -423,7 +430,10 @@ export function SessionMessageList({
                   />
                 ) : node.kind === "plan-review" ? (
                   <PlanReviewCard
-                    sessionId={sessionId}
+                    commentable={node.id === activePlanId}
+                    comments={node.id === activePlanId ? planComments : undefined}
+                    onSaveComment={onSavePlanComment}
+                    onRemoveComment={onRemovePlanComment}
                     planContent={node.planContent}
                     planFilePath={node.planFilePath}
                     timestamp={node.timestamp}

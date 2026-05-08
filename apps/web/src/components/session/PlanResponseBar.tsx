@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Send, X } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { MessageSquareText, Send, X } from "lucide-react";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -11,19 +11,54 @@ import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
+import type { MarkdownSteerComment } from "../ui/markdownSteering";
 
 interface PlanResponseBarProps {
   sessionId: string;
   planContent: string;
+  planComments?: Record<string, MarkdownSteerComment>;
+  onClearPlanComments?: () => void;
   onDismiss: () => void;
 }
 
 const PRESETS = ["Approve (new session)", "Approve (keep context)"];
 
-export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanResponseBarProps) {
+function getCommentIndex(comment: MarkdownSteerComment): number {
+  const [index] = comment.id.split("-");
+  const parsed = Number(index);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildCommentPrompt(comments: MarkdownSteerComment[], note: string): string {
+  const commentText = comments
+    .map(
+      (comment, index) =>
+        `Comment ${index + 1}\n\nSelected plan block:\n${comment.markdown}\n\nComment:\n${comment.text}`,
+    )
+    .join("\n\n---\n\n");
+  const noteText = note ? `\n\nOverall note:\n${note}` : "";
+
+  return `Please revise the plan using these inline comments. Apply them together, keep the rest of the plan coherent, and do not start implementation yet.\n\n${commentText}${noteText}`;
+}
+
+export function PlanResponseBar({
+  sessionId,
+  planContent,
+  planComments,
+  onClearPlanComments,
+  onDismiss,
+}: PlanResponseBarProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
+  const commentList = useMemo(
+    () =>
+      Object.values(planComments ?? {}).sort((a, b) => getCommentIndex(a) - getCommentIndex(b)),
+    [planComments],
+  );
+  const commentCount = commentList.length;
+  const hasComments = commentCount > 0;
+  const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
   const openSessionTab = useUIStore(
     (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
   );
@@ -118,33 +153,37 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
 
   const handleRevise = useCallback(async () => {
     const text = feedback.trim();
-    if (!text || sending) return;
+    if ((!text && !hasComments) || sending) return;
     setSending(true);
     try {
       await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
-          text: `Please revise the plan: ${text}`,
+          text: hasComments
+            ? buildCommentPrompt(commentList, text)
+            : `Please revise the plan: ${text}`,
           interactionMode: "plan",
         })
         .toPromise();
       setFeedback("");
+      if (hasComments) onClearPlanComments?.();
     } finally {
       setSending(false);
     }
-  }, [sessionId, feedback, sending]);
+  }, [commentList, feedback, hasComments, onClearPlanComments, sending, sessionId]);
 
   const handleSubmit = useCallback(() => {
     if (selected === "Approve (new session)") {
       handleClearContext();
     } else if (selected === "Approve (keep context)") {
       handleKeepContext();
-    } else if (feedback.trim()) {
+    } else if (feedback.trim() || hasComments) {
       handleRevise();
     }
-  }, [selected, feedback, handleClearContext, handleKeepContext, handleRevise]);
+  }, [selected, feedback, hasComments, handleClearContext, handleKeepContext, handleRevise]);
 
-  const hasAnswer = selected !== null || feedback.trim().length > 0;
+  const hasAnswer = selected !== null || feedback.trim().length > 0 || hasComments;
+  const primaryLabel = selected ? "Approve" : hasComments ? "Send comments" : "Revise";
 
   return (
     <div className="shrink-0 border-t border-accent/30 bg-surface px-4 py-3">
@@ -152,6 +191,11 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
           Plan Review
         </span>
+        {hasComments && (
+          <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+            {commentLabel}
+          </span>
+        )}
         <div className="flex-1" />
         <button
           type="button"
@@ -162,6 +206,13 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           <X size={14} />
         </button>
       </div>
+
+      {hasComments && (
+        <div className="mb-2 flex items-center gap-1.5 rounded-md border border-accent/20 bg-accent/5 px-2 py-1.5 text-xs text-muted-foreground">
+          <MessageSquareText size={13} className="text-accent" />
+          <span>{commentLabel} ready to send with this plan revision.</span>
+        </div>
+      )}
 
       <div className="mb-2 flex flex-wrap gap-1.5">
         {PRESETS.map((label) => (
@@ -197,13 +248,17 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              if (feedback.trim()) {
+              if (feedback.trim() || hasComments) {
                 setSelected(null);
                 handleRevise();
               }
             }
           }}
-          placeholder="Suggest changes to revise the plan..."
+          placeholder={
+            hasComments
+              ? "Optional note to include with comments..."
+              : "Suggest changes to revise the plan..."
+          }
           disabled={sending}
           className="flex-1 rounded-lg border border-border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
         />
@@ -214,7 +269,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
         >
           <Send size={14} />
-          {selected ? "Approve" : "Revise"}
+          {primaryLabel}
         </button>
       </div>
     </div>
