@@ -21,7 +21,16 @@ interface PlanResponseBarProps {
   onDismiss: () => void;
 }
 
-const PRESETS = ["Approve (new session)", "Approve (keep context)"];
+const APPROVE_NEW_SESSION = "Approve (new session)";
+const APPROVE_KEEP_CONTEXT = "Approve (keep context)";
+const PRESETS = [APPROVE_NEW_SESSION, APPROVE_KEEP_CONTEXT];
+
+function getApprovalLabel(label: string, hasComments: boolean): string {
+  if (!hasComments) return label;
+  return label === APPROVE_NEW_SESSION
+    ? "Approve with comments (new session)"
+    : "Approve with comments (keep context)";
+}
 
 function getCommentGroupIndex(comments: MarkdownSteerComment[]): number {
   const [index] = comments[0]?.id.split("-") ?? [];
@@ -223,10 +232,27 @@ export function PlanResponseBar({
     }
   }, [commentGroups, feedback, hasComments, onClearPlanComments, sending, sessionId]);
 
+  const handleApprovalClick = useCallback(
+    (label: string) => {
+      if (hasComments) {
+        if (label === APPROVE_NEW_SESSION) {
+          handleClearContext();
+        } else {
+          handleKeepContext();
+        }
+        return;
+      }
+
+      setSelected(selected === label ? null : label);
+      setFeedback("");
+    },
+    [hasComments, handleClearContext, handleKeepContext, selected],
+  );
+
   const handleSubmit = useCallback(() => {
-    if (selected === "Approve (new session)") {
+    if (!hasComments && selected === APPROVE_NEW_SESSION) {
       handleClearContext();
-    } else if (selected === "Approve (keep context)") {
+    } else if (!hasComments && selected === APPROVE_KEEP_CONTEXT) {
       handleKeepContext();
     } else if (feedback.trim() || hasComments) {
       handleRevise();
@@ -234,13 +260,7 @@ export function PlanResponseBar({
   }, [selected, feedback, hasComments, handleClearContext, handleKeepContext, handleRevise]);
 
   const hasAnswer = selected !== null || feedback.trim().length > 0 || hasComments;
-  const primaryLabel = selected
-    ? hasComments
-      ? "Approve with comments"
-      : "Approve"
-    : hasComments
-      ? "Send comments"
-      : "Revise";
+  const primaryLabel = hasComments ? "Send comments" : selected ? "Approve" : "Revise";
 
   return (
     <div className="shrink-0 border-t border-accent/30 bg-surface px-4 py-3">
@@ -276,20 +296,19 @@ export function PlanResponseBar({
           <button
             key={label}
             type="button"
-            onClick={() => {
-              setSelected(selected === label ? null : label);
-              setFeedback("");
-            }}
+            onClick={() => handleApprovalClick(label)}
             disabled={sending}
             className={cn(
               "min-h-8 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-              selected === label
-                ? "border-accent bg-accent/20 text-accent"
-                : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-elevated",
+              hasComments
+                ? "border-accent/35 bg-accent/10 text-accent hover:bg-accent/15"
+                : selected === label
+                  ? "border-accent bg-accent/20 text-accent"
+                  : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-elevated",
               sending && "opacity-50",
             )}
           >
-            {label}
+            {getApprovalLabel(label, hasComments)}
           </button>
         ))}
       </div>
