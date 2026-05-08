@@ -4,8 +4,8 @@ export interface MarkdownSteerBlock {
   type: string;
 }
 
-export interface MarkdownSteerAnnotation extends MarkdownSteerBlock {
-  feedback: string;
+export interface MarkdownSteerComment extends MarkdownSteerBlock {
+  text: string;
 }
 
 interface HastPoint {

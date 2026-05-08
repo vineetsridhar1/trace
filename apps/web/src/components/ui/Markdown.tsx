@@ -6,16 +6,16 @@ import { useFileOpen } from "../session/FileOpenContext";
 import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
 import {
   createSteerableBlocksPlugin,
-  type MarkdownSteerAnnotation,
+  type MarkdownSteerComment,
   type MarkdownSteerBlock,
 } from "./markdownSteering";
 
 interface MarkdownProps {
   children: string;
   steerableBlocks?: boolean;
-  annotations?: Record<string, MarkdownSteerAnnotation>;
-  onSaveAnnotation?: (block: MarkdownSteerBlock, feedback: string) => void;
-  onRemoveAnnotation?: (blockId: string) => void;
+  comments?: Record<string, MarkdownSteerComment>;
+  onSaveComment?: (block: MarkdownSteerBlock, text: string) => void;
+  onRemoveComment?: (blockId: string) => void;
 }
 
 interface SteerableDivProps extends ComponentPropsWithoutRef<"div"> {
@@ -75,13 +75,13 @@ function FileAwareLink({
 export function Markdown({
   children,
   steerableBlocks = false,
-  annotations,
-  onSaveAnnotation,
-  onRemoveAnnotation,
+  comments,
+  onSaveComment,
+  onRemoveComment,
 }: MarkdownProps) {
   const fileOpen = useFileOpen();
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
-  const canSteer = steerableBlocks && !!onSaveAnnotation && !!onRemoveAnnotation;
+  const canSteer = steerableBlocks && !!onSaveComment && !!onRemoveComment;
 
   const linkComponent = useMemo(() => {
     if (!fileOpen) return ExternalLink;
@@ -90,20 +90,20 @@ export function Markdown({
     };
   }, [fileOpen]);
 
-  const handleSaveAnnotation = useCallback(
-    (block: MarkdownSteerBlock, feedback: string) => {
-      onSaveAnnotation?.(block, feedback);
+  const handleSaveComment = useCallback(
+    (block: MarkdownSteerBlock, text: string) => {
+      onSaveComment?.(block, text);
       setActiveBlockId(null);
     },
-    [onSaveAnnotation],
+    [onSaveComment],
   );
 
-  const handleRemoveAnnotation = useCallback(
+  const handleRemoveComment = useCallback(
     (blockId: string) => {
-      onRemoveAnnotation?.(blockId);
+      onRemoveComment?.(blockId);
       setActiveBlockId(null);
     },
-    [onRemoveAnnotation],
+    [onRemoveComment],
   );
 
   const components = useMemo<Components>(() => {
@@ -130,12 +130,12 @@ export function Markdown({
       return (
         <SteerableMarkdownBlock
           block={{ id: blockId, markdown: blockMarkdown, type: blockType }}
-          annotation={annotations?.[blockId]?.feedback ?? ""}
+          comment={comments?.[blockId]?.text ?? ""}
           active={activeBlockId === blockId}
           onOpen={setActiveBlockId}
           onCancel={() => setActiveBlockId(null)}
-          onSave={handleSaveAnnotation}
-          onRemove={handleRemoveAnnotation}
+          onSave={handleSaveComment}
+          onRemove={handleRemoveComment}
         >
           {blockChildren as ReactNode}
         </SteerableMarkdownBlock>
@@ -145,10 +145,10 @@ export function Markdown({
     return { a: linkComponent, div: SteerableDiv };
   }, [
     activeBlockId,
-    annotations,
+    comments,
     canSteer,
-    handleRemoveAnnotation,
-    handleSaveAnnotation,
+    handleRemoveComment,
+    handleSaveComment,
     linkComponent,
   ]);
 

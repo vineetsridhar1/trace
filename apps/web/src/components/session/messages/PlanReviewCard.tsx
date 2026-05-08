@@ -4,7 +4,7 @@ import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { Markdown } from "../../ui/Markdown";
 import { Button } from "../../ui/button";
-import type { MarkdownSteerAnnotation, MarkdownSteerBlock } from "../../ui/markdownSteering";
+import type { MarkdownSteerComment, MarkdownSteerBlock } from "../../ui/markdownSteering";
 import { formatTime } from "./utils";
 
 interface PlanReviewCardProps {
@@ -14,21 +14,21 @@ interface PlanReviewCardProps {
   timestamp: string;
 }
 
-function getAnnotationIndex(annotation: MarkdownSteerAnnotation): number {
-  const [index] = annotation.id.split("-");
+function getCommentIndex(comment: MarkdownSteerComment): number {
+  const [index] = comment.id.split("-");
   const parsed = Number(index);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function buildAnnotationPrompt(annotations: MarkdownSteerAnnotation[]): string {
-  const annotationText = annotations
+function buildCommentPrompt(comments: MarkdownSteerComment[]): string {
+  const commentText = comments
     .map(
-      (annotation, index) =>
-        `Annotation ${index + 1}\n\nSelected plan block:\n${annotation.markdown}\n\nFeedback:\n${annotation.feedback}`,
+      (comment, index) =>
+        `Comment ${index + 1}\n\nSelected plan block:\n${comment.markdown}\n\nComment:\n${comment.text}`,
     )
     .join("\n\n---\n\n");
 
-  return `Please revise the plan using these inline annotations. Apply them together, keep the rest of the plan coherent, and do not start implementation yet.\n\n${annotationText}`;
+  return `Please revise the plan using these inline comments. Apply them together, keep the rest of the plan coherent, and do not start implementation yet.\n\n${commentText}`;
 }
 
 export function PlanReviewCard({
@@ -37,53 +37,53 @@ export function PlanReviewCard({
   planFilePath,
   timestamp,
 }: PlanReviewCardProps) {
-  const [annotations, setAnnotations] = useState<Record<string, MarkdownSteerAnnotation>>({});
-  const [sendingAnnotations, setSendingAnnotations] = useState(false);
+  const [comments, setComments] = useState<Record<string, MarkdownSteerComment>>({});
+  const [sendingComments, setSendingComments] = useState(false);
 
-  const annotationList = useMemo(
-    () => Object.values(annotations).sort((a, b) => getAnnotationIndex(a) - getAnnotationIndex(b)),
-    [annotations],
+  const commentList = useMemo(
+    () => Object.values(comments).sort((a, b) => getCommentIndex(a) - getCommentIndex(b)),
+    [comments],
   );
 
-  const handleSaveAnnotation = useCallback((block: MarkdownSteerBlock, feedback: string) => {
-    setAnnotations((current) => ({
+  const handleSaveComment = useCallback((block: MarkdownSteerBlock, text: string) => {
+    setComments((current) => ({
       ...current,
       [block.id]: {
         ...block,
-        feedback,
+        text,
       },
     }));
   }, []);
 
-  const handleRemoveAnnotation = useCallback((blockId: string) => {
-    setAnnotations((current) => {
+  const handleRemoveComment = useCallback((blockId: string) => {
+    setComments((current) => {
       const next = { ...current };
       delete next[blockId];
       return next;
     });
   }, []);
 
-  const handleSendAnnotations = useCallback(async () => {
-    if (annotationList.length === 0 || sendingAnnotations) return;
+  const handleSendComments = useCallback(async () => {
+    if (commentList.length === 0 || sendingComments) return;
 
-    setSendingAnnotations(true);
+    setSendingComments(true);
     try {
       await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
-          text: buildAnnotationPrompt(annotationList),
+          text: buildCommentPrompt(commentList),
           interactionMode: "plan",
         })
         .toPromise();
-      setAnnotations({});
+      setComments({});
     } finally {
-      setSendingAnnotations(false);
+      setSendingComments(false);
     }
-  }, [annotationList, sendingAnnotations, sessionId]);
+  }, [commentList, sendingComments, sessionId]);
 
-  const annotationCount = annotationList.length;
-  const annotationLabel =
-    annotationCount === 1 ? "1 inline annotation" : `${annotationCount} inline annotations`;
+  const commentCount = commentList.length;
+  const commentLabel =
+    commentCount === 1 ? "1 inline comment" : `${commentCount} inline comments`;
 
   return (
     <div className="accent-dashed-container px-4 py-3">
@@ -100,25 +100,25 @@ export function PlanReviewCard({
 
       <Markdown
         steerableBlocks
-        annotations={annotations}
-        onSaveAnnotation={handleSaveAnnotation}
-        onRemoveAnnotation={handleRemoveAnnotation}
+        comments={comments}
+        onSaveComment={handleSaveComment}
+        onRemoveComment={handleRemoveComment}
       >
         {planContent}
       </Markdown>
 
-      {annotationCount > 0 && (
+      {commentCount > 0 && (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-accent/20 bg-accent/5 px-3 py-2">
-          <span className="text-xs text-muted-foreground">{annotationLabel}</span>
+          <span className="text-xs text-muted-foreground">{commentLabel}</span>
           <Button
             type="button"
             size="xs"
-            onClick={() => void handleSendAnnotations()}
-            disabled={sendingAnnotations}
+            onClick={() => void handleSendComments()}
+            disabled={sendingComments}
             className="h-6 rounded-md bg-accent px-2 text-[11px] text-accent-foreground hover:bg-accent/90"
           >
             <Send size={12} />
-            Send annotations
+            Send comments
           </Button>
         </div>
       )}
