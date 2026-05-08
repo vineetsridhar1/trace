@@ -18,9 +18,15 @@ contextBridge.exposeInMainWorld("trace", {
   repairRepoGitHooks: (repoId: string) => ipcRenderer.invoke("repair-repo-git-hooks", repoId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
+  captureFeedbackScreenshot: () => ipcRenderer.invoke("capture-feedback-screenshot"),
   setBridgeLabel: (label: string) => ipcRenderer.invoke("set-bridge-label", label),
   setBridgeAuthContext: (organizationId: string | null) =>
     ipcRenderer.invoke("set-bridge-auth-context", organizationId),
+  onFeedbackShortcut: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("feedback-shortcut", listener);
+    return () => ipcRenderer.removeListener("feedback-shortcut", listener);
+  },
   onBridgeStatus: (callback: (status: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status);
     ipcRenderer.on("bridge-status", listener);

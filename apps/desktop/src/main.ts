@@ -1,10 +1,13 @@
 import {
   app,
   BrowserWindow,
+  desktopCapturer,
   dialog,
+  globalShortcut,
   ipcMain,
   Menu,
   powerMonitor,
+  screen,
   shell,
   type MenuItemConstructorOptions,
 } from "electron";
@@ -29,6 +32,7 @@ const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
+const feedbackShortcut = process.env.TRACE_FEEDBACK_SHORTCUT ?? "CommandOrControl+Shift+F";
 
 app.setName(appName);
 
@@ -46,6 +50,48 @@ const bridge = new BridgeClient(serverUrl, getSessionCookieHeader);
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("bridge-status", status);
+}
+
+function publishFeedbackShortcut() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  mainWindow.webContents.send("feedback-shortcut");
+}
+
+function registerFeedbackShortcut() {
+  const registered = globalShortcut.register(feedbackShortcut, publishFeedbackShortcut);
+  if (!registered) {
+    console.warn(`[main] failed to register feedback shortcut: ${feedbackShortcut}`);
+  }
+}
+
+async function captureFeedbackScreenshot() {
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint);
+  const scaleFactor = display.scaleFactor || 1;
+  const thumbnailSize = {
+    width: Math.round(display.size.width * scaleFactor),
+    height: Math.round(display.size.height * scaleFactor),
+  };
+  const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize });
+  const source =
+    sources.find((item) => item.display_id === String(display.id)) ??
+    sources.find((item) => item.id.includes(String(display.id))) ??
+    sources[0];
+
+  if (!source || source.thumbnail.isEmpty()) {
+    throw new Error("Unable to capture the current screen");
+  }
+
+  const image = source.thumbnail;
+  const size = image.getSize();
+  return {
+    dataUrl: image.toDataURL(),
+    width: size.width,
+    height: size.height,
+  };
 }
 
 function configureApplicationIdentity() {
@@ -196,6 +242,7 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 ipcMain.handle("get-bridge-info", () => bridge.getInfo());
+ipcMain.handle("capture-feedback-screenshot", () => captureFeedbackScreenshot());
 ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   await setBridgeLabel(label);
   bridge.updateLabel();
@@ -218,6 +265,7 @@ app.whenReady().then(() => {
   });
   bridge.connect();
   createWindow();
+  registerFeedbackShortcut();
 
   // After sleep/wake the WebSocket is often dead but no close event fires.
   // Force an immediate reconnect so the user doesn't have to restart the app.
@@ -238,4 +286,8 @@ app.on("activate", () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });

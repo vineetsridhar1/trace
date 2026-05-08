@@ -43,6 +43,12 @@ declare global {
     status: DesktopBridgeConnectionStatus;
   };
 
+  type DesktopFeedbackScreenshot = {
+    dataUrl: string;
+    width: number;
+    height: number;
+  };
+
   type DesktopLinkedCheckoutStatus = {
     repoId: string;
     repoPath: string | null;
@@ -130,8 +136,10 @@ declare global {
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
+    captureFeedbackScreenshot: () => Promise<DesktopFeedbackScreenshot>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
+    onFeedbackShortcut: (callback: () => void) => () => void;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
   }
 
