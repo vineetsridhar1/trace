@@ -29,18 +29,42 @@ function getCommentGroupIndex(comments: MarkdownSteerComment[]): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function buildCommentPrompt(commentGroups: MarkdownSteerComment[][], note: string): string {
-  const commentText = commentGroups
+function formatCommentGroups(commentGroups: MarkdownSteerComment[][]): string {
+  return commentGroups
     .map(
       (comments, index) =>
-        `Block ${index + 1}\n\nSelected plan block:\n${comments[0]?.markdown ?? ""}\n\nComments:\n${comments
+        `Block ${index + 1}
+
+Selected plan block:
+${comments[0]?.markdown ?? ""}
+
+Comments:
+${comments
           .map((comment, commentIndex) => `${commentIndex + 1}. ${comment.text}`)
           .join("\n")}`,
     )
     .join("\n\n---\n\n");
+}
+
+function buildCommentPrompt(commentGroups: MarkdownSteerComment[][], note: string): string {
   const noteText = note ? `\n\nOverall note:\n${note}` : "";
 
-  return `Please revise the plan using these inline comments. Apply them together, keep the rest of the plan coherent, and do not start implementation yet.\n\n${commentText}${noteText}`;
+  return `Please revise the plan using these inline comments. Apply them together, keep the rest of the plan coherent, and do not start implementation yet.\n\n${formatCommentGroups(commentGroups)}${noteText}`;
+}
+
+function buildApproveWithCommentsPrompt({
+  planContent,
+  commentGroups,
+  note,
+}: {
+  planContent?: string;
+  commentGroups: MarkdownSteerComment[][];
+  note: string;
+}): string {
+  const planText = planContent ? `\n\nPlan:\n${planContent}` : "";
+  const noteText = note ? `\n\nOverall note:\n${note}` : "";
+
+  return `Approved. Implement this plan, applying these inline comments as implementation guidance.${planText}\n\nInline comments:\n${formatCommentGroups(commentGroups)}${noteText}`;
 }
 
 export function PlanResponseBar({
@@ -87,7 +111,13 @@ export function PlanResponseBar({
     if (sending || !sessionGroupId) return;
     setSending(true);
     try {
-      const prompt = `Implement the following plan:\n\n${planContent}`;
+      const prompt = hasComments
+        ? buildApproveWithCommentsPrompt({
+            planContent,
+            commentGroups,
+            note: feedback.trim(),
+          })
+        : `Implement the following plan:\n\n${planContent}`;
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
@@ -122,6 +152,10 @@ export function PlanResponseBar({
         openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
         await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+        if (hasComments) {
+          setFeedback("");
+          onClearPlanComments?.();
+        }
       }
     } finally {
       setSending(false);
@@ -130,6 +164,10 @@ export function PlanResponseBar({
     sending,
     sessionGroupId,
     planContent,
+    hasComments,
+    commentGroups,
+    feedback,
+    onClearPlanComments,
     tool,
     model,
     defaultHosting,
@@ -147,13 +185,22 @@ export function PlanResponseBar({
       await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
-          text: "Approved. Implement this plan.",
+          text: hasComments
+            ? buildApproveWithCommentsPrompt({
+                commentGroups,
+                note: feedback.trim(),
+              })
+            : "Approved. Implement this plan.",
         })
         .toPromise();
+      if (hasComments) {
+        setFeedback("");
+        onClearPlanComments?.();
+      }
     } finally {
       setSending(false);
     }
-  }, [sessionId, sending]);
+  }, [commentGroups, feedback, hasComments, onClearPlanComments, sessionId, sending]);
 
   const handleRevise = useCallback(async () => {
     const text = feedback.trim();
@@ -187,7 +234,13 @@ export function PlanResponseBar({
   }, [selected, feedback, hasComments, handleClearContext, handleKeepContext, handleRevise]);
 
   const hasAnswer = selected !== null || feedback.trim().length > 0 || hasComments;
-  const primaryLabel = selected ? "Approve" : hasComments ? "Send comments" : "Revise";
+  const primaryLabel = selected
+    ? hasComments
+      ? "Approve with comments"
+      : "Approve"
+    : hasComments
+      ? "Send comments"
+      : "Revise";
 
   return (
     <div className="shrink-0 border-t border-accent/30 bg-surface px-4 py-3">
@@ -214,7 +267,7 @@ export function PlanResponseBar({
       {hasComments && (
         <div className="mb-2 flex items-center gap-1.5 rounded-md border border-accent/20 bg-accent/5 px-2 py-1.5 text-xs text-muted-foreground">
           <MessageSquareText size={13} className="text-accent" />
-          <span>{commentLabel} ready to send with this plan revision.</span>
+          <span>{commentLabel} ready for revision or approval.</span>
         </div>
       )}
 
@@ -247,14 +300,13 @@ export function PlanResponseBar({
           value={feedback}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
             setFeedback(e.target.value);
-            if (e.target.value) setSelected(null);
+            if (e.target.value && !hasComments) setSelected(null);
           }}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              if (feedback.trim() || hasComments) {
-                setSelected(null);
-                handleRevise();
+              if (hasAnswer) {
+                handleSubmit();
               }
             }
           }}
