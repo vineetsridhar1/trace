@@ -58,13 +58,16 @@ export function SteerableMarkdownBlock({
   const [blockHovered, setBlockHovered] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [triggerPosition, setTriggerPosition] = useState<TriggerPosition | null>(null);
   const blockRef = useRef<HTMLDivElement>(null);
+  const previewCloseTimeoutRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const commentCount = comments.length;
   const hasComments = commentCount > 0;
   const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
-  const triggerVisible = blockHovered || triggerHovered || focused || active || hasComments;
+  const popoverOpen = active || previewOpen;
+  const triggerVisible = blockHovered || triggerHovered || focused || popoverOpen || hasComments;
 
   useEffect(() => {
     if (!active) {
@@ -79,6 +82,36 @@ export function SteerableMarkdownBlock({
 
     return () => window.cancelAnimationFrame(frameId);
   }, [active]);
+
+  const clearPreviewCloseTimeout = useCallback(() => {
+    if (previewCloseTimeoutRef.current === null) return;
+    window.clearTimeout(previewCloseTimeoutRef.current);
+    previewCloseTimeoutRef.current = null;
+  }, []);
+
+  const openPreview = useCallback(() => {
+    if (!hasComments) return;
+    clearPreviewCloseTimeout();
+    setPreviewOpen(true);
+  }, [clearPreviewCloseTimeout, hasComments]);
+
+  const schedulePreviewClose = useCallback(() => {
+    if (active) return;
+    clearPreviewCloseTimeout();
+    previewCloseTimeoutRef.current = window.setTimeout(() => {
+      setPreviewOpen(false);
+      previewCloseTimeoutRef.current = null;
+    }, 160);
+  }, [active, clearPreviewCloseTimeout]);
+
+  useEffect(() => {
+    return () => clearPreviewCloseTimeout();
+  }, [clearPreviewCloseTimeout]);
+
+  useEffect(() => {
+    if (hasComments) return;
+    setPreviewOpen(false);
+  }, [hasComments]);
 
   const updateTriggerPosition = useCallback(() => {
     const element = blockRef.current;
@@ -137,14 +170,17 @@ export function SteerableMarkdownBlock({
   }, [triggerVisible, updateTriggerPosition]);
 
   const handleOpen = useCallback(() => {
+    clearPreviewCloseTimeout();
+    setPreviewOpen(false);
     onOpen(block.id);
-  }, [block.id, onOpen]);
+  }, [block.id, clearPreviewCloseTimeout, onOpen]);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
         handleOpen();
       } else {
+        setPreviewOpen(false);
         onCancel();
       }
     },
@@ -152,6 +188,7 @@ export function SteerableMarkdownBlock({
   );
 
   const handleCancel = useCallback(() => {
+    setPreviewOpen(false);
     setDraft("");
     onCancel();
   }, [onCancel]);
@@ -173,12 +210,12 @@ export function SteerableMarkdownBlock({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "Escape" && active) {
+      if (event.key === "Escape" && popoverOpen) {
         event.preventDefault();
         handleCancel();
       }
     },
-    [active, handleCancel],
+    [handleCancel, popoverOpen],
   );
 
   const handleTextareaKeyDown = useCallback(
@@ -203,23 +240,28 @@ export function SteerableMarkdownBlock({
     setFocused(false);
   }, []);
 
-  const handleTriggerMouseLeave = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    const element = blockRef.current;
-    if (!element) {
+  const handleTriggerMouseLeave = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const element = blockRef.current;
+      if (!element) {
+        setTriggerHovered(false);
+        schedulePreviewClose();
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const isInsideBlock =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+
+      setBlockHovered(isInsideBlock);
       setTriggerHovered(false);
-      return;
-    }
-
-    const rect = element.getBoundingClientRect();
-    const isInsideBlock =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-
-    setBlockHovered(isInsideBlock);
-    setTriggerHovered(false);
-  }, []);
+      if (!isInsideBlock) schedulePreviewClose();
+    },
+    [schedulePreviewClose],
+  );
 
   const triggerRailStyle: CSSProperties | undefined = triggerPosition
     ? {
@@ -233,15 +275,25 @@ export function SteerableMarkdownBlock({
     triggerVisible && triggerRailStyle ? (
       <div
         style={triggerRailStyle}
-        onMouseEnter={() => setTriggerHovered(true)}
+        onMouseEnter={() => {
+          setTriggerHovered(true);
+          openPreview();
+        }}
         onMouseLeave={handleTriggerMouseLeave}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          setFocused(true);
+          openPreview();
+        }}
         onBlur={() => setFocused(false)}
         className="pointer-events-none z-50 flex h-9 w-0 justify-center"
       >
         <PopoverTrigger
           title={hasComments ? "View comments" : "Add comment"}
           aria-label={hasComments ? "View comments" : "Add comment"}
+          onClick={(event) => {
+            event.preventDefault();
+            handleOpen();
+          }}
           className={cn(
             "pointer-events-auto flex h-9 min-w-9 items-center justify-center gap-1 rounded-full border text-xs opacity-100 shadow-md ring-1 transition-all outline-none",
             "focus-visible:ring-2 focus-visible:ring-primary/50",
@@ -267,7 +319,10 @@ export function SteerableMarkdownBlock({
       onKeyDown={handleKeyDown}
       onMouseEnter={() => setBlockHovered(true)}
       onMouseMove={() => setBlockHovered(true)}
-      onMouseLeave={() => setBlockHovered(false)}
+      onMouseLeave={() => {
+        setBlockHovered(false);
+        schedulePreviewClose();
+      }}
       onFocus={() => setFocused(true)}
       onBlur={handleBlur}
       className={cn(
@@ -277,7 +332,7 @@ export function SteerableMarkdownBlock({
     >
       <div className="min-w-0 pr-12">{children}</div>
 
-      <Popover open={active} onOpenChange={handleOpenChange}>
+      <Popover open={popoverOpen} onOpenChange={handleOpenChange}>
         {triggerRail && typeof document !== "undefined"
           ? createPortal(triggerRail, document.body)
           : triggerRail}
@@ -286,6 +341,8 @@ export function SteerableMarkdownBlock({
           side="right"
           align="start"
           sideOffset={10}
+          onMouseEnter={clearPreviewCloseTimeout}
+          onMouseLeave={schedulePreviewClose}
           className="w-80 gap-2 rounded-md border border-border bg-surface p-2 shadow-xl ring-1 ring-foreground/10"
         >
           <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
