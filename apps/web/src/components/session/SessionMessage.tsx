@@ -143,6 +143,11 @@ function renderSessionOutput(
     return <CompletionRow timestamp={ts} result={str(payload.message, "Error")} isUserStop />;
   }
 
+  if (type === "workspace_failed") {
+    const error = str(payload.error);
+    return <SystemBadge text={error || "Workspace preparation failed"} />;
+  }
+
   return null;
 }
 

@@ -50,6 +50,21 @@ describe("sessionPatchFromOutput", () => {
     expect(patch?.connection).toEqual({ state: "disconnected" });
   });
 
+  it("returns retryable patch for workspace_failed", () => {
+    const patch = sessionPatchFromOutput({
+      type: "workspace_failed",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+      connection: { state: "failed", canRetry: true },
+    });
+    expect(patch).toEqual({
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+      connection: { state: "failed", canRetry: true },
+      worktreeDeleted: false,
+    });
+  });
+
   it("returns config patch for config_changed", () => {
     const patch = sessionPatchFromOutput({
       type: "config_changed",

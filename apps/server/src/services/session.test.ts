@@ -3023,6 +3023,68 @@ describe("SessionService", () => {
         { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
       );
     });
+
+    it("retries failed sessions when the connection is explicitly retryable", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          agentStatus: "failed",
+          sessionStatus: "in_progress",
+          workdir: "/tmp/trace/workspace",
+          worktreeDeleted: false,
+          connection: {
+            state: "failed",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            lastError: "Command failed: git clean -ffdx\n",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+            autoRetryable: false,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-a",
+        key: "org-1:runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "org-1:runtime-a");
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "prepare" }),
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            agentStatus: "done",
+            connection: expect.objectContaining({
+              state: "connected",
+            }),
+          }),
+        }),
+      );
+    });
   });
 
   describe("updateConfig", () => {
@@ -3537,6 +3599,105 @@ describe("SessionService", () => {
             type: "setup_script_completed",
             success: true,
             exitCode: 0,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe("workspaceFailed", () => {
+    it("keeps workspace failures retryable without marking the worktree deleted", async () => {
+      const pendingRun = {
+        type: "send",
+        prompt: "Continue",
+        interactionMode: "code",
+      };
+      const failedConnection = {
+        state: "failed",
+        runtimeInstanceId: "runtime-a",
+        runtimeLabel: "Laptop A",
+        lastError: "Command failed: git clean -ffdx\n",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+        autoRetryable: false,
+        failedAt: "2026-05-09T04:29:16.000Z",
+      };
+
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          workdir: "/tmp/trace/workspace",
+          worktreeDeleted: false,
+          pendingRun,
+          connection: failedConnection,
+        }),
+      );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/workspace",
+          worktreeDeleted: false,
+          connection: failedConnection,
+        }),
+      );
+
+      await service.workspaceFailed("session-1", "Command failed: git clean -ffdx\n");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: expect.objectContaining({
+          agentStatus: "done",
+          worktreeDeleted: false,
+          connection: expect.objectContaining({
+            state: "failed",
+            canRetry: true,
+            canMove: true,
+            autoRetryable: false,
+            lastError: "Command failed: git clean -ffdx\n",
+          }),
+        }),
+        include: expect.any(Object),
+      });
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({
+            workdir: null,
+            pendingRun: expect.anything(),
+          }),
+        }),
+      );
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            worktreeDeleted: false,
+            connection: expect.objectContaining({
+              state: "failed",
+              canRetry: true,
+            }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "workspace_failed",
+            agentStatus: "done",
+            worktreeDeleted: false,
+            connection: expect.objectContaining({
+              state: "failed",
+              canRetry: true,
+            }),
           }),
         }),
       );

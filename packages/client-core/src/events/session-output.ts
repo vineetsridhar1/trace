@@ -28,6 +28,15 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
       workdir: payload.workdir,
     };
   }
+  if (payload.type === "workspace_failed") {
+    const connection = asJsonObject(payload.connection);
+    return {
+      ...(payload.agentStatus && { agentStatus: payload.agentStatus as AgentStatus }),
+      ...(payload.sessionStatus && { sessionStatus: payload.sessionStatus as SessionStatus }),
+      ...(connection ? { connection: connection as SessionEntity["connection"] } : {}),
+      worktreeDeleted: false,
+    };
+  }
   if (payload.type === "title_generated" && typeof payload.name === "string") {
     return { name: payload.name };
   }
