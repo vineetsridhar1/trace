@@ -119,25 +119,27 @@ export function SteerableMarkdownBlock({
         "focus-visible:ring-1 focus-visible:ring-accent/40",
       )}
     >
-      <div className="min-w-0 pr-24">{children}</div>
-
       <Popover open={active} onOpenChange={handleOpenChange}>
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-10 items-start justify-end">
-          <PopoverTrigger
-            title={hasComments ? "View comments" : "Add comment"}
-            aria-label={hasComments ? "View comments" : "Add comment"}
-            className={cn(
-              "sticky top-3 flex h-8 min-w-8 translate-x-1/2 items-center justify-center gap-1 rounded-full border text-xs shadow-sm transition-all outline-none",
-              "focus-visible:ring-2 focus-visible:ring-accent/40",
-              hasComments
-                ? "pointer-events-auto min-w-10 border-accent/40 bg-accent px-2.5 text-accent-foreground opacity-100 hover:bg-accent/90"
-                : "pointer-events-none w-8 border-border bg-surface-deep text-muted-foreground opacity-0 hover:bg-surface-elevated hover:text-foreground group-hover/steer:pointer-events-auto group-hover/steer:opacity-100 group-focus-within/steer:pointer-events-auto group-focus-within/steer:opacity-100",
-              active && "pointer-events-auto opacity-100",
-            )}
-          >
-            {hasComments ? <MessageSquareText size={15} /> : <MessageSquarePlus size={15} />}
-            {hasComments && <span>{commentCount}</span>}
-          </PopoverTrigger>
+        <div className="grid grid-cols-[minmax(0,1fr)_2.75rem] items-start">
+          <div className="min-w-0 pr-3">{children}</div>
+
+          <div className="pointer-events-none sticky top-3 z-10 flex h-8 justify-end self-start">
+            <PopoverTrigger
+              title={hasComments ? "View comments" : "Add comment"}
+              aria-label={hasComments ? "View comments" : "Add comment"}
+              className={cn(
+                "flex h-8 min-w-8 translate-x-1/2 items-center justify-center gap-1 rounded-full border text-xs shadow-sm transition-all outline-none",
+                "focus-visible:ring-2 focus-visible:ring-accent/40",
+                hasComments
+                  ? "pointer-events-auto min-w-10 border-accent/40 bg-accent px-2.5 text-accent-foreground opacity-100 hover:bg-accent/90"
+                  : "pointer-events-none w-8 border-border bg-surface-deep text-muted-foreground opacity-0 hover:bg-surface-elevated hover:text-foreground group-hover/steer:pointer-events-auto group-hover/steer:opacity-100 group-focus-within/steer:pointer-events-auto group-focus-within/steer:opacity-100",
+                active && "pointer-events-auto opacity-100",
+              )}
+            >
+              {hasComments ? <MessageSquareText size={15} /> : <MessageSquarePlus size={15} />}
+              {hasComments && <span>{commentCount}</span>}
+            </PopoverTrigger>
+          </div>
         </div>
 
         <PopoverContent
