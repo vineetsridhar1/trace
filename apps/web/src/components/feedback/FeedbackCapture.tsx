@@ -6,6 +6,7 @@ import { sendSessionFeedback } from "../../lib/session-feedback";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { FeedbackCanvas, type FeedbackCanvasHandle } from "./FeedbackCanvas";
+import { FeedbackDestinationBadge } from "./FeedbackDestinationBadge";
 
 type FeedbackState =
   | { status: "closed" }
@@ -95,11 +96,14 @@ export function FeedbackCapture() {
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-black/90 p-4 text-white backdrop-blur-sm">
       <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium">Trace feedback</p>
           <p className="text-xs text-white/60">
-            Draw on the screenshot, add a note, and send it to the active session.
+            Draw directly on this screen capture, add a note, then send.
           </p>
+        </div>
+        <div className="ml-auto hidden max-w-[min(520px,50vw)] md:block">
+          <FeedbackDestinationBadge sessionId={activeSessionId} />
         </div>
         <Button
           variant="ghost"
@@ -109,6 +113,10 @@ export function FeedbackCapture() {
         >
           <X />
         </Button>
+      </div>
+
+      <div className="mb-3 shrink-0 md:hidden">
+        <FeedbackDestinationBadge sessionId={activeSessionId} />
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
@@ -152,11 +160,9 @@ export function FeedbackCapture() {
         </div>
       </div>
 
-      {!activeSessionId && (
-        <p className="mt-2 shrink-0 text-center text-xs text-destructive">
-          Select a session before sending feedback.
-        </p>
-      )}
+      <p className="mt-2 shrink-0 text-center text-xs text-white/50">
+        Press Escape to cancel. Shortcut: Cmd/Ctrl + Shift + F.
+      </p>
     </div>
   );
 }
