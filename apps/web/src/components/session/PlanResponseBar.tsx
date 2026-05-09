@@ -40,18 +40,23 @@ function getCommentGroupIndex(comments: MarkdownSteerComment[]): number {
 
 function formatCommentGroups(commentGroups: MarkdownSteerComment[][]): string {
   return commentGroups
-    .map(
-      (comments, index) =>
-        `Block ${index + 1}
+    .map((comments, index) => {
+      const referencedBlock = comments[0]?.markdown.trim() || "(Referenced plan block unavailable)";
+      const blockType = comments[0]?.type ?? "plan block";
+      const commentText = comments
+        .map((comment, commentIndex) => `${commentIndex + 1}. ${comment.text}`)
+        .join("\n");
 
-Selected plan block:
-${comments[0]?.markdown ?? ""}
+      return `Comment group ${index + 1} (${blockType})
 
-Comments:
-${comments
-          .map((comment, commentIndex) => `${commentIndex + 1}. ${comment.text}`)
-          .join("\n")}`,
-    )
+These comments refer to this exact plan block:
+\`\`\`\`markdown
+${referencedBlock}
+\`\`\`\`
+
+Comments for this block:
+${commentText}`;
+    })
     .join("\n\n---\n\n");
 }
 
