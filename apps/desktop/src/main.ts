@@ -75,6 +75,15 @@ function getScreenRecordingStatus() {
   return systemPreferences.getMediaAccessStatus("screen");
 }
 
+function getCurrentMacAppPath() {
+  if (process.platform !== "darwin") return null;
+
+  const appContentsIndex = process.execPath.indexOf(".app/Contents/MacOS/");
+  if (appContentsIndex === -1) return null;
+
+  return process.execPath.slice(0, appContentsIndex + ".app".length);
+}
+
 function getScreenRecordingPermissionMessage() {
   const permissionStatus = getScreenRecordingStatus();
 
@@ -112,15 +121,23 @@ async function promptForScreenRecordingAccess() {
 
   if (getScreenRecordingStatus() === "granted") return;
 
+  const appPath = getCurrentMacAppPath();
   const messageBoxOptions = {
     type: "info",
-    buttons: ["Open Settings", "Cancel"],
+    buttons: appPath ? ["Open Settings", "Show App in Finder", "Cancel"] : ["Open Settings", "Cancel"],
     defaultId: 0,
-    cancelId: 1,
+    cancelId: appPath ? 2 : 1,
     title: "Allow Screen Recording",
     message: "Trace needs Screen Recording permission to capture feedback screenshots.",
-    detail:
-      "macOS requires this permission before Trace can capture your screen for annotated feedback. After enabling it, restart Trace.",
+    detail: [
+      "macOS requires this permission before Trace can capture your screen for annotated feedback.",
+      appPath
+        ? "If Trace does not appear in the Screen Recording list, add the app shown in Finder."
+        : null,
+      "After enabling it, restart Trace.",
+    ]
+      .filter(Boolean)
+      .join(" "),
   } satisfies Electron.MessageBoxOptions;
   const result = mainWindow
     ? await dialog.showMessageBox(mainWindow, messageBoxOptions)
@@ -128,6 +145,8 @@ async function promptForScreenRecordingAccess() {
 
   if (result.response === 0) {
     await shell.openExternal(macScreenRecordingSettingsUrl);
+  } else if (result.response === 1 && appPath) {
+    shell.showItemInFolder(appPath);
   }
 
   throw new Error(getScreenRecordingPermissionMessage());
