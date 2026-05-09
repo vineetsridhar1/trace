@@ -359,6 +359,38 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().sessions["session-1"].workdir).toBe("/tmp/work");
   });
 
+  it("routes session_output workspace_failed into retryable session state", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          agentStatus: "active",
+          worktreeDeleted: false,
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: {
+          type: "workspace_failed",
+          agentStatus: "done",
+          connection: { state: "failed", canRetry: true },
+        },
+      }),
+    );
+
+    const session = useEntityStore.getState().sessions["session-1"];
+    expect(session.agentStatus).toBe("done");
+    expect(session.worktreeDeleted).toBe(false);
+    expect(session.connection).toEqual({ state: "failed", canRetry: true });
+  });
+
   it("routes session_output title_generated into session.name", () => {
     useEntityStore.setState({
       sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },

@@ -4312,32 +4312,30 @@ export class SessionService {
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: {
-        agentStatus: "failed",
-        workdir: null,
-        worktreeDeleted: true,
-        pendingRun: Prisma.DbNull,
+        agentStatus: "done",
+        worktreeDeleted: false,
         connection: nextConnection,
       },
       include: SESSION_INCLUDE,
     });
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir: null,
       connection: session.connection as Prisma.InputJsonValue,
-      worktreeDeleted: true,
+      worktreeDeleted: false,
     });
 
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: sessionId,
-      eventType: "session_terminated",
+      eventType: "session_output",
       payload: {
+        type: "workspace_failed",
         sessionId,
-        reason: "workspace_failed",
         error,
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
-        worktreeDeleted: true,
+        connection: nextConnection,
+        worktreeDeleted: false,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
@@ -4854,11 +4852,17 @@ export class SessionService {
       include: { ...SESSION_INCLUDE, projects: true },
     });
 
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
-      return session;
-    }
-
     const conn = this.parseConnection(session.connection);
+
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+      const retryableFailedSession =
+        session.agentStatus === "failed" &&
+        session.sessionStatus !== "merged" &&
+        session.worktreeDeleted === false &&
+        conn.canRetry === true &&
+        (conn.state === "failed" || conn.state === "timed_out" || conn.state === "disconnected");
+      if (!retryableFailedSession) return session;
+    }
 
     // Emit retry requested event
     await eventService.create({
@@ -5020,12 +5024,14 @@ export class SessionService {
         autoRetryable: true,
       };
 
-      // Preserve agent/session status — only update connection state.
+      // Preserve agent/session status unless it was previously marked terminal by a retryable failure.
+      const updateData: Prisma.SessionUpdateInput = {
+        connection: connJson(restoredConn),
+        ...(session.agentStatus === "failed" ? { agentStatus: "done" } : {}),
+      };
       const updated = await prisma.session.update({
         where: { id: sessionId },
-        data: {
-          connection: connJson(restoredConn),
-        },
+        data: updateData,
         include: SESSION_INCLUDE,
       });
       const sessionGroup = await this.syncGroupWorkspaceState(updated.sessionGroupId, {
@@ -5064,12 +5070,14 @@ export class SessionService {
       retryCount: 0,
     };
 
-    // Preserve agent/session status — only update connection state.
+    // Preserve agent/session status unless it was previously marked terminal by a retryable failure.
+    const updateData: Prisma.SessionUpdateInput = {
+      connection: connJson(restoredConn),
+      ...(session.agentStatus === "failed" ? { agentStatus: "done" } : {}),
+    };
     const updated = await prisma.session.update({
       where: { id: sessionId },
-      data: {
-        connection: connJson(restoredConn),
-      },
+      data: updateData,
       include: SESSION_INCLUDE,
     });
     const sessionGroup = await this.syncGroupWorkspaceState(updated.sessionGroupId, {
