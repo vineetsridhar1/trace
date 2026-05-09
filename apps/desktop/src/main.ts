@@ -6,6 +6,7 @@ import {
   globalShortcut,
   ipcMain,
   Menu,
+  nativeImage,
   powerMonitor,
   screen,
   shell,
@@ -14,6 +15,8 @@ import {
 } from "electron";
 import path from "path";
 import { execFile } from "child_process";
+import fs from "fs/promises";
+import os from "os";
 import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
@@ -152,9 +155,28 @@ async function promptForScreenRecordingAccess() {
   throw new Error(getScreenRecordingPermissionMessage());
 }
 
-async function captureFeedbackScreenshot() {
-  await promptForScreenRecordingAccess();
+async function captureFeedbackScreenshotWithScreencapture() {
+  const screenshotPath = path.join(os.tmpdir(), `trace-feedback-${process.pid}-${Date.now()}.png`);
 
+  try {
+    await execFileAsync("screencapture", ["-x", "-t", "png", screenshotPath]);
+    const image = nativeImage.createFromPath(screenshotPath);
+    if (image.isEmpty()) {
+      throw new Error("screencapture returned an empty image");
+    }
+
+    const size = image.getSize();
+    return {
+      dataUrl: image.toDataURL(),
+      width: size.width,
+      height: size.height,
+    };
+  } finally {
+    await fs.rm(screenshotPath, { force: true });
+  }
+}
+
+async function captureFeedbackScreenshot() {
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
   const scaleFactor = display.scaleFactor || 1;
@@ -166,6 +188,14 @@ async function captureFeedbackScreenshot() {
   try {
     sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize });
   } catch (error) {
+    if (process.platform === "darwin") {
+      try {
+        return await captureFeedbackScreenshotWithScreencapture();
+      } catch {
+        // Fall through to the permission prompt and Electron's original error detail.
+      }
+    }
+    await promptForScreenRecordingAccess();
     throw new Error(getCaptureFailureMessage(error));
   }
   const source =
@@ -174,6 +204,14 @@ async function captureFeedbackScreenshot() {
     sources[0];
 
   if (!source || source.thumbnail.isEmpty()) {
+    if (process.platform === "darwin") {
+      try {
+        return await captureFeedbackScreenshotWithScreencapture();
+      } catch {
+        // Fall through to the permission prompt below.
+      }
+    }
+    await promptForScreenRecordingAccess();
     throw new Error(getCaptureFailureMessage("No usable screen source was returned"));
   }
 
