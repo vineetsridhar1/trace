@@ -1,5 +1,6 @@
-import type { KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, MessageSquarePlus, MessageSquareText, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -19,6 +20,30 @@ interface SteerableMarkdownBlockProps {
   onRemove: (blockId: string, commentId: string) => void;
 }
 
+const TRIGGER_SIZE = 32;
+const TRIGGER_TOP_OFFSET = 12;
+const BLOCK_TOP_INSET = 6;
+const VIEWPORT_SIDE_INSET = 18;
+
+interface TriggerPosition {
+  top: number;
+  left: number;
+}
+
+function getScrollContainer(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement;
+
+  while (parent) {
+    const { overflowY } = window.getComputedStyle(parent);
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+
+  return null;
+}
+
 export function SteerableMarkdownBlock({
   block,
   comments,
@@ -30,10 +55,15 @@ export function SteerableMarkdownBlock({
   onRemove,
 }: SteerableMarkdownBlockProps) {
   const [draft, setDraft] = useState("");
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [triggerPosition, setTriggerPosition] = useState<TriggerPosition | null>(null);
+  const blockRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const commentCount = comments.length;
   const hasComments = commentCount > 0;
   const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
+  const triggerVisible = hovered || focused || active || hasComments;
 
   useEffect(() => {
     if (!active) {
@@ -48,6 +78,62 @@ export function SteerableMarkdownBlock({
 
     return () => window.cancelAnimationFrame(frameId);
   }, [active]);
+
+  const updateTriggerPosition = useCallback(() => {
+    const element = blockRef.current;
+    if (!element) return;
+
+    const blockRect = element.getBoundingClientRect();
+    const scrollContainer = getScrollContainer(element);
+    const scrollRect = scrollContainer?.getBoundingClientRect();
+    const containerTop = scrollRect?.top ?? 0;
+    const visibleTop = containerTop + TRIGGER_TOP_OFFSET;
+    const visibleBottom = scrollRect?.bottom ?? window.innerHeight;
+
+    if (blockRect.bottom <= containerTop || blockRect.top >= visibleBottom) {
+      setTriggerPosition(null);
+      return;
+    }
+
+    const blockTop = blockRect.top + BLOCK_TOP_INSET;
+    const blockBottom = blockRect.bottom - TRIGGER_SIZE - BLOCK_TOP_INSET;
+    const top = Math.min(Math.max(blockTop, visibleTop), blockBottom);
+    const left = Math.min(
+      Math.max(blockRect.right, VIEWPORT_SIDE_INSET),
+      window.innerWidth - VIEWPORT_SIDE_INSET,
+    );
+
+    setTriggerPosition((current) => {
+      if (current && current.top === top && current.left === left) return current;
+      return { top, left };
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!triggerVisible) {
+      setTriggerPosition(null);
+      return;
+    }
+
+    let frameId: number | null = null;
+    const scheduleUpdate = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        updateTriggerPosition();
+      });
+    };
+
+    updateTriggerPosition();
+    window.addEventListener("scroll", scheduleUpdate, true);
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      window.removeEventListener("scroll", scheduleUpdate, true);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [triggerVisible, updateTriggerPosition]);
 
   const handleOpen = useCallback(() => {
     onOpen(block.id);
@@ -110,37 +196,67 @@ export function SteerableMarkdownBlock({
     [handleCancel, handleSave],
   );
 
+  const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setFocused(false);
+  }, []);
+
+  const triggerRailStyle: CSSProperties | undefined = triggerPosition
+    ? {
+        position: "fixed",
+        top: triggerPosition.top,
+        left: triggerPosition.left,
+      }
+    : undefined;
+
+  const triggerRail =
+    triggerVisible && triggerRailStyle ? (
+      <div
+        style={triggerRailStyle}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="pointer-events-none z-50 flex h-8 w-0 justify-center"
+      >
+        <PopoverTrigger
+          title={hasComments ? "View comments" : "Add comment"}
+          aria-label={hasComments ? "View comments" : "Add comment"}
+          className={cn(
+            "pointer-events-auto flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border text-xs opacity-100 shadow-sm transition-all outline-none",
+            "focus-visible:ring-2 focus-visible:ring-accent/40",
+            hasComments
+              ? "min-w-10 border-accent/40 bg-accent px-2.5 text-accent-foreground hover:bg-accent/90"
+              : "w-8 border-border bg-surface-deep text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+          )}
+        >
+          {hasComments ? <MessageSquareText size={15} /> : <MessageSquarePlus size={15} />}
+          {hasComments && <span>{commentCount}</span>}
+        </PopoverTrigger>
+      </div>
+    ) : null;
+
   return (
     <div
+      ref={blockRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={handleBlur}
       className={cn(
         "group/steer relative -mx-2 my-1 rounded-md px-2 py-1.5 outline-none transition-colors",
         "focus-visible:ring-1 focus-visible:ring-accent/40",
       )}
     >
-      <Popover open={active} onOpenChange={handleOpenChange}>
-        <div className="grid grid-cols-[minmax(0,1fr)_2.75rem] items-start">
-          <div className="min-w-0 pr-3">{children}</div>
+      <div className="min-w-0 pr-12">{children}</div>
 
-          <div className="pointer-events-none sticky top-3 z-10 flex h-8 justify-end self-start">
-            <PopoverTrigger
-              title={hasComments ? "View comments" : "Add comment"}
-              aria-label={hasComments ? "View comments" : "Add comment"}
-              className={cn(
-                "flex h-8 min-w-8 translate-x-1/2 items-center justify-center gap-1 rounded-full border text-xs shadow-sm transition-all outline-none",
-                "focus-visible:ring-2 focus-visible:ring-accent/40",
-                hasComments
-                  ? "pointer-events-auto min-w-10 border-accent/40 bg-accent px-2.5 text-accent-foreground opacity-100 hover:bg-accent/90"
-                  : "pointer-events-none w-8 border-border bg-surface-deep text-muted-foreground opacity-0 hover:bg-surface-elevated hover:text-foreground group-hover/steer:pointer-events-auto group-hover/steer:opacity-100 group-focus-within/steer:pointer-events-auto group-focus-within/steer:opacity-100",
-                active && "pointer-events-auto opacity-100",
-              )}
-            >
-              {hasComments ? <MessageSquareText size={15} /> : <MessageSquarePlus size={15} />}
-              {hasComments && <span>{commentCount}</span>}
-            </PopoverTrigger>
-          </div>
-        </div>
+      <Popover open={active} onOpenChange={handleOpenChange}>
+        {triggerRail && typeof document !== "undefined"
+          ? createPortal(triggerRail, document.body)
+          : triggerRail}
 
         <PopoverContent
           side="right"
