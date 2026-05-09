@@ -223,6 +223,11 @@ async function captureFeedbackScreenshot() {
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
   if (process.platform === "darwin") {
+    if (getScreenRecordingStatus() !== "granted") {
+      await promptForScreenRecordingAccess();
+      throw new Error(getScreenRecordingPermissionMessage());
+    }
+
     try {
       return await captureFeedbackScreenshotWithScreencapture(display);
     } catch (error) {
