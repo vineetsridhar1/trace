@@ -34,6 +34,8 @@ const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + por
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
 const feedbackShortcut = process.env.TRACE_FEEDBACK_SHORTCUT ?? "CommandOrControl+Shift+F";
+const macScreenRecordingSettingsUrl =
+  "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 
 app.setName(appName);
 
@@ -73,22 +75,67 @@ function getScreenRecordingStatus() {
   return systemPreferences.getMediaAccessStatus("screen");
 }
 
+function getScreenRecordingPermissionMessage() {
+  const permissionStatus = getScreenRecordingStatus();
+
+  return [
+    "Trace needs macOS Screen Recording permission to capture feedback screenshots.",
+    "Enable it in System Settings > Privacy & Security > Screen Recording, then restart Trace.",
+    `Current permission status: ${permissionStatus}.`,
+  ].join(" ");
+}
+
 function getCaptureFailureMessage(error: unknown) {
   const detail = error instanceof Error ? error.message : String(error);
   const permissionStatus = getScreenRecordingStatus();
 
   if (process.platform === "darwin" && permissionStatus !== "granted") {
-    return [
-      "Trace needs macOS Screen Recording permission to capture feedback screenshots.",
-      "Enable it in System Settings > Privacy & Security > Screen Recording, then restart Trace.",
-      `Current permission status: ${permissionStatus}.`,
-    ].join(" ");
+    return getScreenRecordingPermissionMessage();
   }
 
   return `Unable to capture the current screen. ${detail}`;
 }
 
+async function promptForScreenRecordingAccess() {
+  if (process.platform !== "darwin" || getScreenRecordingStatus() === "granted") return;
+
+  if (getScreenRecordingStatus() === "not-determined") {
+    try {
+      await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 1, height: 1 },
+      });
+    } catch {
+      // macOS may reject this immediately; the explicit settings prompt below handles it.
+    }
+  }
+
+  if (getScreenRecordingStatus() === "granted") return;
+
+  const messageBoxOptions = {
+    type: "info",
+    buttons: ["Open Settings", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "Allow Screen Recording",
+    message: "Trace needs Screen Recording permission to capture feedback screenshots.",
+    detail:
+      "macOS requires this permission before Trace can capture your screen for annotated feedback. After enabling it, restart Trace.",
+  } satisfies Electron.MessageBoxOptions;
+  const result = mainWindow
+    ? await dialog.showMessageBox(mainWindow, messageBoxOptions)
+    : await dialog.showMessageBox(messageBoxOptions);
+
+  if (result.response === 0) {
+    await shell.openExternal(macScreenRecordingSettingsUrl);
+  }
+
+  throw new Error(getScreenRecordingPermissionMessage());
+}
+
 async function captureFeedbackScreenshot() {
+  await promptForScreenRecordingAccess();
+
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
   const scaleFactor = display.scaleFactor || 1;
