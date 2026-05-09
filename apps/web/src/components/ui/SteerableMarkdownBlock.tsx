@@ -1,6 +1,7 @@
 import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, MessageSquarePlus, MessageSquareText, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -296,28 +297,36 @@ export function SteerableMarkdownBlock({
         width: PREVIEW_WIDTH,
       }
     : undefined;
-  const commentPreview =
-    hasComments && triggerHovered && !active && previewStyle ? (
-      <div
-        style={previewStyle}
-        className="pointer-events-none z-50 rounded-md border border-border bg-surface p-2 text-xs shadow-xl ring-1 ring-foreground/10"
-      >
-        <div className="mb-1.5 flex items-center gap-1.5 font-medium text-foreground">
-          <MessageSquareText size={13} className="text-primary" />
-          {commentLabel}
-        </div>
-        <div className="max-h-40 overflow-hidden rounded-md border border-border bg-surface-deep/60 p-1">
-          {comments.map((comment) => (
-            <p
-              key={comment.commentId}
-              className="rounded-md px-2 py-1.5 leading-5 text-foreground/90"
-            >
-              {comment.text}
-            </p>
-          ))}
-        </div>
-      </div>
-    ) : null;
+  const commentPreview = (
+    <AnimatePresence>
+      {hasComments && triggerHovered && !active && previewStyle ? (
+        <motion.div
+          key={block.id}
+          style={previewStyle}
+          initial={{ opacity: 0, x: -6, y: 2, scale: 0.98 }}
+          animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+          exit={{ opacity: 0, x: -6, y: 2, scale: 0.98 }}
+          transition={{ duration: 0.14, ease: "easeOut" }}
+          className="pointer-events-none z-50 overflow-hidden rounded-lg border border-primary/20 bg-surface-elevated/95 p-1.5 text-xs shadow-2xl ring-1 ring-primary/15 backdrop-blur"
+        >
+          <div className="flex items-center gap-1.5 px-1.5 py-1 font-medium text-foreground">
+            <MessageSquareText size={13} className="text-primary" />
+            {commentLabel}
+          </div>
+          <div className="max-h-48 space-y-1 overflow-hidden">
+            {comments.map((comment) => (
+              <p
+                key={comment.commentId}
+                className="rounded-md bg-surface px-2.5 py-2 leading-5 text-foreground/90 shadow-sm"
+              >
+                {comment.text}
+              </p>
+            ))}
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 
   return (
     <div
@@ -340,7 +349,7 @@ export function SteerableMarkdownBlock({
         {triggerRail && typeof document !== "undefined"
           ? createPortal(triggerRail, document.body)
           : triggerRail}
-        {commentPreview && typeof document !== "undefined"
+        {typeof document !== "undefined"
           ? createPortal(commentPreview, document.body)
           : commentPreview}
 
