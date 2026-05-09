@@ -28,10 +28,13 @@ import {
 } from "./config.js";
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
+import { getFeedbackOverlayHtml, type FeedbackDestination } from "./feedback-overlay.js";
 
 const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
+let feedbackOverlayWindow: BrowserWindow | null = null;
+let feedbackDestination: FeedbackDestination | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const appName = "Trace";
@@ -59,11 +62,7 @@ function publishBridgeStatus(status: BridgeConnectionStatus) {
 }
 
 function publishFeedbackShortcut() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
-  mainWindow.webContents.send("feedback-shortcut");
+  openFeedbackOverlay();
 }
 
 function registerFeedbackShortcut() {
@@ -127,7 +126,9 @@ async function promptForScreenRecordingAccess() {
   const appPath = getCurrentMacAppPath();
   const messageBoxOptions = {
     type: "info",
-    buttons: appPath ? ["Open Settings", "Show App in Finder", "Cancel"] : ["Open Settings", "Cancel"],
+    buttons: appPath
+      ? ["Open Settings", "Show App in Finder", "Cancel"]
+      : ["Open Settings", "Cancel"],
     defaultId: 0,
     cancelId: appPath ? 2 : 1,
     title: "Allow Screen Recording",
@@ -222,6 +223,55 @@ async function captureFeedbackScreenshot() {
     width: size.width,
     height: size.height,
   };
+}
+
+function closeFeedbackOverlay() {
+  if (!feedbackOverlayWindow || feedbackOverlayWindow.isDestroyed()) return;
+  feedbackOverlayWindow.close();
+  feedbackOverlayWindow = null;
+}
+
+function openFeedbackOverlay() {
+  if (feedbackOverlayWindow && !feedbackOverlayWindow.isDestroyed()) {
+    feedbackOverlayWindow.focus();
+    return;
+  }
+
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint);
+
+  feedbackOverlayWindow = new BrowserWindow({
+    ...display.bounds,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    hasShadow: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  feedbackOverlayWindow.setAlwaysOnTop(true, "screen-saver");
+  if (process.platform === "darwin") {
+    feedbackOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+
+  feedbackOverlayWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(getFeedbackOverlayHtml(feedbackDestination))}`,
+  );
+
+  feedbackOverlayWindow.on("closed", () => {
+    feedbackOverlayWindow = null;
+  });
 }
 
 function configureApplicationIdentity() {
@@ -373,6 +423,29 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 ipcMain.handle("get-bridge-info", () => bridge.getInfo());
 ipcMain.handle("capture-feedback-screenshot", () => captureFeedbackScreenshot());
+ipcMain.handle("close-feedback-overlay", () => {
+  closeFeedbackOverlay();
+  return true;
+});
+ipcMain.handle(
+  "submit-feedback-overlay",
+  (
+    _event,
+    payload: { message: string; screenshot: { dataUrl: string; width: number; height: number } },
+  ) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      throw new Error("Trace is not ready to send feedback");
+    }
+
+    mainWindow.webContents.send("feedback-overlay-submit", payload);
+    closeFeedbackOverlay();
+    return true;
+  },
+);
+ipcMain.handle("set-feedback-destination", (_event, destination: FeedbackDestination | null) => {
+  feedbackDestination = destination;
+  return true;
+});
 ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   await setBridgeLabel(label);
   bridge.updateLabel();

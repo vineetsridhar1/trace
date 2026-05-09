@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld("trace", {
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
   captureFeedbackScreenshot: () => ipcRenderer.invoke("capture-feedback-screenshot"),
+  closeFeedbackOverlay: () => ipcRenderer.invoke("close-feedback-overlay"),
+  submitFeedbackOverlay: (payload: unknown) =>
+    ipcRenderer.invoke("submit-feedback-overlay", payload),
+  setFeedbackDestination: (destination: unknown) =>
+    ipcRenderer.invoke("set-feedback-destination", destination),
   setBridgeLabel: (label: string) => ipcRenderer.invoke("set-bridge-label", label),
   setBridgeAuthContext: (organizationId: string | null) =>
     ipcRenderer.invoke("set-bridge-auth-context", organizationId),
@@ -26,6 +31,11 @@ contextBridge.exposeInMainWorld("trace", {
     const listener = () => callback();
     ipcRenderer.on("feedback-shortcut", listener);
     return () => ipcRenderer.removeListener("feedback-shortcut", listener);
+  },
+  onFeedbackOverlaySubmit: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on("feedback-overlay-submit", listener);
+    return () => ipcRenderer.removeListener("feedback-overlay-submit", listener);
   },
   onBridgeStatus: (callback: (status: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useEntityField } from "@trace/client-core";
 import { Eraser, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "../../stores/ui";
@@ -13,8 +14,28 @@ type FeedbackState =
   | { status: "loading" }
   | { status: "ready"; screenshot: DesktopFeedbackScreenshot };
 
+type EntitySummary = { name?: string | null };
+
 export function FeedbackCapture() {
   const activeSessionId = useUIStore((s) => s.activeSessionId);
+  const sessionName = useEntityField("sessions", activeSessionId ?? "", "name") as
+    | string
+    | undefined;
+  const sessionGroupId = useEntityField("sessions", activeSessionId ?? "", "sessionGroupId") as
+    | string
+    | null
+    | undefined;
+  const groupName = useEntityField("sessionGroups", sessionGroupId ?? "", "name") as
+    | string
+    | undefined;
+  const branch = useEntityField("sessions", activeSessionId ?? "", "branch") as
+    | string
+    | null
+    | undefined;
+  const repo = useEntityField("sessions", activeSessionId ?? "", "repo") as
+    | EntitySummary
+    | null
+    | undefined;
   const [state, setState] = useState<FeedbackState>({ status: "closed" });
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -46,12 +67,55 @@ export function FeedbackCapture() {
     }
   }, []);
 
+  const sendOverlayFeedback = useCallback(async (payload: DesktopFeedbackOverlayPayload) => {
+    const sessionId = useUIStore.getState().activeSessionId;
+    if (!sessionId) {
+      toast.error("Open a synced session before sending feedback");
+      return;
+    }
+
+    let previewUrl: string | null = null;
+    try {
+      const blob = dataUrlToBlob(payload.screenshot.dataUrl);
+      previewUrl = URL.createObjectURL(blob);
+      await sendSessionFeedback({
+        sessionId,
+        message: payload.message,
+        imageBlob: blob,
+        imagePreviewUrl: previewUrl,
+      });
+      toast.success("Feedback sent to the current session");
+    } catch (error) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      toast.error(error instanceof Error ? error.message : "Failed to send feedback");
+    }
+  }, []);
+
   useEffect(() => {
     if (!window.trace?.onFeedbackShortcut) return;
     return window.trace.onFeedbackShortcut(() => {
       void open();
     });
   }, [open]);
+
+  useEffect(() => {
+    if (!window.trace?.setFeedbackDestination) return;
+
+    void window.trace.setFeedbackDestination({
+      sessionId: activeSessionId,
+      label: sessionName ?? "No session selected",
+      context: [groupName, repo?.name].filter(Boolean).join(" · ") || null,
+      branch: branch ?? null,
+    });
+  }, [activeSessionId, branch, groupName, repo?.name, sessionName]);
+
+  useEffect(() => {
+    if (!window.trace?.onFeedbackOverlaySubmit) return;
+
+    return window.trace.onFeedbackOverlaySubmit((payload) => {
+      void sendOverlayFeedback(payload);
+    });
+  }, [sendOverlayFeedback]);
 
   useEffect(() => {
     if (state.status === "closed") return;
@@ -165,4 +229,22 @@ export function FeedbackCapture() {
       </p>
     </div>
   );
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [metadata, data] = dataUrl.split(",");
+  if (!metadata || !data) {
+    throw new Error("Invalid screenshot data");
+  }
+
+  const mimeMatch = metadata.match(/^data:(.*?);base64$/);
+  const mime = mimeMatch?.[1] || "image/png";
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mime });
 }

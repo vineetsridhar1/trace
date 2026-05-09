@@ -49,6 +49,18 @@ declare global {
     height: number;
   };
 
+  type DesktopFeedbackDestination = {
+    sessionId: string | null;
+    label: string;
+    context: string | null;
+    branch: string | null;
+  };
+
+  type DesktopFeedbackOverlayPayload = {
+    message: string;
+    screenshot: DesktopFeedbackScreenshot;
+  };
+
   type DesktopLinkedCheckoutStatus = {
     repoId: string;
     repoPath: string | null;
@@ -137,9 +149,15 @@ declare global {
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
     captureFeedbackScreenshot: () => Promise<DesktopFeedbackScreenshot>;
+    closeFeedbackOverlay: () => Promise<boolean>;
+    submitFeedbackOverlay: (payload: DesktopFeedbackOverlayPayload) => Promise<boolean>;
+    setFeedbackDestination: (destination: DesktopFeedbackDestination | null) => Promise<boolean>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onFeedbackShortcut: (callback: () => void) => () => void;
+    onFeedbackOverlaySubmit: (
+      callback: (payload: DesktopFeedbackOverlayPayload) => void,
+    ) => () => void;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
   }
 
