@@ -1,4 +1,4 @@
-import type { CSSProperties, FocusEvent, KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, MessageSquarePlus, MessageSquareText, Trash2, X } from "lucide-react";
@@ -55,7 +55,8 @@ export function SteerableMarkdownBlock({
   onRemove,
 }: SteerableMarkdownBlockProps) {
   const [draft, setDraft] = useState("");
-  const [hovered, setHovered] = useState(false);
+  const [blockHovered, setBlockHovered] = useState(false);
+  const [triggerHovered, setTriggerHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [triggerPosition, setTriggerPosition] = useState<TriggerPosition | null>(null);
   const blockRef = useRef<HTMLDivElement>(null);
@@ -63,7 +64,7 @@ export function SteerableMarkdownBlock({
   const commentCount = comments.length;
   const hasComments = commentCount > 0;
   const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
-  const triggerVisible = hovered || focused || active || hasComments;
+  const triggerVisible = blockHovered || triggerHovered || focused || active || hasComments;
 
   useEffect(() => {
     if (!active) {
@@ -202,6 +203,24 @@ export function SteerableMarkdownBlock({
     setFocused(false);
   }, []);
 
+  const handleTriggerMouseLeave = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    const element = blockRef.current;
+    if (!element) {
+      setTriggerHovered(false);
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const isInsideBlock =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom;
+
+    setBlockHovered(isInsideBlock);
+    setTriggerHovered(false);
+  }, []);
+
   const triggerRailStyle: CSSProperties | undefined = triggerPosition
     ? {
         position: "fixed",
@@ -214,8 +233,8 @@ export function SteerableMarkdownBlock({
     triggerVisible && triggerRailStyle ? (
       <div
         style={triggerRailStyle}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onMouseEnter={() => setTriggerHovered(true)}
+        onMouseLeave={handleTriggerMouseLeave}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className="pointer-events-none z-50 flex h-8 w-0 justify-center"
@@ -242,8 +261,9 @@ export function SteerableMarkdownBlock({
       ref={blockRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setBlockHovered(true)}
+      onMouseMove={() => setBlockHovered(true)}
+      onMouseLeave={() => setBlockHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={handleBlur}
       className={cn(
