@@ -20,7 +20,7 @@ interface SteerableMarkdownBlockProps {
   onRemove: (blockId: string, commentId: string) => void;
 }
 
-const TRIGGER_SIZE = 32;
+const TRIGGER_SIZE = 36;
 const TRIGGER_TOP_OFFSET = 12;
 const BLOCK_TOP_INSET = 6;
 const VIEWPORT_SIDE_INSET = 18;
@@ -237,20 +237,24 @@ export function SteerableMarkdownBlock({
         onMouseLeave={handleTriggerMouseLeave}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="pointer-events-none z-50 flex h-8 w-0 justify-center"
+        className="pointer-events-none z-50 flex h-9 w-0 justify-center"
       >
         <PopoverTrigger
           title={hasComments ? "View comments" : "Add comment"}
           aria-label={hasComments ? "View comments" : "Add comment"}
           className={cn(
-            "pointer-events-auto flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border text-xs opacity-100 shadow-sm transition-all outline-none",
+            "pointer-events-auto flex h-9 min-w-9 items-center justify-center gap-1 rounded-full border text-xs opacity-100 shadow-sm transition-all outline-none",
             "focus-visible:ring-2 focus-visible:ring-accent/40",
             hasComments
-              ? "min-w-10 border-accent/40 bg-accent px-2.5 text-accent-foreground hover:bg-accent/90"
-              : "w-8 border-border bg-surface-deep text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+              ? "min-w-11 border-accent/40 bg-accent px-2.5 text-accent-foreground hover:bg-accent/90"
+              : "w-9 border-border bg-surface-deep text-primary hover:bg-surface-elevated",
           )}
         >
-          {hasComments ? <MessageSquareText size={15} /> : <MessageSquarePlus size={15} />}
+          {hasComments ? (
+            <MessageSquareText size={16} className="text-primary" />
+          ) : (
+            <MessageSquarePlus size={16} className="text-primary" />
+          )}
           {hasComments && <span>{commentCount}</span>}
         </PopoverTrigger>
       </div>
