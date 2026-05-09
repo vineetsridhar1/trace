@@ -107,13 +107,13 @@ export function SteerableMarkdownBlock({
       Math.max(blockRect.right, VIEWPORT_SIDE_INSET),
       window.innerWidth - VIEWPORT_SIDE_INSET,
     );
-    const maxPreviewLeft = Math.max(
+    const previewLeftOnRight = left + TRIGGER_SIZE / 2 + PREVIEW_GAP;
+    const previewRightEdge = previewLeftOnRight + PREVIEW_WIDTH;
+    const previewLeft = Math.max(
       VIEWPORT_SIDE_INSET,
-      window.innerWidth - PREVIEW_WIDTH - VIEWPORT_SIDE_INSET,
-    );
-    const previewLeft = Math.min(
-      Math.max(left + TRIGGER_SIZE / 2 + PREVIEW_GAP, VIEWPORT_SIDE_INSET),
-      maxPreviewLeft,
+      previewRightEdge <= window.innerWidth - VIEWPORT_SIDE_INSET
+        ? previewLeftOnRight
+        : left - TRIGGER_SIZE / 2 - PREVIEW_GAP - PREVIEW_WIDTH,
     );
 
     setTriggerPosition((current) => {
@@ -266,7 +266,6 @@ export function SteerableMarkdownBlock({
         className="pointer-events-none z-50 flex h-9 w-0 justify-center"
       >
         <PopoverTrigger
-          title={hasComments ? "View comments" : "Add comment"}
           aria-label={hasComments ? "View comments" : "Add comment"}
           onClick={(event) => {
             event.preventDefault();
