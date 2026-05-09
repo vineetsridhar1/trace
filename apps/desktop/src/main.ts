@@ -28,10 +28,19 @@ import {
 } from "./config.js";
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
+import {
+  getFeedbackOverlayHtml,
+  type FeedbackDestination,
+  type FeedbackOverlaySubmitPayload,
+  type FeedbackScreenshot,
+} from "./feedback-overlay.js";
 
 const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
+let feedbackOverlayWindow: BrowserWindow | null = null;
+let feedbackDestination: FeedbackDestination | null = null;
+let feedbackOverlayReadyTimer: ReturnType<typeof setTimeout> | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const appName = "Trace";
@@ -59,9 +68,24 @@ function publishBridgeStatus(status: BridgeConnectionStatus) {
 }
 
 async function publishFeedbackShortcut() {
+  if (feedbackOverlayWindow && !feedbackOverlayWindow.isDestroyed()) {
+    closeFeedbackOverlay();
+    return;
+  }
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!feedbackDestination?.sessionId) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "No Synced Session",
+      message: "Open a synced session before sending feedback.",
+    });
+    return;
+  }
 
-  let screenshot: { dataUrl: string; width: number; height: number };
+  let screenshot: FeedbackScreenshot;
   try {
     screenshot = await captureFeedbackScreenshot();
   } catch (error) {
@@ -74,10 +98,7 @@ async function publishFeedbackShortcut() {
     return;
   }
 
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
-  mainWindow.webContents.send("feedback-shortcut", screenshot);
+  openFeedbackOverlay(screenshot);
 }
 
 function registerFeedbackShortcut() {
@@ -241,6 +262,76 @@ async function captureFeedbackScreenshot() {
   };
 }
 
+function clearFeedbackOverlayReadyTimer() {
+  if (!feedbackOverlayReadyTimer) return;
+  clearTimeout(feedbackOverlayReadyTimer);
+  feedbackOverlayReadyTimer = null;
+}
+
+function closeFeedbackOverlay() {
+  clearFeedbackOverlayReadyTimer();
+  if (!feedbackOverlayWindow || feedbackOverlayWindow.isDestroyed()) return;
+  feedbackOverlayWindow.close();
+  feedbackOverlayWindow = null;
+}
+
+function openFeedbackOverlay(screenshot: FeedbackScreenshot) {
+  if (feedbackOverlayWindow && !feedbackOverlayWindow.isDestroyed()) {
+    feedbackOverlayWindow.focus();
+    return;
+  }
+
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint);
+  feedbackOverlayWindow = new BrowserWindow({
+    ...display.bounds,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    hasShadow: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  feedbackOverlayWindow.webContents.on("before-input-event", (event, input) => {
+    const key = input.key.toLowerCase();
+    if (key === "escape" || (input.meta && key === "w")) {
+      event.preventDefault();
+      closeFeedbackOverlay();
+    }
+  });
+
+  feedbackOverlayWindow.webContents.on("did-finish-load", () => {
+    feedbackOverlayWindow?.webContents.send("feedback-overlay-init", {
+      screenshot,
+      destination: feedbackDestination,
+    });
+    clearFeedbackOverlayReadyTimer();
+    feedbackOverlayReadyTimer = setTimeout(() => {
+      closeFeedbackOverlay();
+    }, 8_000);
+  });
+
+  feedbackOverlayWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(getFeedbackOverlayHtml())}`,
+  );
+
+  feedbackOverlayWindow.on("closed", () => {
+    clearFeedbackOverlayReadyTimer();
+    feedbackOverlayWindow = null;
+  });
+}
+
 function configureApplicationIdentity() {
   app.setName(appName);
 
@@ -390,6 +481,27 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 ipcMain.handle("get-bridge-info", () => bridge.getInfo());
 ipcMain.handle("capture-feedback-screenshot", () => captureFeedbackScreenshot());
+ipcMain.handle("feedback-overlay-ready", () => {
+  clearFeedbackOverlayReadyTimer();
+  return true;
+});
+ipcMain.handle("close-feedback-overlay", () => {
+  closeFeedbackOverlay();
+  return true;
+});
+ipcMain.handle("submit-feedback-overlay", (_event, payload: FeedbackOverlaySubmitPayload) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    throw new Error("Trace is not ready to send feedback");
+  }
+
+  mainWindow.webContents.send("feedback-overlay-submit", payload);
+  closeFeedbackOverlay();
+  return true;
+});
+ipcMain.handle("set-feedback-destination", (_event, destination: FeedbackDestination | null) => {
+  feedbackDestination = destination;
+  return true;
+});
 ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   await setBridgeLabel(label);
   bridge.updateLabel();

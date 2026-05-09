@@ -14,18 +14,20 @@ export async function sendSessionFeedback({
   message,
   imageBlob,
   imagePreviewUrl,
+  formatMessage = true,
 }: {
   sessionId: string;
   message: string;
   imageBlob: Blob;
   imagePreviewUrl: string;
+  formatMessage?: boolean;
 }): Promise<void> {
   const file = new File([imageBlob], `trace-feedback-${generateUUID()}.jpg`, {
     type: imageBlob.type || "image/jpeg",
   });
   const orgId = useAuthStore.getState().activeOrgId;
   const imageKey = await uploadFile(file, orgId ?? undefined);
-  const text = formatFeedbackMessage(message);
+  const text = formatMessage ? formatFeedbackMessage(message) : message.trim();
   const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
     sessionId,
     text,
