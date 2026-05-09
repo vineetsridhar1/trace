@@ -1,14 +1,27 @@
 import { Map } from "lucide-react";
 import { Markdown } from "../../ui/Markdown";
+import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../../ui/markdownSteering";
 import { formatTime } from "./utils";
 
 interface PlanReviewCardProps {
   planContent: string;
   planFilePath: string;
   timestamp: string;
+  commentable?: boolean;
+  comments?: MarkdownSteerCommentsByBlock;
+  onAddComment?: (block: MarkdownSteerBlock, text: string) => void;
+  onRemoveComment?: (blockId: string, commentId: string) => void;
 }
 
-export function PlanReviewCard({ planContent, planFilePath, timestamp }: PlanReviewCardProps) {
+export function PlanReviewCard({
+  planContent,
+  planFilePath,
+  timestamp,
+  commentable = false,
+  comments,
+  onAddComment,
+  onRemoveComment,
+}: PlanReviewCardProps) {
   return (
     <div className="accent-dashed-container px-4 py-3">
       <div className="mb-3 flex items-center gap-2">
@@ -22,7 +35,14 @@ export function PlanReviewCard({ planContent, planFilePath, timestamp }: PlanRev
         <span className="ml-auto text-xs text-muted-foreground">{formatTime(timestamp)}</span>
       </div>
 
-      <Markdown>{planContent}</Markdown>
+      <Markdown
+        steerableBlocks={commentable}
+        comments={comments}
+        onAddComment={onAddComment}
+        onRemoveComment={onRemoveComment}
+      >
+        {planContent}
+      </Markdown>
     </div>
   );
 }

@@ -28,6 +28,7 @@ import { isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
 import {
   DISMISS_SESSION_MUTATION,
@@ -371,6 +372,43 @@ export function SessionDetailView({
     return null;
   }, [nodes, sessionStatus]);
 
+  const [planComments, setPlanComments] = useState<MarkdownSteerCommentsByBlock>({});
+
+  useEffect(() => {
+    setPlanComments({});
+  }, [activePlan?.node.id]);
+
+  const handleAddPlanComment = useCallback((block: MarkdownSteerBlock, text: string) => {
+    setPlanComments((current) => ({
+      ...current,
+      [block.id]: [
+        ...(current[block.id] ?? []),
+        {
+          ...block,
+          commentId: `${block.id}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+          text,
+        },
+      ],
+    }));
+  }, []);
+
+  const handleRemovePlanComment = useCallback((blockId: string, commentId: string) => {
+    setPlanComments((current) => {
+      const next = { ...current };
+      const blockComments = next[blockId]?.filter((comment) => comment.commentId !== commentId);
+      if (blockComments && blockComments.length > 0) {
+        next[blockId] = blockComments;
+      } else {
+        delete next[blockId];
+      }
+      return next;
+    });
+  }, []);
+
+  const handleClearPlanComments = useCallback(() => {
+    setPlanComments({});
+  }, []);
+
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
   // Don't show a stale question if a more recent plan exists — the question was already answered
   const showQuestion = (() => {
@@ -438,6 +476,10 @@ export function SessionDetailView({
                 toolResultByUseId={toolResultByUseId}
                 scrollToEventId={scrollToEventId}
                 onScrollComplete={onScrollComplete}
+                activePlanId={activePlan?.node.id}
+                planComments={planComments}
+                onAddPlanComment={handleAddPlanComment}
+                onRemovePlanComment={handleRemovePlanComment}
               />
             )}
             {initialEventsLoading && (
@@ -534,6 +576,8 @@ export function SessionDetailView({
           <PlanResponseBar
             sessionId={sessionId}
             planContent={activePlan.node.planContent}
+            planComments={planComments}
+            onClearPlanComments={handleClearPlanComments}
             onDismiss={handleDismissPlan}
           />
         ) : (

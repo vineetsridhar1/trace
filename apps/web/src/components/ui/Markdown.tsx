@@ -1,8 +1,33 @@
-import type { ComponentPropsWithoutRef, MouseEvent } from "react";
-import { useCallback, useMemo } from "react";
-import ReactMarkdown from "react-markdown";
+import type { ComponentPropsWithoutRef, MouseEvent, ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useFileOpen } from "../session/FileOpenContext";
+import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
+import {
+  createSteerableBlocksPlugin,
+  type MarkdownSteerCommentsByBlock,
+  type MarkdownSteerBlock,
+} from "./markdownSteering";
+
+interface MarkdownProps {
+  children: string;
+  steerableBlocks?: boolean;
+  comments?: MarkdownSteerCommentsByBlock;
+  onAddComment?: (block: MarkdownSteerBlock, text: string) => void;
+  onRemoveComment?: (blockId: string, commentId: string) => void;
+}
+
+interface SteerableDivProps extends ComponentPropsWithoutRef<"div"> {
+  node?: unknown;
+  "data-steer-block-id"?: unknown;
+  "data-steer-block-markdown"?: unknown;
+  "data-steer-block-type"?: unknown;
+}
+
+function getDataString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
 
 /** Returns true if href looks like a file path (not a URL, anchor, or other scheme). */
 function isFilePath(href: string): boolean {
@@ -47,8 +72,16 @@ function FileAwareLink({
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }
 
-export function Markdown({ children }: { children: string }) {
+export function Markdown({
+  children,
+  steerableBlocks = false,
+  comments,
+  onAddComment,
+  onRemoveComment,
+}: MarkdownProps) {
   const fileOpen = useFileOpen();
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const canSteer = steerableBlocks && !!onAddComment && !!onRemoveComment;
 
   const linkComponent = useMemo(() => {
     if (!fileOpen) return ExternalLink;
@@ -57,9 +90,78 @@ export function Markdown({ children }: { children: string }) {
     };
   }, [fileOpen]);
 
+  const handleAddComment = useCallback(
+    (block: MarkdownSteerBlock, text: string) => {
+      onAddComment?.(block, text);
+    },
+    [onAddComment],
+  );
+
+  const handleRemoveComment = useCallback(
+    (blockId: string, commentId: string) => {
+      onRemoveComment?.(blockId, commentId);
+    },
+    [onRemoveComment],
+  );
+
+  const components = useMemo<Components>(() => {
+    if (!canSteer) {
+      return { a: linkComponent };
+    }
+
+    function SteerableDiv({
+      children: blockChildren,
+      node: _node,
+      "data-steer-block-id": rawBlockId,
+      "data-steer-block-markdown": rawBlockMarkdown,
+      "data-steer-block-type": rawBlockType,
+      ...props
+    }: SteerableDivProps) {
+      const blockId = getDataString(rawBlockId);
+      const blockMarkdown = getDataString(rawBlockMarkdown);
+      const blockType = getDataString(rawBlockType);
+
+      if (!blockId || !blockMarkdown || !blockType) {
+        return <div {...props}>{blockChildren}</div>;
+      }
+
+      return (
+        <SteerableMarkdownBlock
+          block={{ id: blockId, markdown: blockMarkdown, type: blockType }}
+          comments={comments?.[blockId] ?? []}
+          active={activeBlockId === blockId}
+          onOpen={setActiveBlockId}
+          onCancel={() => setActiveBlockId(null)}
+          onAdd={handleAddComment}
+          onRemove={handleRemoveComment}
+        >
+          {blockChildren as ReactNode}
+        </SteerableMarkdownBlock>
+      );
+    }
+
+    return { a: linkComponent, div: SteerableDiv };
+  }, [
+    activeBlockId,
+    comments,
+    canSteer,
+    handleAddComment,
+    handleRemoveComment,
+    linkComponent,
+  ]);
+
+  const rehypePlugins = useMemo(() => {
+    if (!canSteer) return [];
+    return [createSteerableBlocksPlugin(children)];
+  }, [canSteer, children]);
+
   return (
     <div className="markdown-body">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: linkComponent }}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={rehypePlugins}
+        components={components}
+      >
         {children}
       </ReactMarkdown>
     </div>

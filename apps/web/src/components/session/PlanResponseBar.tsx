@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Send, X } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { MessageSquareText, Send, X } from "lucide-react";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -11,19 +11,52 @@ import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
+import type { MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
+import {
+  buildApproveWithCommentsPrompt,
+  buildCommentPrompt,
+  getCommentGroupIndex,
+} from "./planCommentPrompts";
 
 interface PlanResponseBarProps {
   sessionId: string;
   planContent: string;
+  planComments?: MarkdownSteerCommentsByBlock;
+  onClearPlanComments?: () => void;
   onDismiss: () => void;
 }
 
-const PRESETS = ["Approve (new session)", "Approve (keep context)"];
+const APPROVE_NEW_SESSION = "Approve (new session)";
+const APPROVE_KEEP_CONTEXT = "Approve (keep context)";
+const PRESETS = [APPROVE_NEW_SESSION, APPROVE_KEEP_CONTEXT];
 
-export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanResponseBarProps) {
+function getApprovalLabel(label: string, hasComments: boolean): string {
+  if (!hasComments) return label;
+  return label === APPROVE_NEW_SESSION
+    ? "Approve with comments (new session)"
+    : "Approve with comments (keep context)";
+}
+
+export function PlanResponseBar({
+  sessionId,
+  planContent,
+  planComments,
+  onClearPlanComments,
+  onDismiss,
+}: PlanResponseBarProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
+  const commentGroups = useMemo(
+    () =>
+      Object.values(planComments ?? {})
+        .filter((comments) => comments.length > 0)
+        .sort((a, b) => getCommentGroupIndex(a) - getCommentGroupIndex(b)),
+    [planComments],
+  );
+  const commentCount = commentGroups.reduce((sum, comments) => sum + comments.length, 0);
+  const hasComments = commentCount > 0;
+  const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
   const openSessionTab = useUIStore(
     (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
   );
@@ -48,7 +81,13 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     if (sending || !sessionGroupId) return;
     setSending(true);
     try {
-      const prompt = `Implement the following plan:\n\n${planContent}`;
+      const prompt = hasComments
+        ? buildApproveWithCommentsPrompt({
+            planContent,
+            commentGroups,
+            note: feedback.trim(),
+          })
+        : `Implement the following plan:\n\n${planContent}`;
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
@@ -83,6 +122,10 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
         await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+        if (hasComments) {
+          setFeedback("");
+          onClearPlanComments?.();
+        }
       }
     } finally {
       setSending(false);
@@ -91,6 +134,10 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     sending,
     sessionGroupId,
     planContent,
+    hasComments,
+    commentGroups,
+    feedback,
+    onClearPlanComments,
     tool,
     model,
     defaultHosting,
@@ -108,43 +155,73 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
       await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
-          text: "Approved. Implement this plan.",
+          text: hasComments
+            ? buildApproveWithCommentsPrompt({
+                commentGroups,
+                note: feedback.trim(),
+              })
+            : "Approved. Implement this plan.",
         })
         .toPromise();
+      if (hasComments) {
+        setFeedback("");
+        onClearPlanComments?.();
+      }
     } finally {
       setSending(false);
     }
-  }, [sessionId, sending]);
+  }, [commentGroups, feedback, hasComments, onClearPlanComments, sessionId, sending]);
 
   const handleRevise = useCallback(async () => {
     const text = feedback.trim();
-    if (!text || sending) return;
+    if ((!text && !hasComments) || sending) return;
     setSending(true);
     try {
       await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
-          text: `Please revise the plan: ${text}`,
+          text: hasComments
+            ? buildCommentPrompt(commentGroups, text)
+            : `Please revise the plan: ${text}`,
           interactionMode: "plan",
         })
         .toPromise();
       setFeedback("");
+      if (hasComments) onClearPlanComments?.();
     } finally {
       setSending(false);
     }
-  }, [sessionId, feedback, sending]);
+  }, [commentGroups, feedback, hasComments, onClearPlanComments, sending, sessionId]);
+
+  const handleApprovalClick = useCallback(
+    (label: string) => {
+      if (hasComments) {
+        if (label === APPROVE_NEW_SESSION) {
+          handleClearContext();
+        } else {
+          handleKeepContext();
+        }
+        return;
+      }
+
+      setSelected(selected === label ? null : label);
+      setFeedback("");
+    },
+    [hasComments, handleClearContext, handleKeepContext, selected],
+  );
 
   const handleSubmit = useCallback(() => {
-    if (selected === "Approve (new session)") {
+    if (!hasComments && selected === APPROVE_NEW_SESSION) {
       handleClearContext();
-    } else if (selected === "Approve (keep context)") {
+    } else if (!hasComments && selected === APPROVE_KEEP_CONTEXT) {
       handleKeepContext();
-    } else if (feedback.trim()) {
+    } else if (feedback.trim() || hasComments) {
       handleRevise();
     }
-  }, [selected, feedback, handleClearContext, handleKeepContext, handleRevise]);
+  }, [selected, feedback, hasComments, handleClearContext, handleKeepContext, handleRevise]);
 
-  const hasAnswer = selected !== null || feedback.trim().length > 0;
+  const hasAnswer = selected !== null || feedback.trim().length > 0 || hasComments;
+  const primaryLabel = hasComments ? "Send comments" : selected ? "Approve" : "Revise";
 
   return (
     <div className="shrink-0 border-t border-accent/30 bg-surface px-4 py-3">
@@ -152,6 +229,11 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
           Plan Review
         </span>
+        {hasComments && (
+          <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+            {commentLabel}
+          </span>
+        )}
         <div className="flex-1" />
         <button
           type="button"
@@ -163,25 +245,31 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         </button>
       </div>
 
+      {hasComments && (
+        <div className="mb-2 flex items-center gap-1.5 rounded-md border border-accent/20 bg-accent/5 px-2 py-1.5 text-xs text-muted-foreground">
+          <MessageSquareText size={13} className="text-accent" />
+          <span>{commentLabel} ready for revision or approval.</span>
+        </div>
+      )}
+
       <div className="mb-2 flex flex-wrap gap-1.5">
         {PRESETS.map((label) => (
           <button
             key={label}
             type="button"
-            onClick={() => {
-              setSelected(selected === label ? null : label);
-              setFeedback("");
-            }}
+            onClick={() => handleApprovalClick(label)}
             disabled={sending}
             className={cn(
               "min-h-8 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-              selected === label
-                ? "border-accent bg-accent/20 text-accent"
-                : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-elevated",
+              hasComments
+                ? "border-accent/35 bg-accent/10 text-accent hover:bg-accent/15"
+                : selected === label
+                  ? "border-accent bg-accent/20 text-accent"
+                  : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-elevated",
               sending && "opacity-50",
             )}
           >
-            {label}
+            {getApprovalLabel(label, hasComments)}
           </button>
         ))}
       </div>
@@ -192,18 +280,21 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           value={feedback}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
             setFeedback(e.target.value);
-            if (e.target.value) setSelected(null);
+            if (e.target.value && !hasComments) setSelected(null);
           }}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              if (feedback.trim()) {
-                setSelected(null);
-                handleRevise();
+              if (hasAnswer) {
+                handleSubmit();
               }
             }
           }}
-          placeholder="Suggest changes to revise the plan..."
+          placeholder={
+            hasComments
+              ? "Optional note to include with comments..."
+              : "Suggest changes to revise the plan..."
+          }
           disabled={sending}
           className="flex-1 rounded-lg border border-border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
         />
@@ -214,7 +305,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
         >
           <Send size={14} />
-          {selected ? "Approve" : "Revise"}
+          {primaryLabel}
         </button>
       </div>
     </div>
