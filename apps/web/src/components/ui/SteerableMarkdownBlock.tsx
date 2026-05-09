@@ -24,10 +24,13 @@ const TRIGGER_SIZE = 36;
 const TRIGGER_TOP_OFFSET = 12;
 const BLOCK_TOP_INSET = 6;
 const VIEWPORT_SIDE_INSET = 18;
+const PREVIEW_WIDTH = 288;
+const PREVIEW_GAP = 14;
 
 interface TriggerPosition {
   top: number;
   left: number;
+  previewLeft: number;
 }
 
 function getScrollContainer(element: HTMLElement): HTMLElement | null {
@@ -58,16 +61,13 @@ export function SteerableMarkdownBlock({
   const [blockHovered, setBlockHovered] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [triggerPosition, setTriggerPosition] = useState<TriggerPosition | null>(null);
   const blockRef = useRef<HTMLDivElement>(null);
-  const previewCloseTimeoutRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const commentCount = comments.length;
   const hasComments = commentCount > 0;
   const commentLabel = commentCount === 1 ? "1 comment" : `${commentCount} comments`;
-  const popoverOpen = active || previewOpen;
-  const triggerVisible = blockHovered || triggerHovered || focused || popoverOpen || hasComments;
+  const triggerVisible = blockHovered || triggerHovered || focused || active || hasComments;
 
   useEffect(() => {
     if (!active) {
@@ -82,36 +82,6 @@ export function SteerableMarkdownBlock({
 
     return () => window.cancelAnimationFrame(frameId);
   }, [active]);
-
-  const clearPreviewCloseTimeout = useCallback(() => {
-    if (previewCloseTimeoutRef.current === null) return;
-    window.clearTimeout(previewCloseTimeoutRef.current);
-    previewCloseTimeoutRef.current = null;
-  }, []);
-
-  const openPreview = useCallback(() => {
-    if (!hasComments) return;
-    clearPreviewCloseTimeout();
-    setPreviewOpen(true);
-  }, [clearPreviewCloseTimeout, hasComments]);
-
-  const schedulePreviewClose = useCallback(() => {
-    if (active) return;
-    clearPreviewCloseTimeout();
-    previewCloseTimeoutRef.current = window.setTimeout(() => {
-      setPreviewOpen(false);
-      previewCloseTimeoutRef.current = null;
-    }, 160);
-  }, [active, clearPreviewCloseTimeout]);
-
-  useEffect(() => {
-    return () => clearPreviewCloseTimeout();
-  }, [clearPreviewCloseTimeout]);
-
-  useEffect(() => {
-    if (hasComments) return;
-    setPreviewOpen(false);
-  }, [hasComments]);
 
   const updateTriggerPosition = useCallback(() => {
     const element = blockRef.current;
@@ -136,10 +106,25 @@ export function SteerableMarkdownBlock({
       Math.max(blockRect.right, VIEWPORT_SIDE_INSET),
       window.innerWidth - VIEWPORT_SIDE_INSET,
     );
+    const maxPreviewLeft = Math.max(
+      VIEWPORT_SIDE_INSET,
+      window.innerWidth - PREVIEW_WIDTH - VIEWPORT_SIDE_INSET,
+    );
+    const previewLeft = Math.min(
+      Math.max(left + TRIGGER_SIZE / 2 + PREVIEW_GAP, VIEWPORT_SIDE_INSET),
+      maxPreviewLeft,
+    );
 
     setTriggerPosition((current) => {
-      if (current && current.top === top && current.left === left) return current;
-      return { top, left };
+      if (
+        current &&
+        current.top === top &&
+        current.left === left &&
+        current.previewLeft === previewLeft
+      ) {
+        return current;
+      }
+      return { top, left, previewLeft };
     });
   }, []);
 
@@ -170,17 +155,14 @@ export function SteerableMarkdownBlock({
   }, [triggerVisible, updateTriggerPosition]);
 
   const handleOpen = useCallback(() => {
-    clearPreviewCloseTimeout();
-    setPreviewOpen(false);
     onOpen(block.id);
-  }, [block.id, clearPreviewCloseTimeout, onOpen]);
+  }, [block.id, onOpen]);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
         handleOpen();
       } else {
-        setPreviewOpen(false);
         onCancel();
       }
     },
@@ -188,7 +170,6 @@ export function SteerableMarkdownBlock({
   );
 
   const handleCancel = useCallback(() => {
-    setPreviewOpen(false);
     setDraft("");
     onCancel();
   }, [onCancel]);
@@ -210,12 +191,12 @@ export function SteerableMarkdownBlock({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "Escape" && popoverOpen) {
+      if (event.key === "Escape" && active) {
         event.preventDefault();
         handleCancel();
       }
     },
-    [handleCancel, popoverOpen],
+    [active, handleCancel],
   );
 
   const handleTextareaKeyDown = useCallback(
@@ -245,7 +226,6 @@ export function SteerableMarkdownBlock({
       const element = blockRef.current;
       if (!element) {
         setTriggerHovered(false);
-        schedulePreviewClose();
         return;
       }
 
@@ -258,9 +238,8 @@ export function SteerableMarkdownBlock({
 
       setBlockHovered(isInsideBlock);
       setTriggerHovered(false);
-      if (!isInsideBlock) schedulePreviewClose();
     },
-    [schedulePreviewClose],
+    [],
   );
 
   const triggerRailStyle: CSSProperties | undefined = triggerPosition
@@ -277,12 +256,10 @@ export function SteerableMarkdownBlock({
         style={triggerRailStyle}
         onMouseEnter={() => {
           setTriggerHovered(true);
-          openPreview();
         }}
         onMouseLeave={handleTriggerMouseLeave}
         onFocus={() => {
           setFocused(true);
-          openPreview();
         }}
         onBlur={() => setFocused(false)}
         className="pointer-events-none z-50 flex h-9 w-0 justify-center"
@@ -311,6 +288,36 @@ export function SteerableMarkdownBlock({
         </PopoverTrigger>
       </div>
     ) : null;
+  const previewStyle: CSSProperties | undefined = triggerPosition
+    ? {
+        position: "fixed",
+        top: triggerPosition.top,
+        left: triggerPosition.previewLeft,
+        width: PREVIEW_WIDTH,
+      }
+    : undefined;
+  const commentPreview =
+    hasComments && triggerHovered && !active && previewStyle ? (
+      <div
+        style={previewStyle}
+        className="pointer-events-none z-50 rounded-md border border-border bg-surface p-2 text-xs shadow-xl ring-1 ring-foreground/10"
+      >
+        <div className="mb-1.5 flex items-center gap-1.5 font-medium text-foreground">
+          <MessageSquareText size={13} className="text-primary" />
+          {commentLabel}
+        </div>
+        <div className="max-h-40 overflow-hidden rounded-md border border-border bg-surface-deep/60 p-1">
+          {comments.map((comment) => (
+            <p
+              key={comment.commentId}
+              className="rounded-md px-2 py-1.5 leading-5 text-foreground/90"
+            >
+              {comment.text}
+            </p>
+          ))}
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div
@@ -319,10 +326,7 @@ export function SteerableMarkdownBlock({
       onKeyDown={handleKeyDown}
       onMouseEnter={() => setBlockHovered(true)}
       onMouseMove={() => setBlockHovered(true)}
-      onMouseLeave={() => {
-        setBlockHovered(false);
-        schedulePreviewClose();
-      }}
+      onMouseLeave={() => setBlockHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={handleBlur}
       className={cn(
@@ -332,17 +336,18 @@ export function SteerableMarkdownBlock({
     >
       <div className="min-w-0 pr-12">{children}</div>
 
-      <Popover open={popoverOpen} onOpenChange={handleOpenChange}>
+      <Popover open={active} onOpenChange={handleOpenChange}>
         {triggerRail && typeof document !== "undefined"
           ? createPortal(triggerRail, document.body)
           : triggerRail}
+        {commentPreview && typeof document !== "undefined"
+          ? createPortal(commentPreview, document.body)
+          : commentPreview}
 
         <PopoverContent
           side="right"
           align="start"
           sideOffset={10}
-          onMouseEnter={clearPreviewCloseTimeout}
-          onMouseLeave={schedulePreviewClose}
           className="w-80 gap-2 rounded-md border border-border bg-surface p-2 shadow-xl ring-1 ring-foreground/10"
         >
           <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
