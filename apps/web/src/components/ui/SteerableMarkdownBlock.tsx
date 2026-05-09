@@ -243,11 +243,11 @@ export function SteerableMarkdownBlock({
           title={hasComments ? "View comments" : "Add comment"}
           aria-label={hasComments ? "View comments" : "Add comment"}
           className={cn(
-            "pointer-events-auto flex h-9 min-w-9 items-center justify-center gap-1 rounded-full border text-xs opacity-100 shadow-sm transition-all outline-none",
-            "focus-visible:ring-2 focus-visible:ring-accent/40",
+            "pointer-events-auto flex h-9 min-w-9 items-center justify-center gap-1 rounded-full border text-xs opacity-100 shadow-md ring-1 transition-all outline-none",
+            "focus-visible:ring-2 focus-visible:ring-primary/50",
             hasComments
-              ? "min-w-11 border-accent/40 bg-accent px-2.5 text-accent-foreground hover:bg-accent/90"
-              : "w-9 border-border bg-surface-deep text-primary hover:bg-surface-elevated",
+              ? "min-w-11 border-primary/45 bg-surface-elevated px-2.5 text-foreground ring-primary/25 hover:border-primary/70 hover:bg-surface"
+              : "w-9 border-primary/35 bg-surface-elevated text-primary ring-primary/20 hover:border-primary/60 hover:bg-surface",
           )}
         >
           {hasComments ? (
@@ -255,7 +255,7 @@ export function SteerableMarkdownBlock({
           ) : (
             <MessageSquarePlus size={16} className="text-primary" />
           )}
-          {hasComments && <span>{commentCount}</span>}
+          {hasComments && <span className="font-medium text-foreground">{commentCount}</span>}
         </PopoverTrigger>
       </div>
     ) : null;
