@@ -5,6 +5,12 @@ export type FeedbackDestination = {
   branch: string | null;
 };
 
+export type FeedbackScreenshot = {
+  dataUrl: string;
+  width: number;
+  height: number;
+};
+
 export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) {
   const destinationJson = JSON.stringify(
     destination ?? {
@@ -48,6 +54,15 @@ export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) 
         inset: 0;
         width: 100vw;
         height: 100vh;
+      }
+
+      #screenshot {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        object-fit: fill;
+        pointer-events: none;
       }
 
       .panel {
@@ -202,6 +217,7 @@ export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) 
     </style>
   </head>
   <body>
+    <img id="screenshot" alt="" />
     <canvas id="canvas"></canvas>
     <div class="hint">Draw anywhere. Press Escape to cancel.</div>
     <section class="panel" id="panel">
@@ -223,6 +239,8 @@ export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) 
     </section>
     <script>
       const destination = ${destinationJson};
+      let screenshot = null;
+      const screenshotImage = document.getElementById("screenshot");
       const canvas = document.getElementById("canvas");
       const context = canvas.getContext("2d");
       const message = document.getElementById("message");
@@ -239,6 +257,14 @@ export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) 
       destinationTitle.textContent = destination.label || "No session selected";
       destinationMeta.textContent = [destination.context, destination.branch].filter(Boolean).join(" · ");
       destinationMeta.style.display = destinationMeta.textContent ? "block" : "none";
+
+      async function loadInitialScreenshot() {
+        screenshot = await window.trace.getFeedbackOverlayScreenshot();
+        if (!screenshot) {
+          throw new Error("Screenshot is not ready");
+        }
+        screenshotImage.src = screenshot.dataUrl;
+      }
 
       function resizeCanvas() {
         const scale = window.devicePixelRatio || 1;
@@ -343,6 +369,10 @@ export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) 
 
       send.addEventListener("click", async () => {
         if (sending) return;
+        if (!screenshot) {
+          alert("Screenshot is not ready");
+          return;
+        }
         sending = true;
         send.disabled = true;
         send.textContent = "Sending...";
@@ -351,7 +381,6 @@ export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) 
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         try {
-          const screenshot = await window.trace.captureFeedbackScreenshot();
           const mergedScreenshot = await mergeCapture(screenshot, annotationDataUrl);
           await window.trace.submitFeedbackOverlay({
             message: message.value,
@@ -366,8 +395,15 @@ export function getFeedbackOverlayHtml(destination: FeedbackDestination | null) 
         }
       });
 
-      resizeCanvas();
-      setTimeout(() => message.focus(), 100);
+      loadInitialScreenshot()
+        .then(() => {
+          resizeCanvas();
+          setTimeout(() => message.focus(), 100);
+        })
+        .catch((error) => {
+          alert(error instanceof Error ? error.message : "Failed to load feedback screenshot");
+          window.trace.closeFeedbackOverlay();
+        });
     </script>
   </body>
 </html>`;

@@ -149,6 +149,7 @@ declare global {
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
     captureFeedbackScreenshot: () => Promise<DesktopFeedbackScreenshot>;
+    getFeedbackOverlayScreenshot: () => Promise<DesktopFeedbackScreenshot | null>;
     closeFeedbackOverlay: () => Promise<boolean>;
     submitFeedbackOverlay: (payload: DesktopFeedbackOverlayPayload) => Promise<boolean>;
     setFeedbackDestination: (destination: DesktopFeedbackDestination | null) => Promise<boolean>;

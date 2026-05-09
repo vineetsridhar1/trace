@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("trace", {
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
   captureFeedbackScreenshot: () => ipcRenderer.invoke("capture-feedback-screenshot"),
+  getFeedbackOverlayScreenshot: () => ipcRenderer.invoke("get-feedback-overlay-screenshot"),
   closeFeedbackOverlay: () => ipcRenderer.invoke("close-feedback-overlay"),
   submitFeedbackOverlay: (payload: unknown) =>
     ipcRenderer.invoke("submit-feedback-overlay", payload),
