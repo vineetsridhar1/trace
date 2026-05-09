@@ -172,6 +172,8 @@ export function getFeedbackOverlayHtml() {
       let draft = null;
       let nextAnnotationId = 1;
       let submitting = false;
+      const maxUploadBytes = 4.5 * 1024 * 1024;
+      const maxOutputEdge = 3200;
 
       function resizeCanvas() {
         const scale = window.devicePixelRatio || 1;
@@ -322,10 +324,52 @@ export function getFeedbackOverlayHtml() {
           drawTextBox(outputContext, annotation, scaleX, scaleY);
         }
 
+        return exportCompressedScreenshot(output);
+      }
+
+      function estimateDataUrlBytes(dataUrl) {
+        const encoded = dataUrl.split(",")[1] || "";
+        return Math.ceil((encoded.length * 3) / 4);
+      }
+
+      function scaledCanvas(source, scale) {
+        if (scale >= 0.999) return source;
+        const scaled = document.createElement("canvas");
+        scaled.width = Math.max(1, Math.round(source.width * scale));
+        scaled.height = Math.max(1, Math.round(source.height * scale));
+        const scaledContext = scaled.getContext("2d");
+        scaledContext.drawImage(source, 0, 0, scaled.width, scaled.height);
+        return scaled;
+      }
+
+      function exportCompressedScreenshot(source) {
+        let scale = Math.min(1, maxOutputEdge / Math.max(source.width, source.height));
+        let working = scaledCanvas(source, scale);
+        let bestDataUrl = "";
+        let bestBytes = Infinity;
+
+        for (const quality of [0.84, 0.76, 0.68, 0.6]) {
+          const dataUrl = working.toDataURL("image/jpeg", quality);
+          const bytes = estimateDataUrlBytes(dataUrl);
+          bestDataUrl = dataUrl;
+          bestBytes = bytes;
+          if (bytes <= maxUploadBytes) {
+            return { dataUrl, width: working.width, height: working.height };
+          }
+        }
+
+        while (bestBytes > maxUploadBytes && Math.max(working.width, working.height) > 1400) {
+          scale *= 0.85;
+          working = scaledCanvas(source, scale);
+          const dataUrl = working.toDataURL("image/jpeg", 0.64);
+          bestBytes = estimateDataUrlBytes(dataUrl);
+          bestDataUrl = dataUrl;
+        }
+
         return {
-          dataUrl: output.toDataURL("image/png"),
-          width: screenshot.width,
-          height: screenshot.height,
+          dataUrl: bestDataUrl,
+          width: working.width,
+          height: working.height,
         };
       }
 
