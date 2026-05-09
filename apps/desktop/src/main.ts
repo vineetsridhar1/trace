@@ -9,6 +9,7 @@ import {
   powerMonitor,
   screen,
   shell,
+  systemPreferences,
   type MenuItemConstructorOptions,
 } from "electron";
 import path from "path";
@@ -67,6 +68,26 @@ function registerFeedbackShortcut() {
   }
 }
 
+function getScreenRecordingStatus() {
+  if (process.platform !== "darwin") return "granted";
+  return systemPreferences.getMediaAccessStatus("screen");
+}
+
+function getCaptureFailureMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : String(error);
+  const permissionStatus = getScreenRecordingStatus();
+
+  if (process.platform === "darwin" && permissionStatus !== "granted") {
+    return [
+      "Trace needs macOS Screen Recording permission to capture feedback screenshots.",
+      "Enable it in System Settings > Privacy & Security > Screen Recording, then restart Trace.",
+      `Current permission status: ${permissionStatus}.`,
+    ].join(" ");
+  }
+
+  return `Unable to capture the current screen. ${detail}`;
+}
+
 async function captureFeedbackScreenshot() {
   const cursorPoint = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursorPoint);
@@ -75,14 +96,19 @@ async function captureFeedbackScreenshot() {
     width: Math.round(display.size.width * scaleFactor),
     height: Math.round(display.size.height * scaleFactor),
   };
-  const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize });
+  let sources: Electron.DesktopCapturerSource[];
+  try {
+    sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize });
+  } catch (error) {
+    throw new Error(getCaptureFailureMessage(error));
+  }
   const source =
     sources.find((item) => item.display_id === String(display.id)) ??
     sources.find((item) => item.id.includes(String(display.id))) ??
     sources[0];
 
   if (!source || source.thumbnail.isEmpty()) {
-    throw new Error("Unable to capture the current screen");
+    throw new Error(getCaptureFailureMessage("No usable screen source was returned"));
   }
 
   const image = source.thumbnail;
