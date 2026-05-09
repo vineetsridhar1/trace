@@ -2814,6 +2814,51 @@ describe("SessionService", () => {
       eventServiceMock.create.mockClear();
     });
 
+    it.each([
+      {
+        name: "stopped",
+        session: {
+          agentStatus: "stopped" as const,
+          sessionStatus: "in_progress" as const,
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        },
+      },
+      {
+        name: "merged",
+        session: {
+          agentStatus: "done" as const,
+          sessionStatus: "merged" as const,
+          worktreeDeleted: false,
+          connection: {
+            state: "failed",
+            runtimeInstanceId: "runtime-a",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        },
+      },
+    ])("does not retry terminal $name sessions even when connection canRetry is true", async ({
+      session,
+    }) => {
+      const terminalSession = makeSession(session);
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(terminalSession);
+
+      const result = await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(result).toBe(terminalSession);
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+      expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
     it("fails without picking a different bridge when the home runtime is offline", async () => {
       // Laptop A is the home bridge; Laptop B is also connected. Auto-retry
       // must not silently hand off to Laptop B — the user must explicitly Move.

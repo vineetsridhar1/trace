@@ -4854,8 +4854,14 @@ export class SessionService {
 
     const conn = this.parseConnection(session.connection);
 
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus) && !conn.canRetry) {
-      return session;
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+      const retryableFailedSession =
+        session.agentStatus === "failed" &&
+        session.sessionStatus !== "merged" &&
+        session.worktreeDeleted === false &&
+        conn.canRetry === true &&
+        (conn.state === "failed" || conn.state === "timed_out" || conn.state === "disconnected");
+      if (!retryableFailedSession) return session;
     }
 
     // Emit retry requested event
