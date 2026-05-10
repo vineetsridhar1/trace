@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Monitor, Loader2 } from "lucide-react";
+import { Monitor, Loader2 } from "lucide-react";
 import type { SessionRuntimeInstance } from "@trace/gql";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { client } from "../../lib/urql";
 import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
@@ -105,12 +106,7 @@ export function RuntimeSelector({
             rt.hostingMode === "local" &&
             !rt.registeredRepoIds.includes(channelRepoId);
           return (
-            <SelectItem
-              key={rt.id}
-              value={rt.id}
-              disabled={lacksRepo}
-              title={lacksRepo ? "This local runtime does not have this repo linked." : undefined}
-            >
+            <SelectItem key={rt.id} value={rt.id} disabled={lacksRepo}>
               <span className="flex items-center gap-1.5">
                 <RuntimeIcon hostingMode={rt.hostingMode} />
                 {rt.label}
@@ -118,10 +114,9 @@ export function RuntimeSelector({
                   ({rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""})
                 </span>
                 {lacksRepo && (
-                  <span className="flex items-center gap-0.5 text-xs text-amber-500">
-                    <AlertTriangle size={10} />
+                  <DisabledReasonHint message="This local runtime does not have this repo linked.">
                     repo not linked
-                  </span>
+                  </DisabledReasonHint>
                 )}
               </span>
             </SelectItem>

@@ -76,6 +76,15 @@ function normalizeClientSource(source: string | null | undefined): string | null
   return trimmed ? trimmed : null;
 }
 
+function assertCloudRepoRemoteAvailable(
+  hosting: string | null | undefined,
+  repo: { remoteUrl: string | null } | null | undefined,
+): void {
+  if (hosting === "cloud" && repo && !repo.remoteUrl) {
+    throw new ValidationError("Cloud sessions require the repo to have a remote URL.");
+  }
+}
+
 function getAssistantBlocks(data: Record<string, unknown>): Record<string, unknown>[] | null {
   if (data.type !== "assistant") return null;
   const message = data.message;
@@ -802,6 +811,8 @@ export class SessionService {
       config: Prisma.JsonValue;
     } | null;
   }): void {
+    assertCloudRepoRemoteAvailable(params.hosting, params.repo);
+
     void (async () => {
       const environment = params.environment ?? (await this.resolveProvisioningEnvironment(params));
 
@@ -2043,6 +2054,15 @@ export class SessionService {
       sourceSession?.repoId ??
       restoreCheckpoint?.repoId ??
       undefined;
+    const resolvedRepo = resolvedRepoId
+      ? await prisma.repo.findFirst({
+          where: { id: resolvedRepoId, organizationId: input.organizationId },
+          select: { id: true, remoteUrl: true },
+        })
+      : null;
+    if (resolvedRepoId && !resolvedRepo) {
+      throw new Error("Repo not found");
+    }
     const resolvedBranch =
       input.branch ??
       seedGroup?.branch ??
@@ -2299,6 +2319,8 @@ export class SessionService {
         sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
         this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
     }
+
+    assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
     // Checkpoint restores always need a worktree to reset to a specific SHA.
@@ -2620,6 +2642,9 @@ export class SessionService {
       };
       const commands = this.parsePendingCommands(session.pendingRun);
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
+      if (needsProvisioning) {
+        assertCloudRepoRemoteAvailable(session.hosting, session.repo);
+      }
       const markLocalPreparing = session.hosting === "local" && needsProvisioning;
       const updated = await prisma.session.update({
         where: { id },
@@ -3109,6 +3134,7 @@ export class SessionService {
         runtimeLabel = runtime.label;
         sessionRouter.bindSession(sessionId, runtime.key);
       } else if (newHosting === "cloud") {
+        assertCloudRepoRemoteAvailable(newHosting, prev.repo);
         requestedEnvironment = await agentEnvironmentService.resolveForSessionRequest({
           organizationId,
           adapterType: "provisioned",
@@ -3632,6 +3658,7 @@ export class SessionService {
     if (session.agentStatus === "not_started" && !session.workdir && !session.toolSessionId) {
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
       if (needsProvisioning) {
+        assertCloudRepoRemoteAvailable(session.hosting, session.repo);
         const pendingCommand: PendingSessionCommand = {
           type: "send",
           prompt: text,
@@ -4864,6 +4891,8 @@ export class SessionService {
       if (!retryableFailedSession) return session;
     }
 
+    assertCloudRepoRemoteAvailable(session.hosting, session.repo);
+
     // Emit retry requested event
     await eventService.create({
       organizationId: session.organizationId,
@@ -5266,7 +5295,9 @@ export class SessionService {
   }
 
   private async moveSessionInPlace(params: {
-    session: Awaited<ReturnType<typeof prisma.session.findFirstOrThrow>>;
+    session: Awaited<ReturnType<typeof prisma.session.findFirstOrThrow>> & {
+      repo?: { remoteUrl: string | null } | null;
+    };
     targetHosting: "cloud" | "local";
     targetRuntimeInstanceId?: string | null;
     targetRuntimeLabel?: string | null;
@@ -5302,6 +5333,7 @@ export class SessionService {
     if (targetHosting === "cloud" && !targetEnvironment) {
       throw new Error("No enabled cloud agent environment is configured");
     }
+    assertCloudRepoRemoteAvailable(targetHosting, session.repo);
 
     const sourceInspection = await this.inspectSessionMoveSource({
       sessionId: session.id,
@@ -6320,6 +6352,7 @@ export class SessionService {
       sessionGroup?: { slug: string | null } | null;
       channel?: { baseBranch?: string | null } | null;
       repo: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
+      hosting: string;
       branch: string | null;
       connection: unknown;
     },
@@ -6334,6 +6367,7 @@ export class SessionService {
 
     const repo = session.repo;
     if (!repo) return;
+    assertCloudRepoRemoteAvailable(session.hosting, repo);
 
     const conn = this.parseConnection(session.connection);
     const deliveryResult = sessionRouter.send(

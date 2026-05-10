@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
+import { Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
 import type { ChannelType, CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { gql } from "@urql/core";
 import { BranchCombobox } from "../channel/BranchCombobox";
@@ -14,6 +14,7 @@ import {
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
@@ -422,20 +423,14 @@ function RepoOptionItem({
       ? "This repo is not cloned on any connected local runtime."
       : undefined;
   return (
-    <SelectItem value={id} disabled={disabled} title={disabledReason}>
+    <SelectItem value={id} disabled={disabled}>
       <span className="flex items-center gap-1.5">
         {name ?? id}
-        {localUnavailable && (
-          <span className="flex items-center gap-0.5 text-xs text-amber-500">
-            <AlertTriangle size={10} />
-            not cloned
-          </span>
+        {localUnavailable && disabledReason && (
+          <DisabledReasonHint message={disabledReason}>not cloned</DisabledReasonHint>
         )}
-        {remoteUnavailable && (
-          <span className="flex items-center gap-0.5 text-xs text-amber-500">
-            <AlertTriangle size={10} />
-            remote required
-          </span>
+        {remoteUnavailable && disabledReason && (
+          <DisabledReasonHint message={disabledReason}>remote required</DisabledReasonHint>
         )}
       </span>
     </SelectItem>

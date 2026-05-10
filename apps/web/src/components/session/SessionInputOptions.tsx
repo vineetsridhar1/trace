@@ -8,6 +8,7 @@ import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import {
   getModelsForTool,
@@ -500,15 +501,13 @@ export function SessionInputOptions({
               <SelectItem
                 value={CLOUD_RUNTIME_ID}
                 disabled={!cloudEnvironmentAvailable || !!cloudDisabledReason}
-                title={cloudDisabledReason ?? undefined}
               >
                 <span className="flex items-center gap-1.5">
                   <Cloud size={12} className="text-sky-400" /> Cloud
                   {cloudDisabledReason && (
-                    <span className="flex items-center gap-0.5 text-xs text-amber-500">
-                      <AlertTriangle size={10} />
+                    <DisabledReasonHint message={cloudDisabledReason}>
                       remote required
-                    </span>
+                    </DisabledReasonHint>
                   )}
                 </span>
               </SelectItem>
@@ -524,21 +523,13 @@ export function SessionInputOptions({
             {connectedLocalRuntimes.map((r: SessionRuntimeInstance) => {
               const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
               return (
-                <SelectItem
-                  key={r.id}
-                  value={r.id}
-                  disabled={lacksRepo}
-                  title={
-                    lacksRepo ? "This local runtime does not have this repo linked." : undefined
-                  }
-                >
+                <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>
                   <span className="flex items-center gap-1.5">
                     <Monitor size={12} className="text-green-400" /> {r.label}
                     {lacksRepo && (
-                      <span className="flex items-center gap-0.5 text-xs text-amber-500">
-                        <AlertTriangle size={10} />
+                      <DisabledReasonHint message="This local runtime does not have this repo linked.">
                         repo not linked
-                      </span>
+                      </DisabledReasonHint>
                     )}
                   </span>
                 </SelectItem>

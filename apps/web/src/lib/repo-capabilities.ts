@@ -18,3 +18,11 @@ export function hasRepoRemote(repo: RepoRemoteRef): boolean {
 export function repoRemoteKnownMissing(repo: RepoRemoteRef): boolean {
   return repo != null && "remoteUrl" in repo && !hasRepoRemote(repo);
 }
+
+export function resolveSupportedHostingForRepo(
+  hosting: string | null | undefined,
+  repo: RepoRemoteRef,
+): string | undefined {
+  if (hosting === "cloud" && repoRemoteKnownMissing(repo)) return "local";
+  return hosting ?? undefined;
+}

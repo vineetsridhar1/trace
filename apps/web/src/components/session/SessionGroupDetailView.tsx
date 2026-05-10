@@ -24,6 +24,7 @@ import { useFileActions } from "./useFileActions";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
+import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
@@ -125,7 +126,7 @@ export function SessionGroupDetailView({
 }) {
   const groupName = useEntityField("sessionGroups", sessionGroupId, "name");
   const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
-    | { id: string; name: string; defaultBranch?: string }
+    | { id: string; name: string; remoteUrl?: string | null; defaultBranch?: string }
     | null
     | undefined;
   const groupBranch = useEntityField("sessionGroups", sessionGroupId, "branch") as
@@ -429,15 +430,19 @@ export function SessionGroupDetailView({
         useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
         groupSessions,
       ) ?? getSessionChannelId(selectedSession);
+    const selectedRepo =
+      groupRepo ??
+      (selectedSession.repo as { id: string; remoteUrl?: string | null } | null | undefined);
+    const selectedHosting = resolveSupportedHostingForRepo(selectedSession.hosting, selectedRepo);
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
           tool: selectedSession.tool,
           model: selectedSession.model ?? undefined,
           reasoningEffort: selectedSession.reasoningEffort ?? undefined,
-          hosting: selectedSession.hosting,
+          hosting: selectedHosting,
           channelId: resolvedChannelId ?? undefined,
-          repoId: groupRepo?.id ?? (selectedSession.repo as { id: string } | null | undefined)?.id,
+          repoId: selectedRepo?.id,
           branch: groupBranch ?? selectedSession.branch ?? undefined,
           sessionGroupId,
         },
@@ -461,9 +466,9 @@ export function SessionGroupDetailView({
       tool: selectedSession.tool,
       model: selectedSession.model,
       reasoningEffort: selectedSession.reasoningEffort,
-      hosting: selectedSession.hosting,
+      hosting: selectedHosting ?? selectedSession.hosting,
       channel: resolvedChannelId ? { id: resolvedChannelId } : null,
-      repo: groupRepo ?? (selectedSession.repo as { id: string } | null | undefined),
+      repo: selectedRepo,
       branch: groupBranch ?? selectedSession.branch,
     });
     openSessionTab(sessionGroupId, newSessionId);
