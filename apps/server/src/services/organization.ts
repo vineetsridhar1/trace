@@ -12,7 +12,7 @@ import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { isLocalMode } from "../lib/mode.js";
-import { normalizeMembers } from "./member-utils.js";
+import { createChannelInTransaction } from "./channel-create.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -214,112 +214,72 @@ export class OrganizationService {
 
     if (existing) return existing;
 
-    const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const repo = await tx.repo.create({
-        data: {
-          name: input.name,
-          remoteUrl: input.remoteUrl,
-          defaultBranch: input.defaultBranch ?? "main",
-          organizationId: input.organizationId,
-        },
-        include: { projects: true, sessions: true },
-      });
-
-      await eventService.create(
-        {
-          organizationId: input.organizationId,
-          scopeType: "system",
-          scopeId: repo.id,
-          eventType: "repo_created",
-          payload: {
-            repo: {
-              id: repo.id,
-              name: repo.name,
-              remoteUrl: repo.remoteUrl,
-              defaultBranch: repo.defaultBranch,
-              webhookActive: !!repo.webhookId,
-            },
+    const [repo, repoEvent, channelEvent] = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const repo = await tx.repo.create({
+          data: {
+            name: input.name,
+            remoteUrl: input.remoteUrl,
+            defaultBranch: input.defaultBranch ?? "main",
+            organizationId: input.organizationId,
           },
-          actorType,
-          actorId,
-        },
-        tx,
-      );
+          include: { projects: true, sessions: true },
+        });
 
-      const lastUngroupedChannel = await tx.channel.findFirst({
-        where: { organizationId: input.organizationId, groupId: null },
-        orderBy: { position: "desc" },
-        select: { position: true },
-      });
-      const lastGroup = await tx.channelGroup.findFirst({
-        where: { organizationId: input.organizationId },
-        orderBy: { position: "desc" },
-        select: { position: true },
-      });
-      const position =
-        Math.max(lastUngroupedChannel?.position ?? -1, lastGroup?.position ?? -1) + 1;
-
-      const channel = await tx.channel.create({
-        data: {
+        const { channel, channelPayload } = await createChannelInTransaction(tx, {
+          organizationId: input.organizationId,
           name: repo.name,
           type: "coding",
-          position,
-          organizationId: input.organizationId,
-          repoId: repo.id,
-          baseBranch: repo.defaultBranch,
-        },
-      });
-
-      if (actorType !== "system") {
-        await tx.channelMember.create({ data: { channelId: channel.id, userId: actorId } });
-      }
-
-      if (actorId !== TRACE_AI_USER_ID) {
-        const aiOrgMember = await tx.orgMember.findUnique({
-          where: {
-            userId_organizationId: {
-              userId: TRACE_AI_USER_ID,
-              organizationId: input.organizationId,
-            },
-          },
-          select: { userId: true },
-        });
-        if (aiOrgMember) {
-          await tx.channelMember.create({
-            data: { channelId: channel.id, userId: TRACE_AI_USER_ID },
-          });
-        }
-      }
-
-      const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channel.id });
-
-      await eventService.create(
-        {
-          organizationId: input.organizationId,
-          scopeType: "channel",
-          scopeId: channel.id,
-          eventType: "channel_created",
-          payload: {
-            channel: {
-              id: channel.id,
-              name: channel.name,
-              type: channel.type,
-              position: channel.position,
-              groupId: channel.groupId,
-              repoId: channel.repoId,
-              baseBranch: channel.baseBranch,
-              repo: { id: repo.id, name: repo.name },
-              members: normalizedMembers,
-            },
-          },
           actorType,
           actorId,
-        },
-        tx,
-      );
+          repo: { id: repo.id, name: repo.name },
+          baseBranch: repo.defaultBranch,
+        });
 
-      return [repo] as const;
-    });
+        const repoEvent = await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "system",
+            scopeId: repo.id,
+            eventType: "repo_created",
+            payload: {
+              repo: {
+                id: repo.id,
+                name: repo.name,
+                remoteUrl: repo.remoteUrl,
+                defaultBranch: repo.defaultBranch,
+                webhookActive: !!repo.webhookId,
+              },
+            },
+            actorType,
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        );
+
+        const channelEvent = await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "channel",
+            scopeId: channel.id,
+            eventType: "channel_created",
+            payload: {
+              channel: channelPayload,
+            },
+            actorType,
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        );
+
+        return [repo, repoEvent, channelEvent] as const;
+      },
+    );
+
+    eventService.publishCreated(repoEvent);
+    eventService.publishCreated(channelEvent);
 
     return repo;
   }

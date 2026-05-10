@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Event as PrismaEvent, Prisma } from "@prisma/client";
 import type { ScopeType, EventType, ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -16,6 +16,7 @@ export interface CreateEventInput {
   actorId: string;
   parentId?: string;
   metadata?: Prisma.InputJsonValue;
+  deferPublish?: boolean;
 }
 
 export interface EventQueryOpts {
@@ -83,23 +84,31 @@ export class EventService {
       },
     });
 
+    if (!input.deferPublish) {
+      this.publishCreated(event);
+    }
+
+    return event;
+  }
+
+  publishCreated(event: PrismaEvent) {
     // Broadcast to entity-scoped topic (e.g. channel:<id>:events)
-    const topicBuilder = scopeTopicMap[input.scopeType];
+    const topicBuilder = scopeTopicMap[event.scopeType];
     if (topicBuilder) {
-      pubsub.publish(topicBuilder(input.scopeId), { [`${input.scopeType}Events`]: event });
+      pubsub.publish(topicBuilder(event.scopeId), { [`${event.scopeType}Events`]: event });
     }
 
     // For session-scoped events, also publish to the session-specific topic
     // so session detail views get full payloads via their own subscription.
-    if (input.scopeType === "session") {
-      pubsub.publish(topics.sessionEvents(input.scopeId), { sessionEvents: event });
+    if (event.scopeType === "session") {
+      pubsub.publish(topics.sessionEvents(event.scopeId), { sessionEvents: event });
     }
 
     // Phase 3B: Skip org broadcast for chat events — they already go to chat:<id>:events
     // and broadcasting to org topic only triggers per-event membership checks for non-members.
-    if (input.scopeType === "chat") {
+    if (event.scopeType === "chat") {
       // Still append to Redis stream for agent worker
-      this.appendToStream(input.organizationId, event);
+      this.appendToStream(event.organizationId, event);
       return event;
     }
 
@@ -108,10 +117,10 @@ export class EventService {
     // changes, titles, connection state, checkpoints). Pure content events
     // (assistant messages, tool output, results) are noise at the org level —
     // viewers of a specific session get full payloads via sessionEvents.
-    if (input.eventType === "session_output") {
+    if (event.eventType === "session_output") {
       const p =
-        input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
-          ? (input.payload as Record<string, unknown>)
+        event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+          ? (event.payload as Record<string, unknown>)
           : ({} as Record<string, unknown>);
       const subtype = p.type as string | undefined;
       if (subtype && ORG_RELEVANT_OUTPUT_SUBTYPES.has(subtype)) {
@@ -126,17 +135,17 @@ export class EventService {
           timestamp: event.timestamp,
           metadata: event.metadata,
           organizationId: event.organizationId,
-          payload: this.trimSessionOutputPayload(input.payload),
+          payload: this.trimSessionOutputPayload(event.payload as Prisma.InputJsonValue),
         };
-        pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: thinEnvelope });
+        pubsub.publish(topics.orgEvents(event.organizationId), { orgEvents: thinEnvelope });
       }
     } else {
       // All other events: broadcast full event to org topic
-      pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: event });
+      pubsub.publish(topics.orgEvents(event.organizationId), { orgEvents: event });
     }
 
     // Append to org-scoped Redis Stream for durable consumption by the agent worker
-    this.appendToStream(input.organizationId, event);
+    this.appendToStream(event.organizationId, event);
     void pushNotificationService.notifyForEvent(event).catch((err: Error) => {
       console.error("[push-notifications] event notification failed:", err.message);
     });

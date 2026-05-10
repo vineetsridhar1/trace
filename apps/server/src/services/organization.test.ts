@@ -8,6 +8,7 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("./event.js", () => ({
   eventService: {
     create: vi.fn(),
+    publishCreated: vi.fn(),
   },
 }));
 
@@ -193,6 +194,9 @@ describe("OrganizationService", () => {
       { id: "user-1", name: "User One", avatarUrl: null },
       { id: TRACE_AI_USER_ID, name: "Trace AI", avatarUrl: null },
     ]);
+    eventServiceMock.create
+      .mockResolvedValueOnce({ id: "event-repo" })
+      .mockResolvedValueOnce({ id: "event-channel" });
 
     const service = new OrganizationService();
     const repo = await service.createRepo(
@@ -212,6 +216,7 @@ describe("OrganizationService", () => {
         type: "coding",
         position: 5,
         organizationId: "org-1",
+        groupId: null,
         repoId: "repo-1",
         baseBranch: "main",
       },
@@ -240,6 +245,7 @@ describe("OrganizationService", () => {
         },
         actorType: "user",
         actorId: "user-1",
+        deferPublish: true,
       },
       prismaMock,
     );
@@ -274,9 +280,43 @@ describe("OrganizationService", () => {
         },
         actorType: "user",
         actorId: "user-1",
+        deferPublish: true,
       },
       prismaMock,
     );
+    expect(eventServiceMock.publishCreated).toHaveBeenNthCalledWith(1, { id: "event-repo" });
+    expect(eventServiceMock.publishCreated).toHaveBeenNthCalledWith(2, { id: "event-channel" });
+  });
+
+  it("does not emit repo_created when automatic channel creation fails", async () => {
+    prismaMock.repo.findUnique.mockResolvedValueOnce(null);
+    prismaMock.repo.create.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "trace",
+      remoteUrl: "https://github.com/acme/trace.git",
+      defaultBranch: "main",
+      webhookId: null,
+    });
+    prismaMock.channel.findFirst.mockResolvedValueOnce(null);
+    prismaMock.channelGroup.findFirst.mockResolvedValueOnce(null);
+    prismaMock.channel.create.mockRejectedValueOnce(new Error("channel create failed"));
+
+    const service = new OrganizationService();
+    await expect(
+      service.createRepo(
+        {
+          organizationId: "org-1",
+          name: "trace",
+          remoteUrl: "https://github.com/acme/trace.git",
+        } as any,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("channel create failed");
+
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.publishCreated).not.toHaveBeenCalled();
   });
 
   it("updates repos, creates projects, and links entities", async () => {
