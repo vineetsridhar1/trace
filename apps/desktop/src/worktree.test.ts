@@ -373,4 +373,65 @@ describe("createWorktree", () => {
       expect.any(Function),
     );
   });
+
+  it("creates an orphan worktree for repos with no commits", async () => {
+    existsSyncMock.mockReturnValue(false);
+    generateAnimalSlugMock.mockReturnValue("partridge");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout?: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(new Error("No such remote 'origin'"));
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(new Error("invalid ref"));
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "worktree" && args[1] === "add") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`));
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    const result = await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "partridge",
+      defaultBranch: "main",
+    });
+
+    expect(result.branch).toBe("trace/partridge");
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      [
+        "worktree",
+        "add",
+        "--orphan",
+        "-b",
+        "trace/partridge",
+        expect.stringContaining("/trace/sessions/repo-1/partridge"),
+      ],
+      expect.objectContaining({ cwd: "/tmp/repo" }),
+      expect.any(Function),
+    );
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["reset", expect.anything(), expect.anything()],
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
 });
