@@ -9,8 +9,6 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
   getRepoConfig,
@@ -21,8 +19,7 @@ import {
 } from "./config.js";
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
-
-const execFileAsync = promisify(execFile);
+import { getGitInfo } from "./git-info.js";
 
 let mainWindow: BrowserWindow | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
@@ -133,19 +130,7 @@ ipcMain.handle("pick-folder", async () => {
 });
 
 ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
-  try {
-    const [remoteResult, branchResult] = await Promise.all([
-      execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }),
-      execFileAsync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: folderPath }),
-    ]);
-    return {
-      remoteUrl: remoteResult.stdout.trim(),
-      defaultBranch: branchResult.stdout.trim() || "main",
-      name: path.basename(folderPath),
-    };
-  } catch {
-    return { error: "Not a git repository or no remote origin configured." };
-  }
+  return getGitInfo(folderPath);
 });
 
 ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
