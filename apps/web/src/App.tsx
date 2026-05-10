@@ -24,6 +24,7 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
 import { LoginPage } from "./components/auth/LoginPage";
+import { FeedbackCapture } from "./components/feedback/FeedbackCapture";
 import { cn } from "./lib/utils";
 import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
@@ -146,6 +147,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   return (
     <TooltipProvider>
       <BridgeSyncHydrator />
+      <FeedbackCapture />
       <div
         className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] bg-surface-deep"
         style={{ backgroundColor: "var(--trace-shell-bg, var(--th-surface-deep))" }}

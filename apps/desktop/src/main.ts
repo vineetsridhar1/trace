@@ -1,15 +1,22 @@
 import {
   app,
   BrowserWindow,
+  desktopCapturer,
   dialog,
+  globalShortcut,
   ipcMain,
   Menu,
+  nativeImage,
   powerMonitor,
+  screen,
   shell,
+  systemPreferences,
   type MenuItemConstructorOptions,
 } from "electron";
 import path from "path";
 import { execFile } from "child_process";
+import fs from "fs/promises";
+import os from "os";
 import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
@@ -21,14 +28,26 @@ import {
 } from "./config.js";
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
+import {
+  getFeedbackOverlayHtml,
+  type FeedbackDestination,
+  type FeedbackOverlaySubmitPayload,
+  type FeedbackScreenshot,
+} from "./feedback-overlay.js";
 
 const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
+let feedbackOverlayWindow: BrowserWindow | null = null;
+let feedbackDestination: FeedbackDestination | null = null;
+let feedbackOverlayReadyTimer: ReturnType<typeof setTimeout> | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
+const feedbackShortcut = process.env.TRACE_FEEDBACK_SHORTCUT ?? "CommandOrControl+Shift+F";
+const macScreenRecordingSettingsUrl =
+  "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 
 app.setName(appName);
 
@@ -46,6 +65,271 @@ const bridge = new BridgeClient(serverUrl, getSessionCookieHeader);
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("bridge-status", status);
+}
+
+async function publishFeedbackShortcut() {
+  if (feedbackOverlayWindow && !feedbackOverlayWindow.isDestroyed()) {
+    closeFeedbackOverlay();
+    return;
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!feedbackDestination?.sessionId) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "No Synced Session",
+      message: "Open a synced session before sending feedback.",
+    });
+    return;
+  }
+
+  let screenshot: FeedbackScreenshot;
+  try {
+    screenshot = await captureFeedbackScreenshot();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to capture the current screen.";
+    await dialog.showMessageBox(mainWindow, {
+      type: "error",
+      title: "Unable to Capture Feedback",
+      message,
+    });
+    return;
+  }
+
+  openFeedbackOverlay(screenshot);
+}
+
+function registerFeedbackShortcut() {
+  const registered = globalShortcut.register(feedbackShortcut, publishFeedbackShortcut);
+  if (!registered) {
+    console.warn(`[main] failed to register feedback shortcut: ${feedbackShortcut}`);
+  }
+}
+
+function getScreenRecordingStatus() {
+  if (process.platform !== "darwin") return "granted";
+  return systemPreferences.getMediaAccessStatus("screen");
+}
+
+function getCurrentMacAppPath() {
+  if (process.platform !== "darwin") return null;
+
+  const appContentsIndex = process.execPath.indexOf(".app/Contents/MacOS/");
+  if (appContentsIndex === -1) return null;
+
+  return process.execPath.slice(0, appContentsIndex + ".app".length);
+}
+
+function getScreenRecordingPermissionMessage() {
+  const permissionStatus = getScreenRecordingStatus();
+
+  return [
+    "Trace needs macOS Screen Recording permission to capture feedback screenshots.",
+    "Enable it in System Settings > Privacy & Security > Screen Recording, then restart Trace.",
+    `Current permission status: ${permissionStatus}.`,
+  ].join(" ");
+}
+
+function getCaptureFailureMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : String(error);
+  const permissionStatus = getScreenRecordingStatus();
+
+  if (process.platform === "darwin" && permissionStatus !== "granted") {
+    return getScreenRecordingPermissionMessage();
+  }
+
+  return `Unable to capture the current screen. ${detail}`;
+}
+
+async function promptForScreenRecordingAccess() {
+  if (process.platform !== "darwin" || getScreenRecordingStatus() === "granted") return;
+
+  if (getScreenRecordingStatus() === "not-determined") {
+    try {
+      await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 1, height: 1 },
+      });
+    } catch {
+      // macOS may reject this immediately; the explicit settings prompt below handles it.
+    }
+  }
+
+  if (getScreenRecordingStatus() === "granted") return;
+
+  const appPath = getCurrentMacAppPath();
+  const messageBoxOptions = {
+    type: "info",
+    buttons: appPath
+      ? ["Open Settings", "Show App in Finder", "Cancel"]
+      : ["Open Settings", "Cancel"],
+    defaultId: 0,
+    cancelId: appPath ? 2 : 1,
+    title: "Allow Screen Recording",
+    message: "Trace needs Screen Recording permission to capture feedback screenshots.",
+    detail: [
+      "macOS requires this permission before Trace can capture your screen for annotated feedback.",
+      appPath
+        ? "If Trace does not appear in the Screen Recording list, add the app shown in Finder."
+        : null,
+      "After enabling it, restart Trace.",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  } satisfies Electron.MessageBoxOptions;
+  const result = mainWindow
+    ? await dialog.showMessageBox(mainWindow, messageBoxOptions)
+    : await dialog.showMessageBox(messageBoxOptions);
+
+  if (result.response === 0) {
+    await shell.openExternal(macScreenRecordingSettingsUrl);
+  } else if (result.response === 1 && appPath) {
+    shell.showItemInFolder(appPath);
+  }
+
+  throw new Error(getScreenRecordingPermissionMessage());
+}
+
+async function captureFeedbackScreenshotWithScreencapture(display: Electron.Display) {
+  const screenshotPath = path.join(os.tmpdir(), `trace-feedback-${process.pid}-${Date.now()}.png`);
+  const captureBounds = [
+    Math.round(display.bounds.x),
+    Math.round(display.bounds.y),
+    Math.round(display.bounds.width),
+    Math.round(display.bounds.height),
+  ].join(",");
+
+  try {
+    await execFileAsync("screencapture", ["-x", "-t", "png", "-R", captureBounds, screenshotPath]);
+    const image = nativeImage.createFromPath(screenshotPath);
+    if (image.isEmpty()) {
+      throw new Error("screencapture returned an empty image");
+    }
+
+    const size = image.getSize();
+    return {
+      dataUrl: image.toDataURL(),
+      width: size.width,
+      height: size.height,
+    };
+  } finally {
+    await fs.rm(screenshotPath, { force: true });
+  }
+}
+
+async function captureFeedbackScreenshot() {
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint);
+  if (process.platform === "darwin") {
+    try {
+      return await captureFeedbackScreenshotWithScreencapture(display);
+    } catch (error) {
+      await promptForScreenRecordingAccess();
+      throw new Error(getCaptureFailureMessage(error));
+    }
+  }
+
+  const scaleFactor = display.scaleFactor || 1;
+  const thumbnailSize = {
+    width: Math.round(display.size.width * scaleFactor),
+    height: Math.round(display.size.height * scaleFactor),
+  };
+  let sources: Electron.DesktopCapturerSource[];
+  try {
+    sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize });
+  } catch (error) {
+    await promptForScreenRecordingAccess();
+    throw new Error(getCaptureFailureMessage(error));
+  }
+  const source =
+    sources.find((item) => item.display_id === String(display.id)) ??
+    sources.find((item) => item.id.includes(String(display.id))) ??
+    sources[0];
+
+  if (!source || source.thumbnail.isEmpty()) {
+    await promptForScreenRecordingAccess();
+    throw new Error(getCaptureFailureMessage("No usable screen source was returned"));
+  }
+
+  const image = source.thumbnail;
+  const size = image.getSize();
+  return {
+    dataUrl: image.toDataURL(),
+    width: size.width,
+    height: size.height,
+  };
+}
+
+function clearFeedbackOverlayReadyTimer() {
+  if (!feedbackOverlayReadyTimer) return;
+  clearTimeout(feedbackOverlayReadyTimer);
+  feedbackOverlayReadyTimer = null;
+}
+
+function closeFeedbackOverlay() {
+  clearFeedbackOverlayReadyTimer();
+  if (!feedbackOverlayWindow || feedbackOverlayWindow.isDestroyed()) return;
+  feedbackOverlayWindow.close();
+  feedbackOverlayWindow = null;
+}
+
+function openFeedbackOverlay(screenshot: FeedbackScreenshot) {
+  if (feedbackOverlayWindow && !feedbackOverlayWindow.isDestroyed()) {
+    feedbackOverlayWindow.focus();
+    return;
+  }
+
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint);
+  feedbackOverlayWindow = new BrowserWindow({
+    ...display.bounds,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    hasShadow: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  feedbackOverlayWindow.webContents.on("before-input-event", (event, input) => {
+    const key = input.key.toLowerCase();
+    if (key === "escape" || (input.meta && key === "w")) {
+      event.preventDefault();
+      closeFeedbackOverlay();
+    }
+  });
+
+  feedbackOverlayWindow.webContents.on("did-finish-load", () => {
+    feedbackOverlayWindow?.webContents.send("feedback-overlay-init", {
+      screenshot,
+      destination: feedbackDestination,
+    });
+    clearFeedbackOverlayReadyTimer();
+    feedbackOverlayReadyTimer = setTimeout(() => {
+      closeFeedbackOverlay();
+    }, 8_000);
+  });
+
+  feedbackOverlayWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(getFeedbackOverlayHtml())}`,
+  );
+
+  feedbackOverlayWindow.on("closed", () => {
+    clearFeedbackOverlayReadyTimer();
+    feedbackOverlayWindow = null;
+  });
 }
 
 function configureApplicationIdentity() {
@@ -196,6 +480,28 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 ipcMain.handle("get-bridge-info", () => bridge.getInfo());
+ipcMain.handle("capture-feedback-screenshot", () => captureFeedbackScreenshot());
+ipcMain.handle("feedback-overlay-ready", () => {
+  clearFeedbackOverlayReadyTimer();
+  return true;
+});
+ipcMain.handle("close-feedback-overlay", () => {
+  closeFeedbackOverlay();
+  return true;
+});
+ipcMain.handle("submit-feedback-overlay", (_event, payload: FeedbackOverlaySubmitPayload) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    throw new Error("Trace is not ready to send feedback");
+  }
+
+  mainWindow.webContents.send("feedback-overlay-submit", payload);
+  closeFeedbackOverlay();
+  return true;
+});
+ipcMain.handle("set-feedback-destination", (_event, destination: FeedbackDestination | null) => {
+  feedbackDestination = destination;
+  return true;
+});
 ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   await setBridgeLabel(label);
   bridge.updateLabel();
@@ -218,6 +524,7 @@ app.whenReady().then(() => {
   });
   bridge.connect();
   createWindow();
+  registerFeedbackShortcut();
 
   // After sleep/wake the WebSocket is often dead but no close event fires.
   // Force an immediate reconnect so the user doesn't have to restart the app.
@@ -238,4 +545,8 @@ app.on("activate", () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });

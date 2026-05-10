@@ -43,6 +43,26 @@ declare global {
     status: DesktopBridgeConnectionStatus;
   };
 
+  type DesktopFeedbackScreenshot = {
+    dataUrl: string;
+    width: number;
+    height: number;
+  };
+
+  type DesktopFeedbackDestination = {
+    sessionId: string | null;
+    label: string;
+  };
+
+  type DesktopFeedbackOverlayPayload = {
+    screenshot: DesktopFeedbackScreenshot;
+  };
+
+  type DesktopFeedbackOverlayInitPayload = {
+    screenshot: DesktopFeedbackScreenshot;
+    destination: DesktopFeedbackDestination | null;
+  };
+
   type DesktopLinkedCheckoutStatus = {
     repoId: string;
     repoPath: string | null;
@@ -130,8 +150,20 @@ declare global {
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
+    captureFeedbackScreenshot: () => Promise<DesktopFeedbackScreenshot>;
+    feedbackOverlayReady: () => Promise<boolean>;
+    closeFeedbackOverlay: () => Promise<boolean>;
+    submitFeedbackOverlay: (payload: DesktopFeedbackOverlayPayload) => Promise<boolean>;
+    setFeedbackDestination: (destination: DesktopFeedbackDestination | null) => Promise<boolean>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
+    onFeedbackOverlayInit: (
+      callback: (payload: DesktopFeedbackOverlayInitPayload) => void,
+    ) => () => void;
+    onFeedbackShortcut: (callback: (screenshot?: DesktopFeedbackScreenshot) => void) => () => void;
+    onFeedbackOverlaySubmit: (
+      callback: (payload: DesktopFeedbackOverlayPayload) => void,
+    ) => () => void;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
   }
 

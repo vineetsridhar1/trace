@@ -18,9 +18,32 @@ contextBridge.exposeInMainWorld("trace", {
   repairRepoGitHooks: (repoId: string) => ipcRenderer.invoke("repair-repo-git-hooks", repoId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
+  captureFeedbackScreenshot: () => ipcRenderer.invoke("capture-feedback-screenshot"),
+  feedbackOverlayReady: () => ipcRenderer.invoke("feedback-overlay-ready"),
+  closeFeedbackOverlay: () => ipcRenderer.invoke("close-feedback-overlay"),
+  submitFeedbackOverlay: (payload: unknown) =>
+    ipcRenderer.invoke("submit-feedback-overlay", payload),
+  setFeedbackDestination: (destination: unknown) =>
+    ipcRenderer.invoke("set-feedback-destination", destination),
   setBridgeLabel: (label: string) => ipcRenderer.invoke("set-bridge-label", label),
   setBridgeAuthContext: (organizationId: string | null) =>
     ipcRenderer.invoke("set-bridge-auth-context", organizationId),
+  onFeedbackOverlayInit: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on("feedback-overlay-init", listener);
+    return () => ipcRenderer.removeListener("feedback-overlay-init", listener);
+  },
+  onFeedbackShortcut: (callback: (screenshot?: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, screenshot?: unknown) =>
+      callback(screenshot);
+    ipcRenderer.on("feedback-shortcut", listener);
+    return () => ipcRenderer.removeListener("feedback-shortcut", listener);
+  },
+  onFeedbackOverlaySubmit: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on("feedback-overlay-submit", listener);
+    return () => ipcRenderer.removeListener("feedback-overlay-submit", listener);
+  },
   onBridgeStatus: (callback: (status: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status);
     ipcRenderer.on("bridge-status", listener);
