@@ -1,7 +1,7 @@
 export type TraceRepo = {
   id: string;
   name: string;
-  remoteUrl: string;
+  remoteUrl: string | null;
   defaultBranch: string;
   branch: string | null;
   checkpointSha: string | null;

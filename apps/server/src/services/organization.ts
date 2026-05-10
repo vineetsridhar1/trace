@@ -201,25 +201,29 @@ export class OrganizationService {
       assertActorOrgAccess(tx, input.organizationId, actorType, actorId),
     );
 
-    // Deduplicate by remote URL within the org — if it already exists, return it
-    const existing = await prisma.repo.findUnique({
-      where: {
-        organizationId_remoteUrl: {
-          organizationId: input.organizationId,
-          remoteUrl: input.remoteUrl,
-        },
-      },
-      include: { projects: true, sessions: true },
-    });
+    const remoteUrl = input.remoteUrl?.trim() || null;
 
-    if (existing) return existing;
+    // Deduplicate by remote URL within the org — if it already exists, return it
+    if (remoteUrl) {
+      const existing = await prisma.repo.findUnique({
+        where: {
+          organizationId_remoteUrl: {
+            organizationId: input.organizationId,
+            remoteUrl,
+          },
+        },
+        include: { projects: true, sessions: true },
+      });
+
+      if (existing) return existing;
+    }
 
     const [repo, repoEvent, channelEvent] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const repo = await tx.repo.create({
           data: {
             name: input.name,
-            remoteUrl: input.remoteUrl,
+            remoteUrl,
             defaultBranch: input.defaultBranch ?? "main",
             organizationId: input.organizationId,
           },

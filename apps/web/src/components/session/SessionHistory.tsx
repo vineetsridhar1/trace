@@ -12,6 +12,7 @@ import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
+import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 
 interface SessionHistoryProps {
   sessionId: string;
@@ -62,15 +63,19 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
 
       setCreatingFromId(sourceId);
       try {
+        const sourceRepo = source.repo as
+          | { id: string; remoteUrl?: string | null }
+          | null
+          | undefined;
         const result = await client
           .mutation(START_SESSION_MUTATION, {
             input: {
               tool: source.tool,
               model: source.model ?? undefined,
               reasoningEffort: source.reasoningEffort ?? undefined,
-              hosting: source.hosting,
+              hosting: resolveSupportedHostingForRepo(source.hosting, sourceRepo),
               channelId: getSessionChannelId(source) ?? undefined,
-              repoId: (source.repo as { id: string } | null | undefined)?.id,
+              repoId: sourceRepo?.id,
               branch: source.branch ?? undefined,
               sessionGroupId,
               sourceSessionId: sourceId,

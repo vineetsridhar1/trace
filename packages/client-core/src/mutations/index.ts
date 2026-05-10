@@ -357,6 +357,7 @@ export const MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY = gql`
         repo {
           id
           name
+          remoteUrl
         }
         attachedSessionGroup {
           id
@@ -434,6 +435,7 @@ export const MY_CONNECTIONS_QUERY = gql`
         repo {
           id
           name
+          remoteUrl
           defaultBranch
         }
         channel {

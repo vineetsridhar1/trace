@@ -28,7 +28,7 @@ const isElectron = typeof window.trace?.pickFolder === "function";
 
 interface DetectedRepo {
   name: string;
-  remoteUrl: string;
+  remoteUrl: string | null;
   defaultBranch: string;
 }
 
@@ -68,8 +68,12 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
   async function handleLink() {
     const repo =
       detected ??
-      (manualName.trim() && manualRemoteUrl.trim()
-        ? { name: manualName.trim(), remoteUrl: manualRemoteUrl.trim(), defaultBranch: "main" }
+      (manualName.trim()
+        ? {
+            name: manualName.trim(),
+            remoteUrl: manualRemoteUrl.trim() || null,
+            defaultBranch: "main",
+          }
         : null);
     if (!repo || !activeOrgId) return;
 
@@ -118,7 +122,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
     else setOpen(true);
   }
 
-  const canSubmit = detected || (manualName.trim() && manualRemoteUrl.trim());
+  const canSubmit = detected || manualName.trim();
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -134,7 +138,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
           <DialogDescription>
             {isElectron
               ? "Select a local folder containing a git repository."
-              : "Enter the git remote URL to link a repository to your organization."}
+              : "Enter repository details to link it to your organization."}
           </DialogDescription>
         </DialogHeader>
 
@@ -154,7 +158,9 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
                     <span className="text-sm font-medium text-foreground">{detected.name}</span>
                     <span className="text-xs text-muted-foreground">{detected.defaultBranch}</span>
                   </div>
-                  <p className="truncate text-xs text-muted-foreground">{detected.remoteUrl}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {detected.remoteUrl ?? "No remote configured"}
+                  </p>
                 </div>
               )}
             </>
@@ -174,7 +180,9 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">Remote URL</label>
+                <label className="mb-1.5 block text-sm text-muted-foreground">
+                  Remote URL (optional)
+                </label>
                 <Input
                   value={manualRemoteUrl}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>

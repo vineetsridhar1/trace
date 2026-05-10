@@ -10,6 +10,8 @@ import {
 import { Button } from "../ui/button";
 import { BranchCombobox } from "../channel/BranchCombobox";
 import { RepoDesktopSection } from "./RepoDesktopSection";
+import { DisabledTooltip } from "../ui/DisabledTooltip";
+import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 
@@ -30,6 +32,7 @@ export function RepoCard({
   const [saving, setSaving] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
   const [webhookError, setWebhookError] = useState<string | null>(null);
+  const webhookDisabledReason = hasRepoRemote({ remoteUrl }) ? null : WEBHOOK_REPO_REMOTE_REQUIRED;
 
   const startEditing = () => {
     setEditBranch(defaultBranch ?? "main");
@@ -62,7 +65,7 @@ export function RepoCard({
   };
 
   const toggleWebhook = async () => {
-    if (webhookPending) return;
+    if (webhookPending || webhookDisabledReason) return;
 
     setWebhookPending(true);
     setWebhookError(null);
@@ -91,7 +94,9 @@ export function RepoCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">{name}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{remoteUrl}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {remoteUrl ?? "No remote configured"}
+          </p>
           <div className="mt-1 flex items-center gap-1.5">
             {editing ? (
               <div className="flex items-center gap-1.5">
@@ -133,20 +138,22 @@ export function RepoCard({
             >
               {webhookActive ? "GitHub webhook connected" : "GitHub webhook not connected"}
             </p>
-            <Button
-              variant={webhookActive ? "ghost" : "outline"}
-              size="sm"
-              onClick={toggleWebhook}
-              disabled={webhookPending}
-            >
-              {webhookPending
-                ? webhookActive
-                  ? "Disconnecting..."
-                  : "Connecting..."
-                : webhookActive
-                  ? "Disconnect Webhook"
-                  : "Connect Webhook"}
-            </Button>
+            <DisabledTooltip message={webhookDisabledReason}>
+              <Button
+                variant={webhookActive ? "ghost" : "outline"}
+                size="sm"
+                onClick={toggleWebhook}
+                disabled={webhookPending || !!webhookDisabledReason}
+              >
+                {webhookPending
+                  ? webhookActive
+                    ? "Disconnecting..."
+                    : "Connecting..."
+                  : webhookActive
+                    ? "Disconnect Webhook"
+                    : "Connect Webhook"}
+              </Button>
+            </DisabledTooltip>
           </div>
           {webhookError && <p className="mt-2 text-xs text-destructive">{webhookError}</p>}
 

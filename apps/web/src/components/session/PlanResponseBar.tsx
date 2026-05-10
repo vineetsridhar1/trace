@@ -17,6 +17,7 @@ import {
   buildCommentPrompt,
   getCommentGroupIndex,
 } from "./planCommentPrompts";
+import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 
 interface PlanResponseBarProps {
   sessionId: string;
@@ -73,9 +74,12 @@ export function PlanResponseBar({
     | string
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
-  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const repo = useEntityField("sessions", sessionId, "repo") as
+    | { id: string; remoteUrl?: string | null }
+    | null
+    | undefined;
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
-  const defaultHosting = hosting ?? "local";
+  const defaultHosting = resolveSupportedHostingForRepo(hosting ?? "local", repo) ?? "local";
 
   const handleClearContext = useCallback(async () => {
     if (sending || !sessionGroupId) return;

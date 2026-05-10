@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
+import { Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
 import type { ChannelType, CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { gql } from "@urql/core";
 import { BranchCombobox } from "../channel/BranchCombobox";
@@ -14,6 +14,7 @@ import {
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
@@ -21,6 +22,7 @@ import { useAuthStore } from "@trace/client-core";
 import { useEntityField, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
+import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 
 const CREATE_CHANNEL_MUTATION = gql`
   mutation CreateChannel($input: CreateChannelInput!) {
@@ -329,7 +331,12 @@ export function CreateChannelDialog({
                       <SelectContent>
                         <SelectItem value="__none__">Select a repo...</SelectItem>
                         {repoIds.map((id) => (
-                          <RepoOptionItem key={id} id={id} disabled={!isRepoCloned(id)} />
+                          <RepoOptionItem
+                            key={id}
+                            id={id}
+                            localUnavailable={!isRepoCloned(id)}
+                            cloudOnly={!hasLocalBridge}
+                          />
                         ))}
                       </SelectContent>
                     </Select>
@@ -397,17 +404,33 @@ function SelectedRepoValue({ id }: { id: string | undefined }) {
   return <>{id ? (name ?? id) : "Select a repo..."}</>;
 }
 
-function RepoOptionItem({ id, disabled }: { id: string; disabled?: boolean }) {
+function RepoOptionItem({
+  id,
+  localUnavailable,
+  cloudOnly,
+}: {
+  id: string;
+  localUnavailable?: boolean;
+  cloudOnly?: boolean;
+}) {
   const name = useEntityField("repos", id, "name");
+  const remoteUrl = useEntityField("repos", id, "remoteUrl") as string | null | undefined;
+  const remoteUnavailable = !!cloudOnly && repoRemoteKnownMissing({ remoteUrl });
+  const disabled = localUnavailable || remoteUnavailable;
+  const disabledReason = remoteUnavailable
+    ? CLOUD_REPO_REMOTE_REQUIRED
+    : localUnavailable
+      ? "This repo is not cloned on any connected local runtime."
+      : undefined;
   return (
     <SelectItem value={id} disabled={disabled}>
       <span className="flex items-center gap-1.5">
         {name ?? id}
-        {disabled && (
-          <span className="flex items-center gap-0.5 text-xs text-amber-500">
-            <AlertTriangle size={10} />
-            not cloned
-          </span>
+        {localUnavailable && disabledReason && (
+          <DisabledReasonHint message={disabledReason}>not cloned</DisabledReasonHint>
+        )}
+        {remoteUnavailable && disabledReason && (
+          <DisabledReasonHint message={disabledReason}>remote required</DisabledReasonHint>
         )}
       </span>
     </SelectItem>

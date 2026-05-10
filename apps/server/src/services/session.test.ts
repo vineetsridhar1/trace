@@ -291,6 +291,10 @@ describe("SessionService", () => {
     });
     prismaMock.channel.findUnique.mockResolvedValue(null);
     prismaMock.gitCheckpoint.findUnique.mockResolvedValue(null);
+    prismaMock.repo.findFirst.mockResolvedValue({
+      id: "repo-1",
+      remoteUrl: "git@github.com:trace/trace.git",
+    });
   });
 
   afterEach(() => {
@@ -568,6 +572,30 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    it("rejects cloud sessions for repos without remote urls", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1", remoteUrl: null });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          channelId: "channel-1",
+          hosting: "cloud",
+          prompt: "Implement dashboard filters",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Cloud sessions require the repo to have a remote URL.");
+
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    });
+
     it("creates a new session group for a channel entrypoint", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup });
@@ -2256,6 +2284,30 @@ describe("SessionService", () => {
   });
 
   describe("run", () => {
+    it("rejects deferred cloud runs for repos without remote urls", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          agentStatus: "not_started",
+          workdir: null,
+          toolSessionId: null,
+          repo: {
+            id: "repo-1",
+            name: "trace",
+            remoteUrl: null,
+            defaultBranch: "main",
+          },
+        }),
+      );
+
+      await expect(service.run("session-1", "Ship it")).rejects.toThrow(
+        "Cloud sessions require the repo to have a remote URL.",
+      );
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    });
+
     it("queues checkpoint context when the initial run waits for workspace preparation", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({
@@ -2844,20 +2896,21 @@ describe("SessionService", () => {
           },
         },
       },
-    ])("does not retry terminal $name sessions even when connection canRetry is true", async ({
-      session,
-    }) => {
-      const terminalSession = makeSession(session);
-      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(terminalSession);
+    ])(
+      "does not retry terminal $name sessions even when connection canRetry is true",
+      async ({ session }) => {
+        const terminalSession = makeSession(session);
+        prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(terminalSession);
 
-      const result = await service.retryConnection("session-1", "org-1", "user", "user-1");
+        const result = await service.retryConnection("session-1", "org-1", "user", "user-1");
 
-      expect(result).toBe(terminalSession);
-      expect(eventServiceMock.create).not.toHaveBeenCalled();
-      expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
-      expect(sessionRouterMock.send).not.toHaveBeenCalled();
-      expect(prismaMock.session.update).not.toHaveBeenCalled();
-    });
+        expect(result).toBe(terminalSession);
+        expect(eventServiceMock.create).not.toHaveBeenCalled();
+        expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
+        expect(sessionRouterMock.send).not.toHaveBeenCalled();
+        expect(prismaMock.session.update).not.toHaveBeenCalled();
+      },
+    );
 
     it("fails without picking a different bridge when the home runtime is offline", async () => {
       // Laptop A is the home bridge; Laptop B is also connected. Auto-retry
@@ -3209,6 +3262,26 @@ describe("SessionService", () => {
       await expect(
         service.updateConfig("session-1", "org-1", { reasoningEffort: "   " }, "user", "user-1"),
       ).rejects.toThrow("Reasoning effort cannot be empty");
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects switching a no-remote repo session to cloud", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          repo: {
+            id: "repo-1",
+            name: "trace",
+            remoteUrl: null,
+            defaultBranch: "main",
+          },
+        }),
+      );
+
+      await expect(
+        service.updateConfig("session-1", "org-1", { hosting: "cloud" }, "user", "user-1"),
+      ).rejects.toThrow("Cloud sessions require the repo to have a remote URL.");
 
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
@@ -4872,6 +4945,27 @@ describe("SessionService", () => {
         "Cloud sessions are disabled in local mode",
       );
       expect(prismaMock.session.findFirstOrThrow).not.toHaveBeenCalled();
+    });
+
+    it("rejects moving a no-remote repo session to cloud", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          repo: {
+            id: "repo-1",
+            name: "trace",
+            remoteUrl: null,
+            defaultBranch: "main",
+          },
+        }),
+      );
+
+      await expect(service.moveToCloud("session-1", "org-1", "user", "user-1")).rejects.toThrow(
+        "Cloud sessions require the repo to have a remote URL.",
+      );
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
     });
 
     it("rebinds the same session to cloud inside the same group", async () => {

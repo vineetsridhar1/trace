@@ -26,6 +26,10 @@ export class WebhookService {
       throw new Error("Webhook already registered for this repo");
     }
 
+    if (!repo.remoteUrl) {
+      throw new Error("Cannot register GitHub webhook for a repo without a remote URL.");
+    }
+
     const parsed = parseGitHubRepo(repo.remoteUrl);
     if (!parsed) {
       throw new Error("Cannot parse GitHub owner/repo from remote URL: " + repo.remoteUrl);
@@ -114,6 +118,10 @@ export class WebhookService {
 
     if (!repo.webhookId) {
       throw new Error("No webhook registered for this repo");
+    }
+
+    if (!repo.remoteUrl) {
+      throw new Error("Cannot unregister GitHub webhook for a repo without a remote URL.");
     }
 
     const parsed = parseGitHubRepo(repo.remoteUrl);

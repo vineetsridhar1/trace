@@ -43,8 +43,12 @@ async function resolveBaseBranch(
   // 2. Local ref (branch exists locally but was never pushed)
   if (await refExists(repoPath, candidate)) return candidate;
 
-  // 3. Safe fallback to repo's main branch on remote
-  return `origin/${defaultBranch}`;
+  // 3. Safe fallback to repo's default branch, remote first, then local.
+  const remoteDefault = `origin/${defaultBranch}`;
+  if (await refExists(repoPath, remoteDefault)) return remoteDefault;
+  if (await refExists(repoPath, defaultBranch)) return defaultBranch;
+
+  return "HEAD";
 }
 
 async function getCurrentBranch(worktreePath: string): Promise<string | null> {
@@ -98,6 +102,13 @@ async function setUpstreamIfRemote(
   await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
 }
 
+async function hasRemoteOrigin(repoPath: string): Promise<boolean> {
+  return execFileAsync("git", ["remote", "get-url", "origin"], { cwd: repoPath }).then(
+    () => true,
+    () => false,
+  );
+}
+
 function resolveWorktreeBranch(
   slug: string,
   startBranch: string | undefined,
@@ -149,9 +160,11 @@ export async function createWorktree({
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
-  // Fetch latest so origin refs are up to date
+  const hasOrigin = await hasRemoteOrigin(repoPath);
+
+  // Fetch latest so origin refs are up to date when a remote exists.
   if (!checkpointSha) {
-    await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+    if (hasOrigin) await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
   } else {
     // Verify the checkpoint SHA is reachable locally; fetch if not
     const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], {
@@ -159,7 +172,7 @@ export async function createWorktree({
     })
       .then(() => true)
       .catch(() => false);
-    if (!reachable) {
+    if (!reachable && hasOrigin) {
       await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
     }
   }

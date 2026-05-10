@@ -10,6 +10,8 @@ import {
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
+import { DisabledTooltip } from "../ui/DisabledTooltip";
+import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 
 interface RuntimeInstance {
   id: string;
@@ -36,8 +38,12 @@ export function SessionRuntimePicker({
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
-  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const repo = useEntityField("sessions", sessionId, "repo") as
+    | { id: string; remoteUrl?: string | null }
+    | null
+    | undefined;
   const repoId = repo?.id ?? null;
+  const cloudDisabledReason = repoRemoteKnownMissing(repo) ? CLOUD_REPO_REMOTE_REQUIRED : null;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | { runtimeInstanceId?: string | null }
     | null
@@ -93,6 +99,10 @@ export function SessionRuntimePicker({
   );
 
   const handleMoveToCloud = useCallback(async () => {
+    if (cloudDisabledReason) {
+      toast.error("Cloud is unavailable for this repo", { description: cloudDisabledReason });
+      return;
+    }
     if (!cloudEnvironmentAvailable) {
       toast.error("Cloud is not configured for this organization");
       return;
@@ -120,7 +130,7 @@ export function SessionRuntimePicker({
     } finally {
       setMoving(null);
     }
-  }, [cloudEnvironmentAvailable, onClose, sessionId]);
+  }, [cloudDisabledReason, cloudEnvironmentAvailable, onClose, sessionId]);
 
   const localRuntimes = runtimes.filter(
     (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,
@@ -142,53 +152,61 @@ export function SessionRuntimePicker({
       ) : (
         <div className="space-y-1">
           {cloudEnvironmentAvailable ? (
-            <button
-              onClick={handleMoveToCloud}
-              disabled={moving !== null}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-elevated disabled:opacity-50"
-            >
-              <Cloud size={14} className="shrink-0 text-sky-400" />
-              <div className="min-w-0 flex-1">
-                <span className="text-foreground">New cloud container</span>
-                <span className="ml-2 text-xs text-muted-foreground">pulls current branch</span>
-              </div>
-              {moving === "cloud" && (
-                <Loader2 size={12} className="animate-spin text-muted-foreground" />
-              )}
-            </button>
+            <DisabledTooltip message={cloudDisabledReason} fullWidth>
+              <button
+                onClick={handleMoveToCloud}
+                disabled={moving !== null || !!cloudDisabledReason}
+                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-elevated disabled:opacity-50"
+              >
+                <Cloud size={14} className="shrink-0 text-sky-400" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-foreground">New cloud container</span>
+                  <span className="ml-2 text-xs text-muted-foreground">pulls current branch</span>
+                </div>
+                {moving === "cloud" && (
+                  <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                )}
+              </button>
+            </DisabledTooltip>
           ) : null}
 
           {localRuntimes.map((rt: RuntimeInstance) => {
             const lacksRepo =
               !!repoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(repoId);
+            const disabledReason = lacksRepo
+              ? "This local runtime does not have this repo linked."
+              : !rt.connected
+                ? "This local runtime is offline."
+                : null;
 
             return (
-              <button
-                key={rt.id}
-                onClick={() => handleMove(rt.id)}
-                disabled={!rt.connected || lacksRepo || moving !== null}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
-              >
-                <Monitor size={14} className="shrink-0 text-green-400" />
-                <div className="min-w-0 flex-1">
-                  <span className="text-foreground">{rt.label}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                {moving === rt.id && (
-                  <Loader2 size={12} className="animate-spin text-muted-foreground" />
-                )}
-                {lacksRepo && (
-                  <span className="flex items-center gap-1 text-xs text-amber-500">
-                    <AlertTriangle size={10} />
-                    repo not linked
-                  </span>
-                )}
-                {!lacksRepo && !rt.connected && (
-                  <span className="text-xs text-muted-foreground">offline</span>
-                )}
-              </button>
+              <DisabledTooltip key={rt.id} message={disabledReason} fullWidth>
+                <button
+                  onClick={() => handleMove(rt.id)}
+                  disabled={!rt.connected || lacksRepo || moving !== null}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
+                >
+                  <Monitor size={14} className="shrink-0 text-green-400" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-foreground">{rt.label}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  {moving === rt.id && (
+                    <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                  )}
+                  {lacksRepo && (
+                    <span className="flex items-center gap-1 text-xs text-amber-500">
+                      <AlertTriangle size={10} />
+                      repo not linked
+                    </span>
+                  )}
+                  {!lacksRepo && !rt.connected && (
+                    <span className="text-xs text-muted-foreground">offline</span>
+                  )}
+                </button>
+              </DisabledTooltip>
             );
           })}
 

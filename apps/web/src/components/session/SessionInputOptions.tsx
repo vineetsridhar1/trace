@@ -8,6 +8,7 @@ import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import {
   getModelsForTool,
@@ -22,6 +23,7 @@ import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
+import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
@@ -138,8 +140,12 @@ export function SessionInputOptions({
     | string
     | undefined;
 
-  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const repo = useEntityField("sessions", sessionId, "repo") as
+    | { id: string; remoteUrl?: string | null }
+    | null
+    | undefined;
   const channelRepoId = repo?.id;
+  const cloudDisabledReason = repoRemoteKnownMissing(repo) ? CLOUD_REPO_REMOTE_REQUIRED : null;
 
   const currentTool = tool ?? "claude_code";
   const modelOptions = getModelsForTool(currentTool);
@@ -255,6 +261,10 @@ export function SessionInputOptions({
       if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
 
       if (value === CLOUD_RUNTIME_ID) {
+        if (cloudDisabledReason) {
+          toast.error("Cloud is unavailable for this repo", { description: cloudDisabledReason });
+          return;
+        }
         if (!cloudEnvironmentAvailable) {
           toast.error("Cloud is not configured for this organization");
           return;
@@ -328,7 +338,15 @@ export function SessionInputOptions({
         console.error("Failed to update session runtime:", error);
       }
     },
-    [isOptimistic, sessionId, currentRuntimeValue, runtimes, connection, cloudEnvironmentAvailable],
+    [
+      isOptimistic,
+      sessionId,
+      currentRuntimeValue,
+      runtimes,
+      connection,
+      cloudDisabledReason,
+      cloudEnvironmentAvailable,
+    ],
   );
 
   useEffect(() => {
@@ -480,9 +498,17 @@ export function SessionInputOptions({
           </SelectTrigger>
           <SelectContent>
             {showCloudRuntimeOption ? (
-              <SelectItem value={CLOUD_RUNTIME_ID} disabled={!cloudEnvironmentAvailable}>
+              <SelectItem
+                value={CLOUD_RUNTIME_ID}
+                disabled={!cloudEnvironmentAvailable || !!cloudDisabledReason}
+              >
                 <span className="flex items-center gap-1.5">
                   <Cloud size={12} className="text-sky-400" /> Cloud
+                  {cloudDisabledReason && (
+                    <DisabledReasonHint message={cloudDisabledReason}>
+                      remote required
+                    </DisabledReasonHint>
+                  )}
                 </span>
               </SelectItem>
             ) : null}
@@ -501,10 +527,9 @@ export function SessionInputOptions({
                   <span className="flex items-center gap-1.5">
                     <Monitor size={12} className="text-green-400" /> {r.label}
                     {lacksRepo && (
-                      <span className="flex items-center gap-0.5 text-xs text-amber-500">
-                        <AlertTriangle size={10} />
+                      <DisabledReasonHint message="This local runtime does not have this repo linked.">
                         repo not linked
-                      </span>
+                      </DisabledReasonHint>
                     )}
                   </span>
                 </SelectItem>

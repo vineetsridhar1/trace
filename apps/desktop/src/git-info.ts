@@ -5,7 +5,7 @@ import { promisify } from "util";
 const execFileAsync = promisify(execFile);
 
 export interface GitInfo {
-  remoteUrl: string;
+  remoteUrl: string | null;
   defaultBranch: string;
   name: string;
 }
@@ -44,18 +44,22 @@ async function resolveOriginDefaultBranch(folderPath: string): Promise<string | 
 
 export async function getGitInfo(folderPath: string): Promise<GitInfo | GitInfoError> {
   try {
-    const { stdout } = await execFileAsync("git", ["remote", "get-url", "origin"], {
-      cwd: folderPath,
-    });
-    const branch =
-      (await resolveCurrentBranch(folderPath)) ?? (await resolveOriginDefaultBranch(folderPath));
+    await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: folderPath });
+    const [remoteResult, branch] = await Promise.all([
+      execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }).catch(
+        () => null,
+      ),
+      resolveCurrentBranch(folderPath).then(
+        async (currentBranch) => currentBranch ?? (await resolveOriginDefaultBranch(folderPath)),
+      ),
+    ]);
 
     return {
-      remoteUrl: stdout.trim(),
+      remoteUrl: remoteResult?.stdout.trim() || null,
       defaultBranch: branch ?? "main",
       name: path.basename(folderPath),
     };
   } catch {
-    return { error: "Not a git repository or no remote origin configured." };
+    return { error: "Not a git repository." };
   }
 }

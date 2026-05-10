@@ -324,7 +324,7 @@ export type CreateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
-  remoteUrl: Scalars["String"]["input"];
+  remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type CreateTicketInput = {
@@ -1419,7 +1419,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
-  remoteUrl: Scalars["String"]["output"];
+  remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
 };
@@ -3428,7 +3428,7 @@ export type RepoResolvers<
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes["Project"]>, ParentType, ContextType>;
-  remoteUrl?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  remoteUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   webhookActive?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;

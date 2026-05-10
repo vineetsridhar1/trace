@@ -15,6 +15,7 @@ import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "@trace/client-core";
 import { RestoreCheckpointDialog, shouldShowRestoreDialog } from "./RestoreCheckpointDialog";
+import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 
 function formatCheckpointTime(committedAt: string): string {
   return new Date(committedAt).toLocaleString([], {
@@ -99,13 +100,14 @@ export function CheckpointPanel({
 
       setRestoringId(checkpoint.id);
       try {
+        const restoreRepo = restoreSession.repo as { remoteUrl?: string | null } | null | undefined;
         const result = await client
           .mutation(START_SESSION_MUTATION, {
             input: {
               tool: restoreSession.tool,
               model: restoreSession.model ?? undefined,
               reasoningEffort: restoreSession.reasoningEffort ?? undefined,
-              hosting: restoreSession.hosting,
+              hosting: resolveSupportedHostingForRepo(restoreSession.hosting, restoreRepo),
               channelId: channelId ?? undefined,
               restoreCheckpointId: checkpoint.id,
             },

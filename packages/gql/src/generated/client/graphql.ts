@@ -323,7 +323,7 @@ export type CreateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
-  remoteUrl: Scalars["String"]["input"];
+  remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type CreateTicketInput = {
@@ -1418,7 +1418,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
-  remoteUrl: Scalars["String"]["output"];
+  remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
 };
@@ -1844,6 +1844,7 @@ export type SessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -1859,7 +1860,7 @@ export type SessionGroupsQuery = {
         autoRetryable?: boolean | null;
       } | null;
       createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
@@ -1900,6 +1901,7 @@ export type FilteredSessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -1915,7 +1917,7 @@ export type FilteredSessionGroupsQuery = {
         autoRetryable?: boolean | null;
       } | null;
       createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
@@ -2065,7 +2067,7 @@ export type SessionDetailQuery = {
     sessionGroupId?: string | null;
     createdAt: string;
     updatedAt: string;
-    repo?: { __typename?: "Repo"; id: string; name: string } | null;
+    repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
     connection?: {
       __typename?: "SessionConnection";
       state: SessionConnectionState;
@@ -2103,7 +2105,7 @@ export type SessionDetailQuery = {
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       connection?: {
         __typename?: "SessionConnection";
         state: SessionConnectionState;
@@ -2175,7 +2177,13 @@ export type SessionGroupDetailQuery = {
       filesChanged: number;
       createdAt: string;
     }>;
-    repo?: { __typename?: "Repo"; id: string; name: string; defaultBranch: string } | null;
+    repo?: {
+      __typename?: "Repo";
+      id: string;
+      name: string;
+      remoteUrl?: string | null;
+      defaultBranch: string;
+    } | null;
     connection?: {
       __typename?: "SessionConnection";
       state: SessionConnectionState;
@@ -2201,6 +2209,8 @@ export type SessionGroupDetailQuery = {
       branch?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
+      lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2215,7 +2225,7 @@ export type SessionGroupDetailQuery = {
         autoRetryable?: boolean | null;
       } | null;
       createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
@@ -2331,7 +2341,7 @@ export type SettingsReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -2360,7 +2370,7 @@ export type AgentEnvironmentsSettingsQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -2892,7 +2902,7 @@ export type ReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -2949,7 +2959,7 @@ export type OnboardingReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -3104,6 +3114,7 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -3142,6 +3153,7 @@ export const SessionGroupsDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },
@@ -3255,6 +3267,7 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -3293,6 +3306,7 @@ export const FilteredSessionGroupsDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },
@@ -3866,6 +3880,7 @@ export const SessionDetailDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                     ],
                   },
                 },
@@ -3951,6 +3966,7 @@ export const SessionDetailDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },
@@ -4102,6 +4118,7 @@ export const SessionGroupDetailDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                     ],
                   },
@@ -4152,6 +4169,8 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -4189,6 +4208,7 @@ export const SessionGroupDetailDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },

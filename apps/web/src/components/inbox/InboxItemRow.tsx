@@ -15,6 +15,7 @@ import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
 import type { QuestionData } from "./InboxQuestionBody";
+import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 
 /** Human-friendly label for inbox item types. */
 function itemTypeLabel(itemType: string | undefined): string {
@@ -54,11 +55,10 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     | string
     | null
     | undefined;
-  const sessionReasoningEffort = useEntityField(
-    "sessions",
-    sourceId ?? "",
-    "reasoningEffort",
-  ) as string | null | undefined;
+  const sessionReasoningEffort = useEntityField("sessions", sourceId ?? "", "reasoningEffort") as
+    | string
+    | null
+    | undefined;
   const sessionHosting = useEntityField("sessions", sourceId ?? "", "hosting") as
     | string
     | undefined;
@@ -66,7 +66,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     | string
     | undefined;
   const sessionRepo = useEntityField("sessions", sourceId ?? "", "repo") as
-    | { id: string }
+    | { id: string; remoteUrl?: string | null }
     | null
     | undefined;
   const sessionBranch = useEntityField("sessions", sourceId ?? "", "branch") as
@@ -97,13 +97,14 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
       const prompt = planContent
         ? `Implement the following plan:\n\n${planContent}`
         : "Implement the plan from the previous session.";
+      const hosting = resolveSupportedHostingForRepo(sessionHosting ?? "cloud", sessionRepo);
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
             tool: sessionTool ?? "claude_code",
             model: sessionModel ?? undefined,
             reasoningEffort: sessionReasoningEffort ?? undefined,
-            hosting: sessionHosting ?? "cloud",
+            hosting,
             channelId: sessionChannel?.id,
             repoId: sessionRepo?.id,
             branch: sessionBranch ?? undefined,
@@ -122,7 +123,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
           tool: sessionTool ?? "claude_code",
           model: sessionModel,
           reasoningEffort: sessionReasoningEffort,
-          hosting: sessionHosting ?? "cloud",
+          hosting: hosting ?? "local",
           channel: sessionChannel,
           repo: sessionRepo,
           branch: sessionBranch,
@@ -144,7 +145,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     sessionReasoningEffort,
     sessionHosting,
     sessionChannel?.id,
-    sessionRepo?.id,
+    sessionRepo,
     sessionBranch,
     sessionGroupId,
     openSessionTab,

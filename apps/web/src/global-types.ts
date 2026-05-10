@@ -106,7 +106,7 @@ declare global {
   type GitInfoResult =
     | {
         name: string;
-        remoteUrl: string;
+        remoteUrl: string | null;
         defaultBranch: string;
       }
     | {

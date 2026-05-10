@@ -69,14 +69,16 @@ describe("getGitInfo", () => {
     });
   });
 
-  it("still rejects folders without an origin remote", async () => {
+  it("accepts folders without an origin remote", async () => {
     const root = makeTempRoot();
     const repoPath = path.join(root, "repo");
     fs.mkdirSync(repoPath);
     await git(repoPath, ["init", "-b", "main"]);
 
     await expect(getGitInfo(repoPath)).resolves.toEqual({
-      error: "Not a git repository or no remote origin configured.",
+      remoteUrl: null,
+      defaultBranch: "main",
+      name: "repo",
     });
   });
 });

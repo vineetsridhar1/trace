@@ -112,7 +112,7 @@ export interface SessionAdapterCreateOptions {
   tool: string;
   model?: string;
   reasoningEffort?: string;
-  repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
+  repo?: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
   branch?: string;
   checkpointSha?: string;
   createdById: string;

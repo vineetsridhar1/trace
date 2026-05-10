@@ -44,7 +44,7 @@ export interface BridgePrepareCommand {
   slug?: string;
   repoId: string;
   repoName: string;
-  repoRemoteUrl: string;
+  repoRemoteUrl: string | null;
   defaultBranch: string;
   branch?: string;
   preserveBranchName?: boolean;
@@ -61,7 +61,7 @@ export interface BridgeUpgradeWorkspaceCommand {
   slug?: string;
   repoId: string;
   repoName: string;
-  repoRemoteUrl: string;
+  repoRemoteUrl: string | null;
   defaultBranch: string;
   branch?: string;
   preserveBranchName?: boolean;

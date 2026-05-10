@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CreateRepoInput } from "@trace/gql";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -317,6 +318,73 @@ describe("OrganizationService", () => {
 
     expect(eventServiceMock.create).not.toHaveBeenCalled();
     expect(eventServiceMock.publishCreated).not.toHaveBeenCalled();
+  });
+
+  it("creates repos without remote urls", async () => {
+    const joinedAt = new Date("2026-04-03T00:00:00.000Z");
+    prismaMock.repo.create.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "local-only",
+      remoteUrl: null,
+      defaultBranch: "main",
+      webhookId: null,
+    });
+    prismaMock.channel.findFirst.mockResolvedValueOnce(null);
+    prismaMock.channelGroup.findFirst.mockResolvedValueOnce(null);
+    prismaMock.channel.create.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+      name: "local-only",
+      type: "coding",
+      position: 1,
+      groupId: null,
+      repoId: "repo-1",
+      baseBranch: "main",
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({
+      userId: TRACE_AI_USER_ID,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      { channelId: "channel-1", userId: "user-1", joinedAt, leftAt: null },
+      { channelId: "channel-1", userId: TRACE_AI_USER_ID, joinedAt, leftAt: null },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+      { id: TRACE_AI_USER_ID, name: "Trace AI", avatarUrl: null },
+    ]);
+    eventServiceMock.create
+      .mockResolvedValueOnce({ id: "event-repo" })
+      .mockResolvedValueOnce({ id: "event-channel" });
+
+    const service = new OrganizationService();
+    const input: CreateRepoInput = {
+      organizationId: "org-1",
+      name: "local-only",
+    };
+    const repo = await service.createRepo(input, "user", "user-1");
+
+    expect(repo.id).toBe("repo-1");
+    expect(prismaMock.repo.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.repo.create).toHaveBeenCalledWith({
+      data: {
+        name: "local-only",
+        remoteUrl: null,
+        defaultBranch: "main",
+        organizationId: "org-1",
+      },
+      include: { projects: true, sessions: true },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          repo: expect.objectContaining({ remoteUrl: null }),
+        }),
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.publishCreated).toHaveBeenNthCalledWith(1, { id: "event-repo" });
+    expect(eventServiceMock.publishCreated).toHaveBeenNthCalledWith(2, { id: "event-channel" });
   });
 
   it("updates repos, creates projects, and links entities", async () => {
