@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("trace", {
   },
   pickFolder: () => ipcRenderer.invoke("pick-folder"),
   getGitInfo: (folderPath: string) => ipcRenderer.invoke("get-git-info", folderPath),
+  createLocalProject: (input: { name: string; parentPath: string }) =>
+    ipcRenderer.invoke("create-local-project", input),
   saveRepoPath: (repoId: string, localPath: string) =>
     ipcRenderer.invoke("save-repo-path", repoId, localPath),
   getRepoPath: (repoId: string) => ipcRenderer.invoke("get-repo-path", repoId),

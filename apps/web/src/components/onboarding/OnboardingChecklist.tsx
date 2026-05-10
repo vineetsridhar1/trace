@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Check, ChevronRight, Circle, GitBranch, Hash, Play } from "lucide-react";
 import { motion } from "framer-motion";
-import { useUIStore, type UIState } from "../../stores/ui";
 import type { OnboardingStatus } from "../../hooks/useOnboardingStatus";
+import { useOnboardingStore } from "../../stores/onboarding";
 import { BrowseChannelsDialog } from "../sidebar/BrowseChannelsDialog";
 import { CreateChannelDialog } from "../sidebar/CreateChannelDialog";
+import { CreateRepoDialog } from "../settings/CreateRepoDialog";
 import { createQuickSession } from "../../lib/create-quick-session";
 
 type IconComponent = typeof GitBranch;
@@ -14,15 +15,10 @@ interface Props {
 }
 
 export function OnboardingChecklist({ status }: Props) {
-  const setActivePage = useUIStore((s: UIState) => s.setActivePage);
-  const setSettingsInitialTab = useUIStore((s: UIState) => s.setSettingsInitialTab);
+  const invalidateRepos = useOnboardingStore((s) => s.invalidateRepos);
+  const [repoOpen, setRepoOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [browseOpen, setBrowseOpen] = useState(false);
-
-  function openSettings(tab: string) {
-    setSettingsInitialTab(tab);
-    setActivePage("settings");
-  }
 
   return (
     <div className="space-y-4">
@@ -37,9 +33,9 @@ export function OnboardingChecklist({ status }: Props) {
         <SimpleRow
           done={status.hasRepo}
           icon={GitBranch}
-          title="Connect a repository"
-          description="Link a codebase to your organization."
-          onClick={() => openSettings("repositories")}
+          title="Create or connect a repository"
+          description="Start a new local project or link a codebase."
+          onClick={() => setRepoOpen(true)}
         />
 
         <ChannelRow
@@ -63,6 +59,12 @@ export function OnboardingChecklist({ status }: Props) {
         />
       </div>
 
+      <CreateRepoDialog
+        open={repoOpen}
+        onOpenChange={setRepoOpen}
+        hideTrigger
+        onCreated={invalidateRepos}
+      />
       <CreateChannelDialog open={createOpen} onOpenChange={setCreateOpen} />
       <BrowseChannelsDialog open={browseOpen} onOpenChange={setBrowseOpen} hideTrigger />
     </div>

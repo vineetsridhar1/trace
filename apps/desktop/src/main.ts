@@ -9,6 +9,9 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import path from "path";
+import fs from "fs";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
   getRepoConfig,
@@ -20,6 +23,8 @@ import {
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
+
+const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
@@ -132,6 +137,55 @@ ipcMain.handle("pick-folder", async () => {
 ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
   return getGitInfo(folderPath);
 });
+
+ipcMain.handle(
+  "create-local-project",
+  async (_event, input: { name?: string; parentPath?: string }) => {
+    const name = input.name?.trim();
+    const parentPath = input.parentPath;
+    if (!name) return { error: "Project name is required." };
+    if (!parentPath) return { error: "Project location is required." };
+    if (name.includes("/") || name.includes("\\") || name === "." || name === "..") {
+      return { error: "Project name cannot contain path separators." };
+    }
+
+    const projectPath = path.join(parentPath, name);
+
+    try {
+      const existingEntries = await fs.promises.readdir(projectPath).catch((error: unknown) => {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT") return null;
+        throw error;
+      });
+
+      if (existingEntries && existingEntries.length > 0) {
+        return { error: "A non-empty folder already exists at that location." };
+      }
+
+      if (!existingEntries) {
+        await fs.promises.mkdir(projectPath, { recursive: false });
+      }
+      try {
+        await execFileAsync("git", ["init", "-b", "main"], { cwd: projectPath });
+      } catch {
+        await execFileAsync("git", ["init"], { cwd: projectPath });
+        await execFileAsync("git", ["symbolic-ref", "HEAD", "refs/heads/main"], {
+          cwd: projectPath,
+        });
+      }
+
+      return {
+        name,
+        path: projectPath,
+        remoteUrl: null,
+        defaultBranch: "main",
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { error: message };
+    }
+  },
+);
 
 ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
   const repoConfig = await saveRepoPath(repoId, localPath);
