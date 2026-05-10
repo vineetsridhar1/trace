@@ -77,6 +77,46 @@ describe("EventService", () => {
     );
   });
 
+  it("can create events without publishing until explicitly requested", async () => {
+    prismaMock.event.create.mockResolvedValueOnce({
+      id: "event-1",
+      organizationId: "org-1",
+      scopeType: "channel",
+      scopeId: "channel-1",
+      eventType: "channel_created",
+    });
+
+    const service = new EventService();
+    const event = await service.create({
+      organizationId: "org-1",
+      scopeType: "channel",
+      scopeId: "channel-1",
+      eventType: "channel_created",
+      payload: { ok: true } as any,
+      actorType: "user",
+      actorId: "user-1",
+      deferPublish: true,
+    });
+
+    expect(pubsubMock.publish).not.toHaveBeenCalled();
+    expect(redisMock.xadd).not.toHaveBeenCalled();
+
+    service.publishCreated(event);
+
+    expect(pubsubMock.publish).toHaveBeenNthCalledWith(1, "channel:channel-1:events", {
+      channelEvents: event,
+    });
+    expect(pubsubMock.publish).toHaveBeenNthCalledWith(2, "org:org-1:events", {
+      orgEvents: event,
+    });
+    expect(redisMock.xadd).toHaveBeenCalledWith(
+      "stream:org:org-1:events",
+      "*",
+      "event",
+      JSON.stringify(event),
+    );
+  });
+
   it("queries events in chronological order even when paginating backwards", async () => {
     const older = { id: "older" };
     const newer = { id: "newer" };

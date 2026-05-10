@@ -9,8 +9,6 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
   getRepoConfig,
@@ -21,8 +19,7 @@ import {
 } from "./config.js";
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
-
-const execFileAsync = promisify(execFile);
+import { getGitInfo } from "./git-info.js";
 
 let mainWindow: BrowserWindow | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
@@ -133,22 +130,7 @@ ipcMain.handle("pick-folder", async () => {
 });
 
 ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
-  try {
-    await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: folderPath });
-    const [remoteResult, branchResult] = await Promise.all([
-      execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }).catch(() => null),
-      execFileAsync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: folderPath }).catch(
-        () => null,
-      ),
-    ]);
-    return {
-      remoteUrl: remoteResult?.stdout.trim() || null,
-      defaultBranch: branchResult?.stdout.trim() || "main",
-      name: path.basename(folderPath),
-    };
-  } catch {
-    return { error: "Not a git repository." };
-  }
+  return getGitInfo(folderPath);
 });
 
 ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
