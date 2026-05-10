@@ -321,7 +321,7 @@ export type CreateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
-  remoteUrl: Scalars["String"]["input"];
+  remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type CreateTicketInput = {
@@ -1416,7 +1416,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
-  remoteUrl: Scalars["String"]["output"];
+  remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
 };

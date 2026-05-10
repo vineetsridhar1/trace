@@ -91,7 +91,9 @@ export function RepoCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">{name}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{remoteUrl}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {remoteUrl ?? "No remote configured"}
+          </p>
           <div className="mt-1 flex items-center gap-1.5">
             {editing ? (
               <div className="flex items-center gap-1.5">

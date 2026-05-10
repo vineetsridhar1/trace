@@ -323,7 +323,7 @@ export type CreateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
-  remoteUrl: Scalars["String"]["input"];
+  remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type CreateTicketInput = {
@@ -1418,7 +1418,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
-  remoteUrl: Scalars["String"]["output"];
+  remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
 };
@@ -1844,6 +1844,7 @@ export type SessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -1900,6 +1901,7 @@ export type FilteredSessionGroupsQuery = {
       prUrl?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
@@ -2201,6 +2203,8 @@ export type SessionGroupDetailQuery = {
       branch?: string | null;
       worktreeDeleted: boolean;
       sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
+      lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2331,7 +2335,7 @@ export type SettingsReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -2360,7 +2364,7 @@ export type AgentEnvironmentsSettingsQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -2892,7 +2896,7 @@ export type ReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -2949,7 +2953,7 @@ export type OnboardingReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
-    remoteUrl: string;
+    remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
   }>;
@@ -3104,6 +3108,7 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -3255,6 +3260,7 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
@@ -4152,6 +4158,8 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },

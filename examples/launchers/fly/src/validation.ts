@@ -58,7 +58,7 @@ function validateRepo(value: unknown): StartSessionRequest["repo"] {
   return {
     id: requireString(repo.id, "repo.id"),
     name: requireString(repo.name, "repo.name"),
-    remoteUrl: requireString(repo.remoteUrl, "repo.remoteUrl"),
+    remoteUrl: repo.remoteUrl === null ? null : requireString(repo.remoteUrl, "repo.remoteUrl"),
     defaultBranch: requireString(repo.defaultBranch, "repo.defaultBranch"),
     branch: repo.branch === null ? null : requireString(repo.branch, "repo.branch"),
     checkpointSha:

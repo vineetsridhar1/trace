@@ -1,0 +1,1 @@
+ALTER TABLE "Repo" ALTER COLUMN "remoteUrl" DROP NOT NULL;

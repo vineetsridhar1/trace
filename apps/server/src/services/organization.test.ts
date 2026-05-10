@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CreateRepoInput } from "@trace/gql";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -198,6 +199,44 @@ describe("OrganizationService", () => {
         actorType: "user",
         actorId: "user-1",
       },
+      prismaMock,
+    );
+  });
+
+  it("creates repos without remote urls", async () => {
+    prismaMock.repo.create.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "local-only",
+      remoteUrl: null,
+      defaultBranch: "main",
+      webhookId: null,
+    });
+
+    const service = new OrganizationService();
+    const input: CreateRepoInput = {
+      organizationId: "org-1",
+      name: "local-only",
+    };
+    const repo = await service.createRepo(input, "user", "user-1");
+
+    expect(repo.id).toBe("repo-1");
+    expect(prismaMock.repo.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.repo.create).toHaveBeenCalledWith({
+      data: {
+        name: "local-only",
+        remoteUrl: null,
+        defaultBranch: "main",
+        organizationId: "org-1",
+      },
+      include: { projects: true, sessions: true },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          repo: expect.objectContaining({ remoteUrl: null }),
+        }),
+      }),
       prismaMock,
     );
   });

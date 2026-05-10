@@ -28,8 +28,11 @@ export function listClonedRepoIds(): string[] {
  * Ensure a bare repo exists at /repos/{repoId}.
  * Clones if missing, fetches if already present.
  */
-export async function ensureRepo(repoId: string, remoteUrl: string): Promise<string> {
+export async function ensureRepo(repoId: string, remoteUrl: string | null): Promise<string> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
+  if (!remoteUrl) {
+    throw new Error("Cloud workspaces require a repo remote URL.");
+  }
 
   // Inject GitHub token into HTTPS URL for private repo access
   let authUrl = remoteUrl;

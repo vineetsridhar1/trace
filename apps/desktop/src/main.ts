@@ -134,17 +134,20 @@ ipcMain.handle("pick-folder", async () => {
 
 ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
   try {
+    await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: folderPath });
     const [remoteResult, branchResult] = await Promise.all([
-      execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }),
-      execFileAsync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: folderPath }),
+      execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }).catch(() => null),
+      execFileAsync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: folderPath }).catch(
+        () => null,
+      ),
     ]);
     return {
-      remoteUrl: remoteResult.stdout.trim(),
-      defaultBranch: branchResult.stdout.trim() || "main",
+      remoteUrl: remoteResult?.stdout.trim() || null,
+      defaultBranch: branchResult?.stdout.trim() || "main",
       name: path.basename(folderPath),
     };
   } catch {
-    return { error: "Not a git repository or no remote origin configured." };
+    return { error: "Not a git repository." };
   }
 });
 
