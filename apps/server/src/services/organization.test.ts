@@ -12,6 +12,7 @@ vi.mock("./event.js", () => ({
 }));
 
 import { prisma } from "../lib/db.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
 import { OrganizationService } from "./organization.js";
 
@@ -155,9 +156,11 @@ describe("OrganizationService", () => {
     ).resolves.toEqual({ id: "repo-1" });
 
     expect(prismaMock.repo.create).not.toHaveBeenCalled();
+    expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
-  it("creates repos and emits repo_created events", async () => {
+  it("creates repos, creates a coding channel, and emits events", async () => {
+    const joinedAt = new Date("2026-04-03T00:00:00.000Z");
     prismaMock.repo.findUnique.mockResolvedValueOnce(null);
     prismaMock.repo.create.mockResolvedValueOnce({
       id: "repo-1",
@@ -167,6 +170,29 @@ describe("OrganizationService", () => {
       defaultBranch: "main",
       webhookId: null,
     });
+    prismaMock.channel.findFirst.mockResolvedValueOnce({ position: 2 });
+    prismaMock.channelGroup.findFirst.mockResolvedValueOnce({ position: 4 });
+    prismaMock.channel.create.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+      name: "trace",
+      type: "coding",
+      position: 5,
+      groupId: null,
+      repoId: "repo-1",
+      baseBranch: "main",
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({
+      userId: TRACE_AI_USER_ID,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      { channelId: "channel-1", userId: "user-1", joinedAt, leftAt: null },
+      { channelId: "channel-1", userId: TRACE_AI_USER_ID, joinedAt, leftAt: null },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+      { id: TRACE_AI_USER_ID, name: "Trace AI", avatarUrl: null },
+    ]);
 
     const service = new OrganizationService();
     const repo = await service.createRepo(
@@ -180,7 +206,24 @@ describe("OrganizationService", () => {
     );
 
     expect(repo.id).toBe("repo-1");
-    expect(eventServiceMock.create).toHaveBeenCalledWith(
+    expect(prismaMock.channel.create).toHaveBeenCalledWith({
+      data: {
+        name: "trace",
+        type: "coding",
+        position: 5,
+        organizationId: "org-1",
+        repoId: "repo-1",
+        baseBranch: "main",
+      },
+    });
+    expect(prismaMock.channelMember.create).toHaveBeenNthCalledWith(1, {
+      data: { channelId: "channel-1", userId: "user-1" },
+    });
+    expect(prismaMock.channelMember.create).toHaveBeenNthCalledWith(2, {
+      data: { channelId: "channel-1", userId: TRACE_AI_USER_ID },
+    });
+    expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+      1,
       {
         organizationId: "org-1",
         scopeType: "system",
@@ -193,6 +236,40 @@ describe("OrganizationService", () => {
             remoteUrl: "https://github.com/acme/trace.git",
             defaultBranch: "main",
             webhookActive: false,
+          },
+        },
+        actorType: "user",
+        actorId: "user-1",
+      },
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+      2,
+      {
+        organizationId: "org-1",
+        scopeType: "channel",
+        scopeId: "channel-1",
+        eventType: "channel_created",
+        payload: {
+          channel: {
+            id: "channel-1",
+            name: "trace",
+            type: "coding",
+            position: 5,
+            groupId: null,
+            repoId: "repo-1",
+            baseBranch: "main",
+            repo: { id: "repo-1", name: "trace" },
+            members: [
+              {
+                user: { id: "user-1", name: "User One", avatarUrl: null },
+                joinedAt: joinedAt.toISOString(),
+              },
+              {
+                user: { id: TRACE_AI_USER_ID, name: "Trace AI", avatarUrl: null },
+                joinedAt: joinedAt.toISOString(),
+              },
+            ],
           },
         },
         actorType: "user",

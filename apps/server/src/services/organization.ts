@@ -12,6 +12,7 @@ import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { isLocalMode } from "../lib/mode.js";
+import { normalizeMembers } from "./member-utils.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -224,7 +225,7 @@ export class OrganizationService {
         include: { projects: true, sessions: true },
       });
 
-      const event = await eventService.create(
+      await eventService.create(
         {
           organizationId: input.organizationId,
           scopeType: "system",
@@ -245,7 +246,79 @@ export class OrganizationService {
         tx,
       );
 
-      return [repo, event] as const;
+      const lastUngroupedChannel = await tx.channel.findFirst({
+        where: { organizationId: input.organizationId, groupId: null },
+        orderBy: { position: "desc" },
+        select: { position: true },
+      });
+      const lastGroup = await tx.channelGroup.findFirst({
+        where: { organizationId: input.organizationId },
+        orderBy: { position: "desc" },
+        select: { position: true },
+      });
+      const position =
+        Math.max(lastUngroupedChannel?.position ?? -1, lastGroup?.position ?? -1) + 1;
+
+      const channel = await tx.channel.create({
+        data: {
+          name: repo.name,
+          type: "coding",
+          position,
+          organizationId: input.organizationId,
+          repoId: repo.id,
+          baseBranch: repo.defaultBranch,
+        },
+      });
+
+      if (actorType !== "system") {
+        await tx.channelMember.create({ data: { channelId: channel.id, userId: actorId } });
+      }
+
+      if (actorId !== TRACE_AI_USER_ID) {
+        const aiOrgMember = await tx.orgMember.findUnique({
+          where: {
+            userId_organizationId: {
+              userId: TRACE_AI_USER_ID,
+              organizationId: input.organizationId,
+            },
+          },
+          select: { userId: true },
+        });
+        if (aiOrgMember) {
+          await tx.channelMember.create({
+            data: { channelId: channel.id, userId: TRACE_AI_USER_ID },
+          });
+        }
+      }
+
+      const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channel.id });
+
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "channel",
+          scopeId: channel.id,
+          eventType: "channel_created",
+          payload: {
+            channel: {
+              id: channel.id,
+              name: channel.name,
+              type: channel.type,
+              position: channel.position,
+              groupId: channel.groupId,
+              repoId: channel.repoId,
+              baseBranch: channel.baseBranch,
+              repo: { id: repo.id, name: repo.name },
+              members: normalizedMembers,
+            },
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return [repo] as const;
     });
 
     return repo;
