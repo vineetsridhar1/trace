@@ -1,9 +1,5 @@
-import { useState } from "react";
-import { FolderOpen, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
-import { useAuthStore } from "@trace/client-core";
-import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -13,131 +9,49 @@ import {
   ResponsiveDialogTrigger as DialogTrigger,
   ResponsiveDialogDescription as DialogDescription,
 } from "../ui/responsive-dialog";
-import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { ExistingRepoForm } from "./ExistingRepoForm";
+import { ManualRepoForm } from "./ManualRepoForm";
+import { NewLocalProjectForm } from "./NewLocalProjectForm";
+import { RepoDialogModeSwitch } from "./RepoDialogModeSwitch";
+import {
+  canCreateLocalProject,
+  isElectron,
+  useCreateRepoDialog,
+} from "./useCreateRepoDialog";
 
-const CREATE_REPO_MUTATION = gql`
-  mutation CreateRepo($input: CreateRepoInput!) {
-    createRepo(input: $input) {
-      id
-    }
-  }
-`;
-
-const isElectron = typeof window.trace?.pickFolder === "function";
-
-interface DetectedRepo {
-  name: string;
-  remoteUrl: string | null;
-  defaultBranch: string;
+interface CreateRepoDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+  onCreated?: () => void;
 }
 
-export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [detected, setDetected] = useState<DetectedRepo | null>(null);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  // Manual fallback fields (browser only)
-  const [manualName, setManualName] = useState("");
-  const [manualRemoteUrl, setManualRemoteUrl] = useState("");
-  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+export function CreateRepoDialog({
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+  onCreated,
+}: CreateRepoDialogProps) {
   const isMobile = useIsMobile();
-
-  async function handlePickFolder() {
-    setError(null);
-    setDetected(null);
-
-    const folderPath = await window.trace!.pickFolder();
-    if (!folderPath) return; // cancelled
-    setSelectedPath(folderPath);
-
-    const result = await window.trace!.getGitInfo(folderPath);
-    if ("error" in result) {
-      setError(result.error);
-      return;
-    }
-
-    setDetected({
-      name: result.name,
-      remoteUrl: result.remoteUrl,
-      defaultBranch: result.defaultBranch,
-    });
-  }
-
-  async function handleLink() {
-    const repo =
-      detected ??
-      (manualName.trim()
-        ? {
-            name: manualName.trim(),
-            remoteUrl: manualRemoteUrl.trim() || null,
-            defaultBranch: "main",
-          }
-        : null);
-    if (!repo || !activeOrgId) return;
-
-    setCreating(true);
-    try {
-      const result = await client
-        .mutation(CREATE_REPO_MUTATION, {
-          input: {
-            organizationId: activeOrgId,
-            name: repo.name,
-            remoteUrl: repo.remoteUrl,
-            defaultBranch: repo.defaultBranch,
-          },
-        })
-        .toPromise();
-
-      if (result.data?.createRepo) {
-        // Persist local path mapping so the bridge can find the repo on disk
-        if (selectedPath && window.trace?.saveRepoPath) {
-          try {
-            await window.trace.saveRepoPath(result.data.createRepo.id, selectedPath);
-          } catch (saveErr) {
-            setError(saveErr instanceof Error ? saveErr.message : "Failed to save local path");
-            return;
-          }
-        }
-        resetAndClose();
-        onCreated?.();
-      }
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  function resetAndClose() {
-    setDetected(null);
-    setSelectedPath(null);
-    setError(null);
-    setManualName("");
-    setManualRemoteUrl("");
-    setOpen(false);
-  }
-
-  function handleOpenChange(next: boolean) {
-    if (!next) resetAndClose();
-    else setOpen(true);
-  }
-
-  const canSubmit = detected || manualName.trim();
+  const state = useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger className="inline-flex">
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <Plus size={14} />
-          Link Repository
-        </Button>
-      </DialogTrigger>
+    <Dialog open={state.open} onOpenChange={state.handleOpenChange}>
+      {!hideTrigger && (
+        <DialogTrigger className="inline-flex">
+          <Button variant="outline" size="sm" className="gap-1.5">
+            <Plus size={14} />
+            Link Repository
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Link Repository</DialogTitle>
           <DialogDescription>
             {isElectron
-              ? "Select a local folder containing a git repository."
+              ? "Select an existing git repository or create a new local project."
               : "Enter repository details to link it to your organization."}
           </DialogDescription>
         </DialogHeader>
@@ -145,59 +59,52 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
         <div className="py-4 space-y-4">
           {isElectron ? (
             <>
-              <Button variant="outline" className="w-full gap-2" onClick={handlePickFolder}>
-                <FolderOpen size={16} />
-                Choose Folder
-              </Button>
+              {canCreateLocalProject && (
+                <RepoDialogModeSwitch mode={state.mode} onModeChange={state.setMode} />
+              )}
 
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              {detected && (
-                <div className="rounded-lg border border-border bg-surface-deep p-3 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">{detected.name}</span>
-                    <span className="text-xs text-muted-foreground">{detected.defaultBranch}</span>
-                  </div>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {detected.remoteUrl ?? "No remote configured"}
-                  </p>
-                </div>
+              {state.mode === "link" ? (
+                <ExistingRepoForm
+                  detected={state.detected}
+                  onPickFolder={state.handlePickFolder}
+                />
+              ) : (
+                <NewLocalProjectForm
+                  projectName={state.projectName}
+                  parentSelection={state.parentSelection}
+                  autoFocus={!isMobile}
+                  onProjectNameChange={state.setProjectName}
+                  onPickParentFolder={state.handlePickParentFolder}
+                />
               )}
             </>
           ) : (
-            <>
-              <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">
-                  Repository name
-                </label>
-                <Input
-                  value={manualName}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setManualName(e.target.value)
-                  }
-                  placeholder="e.g. api-server"
-                  autoFocus={!isMobile}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">
-                  Remote URL (optional)
-                </label>
-                <Input
-                  value={manualRemoteUrl}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setManualRemoteUrl(e.target.value)
-                  }
-                  placeholder="e.g. git@github.com:org/repo.git"
-                />
-              </div>
-            </>
+            <ManualRepoForm
+              name={state.manualName}
+              remoteUrl={state.manualRemoteUrl}
+              autoFocus={!isMobile}
+              onNameChange={state.setManualName}
+              onRemoteUrlChange={state.setManualRemoteUrl}
+            />
           )}
+
+          {state.error && <p className="text-sm text-destructive">{state.error}</p>}
         </div>
 
         <DialogFooter>
-          <Button onClick={handleLink} disabled={!canSubmit || creating}>
-            {creating ? "Linking..." : "Link Repository"}
+          <Button
+            onClick={state.mode === "create" ? state.handleCreateProject : state.handleLink}
+            disabled={
+              (state.mode === "create" ? !state.canCreate : !state.canLink) || state.creating
+            }
+          >
+            {state.creating
+              ? state.mode === "create"
+                ? "Creating..."
+                : "Linking..."
+              : state.mode === "create"
+                ? "Create Project"
+                : "Link Repository"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -178,7 +178,10 @@ export async function createWorktree({
   }
 
   // Resolve base branch with fallback chain (remote → local → default)
-  const baseRef = checkpointSha ?? (await resolveBaseBranch(repoPath, startBranch, defaultBranch));
+  const resolvedBaseRef =
+    checkpointSha ?? (await resolveBaseBranch(repoPath, startBranch, defaultBranch));
+  const baseRef =
+    resolvedBaseRef === "HEAD" && !(await refExists(repoPath, "HEAD")) ? null : resolvedBaseRef;
 
   // If the worktree directory already exists, reuse its branch name but reset
   // Trace-owned contents to the requested remote/checkpoint state. A moved
@@ -186,8 +189,10 @@ export async function createWorktree({
   // while the durable session branch exists at origin/trace/{slug}.
   if (fs.existsSync(targetPath)) {
     const currentBranch = await getCurrentBranch(targetPath);
-    await resetWorktreeToRef(targetPath, baseRef);
-    await setUpstreamIfRemote(repoPath, currentBranch, baseRef);
+    if (baseRef) {
+      await resetWorktreeToRef(targetPath, baseRef);
+      await setUpstreamIfRemote(repoPath, currentBranch, baseRef);
+    }
     return { workdir: targetPath, branch: currentBranch ?? branch, slug: worktreeSlug };
   }
 
@@ -197,11 +202,15 @@ export async function createWorktree({
   if (branchExists) {
     // Reuse existing branch without -b
     await addWorktree(repoPath, targetPath, [targetPath, branch]);
+  } else if (!baseRef) {
+    await addWorktree(repoPath, targetPath, ["--orphan", "-b", branch, targetPath]);
   } else {
     await addWorktree(repoPath, targetPath, ["-b", branch, targetPath, baseRef]);
   }
-  await resetWorktreeToRef(targetPath, baseRef);
-  await setUpstreamIfRemote(repoPath, branch, baseRef);
+  if (baseRef) {
+    await resetWorktreeToRef(targetPath, baseRef);
+    await setUpstreamIfRemote(repoPath, branch, baseRef);
+  }
 
   if (gitHooksEnabled) {
     await installOrRepairRepoHooks(targetPath);

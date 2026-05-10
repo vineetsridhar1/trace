@@ -113,12 +113,33 @@ declare global {
         error: string;
       };
 
+  type CreateLocalProjectResult =
+    | {
+        name: string;
+        path: string;
+        remoteUrl: string | null;
+        defaultBranch: string;
+      }
+    | {
+        error: string;
+      };
+
+  type ProjectParentSelectionResult = {
+    token: string;
+    path: string;
+  } | null;
+
   interface TraceElectronBridge {
     platform: string;
     send: (channel: string, data: unknown) => void;
     on: (channel: string, callback: (...args: unknown[]) => void) => void;
     pickFolder: () => Promise<string | null>;
     getGitInfo: (folderPath: string) => Promise<GitInfoResult>;
+    pickProjectParentFolder: () => Promise<ProjectParentSelectionResult>;
+    createLocalProject: (input: {
+      name: string;
+      parentToken: string;
+    }) => Promise<CreateLocalProjectResult>;
     saveRepoPath: (repoId: string, localPath: string) => Promise<DesktopRepoConfig>;
     getRepoPath: (repoId: string) => Promise<string | null>;
     getRepoConfig: (repoId: string) => Promise<DesktopRepoConfig | null>;

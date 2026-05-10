@@ -9,6 +9,7 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import path from "path";
+import crypto from "crypto";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
   getRepoConfig,
@@ -20,8 +21,14 @@ import {
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
+import { createLocalProjectOnDisk } from "./local-project.js";
 
 let mainWindow: BrowserWindow | null = null;
+const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
+const projectParentSelections = new Map<
+  string,
+  { path: string; timeout: ReturnType<typeof setTimeout> }
+>();
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const appName = "Trace";
@@ -132,6 +139,44 @@ ipcMain.handle("pick-folder", async () => {
 ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
   return getGitInfo(folderPath);
 });
+
+ipcMain.handle("pick-project-parent-folder", async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory"],
+  });
+  if (result.canceled) return null;
+
+  const token = crypto.randomUUID();
+  const folderPath = result.filePaths[0];
+  const timeout = setTimeout(() => {
+    projectParentSelections.delete(token);
+  }, PROJECT_PARENT_SELECTION_TTL_MS);
+  timeout.unref?.();
+  projectParentSelections.set(token, { path: folderPath, timeout });
+  return { token, path: folderPath };
+});
+
+ipcMain.handle(
+  "create-local-project",
+  async (_event, input: { name?: string; parentToken?: string }) => {
+    const parentToken = input.parentToken;
+    const selection = parentToken ? projectParentSelections.get(parentToken) : null;
+    if (parentToken) {
+      if (selection) clearTimeout(selection.timeout);
+      projectParentSelections.delete(parentToken);
+    }
+    try {
+      return await createLocalProjectOnDisk({
+        name: input.name,
+        parentPath: selection?.path ?? "",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { error: message };
+    }
+  },
+);
 
 ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
   const repoConfig = await saveRepoPath(repoId, localPath);
