@@ -27,6 +27,7 @@ import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
+import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -38,6 +39,7 @@ import {
   SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -67,6 +69,7 @@ const SESSION_DETAIL_QUERY = gql`
       repo {
         id
         name
+        remoteUrl
       }
       branch
       workdir
@@ -114,6 +117,7 @@ const SESSION_DETAIL_QUERY = gql`
         repo {
           id
           name
+          remoteUrl
         }
         connection {
           state
@@ -609,6 +613,11 @@ function RuntimeLifecycleNotice({
 }) {
   const [action, setAction] = useState<"retry" | "cloud" | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const repo = useEntityField("sessions", sessionId, "repo") as
+    | { remoteUrl?: string | null }
+    | null
+    | undefined;
+  const cloudDisabledReason = repoRemoteKnownMissing(repo) ? CLOUD_REPO_REMOTE_REQUIRED : null;
   const failed = RUNTIME_FAILURE_STATES.has(connectionState);
   const providerStatus =
     typeof connection?.providerStatus === "string" ? connection.providerStatus : null;
@@ -638,6 +647,12 @@ function RuntimeLifecycleNotice({
   const iconTone = failed ? "text-destructive" : "text-yellow-500";
 
   const handleRetry = useCallback(async () => {
+    if (cloudDisabledReason) {
+      toast.error("Cloud retry is unavailable for this repo", {
+        description: cloudDisabledReason,
+      });
+      return;
+    }
     setAction("retry");
     try {
       const result = await client
@@ -649,9 +664,13 @@ function RuntimeLifecycleNotice({
     } finally {
       setAction(null);
     }
-  }, [sessionId]);
+  }, [cloudDisabledReason, sessionId]);
 
   const handleNewCloud = useCallback(async () => {
+    if (cloudDisabledReason) {
+      toast.error("Cloud is unavailable for this repo", { description: cloudDisabledReason });
+      return;
+    }
     setAction("cloud");
     try {
       const result = await client
@@ -665,7 +684,7 @@ function RuntimeLifecycleNotice({
     } finally {
       setAction(null);
     }
-  }, [sessionId]);
+  }, [cloudDisabledReason, sessionId]);
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
@@ -681,15 +700,17 @@ function RuntimeLifecycleNotice({
         </div>
         {failed && (
           <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              disabled={action !== null}
-              onClick={handleRetry}
-              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
-            >
-              <RefreshCw size={12} className={action === "retry" ? "animate-spin" : ""} />
-              Retry
-            </button>
+            <DisabledTooltip message={cloudDisabledReason}>
+              <button
+                type="button"
+                disabled={action !== null || !!cloudDisabledReason}
+                onClick={handleRetry}
+                className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={action === "retry" ? "animate-spin" : ""} />
+                Retry
+              </button>
+            </DisabledTooltip>
             <button
               type="button"
               disabled={action !== null}
@@ -699,19 +720,21 @@ function RuntimeLifecycleNotice({
               <ArrowRightLeft size={12} />
               Move
             </button>
-            <button
-              type="button"
-              disabled={action !== null}
-              onClick={handleNewCloud}
-              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
-            >
-              {action === "cloud" ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Cloud size={12} />
-              )}
-              New cloud container
-            </button>
+            <DisabledTooltip message={cloudDisabledReason}>
+              <button
+                type="button"
+                disabled={action !== null || !!cloudDisabledReason}
+                onClick={handleNewCloud}
+                className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
+              >
+                {action === "cloud" ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Cloud size={12} />
+                )}
+                New cloud container
+              </button>
+            </DisabledTooltip>
           </div>
         )}
       </div>

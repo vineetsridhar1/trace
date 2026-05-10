@@ -105,7 +105,12 @@ export function RuntimeSelector({
             rt.hostingMode === "local" &&
             !rt.registeredRepoIds.includes(channelRepoId);
           return (
-            <SelectItem key={rt.id} value={rt.id} disabled={lacksRepo}>
+            <SelectItem
+              key={rt.id}
+              value={rt.id}
+              disabled={lacksRepo}
+              title={lacksRepo ? "This local runtime does not have this repo linked." : undefined}
+            >
               <span className="flex items-center gap-1.5">
                 <RuntimeIcon hostingMode={rt.hostingMode} />
                 {rt.label}

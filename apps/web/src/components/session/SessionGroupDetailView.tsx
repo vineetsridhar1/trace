@@ -51,6 +51,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       repo {
         id
         name
+        remoteUrl
         defaultBranch
       }
       connection {
@@ -102,6 +103,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         repo {
           id
           name
+          remoteUrl
         }
         channel {
           id

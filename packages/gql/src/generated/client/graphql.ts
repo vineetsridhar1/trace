@@ -1860,7 +1860,7 @@ export type SessionGroupsQuery = {
         autoRetryable?: boolean | null;
       } | null;
       createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
@@ -1917,7 +1917,7 @@ export type FilteredSessionGroupsQuery = {
         autoRetryable?: boolean | null;
       } | null;
       createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
@@ -2067,7 +2067,7 @@ export type SessionDetailQuery = {
     sessionGroupId?: string | null;
     createdAt: string;
     updatedAt: string;
-    repo?: { __typename?: "Repo"; id: string; name: string } | null;
+    repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
     connection?: {
       __typename?: "SessionConnection";
       state: SessionConnectionState;
@@ -2105,7 +2105,7 @@ export type SessionDetailQuery = {
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       connection?: {
         __typename?: "SessionConnection";
         state: SessionConnectionState;
@@ -2177,7 +2177,13 @@ export type SessionGroupDetailQuery = {
       filesChanged: number;
       createdAt: string;
     }>;
-    repo?: { __typename?: "Repo"; id: string; name: string; defaultBranch: string } | null;
+    repo?: {
+      __typename?: "Repo";
+      id: string;
+      name: string;
+      remoteUrl?: string | null;
+      defaultBranch: string;
+    } | null;
     connection?: {
       __typename?: "SessionConnection";
       state: SessionConnectionState;
@@ -2219,7 +2225,7 @@ export type SessionGroupDetailQuery = {
         autoRetryable?: boolean | null;
       } | null;
       createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
@@ -3147,6 +3153,7 @@ export const SessionGroupsDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },
@@ -3299,6 +3306,7 @@ export const FilteredSessionGroupsDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },
@@ -3872,6 +3880,7 @@ export const SessionDetailDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                     ],
                   },
                 },
@@ -3957,6 +3966,7 @@ export const SessionDetailDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },
@@ -4108,6 +4118,7 @@ export const SessionGroupDetailDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                     ],
                   },
@@ -4197,6 +4208,7 @@ export const SessionGroupDetailDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                           ],
                         },
                       },

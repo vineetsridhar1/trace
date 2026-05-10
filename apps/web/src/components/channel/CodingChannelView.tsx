@@ -64,6 +64,7 @@ const SESSION_GROUPS_QUERY = gql`
         repo {
           id
           name
+          remoteUrl
         }
         channel {
           id

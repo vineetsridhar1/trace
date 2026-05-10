@@ -21,6 +21,7 @@ import { useAuthStore } from "@trace/client-core";
 import { useEntityField, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
+import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 
 const CREATE_CHANNEL_MUTATION = gql`
   mutation CreateChannel($input: CreateChannelInput!) {
@@ -329,7 +330,12 @@ export function CreateChannelDialog({
                       <SelectContent>
                         <SelectItem value="__none__">Select a repo...</SelectItem>
                         {repoIds.map((id) => (
-                          <RepoOptionItem key={id} id={id} disabled={!isRepoCloned(id)} />
+                          <RepoOptionItem
+                            key={id}
+                            id={id}
+                            localUnavailable={!isRepoCloned(id)}
+                            cloudOnly={!hasLocalBridge}
+                          />
                         ))}
                       </SelectContent>
                     </Select>
@@ -397,16 +403,38 @@ function SelectedRepoValue({ id }: { id: string | undefined }) {
   return <>{id ? (name ?? id) : "Select a repo..."}</>;
 }
 
-function RepoOptionItem({ id, disabled }: { id: string; disabled?: boolean }) {
+function RepoOptionItem({
+  id,
+  localUnavailable,
+  cloudOnly,
+}: {
+  id: string;
+  localUnavailable?: boolean;
+  cloudOnly?: boolean;
+}) {
   const name = useEntityField("repos", id, "name");
+  const remoteUrl = useEntityField("repos", id, "remoteUrl") as string | null | undefined;
+  const remoteUnavailable = !!cloudOnly && repoRemoteKnownMissing({ remoteUrl });
+  const disabled = localUnavailable || remoteUnavailable;
+  const disabledReason = remoteUnavailable
+    ? CLOUD_REPO_REMOTE_REQUIRED
+    : localUnavailable
+      ? "This repo is not cloned on any connected local runtime."
+      : undefined;
   return (
-    <SelectItem value={id} disabled={disabled}>
+    <SelectItem value={id} disabled={disabled} title={disabledReason}>
       <span className="flex items-center gap-1.5">
         {name ?? id}
-        {disabled && (
+        {localUnavailable && (
           <span className="flex items-center gap-0.5 text-xs text-amber-500">
             <AlertTriangle size={10} />
             not cloned
+          </span>
+        )}
+        {remoteUnavailable && (
+          <span className="flex items-center gap-0.5 text-xs text-amber-500">
+            <AlertTriangle size={10} />
+            remote required
           </span>
         )}
       </span>
