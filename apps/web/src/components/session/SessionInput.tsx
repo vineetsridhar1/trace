@@ -32,6 +32,7 @@ import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useB
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
 const MAX_ATTACHMENTS = 5;
+type ActiveSubmitMode = "queue" | "steer";
 
 export function SessionInput({
   sessionId,
@@ -69,6 +70,7 @@ export function SessionInput({
   const [mode, setMode] = useState<InteractionMode>("code");
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(false);
+  const activeSubmitModeRef = useRef<ActiveSubmitMode>("queue");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
@@ -174,7 +176,8 @@ export function SessionInput({
           }
         }
 
-        if (canQueue) {
+        const shouldQueueActivePrompt = canQueue && activeSubmitModeRef.current === "queue";
+        if (shouldQueueActivePrompt) {
           try {
             const result = await client
               .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
@@ -275,6 +278,20 @@ export function SessionInput({
     },
     [sessionId, mode, canSend, canQueue, images, isNotStarted, hosting, connection],
   );
+
+  const handleQueueSubmit = useCallback(() => {
+    activeSubmitModeRef.current = "queue";
+    void editorRef.current?.submit();
+  }, []);
+
+  const handleSteerSubmit = useCallback(async () => {
+    activeSubmitModeRef.current = "steer";
+    try {
+      await editorRef.current?.submit();
+    } finally {
+      activeSubmitModeRef.current = "queue";
+    }
+  }, []);
 
   // If the user has bridge access (owner or granted), a disconnected session
   // belongs to the recovery panel — not the permission prompt. Non-owners
@@ -386,7 +403,7 @@ export function SessionInput({
         {isActive ? (
           <>
             <button
-              onClick={() => void editorRef.current?.submit()}
+              onClick={handleQueueSubmit}
               disabled={(!hasContent && images.length === 0) || !canSend || isSending}
               className={cn(
                 "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
@@ -395,6 +412,14 @@ export function SessionInput({
               title="Queue message"
             >
               <Send size={16} />
+            </button>
+            <button
+              onClick={() => void handleSteerSubmit()}
+              disabled={(!hasContent && images.length === 0) || !canSend || isSending}
+              className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-50"
+              title="Steer running agent"
+            >
+              Steer
             </button>
             <button
               onClick={onStop}
@@ -406,7 +431,7 @@ export function SessionInput({
           </>
         ) : (
           <button
-            onClick={() => void editorRef.current?.submit()}
+            onClick={handleQueueSubmit}
             disabled={(!hasContent && images.length === 0) || !canSend || isSending}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
