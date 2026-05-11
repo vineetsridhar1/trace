@@ -89,6 +89,8 @@ export {
   HIDDEN_SESSION_PAYLOAD_TYPE_SET,
 } from "./session/event-filters.js";
 export { buildSessionNodes } from "./session/nodes.js";
+export { isSessionPreparing } from "./session/preparation.js";
+export type { SessionPreparationFields } from "./session/preparation.js";
 export type {
   AgentToolResult,
   BuildSessionNodesResult,

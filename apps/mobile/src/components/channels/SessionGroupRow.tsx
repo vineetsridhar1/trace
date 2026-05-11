@@ -7,7 +7,11 @@ import ContextMenu, {
   type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
-import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
+import {
+  ARCHIVE_SESSION_GROUP_MUTATION,
+  isSessionPreparing,
+  useEntityField,
+} from "@trace/client-core";
 import { Avatar, Chip, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { buildSessionRowAccessibilityLabel } from "@/lib/accessibility";
@@ -49,8 +53,12 @@ export const SessionGroupRow = memo(function SessionGroupRow({
     | null
     | undefined;
   const lastMessageAt = useEntityField("sessions", latestSessionId ?? "", "lastMessageAt");
+  const lastUserMessageAt = useEntityField("sessions", latestSessionId ?? "", "lastUserMessageAt");
   const updatedAt = useEntityField("sessions", latestSessionId ?? "", "updatedAt");
   const agentStatus = useEntityField("sessions", latestSessionId ?? "", "agentStatus");
+  const sessionStatus = useEntityField("sessions", latestSessionId ?? "", "sessionStatus");
+  const workdir = useEntityField("sessions", latestSessionId ?? "", "workdir");
+  const connection = useEntityField("sessions", latestSessionId ?? "", "connection");
   const lastEventPreview = useEntityField("sessions", latestSessionId ?? "", "_lastEventPreview");
   const createdBy = useEntityField("sessions", latestSessionId ?? "", "createdBy") as
     | { name?: string | null; avatarUrl?: string | null }
@@ -125,6 +133,16 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const chipVariant = mapStatusToChipVariant(status);
   const timestamp = lastMessageAt ?? updatedAt ?? null;
   const secondaryLabel = latestSessionRepo?.name ?? groupRepo?.name ?? branch ?? null;
+  const indicatorAgentStatus = isSessionPreparing({
+    agentStatus,
+    sessionStatus,
+    workdir,
+    lastUserMessageAt,
+    lastMessageAt,
+    connection,
+  })
+    ? "preparing"
+    : agentStatus;
   const accessibilityLabel = buildSessionRowAccessibilityLabel({
     name,
     status,
@@ -163,7 +181,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
           ) : null}
           <View style={styles.main}>
             <View style={styles.titleRow}>
-              <SessionStatusIndicator status={status} agentStatus={agentStatus} />
+              <SessionStatusIndicator status={status} agentStatus={indicatorAgentStatus} />
               <Text
                 variant="body"
                 color="foreground"

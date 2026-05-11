@@ -1,5 +1,5 @@
 import { SymbolView } from "expo-symbols";
-import { useEntityField } from "@trace/client-core";
+import { isSessionPreparing, useEntityField } from "@trace/client-core";
 import type { SessionStatus } from "@trace/gql";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { ListRow } from "@/components/design-system";
@@ -28,13 +28,40 @@ export function SessionTabSwitcherRow({
     | string
     | null
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
+  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt") as
+    | string
+    | null
+    | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const indicatorAgentStatus = isSessionPreparing({
+    agentStatus,
+    sessionStatus,
+    workdir,
+    lastUserMessageAt,
+    lastMessageAt,
+    connection,
+  })
+    ? "preparing"
+    : agentStatus;
 
   return (
     <ListRow
       title={name ?? "Session"}
-      subtitle={sessionSubtitle(active, sessionStatus, agentStatus)}
+      subtitle={sessionSubtitle(active, sessionStatus, indicatorAgentStatus)}
       leading={
-        <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={10} />
+        <SessionStatusIndicator
+          status={sessionStatus}
+          agentStatus={indicatorAgentStatus}
+          size={10}
+        />
       }
       trailing={
         active ? (
@@ -58,6 +85,7 @@ function sessionSubtitle(
   agentStatus: string | null | undefined,
 ): string | undefined {
   if (active) return "Current tab";
+  if (agentStatus === "preparing") return "Preparing workspace";
   if (agentStatus === "active") return "Agent running";
   if (agentStatus === "failed") return "Needs attention";
   if (sessionStatus === "needs_input") return "Needs input";

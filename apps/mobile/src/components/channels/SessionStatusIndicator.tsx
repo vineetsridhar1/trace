@@ -34,7 +34,7 @@ function indicatorKind(
     return "dot";
   }
   if (status === "failed" || agentStatus === "failed") return "x";
-  if (agentStatus === "active") return "spinner";
+  if (agentStatus === "active" || agentStatus === "preparing") return "spinner";
   return "dot";
 }
 

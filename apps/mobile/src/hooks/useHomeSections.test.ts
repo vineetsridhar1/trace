@@ -67,4 +67,23 @@ describe("buildHomeSections", () => {
       },
     ]);
   });
+
+  it("shows prompted sessions preparing a workspace as working now", () => {
+    const result = buildHomeSections(
+      stateWithSessions([
+        session({
+          id: "session_preparing",
+          sessionGroupId: "group_preparing",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          workdir: null,
+          lastUserMessageAt: "2026-04-26T11:58:00.000Z",
+        }),
+      ]),
+      "user_1",
+      null,
+    );
+
+    expect(result.sections).toEqual([{ kind: "working_now", ids: ["group_preparing"] }]);
+  });
 });

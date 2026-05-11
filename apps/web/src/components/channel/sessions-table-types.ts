@@ -42,9 +42,10 @@ export function bucketize(ts: string | undefined): number {
 export const sessionStatusGroupOrder: Record<string, number> = {
   needs_input: 0,
   in_review: 1,
-  in_progress: 2,
-  failed: 3,
-  stopped: 4,
-  merged: 5,
-  archived: 6,
+  preparing: 2,
+  in_progress: 3,
+  failed: 4,
+  stopped: 5,
+  merged: 6,
+  archived: 7,
 };

@@ -21,9 +21,31 @@ export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: Sessio
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
 
-  const displayStatus = getDisplaySessionStatus(sessionStatus, null, agentStatus);
-  const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus);
+  const preparation = { workdir, lastUserMessageAt, connection };
+  const displayStatus = getDisplaySessionStatus(
+    sessionStatus,
+    null,
+    agentStatus,
+    null,
+    preparation,
+  );
+  const displayAgentStatus = getDisplayAgentStatus(
+    agentStatus,
+    sessionStatus,
+    null,
+    null,
+    preparation,
+  );
   const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
   const label = sessionStatusLabel[displayStatus] ?? displayStatus;
 

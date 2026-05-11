@@ -10,6 +10,7 @@ export function AgentStatusIcon({
   className?: string;
 }) {
   switch (agentStatus) {
+    case "preparing":
     case "active":
       return <Loader2 size={size} className={`animate-spin ${className ?? ""}`} />;
     case "failed":

@@ -32,13 +32,25 @@ export function SessionStreamError({ error, onRetry }: { error: string; onRetry:
 /** Solid stream surface shown once hydration completes but no events exist. */
 export function SessionStreamEmpty({
   agentStatus,
+  preparing = false,
   bottomInset = 0,
 }: {
   agentStatus?: AgentStatus | null;
+  preparing?: boolean;
   bottomInset?: number;
 }) {
   const theme = useTheme();
   const notStarted = agentStatus === "not_started";
+  const title = preparing
+    ? "Preparing workspace…"
+    : notStarted
+      ? "Ready when you are"
+      : "Waiting for the agent…";
+  const subtitle = preparing
+    ? "Trace is creating the worktree before the agent starts."
+    : notStarted
+      ? "Type a prompt below to kick off the session."
+      : "The first response should arrive shortly.";
 
   return (
     <View
@@ -51,17 +63,15 @@ export function SessionStreamEmpty({
       ]}
     >
       <SymbolView
-        name={notStarted ? "sparkles" : "hourglass"}
+        name={preparing ? "hammer" : notStarted ? "sparkles" : "hourglass"}
         size={28}
         tintColor={theme.colors.mutedForeground}
       />
       <Text variant="headline" color="foreground" align="center">
-        {notStarted ? "Ready when you are" : "Waiting for the agent…"}
+        {title}
       </Text>
       <Text variant="footnote" color="mutedForeground" align="center">
-        {notStarted
-          ? "Type a prompt below to kick off the session."
-          : "The first response should arrive shortly."}
+        {subtitle}
       </Text>
     </View>
   );

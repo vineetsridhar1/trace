@@ -66,6 +66,11 @@ export function SessionHeader({
     | Record<string, unknown>
     | null
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
   const setActiveSessionId = useUIStore(
     (s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId,
   );
@@ -118,12 +123,14 @@ export function SessionHeader({
     prUrl,
     agentStatus,
     groupArchivedAt,
+    { workdir, lastUserMessageAt, connection },
   );
   const displayAgentStatus = getDisplayAgentStatus(
     agentStatus,
     sessionStatus,
     prUrl,
     groupArchivedAt,
+    { workdir, lastUserMessageAt, connection },
   );
 
   const closeHistory = useCallback(() => setShowHistory(false), []);

@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import type { SessionGroupStatus } from "@trace/gql";
-import { useEntityField } from "@trace/client-core";
+import { isSessionPreparing, useEntityField } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
@@ -96,6 +96,29 @@ const SessionTabPill = memo(function SessionTabPill({
     | string
     | null
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
+  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt") as
+    | string
+    | null
+    | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const indicatorAgentStatus = isSessionPreparing({
+    agentStatus,
+    sessionStatus,
+    workdir,
+    lastUserMessageAt,
+    lastMessageAt,
+    connection,
+  })
+    ? "preparing"
+    : agentStatus;
 
   return (
     <Pressable
@@ -122,7 +145,7 @@ const SessionTabPill = memo(function SessionTabPill({
         },
       ]}
     >
-      <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={8} />
+      <SessionStatusIndicator status={sessionStatus} agentStatus={indicatorAgentStatus} size={8} />
       <Text
         variant="footnote"
         numberOfLines={1}

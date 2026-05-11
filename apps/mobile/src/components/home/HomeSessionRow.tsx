@@ -2,7 +2,7 @@ import { memo, useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import ContextMenu from "react-native-context-menu-view";
-import { useEntityField } from "@trace/client-core";
+import { isSessionPreparing, useEntityField } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { buildSessionRowAccessibilityLabel } from "@/lib/accessibility";
@@ -31,7 +31,10 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const lastEventPreview = useEntityField("sessions", sessionId, "_lastEventPreview");
   const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
+  const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt");
   const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
+  const workdir = useEntityField("sessions", sessionId, "workdir");
+  const connection = useEntityField("sessions", sessionId, "connection");
   const prUrl = useEntityField("sessions", sessionId, "prUrl");
 
   const handlePress = useCallback(() => {
@@ -63,6 +66,16 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
 
   const timestamp = lastMessageAt ?? updatedAt ?? null;
   const repoName = (repo as { name?: string } | null | undefined)?.name ?? null;
+  const indicatorAgentStatus = isSessionPreparing({
+    agentStatus,
+    sessionStatus,
+    workdir,
+    lastUserMessageAt,
+    lastMessageAt,
+    connection,
+  })
+    ? "preparing"
+    : agentStatus;
   const accessibilityLabel = buildSessionRowAccessibilityLabel({
     name,
     status: sessionStatus,
@@ -94,7 +107,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
         >
           <View style={styles.main}>
             <View style={styles.titleRow}>
-              <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} />
+              <SessionStatusIndicator status={sessionStatus} agentStatus={indicatorAgentStatus} />
               <Text
                 variant="body"
                 color="foreground"

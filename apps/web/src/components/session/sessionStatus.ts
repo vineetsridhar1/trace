@@ -1,6 +1,10 @@
+import { isSessionPreparing } from "@trace/client-core";
+import type { SessionPreparationFields } from "@trace/client-core";
+
 // ─── Agent Status (what the coding agent is doing) ───
 
 export const agentStatusColor: Record<string, string> = {
+  preparing: "text-amber-400",
   active: "text-blue-400",
   done: "text-green-400",
   failed: "text-destructive",
@@ -9,6 +13,7 @@ export const agentStatusColor: Record<string, string> = {
 };
 
 export const agentStatusLabel: Record<string, string> = {
+  preparing: "Preparing...",
   active: "Active",
   done: "Done",
   failed: "Failed",
@@ -21,6 +26,7 @@ export const agentStatusLabel: Record<string, string> = {
 // Includes "failed" and "stopped" because getDisplaySessionStatus() maps terminal
 // agent states into these display keys for group headers and table row groups.
 export const sessionStatusColor: Record<string, string> = {
+  preparing: "text-amber-400",
   not_started: "text-muted-foreground",
   in_progress: "text-blue-400",
   needs_input: "text-amber-400",
@@ -32,6 +38,7 @@ export const sessionStatusColor: Record<string, string> = {
 };
 
 export const sessionStatusLabel: Record<string, string> = {
+  preparing: "Preparing...",
   not_started: "Creating...",
   in_progress: "In Progress",
   needs_input: "Needs Input",
@@ -102,6 +109,7 @@ export function getDisplaySessionStatus(
   prUrl: string | null | undefined,
   agentStatus?: string | undefined,
   archivedAt?: string | null | undefined,
+  preparation?: SessionPreparationFields,
 ): string {
   if (archivedAt) return "archived";
   if (sessionStatus === "merged") return "merged";
@@ -109,6 +117,7 @@ export function getDisplaySessionStatus(
   if (agentStatus === "stopped") return "stopped";
   if (sessionStatus === "needs_input") return "needs_input";
   if (prUrl) return "in_review";
+  if (isSessionPreparing({ agentStatus, sessionStatus, ...preparation })) return "preparing";
   return "in_progress";
 }
 
@@ -120,17 +129,20 @@ export function getDisplayAgentStatus(
   sessionStatus?: string | undefined,
   prUrl?: string | null | undefined,
   archivedAt?: string | null | undefined,
+  preparation?: SessionPreparationFields,
 ): string {
   const displaySessionStatus = getDisplaySessionStatus(
     sessionStatus,
     prUrl,
     agentStatus,
     archivedAt,
+    preparation,
   );
 
   if (displaySessionStatus === "archived") return "stopped";
   if (displaySessionStatus === "failed") return "failed";
   if (displaySessionStatus === "stopped") return "stopped";
+  if (displaySessionStatus === "preparing") return "preparing";
   if (agentStatus === "not_started") return "not_started";
   if (agentStatus === "active") return "active";
 
@@ -145,6 +157,7 @@ export function getSessionGroupDisplayStatus(
   agentStatuses: Array<string | null | undefined>,
   prUrl: string | null | undefined,
   archivedAt?: string | null | undefined,
+  sessions?: Array<SessionPreparationFields | null | undefined>,
 ): string {
   if (archivedAt) return "archived";
   // Merged is terminal and takes priority over all other states,
@@ -152,6 +165,9 @@ export function getSessionGroupDisplayStatus(
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
   if (prUrl) return "in_review";
+  if (sessions?.some(isSessionPreparing) && !agentStatuses.some((s) => s === "active")) {
+    return "preparing";
+  }
   if (
     agentStatuses.some((s) => s === "active") ||
     sessionStatuses.some((s) => s === "in_progress")
@@ -169,8 +185,10 @@ export function getSessionGroupDisplayStatus(
  */
 export function getSessionGroupAgentStatus(
   agentStatuses: Array<string | null | undefined>,
+  sessions?: Array<SessionPreparationFields | null | undefined>,
 ): string {
   if (agentStatuses.some((s) => s === "active")) return "active";
+  if (sessions?.some(isSessionPreparing)) return "preparing";
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
   if (agentStatuses.every((s) => s === "not_started")) return "not_started";

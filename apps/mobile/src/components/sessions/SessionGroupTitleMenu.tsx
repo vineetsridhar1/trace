@@ -19,7 +19,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useEntityField } from "@trace/client-core";
+import { isSessionPreparing, useEntityField } from "@trace/client-core";
 import type { SessionGroupStatus } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
@@ -287,6 +287,36 @@ function TitleRow({
     | string
     | null
     | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId ?? "", "sessionStatus") as
+    | string
+    | null
+    | undefined;
+  const workdir = useEntityField("sessions", sessionId ?? "", "workdir") as
+    | string
+    | null
+    | undefined;
+  const lastUserMessageAt = useEntityField("sessions", sessionId ?? "", "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
+  const lastMessageAt = useEntityField("sessions", sessionId ?? "", "lastMessageAt") as
+    | string
+    | null
+    | undefined;
+  const connection = useEntityField("sessions", sessionId ?? "", "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const indicatorAgentStatus = isSessionPreparing({
+    agentStatus,
+    sessionStatus,
+    workdir,
+    lastUserMessageAt,
+    lastMessageAt,
+    connection,
+  })
+    ? "preparing"
+    : agentStatus;
 
   return (
     <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
@@ -301,7 +331,7 @@ function TitleRow({
       >
         <SessionStatusIndicator
           status={status as SessionGroupStatus | null | undefined}
-          agentStatus={agentStatus}
+          agentStatus={indicatorAgentStatus}
           size={8}
         />
       </View>

@@ -70,6 +70,8 @@ function buildRowSignature(row: SessionGroupRow): string {
     latestSession?.updatedAt ?? "",
     latestSession?._sortTimestamp ?? "",
     latestSession?.lastMessageAt ?? "",
+    latestSession?.lastUserMessageAt ?? "",
+    latestSession?.workdir ?? "",
     latestSession?.agentStatus ?? "",
     latestSession?.sessionStatus ?? "",
     latestRepo?.id ?? "",
@@ -135,11 +137,17 @@ export function useSessionGroupRows(
         const archivedAt = group.archivedAt as string | null | undefined;
         const displaySessionStatus =
           groupSessions.length > 0
-            ? getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl, archivedAt)
+            ? getSessionGroupDisplayStatus(
+                sessionStatuses,
+                agentStatuses,
+                prUrl,
+                archivedAt,
+                groupSessions,
+              )
             : ((group.status as string | undefined) ?? "in_progress");
         const displayAgentStatus = archivedAt
           ? "stopped"
-          : getSessionGroupAgentStatus(agentStatuses);
+          : getSessionGroupAgentStatus(agentStatuses, groupSessions);
 
         const row = {
           ...group,

@@ -2,6 +2,7 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 import { asJsonObject } from "@trace/shared";
 import {
   eventScopeKey,
+  isSessionPreparing,
   useEntityStore,
   type EntityState,
   type SessionEntity,
@@ -179,7 +180,7 @@ export function buildHomeSections(
       continue;
     }
 
-    if (session.agentStatus === "active") {
+    if (session.agentStatus === "active" || isSessionPreparing(session)) {
       const existing = groupWorking.get(groupId);
       if (!existing || sortTs > existing.ts) {
         groupWorking.set(groupId, { ts: sortTs });

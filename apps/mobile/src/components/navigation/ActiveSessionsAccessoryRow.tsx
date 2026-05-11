@@ -1,7 +1,7 @@
 import { memo, useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { useEntityField } from "@trace/client-core";
+import { isSessionPreparing, useEntityField } from "@trace/client-core";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { Text } from "@/components/design-system/Text";
 import { haptic } from "@/lib/haptics";
@@ -23,6 +23,8 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
+  const workdir = useEntityField("sessions", sessionId, "workdir");
+  const connection = useEntityField("sessions", sessionId, "connection");
   const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt");
   const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
   const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
@@ -38,6 +40,16 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   const branch = sessionBranch ?? groupBranch ?? null;
   const lastSentAt = lastMessageAt ?? lastUserMessageAt ?? updatedAt ?? null;
   const lastSentLabel = lastSentAt ? timeAgo(lastSentAt) : "";
+  const indicatorAgentStatus = isSessionPreparing({
+    agentStatus,
+    sessionStatus,
+    workdir,
+    lastUserMessageAt,
+    lastMessageAt,
+    connection,
+  })
+    ? "preparing"
+    : agentStatus;
 
   return (
     <Pressable
@@ -47,7 +59,11 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
       onPress={onPress}
     >
       <View style={styles.leading}>
-        <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={10} />
+        <SessionStatusIndicator
+          status={sessionStatus}
+          agentStatus={indicatorAgentStatus}
+          size={10}
+        />
       </View>
       <View style={styles.text}>
         <Text variant="callout" numberOfLines={1} style={styles.title}>

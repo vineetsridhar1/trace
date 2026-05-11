@@ -8,7 +8,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { useEntityField } from "@trace/client-core";
+import { isSessionPreparing, useEntityField } from "@trace/client-core";
 import { useNewActivityTracker } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { useSessionNodes } from "@/hooks/useSessionNodes";
@@ -93,7 +93,19 @@ export function SessionStream({
     events: scopedEvents,
   } = useSessionNodes(sessionId, { enabled: renderEvents, frozen: isScrollActive });
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
+  const workdir = useEntityField("sessions", sessionId, "workdir");
+  const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt");
+  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
   const connection = useEntityField("sessions", sessionId, "connection");
+  const preparing = isSessionPreparing({
+    agentStatus,
+    sessionStatus,
+    workdir,
+    lastUserMessageAt,
+    lastMessageAt,
+    connection,
+  });
 
   const timestampRevealX = useSharedValue(0);
   const contentOpacity = useSharedValue(nodes.length > 0 ? 1 : 0);
@@ -210,7 +222,13 @@ export function SessionStream({
     return <SessionStreamError error={error} onRetry={() => void fetchEvents()} />;
   }
   if (!loading && nodes.length === 0) {
-    return <SessionStreamEmpty agentStatus={agentStatus} bottomInset={bottomInset} />;
+    return (
+      <SessionStreamEmpty
+        agentStatus={agentStatus}
+        preparing={preparing}
+        bottomInset={bottomInset}
+      />
+    );
   }
 
   const disconnected = connection?.state === "disconnected";
