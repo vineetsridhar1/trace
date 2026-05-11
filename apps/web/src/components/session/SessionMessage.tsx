@@ -140,7 +140,7 @@ function renderSessionOutput(
   }
 
   if (type === "error") {
-    return <CompletionRow timestamp={ts} result={str(payload.message, "Error")} isUserStop />;
+    return <CompletionRow timestamp={ts} error={str(payload.message)} />;
   }
 
   if (type === "workspace_failed") {

@@ -1,20 +1,29 @@
-import { Square, CheckCircle } from "lucide-react";
+import { AlertCircle, CheckCircle } from "lucide-react";
 import { Markdown } from "../../ui/Markdown";
 import { formatTime } from "./utils";
 
 interface CompletionRowProps {
   timestamp: string;
   result?: string;
-  isUserStop?: boolean;
+  error?: string;
 }
 
-export function CompletionRow({ timestamp, result, isUserStop }: CompletionRowProps) {
-  if (isUserStop) {
+export function CompletionRow({ timestamp, result, error }: CompletionRowProps) {
+  if (error !== undefined) {
     return (
-      <div className="flex items-center gap-1.5 py-0.5 px-1 opacity-45">
-        <Square className="text-destructive" size={8} />
-        <span className="text-[11px] text-muted-foreground">Stopped by user</span>
-        <span className="ml-auto text-[10px] text-muted-foreground">{formatTime(timestamp)}</span>
+      <div className="activity-row">
+        <div className="flex items-center gap-2">
+          <AlertCircle size={12} className="text-destructive" />
+          <span className="text-xs font-semibold text-foreground">Session error</span>
+          <span className="ml-auto text-[10px] text-muted-foreground">
+            {formatTime(timestamp)}
+          </span>
+        </div>
+        {error && (
+          <div className="mt-1 ml-5 whitespace-pre-wrap text-xs text-muted-foreground">
+            {error}
+          </div>
+        )}
       </div>
     );
   }
