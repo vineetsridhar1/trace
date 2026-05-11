@@ -454,6 +454,7 @@ model SessionGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([repoId, slug])
   @@index([organizationId, updatedAt])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])

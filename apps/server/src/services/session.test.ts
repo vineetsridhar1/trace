@@ -135,6 +135,7 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     organizationId: "org-1",
     channelId: "channel-1",
     repoId: "repo-1",
+    slug: "ladybug",
     branch: "main",
     workdir: null,
     connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
@@ -2380,6 +2381,7 @@ describe("SessionService", () => {
         actorType: "agent",
         actorId: "agent-1",
       });
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({

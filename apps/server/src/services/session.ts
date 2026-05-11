@@ -14,6 +14,7 @@ import {
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
 } from "@trace/shared";
+import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
@@ -815,11 +816,23 @@ export class SessionService {
 
     void (async () => {
       const environment = params.environment ?? (await this.resolveProvisioningEnvironment(params));
+      let slug = params.slug ?? undefined;
+      if (!slug && params.sessionGroupId && params.repo?.id) {
+        try {
+          slug = await this.allocateSessionGroupSlug(params.sessionGroupId, params.repo.id);
+        } catch (error) {
+          console.warn(
+            `[session] slug allocation failed for group ${params.sessionGroupId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }
 
       sessionRouter.createRuntime({
         sessionId: params.sessionId,
         sessionGroupId: params.sessionGroupId ?? undefined,
-        slug: params.slug ?? undefined,
+        slug: slug ?? undefined,
         preserveBranchName: params.preserveBranchName,
         hosting: params.hosting as "cloud" | "local",
         adapterType: params.adapterType,
@@ -849,6 +862,54 @@ export class SessionService {
       const message = error instanceof Error ? error.message : String(error);
       void this.workspaceFailed(params.sessionId, message);
     });
+  }
+
+  /**
+   * Allocate a workspace slug for a session group, persisting it before the bridge
+   * sees it. Used slugs are tracked across the SessionGroup table (scoped by repo)
+   * so a slug is never recycled even after the worktree or branch is cleaned up.
+   */
+  private async allocateSessionGroupSlug(
+    sessionGroupId: string,
+    repoId: string,
+  ): Promise<string | undefined> {
+    const MAX_ATTEMPTS = 10;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const existing = await prisma.sessionGroup.findUnique({
+        where: { id: sessionGroupId },
+        select: { slug: true },
+      });
+      if (existing?.slug) return existing.slug;
+
+      const used = await prisma.sessionGroup.findMany({
+        where: { repoId, slug: { not: null } },
+        select: { slug: true },
+      });
+      const usedNames = new Set(
+        (used ?? []).map((row) => row.slug).filter((s): s is string => !!s),
+      );
+      const candidate = generateAnimalSlug(usedNames);
+
+      try {
+        await prisma.sessionGroup.update({
+          where: { id: sessionGroupId },
+          data: { slug: candidate },
+        });
+        return candidate;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+    console.warn(
+      `[session] allocateSessionGroupSlug: exhausted ${MAX_ATTEMPTS} attempts for group ${sessionGroupId}`,
+    );
+    return undefined;
   }
 
   private async resolveProvisioningEnvironment(params: {
