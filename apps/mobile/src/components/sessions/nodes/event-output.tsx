@@ -17,8 +17,8 @@ export function renderSessionOutput(payload: JsonObject, context: NodeRenderCont
   }
   if (type === "result") return <CompletionRow />;
   if (type === "error") {
-    const message = typeof payload.message === "string" ? payload.message : "Error";
-    return <CompletionRow result={message} isUserStop />;
+    const message = typeof payload.message === "string" ? payload.message : "";
+    return <CompletionRow error={message} />;
   }
   return null;
 }

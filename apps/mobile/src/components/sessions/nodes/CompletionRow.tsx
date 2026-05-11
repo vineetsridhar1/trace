@@ -6,26 +6,35 @@ import { Markdown } from "./Markdown";
 
 interface CompletionRowProps {
   result?: string;
-  isUserStop?: boolean;
+  error?: string;
 }
 
 /** Session end marker — `result` vs `error` payloads on `session_output`. */
-export function CompletionRow({ result, isUserStop }: CompletionRowProps) {
+export function CompletionRow({ result, error }: CompletionRowProps) {
   const theme = useTheme();
 
-  if (isUserStop) {
+  if (error !== undefined) {
     return (
-      <View style={[styles.row, { gap: 6, paddingVertical: 4 }]}>
-        <SymbolView
-          name="stop.fill"
-          size={10}
-          tintColor={theme.colors.destructive}
-          resizeMode="scaleAspectFit"
-          style={styles.icon10}
-        />
-        <Text variant="caption1" color="mutedForeground">
-          Stopped by user
-        </Text>
+      <View style={[styles.wrapper, { gap: theme.spacing.xs, paddingVertical: 4 }]}>
+        <View style={[styles.row, { gap: 8 }]}>
+          <SymbolView
+            name="exclamationmark.circle"
+            size={14}
+            tintColor={theme.colors.destructive}
+            resizeMode="scaleAspectFit"
+            style={styles.icon14}
+          />
+          <Text variant="footnote" style={{ color: theme.colors.foreground, fontWeight: "600" }}>
+            Session error
+          </Text>
+        </View>
+        {error ? (
+          <View style={styles.result}>
+            <Text variant="footnote" color="mutedForeground">
+              {error}
+            </Text>
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -56,7 +65,6 @@ export function CompletionRow({ result, isUserStop }: CompletionRowProps) {
 const styles = StyleSheet.create({
   wrapper: { width: "100%" },
   row: { flexDirection: "row", alignItems: "center" },
-  icon10: { width: 10, height: 10 },
   icon14: { width: 14, height: 14 },
   result: { paddingLeft: 22 },
 });
