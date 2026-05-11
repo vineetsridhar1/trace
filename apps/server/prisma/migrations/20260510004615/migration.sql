@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "MobilePairingToken_ownerUserId_organizationId_usedAt_expiresAt_" RENAME TO "MobilePairingToken_ownerUserId_organizationId_usedAt_expire_idx";
