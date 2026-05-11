@@ -9,6 +9,18 @@ export const START_SESSION_MUTATION = gql`
   }
 `;
 
+export const PULL_PULL_REQUEST_MUTATION = gql`
+  mutation PullPullRequest($input: PullPullRequestInput!) {
+    pullPullRequest(input: $input) {
+      id
+      sessionGroupId
+      channel {
+        id
+      }
+    }
+  }
+`;
+
 export const RUN_SESSION_MUTATION = gql`
   mutation RunSession($id: ID!, $prompt: String, $interactionMode: String) {
     runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) {

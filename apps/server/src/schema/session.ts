@@ -1,7 +1,14 @@
 import type { Context } from "../context.js";
-import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from "@trace/gql";
+import type {
+  AgentStatus,
+  CodingTool,
+  PullPullRequestInput,
+  SessionFilters,
+  StartSessionInput,
+} from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { githubService } from "../services/github.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
@@ -99,6 +106,14 @@ export const sessionQueries = {
       args.runtimeInstanceId ?? undefined,
       args.sessionGroupId ?? undefined,
     );
+  },
+  repoPullRequests: (_: unknown, args: { repoId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return githubService.listOpenPullRequests({
+      repoId: args.repoId,
+      userId: ctx.userId,
+      organizationId: requireOrgContext(ctx),
+    });
   },
   sessionGroupFiles: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
@@ -248,6 +263,16 @@ export const sessionMutations = {
   startSession: (_: unknown, args: { input: StartSessionInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.start({
+      ...args.input,
+      organizationId: orgId,
+      createdById: ctx.userId,
+      actorType: ctx.actorType,
+      clientSource: ctx.clientSource,
+    });
+  },
+  pullPullRequest: (_: unknown, args: { input: PullPullRequestInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.pullPullRequest({
       ...args.input,
       organizationId: orgId,
       createdById: ctx.userId,

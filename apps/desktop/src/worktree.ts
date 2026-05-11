@@ -5,6 +5,14 @@ import { execFile } from "child_process";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import { assertValidCommitSha } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
+import { findWorktreePathForBranch } from "./git-utils.js";
+
+export class BranchAlreadyCheckedOutError extends Error {
+  constructor(readonly worktreePath: string) {
+    super(`Branch already checked out at ${worktreePath}`);
+    this.name = "BranchAlreadyCheckedOutError";
+  }
+}
 
 function execFileAsync(
   command: string,
@@ -194,6 +202,11 @@ export async function createWorktree({
       await setUpstreamIfRemote(repoPath, currentBranch, baseRef);
     }
     return { workdir: targetPath, branch: currentBranch ?? branch, slug: worktreeSlug };
+  }
+
+  const existingWorktreePath = await findWorktreePathForBranch(repoPath, branch);
+  if (existingWorktreePath && path.resolve(existingWorktreePath) !== path.resolve(targetPath)) {
+    throw new BranchAlreadyCheckedOutError(existingWorktreePath);
   }
 
   // Check if the branch already exists (e.g. worktree was removed but branch remains)

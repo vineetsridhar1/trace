@@ -324,6 +324,16 @@ type Repo {
   sessions: [Session!]!
 }
 
+type PullRequest {
+  number: Int!
+  title: String!
+  branch: String!
+  url: String!
+  author: String!
+  isDraft: Boolean!
+  updatedAt: DateTime!
+}
+
 type Project {
   id: ID!
   name: String!
@@ -837,6 +847,15 @@ input StartSessionInput {
   interactionMode: String
 }
 
+input PullPullRequestInput {
+  repoId: ID!
+  branch: String!
+  channelId: ID
+  runtimeInstanceId: ID
+  tool: CodingTool!
+  model: String
+}
+
 input SessionFilters {
   agentStatus: AgentStatus
   tool: CodingTool
@@ -982,6 +1001,7 @@ type Query {
   myConnections: [ConnectionsBridge!]!
   bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
+  repoPullRequests(repoId: ID!): [PullRequest!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
@@ -1084,6 +1104,7 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
+  pullPullRequest(input: PullPullRequestInput!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!

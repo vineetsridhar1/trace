@@ -34,6 +34,7 @@ export { generateUUID } from "./utils/uuid.js";
 export { getSessionChannelId, getSessionGroupChannelId } from "./lib/session-group.js";
 
 export * from "./mutations/index.js";
+export * from "./queries/index.js";
 export {
   isOptimisticEvent,
   optimisticallyInsertChatMessage,

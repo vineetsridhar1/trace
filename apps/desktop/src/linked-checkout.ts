@@ -17,6 +17,7 @@ import { installOrRepairRepoHooks } from "./repo-hooks.js";
 import {
   assertSafeGitRef,
   execFileAsync,
+  findWorktreePathForBranch,
   formatGitError,
   getCurrentBranch,
   GIT_MAX_BUFFER,
@@ -763,32 +764,6 @@ function writeLocalEntry(absPath: string, entry: CheckoutEntry, rootDir: string)
 
   fs.writeFileSync(absPath, entry.content);
   fs.chmodSync(absPath, entry.mode);
-}
-
-async function findWorktreePathForBranch(repoPath: string, branch: string): Promise<string | null> {
-  assertSafeGitRef(branch);
-
-  const output = await runGit(repoPath, ["worktree", "list", "--porcelain"]);
-  const blocks = output.split(/\n\n+/);
-
-  for (const block of blocks) {
-    let worktreePath: string | null = null;
-    let worktreeBranch: string | null = null;
-
-    for (const line of block.split("\n")) {
-      if (line.startsWith("worktree ")) {
-        worktreePath = line.slice("worktree ".length);
-      } else if (line.startsWith("branch refs/heads/")) {
-        worktreeBranch = line.slice("branch refs/heads/".length);
-      }
-    }
-
-    if (worktreeBranch === branch && worktreePath) {
-      return worktreePath;
-    }
-  }
-
-  return null;
 }
 
 async function loadChangedPathStates(

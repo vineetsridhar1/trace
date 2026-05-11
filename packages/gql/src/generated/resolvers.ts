@@ -582,6 +582,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  pullPullRequest: Session;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -829,6 +830,10 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPullPullRequestArgs = {
+  input: PullPullRequestInput;
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1124,6 +1129,26 @@ export type Project = {
   tickets: Array<Ticket>;
 };
 
+export type PullPullRequestInput = {
+  branch: Scalars["String"]["input"];
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool: CodingTool;
+};
+
+export type PullRequest = {
+  __typename?: "PullRequest";
+  author: Scalars["String"]["output"];
+  branch: Scalars["String"]["output"];
+  isDraft: Scalars["Boolean"]["output"];
+  number: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type PushPlatform = "android" | "ios";
 
 export type Query = {
@@ -1159,6 +1184,7 @@ export type Query = {
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
+  repoPullRequests: Array<PullRequest>;
   repos: Array<Repo>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -1311,6 +1337,10 @@ export type QueryRepoBranchesArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type QueryRepoPullRequestsArgs = {
+  repoId: Scalars["ID"]["input"];
 };
 
 export type QueryReposArgs = {
@@ -1956,6 +1986,8 @@ export type ResolversTypes = ResolversObject<{
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
+  PullPullRequestInput: PullPullRequestInput;
+  PullRequest: ResolverTypeWrapper<PullRequest>;
   PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
@@ -2053,6 +2085,8 @@ export type ResolversParentTypes = ResolversObject<{
   Participant: Participant;
   PortEndpoint: PortEndpoint;
   Project: Project;
+  PullPullRequestInput: PullPullRequestInput;
+  PullRequest: PullRequest;
   Query: {};
   QueuedMessage: QueuedMessage;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
@@ -2797,6 +2831,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationMuteScopeArgs, "scopeId" | "scopeType">
   >;
+  pullPullRequest?: Resolver<
+    ResolversTypes["Session"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationPullPullRequestArgs, "input">
+  >;
   queueSessionMessage?: Resolver<
     ResolversTypes["QueuedMessage"],
     ParentType,
@@ -3136,6 +3176,20 @@ export type ProjectResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type PullRequestResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["PullRequest"] = ResolversParentTypes["PullRequest"],
+> = ResolversObject<{
+  author?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  branch?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  isDraft?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  number?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  url?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type QueryResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Query"] = ResolversParentTypes["Query"],
@@ -3300,6 +3354,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryRepoBranchesArgs, "repoId">
+  >;
+  repoPullRequests?: Resolver<
+    Array<ResolversTypes["PullRequest"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryRepoPullRequestsArgs, "repoId">
   >;
   repos?: Resolver<
     Array<ResolversTypes["Repo"]>,
@@ -3777,6 +3837,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Participant?: ParticipantResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;
   Project?: ProjectResolvers<ContextType>;
+  PullRequest?: PullRequestResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   QueuedMessage?: QueuedMessageResolvers<ContextType>;
   Repo?: RepoResolvers<ContextType>;

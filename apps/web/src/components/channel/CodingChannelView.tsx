@@ -7,6 +7,7 @@ import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { StartSessionDialog } from "./StartSessionDialog";
+import { PullPrDialog } from "./PullPrDialog";
 import { SessionsTable } from "./SessionsTable";
 import { MergedArchivedPage } from "./MergedArchivedPage";
 import { SidebarTrigger } from "../ui/sidebar";
@@ -145,6 +146,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
         >
           <Archive size={15} />
         </Button>
+        <PullPrDialog channelId={channelId} />
         <StartSessionDialog channelId={channelId} />
       </div>
 

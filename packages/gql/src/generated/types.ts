@@ -579,6 +579,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  pullPullRequest: Session;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -826,6 +827,10 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPullPullRequestArgs = {
+  input: PullPullRequestInput;
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1121,6 +1126,26 @@ export type Project = {
   tickets: Array<Ticket>;
 };
 
+export type PullPullRequestInput = {
+  branch: Scalars["String"]["input"];
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool: CodingTool;
+};
+
+export type PullRequest = {
+  __typename?: "PullRequest";
+  author: Scalars["String"]["output"];
+  branch: Scalars["String"]["output"];
+  isDraft: Scalars["Boolean"]["output"];
+  number: Scalars["Int"]["output"];
+  title: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type PushPlatform = "android" | "ios";
 
 export type Query = {
@@ -1156,6 +1181,7 @@ export type Query = {
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
+  repoPullRequests: Array<PullRequest>;
   repos: Array<Repo>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
@@ -1308,6 +1334,10 @@ export type QueryRepoBranchesArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type QueryRepoPullRequestsArgs = {
+  repoId: Scalars["ID"]["input"];
 };
 
 export type QueryReposArgs = {

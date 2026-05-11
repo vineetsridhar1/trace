@@ -1,4 +1,4 @@
-import type { StartSessionInput, ActorType } from "@trace/gql";
+import type { PullPullRequestInput, StartSessionInput, ActorType } from "@trace/gql";
 import type { AgentStatus, SessionStatus, CodingTool } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
@@ -49,6 +49,14 @@ import { isLocalMode } from "../lib/mode.js";
 export type StartSessionServiceInput = StartSessionInput & {
   sessionGroupId?: string | null;
   sourceSessionId?: string | null;
+  preserveBranchName?: boolean;
+  organizationId: string;
+  createdById: string;
+  actorType?: ActorType;
+  clientSource?: string | null;
+};
+
+type PullPullRequestServiceInput = PullPullRequestInput & {
   organizationId: string;
   createdById: string;
   actorType?: ActorType;
@@ -1909,6 +1917,46 @@ export class SessionService {
     });
   }
 
+  async pullPullRequest(input: PullPullRequestServiceInput) {
+    await this.assertRepoExists(input.repoId, input.organizationId);
+
+    const existing = await prisma.sessionGroup.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch: input.branch,
+        archivedAt: null,
+        sessions: { some: { sessionStatus: { not: "merged" } } },
+      },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        sessions: {
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+          include: SESSION_INCLUDE,
+        },
+      },
+    });
+
+    const existingSession = existing?.sessions[0];
+    if (existingSession) return existingSession;
+
+    return this.start({
+      tool: input.tool,
+      model: input.model,
+      repoId: input.repoId,
+      branch: input.branch,
+      channelId: input.channelId,
+      runtimeInstanceId: input.runtimeInstanceId,
+      preserveBranchName: true,
+      hosting: "local",
+      organizationId: input.organizationId,
+      createdById: input.createdById,
+      actorType: input.actorType,
+      clientSource: input.clientSource,
+    });
+  }
+
   async start(input: StartSessionServiceInput) {
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
@@ -2492,7 +2540,7 @@ export class SessionService {
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
         slug: session.sessionGroup?.slug,
-        preserveBranchName: false,
+        preserveBranchName: input.preserveBranchName ?? false,
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
