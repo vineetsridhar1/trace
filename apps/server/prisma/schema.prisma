@@ -248,6 +248,7 @@ model Organization {
   orgSecrets    OrgSecret[]
   cloudMachines CloudMachine[]
   aiConversations  AiConversation[]
+  slackInstalls SlackInstall[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -332,6 +333,8 @@ model User {
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
   queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
+  slackInstalls     SlackInstall[]   @relation("SlackInstallInstaller")
+  slackAccounts     SlackAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -521,6 +524,7 @@ model Session {
 
   projects        SessionProject[]
   queuedMessages  QueuedMessage[]
+  slackThread     SlackThreadSession?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -962,4 +966,45 @@ model AiTurn {
 
   @@index([branchId, createdAt])
   @@index([parentTurnId])
+}
+
+model SlackInstall {
+  id                String       @id @default(uuid())
+  slackTeamId       String       @unique
+  slackTeamName     String?
+  botUserId         String
+  encryptedBotToken String
+  iv                String
+  installedById     String
+  installedBy       User         @relation("SlackInstallInstaller", fields: [installedById], references: [id])
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model SlackAccount {
+  id          String   @id @default(uuid())
+  slackUserId String
+  slackTeamId String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([slackUserId, slackTeamId])
+  @@index([userId])
+}
+
+model SlackThreadSession {
+  id             String   @id @default(uuid())
+  slackTeamId    String
+  slackChannelId String
+  slackThreadTs  String
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  @@unique([slackTeamId, slackChannelId, slackThreadTs])
 }

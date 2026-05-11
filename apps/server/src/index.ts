@@ -18,6 +18,8 @@ import { authRouter } from "./routes/auth.js";
 import { uploadRouter } from "./routes/upload.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
+import { slackRouter } from "./routes/slack.js";
+import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
@@ -151,6 +153,10 @@ async function main() {
   );
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
+
+  // Slack router applies per-endpoint body parsers (raw for /events, urlencoded for /link/complete),
+  // so register before express.json() so the events webhook keeps a raw buffer.
+  app.use("/slack", slackRouter);
 
   // Local storage PUT accepts raw body — register BEFORE express.json()
   if (localStorageRouter) app.use(localStorageRouter);
@@ -483,6 +489,11 @@ async function main() {
   if (cloudMachineService) {
     await cloudMachineService.restoreFromDb();
   }
+
+  // Reattach Slack event bridges for any in-flight sessions.
+  await slackEventBridge.rehydrate().catch((err: unknown) => {
+    console.warn("[slack-bridge] rehydration failed:", (err as Error).message);
+  });
 
   startupReady = true;
 }
