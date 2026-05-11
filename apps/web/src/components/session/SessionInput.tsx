@@ -60,7 +60,6 @@ export function SessionInput({
     | null
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
-  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -84,10 +83,11 @@ export function SessionInput({
   const disconnected = isDisconnected(connection);
   const connectionState =
     typeof connection?.state === "string" ? (connection.state as string) : null;
-  // Show preparing only when we have positive evidence the runtime is starting:
-  // workdir not yet set AND the connection is in an active startup state.
+  // Show preparing whenever the connection is mid-startup. Sessions inherit
+  // workdir from their group at creation time, so checking workdir alone would
+  // miss every session past the first in a group.
   const preparing =
-    !workdir && connectionState !== null && STARTUP_CONNECTION_STATES.has(connectionState);
+    connectionState !== null && STARTUP_CONNECTION_STATES.has(connectionState);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
