@@ -35,11 +35,22 @@ const SESSION_GROUPS_QUERY = gql`
         reasoningEffort
         hosting
         branch
+        workdir
         prUrl
         worktreeDeleted
         sessionGroupId
         lastMessageAt
         lastUserMessageAt
+        connection {
+          state
+          runtimeInstanceId
+          runtimeLabel
+          lastError
+          retryCount
+          canRetry
+          canMove
+          autoRetryable
+        }
         createdBy {
           id
           name

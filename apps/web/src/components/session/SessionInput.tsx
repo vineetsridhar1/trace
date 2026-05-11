@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type ChangeEvent } from "react";
 import { Cloud, Loader2, Monitor, Paperclip, Send, Square } from "lucide-react";
 import {
   isSessionPreparing,
+  isSessionRuntimeStartingUp,
   useEntityField,
   useEntityStore,
   type SessionEntity,
@@ -37,14 +38,6 @@ import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useB
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
 const MAX_ATTACHMENTS = 5;
-
-const STARTUP_CONNECTION_STATES = new Set([
-  "pending",
-  "requested",
-  "provisioning",
-  "booting",
-  "connecting",
-]);
 
 export function SessionInput({
   sessionId,
@@ -99,11 +92,6 @@ export function SessionInput({
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
-  const connectionState =
-    typeof connection?.state === "string" ? (connection.state as string) : null;
-  // Show preparing if the session is in the canonical preparing state, or if
-  // the connection is mid-startup (covers the cloud optimistic-active window
-  // where agentStatus is locally patched to "active" before the runtime is up).
   const preparing =
     isSessionPreparing({
       agentStatus,
@@ -112,8 +100,7 @@ export function SessionInput({
       lastUserMessageAt: rawLastUserMessageAt,
       lastMessageAt,
       connection,
-    }) ||
-    (connectionState !== null && STARTUP_CONNECTION_STATES.has(connectionState));
+    }) || isSessionRuntimeStartingUp(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =

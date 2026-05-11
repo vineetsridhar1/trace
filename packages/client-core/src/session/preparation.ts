@@ -33,3 +33,16 @@ export function isSessionPreparing(session: SessionPreparationFields | null | un
     Boolean(session.lastUserMessageAt ?? session.lastMessageAt)
   );
 }
+
+/**
+ * Whether the session's runtime connection is in an active startup state.
+ * Use this for input-gating: it catches the cloud optimistic-active window
+ * where agentStatus has been locally patched to "active" before the runtime
+ * is up — a case isSessionPreparing's "not_started" gate misses.
+ */
+export function isSessionRuntimeStartingUp(
+  connection: SessionPreparationFields["connection"],
+): boolean {
+  const state = connectionState(connection);
+  return state !== null && STARTUP_CONNECTION_STATES.has(state);
+}
