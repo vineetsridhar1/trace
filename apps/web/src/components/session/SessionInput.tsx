@@ -1,6 +1,12 @@
 import { useCallback, useRef, useState, type ChangeEvent } from "react";
-import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
-import { useEntityField, useEntityStore, type SessionEntity } from "@trace/client-core";
+import { Cloud, Loader2, Monitor, Paperclip, Send, Square } from "lucide-react";
+import {
+  isSessionPreparing,
+  isSessionRuntimeStartingUp,
+  useEntityField,
+  useEntityStore,
+  type SessionEntity,
+} from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
@@ -53,6 +59,18 @@ export function SessionInput({
     | null
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const rawLastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
+  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt") as
+    | string
+    | null
+    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -74,6 +92,15 @@ export function SessionInput({
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
+  const preparing =
+    isSessionPreparing({
+      agentStatus,
+      sessionStatus,
+      workdir,
+      lastUserMessageAt: rawLastUserMessageAt,
+      lastMessageAt,
+      connection,
+    }) || isSessionRuntimeStartingUp(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
@@ -82,10 +109,7 @@ export function SessionInput({
     (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
-  const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
-    | string
-    | undefined;
-  const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
+  const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
 
@@ -312,6 +336,12 @@ export function SessionInput({
         MODE_CONFIG[mode as InteractionMode].containerBorder,
       )}
     >
+      {preparing && (
+        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 size={12} className="shrink-0 animate-spin text-yellow-500" />
+          <span>Preparing workspace…</span>
+        </div>
+      )}
       <ImageAttachmentBar attachments={images} onRemove={handleRemoveImage} />
       <div className="flex items-center gap-2">
         {!isNotStarted && (

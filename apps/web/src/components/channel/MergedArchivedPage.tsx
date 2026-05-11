@@ -49,6 +49,7 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         reasoningEffort
         hosting
         branch
+        workdir
         prUrl
         worktreeDeleted
         sessionGroupId
