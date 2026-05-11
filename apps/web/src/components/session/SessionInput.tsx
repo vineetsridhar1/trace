@@ -1,6 +1,11 @@
 import { useCallback, useRef, useState, type ChangeEvent } from "react";
-import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
-import { useEntityField, useEntityStore, type SessionEntity } from "@trace/client-core";
+import { Cloud, Loader2, Monitor, Paperclip, Send, Square } from "lucide-react";
+import {
+  isSessionPreparing,
+  useEntityField,
+  useEntityStore,
+  type SessionEntity,
+} from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
@@ -33,6 +38,13 @@ const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
 const MAX_ATTACHMENTS = 5;
 
+const STARTUP_CONNECTION_STATES = new Set([
+  "requested",
+  "provisioning",
+  "booting",
+  "connecting",
+]);
+
 export function SessionInput({
   sessionId,
   onStop,
@@ -53,6 +65,18 @@ export function SessionInput({
     | null
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const rawLastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
+  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt") as
+    | string
+    | null
+    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -74,6 +98,22 @@ export function SessionInput({
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
+  const connectionState =
+    typeof connection?.state === "string" ? (connection.state as string) : null;
+  // After the user sends the first prompt, the optimistic patch locally flips
+  // agentStatus to "active" before the runtime is ready, so isSessionPreparing
+  // (which requires "not_started") misses that window. Also catch it directly
+  // via the connection state.
+  const preparing =
+    isSessionPreparing({
+      agentStatus,
+      sessionStatus,
+      workdir,
+      lastUserMessageAt: rawLastUserMessageAt,
+      lastMessageAt,
+      connection,
+    }) ||
+    (!workdir && connectionState !== null && STARTUP_CONNECTION_STATES.has(connectionState));
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
@@ -82,10 +122,7 @@ export function SessionInput({
     (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
-  const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
-    | string
-    | undefined;
-  const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
+  const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
 
@@ -292,6 +329,21 @@ export function SessionInput({
           sessionGroupId={sessionGroupId ?? null}
           onRequested={onAccessRequested}
         />
+      </div>
+    );
+  }
+  if (preparing) {
+    return (
+      <div className="shrink-0 border-t border-border px-4 py-3">
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2.5">
+          <Loader2 size={16} className="shrink-0 animate-spin text-yellow-500" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">Preparing workspace…</p>
+            <p className="text-xs text-muted-foreground">
+              Trace is starting your runtime before the agent begins.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
