@@ -332,21 +332,6 @@ export function SessionInput({
       </div>
     );
   }
-  if (preparing) {
-    return (
-      <div className="shrink-0 border-t border-border px-4 py-3">
-        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2.5">
-          <Loader2 size={16} className="shrink-0 animate-spin text-yellow-500" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-foreground">Preparing workspace…</p>
-            <p className="text-xs text-muted-foreground">
-              Trace is starting your runtime before the agent begins.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
     : isOptimistic
@@ -364,6 +349,12 @@ export function SessionInput({
         MODE_CONFIG[mode as InteractionMode].containerBorder,
       )}
     >
+      {preparing && (
+        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 size={12} className="shrink-0 animate-spin text-yellow-500" />
+          <span>Preparing workspace…</span>
+        </div>
+      )}
       <ImageAttachmentBar attachments={images} onRemove={handleRemoveImage} />
       <div className="flex items-center gap-2">
         {!isNotStarted && (
