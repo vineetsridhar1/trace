@@ -74,5 +74,9 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd ~/trace && \
             docker tag '${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}' '${ECR_REGISTRY}/${ECR_REPOSITORY}:latest' && \
-            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml up -d --wait --remove-orphans && \
+            if ! IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml up -d --wait --remove-orphans; then \
+              docker compose -f docker-compose.ec2.yml ps; \
+              docker compose -f docker-compose.ec2.yml logs --no-color --tail=200 backend; \
+              exit 1; \
+            fi && \
             (docker image prune -af || true)"
