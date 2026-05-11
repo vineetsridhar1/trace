@@ -82,6 +82,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         reasoningEffort
         hosting
         branch
+        workdir
         worktreeDeleted
         sessionGroupId
         lastUserMessageAt
