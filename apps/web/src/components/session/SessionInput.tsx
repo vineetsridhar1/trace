@@ -1,6 +1,11 @@
 import { useCallback, useRef, useState, type ChangeEvent } from "react";
 import { Cloud, Loader2, Monitor, Paperclip, Send, Square } from "lucide-react";
-import { useEntityField, useEntityStore, type SessionEntity } from "@trace/client-core";
+import {
+  isSessionPreparing,
+  useEntityField,
+  useEntityStore,
+  type SessionEntity,
+} from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
@@ -34,6 +39,7 @@ const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 const MAX_ATTACHMENTS = 5;
 
 const STARTUP_CONNECTION_STATES = new Set([
+  "pending",
   "requested",
   "provisioning",
   "booting",
@@ -60,6 +66,18 @@ export function SessionInput({
     | null
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const rawLastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | null
+    | undefined;
+  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt") as
+    | string
+    | null
+    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -83,11 +101,19 @@ export function SessionInput({
   const disconnected = isDisconnected(connection);
   const connectionState =
     typeof connection?.state === "string" ? (connection.state as string) : null;
-  // Show preparing whenever the connection is mid-startup. Sessions inherit
-  // workdir from their group at creation time, so checking workdir alone would
-  // miss every session past the first in a group.
+  // Show preparing if the session is in the canonical preparing state, or if
+  // the connection is mid-startup (covers the cloud optimistic-active window
+  // where agentStatus is locally patched to "active" before the runtime is up).
   const preparing =
-    connectionState !== null && STARTUP_CONNECTION_STATES.has(connectionState);
+    isSessionPreparing({
+      agentStatus,
+      sessionStatus,
+      workdir,
+      lastUserMessageAt: rawLastUserMessageAt,
+      lastMessageAt,
+      connection,
+    }) ||
+    (connectionState !== null && STARTUP_CONNECTION_STATES.has(connectionState));
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
@@ -96,10 +122,7 @@ export function SessionInput({
     (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
-  const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
-    | string
-    | undefined;
-  const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
+  const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
 
