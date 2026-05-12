@@ -440,9 +440,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           );
           const boundSessionIds = sessionRouter.getBoundSessionIds(runtimeKey);
           void sessionService
-            .reconcileIdleActiveRuns({
+            .listIdleActiveRunSessionIds({
               sessionIds: boundSessionIds,
               activeSessionIds,
+            })
+            .then((sessionIds) => {
+              for (const sessionId of sessionIds) {
+                enqueueForBoundSession(sessionId, async (boundSessionId) => {
+                  await sessionService.complete(boundSessionId);
+                });
+              }
             })
             .catch((err: unknown) => {
               console.error("[bridge] error reconciling runtime active runs:", err);

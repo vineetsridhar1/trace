@@ -269,7 +269,11 @@ export class ContainerBridge implements IBridgeClient {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      this.send({ type: "runtime_heartbeat", instanceId: `cloud-machine-${this.machineId}` });
+      this.send({
+        type: "runtime_heartbeat",
+        instanceId: `cloud-machine-${this.machineId}`,
+        activeSessionIds: [...this.activeRuns.keys()],
+      });
     }, 10_000);
   }
 

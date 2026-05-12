@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   getLinkedCheckoutStatus: vi.fn(() => Promise.resolve()),
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
   recordOutput: vi.fn(() => Promise.resolve()),
+  complete: vi.fn(() => Promise.resolve()),
+  listIdleActiveRunSessionIds: vi.fn(() => Promise.resolve([])),
   reconcileIdleActiveRuns: vi.fn(() => Promise.resolve([])),
   registerLocalRuntimeConnection: vi.fn(),
   addRegisteredRepoToLocalRuntime: vi.fn(() => Promise.resolve()),
@@ -40,6 +42,8 @@ vi.mock("../services/session.js", () => ({
   sessionService: {
     restoreSessionsForRuntime: mocks.restoreSessionsForRuntime,
     recordOutput: mocks.recordOutput,
+    complete: mocks.complete,
+    listIdleActiveRunSessionIds: mocks.listIdleActiveRunSessionIds,
     reconcileIdleActiveRuns: mocks.reconcileIdleActiveRuns,
   },
 }));
@@ -105,6 +109,7 @@ describe("bridge handler auth", () => {
     vi.clearAllMocks();
     mocks.getRuntimeForSession.mockReturnValue(undefined);
     mocks.getBoundSessionIds.mockReturnValue([]);
+    mocks.listIdleActiveRunSessionIds.mockResolvedValue([]);
     mocks.sessionFindFirst.mockResolvedValue(null);
   });
 
@@ -562,9 +567,86 @@ describe("bridge handler auth", () => {
     });
 
     expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws);
-    expect(mocks.reconcileIdleActiveRuns).toHaveBeenCalledWith({
+    expect(mocks.listIdleActiveRunSessionIds).toHaveBeenCalledWith({
       sessionIds: ["session-1", "session-2"],
       activeSessionIds: ["session-2"],
+    });
+  });
+
+  it("enqueues recovered completions behind prior session output", async () => {
+    const ws = createMockWs();
+    let releaseOutput: () => void = () => {};
+    const outputPromise = new Promise<void>((resolve) => {
+      releaseOutput = resolve;
+    });
+
+    mocks.registerLocalRuntimeConnection.mockResolvedValue({
+      id: "bridge-runtime-1",
+      label: "Bridge",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+    mocks.getBoundSessionIds.mockReturnValue(["session-1"]);
+    mocks.listIdleActiveRunSessionIds.mockResolvedValue(["session-1"]);
+    mocks.recordOutput.mockReturnValueOnce(outputPromise);
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      label: "Bridge",
+      hostingMode: "local",
+      supportedTools: ["claude_code"],
+      registeredRepoIds: [],
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
+    mocks.getRuntimeForSession.mockReturnValue({
+      key: "org-1:bridge-owned",
+      id: "bridge-owned",
+      ws,
+      organizationId: "org-1",
+    });
+
+    ws.emitMessage({
+      type: "session_output",
+      sessionId: "session-1",
+      data: { type: "assistant", message: "final" },
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.recordOutput).toHaveBeenCalledWith("session-1", {
+        type: "assistant",
+        message: "final",
+      });
+    });
+
+    ws.emitMessage({
+      type: "runtime_heartbeat",
+      instanceId: "bridge-owned",
+      activeSessionIds: [],
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.listIdleActiveRunSessionIds).toHaveBeenCalled();
+    });
+    await Promise.resolve();
+    expect(mocks.complete).not.toHaveBeenCalled();
+
+    releaseOutput();
+
+    await vi.waitFor(() => {
+      expect(mocks.complete).toHaveBeenCalledWith("session-1");
     });
   });
 

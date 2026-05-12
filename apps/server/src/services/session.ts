@@ -3627,7 +3627,7 @@ export class SessionService {
     }
   }
 
-  async reconcileIdleActiveRuns(options: {
+  async listIdleActiveRunSessionIds(options: {
     sessionIds: string[];
     activeSessionIds: string[];
     now?: number;
@@ -3652,10 +3652,20 @@ export class SessionService {
       select: { id: true },
     });
 
+    return candidates.map((candidate) => candidate.id);
+  }
+
+  async reconcileIdleActiveRuns(options: {
+    sessionIds: string[];
+    activeSessionIds: string[];
+    now?: number;
+    quietAfterMs?: number;
+  }): Promise<string[]> {
+    const candidates = await this.listIdleActiveRunSessionIds(options);
     const completed: string[] = [];
-    for (const candidate of candidates) {
-      await this.complete(candidate.id);
-      completed.push(candidate.id);
+    for (const sessionId of candidates) {
+      await this.complete(sessionId);
+      completed.push(sessionId);
     }
     return completed;
   }
