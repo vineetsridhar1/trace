@@ -31,9 +31,9 @@ import {
   isMissingToolSessionError,
   parseGitShowOutput,
   inspectSessionGitSyncStatus,
-  getUsedSlugs,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
+import { getUsedSlugs } from "@trace/shared/animal-names";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {

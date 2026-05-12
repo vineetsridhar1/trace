@@ -84,7 +84,6 @@ export type {
   AttachmentDownloadDeps,
   ImageDownloadDeps,
 } from "./bridge.js";
-export { getUsedSlugs } from "./animal-names.js";
 export {
   parseBranchOutput,
   walkDir,
