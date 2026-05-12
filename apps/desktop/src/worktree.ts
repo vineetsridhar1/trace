@@ -121,6 +121,22 @@ function resolveWorktreeBranch(
   return generatedBranch;
 }
 
+async function resolveAvailableWorktreeSlug(
+  sessionsDir: string,
+  repoPath: string,
+  requestedSlug: string | undefined,
+): Promise<string> {
+  const usedSlugs = await getUsedSlugs(sessionsDir, repoPath);
+  if (!requestedSlug) return generateAnimalSlug(usedSlugs);
+
+  const requestedPath = path.join(sessionsDir, requestedSlug);
+  if (!usedSlugs.has(requestedSlug) || fs.existsSync(requestedPath)) {
+    return requestedSlug;
+  }
+
+  return generateAnimalSlug(usedSlugs);
+}
+
 export async function createWorktree({
   repoPath,
   repoId,
@@ -151,7 +167,7 @@ export async function createWorktree({
   gitHooksEnabled?: boolean;
 }): Promise<{ workdir: string; branch: string; slug: string }> {
   const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
-  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(sessionsDir, repoPath));
+  const worktreeSlug = await resolveAvailableWorktreeSlug(sessionsDir, repoPath, slug);
   const branch = resolveWorktreeBranch(worktreeSlug, startBranch, preserveBranchName);
   const targetPath = path.join(sessionsDir, worktreeSlug);
 

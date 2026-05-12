@@ -6,6 +6,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
+import path from "path";
 
 const execFileAsync = promisify(execFile);
 
@@ -351,6 +352,24 @@ export async function getUsedSlugs(sessionsDir: string, repoPath: string): Promi
     }
   } catch {
     // If git command fails, proceed with just directory-based slugs
+  }
+
+  // 3. Existing worktree directory names, including worktrees created under
+  // other Trace session roots on this bridge.
+  try {
+    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], {
+      cwd: repoPath,
+    });
+    for (const line of stdout.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("worktree ")) {
+        const worktreePath = trimmed.slice("worktree ".length);
+        const basename = path.basename(worktreePath);
+        if (basename) used.add(basename);
+      }
+    }
+  } catch {
+    // If git command fails, proceed with directory and branch-based slugs
   }
 
   return used;
