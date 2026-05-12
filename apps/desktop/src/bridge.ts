@@ -31,6 +31,7 @@ import {
   isMissingToolSessionError,
   parseGitShowOutput,
   inspectSessionGitSyncStatus,
+  getUsedSlugs,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
@@ -880,6 +881,38 @@ export class BridgeClient implements IBridgeClient {
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
+          });
+        break;
+      }
+      case "list_workspace_slugs": {
+        const repoConfig = getRepoConfig(cmd.repoId);
+        const repoPath = repoConfig?.path;
+        if (!repoPath) {
+          this.send({
+            type: "workspace_slugs_result",
+            requestId: cmd.requestId,
+            slugs: [],
+            error: "Repo not linked",
+          });
+          break;
+        }
+
+        const sessionsDir = path.join(os.homedir(), "trace", "sessions", cmd.repoId);
+        getUsedSlugs(sessionsDir, repoPath)
+          .then((slugs) => {
+            this.send({
+              type: "workspace_slugs_result",
+              requestId: cmd.requestId,
+              slugs: [...slugs],
+            });
+          })
+          .catch((err: Error) => {
+            this.send({
+              type: "workspace_slugs_result",
+              requestId: cmd.requestId,
+              slugs: [],
+              error: err.message,
+            });
           });
         break;
       }

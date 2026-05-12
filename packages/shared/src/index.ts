@@ -33,6 +33,7 @@ export type {
   BridgeResumeCommand,
   BridgeDeleteCommand,
   BridgeListBranchesCommand,
+  BridgeListWorkspaceSlugsCommand,
   BridgeRuntimeHello,
   BridgeRuntimeHeartbeat,
   BridgeRegisterSession,
@@ -45,6 +46,7 @@ export type {
   BridgeGitCheckpoint,
   BridgeRepoLinked,
   BridgeBranchesResult,
+  BridgeWorkspaceSlugsResult,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeFilesResult,
@@ -82,6 +84,7 @@ export type {
   AttachmentDownloadDeps,
   ImageDownloadDeps,
 } from "./bridge.js";
+export { getUsedSlugs } from "./animal-names.js";
 export {
   parseBranchOutput,
   walkDir,

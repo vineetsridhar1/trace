@@ -199,6 +199,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
       label: "Laptop",
       ws,
       hostingMode: "local",
+      organizationId: "org-1",
       supportedTools: ["codex"],
     });
     router.registerRuntime({
@@ -206,6 +207,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
       label: "Other laptop",
       ws: makeWs(),
       hostingMode: "local",
+      organizationId: "org-1",
       supportedTools: ["codex"],
     });
 
@@ -224,6 +226,49 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
 
     router.resolveBranchRequest(command.requestId, ["main"], undefined, "runtime-1");
     await expect(promise).resolves.toEqual(["main"]);
+  });
+
+  it("ignores workspace slug responses from a runtime that did not receive the request", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+    router.registerRuntime({
+      id: "runtime-2",
+      label: "Other laptop",
+      ws: makeWs(),
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+
+    const promise = router.listWorkspaceSlugs("runtime-1", "repo-1", "org-1");
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    const command = JSON.parse(send.mock.calls[0]?.[0] as string) as {
+      requestId: string;
+      type: string;
+    };
+
+    expect(command.type).toBe("list_workspace_slugs");
+
+    let settled = false;
+    promise.then(() => {
+      settled = true;
+    });
+
+    router.resolveWorkspaceSlugRequest(command.requestId, ["taken"], undefined, "runtime-2");
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    router.resolveWorkspaceSlugRequest(command.requestId, ["taken"], undefined, "runtime-1");
+    await expect(promise).resolves.toEqual(["taken"]);
   });
 });
 

@@ -36,6 +36,7 @@ import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import {
   ensureRepo,
   createWorktree,
+  getWorkspaceSlugs,
   removeWorktree,
   getRepoPath,
   listClonedRepoIds,
@@ -401,6 +402,26 @@ export class ContainerBridge implements IBridgeClient {
             this.send({ type: "workspace_failed", sessionId, error: message });
           }
         })();
+        break;
+      }
+
+      case "list_workspace_slugs": {
+        getWorkspaceSlugs(cmd.repoId)
+          .then((slugs) => {
+            this.send({
+              type: "workspace_slugs_result",
+              requestId: cmd.requestId,
+              slugs: [...slugs],
+            });
+          })
+          .catch((err: Error) => {
+            this.send({
+              type: "workspace_slugs_result",
+              requestId: cmd.requestId,
+              slugs: [],
+              error: err.message,
+            });
+          });
         break;
       }
 

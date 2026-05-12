@@ -95,6 +95,12 @@ export interface BridgeListBranchesCommand {
   repoId: string;
 }
 
+export interface BridgeListWorkspaceSlugsCommand {
+  type: "list_workspace_slugs";
+  requestId: string;
+  repoId: string;
+}
+
 export interface BridgeListFilesCommand {
   type: "list_files";
   requestId: string;
@@ -239,6 +245,7 @@ export type BridgeCommand =
   | BridgeResumeCommand
   | BridgeDeleteCommand
   | BridgeListBranchesCommand
+  | BridgeListWorkspaceSlugsCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeBranchDiffCommand
@@ -427,6 +434,13 @@ export interface BridgeBranchesResult {
   error?: string;
 }
 
+export interface BridgeWorkspaceSlugsResult {
+  type: "workspace_slugs_result";
+  requestId: string;
+  slugs: string[];
+  error?: string;
+}
+
 export interface BridgeFilesResult {
   type: "files_result";
   requestId: string;
@@ -517,6 +531,7 @@ export type BridgeMessage =
   | BridgeLinkedCheckoutActionResult
   | BridgeSessionGitSyncStatusResult
   | BridgeBranchesResult
+  | BridgeWorkspaceSlugsResult
   | BridgeFilesResult
   | BridgeFileContentResult
   | BridgeBranchDiffResult
