@@ -14,11 +14,15 @@ import {
 } from "../lib/slack/user-resolver.js";
 import { slackEventBridge } from "../lib/slack/event-bridge.js";
 import { sessionService } from "../services/session.js";
+import { channelService } from "../services/channel.js";
+import { createChannelInTransaction } from "../services/channel-create.js";
+import { eventService } from "../services/event.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const INSTALL_STATE_TTL_SECONDS = 10 * 60;
 const RECENT_MENTION_TTL_MS = 30 * 1000;
 const recentMentionKeys = new Map<string, number>();
+const SLACK_TRACE_CHANNEL_NAME = "Slack";
 const SLACK_SCOPES = [
   "app_mentions:read",
   "chat:write",
@@ -336,6 +340,54 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
 }
 
+async function ensureSlackTraceChannel(
+  organizationId: string,
+  actorId: string,
+): Promise<string> {
+  const existing = await prisma.channel.findFirst({
+    where: {
+      organizationId,
+      name: SLACK_TRACE_CHANNEL_NAME,
+      type: "coding",
+      repoId: null,
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await channelService.join(existing.id, "user", actorId);
+    return existing.id;
+  }
+
+  const channel = await prisma.$transaction(async (tx) => {
+    const created = await createChannelInTransaction(tx, {
+      organizationId,
+      name: SLACK_TRACE_CHANNEL_NAME,
+      type: "coding",
+      actorType: "user",
+      actorId,
+      repo: null,
+    });
+
+    await eventService.create(
+      {
+        organizationId,
+        scopeType: "channel",
+        scopeId: created.channel.id,
+        eventType: "channel_created",
+        payload: { channel: created.channelPayload },
+        actorType: "user",
+        actorId,
+      },
+      tx,
+    );
+
+    return created.channel;
+  });
+
+  return channel.id;
+}
+
 function claimMentionEvent(teamId: string, channel: string, threadTs: string): boolean {
   const now = Date.now();
   for (const [key, expiresAt] of recentMentionKeys) {
@@ -440,10 +492,12 @@ async function handleAppMention(input: {
 
   let session: Awaited<ReturnType<typeof sessionService.start>>;
   try {
+    const traceChannelId = await ensureSlackTraceChannel(install.organizationId, traceUserId);
     session = await sessionService.start({
       tool: "claude_code",
       organizationId: install.organizationId,
       createdById: traceUserId,
+      channelId: traceChannelId,
       hosting: slackSessionHosting(),
       prompt,
       actorType: "user",
