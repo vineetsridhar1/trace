@@ -326,6 +326,10 @@ function stripBotMention(text: string, botUserId: string): string {
   return text.replace(new RegExp(`<@${botUserId}>`, "g"), "").trim();
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
 async function handleAppMention(input: {
   teamId: string;
   event: SlackEventBody;
@@ -335,13 +339,19 @@ async function handleAppMention(input: {
   const channel = event.channel;
   const ts = event.ts;
   const threadTs = event.thread_ts ?? event.ts;
-  if (!slackUserId || !channel || !ts || !threadTs) return;
+  if (!slackUserId || !channel || !ts || !threadTs) {
+    console.warn("[slack] app_mention missing required fields", { teamId, slackUserId, channel, ts, threadTs });
+    return;
+  }
 
   const install = await prisma.slackInstall.findUnique({
     where: { slackTeamId: teamId },
     select: { organizationId: true, botUserId: true },
   });
-  if (!install) return;
+  if (!install) {
+    console.warn("[slack] ignoring app_mention without install", { teamId, channel, threadTs });
+    return;
+  }
 
   const existingThread = await prisma.slackThreadSession.findUnique({
     where: {
@@ -353,10 +363,14 @@ async function handleAppMention(input: {
     },
     select: { id: true },
   });
-  if (existingThread) return;
+  if (existingThread) {
+    console.info("[slack] ignoring duplicate app_mention for existing thread", { teamId, channel, threadTs });
+    return;
+  }
 
   const traceUserId = await resolveTraceUser(teamId, slackUserId);
   if (!traceUserId) {
+    console.info("[slack] prompting unlinked Slack user", { teamId, slackUserId, channel, threadTs });
     await postLinkPrompt({
       slackTeamId: teamId,
       slackUserId,
@@ -402,15 +416,33 @@ async function handleAppMention(input: {
     return;
   }
 
-  const session = await sessionService.start({
-    tool: "claude_code",
-    organizationId: install.organizationId,
-    createdById: traceUserId,
-    hosting: "cloud",
-    prompt,
-    actorType: "user",
-    clientSource: "slack",
-  });
+  let session: Awaited<ReturnType<typeof sessionService.start>>;
+  try {
+    session = await sessionService.start({
+      tool: "claude_code",
+      organizationId: install.organizationId,
+      createdById: traceUserId,
+      hosting: "cloud",
+      prompt,
+      actorType: "user",
+      clientSource: "slack",
+    });
+  } catch (err: unknown) {
+    const message = errorMessage(err);
+    console.warn("[slack] failed to start session", { teamId, slackUserId, channel, threadTs, error: message });
+    const client = await getSlackClient(teamId);
+    if (client) {
+      await client.chat
+        .postEphemeral({
+          channel,
+          user: slackUserId,
+          thread_ts: threadTs,
+          text: `Could not start a Trace session: ${message}`,
+        })
+        .catch(() => {});
+    }
+    return;
+  }
 
   await prisma.slackThreadSession.create({
     data: {
@@ -596,6 +628,13 @@ router.post(
       res.status(200).type("text/plain").send(envelope.challenge);
       return;
     }
+
+    console.info("[slack] event received", {
+      teamId: envelope.team_id,
+      eventType: envelope.event?.type,
+      channel: envelope.event?.channel,
+      user: envelope.event?.user,
+    });
 
     res.status(200).json({ ok: true });
 
