@@ -853,13 +853,18 @@ export class SessionRouter {
     timeoutMs = 2_000,
   ): Promise<string[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(
-      runtimeId,
-      { type: "list_workspace_slugs", requestId, repoId },
-      organizationId,
-    );
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    const runtime = this.getRuntime(runtimeId, organizationId);
+    if (!runtime) {
+      return Promise.reject(new Error("Runtime not available: no_runtime"));
+    }
+    if (runtime.ws.readyState !== runtime.ws.OPEN) {
+      return Promise.reject(new Error("Runtime not available: runtime_disconnected"));
+    }
+
+    try {
+      runtime.ws.send(JSON.stringify({ type: "list_workspace_slugs", requestId, repoId }));
+    } catch {
+      return Promise.reject(new Error("Runtime not available: delivery_failed"));
     }
 
     return new Promise<string[]>((resolve, reject) => {
@@ -869,7 +874,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingWorkspaceSlugRequests.set(requestId, {
-        runtimeId,
+        runtimeId: runtime.key,
         resolve: (slugs) => {
           clearTimeout(timer);
           resolve(slugs);

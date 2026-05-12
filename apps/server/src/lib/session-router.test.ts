@@ -270,6 +270,43 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
     router.resolveWorkspaceSlugRequest(command.requestId, ["taken"], undefined, "runtime-1");
     await expect(promise).resolves.toEqual(["taken"]);
   });
+
+  it("matches workspace slug responses using the org-scoped local runtime key", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    const runtimeKey = runtimeRouterKey("bridge-1", "org-1");
+
+    router.registerRuntime({
+      key: runtimeKey,
+      id: "bridge-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+
+    const promise = router.listWorkspaceSlugs("bridge-1", "repo-1", "org-1");
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    const command = JSON.parse(send.mock.calls[0]?.[0] as string) as {
+      requestId: string;
+      type: string;
+    };
+
+    expect(command.type).toBe("list_workspace_slugs");
+
+    let settled = false;
+    promise.then(() => {
+      settled = true;
+    });
+
+    router.resolveWorkspaceSlugRequest(command.requestId, ["bare"], undefined, "bridge-1");
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    router.resolveWorkspaceSlugRequest(command.requestId, ["taken"], undefined, runtimeKey);
+    await expect(promise).resolves.toEqual(["taken"]);
+  });
 });
 
 describe("SessionRouter runtime adapter dispatch", () => {

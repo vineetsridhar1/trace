@@ -818,25 +818,17 @@ export class SessionService {
       const environment = params.environment ?? (await this.resolveProvisioningEnvironment(params));
       let slug = params.slug ?? undefined;
       if (!slug && params.sessionGroupId && params.repo?.id) {
-        try {
-          const runtimeUsedSlugs = await this.loadRuntimeWorkspaceSlugs({
-            sessionId: params.sessionId,
-            organizationId: params.organizationId,
-            hosting: params.hosting,
-            repoId: params.repo.id,
-          });
-          slug = await this.allocateSessionGroupSlug(
-            params.sessionGroupId,
-            params.repo.id,
-            runtimeUsedSlugs,
-          );
-        } catch (error) {
-          console.warn(
-            `[session] slug allocation failed for group ${params.sessionGroupId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
+        const runtimeUsedSlugs = await this.loadRuntimeWorkspaceSlugs({
+          sessionId: params.sessionId,
+          organizationId: params.organizationId,
+          hosting: params.hosting,
+          repoId: params.repo.id,
+        });
+        slug = await this.allocateSessionGroupSlug(
+          params.sessionGroupId,
+          params.repo.id,
+          runtimeUsedSlugs,
+        );
       }
 
       sessionRouter.createRuntime({
@@ -882,22 +874,10 @@ export class SessionService {
   }): Promise<string[]> {
     if (params.hosting !== "local") return [];
     const runtime = sessionRouter.getRuntimeForSession(params.sessionId);
-    if (!runtime) return [];
-
-    try {
-      return await sessionRouter.listWorkspaceSlugs(
-        runtime.id,
-        params.repoId,
-        params.organizationId,
-      );
-    } catch (error) {
-      console.warn(
-        `[session] failed to load runtime workspace slugs for repo ${params.repoId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      return [];
+    if (!runtime) {
+      throw new Error("Cannot allocate a local workspace slug before selecting a runtime");
     }
+    return sessionRouter.listWorkspaceSlugs(runtime.id, params.repoId, params.organizationId);
   }
 
   /**
@@ -910,7 +890,7 @@ export class SessionService {
     sessionGroupId: string,
     repoId: string,
     runtimeUsedSlugs: Iterable<string> = [],
-  ): Promise<string | undefined> {
+  ): Promise<string> {
     const MAX_ATTEMPTS = 10;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const existing = await prisma.sessionGroup.findUnique({
@@ -947,10 +927,9 @@ export class SessionService {
         throw error;
       }
     }
-    console.warn(
-      `[session] allocateSessionGroupSlug: exhausted ${MAX_ATTEMPTS} attempts for group ${sessionGroupId}`,
+    throw new Error(
+      `Unable to allocate a unique workspace slug for session group ${sessionGroupId}`,
     );
-    return undefined;
   }
 
   private async resolveProvisioningEnvironment(params: {
