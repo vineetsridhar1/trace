@@ -131,7 +131,6 @@ export function PendingInputQuestion({
                       <View style={styles.menuCopy}>
                         <Text
                           variant="subheadline"
-                          numberOfLines={1}
                           color={selected ? "accent" : "foreground"}
                           style={styles.optionTitle}
                         >
@@ -139,7 +138,6 @@ export function PendingInputQuestion({
                         </Text>
                         <Text
                           variant="caption1"
-                          numberOfLines={2}
                           style={{ color: alpha(theme.colors.foreground, 0.88) }}
                         >
                           {opt.description}
