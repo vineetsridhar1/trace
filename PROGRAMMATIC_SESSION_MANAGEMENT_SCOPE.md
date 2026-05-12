@@ -21,7 +21,7 @@ Trace already has most of the lower-level pieces:
 
 The current gaps are at the API and product boundary:
 
-- Existing auth accepts user session JWTs or paired mobile secrets, not durable machine/session-management tokens.
+- Existing auth accepts user session JWTs or paired mobile secrets, not durable user-owned session management tokens.
 - Existing `ApiToken` rows store provider secrets like Anthropic, OpenAI, GitHub, and SSH keys. They should not be reused for Trace API access.
 - `SessionService.start` accepts an actor type but still records the `session_started` event as `user` in the current implementation.
 - Programmatic callers need idempotency so webhook retries do not create duplicate sessions or duplicate compute.
@@ -30,6 +30,8 @@ The current gaps are at the API and product boundary:
 ## Goals
 
 - Add an org-scoped, machine-friendly session management API.
+- Tie v1 programmatic API keys to a real user, and run sessions as that user.
+- Let in-app orchestrator work inherit the currently logged-in user instead of using a separate API key.
 - Make session creation idempotent for external events.
 - Let orchestrator agents use the same service layer directly.
 - Keep GraphQL resolvers thin and preserve the service-layer ownership model.
@@ -45,6 +47,7 @@ The current gaps are at the API and product boundary:
 - Do not require local desktop runtimes for headless execution.
 - Do not build the full project orchestrator in this scope.
 - Do not turn this into a generic workflow builder.
+- Do not introduce service-account or ownerless sessions in v1.
 
 ## Proposed Boundary
 
@@ -175,7 +178,19 @@ Response:
 
 ## Auth Model
 
-Add session management tokens separate from provider API tokens.
+V1 should use user-owned session management tokens.
+
+There are two authentication paths:
+
+1. External programmatic callers use a session management token.
+2. In-app orchestrator flows use the existing logged-in user session.
+
+Both paths resolve to a concrete `userId`. Sessions created through either path are owned by that user:
+
+- `Session.createdById = resolved user id`
+- lifecycle events use `actorType: "user"`
+- lifecycle events use `actorId = resolved user id`
+- source metadata distinguishes whether the work came from the API, Sentry, or an orchestrator
 
 Suggested model:
 
@@ -183,10 +198,9 @@ Suggested model:
 model SessionManagementToken {
   id             String   @id @default(uuid())
   organizationId String
+  userId         String
   name           String
   tokenHash      String   @unique
-  actorUserId    String
-  actorType      ActorType
   scopes         String[]
   constraints    Json     @default("{}")
   lastUsedAt     DateTime?
@@ -196,6 +210,15 @@ model SessionManagementToken {
   updatedAt      DateTime @updatedAt
 }
 ```
+
+The token should be invalid if:
+
+- it is revoked
+- it is expired
+- the user no longer belongs to the organization
+- the user's current organization role is insufficient for the requested operation
+- the token does not include the required scope
+- the requested repo/channel/environment violates token constraints
 
 Scopes:
 
@@ -212,7 +235,74 @@ Constraints can restrict access to:
 - specific agent environments
 - specific sources
 
-The token should resolve to a real User row because `Session.createdById` requires a user. For orchestrator-owned operations, the actor can be the Trace AI user or a future service-account user. Events should record `actorType: "agent"` when the caller is an agent.
+This deliberately avoids service-account ownership in v1. A programmatic session created by a user's token is a user-owned session with programmatic source metadata.
+
+### External Programmatic Auth
+
+External callers pass a token:
+
+```http
+Authorization: Bearer trace_sm_...
+```
+
+The server resolves that token into:
+
+```ts
+{
+  authKind: "session_management_token",
+  tokenId: "token-1",
+  userId: "user-1",
+  organizationId: "org-1",
+  scopes: ["sessions:create", "sessions:read"],
+  clientSource: "session_management_api"
+}
+```
+
+The management service then calls lower-level session services with:
+
+```ts
+{
+  createdById: "user-1",
+  actorType: "user",
+  clientSource: "session_management_api"
+}
+```
+
+If the source is Sentry, the request should still act as the token user, with metadata like:
+
+```json
+{
+  "managementSource": "sentry",
+  "externalId": "event-123"
+}
+```
+
+### In-App Orchestrator Auth
+
+An orchestrator started from the app should not use a session management token.
+
+It should use the existing app authentication context:
+
+```ts
+{
+  authKind: "interactive_user",
+  userId: ctx.userId,
+  organizationId: ctx.organizationId,
+  clientSource: "orchestrator"
+}
+```
+
+If the orchestrator continues asynchronously after the initial browser request, its durable run record should store the delegated user:
+
+```ts
+{
+  delegatedByUserId: ctx.userId,
+  organizationId: ctx.organizationId,
+  startedFrom: "web"
+}
+```
+
+Each background step should re-check that the delegated user still belongs to the organization before creating sessions or sending messages. The session should still be created with `createdById = delegatedByUserId` and `actorType = "user"` in v1.
 
 ## Idempotency
 
@@ -250,7 +340,7 @@ Rules:
 
 - `deferRuntimeSelection` should default to false for programmatic calls.
 - A create request with a prompt should require either an explicit `environmentId` or an org default environment that can run the requested tool.
-- Local runtimes are allowed only when the token actor has access to the selected bridge runtime and the runtime is connected.
+- Local runtimes are allowed only when the token user or delegated app user has access to the selected bridge runtime and the runtime is connected.
 - `interactionMode: "ask"` should create a read-only workspace where possible, which is useful for triage/investigation sessions.
 - Cloud sessions still require repos to have remote URLs.
 
@@ -268,15 +358,18 @@ The management service should not create session lifecycle events directly. It s
 
 Needed adjustment:
 
-- `SessionService.start` should use the supplied actor type when emitting `session_started`.
+- `SessionService.start` should consistently use the authenticated actor when emitting `session_started`.
+- For v1 programmatic tokens, that actor is the user who owns the token.
+- For v1 in-app orchestrator runs, that actor is the logged-in user who delegated the run.
 
 Useful payload additions:
 
 - `clientSource: "session_management_api"` or a source-specific value
 - `managementSource`, such as `sentry`, `orchestrator`, or `api`
 - `externalId` when available
+- `sessionManagementTokenId` in internal audit metadata only, not public event payloads
 
-These should be payload metadata only. They should not create a separate event path.
+These should stay on the existing event path. Public payloads should include source context; sensitive token identifiers should stay in internal audit records or server logs.
 
 ## Sentry Integration
 
@@ -301,7 +394,21 @@ Future Sentry-specific configuration can live in an integration table or org set
 
 ## Orchestrator Integration
 
-An orchestrator agent should call `SessionManagementService` directly.
+An orchestrator agent should call `SessionManagementService` directly, but the authentication source depends on where orchestration starts.
+
+If orchestration starts from the frontend:
+
+- the GraphQL/API entry point uses the logged-in user's existing session
+- the orchestrator run stores `delegatedByUserId`
+- sessions created by the orchestrator use `createdById = delegatedByUserId`
+- events use `actorType: "user"` and `actorId = delegatedByUserId`
+- event payloads include `managementSource: "orchestrator"`
+
+If orchestration starts from an external API:
+
+- the API request uses a user-owned session management token
+- sessions created by the orchestrator use the token owner's user id
+- event payloads include the external `source` and `externalId` when present
 
 Examples:
 
@@ -313,11 +420,13 @@ Examples:
 
 This keeps orchestration durable service-layer state and avoids forcing agents through GraphQL.
 
+Future service-account or bot ownership can be added later if needed, but v1 should keep ownership tied to a user to avoid changing `Session.createdById`, GraphQL `createdBy`, runtime access assumptions, and user-scoped secret lookup.
+
 ## Delivery Plan
 
 ### Phase 1: Session Management Foundation
 
-- Add session management token model and hashing helpers.
+- Add user-owned session management token model and hashing helpers.
 - Add auth resolution for bearer session-management tokens.
 - Add `SessionManagementService` skeleton.
 - Add scope checks and constraints.
@@ -356,7 +465,9 @@ This keeps orchestration durable service-layer state and avoids forcing agents t
 
 Service tests:
 
-- token auth resolves org, actor, scopes, and constraints
+- token auth resolves org, user, scopes, and constraints
+- token auth rejects users who lost org access
+- in-app orchestrator auth uses the logged-in user without requiring a token
 - create session with explicit provisioned environment
 - create session duplicate returns the existing session
 - conflicting duplicate returns an error
@@ -388,16 +499,18 @@ Sentry tests:
 
 ## Open Questions
 
-- Should tokens always act as `agent`, or should admins be able to create tokens that act as a specific user?
 - Should status reads expose raw events, normalized events, or both?
 - Should delete be part of v1, or should v1 only support terminate/dismiss?
 - Should integration mappings live in org settings first, or get a dedicated table immediately?
 - Should `source` and `externalId` be accepted for all management calls or only create?
 - Should programmatic sessions default to `interactionMode: "ask"` for external incident triggers?
+- Should orchestrator-created events eventually use `actorType: "agent"` plus `delegatedByUserId`, or should they remain user-authored with `managementSource: "orchestrator"`?
 
 ## Success Criteria
 
 - A server-side caller can create a Trace session with a prompt using a durable token.
+- A session management token is tied to a user and cannot act after that user loses org access.
+- A frontend-started orchestrator can create sessions under the logged-in user's identity without minting an API key.
 - The session runs on a provisioned environment without browser interaction.
 - Repeating the same external event does not create duplicate sessions or compute.
 - The caller can poll status and fetch recent events.
