@@ -18,6 +18,7 @@ import type {
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
   BridgeSessionGitSyncStatus,
+  BridgeListWorkspaceSlugsCommand,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -53,6 +54,7 @@ export type SessionCommand =
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
+  | BridgeListWorkspaceSlugsCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
@@ -261,6 +263,11 @@ export class SessionRouter {
   private pendingBranchRequests = new Map<
     string,
     { runtimeId: string; resolve: (branches: string[]) => void; reject: (err: Error) => void }
+  >();
+  /** Pending workspace slug requests: requestId → resolve/reject */
+  private pendingWorkspaceSlugRequests = new Map<
+    string,
+    { runtimeId: string; resolve: (slugs: string[]) => void; reject: (err: Error) => void }
   >();
   /** Pending file list requests: requestId → resolve/reject */
   private pendingFileRequests = new Map<
@@ -831,6 +838,69 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(branches);
+    }
+  }
+
+  /**
+   * Ask a runtime to list workspace slugs already in use for a repo.
+   * Used before durable session-group slug allocation so local bridge state
+   * participates in the server-owned reservation.
+   */
+  listWorkspaceSlugs(
+    runtimeId: string,
+    repoId: string,
+    organizationId?: string | null,
+    timeoutMs = 2_000,
+  ): Promise<string[]> {
+    const requestId = randomUUID();
+    const runtime = this.getRuntime(runtimeId, organizationId);
+    if (!runtime) {
+      return Promise.reject(new Error("Runtime not available: no_runtime"));
+    }
+    if (runtime.ws.readyState !== runtime.ws.OPEN) {
+      return Promise.reject(new Error("Runtime not available: runtime_disconnected"));
+    }
+
+    try {
+      runtime.ws.send(JSON.stringify({ type: "list_workspace_slugs", requestId, repoId }));
+    } catch {
+      return Promise.reject(new Error("Runtime not available: delivery_failed"));
+    }
+
+    return new Promise<string[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingWorkspaceSlugRequests.delete(requestId);
+        reject(new Error("Workspace slug request timed out"));
+      }, timeoutMs);
+
+      this.pendingWorkspaceSlugRequests.set(requestId, {
+        runtimeId: runtime.key,
+        resolve: (slugs) => {
+          clearTimeout(timer);
+          resolve(slugs);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveWorkspaceSlugRequest(
+    requestId: string,
+    slugs: string[],
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingWorkspaceSlugRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingWorkspaceSlugRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(slugs);
     }
   }
 

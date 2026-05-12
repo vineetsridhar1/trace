@@ -58,6 +58,26 @@ export async function ensureRepo(repoId: string, remoteUrl: string | null): Prom
   return repoPath;
 }
 
+export async function getWorkspaceSlugs(repoId: string): Promise<Set<string>> {
+  const repoPath = `${REPOS_DIR}/${repoId}`;
+  return getUsedSlugs(WORKSPACES_DIR, repoPath);
+}
+
+async function resolveAvailableWorkspaceSlug(
+  repoPath: string,
+  requestedSlug: string | undefined,
+): Promise<string> {
+  const usedSlugs = await getUsedSlugs(WORKSPACES_DIR, repoPath);
+  if (!requestedSlug) return generateAnimalSlug(usedSlugs);
+
+  const requestedPath = `${WORKSPACES_DIR}/${requestedSlug}`;
+  if (!usedSlugs.has(requestedSlug) || fs.existsSync(requestedPath)) {
+    return requestedSlug;
+  }
+
+  return generateAnimalSlug(usedSlugs);
+}
+
 /**
  * Create a worktree from the repo at /repos/{repoId}.
  * The worktree is keyed by `slug` (an animal name) when provided.
@@ -86,7 +106,7 @@ export async function createWorktree({
   slug?: string;
 }): Promise<{ workdir: string; branch: string; slug: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
-  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
+  const worktreeSlug = await resolveAvailableWorkspaceSlug(repoPath, slug);
   const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
@@ -110,9 +130,15 @@ export async function createWorktree({
 
   if (fs.existsSync(worktreePath)) {
     const currentBranch = await getCurrentBranch(worktreePath);
+    if (currentBranch !== branchName) {
+      throw new Error(
+        `Existing workspace ${worktreePath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branchName}. ` +
+          "Switch it back or remove the workspace before retrying.",
+      );
+    }
     await resetWorktreeToRef(worktreePath, baseRef);
-    await setUpstreamIfRemote(repoPath, currentBranch ?? branchName, baseRef);
-    return { workdir: worktreePath, branch: currentBranch ?? branchName, slug: worktreeSlug };
+    await setUpstreamIfRemote(repoPath, branchName, baseRef);
+    return { workdir: worktreePath, branch: branchName, slug: worktreeSlug };
   }
 
   // Check if the branch already exists

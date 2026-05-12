@@ -818,15 +818,17 @@ export class SessionService {
       const environment = params.environment ?? (await this.resolveProvisioningEnvironment(params));
       let slug = params.slug ?? undefined;
       if (!slug && params.sessionGroupId && params.repo?.id) {
-        try {
-          slug = await this.allocateSessionGroupSlug(params.sessionGroupId, params.repo.id);
-        } catch (error) {
-          console.warn(
-            `[session] slug allocation failed for group ${params.sessionGroupId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
+        const runtimeUsedSlugs = await this.loadRuntimeWorkspaceSlugs({
+          sessionId: params.sessionId,
+          organizationId: params.organizationId,
+          hosting: params.hosting,
+          repoId: params.repo.id,
+        });
+        slug = await this.allocateSessionGroupSlug(
+          params.sessionGroupId,
+          params.repo.id,
+          runtimeUsedSlugs,
+        );
       }
 
       sessionRouter.createRuntime({
@@ -864,15 +866,31 @@ export class SessionService {
     });
   }
 
+  private async loadRuntimeWorkspaceSlugs(params: {
+    sessionId: string;
+    organizationId: string;
+    hosting: string;
+    repoId: string;
+  }): Promise<string[]> {
+    if (params.hosting !== "local") return [];
+    const runtime = sessionRouter.getRuntimeForSession(params.sessionId);
+    if (!runtime) {
+      throw new Error("Cannot allocate a local workspace slug before selecting a runtime");
+    }
+    return sessionRouter.listWorkspaceSlugs(runtime.id, params.repoId, params.organizationId);
+  }
+
   /**
    * Allocate a workspace slug for a session group, persisting it before the bridge
-   * sees it. Used slugs are tracked across the SessionGroup table (scoped by repo)
-   * so a slug is never recycled even after the worktree or branch is cleaned up.
+   * sees it. Used slugs are tracked across both the SessionGroup table
+   * (scoped by repo) and the selected local runtime so a slug is not recycled
+   * while a branch or worktree still exists on the user's bridge.
    */
   private async allocateSessionGroupSlug(
     sessionGroupId: string,
     repoId: string,
-  ): Promise<string | undefined> {
+    runtimeUsedSlugs: Iterable<string> = [],
+  ): Promise<string> {
     const MAX_ATTEMPTS = 10;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const existing = await prisma.sessionGroup.findUnique({
@@ -888,6 +906,9 @@ export class SessionService {
       const usedNames = new Set(
         (used ?? []).map((row) => row.slug).filter((s): s is string => !!s),
       );
+      for (const slug of runtimeUsedSlugs) {
+        if (slug) usedNames.add(slug);
+      }
       const candidate = generateAnimalSlug(usedNames);
 
       try {
@@ -906,10 +927,9 @@ export class SessionService {
         throw error;
       }
     }
-    console.warn(
-      `[session] allocateSessionGroupSlug: exhausted ${MAX_ATTEMPTS} attempts for group ${sessionGroupId}`,
+    throw new Error(
+      `Unable to allocate a unique workspace slug for session group ${sessionGroupId}`,
     );
-    return undefined;
   }
 
   private async resolveProvisioningEnvironment(params: {
@@ -4274,6 +4294,36 @@ export class SessionService {
   }
 
   async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
+    if (branch) {
+      const current = await prisma.session.findUniqueOrThrow({
+        where: { id: sessionId },
+        select: {
+          organizationId: true,
+          sessionGroup: { select: { branch: true, workdir: true } },
+        },
+      });
+      const existingBranch = current.sessionGroup?.branch ?? null;
+      const existingWorkdir = current.sessionGroup?.workdir ?? null;
+      if (existingWorkdir === workdir && existingBranch && existingBranch !== branch) {
+        await eventService.create({
+          organizationId: current.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "error",
+            message:
+              `Workspace branch mismatch: bridge reported ${branch}, ` +
+              `but this session group is pinned to ${existingBranch}. ` +
+              "Fix the local worktree branch and retry recovery.",
+          },
+          actorType: "system",
+          actorId: "system",
+        });
+        return;
+      }
+    }
+
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {

@@ -539,6 +539,23 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       }
 
       if (
+        msg.type === "workspace_slugs_result" &&
+        typeof msg.requestId === "string" &&
+        Array.isArray(msg.slugs)
+      ) {
+        const slugs = (msg.slugs as unknown[]).filter(
+          (slug): slug is string => typeof slug === "string",
+        );
+        sessionRouter.resolveWorkspaceSlugRequest(
+          msg.requestId,
+          slugs,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
+      if (
         msg.type === "files_result" &&
         typeof msg.requestId === "string" &&
         Array.isArray(msg.files)
