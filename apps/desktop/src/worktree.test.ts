@@ -169,6 +169,58 @@ describe("createWorktree", () => {
     );
   });
 
+  it("fails fast with a GitHub login error when fetch needs credentials", async () => {
+    existsSyncMock.mockReturnValue(false);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout?: string, stderr?: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "https://github.com/opendoor-labs/mortgages.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(
+            new Error("Command failed"),
+            "",
+            "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+          );
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`));
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    await expect(
+      createWorktree({
+        repoPath: "/tmp/repo",
+        repoId: "repo-1",
+        sessionId: "session-1",
+        slug: "otter",
+        defaultBranch: "main",
+      }),
+    ).rejects.toThrow("GitHub login required for this repository");
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["fetch", "origin"],
+      expect.objectContaining({
+        cwd: "/tmp/repo",
+        env: expect.objectContaining({ GIT_TERMINAL_PROMPT: "0" }),
+      }),
+      expect.any(Function),
+    );
+  });
+
   it("creates a Trace branch for new worktrees even when starting from another branch", async () => {
     existsSyncMock.mockReturnValue(false);
     generateAnimalSlugMock.mockReturnValue("otter");
