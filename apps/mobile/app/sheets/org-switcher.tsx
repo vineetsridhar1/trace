@@ -3,7 +3,7 @@ import { OrgSwitcherContent } from "@/components/settings/OrgSwitcherContent";
 
 export default function OrgSwitcherSheetScreen() {
   return (
-    <Sheet detents={["medium"]}>
+    <Sheet detents={["large"]}>
       <OrgSwitcherContent />
     </Sheet>
   );
