@@ -120,6 +120,11 @@ function sessionStatusFromEvent(
   }
 }
 
+function isCurrentUserSession(session: SessionEntity | undefined): session is SessionEntity {
+  const currentUserId = useAuthStore.getState().user?.id;
+  return !!currentUserId && session?.createdBy?.id === currentUserId;
+}
+
 /**
  * Apply an event from the org-wide subscription to the entity store and
  * fire any registered notification handlers. The pure data work runs
@@ -452,17 +457,19 @@ export function handleOrgEvent(event: Event): void {
 
       // Mark badges when agent reaches a terminal state
       if (agentStatus === "done" || agentStatus === "failed" || agentStatus === "stopped") {
-        const session = useEntityStore.getState().sessions[event.scopeId];
-        const channelId = getSessionChannelId(session);
-        if (channelId && channelId !== ui.getActiveChannelId()) {
-          ui.markChannelDone(channelId);
-        }
-        if (event.scopeId !== ui.getActiveSessionId()) {
-          ui.markSessionDone(event.scopeId);
-        }
-        const sessionGroupId = session?.sessionGroupId;
-        if (sessionGroupId && sessionGroupId !== ui.getActiveSessionGroupId()) {
-          ui.markSessionGroupDone(sessionGroupId);
+        const session = batch.get("sessions", event.scopeId);
+        if (isCurrentUserSession(session)) {
+          const channelId = getSessionChannelId(session);
+          if (channelId && channelId !== ui.getActiveChannelId()) {
+            ui.markChannelDone(channelId);
+          }
+          if (event.scopeId !== ui.getActiveSessionId()) {
+            ui.markSessionDone(event.scopeId);
+          }
+          const sessionGroupId = session.sessionGroupId;
+          if (sessionGroupId && sessionGroupId !== ui.getActiveSessionGroupId()) {
+            ui.markSessionGroupDone(sessionGroupId);
+          }
         }
       }
 

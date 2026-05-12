@@ -211,7 +211,10 @@ describe("handleOrgEvent", () => {
     expect(harness.navigateToSession).toHaveBeenCalledWith("channel-7", "group-1", "session-new");
   });
 
-  it("marks badges when an off-screen session reaches a terminal state", () => {
+  it("marks badges when an owned off-screen session reaches a terminal state", () => {
+    useAuthStore.setState({
+      user: { id: "user-1" } as never,
+    });
     useEntityStore.setState((state) => ({
       sessions: {
         ...state.sessions,
@@ -219,6 +222,7 @@ describe("handleOrgEvent", () => {
           id: "session-1",
           sessionGroupId: "group-1",
           channel: { id: "channel-1" },
+          createdBy: { id: "user-1" },
           updatedAt: "2026-01-01T00:00:00.000Z",
           createdAt: "2026-01-01T00:00:00.000Z",
         } as never,
@@ -241,6 +245,43 @@ describe("handleOrgEvent", () => {
     expect(harness.markChannelDone).toHaveBeenCalledWith("channel-1");
     expect(harness.markSessionDone).toHaveBeenCalledWith("session-1");
     expect(harness.markSessionGroupDone).toHaveBeenCalledWith("group-1");
+    expect(useEntityStore.getState().sessions["session-1"].agentStatus).toBe("done");
+  });
+
+  it("does not mark badges when another user's off-screen session reaches a terminal state", () => {
+    useAuthStore.setState({
+      user: { id: "user-1" } as never,
+    });
+    useEntityStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          channel: { id: "channel-1" },
+          createdBy: { id: "user-2" },
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        } as never,
+      },
+    }));
+
+    const harness = installBindings({
+      activeChannelId: "channel-other",
+      activeSessionId: "session-other",
+      activeSessionGroupId: "group-other",
+    });
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_terminated",
+        scopeId: "session-1",
+        payload: { agentStatus: "done", sessionStatus: "completed" },
+      }),
+    );
+
+    expect(harness.markChannelDone).not.toHaveBeenCalled();
+    expect(harness.markSessionDone).not.toHaveBeenCalled();
+    expect(harness.markSessionGroupDone).not.toHaveBeenCalled();
     expect(useEntityStore.getState().sessions["session-1"].agentStatus).toBe("done");
   });
 
