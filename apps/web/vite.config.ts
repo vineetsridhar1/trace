@@ -81,6 +81,11 @@ export default defineConfig({
   server: {
     allowedHosts: ["92b9-74-13-227-36.ngrok-free.app"],
     host: true,
+    allowedHosts: [
+      "support-muzzle-drivable.ngrok-free.dev",
+      ".ngrok-free.app",
+      ".ngrok-free.dev",
+    ],
     port: 3000 + offset,
     proxy: {
       "/.well-known/apple-app-site-association": api,
