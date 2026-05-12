@@ -8,6 +8,7 @@ import {
   getDefaultReasoningEffort,
   hasQuestionBlock,
   hasPlanBlock,
+  isMissingToolSessionError,
   isSupportedModel,
   isSupportedReasoningEffort,
   type GitCheckpointBridgePayload,
@@ -75,6 +76,11 @@ const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
   return trimmed ? trimmed : null;
+}
+
+function extractToolSessionIdFromMissingSessionError(message: string): string | null {
+  const match = /\b(?:thread|session|conversation|chat)\s+id\s+(\S+)/i.exec(message);
+  return match?.[1] ?? null;
 }
 
 function assertCloudRepoRemoteAvailable(
@@ -3317,9 +3323,35 @@ export class SessionService {
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
+        toolSessionId: true,
+        connection: true,
       },
     });
     if (!session) return;
+
+    const conn = this.parseConnection(session.connection);
+    const suppressingToolSessionId = conn.suppressNextToolSessionFailureFor;
+    if (
+      data.type === "result" &&
+      data.subtype === "error" &&
+      typeof suppressingToolSessionId === "string"
+    ) {
+      return;
+    }
+
+    const outputMessage = typeof data.message === "string" ? data.message : null;
+    if (
+      outputMessage &&
+      session.toolSessionId &&
+      isMissingToolSessionError(outputMessage) &&
+      session.toolSessionId === extractToolSessionIdFromMissingSessionError(outputMessage)
+    ) {
+      await this.recoverMissingToolSession(sessionId, {
+        toolSessionId: session.toolSessionId,
+        message: outputMessage,
+      });
+      return;
+    }
 
     const parentToolUseId =
       typeof data.parentToolUseId === "string" ? data.parentToolUseId : undefined;
@@ -3531,9 +3563,20 @@ export class SessionService {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
-      select: { agentStatus: true, sessionStatus: true, sessionGroupId: true },
+      select: { agentStatus: true, sessionStatus: true, sessionGroupId: true, connection: true },
     });
     if (!current || current.agentStatus !== "active") return;
+
+    const conn = this.parseConnection(current.connection);
+    if (typeof conn.suppressNextToolSessionFailureFor === "string") {
+      const { suppressNextToolSessionFailureFor: _suppressed, ...rest } = conn;
+      await prisma.session.update({
+        where: { id },
+        data: { connection: connJson(rest) },
+        select: { id: true },
+      });
+      return;
+    }
 
     // Find when the current run started (last session_resumed or session_started)
     const lastResume = await prisma.event.findFirst({
@@ -4745,7 +4788,12 @@ export class SessionService {
 
     await prisma.session.update({
       where: { id: sessionId },
-      data: { toolSessionId: null },
+      data: {
+        toolSessionId: null,
+        connection: this.mergeConnection(session.connection, {
+          suppressNextToolSessionFailureFor: options.toolSessionId,
+        }),
+      },
     });
 
     const deliveryResult = sessionRouter.send(

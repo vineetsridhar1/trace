@@ -91,6 +91,9 @@ vi.mock("@trace/shared", () => {
     getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
     isSupportedModel: vi.fn().mockReturnValue(true),
     isSupportedReasoningEffort: vi.fn().mockReturnValue(true),
+    isMissingToolSessionError: vi.fn((message: string) =>
+      /no rollout found for thread id|no conversation found with session id/i.test(message),
+    ),
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
   };
@@ -2171,6 +2174,112 @@ describe("SessionService", () => {
         data: { sessionStatus: "needs_input" },
       });
     });
+
+    it("recovers stale tool sessions when an older bridge forwards the missing-session error", async () => {
+      const errorMessage =
+        "Error: thread/resume: thread/resume failed: no rollout found for thread id stale-tool-session (code -32600)";
+
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          sessionGroupId: "group-1",
+          toolSessionId: "stale-tool-session",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        })
+        .mockResolvedValueOnce(
+          makeSession({
+            agentStatus: "active",
+            workdir: "/tmp/worktree",
+            toolSessionId: "stale-tool-session",
+            connection: {
+              state: "connected",
+              runtimeInstanceId: "runtime-a",
+              runtimeLabel: "Laptop A",
+              retryCount: 0,
+              canRetry: true,
+              canMove: true,
+            },
+          }),
+        );
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
+        },
+        {
+          eventType: "message_sent",
+          payload: { text: "Follow-up instruction" },
+        },
+      ]);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "event-message-1" });
+      sessionRouterMock.send.mockReturnValueOnce("delivered");
+
+      await service.recordOutput("session-1", {
+        type: "error",
+        message: errorMessage,
+      });
+
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "error", message: errorMessage }),
+        }),
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: expect.objectContaining({
+          toolSessionId: null,
+          connection: expect.objectContaining({
+            suppressNextToolSessionFailureFor: "stale-tool-session",
+          }),
+        }),
+      });
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "send",
+        }),
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+      const sendCommand = sessionRouterMock.send.mock.calls[0]?.[1] as
+        | Record<string, unknown>
+        | undefined;
+      expect(sendCommand).not.toHaveProperty("toolSessionId");
+    });
+
+    it("suppresses the stale result emitted after server-side missing-session recovery", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+        toolSessionId: null,
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          suppressNextToolSessionFailureFor: "stale-tool-session",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+
+      await service.recordOutput("session-1", {
+        type: "result",
+        subtype: "error",
+      });
+
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("complete", () => {
@@ -2814,7 +2923,12 @@ describe("SessionService", () => {
 
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
-        data: { toolSessionId: null },
+        data: expect.objectContaining({
+          toolSessionId: null,
+          connection: expect.objectContaining({
+            suppressNextToolSessionFailureFor: "stale-tool-session",
+          }),
+        }),
       });
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
@@ -2854,7 +2968,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).not.toHaveBeenCalled();
       expect(prismaMock.session.update).not.toHaveBeenCalledWith({
         where: { id: "session-1" },
-        data: { toolSessionId: null },
+        data: expect.objectContaining({ toolSessionId: null }),
       });
     });
   });
