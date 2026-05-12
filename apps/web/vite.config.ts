@@ -87,6 +87,7 @@ export default defineConfig({
       "/apple-app-site-association": api,
       "/auth": api,
       "/graphql": api,
+      "/slack": api,
       "/uploads": api,
       "/ws": {
         target: api,
