@@ -130,9 +130,15 @@ export async function createWorktree({
 
   if (fs.existsSync(worktreePath)) {
     const currentBranch = await getCurrentBranch(worktreePath);
+    if (currentBranch !== branchName) {
+      throw new Error(
+        `Existing workspace ${worktreePath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branchName}. ` +
+          "Switch it back or remove the workspace before retrying.",
+      );
+    }
     await resetWorktreeToRef(worktreePath, baseRef);
-    await setUpstreamIfRemote(repoPath, currentBranch ?? branchName, baseRef);
-    return { workdir: worktreePath, branch: currentBranch ?? branchName, slug: worktreeSlug };
+    await setUpstreamIfRemote(repoPath, branchName, baseRef);
+    return { workdir: worktreePath, branch: branchName, slug: worktreeSlug };
   }
 
   // Check if the branch already exists

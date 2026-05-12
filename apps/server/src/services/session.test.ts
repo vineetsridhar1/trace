@@ -3500,6 +3500,61 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
+    it("does not overwrite an existing group branch from a mismatched workspace_ready", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+        sessionGroup: { branch: "trace/starling", workdir: "/tmp/trace/starling" },
+      });
+
+      await service.workspaceReady("session-1", "/tmp/trace/starling", "mobile-app-rebased");
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "error",
+            message: expect.stringContaining("Workspace branch mismatch"),
+          }),
+        }),
+      );
+    });
+
+    it("allows a branch change when workspace_ready moves to a new workdir", async () => {
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          sessionGroup: { branch: "main", workdir: "/Users/vineet/src/trace" },
+        })
+        .mockResolvedValueOnce({
+          pendingRun: null,
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+        });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          branch: "trace/ladybug",
+          workdir: "/tmp/trace/ladybug",
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ branch: "trace/ladybug", workdir: "/tmp/trace/ladybug" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/ladybug", "trace/ladybug");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            branch: "trace/ladybug",
+            workdir: "/tmp/trace/ladybug",
+          }),
+        }),
+      );
+    });
+
     it("keeps a session in_progress while a queued command is waiting for delivery", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,

@@ -101,6 +101,58 @@ describe("createWorktree", () => {
     );
   });
 
+  it("rejects an existing worktree checked out to a different branch", async () => {
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/main" ? null : new Error("missing ref"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "feature/other\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+
+    await expect(
+      createWorktree({
+        repoPath: "/tmp/repo",
+        repoId: "repo-1",
+        sessionId: "session-1",
+        slug: "otter",
+        defaultBranch: "main",
+      }),
+    ).rejects.toThrow("Existing session worktree");
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", expect.any(String)],
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
+
   it("reuses a persisted renamed branch when recreating a missing worktree", async () => {
     existsSyncMock.mockReturnValue(false);
     generateAnimalSlugMock.mockReturnValue("otter");

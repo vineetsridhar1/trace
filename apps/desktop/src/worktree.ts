@@ -205,11 +205,17 @@ export async function createWorktree({
   // while the durable session branch exists at origin/trace/{slug}.
   if (fs.existsSync(targetPath)) {
     const currentBranch = await getCurrentBranch(targetPath);
+    if (currentBranch !== branch) {
+      throw new Error(
+        `Existing session worktree ${targetPath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branch}. ` +
+          "Switch it back or remove the worktree before retrying.",
+      );
+    }
     if (baseRef) {
       await resetWorktreeToRef(targetPath, baseRef);
       await setUpstreamIfRemote(repoPath, currentBranch, baseRef);
     }
-    return { workdir: targetPath, branch: currentBranch ?? branch, slug: worktreeSlug };
+    return { workdir: targetPath, branch, slug: worktreeSlug };
   }
 
   // Check if the branch already exists (e.g. worktree was removed but branch remains)
