@@ -343,6 +343,18 @@ async function handleAppMention(input: {
   });
   if (!install) return;
 
+  const existingThread = await prisma.slackThreadSession.findUnique({
+    where: {
+      slackTeamId_slackChannelId_slackThreadTs: {
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackThreadTs: threadTs,
+      },
+    },
+    select: { id: true },
+  });
+  if (existingThread) return;
+
   const traceUserId = await resolveTraceUser(teamId, slackUserId);
   if (!traceUserId) {
     await postLinkPrompt({
@@ -495,6 +507,27 @@ async function handleThreadMessage(input: {
   });
 }
 
+async function handleMessage(input: {
+  teamId: string;
+  event: SlackEventBody;
+}): Promise<void> {
+  const { teamId, event } = input;
+  if (event.bot_id) return;
+  if (event.subtype) return;
+
+  const install = await prisma.slackInstall.findUnique({
+    where: { slackTeamId: teamId },
+    select: { botUserId: true },
+  });
+  const rawText = typeof event.text === "string" ? event.text : "";
+  if (install && rawText.includes(`<@${install.botUserId}>`)) {
+    await handleAppMention({ teamId, event });
+    return;
+  }
+
+  await handleThreadMessage({ teamId, event });
+}
+
 async function handleUninstall(teamId: string): Promise<void> {
   await prisma.slackInstall.deleteMany({ where: { slackTeamId: teamId } }).catch(() => {});
   invalidateSlackClient(teamId);
@@ -511,7 +544,7 @@ async function dispatchSlackEvent(envelope: SlackEventEnvelope): Promise<void> {
   }
 
   if (event.type === "message") {
-    await handleThreadMessage({ teamId, event });
+    await handleMessage({ teamId, event });
     return;
   }
 
