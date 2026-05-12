@@ -393,7 +393,7 @@ async function handleAppMention(input: {
       slackTeamId: teamId,
       slackUserId,
       slackChannelId: channel,
-      threadTs,
+      threadTs: event.thread_ts,
     });
     return;
   }
