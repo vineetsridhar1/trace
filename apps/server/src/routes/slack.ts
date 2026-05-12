@@ -328,6 +328,10 @@ function stripBotMention(text: string, botUserId: string): string {
   return text.replace(new RegExp(`<@${botUserId}>`, "g"), "").trim();
 }
 
+function slackSessionHosting(): "cloud" | "local" {
+  return process.env.SLACK_SESSION_HOSTING === "local" ? "local" : "cloud";
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
 }
@@ -440,7 +444,7 @@ async function handleAppMention(input: {
       tool: "claude_code",
       organizationId: install.organizationId,
       createdById: traceUserId,
-      hosting: "cloud",
+      hosting: slackSessionHosting(),
       prompt,
       actorType: "user",
       clientSource: "slack",
