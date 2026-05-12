@@ -5,6 +5,12 @@ import { execFile } from "child_process";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import { assertValidCommitSha } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
+import { formatGitError, gitEnv } from "./git-utils.js";
+
+type ExecErrorWithOutput = Error & {
+  stdout?: string;
+  stderr?: string;
+};
 
 function execFileAsync(
   command: string,
@@ -12,9 +18,12 @@ function execFileAsync(
   options: { cwd: string },
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, options, (error, stdout, stderr) => {
+    execFile(command, args, { ...options, env: gitEnv() }, (error, stdout, stderr) => {
       if (error) {
-        reject(error);
+        const gitError = error as ExecErrorWithOutput;
+        if (typeof stdout === "string") gitError.stdout = stdout;
+        if (typeof stderr === "string") gitError.stderr = stderr;
+        reject(new Error(formatGitError(gitError)));
         return;
       }
       resolve({ stdout, stderr });
@@ -76,7 +85,7 @@ async function isUsableWorktree(worktreePath: string): Promise<boolean> {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return formatGitError(error);
 }
 
 async function addWorktree(repoPath: string, worktreePath: string, args: string[]): Promise<void> {
