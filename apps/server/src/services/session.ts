@@ -3647,6 +3647,49 @@ export class SessionService {
     }
   }
 
+  async listIdleActiveRunSessionIds(options: {
+    sessionIds: string[];
+    activeSessionIds: string[];
+    now?: number;
+    quietAfterMs?: number;
+  }): Promise<string[]> {
+    const uniqueSessionIds = [...new Set(options.sessionIds)].filter((id) => id.length > 0);
+    if (uniqueSessionIds.length === 0) return [];
+
+    const activeSessionIds = new Set(options.activeSessionIds);
+    const inactiveSessionIds = uniqueSessionIds.filter((id) => !activeSessionIds.has(id));
+    if (inactiveSessionIds.length === 0) return [];
+
+    const now = options.now ?? Date.now();
+    const quietAfterMs = options.quietAfterMs ?? 60_000;
+    const cutoff = new Date(now - quietAfterMs);
+    const candidates = await prisma.session.findMany({
+      where: {
+        id: { in: inactiveSessionIds },
+        agentStatus: "active",
+        OR: [{ lastMessageAt: { lt: cutoff } }, { lastMessageAt: null, updatedAt: { lt: cutoff } }],
+      },
+      select: { id: true },
+    });
+
+    return candidates.map((candidate) => candidate.id);
+  }
+
+  async reconcileIdleActiveRuns(options: {
+    sessionIds: string[];
+    activeSessionIds: string[];
+    now?: number;
+    quietAfterMs?: number;
+  }): Promise<string[]> {
+    const candidates = await this.listIdleActiveRunSessionIds(options);
+    const completed: string[] = [];
+    for (const sessionId of candidates) {
+      await this.complete(sessionId);
+      completed.push(sessionId);
+    }
+    return completed;
+  }
+
   async sendMessage({
     sessionId,
     text,

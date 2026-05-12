@@ -39,6 +39,7 @@ vi.mock("../lib/session-router.js", () => ({
     unbindSession: vi.fn(),
     getRuntime: vi.fn().mockReturnValue(null),
     getRuntimeForSession: vi.fn().mockReturnValue(null),
+    getBoundSessionIds: vi.fn().mockReturnValue([]),
     isRuntimeAvailable: vi.fn().mockReturnValue(true),
     getRuntimeDiagnostics: vi.fn().mockReturnValue({}),
     listRuntimes: vi.fn().mockReturnValue([]),
@@ -2205,6 +2206,60 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+  });
+
+  describe("reconcileIdleActiveRuns", () => {
+    it("completes active sessions that the runtime no longer reports as running", async () => {
+      const now = Date.parse("2026-05-12T12:00:00.000Z");
+      prismaMock.session.findMany.mockResolvedValueOnce([{ id: "session-1" }]);
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce({
+        organizationId: "org-1",
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+
+      const completed = await service.reconcileIdleActiveRuns({
+        sessionIds: ["session-1", "session-2"],
+        activeSessionIds: ["session-2"],
+        now,
+        quietAfterMs: 60_000,
+      });
+
+      expect(completed).toEqual(["session-1"]);
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ["session-1"] },
+          agentStatus: "active",
+          OR: [
+            { lastMessageAt: { lt: new Date("2026-05-12T11:59:00.000Z") } },
+            { lastMessageAt: null, updatedAt: { lt: new Date("2026-05-12T11:59:00.000Z") } },
+          ],
+        },
+        select: { id: true },
+      });
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { agentStatus: "done", sessionStatus: "in_progress" },
+        select: { organizationId: true, createdById: true, name: true },
+      });
+    });
+
+    it("does not query when all bound sessions are still active", async () => {
+      const completed = await service.reconcileIdleActiveRuns({
+        sessionIds: ["session-1"],
+        activeSessionIds: ["session-1"],
+      });
+
+      expect(completed).toEqual([]);
+      expect(prismaMock.session.findMany).not.toHaveBeenCalled();
     });
   });
 
