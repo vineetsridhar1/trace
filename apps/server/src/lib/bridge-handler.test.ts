@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   registerRuntime: vi.fn(),
   unregisterRuntime: vi.fn(),
+  recordHeartbeat: vi.fn(),
   addRegisteredRepo: vi.fn(),
   bindSession: vi.fn(),
   getRuntime: vi.fn(() => undefined),
   getRuntimeForSession: vi.fn(() => undefined),
+  getBoundSessionIds: vi.fn(() => []),
   getLinkedCheckoutStatus: vi.fn(() => Promise.resolve()),
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
   recordOutput: vi.fn(() => Promise.resolve()),
+  reconcileIdleActiveRuns: vi.fn(() => Promise.resolve([])),
   registerLocalRuntimeConnection: vi.fn(),
   addRegisteredRepoToLocalRuntime: vi.fn(() => Promise.resolve()),
   restoreTerminals: vi.fn(() => Promise.resolve()),
@@ -23,10 +26,12 @@ vi.mock("./session-router.js", () => ({
   sessionRouter: {
     registerRuntime: mocks.registerRuntime,
     unregisterRuntime: mocks.unregisterRuntime,
+    recordHeartbeat: mocks.recordHeartbeat,
     addRegisteredRepo: mocks.addRegisteredRepo,
     bindSession: mocks.bindSession,
     getRuntime: mocks.getRuntime,
     getRuntimeForSession: mocks.getRuntimeForSession,
+    getBoundSessionIds: mocks.getBoundSessionIds,
     getLinkedCheckoutStatus: mocks.getLinkedCheckoutStatus,
   },
 }));
@@ -35,6 +40,7 @@ vi.mock("../services/session.js", () => ({
   sessionService: {
     restoreSessionsForRuntime: mocks.restoreSessionsForRuntime,
     recordOutput: mocks.recordOutput,
+    reconcileIdleActiveRuns: mocks.reconcileIdleActiveRuns,
   },
 }));
 
@@ -98,6 +104,7 @@ describe("bridge handler auth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getRuntimeForSession.mockReturnValue(undefined);
+    mocks.getBoundSessionIds.mockReturnValue([]);
     mocks.sessionFindFirst.mockResolvedValue(null);
   });
 
@@ -515,6 +522,50 @@ describe("bridge handler auth", () => {
       });
     });
     expect(mocks.registerRuntime).toHaveBeenCalled();
+  });
+
+  it("reconciles active run state from runtime heartbeats", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValue({
+      id: "bridge-runtime-1",
+      label: "Bridge",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+    mocks.getBoundSessionIds.mockReturnValue(["session-1", "session-2"]);
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      label: "Bridge",
+      hostingMode: "local",
+      supportedTools: ["claude_code"],
+      registeredRepoIds: [],
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
+    ws.emitMessage({
+      type: "runtime_heartbeat",
+      instanceId: "bridge-owned",
+      activeSessionIds: ["session-2"],
+    });
+
+    expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws);
+    expect(mocks.reconcileIdleActiveRuns).toHaveBeenCalledWith({
+      sessionIds: ["session-1", "session-2"],
+      activeSessionIds: ["session-2"],
+    });
   });
 
   it("relays provisioned terminal output and exit by terminalId from the source runtime", async () => {

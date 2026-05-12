@@ -434,6 +434,20 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       if (msg.type === "runtime_heartbeat") {
         if (!registered) return;
         sessionRouter.recordHeartbeat(runtimeKey, ws);
+        if (Array.isArray(msg.activeSessionIds)) {
+          const activeSessionIds = (msg.activeSessionIds as unknown[]).filter(
+            (sessionId): sessionId is string => typeof sessionId === "string" && !!sessionId,
+          );
+          const boundSessionIds = sessionRouter.getBoundSessionIds(runtimeKey);
+          void sessionService
+            .reconcileIdleActiveRuns({
+              sessionIds: boundSessionIds,
+              activeSessionIds,
+            })
+            .catch((err: unknown) => {
+              console.error("[bridge] error reconciling runtime active runs:", err);
+            });
+        }
         return;
       }
 

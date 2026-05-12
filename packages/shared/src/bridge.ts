@@ -278,6 +278,8 @@ export interface BridgeRuntimeHello {
 export interface BridgeRuntimeHeartbeat {
   type: "runtime_heartbeat";
   instanceId: string;
+  /** Sessions with an actively running coding-tool process on this bridge. */
+  activeSessionIds?: string[];
 }
 
 export interface BridgeRegisterSession {

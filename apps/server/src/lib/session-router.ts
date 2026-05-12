@@ -574,6 +574,10 @@ export class SessionRouter {
     return this.runtimes.get(runtimeId);
   }
 
+  getBoundSessionIds(runtimeId: string): string[] {
+    return [...(this.runtimes.get(runtimeId)?.boundSessions ?? [])];
+  }
+
   getRuntime(runtimeId: string, organizationId?: string | null): RuntimeInstance | undefined {
     const key = organizationId ? runtimeRouterKey(runtimeId, organizationId) : runtimeId;
     const direct = this.runtimes.get(key);

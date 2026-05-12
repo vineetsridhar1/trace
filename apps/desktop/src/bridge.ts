@@ -489,7 +489,11 @@ export class BridgeClient implements IBridgeClient {
   private startHeartbeat() {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      this.send({ type: "runtime_heartbeat", instanceId: this.instanceId });
+      this.send({
+        type: "runtime_heartbeat",
+        instanceId: this.instanceId,
+        activeSessionIds: [...this.activeRuns.keys()],
+      });
     }, HEARTBEAT_INTERVAL_MS);
   }
 
