@@ -491,6 +491,7 @@ async function handleAppMention(input: {
   }
 
   let session: Awaited<ReturnType<typeof sessionService.start>>;
+  const hosting = slackSessionHosting();
   try {
     const traceChannelId = await ensureSlackTraceChannel(install.organizationId, traceUserId);
     session = await sessionService.start({
@@ -498,8 +499,8 @@ async function handleAppMention(input: {
       organizationId: install.organizationId,
       createdById: traceUserId,
       channelId: traceChannelId,
-      hosting: slackSessionHosting(),
-      prompt,
+      hosting,
+      prompt: hosting === "local" ? undefined : prompt,
       actorType: "user",
       clientSource: "slack",
     });
@@ -548,6 +549,37 @@ async function handleAppMention(input: {
       .catch((err: unknown) => {
         console.warn("[slack] failed to post start message:", (err as Error).message);
       });
+  }
+
+  if (hosting === "local") {
+    try {
+      await sessionService.run(session.id, prompt, undefined, {
+        userId: traceUserId,
+        organizationId: install.organizationId,
+        clientSource: "slack",
+      });
+    } catch (err: unknown) {
+      const message = errorMessage(err);
+      console.warn("[slack] failed to run local session prompt", {
+        teamId,
+        slackUserId,
+        channel,
+        threadTs,
+        sessionId: session.id,
+        error: message,
+      });
+      const client = await getSlackClient(teamId);
+      if (client) {
+        await client.chat
+          .postEphemeral({
+            channel,
+            user: slackUserId,
+            thread_ts: threadTs,
+            text: `Could not send the prompt to the local Trace session: ${message}`,
+          })
+          .catch(() => {});
+      }
+    }
   }
 }
 
