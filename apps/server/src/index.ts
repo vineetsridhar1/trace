@@ -151,6 +151,8 @@ async function main() {
       credentials: true,
     }),
   );
+  app.use(cookieParser());
+
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
 
@@ -162,7 +164,6 @@ async function main() {
   if (localStorageRouter) app.use(localStorageRouter);
 
   app.use(express.json());
-  app.use(cookieParser());
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (
       SAFE_HTTP_METHODS.has(req.method) ||
