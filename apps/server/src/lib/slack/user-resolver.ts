@@ -104,6 +104,13 @@ export async function postLinkPrompt(input: {
         },
       ],
     })
+    .then(() => {
+      console.info("[slack] posted account link prompt", {
+        teamId: input.slackTeamId,
+        slackUserId: input.slackUserId,
+        channel: input.slackChannelId,
+      });
+    })
     .catch((err: unknown) => {
       console.warn("[slack] failed to post link prompt:", (err as Error).message);
     });

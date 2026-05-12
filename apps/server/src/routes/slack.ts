@@ -17,6 +17,8 @@ import { sessionService } from "../services/session.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const INSTALL_STATE_TTL_SECONDS = 10 * 60;
+const RECENT_MENTION_TTL_MS = 30 * 1000;
+const recentMentionKeys = new Map<string, number>();
 const SLACK_SCOPES = [
   "app_mentions:read",
   "chat:write",
@@ -330,6 +332,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
 }
 
+function claimMentionEvent(teamId: string, channel: string, threadTs: string): boolean {
+  const now = Date.now();
+  for (const [key, expiresAt] of recentMentionKeys) {
+    if (expiresAt <= now) recentMentionKeys.delete(key);
+  }
+
+  const key = `${teamId}:${channel}:${threadTs}`;
+  if (recentMentionKeys.has(key)) return false;
+  recentMentionKeys.set(key, now + RECENT_MENTION_TTL_MS);
+  return true;
+}
+
 async function handleAppMention(input: {
   teamId: string;
   event: SlackEventBody;
@@ -341,6 +355,10 @@ async function handleAppMention(input: {
   const threadTs = event.thread_ts ?? event.ts;
   if (!slackUserId || !channel || !ts || !threadTs) {
     console.warn("[slack] app_mention missing required fields", { teamId, slackUserId, channel, ts, threadTs });
+    return;
+  }
+  if (!claimMentionEvent(teamId, channel, threadTs)) {
+    console.info("[slack] ignoring duplicate mention event", { teamId, channel, threadTs });
     return;
   }
 
