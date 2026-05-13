@@ -4,6 +4,8 @@ import { useEntityField } from "@trace/client-core";
 import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
+import { cn } from "../../lib/utils";
+import { sidebarEdgeRowClass } from "./sidebarItemStyles";
 
 export const ChatItem = memo(function ChatItem({
   id,
@@ -34,7 +36,10 @@ export const ChatItem = memo(function ChatItem({
         isActive={isActive}
         onClick={onClick}
         tooltip={displayName}
-        className="cursor-pointer text-foreground hover:bg-white/10 data-[active=true]:bg-white/10 data-[active=true]:text-foreground"
+        className={cn(
+          "cursor-pointer text-foreground hover:bg-white/10 data-[active=true]:bg-white/10 data-[active=true]:text-foreground",
+          sidebarEdgeRowClass,
+        )}
       >
         <div className="relative">
           <MessageCircle size={16} className="opacity-50" />

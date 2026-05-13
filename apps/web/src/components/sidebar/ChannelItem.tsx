@@ -14,6 +14,7 @@ import {
 } from "../ui/context-menu";
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
 import { cn } from "../../lib/utils";
+import { sidebarEdgeRowClass } from "./sidebarItemStyles";
 
 export const ChannelItem = memo(function ChannelItem({
   id,
@@ -66,6 +67,7 @@ export const ChannelItem = memo(function ChannelItem({
                 tooltip={name ?? ""}
                 className={cn(
                   "h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-foreground",
+                  sidebarEdgeRowClass,
                   isActive ? "bg-white/10" : "hover:bg-white/10",
                   "data-[active=true]:bg-white/10 data-[active=true]:font-medium data-[active=true]:text-foreground",
                 )}
