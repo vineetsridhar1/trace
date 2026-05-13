@@ -221,6 +221,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
 
   setActiveChannelId: (id: string | null) => {
     persistActiveChannelId(id);
+    persistActiveSessionNav(null, null);
     set((s: UIState) => {
       let channelDoneBadges = s.channelDoneBadges;
       if (id && channelDoneBadges[id]) {
