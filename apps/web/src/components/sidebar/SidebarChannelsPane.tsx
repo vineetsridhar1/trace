@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Channel, ChannelGroup } from "@trace/gql";
 import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { features } from "../../lib/features";
@@ -8,6 +8,14 @@ import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
 import { SidebarChannelTree } from "./SidebarChannelTree";
+import type { SidebarSessionScope } from "./ChannelOwnedSessions";
+
+const SIDEBAR_SESSION_SCOPE_KEY = "trace:sidebar-session-scope";
+const SIDEBAR_SESSION_SCOPE_EVENT = "trace:sidebar-session-scope-change";
+
+function readSidebarSessionScope(): SidebarSessionScope {
+  return localStorage.getItem(SIDEBAR_SESSION_SCOPE_KEY) === "all" ? "all" : "mine";
+}
 
 export interface SidebarChannelsPaneProps {
   activeChannelId: string | null;
@@ -42,6 +50,22 @@ export function SidebarChannelsPane({
 }: SidebarChannelsPaneProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
+  const [sessionScope, setSessionScope] = useState<SidebarSessionScope>(readSidebarSessionScope);
+
+  useEffect(() => {
+    const handleScopeChange = () => setSessionScope(readSidebarSessionScope());
+    window.addEventListener(SIDEBAR_SESSION_SCOPE_EVENT, handleScopeChange);
+    return () => window.removeEventListener(SIDEBAR_SESSION_SCOPE_EVENT, handleScopeChange);
+  }, []);
+
+  const toggleSessionScope = useCallback(() => {
+    setSessionScope((current) => {
+      const next = current === "mine" ? "all" : "mine";
+      localStorage.setItem(SIDEBAR_SESSION_SCOPE_KEY, next);
+      window.dispatchEvent(new Event(SIDEBAR_SESSION_SCOPE_EVENT));
+      return next;
+    });
+  }, []);
 
   return (
     <section className="flex h-full min-w-full max-w-full shrink-0 snap-start snap-always flex-col overflow-hidden">
@@ -80,6 +104,7 @@ export function SidebarChannelsPane({
           channelsById={channelsById}
           channelsLoading={channelsLoading}
           groupIds={groupIds}
+          onToggleSessionScope={toggleSessionScope}
           onAddChannel={(groupId: string) => {
             setCreateForGroupId(groupId);
             setCreateDialogOpen(true);
@@ -87,6 +112,7 @@ export function SidebarChannelsPane({
           onChannelClick={onChannelClick}
           onSessionClick={onSessionClick}
           onDragActiveChange={onDragActiveChange}
+          sessionScope={sessionScope}
           topLevelItems={topLevelItems}
         />
       </div>

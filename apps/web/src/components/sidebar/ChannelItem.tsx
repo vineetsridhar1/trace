@@ -15,6 +15,7 @@ import {
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
 import { cn } from "../../lib/utils";
 import { createQuickSession } from "../../lib/create-quick-session";
+import type { SidebarSessionScope } from "./ChannelOwnedSessions";
 
 export const ChannelItem = memo(function ChannelItem({
   id,
@@ -23,7 +24,9 @@ export const ChannelItem = memo(function ChannelItem({
   groupId,
   canExpand = false,
   canStartSession = false,
+  onToggleSessionScope,
   isExpanded = false,
+  sessionScope = "mine",
   onToggleExpanded,
 }: {
   id: string;
@@ -32,7 +35,9 @@ export const ChannelItem = memo(function ChannelItem({
   groupId?: string | null;
   canExpand?: boolean;
   canStartSession?: boolean;
+  onToggleSessionScope?: () => void;
   isExpanded?: boolean;
+  sessionScope?: SidebarSessionScope;
   onToggleExpanded?: () => void;
 }) {
   const name = useEntityField("channels", id, "name");
@@ -69,7 +74,7 @@ export const ChannelItem = memo(function ChannelItem({
                 tooltip={name ?? ""}
                 className={cn(
                   "h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 pl-2 text-sm font-medium text-foreground",
-                  canStartSession && "pr-7",
+                  canStartSession && "pr-16",
                   "hover:!bg-white/10 hover:!text-foreground active:!bg-white/10 active:!text-foreground",
                   "data-[active=true]:!bg-white/10 data-[active=true]:font-medium data-[active=true]:!text-foreground",
                 )}
@@ -113,20 +118,36 @@ export const ChannelItem = memo(function ChannelItem({
                 )}
               </SidebarMenuButton>
               {canStartSession && (
-                <button
-                  type="button"
-                  className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 opacity-0 transition-colors hover:bg-white/10 hover:text-foreground group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
-                  title="New session"
-                  aria-label="New session"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    createQuickSession(id);
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <Plus size={14} />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="absolute right-8 top-1/2 -translate-y-1/2 cursor-default rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
+                    title="Right-click to show mine/all sessions"
+                    aria-label={`Sidebar sessions: ${sessionScope}`}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleSessionScope?.();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    {sessionScope}
+                  </button>
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 opacity-0 transition-colors hover:bg-white/10 hover:text-foreground group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
+                    title="New session"
+                    aria-label="New session"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      createQuickSession(id);
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <Plus size={14} />
+                  </button>
+                </>
               )}
             </SidebarMenuItem>
           </div>

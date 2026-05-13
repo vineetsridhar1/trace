@@ -43,7 +43,10 @@ import {
 type SessionGroupRef = {
   channel?: { id: string } | null;
   archivedAt?: string | null;
+  status?: string | null;
 } | null;
+
+export type SidebarSessionScope = "mine" | "all";
 
 type SidebarSessionRecord = {
   id: string;
@@ -64,15 +67,23 @@ function getSidebarSessionChannelId(session: EntityTableMap["sessions"]): string
   );
 }
 
-export function useOwnedSessionIdsForChannel(channelId: string): string[] {
+export function useSidebarSessionIdsForChannel(
+  channelId: string,
+  scope: SidebarSessionScope,
+): string[] {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   return useEntityIds(
     "sessions",
-    (session) =>
-      Boolean(userId) &&
-      session.createdBy?.id === userId &&
-      Boolean(session.sessionGroupId) &&
-      getSidebarSessionChannelId(session) === channelId,
+    (session) => {
+      const sessionGroup = session.sessionGroup as SessionGroupRef | undefined;
+      return (
+        (scope === "all" || (Boolean(userId) && session.createdBy?.id === userId)) &&
+        Boolean(session.sessionGroupId) &&
+        !sessionGroup?.archivedAt &&
+        sessionGroup?.status !== "merged" &&
+        getSidebarSessionChannelId(session) === channelId
+      );
+    },
     (a, b) => {
       const aSort = a.lastMessageAt ?? a.updatedAt ?? a.createdAt;
       const bSort = b.lastMessageAt ?? b.updatedAt ?? b.createdAt;

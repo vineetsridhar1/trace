@@ -1,7 +1,11 @@
 import { useCallback, useState } from "react";
 import { useEntityField } from "@trace/client-core";
 import { ChannelItem } from "./ChannelItem";
-import { ChannelOwnedSessions, useOwnedSessionIdsForChannel } from "./ChannelOwnedSessions";
+import {
+  ChannelOwnedSessions,
+  useSidebarSessionIdsForChannel,
+  type SidebarSessionScope,
+} from "./ChannelOwnedSessions";
 import { SidebarMenu } from "../ui/sidebar";
 
 function channelExpandedStorageKey(channelId: string): string {
@@ -15,6 +19,8 @@ export function SidebarChannelSection({
   hasActiveSession,
   onChannelClick,
   onSessionClick,
+  onToggleSessionScope,
+  sessionScope,
 }: {
   channelId: string;
   groupId: string | null;
@@ -22,9 +28,11 @@ export function SidebarChannelSection({
   hasActiveSession: boolean;
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onToggleSessionScope: () => void;
+  sessionScope: SidebarSessionScope;
 }) {
   const channelType = useEntityField("channels", channelId, "type");
-  const sessionIds = useOwnedSessionIdsForChannel(channelId);
+  const sessionIds = useSidebarSessionIdsForChannel(channelId, sessionScope);
   const canExpand = channelType !== "text" && sessionIds.length > 0;
   const [expanded, setExpanded] = useState(() => {
     return localStorage.getItem(channelExpandedStorageKey(channelId)) !== "false";
@@ -48,7 +56,9 @@ export function SidebarChannelSection({
           groupId={groupId}
           canExpand={canExpand}
           canStartSession={channelType === "coding"}
+          onToggleSessionScope={onToggleSessionScope}
           isExpanded={expanded}
+          sessionScope={sessionScope}
           onToggleExpanded={toggleExpanded}
         />
       </SidebarMenu>
