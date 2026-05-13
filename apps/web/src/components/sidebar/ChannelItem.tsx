@@ -129,7 +129,6 @@ export const ChannelItem = memo(function ChannelItem({
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      onToggleSessionScope?.();
                     }}
                     onContextMenuCapture={(event) => {
                       event.preventDefault();
@@ -137,7 +136,13 @@ export const ChannelItem = memo(function ChannelItem({
                       onToggleSessionScope?.();
                     }}
                     onMouseDown={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (event.button === 0) {
+                        onToggleSessionScope?.();
+                      }
+                    }}
                   >
                     <AnimatePresence mode="wait" initial={false}>
                       <motion.span
