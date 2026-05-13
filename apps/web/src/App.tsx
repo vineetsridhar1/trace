@@ -118,11 +118,16 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     !!activeChannelId &&
     (features.messaging || (activeChannelType !== undefined && activeChannelType !== "text"));
   const shouldRenderSessionView = activePage === "main" && !!activeSessionGroupId;
+  const isDesktopShell = typeof window.trace !== "undefined";
 
   return (
     <TooltipProvider>
       <BridgeSyncHydrator />
-      <div className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] [background:var(--trace-window-bg)]">
+      <div
+        className={`flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] ${
+          isDesktopShell ? "[background:var(--trace-window-bg)]" : "bg-surface-deep"
+        }`}
+      >
         <InstallBanner />
         <SidebarProvider className="min-h-0 flex-1">
           <AppSidebar />
