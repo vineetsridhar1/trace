@@ -390,24 +390,6 @@ async function ensurePrismaDev() {
 }
 
 async function pushSchema(databaseUrl, env) {
-  log("ensuring pgvector extension");
-  await runCommand(
-    "prisma db execute",
-    [
-      "--filter",
-      "@trace/server",
-      "exec",
-      "prisma",
-      "db",
-      "execute",
-      "--stdin",
-      "--url",
-      databaseUrl,
-    ],
-    env,
-    "CREATE EXTENSION IF NOT EXISTS vector;",
-  );
-
   log("syncing Prisma schema for local mode");
   await runCommand(
     "prisma db push",
