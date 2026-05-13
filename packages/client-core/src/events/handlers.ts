@@ -206,17 +206,6 @@ export function handleOrgEvent(event: Event): void {
       batch.removeQueuedMessage(sid, qmId);
     }
   }
-  if (event.eventType === "queued_messages_reordered") {
-    const queuedMessages = payload.queuedMessages;
-    if (Array.isArray(queuedMessages)) {
-      for (const item of queuedMessages) {
-        const qm = asJsonObject(item);
-        if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
-          batch.upsertQueuedMessage(qm.sessionId, qm.id, qm as unknown as QueuedMessage);
-        }
-      }
-    }
-  }
 
   // Agent environment events
   if (

@@ -3537,13 +3537,54 @@ describe("SessionService", () => {
       });
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          eventType: "queued_messages_reordered",
+          eventType: "queued_message_added",
           payload: expect.objectContaining({
             sessionId: "session-1",
-            queuedMessages: [
-              expect.objectContaining({ id: "queued-2", position: 0 }),
-              expect.objectContaining({ id: "queued-1", position: 1 }),
-            ],
+            queuedMessage: expect.objectContaining({ id: "queued-2", position: 0 }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "queued_message_added",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            queuedMessage: expect.objectContaining({ id: "queued-1", position: 1 }),
+          }),
+        }),
+      );
+    });
+
+    it("updates queued message text and emits an upsert event", async () => {
+      const updated = {
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "edited",
+        imageKeys: [],
+        interactionMode: null,
+        position: 0,
+        createdById: "user-1",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      };
+      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce({
+        sessionId: "session-1",
+        organizationId: "org-1",
+      });
+      prismaMock.queuedMessage.update.mockResolvedValueOnce(updated);
+
+      await service.updateQueuedMessage("queued-1", "edited", "user-1", "org-1");
+
+      expect(prismaMock.queuedMessage.update).toHaveBeenCalledWith({
+        where: { id: "queued-1" },
+        data: { text: "edited" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "queued_message_added",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            queuedMessage: expect.objectContaining({ id: "queued-1", text: "edited" }),
           }),
         }),
       );

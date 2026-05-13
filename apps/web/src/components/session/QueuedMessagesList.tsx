@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
 import {
@@ -8,12 +8,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { FileText, GripVertical, X, Trash2 } from "lucide-react";
+import { Check, FileText, GripVertical, Pencil, Send, X, Trash2 } from "lucide-react";
 import type { QueuedMessage } from "@trace/gql";
 import {
   REMOVE_QUEUED_MESSAGE_MUTATION,
   CLEAR_QUEUED_MESSAGES_MUTATION,
   REORDER_QUEUED_MESSAGES_MUTATION,
+  SEND_SESSION_MESSAGE_MUTATION,
+  UPDATE_QUEUED_MESSAGE_MUTATION,
   StoreBatchWriter,
   useEntityField,
   useEntityStore,
@@ -21,11 +23,21 @@ import {
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { toast } from "sonner";
+import { stripPromptWrapping, wrapPrompt, type InteractionMode } from "./interactionModes";
 
 function QueuedMessageItem({ id }: { id: string }) {
+  const queuedSessionId = useEntityField("queuedMessages", id, "sessionId") as string | undefined;
   const text = useEntityField("queuedMessages", id, "text") as string | undefined;
   const imageKeys = useEntityField("queuedMessages", id, "imageKeys") as string[] | undefined;
+  const interactionMode = useEntityField("queuedMessages", id, "interactionMode") as
+    | string
+    | null
+    | undefined;
   const imageCount = imageKeys?.length ?? 0;
+  const displayText = stripPromptWrapping(text ?? "");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(displayText);
+  const [isBusy, setIsBusy] = useState(false);
   const {
     attributes,
     listeners,
@@ -49,6 +61,64 @@ function QueuedMessageItem({ id }: { id: string }) {
       .catch(() => toast.error("Failed to remove queued message"));
   };
 
+  const handleStartEdit = () => {
+    setEditText(displayText);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditText(displayText);
+    setIsEditing(false);
+  };
+
+  const handleSaveEdit = () => {
+    const nextText = editText.trim();
+    if (!nextText || nextText === displayText) {
+      setIsEditing(false);
+      return;
+    }
+    const nextStoredText =
+      interactionMode === "plan" || interactionMode === "ask"
+        ? wrapPrompt(interactionMode as InteractionMode, nextText)
+        : nextText;
+
+    setIsBusy(true);
+    client
+      .mutation(UPDATE_QUEUED_MESSAGE_MUTATION, { id, text: nextStoredText })
+      .toPromise()
+      .then((result) => {
+        if (result.error) {
+          toast.error("Failed to edit queued message");
+          return;
+        }
+        setIsEditing(false);
+      })
+      .catch(() => toast.error("Failed to edit queued message"))
+      .finally(() => setIsBusy(false));
+  };
+
+  const handleSteer = () => {
+    if (!queuedSessionId) return;
+    setIsBusy(true);
+    client
+      .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+        sessionId: queuedSessionId,
+        text: text ?? "",
+        attachmentKeys: imageKeys && imageKeys.length > 0 ? imageKeys : undefined,
+        interactionMode: interactionMode ?? undefined,
+      })
+      .toPromise()
+      .then(async (result) => {
+        if (result.error) throw result.error;
+        const removeResult = await client
+          .mutation(REMOVE_QUEUED_MESSAGE_MUTATION, { id })
+          .toPromise();
+        if (removeResult.error) throw removeResult.error;
+      })
+      .catch(() => toast.error("Failed to steer queued message"))
+      .finally(() => setIsBusy(false));
+  };
+
   if (!text && imageCount === 0) return null;
 
   return (
@@ -67,20 +137,75 @@ function QueuedMessageItem({ id }: { id: string }) {
       >
         <GripVertical size={14} />
       </button>
-      <span className="min-w-0 flex-1 truncate">{text || "File attachment"}</span>
+      {isEditing ? (
+        <input
+          value={editText}
+          onChange={(event) => setEditText(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") handleSaveEdit();
+            if (event.key === "Escape") handleCancelEdit();
+          }}
+          disabled={isBusy}
+          className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-foreground outline-none focus:border-primary"
+          autoFocus
+        />
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{displayText || "File attachment"}</span>
+      )}
       {imageCount > 0 && (
         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
           <FileText size={12} />
           {imageCount}
         </span>
       )}
-      <button
-        onClick={handleRemove}
-        className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
-        title="Remove"
-      >
-        <X size={14} />
-      </button>
+      {isEditing ? (
+        <>
+          <button
+            onClick={handleSaveEdit}
+            disabled={isBusy}
+            className="shrink-0 transition-colors hover:text-foreground disabled:opacity-50"
+            title="Save"
+          >
+            <Check size={14} />
+          </button>
+          <button
+            onClick={handleCancelEdit}
+            disabled={isBusy}
+            className="shrink-0 transition-colors hover:text-foreground disabled:opacity-50"
+            title="Cancel"
+          >
+            <X size={14} />
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={handleSteer}
+            disabled={isBusy}
+            className="flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium transition-colors hover:text-foreground hover:bg-surface-elevated disabled:opacity-50"
+            title="Steer with this prompt"
+          >
+            <Send size={12} />
+            Steer
+          </button>
+          <button
+            onClick={handleStartEdit}
+            disabled={isBusy}
+            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground disabled:opacity-50"
+            title="Edit"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            onClick={handleRemove}
+            disabled={isBusy}
+            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground disabled:opacity-50"
+            title="Remove"
+          >
+            <X size={14} />
+          </button>
+        </>
+      )}
     </div>
   );
 }

@@ -246,7 +246,6 @@ enum EventType {
   queued_message_removed
   queued_messages_cleared
   queued_messages_drained
-  queued_messages_reordered
   agent_environment_created
   agent_environment_updated
   agent_environment_deleted
@@ -1114,6 +1113,7 @@ type Mutation {
     imageKeys: [String!]
     interactionMode: String
   ): QueuedMessage!
+  updateQueuedMessage(id: ID!, text: String!): QueuedMessage!
   removeQueuedMessage(id: ID!): Boolean!
   clearQueuedMessages(sessionId: ID!): Boolean!
   reorderQueuedMessages(sessionId: ID!, ids: [ID!]!): [QueuedMessage!]!

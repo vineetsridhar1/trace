@@ -4060,6 +4060,27 @@ export class SessionService {
     return queuedMessage;
   }
 
+  private queuedMessagePayload(message: {
+    id: string;
+    sessionId: string;
+    text: string;
+    imageKeys: string[];
+    interactionMode: string | null;
+    position: number;
+    createdAt: Date;
+  }) {
+    return {
+      id: message.id,
+      sessionId: message.sessionId,
+      text: message.text,
+      attachmentKeys: message.imageKeys,
+      imageKeys: message.imageKeys,
+      interactionMode: message.interactionMode,
+      position: message.position,
+      createdAt: message.createdAt.toISOString(),
+    };
+  }
+
   async removeQueuedMessage(id: string, actorId: string, organizationId: string) {
     const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
       where: { id },
@@ -4082,6 +4103,36 @@ export class SessionService {
     });
 
     return true;
+  }
+
+  async updateQueuedMessage(id: string, text: string, actorId: string, organizationId: string) {
+    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+      where: { id },
+      select: { sessionId: true, organizationId: true },
+    });
+    if (queuedMessage.organizationId !== organizationId) {
+      throw new Error("Queued message does not belong to this organization");
+    }
+
+    const updated = await prisma.queuedMessage.update({
+      where: { id },
+      data: { text },
+    });
+
+    await eventService.create({
+      organizationId: queuedMessage.organizationId,
+      scopeType: "session",
+      scopeId: queuedMessage.sessionId,
+      eventType: "queued_message_added",
+      payload: {
+        sessionId: queuedMessage.sessionId,
+        queuedMessage: this.queuedMessagePayload(updated),
+      },
+      actorType: "user",
+      actorId,
+    });
+
+    return updated;
   }
 
   async clearQueuedMessages(sessionId: string, actorId: string, organizationId: string) {
@@ -4156,27 +4207,20 @@ export class SessionService {
       position,
     }));
 
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "queued_messages_reordered",
-      payload: {
-        sessionId,
-        queuedMessages: reordered.map((message) => ({
-          id: message.id,
-          sessionId: message.sessionId,
-          text: message.text,
-          attachmentKeys: message.imageKeys,
-          imageKeys: message.imageKeys,
-          interactionMode: message.interactionMode,
-          position: message.position,
-          createdAt: message.createdAt.toISOString(),
-        })),
-      },
-      actorType: "user",
-      actorId,
-    });
+    for (const message of reordered) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "queued_message_added",
+        payload: {
+          sessionId,
+          queuedMessage: this.queuedMessagePayload(message),
+        },
+        actorType: "user",
+        actorId,
+      });
+    }
 
     return reordered;
   }

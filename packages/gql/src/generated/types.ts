@@ -390,7 +390,6 @@ export type EventType =
   | "queued_message_removed"
   | "queued_messages_cleared"
   | "queued_messages_drained"
-  | "queued_messages_reordered"
   | "repo_created"
   | "repo_updated"
   | "session_deleted"
@@ -589,6 +588,7 @@ export type Mutation = {
   reorderQueuedMessages: Array<QueuedMessage>;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  updateQueuedMessage: QueuedMessage;
   requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -859,6 +859,11 @@ export type MutationRemoveQueuedMessageArgs = {
 export type MutationRenameChatArgs = {
   chatId: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
+};
+
+export type MutationUpdateQueuedMessageArgs = {
+  id: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
 };
 
 export type MutationReorderQueuedMessagesArgs = {

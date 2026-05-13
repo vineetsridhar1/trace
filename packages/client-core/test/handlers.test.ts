@@ -459,34 +459,6 @@ describe("handleOrgEvent", () => {
 
     handleOrgEvent(
       makeEvent({
-        eventType: "queued_messages_reordered",
-        scopeId: "session-1",
-        payload: {
-          queuedMessages: [
-            {
-              id: "qm-2",
-              sessionId: "session-1",
-              text: "next",
-              position: 0,
-              createdAt: "2026-01-01T00:00:01.000Z",
-            },
-            {
-              id: "qm-1",
-              sessionId: "session-1",
-              text: "hi",
-              position: 1,
-              createdAt: "2026-01-01T00:00:00.000Z",
-            },
-          ],
-        },
-      }),
-    );
-
-    expect(useEntityStore.getState().queuedMessages["qm-2"]?.position).toBe(0);
-    expect(useEntityStore.getState().queuedMessages["qm-1"]?.position).toBe(1);
-
-    handleOrgEvent(
-      makeEvent({
         eventType: "queued_message_removed",
         scopeId: "session-1",
         payload: { queuedMessageId: "qm-1", sessionId: "session-1" },
