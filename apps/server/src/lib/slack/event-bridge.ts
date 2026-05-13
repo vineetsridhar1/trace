@@ -11,7 +11,7 @@ type ThreadBinding = {
 
 type EventEnvelope = { sessionEvents: PrismaEvent };
 
-const TERMINAL_EVENT_TYPES = new Set(["session_terminated", "session_deleted"]);
+const TERMINAL_EVENT_TYPES = new Set(["session_deleted"]);
 
 function getObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)

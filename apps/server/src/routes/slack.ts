@@ -1557,6 +1557,12 @@ async function handleThreadMessage(input: {
   const text = rawText.trim();
   if (!text) return;
 
+  slackEventBridge.attach(thread.sessionId, {
+    slackTeamId: teamId,
+    slackChannelId: channel,
+    slackThreadTs: threadTs,
+  });
+
   await sessionService.sendMessage({
     sessionId: thread.sessionId,
     text,
