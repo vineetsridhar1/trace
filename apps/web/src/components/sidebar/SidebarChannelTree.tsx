@@ -113,7 +113,7 @@ export function SidebarChannelTree({
                   channelId={item.id}
                   groupId={null}
                   isChannelActive={item.id === activeChannelId}
-                  hasActiveSession={activeSessionGroupId !== null}
+                  hasActiveSession={item.id === activeChannelId && activeSessionGroupId !== null}
                   onChannelClick={onChannelClick}
                   onSessionClick={onSessionClick}
                 />

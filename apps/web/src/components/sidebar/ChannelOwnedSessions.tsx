@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Circle } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
   useAuthStore,
@@ -169,21 +170,33 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
     });
   }, []);
 
-  if (!expanded || sessionIds.length === 0) return null;
+  if (sessionIds.length === 0) return null;
 
   return (
-    <div className="ml-4 mt-1 space-y-1 pl-1">
-      {groups.map((group) => (
-        <SidebarSessionStatusGroup
-          key={group.status}
-          channelId={channelId}
-          collapsed={collapsedStatuses.has(group.status)}
-          group={group}
-          onSessionClick={onSessionClick}
-          onToggle={toggleStatus}
-        />
-      ))}
-    </div>
+    <AnimatePresence initial={false}>
+      {expanded && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+          className="overflow-hidden"
+        >
+          <div className="ml-4 mt-1 space-y-1 pl-1">
+            {groups.map((group) => (
+              <SidebarSessionStatusGroup
+                key={group.status}
+                channelId={channelId}
+                collapsed={collapsedStatuses.has(group.status)}
+                group={group}
+                onSessionClick={onSessionClick}
+                onToggle={toggleStatus}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 });
 
@@ -218,18 +231,28 @@ function SidebarSessionStatusGroup({
           {group.sessionIds.length}
         </span>
       </button>
-      {!collapsed && (
-        <div className="mt-0.5 space-y-0.5">
-          {group.sessionIds.map((sessionId) => (
-            <OwnedSessionItem
-              key={sessionId}
-              channelId={channelId}
-              sessionId={sessionId}
-              onSessionClick={onSessionClick}
-            />
-          ))}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.14, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="mt-0.5 space-y-0.5">
+              {group.sessionIds.map((sessionId) => (
+                <OwnedSessionItem
+                  key={sessionId}
+                  channelId={channelId}
+                  sessionId={sessionId}
+                  onSessionClick={onSessionClick}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
