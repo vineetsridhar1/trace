@@ -1,5 +1,14 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { Archive, ChevronDown, ChevronRight, Circle } from "lucide-react";
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Copy,
+  ExternalLink,
+  GitPullRequest,
+  Link2,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
@@ -23,6 +32,13 @@ import { cn, timeAgo } from "../../lib/utils";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "../ui/context-menu";
 
 type SessionGroupRef = {
   channel?: { id: string } | null;
@@ -282,6 +298,7 @@ function OwnedSessionItem({
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const prUrl = useEntityField("sessions", sessionId, "prUrl");
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
   const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
   const createdAt = useEntityField("sessions", sessionId, "createdAt");
@@ -297,6 +314,7 @@ function OwnedSessionItem({
   if (!sessionGroupId) return null;
 
   const sessionName = name ?? "Untitled session";
+  const sessionUrl = `${window.location.origin}/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
 
   const row = (
     <div
@@ -348,11 +366,50 @@ function OwnedSessionItem({
 
   return (
     <>
-      <SidebarSessionHoverCard
-        sessionGroupId={sessionGroupId}
-        sessionId={sessionId}
-        trigger={row}
-      />
+      <ContextMenu>
+        <ContextMenuTrigger className="block" render={<div />}>
+          <SidebarSessionHoverCard
+            sessionGroupId={sessionGroupId}
+            sessionId={sessionId}
+            trigger={row}
+          />
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-56">
+          <ContextMenuItem onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}>
+            <ExternalLink size={14} className="mr-1.5 text-muted-foreground" />
+            Open session
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => setArchiveOpen(true)}>
+            <Archive size={14} className="mr-1.5 text-muted-foreground" />
+            Archive session
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          {workdir && (
+            <ContextMenuItem onClick={() => void navigator.clipboard.writeText(workdir)}>
+              <Copy size={14} className="mr-1.5 text-muted-foreground" />
+              Copy working directory
+            </ContextMenuItem>
+          )}
+          <ContextMenuItem onClick={() => void navigator.clipboard.writeText(sessionId)}>
+            <Copy size={14} className="mr-1.5 text-muted-foreground" />
+            Copy session ID
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => void navigator.clipboard.writeText(sessionUrl)}>
+            <Link2 size={14} className="mr-1.5 text-muted-foreground" />
+            Copy deeplink
+          </ContextMenuItem>
+          {prUrl && (
+            <ContextMenuItem
+              render={
+                <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                  <GitPullRequest size={14} className="mr-1.5 text-muted-foreground" />
+                  View PR
+                </a>
+              }
+            />
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
       <ArchiveSessionGroupDialog
         groupId={sessionGroupId}
         groupName={sessionGroupName ?? sessionName}
