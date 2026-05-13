@@ -37,6 +37,26 @@ function extractAssistantText(payload: Record<string, unknown>): string | null {
   return text || null;
 }
 
+function truncateSlackText(text: string): string {
+  const maxLength = 3500;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+function quoteForSlack(text: string): string {
+  return truncateSlackText(text)
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+async function actorDisplayName(actorId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: actorId },
+    select: { name: true, email: true },
+  });
+  return user?.name?.trim() || user?.email?.trim() || "A Trace user";
+}
+
 function traceSessionUrl(input: {
   channelId: string | null;
   sessionGroupId: string | null;
@@ -133,6 +153,15 @@ class SlackEventBridgeManager {
       const text = typeof payload.text === "string" ? payload.text.trim() : "";
       if (!text) return;
       await this.post(binding, text);
+      return;
+    }
+
+    if (event.eventType === "message_sent" && event.actorType === "user") {
+      if (payload.clientSource === "slack") return;
+      const text = typeof payload.text === "string" ? payload.text.trim() : "";
+      if (!text) return;
+      const actorName = await actorDisplayName(event.actorId);
+      await this.post(binding, `*${actorName} sent a message in Trace:*\n${quoteForSlack(text)}`);
       return;
     }
 
