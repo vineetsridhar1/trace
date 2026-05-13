@@ -919,6 +919,7 @@ export type MutationRunSessionArgs = {
 
 export type MutationSendChannelMessageArgs = {
   channelId: Scalars["ID"]["input"];
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   html?: InputMaybe<Scalars["String"]["input"]>;
   parentId?: InputMaybe<Scalars["ID"]["input"]>;
   text?: InputMaybe<Scalars["String"]["input"]>;

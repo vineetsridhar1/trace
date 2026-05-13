@@ -333,6 +333,7 @@ export class ChannelService {
     text,
     html,
     parentId,
+    clientMutationId,
     actorType,
     actorId,
   }: {
@@ -340,6 +341,7 @@ export class ChannelService {
     text?: string;
     html?: string;
     parentId?: string;
+    clientMutationId?: string;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -393,15 +395,15 @@ export class ChannelService {
         data: { updatedAt: createdMessage.createdAt },
       });
 
+      const payload = buildMessageEventPayload(createdMessage) as Record<string, unknown>;
+      if (clientMutationId) payload.clientMutationId = clientMutationId;
       await eventService.create(
         {
           organizationId: channel.organizationId,
           scopeType: "channel",
           scopeId: channel.id,
           eventType: "message_sent",
-          payload: buildMessageEventPayload(
-            createdMessage,
-          ) as unknown as PrismaTypes.InputJsonValue,
+          payload: payload as unknown as PrismaTypes.InputJsonValue,
           actorType,
           actorId,
         },

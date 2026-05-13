@@ -78,7 +78,13 @@ export const channelMutations = {
   },
   sendChannelMessage: (
     _: unknown,
-    args: { channelId: string; text?: string; html?: string; parentId?: string },
+    args: {
+      channelId: string;
+      text?: string;
+      html?: string;
+      parentId?: string;
+      clientMutationId?: string | null;
+    },
     ctx: Context,
   ) => {
     return channelService.sendChannelMessage({
@@ -86,6 +92,7 @@ export const channelMutations = {
       text: args.text ?? undefined,
       html: args.html ?? undefined,
       parentId: args.parentId ?? undefined,
+      clientMutationId: args.clientMutationId ?? undefined,
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });

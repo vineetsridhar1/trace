@@ -250,6 +250,54 @@ describe("ChannelService", () => {
     expect(prismaMock.message.create).not.toHaveBeenCalled();
   });
 
+  it("includes clientMutationId in channel message event payloads for optimistic reconciliation", async () => {
+    const createdAt = new Date("2026-03-22T00:00:00.000Z");
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+      type: "text",
+    });
+    prismaMock.message.create.mockResolvedValueOnce({
+      id: "message-1",
+      channelId: "channel-1",
+      chatId: null,
+      actorType: "user",
+      actorId: "user-1",
+      text: "hello",
+      html: "<p>hello</p>",
+      mentions: null,
+      parentMessageId: null,
+      createdAt,
+      updatedAt: createdAt,
+      editedAt: null,
+      deletedAt: null,
+    });
+    prismaMock.channel.update.mockResolvedValueOnce({});
+
+    const service = new ChannelService();
+    await service.sendChannelMessage({
+      channelId: "channel-1",
+      html: "<p>hello</p>",
+      clientMutationId: "client-mutation-1",
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        scopeType: "channel",
+        scopeId: "channel-1",
+        eventType: "message_sent",
+        payload: expect.objectContaining({
+          messageId: "message-1",
+          clientMutationId: "client-mutation-1",
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
   it("hydrates channel thread replies with the message summary shape", async () => {
     const createdAt = new Date("2026-03-22T00:00:00.000Z");
     prismaMock.message.findFirstOrThrow.mockResolvedValueOnce({ id: "root-1" });

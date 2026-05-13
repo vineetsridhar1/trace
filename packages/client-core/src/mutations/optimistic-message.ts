@@ -45,6 +45,7 @@ export interface PendingChatEntry {
 
 const pendingSessionOptimistic = new Map<string, PendingSessionEntry[]>();
 const pendingChatOptimistic = new Map<string, PendingChatEntry[]>();
+const pendingChannelOptimistic = new Map<string, PendingChatEntry[]>();
 
 function sweepStalePending(): void {
   const now = Date.now();
@@ -57,6 +58,11 @@ function sweepStalePending(): void {
     const fresh = queue.filter((e) => now - e.createdAt < PENDING_TTL_MS);
     if (fresh.length === 0) pendingChatOptimistic.delete(key);
     else pendingChatOptimistic.set(key, fresh);
+  }
+  for (const [key, queue] of pendingChannelOptimistic) {
+    const fresh = queue.filter((e) => now - e.createdAt < PENDING_TTL_MS);
+    if (fresh.length === 0) pendingChannelOptimistic.delete(key);
+    else pendingChannelOptimistic.set(key, fresh);
   }
 }
 
@@ -172,6 +178,23 @@ export function takePendingOptimisticChat(
   return takeMatching(
     pendingChatOptimistic,
     chatId,
+    (entry) =>
+      (clientMutationId !== null && entry.clientMutationId === clientMutationId) ||
+      entry.expectedRealMessageId === realMessageId,
+  );
+}
+
+export function takePendingOptimisticChannel(
+  channelId: string,
+  event: Event,
+): PendingChatEntry | undefined {
+  const clientMutationId = getClientMutationId(event);
+  const payload = asJsonObject(event.payload);
+  const realMessageId = typeof payload?.messageId === "string" ? payload.messageId : null;
+
+  return takeMatching(
+    pendingChannelOptimistic,
+    channelId,
     (entry) =>
       (clientMutationId !== null && entry.clientMutationId === clientMutationId) ||
       entry.expectedRealMessageId === realMessageId,
@@ -487,6 +510,130 @@ export function reconcileOptimisticChatMessage(
   patchPending(
     pendingChatOptimistic,
     chatId,
+    (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
+    (entry) => {
+      entry.expectedRealMessageId = realMessageId;
+    },
+  );
+}
+
+export function optimisticallyInsertChannelMessage(
+  channelId: string,
+  html: string,
+  parentId?: string | null,
+): OptimisticChatIds {
+  const user = useAuthStore.getState().user;
+  const now = new Date().toISOString();
+  const clientMutationId = createClientMutationId();
+  const tempEventId = `${OPTIMISTIC_PREFIX}${generateUUID()}`;
+  const tempMessageId = `${OPTIMISTIC_PREFIX}${generateUUID()}`;
+  const scopeKey = eventScopeKey("channel", channelId);
+
+  const actor = {
+    type: "user" as const,
+    id: user?.id ?? "",
+    name: user?.name ?? null,
+    avatarUrl: user?.avatarUrl ?? null,
+  };
+
+  useEntityStore.getState().upsert("messages", tempMessageId, {
+    id: tempMessageId,
+    chatId: null,
+    channelId,
+    text: html,
+    html,
+    mentions: null,
+    parentMessageId: parentId ?? null,
+    replyCount: 0,
+    latestReplyAt: null,
+    threadRepliers: [],
+    actor,
+    createdAt: now,
+    updatedAt: now,
+    editedAt: null,
+    deletedAt: null,
+  });
+
+  const event: Event = {
+    id: tempEventId,
+    scopeType: "channel",
+    scopeId: channelId,
+    eventType: "message_sent",
+    payload: {
+      messageId: tempMessageId,
+      text: html,
+      html,
+      parentMessageId: parentId ?? null,
+      clientMutationId,
+    } as JsonObject,
+    actor,
+    parentId: null,
+    timestamp: now,
+    metadata: null,
+  };
+
+  useEntityStore.getState().upsertScopedEvent(scopeKey, tempEventId, event);
+
+  enqueue(pendingChannelOptimistic, channelId, {
+    tempMessageId,
+    tempEventId,
+    clientMutationId,
+    createdAt: Date.now(),
+  });
+
+  return { messageId: tempMessageId, eventId: tempEventId, clientMutationId };
+}
+
+export function removeOptimisticChannelMessage(
+  channelId: string,
+  tempMessageId: string,
+  tempEventId: string,
+): void {
+  dequeue(
+    pendingChannelOptimistic,
+    channelId,
+    (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
+  );
+
+  const eventSK = eventScopeKey("channel", channelId);
+  const msgSK = messageScopeKey("channel", channelId);
+  useEntityStore.setState((state: EntityStoreState) => {
+    const { [tempMessageId]: _removed, ...restMessages } = state.messages;
+
+    let nextMsgIndex = state._messageIdsByScope;
+    const scopeIds = nextMsgIndex[msgSK];
+    if (scopeIds?.includes(tempMessageId)) {
+      const filtered = scopeIds.filter((id: string) => id !== tempMessageId);
+      nextMsgIndex = { ...nextMsgIndex, [msgSK]: filtered };
+    }
+
+    let nextEventsByScope = state.eventsByScope;
+    let nextEventIdsByScope = state._eventIdsByScope;
+    const bucket = nextEventsByScope[eventSK];
+    if (bucket?.[tempEventId]) {
+      const { [tempEventId]: _evt, ...rest } = bucket;
+      nextEventsByScope = { ...nextEventsByScope, [eventSK]: rest };
+      nextEventIdsByScope = removeEventIdByScope(nextEventIdsByScope, eventSK, tempEventId);
+    }
+
+    return {
+      messages: restMessages,
+      _messageIdsByScope: nextMsgIndex,
+      eventsByScope: nextEventsByScope,
+      _eventIdsByScope: nextEventIdsByScope,
+    };
+  });
+}
+
+export function reconcileOptimisticChannelMessage(
+  channelId: string,
+  tempMessageId: string,
+  tempEventId: string,
+  realMessageId: string,
+): void {
+  patchPending(
+    pendingChannelOptimistic,
+    channelId,
     (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
     (entry) => {
       entry.expectedRealMessageId = realMessageId;

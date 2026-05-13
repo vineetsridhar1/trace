@@ -1,7 +1,7 @@
 import type { Actor, Event, Message } from "@trace/gql";
 import { asJsonObject, isJsonObject } from "@trace/shared";
 import { useEntityStore, eventScopeKey, messageScopeKey } from "@trace/client-core";
-import { takePendingOptimisticChat } from "@trace/client-core";
+import { takePendingOptimisticChannel, takePendingOptimisticChat } from "@trace/client-core";
 
 type MessageScope =
   | { scopeType: "chat"; scopeId: string }
@@ -87,18 +87,21 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
   if (event.eventType === "message_sent") {
     const nextMessage = buildScopedMessage(scope, event, payload, existing);
 
-    // Chat optimistic reconciliation happens here because chats have both a
+    // Chat/channel optimistic reconciliation happens here because these scopes have both a
     // message entity and a scoped event to clean up.
     // Session optimistic reconciliation is handled in useOrgEvents + useSessionEvents
     // since sessions only have scoped events (no separate message entity).
-    if (scope.scopeType === "chat") {
-      const pending = takePendingOptimisticChat(scope.scopeId, event);
+    if (scope.scopeType === "chat" || scope.scopeType === "channel") {
+      const pending =
+        scope.scopeType === "chat"
+          ? takePendingOptimisticChat(scope.scopeId, event)
+          : takePendingOptimisticChannel(scope.scopeId, event);
       if (pending) {
         // Atomic reconciliation: remove optimistic message, insert real message,
         // and clean up the optimistic scoped event in a single setState to avoid
         // intermediate renders that cause scroll glitches.
-        const eventSK = eventScopeKey("chat", scope.scopeId);
-        const msgSK = messageScopeKey("chat", scope.scopeId);
+        const eventSK = eventScopeKey(scope.scopeType, scope.scopeId);
+        const msgSK = messageScopeKey(scope.scopeType, scope.scopeId);
         useEntityStore.setState((state) => {
           // Remove optimistic message, add real message
           const { [pending.tempMessageId]: _removed, ...restMessages } = state.messages;

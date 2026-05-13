@@ -1209,7 +1209,13 @@ type Mutation {
   ): Message!
   editChatMessage(messageId: ID!, html: String!): Message!
   deleteChatMessage(messageId: ID!): Message!
-  sendChannelMessage(channelId: ID!, text: String, html: String, parentId: ID): Message!
+  sendChannelMessage(
+    channelId: ID!
+    text: String
+    html: String
+    parentId: ID
+    clientMutationId: String
+  ): Message!
   editChannelMessage(messageId: ID!, html: String!): Message!
   deleteChannelMessage(messageId: ID!): Message!
   addChatMember(input: AddChatMemberInput!): Chat!

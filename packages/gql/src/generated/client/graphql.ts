@@ -918,6 +918,7 @@ export type MutationRunSessionArgs = {
 
 export type MutationSendChannelMessageArgs = {
   channelId: Scalars["ID"]["input"];
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   html?: InputMaybe<Scalars["String"]["input"]>;
   parentId?: InputMaybe<Scalars["ID"]["input"]>;
   text?: InputMaybe<Scalars["String"]["input"]>;
@@ -1826,6 +1827,7 @@ export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
   parentId?: InputMaybe<Scalars["ID"]["input"]>;
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
 }>;
 
 export type SendChannelMessageMutation = {
@@ -3027,6 +3029,11 @@ export const SendChannelMessageDocument = {
           variable: { kind: "Variable", name: { kind: "Name", value: "parentId" } },
           type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "clientMutationId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -3049,6 +3056,11 @@ export const SendChannelMessageDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "parentId" },
                 value: { kind: "Variable", name: { kind: "Name", value: "parentId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "clientMutationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "clientMutationId" } },
               },
             ],
             selectionSet: {

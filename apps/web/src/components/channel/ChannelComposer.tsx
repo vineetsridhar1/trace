@@ -3,20 +3,37 @@ import { Send } from "lucide-react";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { toast } from "sonner";
-import { useAuthStore, type AuthState } from "@trace/client-core";
+import {
+  optimisticallyInsertChannelMessage,
+  reconcileOptimisticChannelMessage,
+  removeOptimisticChannelMessage,
+  useAuthStore,
+  type AuthState,
+} from "@trace/client-core";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";
 import {
   beginActionLatency,
+  connectClientMutationLatency,
   expectActionEventLatency,
   markOptimisticLatency,
   measureMutationLatency,
 } from "../../lib/action-latency";
 
 const SEND_CHANNEL_MESSAGE = gql`
-  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {
-    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {
+  mutation SendChannelMessage(
+    $channelId: ID!
+    $html: String
+    $parentId: ID
+    $clientMutationId: String
+  ) {
+    sendChannelMessage(
+      channelId: $channelId
+      html: $html
+      parentId: $parentId
+      clientMutationId: $clientMutationId
+    ) {
       id
     }
   }
@@ -33,6 +50,12 @@ export function ChannelComposer({ channelId, parentId }: { channelId: string; pa
       if (sending) return;
 
       const interactionId = beginActionLatency("send-channel-message", { channelId });
+      const {
+        messageId: tempMessageId,
+        eventId: tempEventId,
+        clientMutationId,
+      } = optimisticallyInsertChannelMessage(channelId, html, parentId);
+      connectClientMutationLatency(clientMutationId, interactionId);
       setSending(true);
       markOptimisticLatency(interactionId);
       expectActionEventLatency({
@@ -50,6 +73,7 @@ export function ChannelComposer({ channelId, parentId }: { channelId: string; pa
               channelId,
               html,
               parentId: parentId ?? null,
+              clientMutationId,
             })
             .toPromise(),
         );
@@ -57,7 +81,12 @@ export function ChannelComposer({ channelId, parentId }: { channelId: string; pa
         if (result.error) {
           throw result.error;
         }
+        const realMessageId = result.data?.sendChannelMessage?.id;
+        if (realMessageId) {
+          reconcileOptimisticChannelMessage(channelId, tempMessageId, tempEventId, realMessageId);
+        }
       } catch (error) {
+        removeOptimisticChannelMessage(channelId, tempMessageId, tempEventId);
         console.error("Failed to send channel message", error);
         toast.error(error instanceof Error ? error.message : "Failed to send message");
         throw error;
