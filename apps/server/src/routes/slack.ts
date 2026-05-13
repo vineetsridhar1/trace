@@ -23,7 +23,7 @@ import {
   signSlackLinkState,
   verifySlackLinkState,
 } from "../lib/slack/user-resolver.js";
-import { slackEventBridge } from "../lib/slack/event-bridge.js";
+import { buildTraceSessionLink, slackEventBridge } from "../lib/slack/event-bridge.js";
 import { sessionService } from "../services/session.js";
 
 const JWT_SECRET = resolveJwtSecret();
@@ -1456,11 +1456,14 @@ async function handleAppMention(input: {
   const client = await getSlackClient(teamId);
   if (client) {
     const shortId = session.id.slice(0, 8);
+    const traceLink = await buildTraceSessionLink(session.id);
     await client.chat
       .postMessage({
         channel,
         thread_ts: threadTs,
-        text: `🟢 Session started — \`${shortId}\``,
+        text: traceLink
+          ? `🟢 Session started — \`${shortId}\` · <${traceLink}|Open in Trace>`
+          : `🟢 Session started — \`${shortId}\``,
       })
       .catch((err: unknown) => {
         console.warn("[slack] failed to post start message:", (err as Error).message);
@@ -1637,10 +1640,13 @@ async function startSlackSessionFromModal(input: {
   });
 
   const client = await getSlackClient(metadata.slackTeamId);
+  const traceLink = await buildTraceSessionLink(session.id);
   const message = client
     ? await client.chat.postMessage({
         channel: metadata.slackChannelId,
-        text: `🟢 Session started — \`${session.id.slice(0, 8)}\``,
+        text: traceLink
+          ? `🟢 Session started — \`${session.id.slice(0, 8)}\` · <${traceLink}|Open in Trace>`
+          : `🟢 Session started — \`${session.id.slice(0, 8)}\``,
       })
     : null;
   const slackThreadTs =

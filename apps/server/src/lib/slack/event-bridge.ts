@@ -13,6 +13,61 @@ type EventEnvelope = { sessionEvents: PrismaEvent };
 
 const TERMINAL_EVENT_TYPES = new Set(["session_terminated", "session_deleted"]);
 
+function getObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function extractAssistantText(payload: Record<string, unknown>): string | null {
+  if (payload.type !== "assistant") return null;
+  const message = getObject(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return null;
+
+  const text = content
+    .map((block) => {
+      const item = getObject(block);
+      return item?.type === "text" && typeof item.text === "string" ? item.text.trim() : "";
+    })
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+
+  return text || null;
+}
+
+function traceSessionUrl(input: {
+  channelId: string | null;
+  sessionGroupId: string | null;
+  sessionId: string;
+}): string | null {
+  const base = process.env.TRACE_WEB_URL?.replace(/\/$/, "");
+  if (!base) return null;
+  const groupPart = input.sessionGroupId ? `/g/${input.sessionGroupId}` : "";
+  const sessionPart = `/s/${input.sessionId}`;
+  if (input.channelId && input.sessionGroupId) {
+    return `${base}/c/${input.channelId}${groupPart}${sessionPart}`;
+  }
+  if (input.sessionGroupId) {
+    return `${base}${groupPart}${sessionPart}`;
+  }
+  return `${base}${sessionPart}`;
+}
+
+export async function buildTraceSessionLink(sessionId: string): Promise<string | null> {
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    select: { id: true, channelId: true, sessionGroupId: true },
+  });
+  if (!session) return null;
+  return traceSessionUrl({
+    channelId: session.channelId,
+    sessionGroupId: session.sessionGroupId,
+    sessionId: session.id,
+  });
+}
+
 class SlackEventBridgeManager {
   private active = new Map<string, ThreadBinding>();
   private cancellers = new Map<string, () => void>();
@@ -81,8 +136,16 @@ class SlackEventBridgeManager {
       return;
     }
 
+    if (event.eventType === "session_output") {
+      const text = extractAssistantText(payload);
+      if (!text) return;
+      await this.post(binding, text);
+      return;
+    }
+
     if (event.eventType === "session_terminated") {
-      await this.post(binding, "🔴 Session ended.");
+      const link = await buildTraceSessionLink(sessionId);
+      await this.post(binding, link ? `🔴 Session ended. <${link}|Open in Trace>` : "🔴 Session ended.");
       return;
     }
 
