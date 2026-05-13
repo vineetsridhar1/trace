@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Cloud, Loader2, Monitor, Paperclip, Send, Square } from "lucide-react";
 import {
   isSessionPreparing,
@@ -87,6 +87,7 @@ export function SessionInput({
   const [mode, setMode] = useState<InteractionMode>("code");
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(false);
+  const hasAutoFocusedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
@@ -112,6 +113,17 @@ export function SessionInput({
   const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
+
+  useEffect(() => {
+    hasAutoFocusedRef.current = false;
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (hasAutoFocusedRef.current || !canSend || isSending) return;
+    hasAutoFocusedRef.current = true;
+    const frame = requestAnimationFrame(() => editorRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [canSend, isSending, sessionId]);
 
   const cycleMode = useCallback(() => {
     setMode((prev: InteractionMode) => {
