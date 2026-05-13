@@ -20,7 +20,7 @@ import {
 import { sessionStatusGroupOrder } from "../channel/sessions-table-types";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
-import { sidebarNestedLeftEdgeRowClass } from "./sidebarItemStyles";
+import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 
 type SessionGroupRef = {
   channel?: { id: string } | null;
@@ -183,7 +183,7 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
           transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
           className="overflow-hidden"
         >
-          <div className="ml-4 mt-1 space-y-1 pl-1">
+          <div className="mt-1 space-y-1">
             {groups.map((group) => (
               <SidebarSessionStatusGroup
                 key={group.status}
@@ -224,7 +224,7 @@ function SidebarSessionStatusGroup({
         type="button"
         className={cn(
           "flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-left text-sm font-medium transition-colors hover:bg-white/10",
-          sidebarNestedLeftEdgeRowClass,
+          sidebarNestedFullWidthRowClass,
         )}
         onClick={() => onToggle(group.status)}
       >
@@ -294,7 +294,7 @@ function OwnedSessionItem({
       type="button"
       className={cn(
         "flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors",
-        sidebarNestedLeftEdgeRowClass,
+        sidebarNestedFullWidthRowClass,
         isActive
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
