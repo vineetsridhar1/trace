@@ -98,7 +98,7 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
       </header>
 

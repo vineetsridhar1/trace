@@ -9,7 +9,7 @@ export function HomeView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
         <span className="text-sm font-medium text-foreground">Home</span>
       </header>
 
