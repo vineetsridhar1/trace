@@ -99,7 +99,7 @@ export function AppSidebar() {
           className="flex size-full flex-col bg-transparent text-sidebar-foreground"
           style={{ backgroundColor: "transparent" }}
         >
-          <div className="app-region-drag h-10 shrink-0" />
+          <div className="app-region-drag h-12 shrink-0" />
           <SidebarContent className="app-region-no-drag overflow-hidden">
             {features.messaging ? (
               <div
