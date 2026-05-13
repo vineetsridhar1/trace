@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent, PointerEvent } from "react";
+import { MAX_WORKSPACE_NAME_LENGTH } from "@trace/shared";
 import { cn } from "@/lib/utils";
 
 export function SessionGroupNameInlineEditor({
@@ -59,6 +60,7 @@ export function SessionGroupNameInlineEditor({
     <input
       ref={inputRef}
       aria-label="Workspace name"
+      maxLength={MAX_WORKSPACE_NAME_LENGTH}
       value={draft}
       onBlur={() => finish("submit")}
       onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
