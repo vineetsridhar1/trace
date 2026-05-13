@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -124,32 +125,44 @@ export function ChannelGroupSection({
           </button>
         </div>
       </div>
-      {!collapsed && (
-        <div
-          ref={setDropRef}
-          className={cn(
-            "rounded-md transition-colors",
-            isOver && !isThisDragging && "bg-blue-500/10 ring-1 ring-blue-500/50",
-          )}
-        >
-          <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-            {channelIds.map((channelId) => (
-              <SidebarChannelSection
-                key={channelId}
-                channelId={channelId}
-                groupId={id}
-                isChannelActive={channelId === activeChannelId}
-                hasActiveSession={activeSessionGroupId !== null}
-                onChannelClick={onChannelClick}
-                onSessionClick={onSessionClick}
-              />
-            ))}
-          </SortableContext>
-          {channelIds.length === 0 && (
-            <p className="px-4 py-1 text-xs text-foreground italic">No channels</p>
-          )}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div
+              ref={setDropRef}
+              className={cn(
+                "rounded-md transition-colors",
+                isOver && !isThisDragging && "bg-blue-500/10 ring-1 ring-blue-500/50",
+              )}
+            >
+              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                {channelIds.map((channelId) => (
+                  <SidebarChannelSection
+                    key={channelId}
+                    channelId={channelId}
+                    groupId={id}
+                    isChannelActive={channelId === activeChannelId}
+                    hasActiveSession={
+                      channelId === activeChannelId && activeSessionGroupId !== null
+                    }
+                    onChannelClick={onChannelClick}
+                    onSessionClick={onSessionClick}
+                  />
+                ))}
+              </SortableContext>
+              {channelIds.length === 0 && (
+                <p className="px-4 py-1 text-xs text-foreground italic">No channels</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
