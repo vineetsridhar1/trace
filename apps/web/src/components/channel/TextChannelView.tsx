@@ -1,4 +1,3 @@
-import { MessageSquare } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useChannelMessages } from "../../hooks/useChannelMessages";
@@ -24,7 +23,6 @@ export function TextChannelView({ channelId }: { channelId: string }) {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
-        <MessageSquare size={16} className="text-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         <ConnectionStatus />
       </div>
