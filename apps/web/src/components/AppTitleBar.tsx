@@ -5,11 +5,15 @@ import { SidebarTrigger } from "./ui/sidebar";
 
 export function AppTitleBar() {
   const activePage = useUIStore((s: UIState) => s.activePage);
+  const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
+  const channelName = useEntityField("channels", activeChannelId ?? "", "name") as
+    | string
+    | undefined;
   const sessionGroupName = useEntityField("sessionGroups", activeSessionGroupId ?? "", "name") as
     | string
     | undefined;
-  const showSessionName = activePage === "main" && !!activeSessionGroupId && !!sessionGroupName;
+  const activeTitle = activePage === "main" ? (sessionGroupName ?? channelName) : undefined;
 
   return (
     <div className="app-region-drag pointer-events-none fixed left-0 right-0 top-[env(safe-area-inset-top)] z-[100] flex h-12 items-center">
@@ -19,9 +23,9 @@ export function AppTitleBar() {
           <OrgSwitcher compact />
         </div>
       </div>
-      {showSessionName && (
+      {activeTitle && (
         <div className="ml-3 min-w-0 max-w-[40vw] truncate text-sm font-semibold text-foreground">
-          {sessionGroupName}
+          {activeTitle}
         </div>
       )}
     </div>

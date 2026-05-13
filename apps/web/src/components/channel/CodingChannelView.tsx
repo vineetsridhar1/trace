@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from "react";
-import { Code, GitBranch, Archive } from "lucide-react";
+import { GitBranch, Archive } from "lucide-react";
 import { gql } from "@urql/core";
 import type { SessionGroup } from "@trace/gql";
 import { useEntityStore, useEntityField, type EntityState } from "@trace/client-core";
@@ -77,7 +77,6 @@ const SESSION_GROUPS_QUERY = gql`
 `;
 
 export function CodingChannelView({ channelId }: { channelId: string }) {
-  const channelName = useEntityField("channels", channelId, "name");
   const baseBranch = useEntityField("channels", channelId, "baseBranch") as
     | string
     | null
@@ -124,8 +123,6 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <Code size={16} className="text-muted-foreground" />
-        <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         {baseBranch && (
           <span className="flex items-center gap-1 rounded-md bg-surface-elevated px-1.5 py-0.5 text-xs text-muted-foreground">
             <GitBranch size={12} />
