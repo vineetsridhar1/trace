@@ -149,6 +149,7 @@ export function SessionInput({
 
       isSendingRef.current = true;
       setIsSending(true);
+      let shouldRefocusAfterQueue = false;
       try {
         const savedImages = [...images];
         const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
@@ -191,6 +192,7 @@ export function SessionInput({
 
             setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
             for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
+            shouldRefocusAfterQueue = true;
           } catch (error) {
             setDraftImages(sessionId, (prev) =>
               prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
@@ -271,6 +273,9 @@ export function SessionInput({
       } finally {
         isSendingRef.current = false;
         setIsSending(false);
+        if (shouldRefocusAfterQueue) {
+          requestAnimationFrame(() => editorRef.current?.focus());
+        }
       }
     },
     [sessionId, mode, canSend, canQueue, images, isNotStarted, hosting, connection],
