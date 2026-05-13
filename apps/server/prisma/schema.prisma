@@ -7,10 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enable pgvector extension for semantic search over memories and summaries.
-// Run `CREATE EXTENSION IF NOT EXISTS vector;` on the database before migrating.
-// The actual vector columns use Unsupported("vector(1536)") on the models.
-
 enum UserRole {
   admin
   member

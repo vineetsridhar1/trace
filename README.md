@@ -190,7 +190,6 @@ pnpm dev:local
 `pnpm dev:local` starts a local Trace workspace:
 
 - Creates or reuses a local Prisma Postgres dev server.
-- Enables `pgvector`.
 - Syncs the Prisma schema and seeds baseline data.
 - Generates the Prisma client.
 - Starts the API server on `http://localhost:4000`.
@@ -239,13 +238,6 @@ Create a GitHub OAuth app at
 [github.com/settings/developers](https://github.com/settings/developers), then
 enable device flow for the app. The web sign-in flow uses GitHub device auth, so
 it does not require a redirect URI or client secret.
-
-Trace uses `pgvector` for indexing and retrieval features. Enable it before
-migrating:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
 
 ### 3. Prepare the database and generated types
 
