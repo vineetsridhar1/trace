@@ -587,10 +587,9 @@ export type Mutation = {
   removeOrgMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
-  reorderQueuedMessages: Array<QueuedMessage>;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
-  updateQueuedMessage: QueuedMessage;
+  reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -606,6 +605,7 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  steerQueuedMessage: Event;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -622,6 +622,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -863,22 +864,17 @@ export type MutationRenameChatArgs = {
   name: Scalars["String"]["input"];
 };
 
-export type MutationUpdateQueuedMessageArgs = {
-  id: Scalars["ID"]["input"];
-  text: Scalars["String"]["input"];
-};
-
-export type MutationReorderQueuedMessagesArgs = {
-  ids: Array<Scalars["ID"]["input"]>;
-  sessionId: Scalars["ID"]["input"];
-};
-
 export type MutationReorderChannelGroupsArgs = {
   input: ReorderChannelGroupsInput;
 };
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
+};
+
+export type MutationReorderQueuedMessagesArgs = {
+  ids: Array<Scalars["ID"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationRequestBridgeAccessArgs = {
@@ -967,6 +963,10 @@ export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
 
+export type MutationSteerQueuedMessageArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationSubscribeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
@@ -1048,6 +1048,11 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdateQueuedMessageArgs = {
+  id: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
 };
 
 export type MutationUpdateRepoArgs = {
@@ -2275,15 +2280,6 @@ export type DeleteApiTokenMutationVariables = Exact<{
 
 export type DeleteApiTokenMutation = { __typename?: "Mutation"; deleteApiToken: boolean };
 
-export type CreateRepoMutationVariables = Exact<{
-  input: CreateRepoInput;
-}>;
-
-export type CreateRepoMutation = {
-  __typename?: "Mutation";
-  createRepo: { __typename?: "Repo"; id: string };
-};
-
 export type AddOrgMemberMutationVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
@@ -2511,6 +2507,15 @@ export type DeleteOrgSecretMutationVariables = Exact<{
 }>;
 
 export type DeleteOrgSecretMutation = { __typename?: "Mutation"; deleteOrgSecret: boolean };
+
+export type CreateRepoMutationVariables = Exact<{
+  input: CreateRepoInput;
+}>;
+
+export type CreateRepoMutation = {
+  __typename?: "Mutation";
+  createRepo: { __typename?: "Repo"; id: string };
+};
 
 export type CreateDmMutationVariables = Exact<{
   input: CreateChatInput;
@@ -4352,46 +4357,6 @@ export const DeleteApiTokenDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>;
-export const CreateRepoDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "CreateRepo" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "CreateRepoInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "createRepo" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<CreateRepoMutation, CreateRepoMutationVariables>;
 export const AddOrgMemberDocument = {
   kind: "Document",
   definitions: [
@@ -5168,6 +5133,46 @@ export const DeleteOrgSecretDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteOrgSecretMutation, DeleteOrgSecretMutationVariables>;
+export const CreateRepoDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateRepo" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "CreateRepoInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createRepo" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CreateRepoMutation, CreateRepoMutationVariables>;
 export const CreateDmDocument = {
   kind: "Document",
   definitions: [

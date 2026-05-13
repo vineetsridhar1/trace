@@ -585,10 +585,9 @@ export type Mutation = {
   removeOrgMember: Scalars["Boolean"]["output"];
   removeQueuedMessage: Scalars["Boolean"]["output"];
   renameChat: Chat;
-  reorderQueuedMessages: Array<QueuedMessage>;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
-  updateQueuedMessage: QueuedMessage;
+  reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -604,6 +603,7 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  steerQueuedMessage: Event;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -620,6 +620,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -861,22 +862,17 @@ export type MutationRenameChatArgs = {
   name: Scalars["String"]["input"];
 };
 
-export type MutationUpdateQueuedMessageArgs = {
-  id: Scalars["ID"]["input"];
-  text: Scalars["String"]["input"];
-};
-
-export type MutationReorderQueuedMessagesArgs = {
-  ids: Array<Scalars["ID"]["input"]>;
-  sessionId: Scalars["ID"]["input"];
-};
-
 export type MutationReorderChannelGroupsArgs = {
   input: ReorderChannelGroupsInput;
 };
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
+};
+
+export type MutationReorderQueuedMessagesArgs = {
+  ids: Array<Scalars["ID"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationRequestBridgeAccessArgs = {
@@ -965,6 +961,10 @@ export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
 
+export type MutationSteerQueuedMessageArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationSubscribeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
@@ -1046,6 +1046,11 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdateQueuedMessageArgs = {
+  id: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
 };
 
 export type MutationUpdateRepoArgs = {

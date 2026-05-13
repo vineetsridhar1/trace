@@ -14,7 +14,7 @@ import {
   REMOVE_QUEUED_MESSAGE_MUTATION,
   CLEAR_QUEUED_MESSAGES_MUTATION,
   REORDER_QUEUED_MESSAGES_MUTATION,
-  SEND_SESSION_MESSAGE_MUTATION,
+  STEER_QUEUED_MESSAGE_MUTATION,
   UPDATE_QUEUED_MESSAGE_MUTATION,
   StoreBatchWriter,
   useEntityField,
@@ -26,7 +26,6 @@ import { toast } from "sonner";
 import { stripPromptWrapping, wrapPrompt, type InteractionMode } from "./interactionModes";
 
 function QueuedMessageItem({ id }: { id: string }) {
-  const queuedSessionId = useEntityField("queuedMessages", id, "sessionId") as string | undefined;
   const text = useEntityField("queuedMessages", id, "text") as string | undefined;
   const imageKeys = useEntityField("queuedMessages", id, "imageKeys") as string[] | undefined;
   const interactionMode = useEntityField("queuedMessages", id, "interactionMode") as
@@ -73,12 +72,12 @@ function QueuedMessageItem({ id }: { id: string }) {
 
   const handleSaveEdit = () => {
     const nextText = editText.trim();
-    if (!nextText || nextText === displayText) {
+    if ((!nextText && imageCount === 0) || nextText === displayText) {
       setIsEditing(false);
       return;
     }
     const nextStoredText =
-      interactionMode === "plan" || interactionMode === "ask"
+      nextText && (interactionMode === "plan" || interactionMode === "ask")
         ? wrapPrompt(interactionMode as InteractionMode, nextText)
         : nextText;
 
@@ -98,22 +97,12 @@ function QueuedMessageItem({ id }: { id: string }) {
   };
 
   const handleSteer = () => {
-    if (!queuedSessionId) return;
     setIsBusy(true);
     client
-      .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-        sessionId: queuedSessionId,
-        text: text ?? "",
-        attachmentKeys: imageKeys && imageKeys.length > 0 ? imageKeys : undefined,
-        interactionMode: interactionMode ?? undefined,
-      })
+      .mutation(STEER_QUEUED_MESSAGE_MUTATION, { id })
       .toPromise()
-      .then(async (result) => {
+      .then((result) => {
         if (result.error) throw result.error;
-        const removeResult = await client
-          .mutation(REMOVE_QUEUED_MESSAGE_MUTATION, { id })
-          .toPromise();
-        if (removeResult.error) throw removeResult.error;
       })
       .catch(() => toast.error("Failed to steer queued message"))
       .finally(() => setIsBusy(false));

@@ -67,6 +67,14 @@ export const REMOVE_QUEUED_MESSAGE_MUTATION = gql`
   }
 `;
 
+export const STEER_QUEUED_MESSAGE_MUTATION = gql`
+  mutation SteerQueuedMessage($id: ID!) {
+    steerQueuedMessage(id: $id) {
+      id
+    }
+  }
+`;
+
 export const UPDATE_QUEUED_MESSAGE_MUTATION = gql`
   mutation UpdateQueuedMessage($id: ID!, $text: String!) {
     updateQueuedMessage(id: $id, text: $text) {

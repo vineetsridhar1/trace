@@ -6,7 +6,10 @@ vi.mock("../lib/db.js", async () => {
 });
 
 vi.mock("./event.js", () => ({
-  eventService: { create: vi.fn().mockResolvedValue({ id: "event-1" }) },
+  eventService: {
+    create: vi.fn().mockResolvedValue({ id: "event-1" }),
+    publishCreated: vi.fn(),
+  },
 }));
 
 vi.mock("./inbox.js", () => ({
@@ -3538,21 +3541,26 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "queued_message_added",
+          deferPublish: true,
           payload: expect.objectContaining({
             sessionId: "session-1",
             queuedMessage: expect.objectContaining({ id: "queued-2", position: 0 }),
           }),
         }),
+        prismaMock,
       );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "queued_message_added",
+          deferPublish: true,
           payload: expect.objectContaining({
             sessionId: "session-1",
             queuedMessage: expect.objectContaining({ id: "queued-1", position: 1 }),
           }),
         }),
+        prismaMock,
       );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledTimes(2);
     });
 
     it("updates queued message text and emits an upsert event", async () => {
@@ -3570,6 +3578,7 @@ describe("SessionService", () => {
       prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce({
         sessionId: "session-1",
         organizationId: "org-1",
+        imageKeys: [],
       });
       prismaMock.queuedMessage.update.mockResolvedValueOnce(updated);
 
@@ -3582,12 +3591,149 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "queued_message_added",
+          deferPublish: true,
           payload: expect.objectContaining({
             sessionId: "session-1",
             queuedMessage: expect.objectContaining({ id: "queued-1", text: "edited" }),
           }),
         }),
+        prismaMock,
       );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-1" });
+    });
+
+    it("allows attachment-only queued message edits", async () => {
+      const updated = {
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "",
+        imageKeys: ["uploads/org-1/file.png"],
+        interactionMode: null,
+        position: 0,
+        createdById: "user-1",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      };
+      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        imageKeys: ["uploads/org-1/file.png"],
+      });
+      prismaMock.queuedMessage.update.mockResolvedValueOnce(updated);
+
+      await service.updateQueuedMessage("queued-1", "", "user-1", "org-1");
+
+      expect(prismaMock.queuedMessage.update).toHaveBeenCalledWith({
+        where: { id: "queued-1" },
+        data: { text: "" },
+      });
+    });
+
+    it("rejects empty text edits without attachments", async () => {
+      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        imageKeys: [],
+      });
+
+      await expect(service.updateQueuedMessage("queued-1", "", "user-1", "org-1")).rejects.toThrow(
+        "Queued message text cannot be empty",
+      );
+
+      expect(prismaMock.queuedMessage.update).not.toHaveBeenCalled();
+    });
+
+    it("steers a queued message by removing it before sending", async () => {
+      const queuedMessage = {
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "steer now",
+        imageKeys: ["uploads/org-1/file.png"],
+        interactionMode: "ask",
+        position: 0,
+        createdById: "user-2",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      };
+      const sentEvent = { id: "sent-event" } as Awaited<ReturnType<SessionService["sendMessage"]>>;
+      const sendSpy = vi.spyOn(service, "sendMessage").mockResolvedValueOnce(sentEvent);
+      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce(queuedMessage);
+      eventServiceMock.create.mockResolvedValueOnce({ id: "removed-event" });
+
+      const result = await service.steerQueuedMessage("queued-1", "user-1", "org-1");
+
+      expect(result).toBe(sentEvent);
+      expect(prismaMock.queuedMessage.delete).toHaveBeenCalledWith({ where: { id: "queued-1" } });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "queued_message_removed",
+          deferPublish: true,
+          payload: { sessionId: "session-1", queuedMessageId: "queued-1" },
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "removed-event" });
+      expect(sendSpy).toHaveBeenCalledWith({
+        sessionId: "session-1",
+        text: "steer now",
+        imageKeys: ["uploads/org-1/file.png"],
+        actorType: "user",
+        actorId: "user-1",
+        interactionMode: "ask",
+      });
+      expect(prismaMock.queuedMessage.create).not.toHaveBeenCalled();
+    });
+
+    it("restores a steered queued message when sending fails", async () => {
+      const queuedMessage = {
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "steer now",
+        imageKeys: [],
+        interactionMode: null,
+        position: 0,
+        createdById: "user-2",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      };
+      const sendError = new Error("send failed");
+      vi.spyOn(service, "sendMessage").mockRejectedValueOnce(sendError);
+      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce(queuedMessage);
+      prismaMock.queuedMessage.create.mockResolvedValueOnce(queuedMessage);
+      eventServiceMock.create
+        .mockResolvedValueOnce({ id: "removed-event" })
+        .mockResolvedValueOnce({ id: "restored-event" });
+
+      await expect(service.steerQueuedMessage("queued-1", "user-1", "org-1")).rejects.toThrow(
+        "send failed",
+      );
+
+      expect(prismaMock.queuedMessage.create).toHaveBeenCalledWith({
+        data: {
+          id: "queued-1",
+          sessionId: "session-1",
+          text: "steer now",
+          imageKeys: [],
+          interactionMode: null,
+          position: 0,
+          createdById: "user-2",
+          organizationId: "org-1",
+          createdAt: queuedMessage.createdAt,
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "queued_message_added",
+          deferPublish: true,
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            queuedMessage: expect.objectContaining({ id: "queued-1", text: "steer now" }),
+          }),
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "removed-event" });
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "restored-event" });
     });
   });
 

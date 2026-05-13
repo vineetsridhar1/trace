@@ -515,6 +515,9 @@ export const sessionMutations = {
   removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.removeQueuedMessage(args.id, ctx.userId, requireOrgContext(ctx));
   },
+  steerQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.steerQueuedMessage(args.id, ctx.userId, requireOrgContext(ctx));
+  },
   updateQueuedMessage: (_: unknown, args: { id: string; text: string }, ctx: Context) => {
     return sessionService.updateQueuedMessage(
       args.id,
