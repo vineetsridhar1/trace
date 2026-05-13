@@ -854,7 +854,7 @@ export class SessionRouter {
     runtimeId: string,
     repoId: string,
     organizationId?: string | null,
-    timeoutMs = 2_000,
+    timeoutMs = 10_000,
   ): Promise<string[]> {
     const requestId = randomUUID();
     const runtime = this.getRuntime(runtimeId, organizationId);
@@ -865,13 +865,7 @@ export class SessionRouter {
       return Promise.reject(new Error("Runtime not available: runtime_disconnected"));
     }
 
-    try {
-      runtime.ws.send(JSON.stringify({ type: "list_workspace_slugs", requestId, repoId }));
-    } catch {
-      return Promise.reject(new Error("Runtime not available: delivery_failed"));
-    }
-
-    return new Promise<string[]>((resolve, reject) => {
+    const promise = new Promise<string[]>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingWorkspaceSlugRequests.delete(requestId);
         reject(new Error("Workspace slug request timed out"));
@@ -889,6 +883,17 @@ export class SessionRouter {
         },
       });
     });
+
+    try {
+      runtime.ws.send(JSON.stringify({ type: "list_workspace_slugs", requestId, repoId }));
+    } catch {
+      const pending = this.pendingWorkspaceSlugRequests.get(requestId);
+      this.pendingWorkspaceSlugRequests.delete(requestId);
+      pending?.reject(new Error("Runtime not available: delivery_failed"));
+      return promise;
+    }
+
+    return promise;
   }
 
   resolveWorkspaceSlugRequest(
