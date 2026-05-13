@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Archive, GitPullRequest, Link2 } from "lucide-react";
+import { Archive, GitPullRequest, Link2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
 
@@ -15,11 +15,13 @@ export function SessionRowContextMenu({
   onArchive,
   onClose,
   onCopyLink,
+  onRename,
 }: {
   menu: SessionRowContextMenuState;
   onArchive: (row: SessionGroupRow) => void;
   onClose: () => void;
   onCopyLink: (row: SessionGroupRow) => void;
+  onRename: (row: SessionGroupRow) => void;
 }) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -77,6 +79,18 @@ export function SessionRowContextMenu({
           </a>
         )}
         <div className="-mx-1 my-1 h-px bg-border" />
+        <button
+          type="button"
+          role="menuitem"
+          className={itemClass}
+          onClick={() => {
+            onRename(menu.row);
+            onClose();
+          }}
+        >
+          <Pencil className="size-4 text-muted-foreground" />
+          Rename
+        </button>
         <button
           type="button"
           role="menuitem"

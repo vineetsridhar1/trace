@@ -2,23 +2,40 @@ import { Laptop, TerminalSquare } from "lucide-react";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
+import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGroupRow } from "./sessions-table-types";
+import { SessionGroupNameInlineEditor } from "./SessionGroupNameInlineEditor";
 import { SessionStatusIndicator } from "./SessionStatusIndicator";
 
-export function SessionNameCell({ row }: { row?: SessionGroupRow }) {
+export function SessionNameCell({
+  renameContext,
+  row,
+}: {
+  renameContext?: SessionGroupRenameContext | null;
+  row?: SessionGroupRow;
+}) {
   if (!row) return null;
 
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[row.id]);
   const terminals = useSessionGroupTerminals(row.id);
   const hasActiveTerminal = terminals.some((t) => t.status === "active");
   const attached = useAttachedCheckoutForGroup(row.id);
+  const isRenaming = renameContext?.renamingGroupId === row.id;
 
   return (
     <div className="flex h-full items-center gap-2">
       <SessionStatusIndicator row={row} />
-      <span className={`truncate text-sm text-foreground ${hasDoneBadge ? "font-semibold" : ""}`}>
-        {row.name}
-      </span>
+      {isRenaming ? (
+        <SessionGroupNameInlineEditor
+          initialName={row.name}
+          onCancel={() => renameContext?.onRenameCancel()}
+          onSubmit={(name) => renameContext?.onRenameSubmit(row, name)}
+        />
+      ) : (
+        <span className={`truncate text-sm text-foreground ${hasDoneBadge ? "font-semibold" : ""}`}>
+          {row.name}
+        </span>
+      )}
       {attached && (
         <span
           title={`Synced to ${attached.bridgeLabel}`}

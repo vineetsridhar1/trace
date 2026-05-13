@@ -174,3 +174,5 @@ export {
   PROVISIONED_RUNTIME_PREFIX,
   isCloudMachineRuntimeId,
 } from "./runtime-ids.js";
+
+export const MAX_WORKSPACE_NAME_LENGTH = 80;

@@ -2,11 +2,19 @@ import { Laptop, TerminalSquare } from "lucide-react";
 import { timeAgo } from "../../lib/utils";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
+import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { getSessionBranch, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
+import { SessionGroupNameInlineEditor } from "./SessionGroupNameInlineEditor";
 import { SessionStatusIndicator } from "./SessionStatusIndicator";
 
-export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
+export function SessionCompactSummaryCell({
+  renameContext,
+  row,
+}: {
+  renameContext?: SessionGroupRenameContext | null;
+  row?: SessionGroupRow;
+}) {
   if (!row) return null;
 
   const repo = getSessionRepo(row);
@@ -15,6 +23,7 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
   const terminals = useSessionGroupTerminals(row.id);
   const hasActiveTerminal = terminals.some((t) => t.status === "active");
   const attached = useAttachedCheckoutForGroup(row.id);
+  const isRenaming = renameContext?.renamingGroupId === row.id;
 
   const subtext = repo && branch ? `${repo.name} / ${branch}` : repo ? repo.name : branch;
 
@@ -22,7 +31,15 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
     <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">
       <div className="flex w-full min-w-0 items-center gap-2">
         <SessionStatusIndicator row={row} />
-        <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
+        {isRenaming ? (
+          <SessionGroupNameInlineEditor
+            initialName={row.name}
+            onCancel={() => renameContext?.onRenameCancel()}
+            onSubmit={(name) => renameContext?.onRenameSubmit(row, name)}
+          />
+        ) : (
+          <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
+        )}
         {attached && (
           <span
             title={`Synced to ${attached.bridgeLabel}`}

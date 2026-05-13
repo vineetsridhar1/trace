@@ -97,6 +97,7 @@ vi.mock("@trace/shared", () => {
     isSupportedReasoningEffort: vi.fn().mockReturnValue(true),
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
+    MAX_WORKSPACE_NAME_LENGTH: 80,
   };
 });
 
@@ -106,7 +107,11 @@ import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
-import { getDefaultReasoningEffort, isSupportedReasoningEffort } from "@trace/shared";
+import {
+  getDefaultReasoningEffort,
+  isSupportedReasoningEffort,
+  MAX_WORKSPACE_NAME_LENGTH,
+} from "@trace/shared";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
 
@@ -4227,6 +4232,104 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+  });
+
+  describe("renameGroup", () => {
+    it("renames a workspace and emits session_group_renamed", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        name: "Old workspace",
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ id: "group-1", name: "New workspace" }),
+      );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ id: "group-1", name: "New workspace" }),
+        sessions: [],
+      });
+
+      const result = await service.renameGroup(
+        "group-1",
+        "org-1",
+        "  New workspace  ",
+        "user",
+        "user-1",
+      );
+
+      expect(result.name).toBe("New workspace");
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { name: "New workspace" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: "org-1",
+          scopeType: "session",
+          scopeId: "session-1",
+          eventType: "session_group_renamed",
+          payload: expect.objectContaining({
+            sessionGroupId: "group-1",
+            name: "New workspace",
+            sessionGroup: expect.objectContaining({
+              id: "group-1",
+              name: "New workspace",
+            }),
+          }),
+          actorType: "user",
+          actorId: "user-1",
+        }),
+        prismaMock,
+      );
+    });
+
+    it("does not complete if the rename event cannot be recorded", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        name: "Old workspace",
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ id: "group-1", name: "New workspace" }),
+      );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ id: "group-1", name: "New workspace" }),
+        sessions: [],
+      });
+      eventServiceMock.create.mockRejectedValueOnce(new Error("event failed"));
+
+      await expect(service.renameGroup("group-1", "org-1", "New workspace")).rejects.toThrow(
+        "event failed",
+      );
+
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "session_group_renamed" }),
+        prismaMock,
+      );
+    });
+
+    it("rejects empty workspace names", async () => {
+      await expect(service.renameGroup("group-1", "org-1", "   ")).rejects.toThrow(
+        "Workspace name cannot be empty",
+      );
+
+      expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects workspace names over the maximum length", async () => {
+      await expect(
+        service.renameGroup("group-1", "org-1", "a".repeat(MAX_WORKSPACE_NAME_LENGTH + 1)),
+      ).rejects.toThrow(`Workspace name cannot exceed ${MAX_WORKSPACE_NAME_LENGTH} characters`);
+
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
   });
 

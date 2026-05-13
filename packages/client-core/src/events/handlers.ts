@@ -435,6 +435,18 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "session_group_renamed") {
+    upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: false });
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (sessionGroupId && typeof payload.name === "string") {
+      batch.patch("sessionGroups", sessionGroupId, {
+        name: payload.name,
+        updatedAt: event.timestamp,
+      } as Partial<SessionGroupEntity>);
+    }
+  }
+
   // Route session status events
   if (
     SESSION_STATUS_EVENTS.has(event.eventType) &&

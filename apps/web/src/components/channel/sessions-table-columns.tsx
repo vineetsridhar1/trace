@@ -10,6 +10,7 @@ import { SessionCreatedByCell } from "./SessionCreatedByCell";
 import { SessionLastActivityCell } from "./SessionLastActivityCell";
 import { SessionNameCell } from "./SessionNameCell";
 import { SessionRepoCell } from "./SessionRepoCell";
+import { getSessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
 import { bucketize, isSessionStatusHeaderRow } from "./sessions-table-types";
 import { getSessionCreatedBy, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
@@ -95,7 +96,10 @@ export const sessionColumns: ColDef<SessionGridRow>[] = [
     filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
       headerFilterText(params.data, SESSION_COLUMN_IDS.compactSummary) ?? rowName(params.data),
     cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
-      <SessionCompactSummaryCell row={params.data as SessionGroupRow | undefined} />
+      <SessionCompactSummaryCell
+        row={params.data as SessionGroupRow | undefined}
+        renameContext={getSessionGroupRenameContext(params.context as unknown)}
+      />
     ),
   },
   {
@@ -108,7 +112,10 @@ export const sessionColumns: ColDef<SessionGridRow>[] = [
     filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
       headerFilterText(params.data, SESSION_COLUMN_IDS.name) ?? rowName(params.data),
     cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
-      <SessionNameCell row={params.data as SessionGroupRow | undefined} />
+      <SessionNameCell
+        row={params.data as SessionGroupRow | undefined}
+        renameContext={getSessionGroupRenameContext(params.context as unknown)}
+      />
     ),
   },
   statusColumn,
