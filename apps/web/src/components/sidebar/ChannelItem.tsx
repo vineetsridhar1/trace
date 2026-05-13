@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "@trace/client-core";
@@ -121,9 +122,14 @@ export const ChannelItem = memo(function ChannelItem({
                 <>
                   <button
                     type="button"
-                    className="absolute right-8 top-1/2 -translate-y-1/2 cursor-default rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
-                    title="Right-click to show mine/all sessions"
+                    className="absolute right-8 top-1/2 flex h-5 w-9 -translate-y-1/2 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
+                    title="Toggle mine/all sessions"
                     aria-label={`Sidebar sessions: ${sessionScope}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleSessionScope?.();
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -131,11 +137,21 @@ export const ChannelItem = memo(function ChannelItem({
                     }}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
-                    {sessionScope}
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span
+                        key={sessionScope}
+                        initial={{ y: 8, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -8, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        {sessionScope}
+                      </motion.span>
+                    </AnimatePresence>
                   </button>
                   <button
                     type="button"
-                    className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 opacity-0 transition-colors hover:bg-white/10 hover:text-foreground group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
+                    className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
                     title="New session"
                     aria-label="New session"
                     onClick={(event) => {
