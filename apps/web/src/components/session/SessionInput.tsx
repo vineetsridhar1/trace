@@ -435,26 +435,13 @@ export function SessionInput({
           <Paperclip size={16} />
         </button>
         {isActive ? (
-          <>
-            <button
-              onClick={handleQueueSubmit}
-              disabled={(!hasContent && images.length === 0) || !canSend || isSending}
-              className={cn(
-                "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-                MODE_CONFIG[mode as InteractionMode].sendButton,
-              )}
-              title="Queue message"
-            >
-              <Send size={16} />
-            </button>
-            <button
-              onClick={onStop}
-              className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
-              title="Stop"
-            >
-              <Square size={16} />
-            </button>
-          </>
+          <button
+            onClick={onStop}
+            className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
+            title="Stop"
+          >
+            <Square size={16} />
+          </button>
         ) : (
           <button
             onClick={handleQueueSubmit}
