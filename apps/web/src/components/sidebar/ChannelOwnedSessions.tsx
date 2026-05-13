@@ -21,6 +21,7 @@ import { sessionStatusGroupOrder } from "../channel/sessions-table-types";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
+import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 
 type SessionGroupRef = {
   channel?: { id: string } | null;
@@ -289,7 +290,7 @@ function OwnedSessionItem({
 
   if (!sessionGroupId) return null;
 
-  return (
+  const button = (
     <button
       type="button"
       className={cn(
@@ -299,7 +300,6 @@ function OwnedSessionItem({
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
       )}
-      title={name ?? "Untitled session"}
       onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}
     >
       <span
@@ -315,6 +315,16 @@ function OwnedSessionItem({
       </span>
       <span className="ml-auto shrink-0 text-[11px] text-foreground">{activityLabel}</span>
     </button>
+  );
+
+  return (
+    <SidebarSessionHoverCard
+      agentStatus={displayAgentStatus}
+      sessionGroupId={sessionGroupId}
+      sessionId={sessionId}
+      sessionStatus={displaySessionStatus}
+      trigger={button}
+    />
   );
 }
 
