@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   GitBranch,
   SlidersHorizontal,
   Bell,
@@ -13,7 +12,6 @@ import {
   Plug,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
-import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
@@ -59,7 +57,6 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 }
 
 export function SettingsPage() {
-  const setActivePage = useUIStore((s) => s.setActivePage);
   const settingsInitialTab = useUIStore((s) => s.settingsInitialTab);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
@@ -102,14 +99,6 @@ export function SettingsPage() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => setActivePage("main")}
-        >
-          <ArrowLeft size={16} />
-        </Button>
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
       </header>
 
