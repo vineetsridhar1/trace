@@ -98,7 +98,7 @@ export function PeekOverlay({
           initial={{ x: "-100%" }}
           animate={{ x: 0 }}
           exit={{ x: "-100%" }}
-          transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
           onMouseLeave={handleOverlayMouseLeave}
           className="fixed bottom-2 left-0 top-[calc(env(safe-area-inset-top)+3rem)] z-50 flex w-[calc(22rem+0.5rem)] flex-col pl-2"
         >
