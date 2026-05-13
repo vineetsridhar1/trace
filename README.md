@@ -239,6 +239,11 @@ Create a GitHub OAuth app at
 enable device flow for the app. The web sign-in flow uses GitHub device auth, so
 it does not require a redirect URI or client secret.
 
+Trace no longer uses `pgvector` after migrations finish. The historical
+migration chain still replays an old embedding migration before the cleanup
+migration drops the extension, so fresh databases must run on a PostgreSQL
+server where the `vector` extension is available.
+
 ### 3. Prepare the database and generated types
 
 ```bash
