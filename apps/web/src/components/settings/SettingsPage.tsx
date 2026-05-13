@@ -10,6 +10,7 @@ import {
   MonitorCog,
   ServerCog,
   KeyRound,
+  Plug,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
@@ -23,6 +24,7 @@ import { ChannelsSection } from "./ChannelsSection";
 import { BridgeAccessSection } from "./BridgeAccessSection";
 import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
 import { OrgSecretsSection } from "./OrgSecretsSection";
+import { ConnectionsSection } from "./ConnectionsSection";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
@@ -32,12 +34,14 @@ type SettingsTab =
   | "api-keys"
   | "members"
   | "channels"
+  | "connections"
   | "bridge-access"
   | "agent-environments"
   | "org-secrets";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
+  { id: "connections", label: "Connections", icon: Plug },
   { id: "members", label: "Members", icon: Users },
   { id: "session-defaults", label: "Session Defaults", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -87,6 +91,7 @@ export function SettingsPage() {
   const contentWidthClass =
     activeTab === "members" ||
     activeTab === "repositories" ||
+    activeTab === "connections" ||
     activeTab === "channels" ||
     activeTab === "bridge-access" ||
     activeTab === "agent-environments" ||
@@ -133,6 +138,7 @@ export function SettingsPage() {
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className={contentWidthClass}>
             {activeTab === "repositories" && <RepositoriesSection />}
+            {activeTab === "connections" && <ConnectionsSection />}
             {activeTab === "members" && <MembersSection />}
             {activeTab === "session-defaults" && <SessionDefaultsSection />}
             {activeTab === "notifications" && <NotificationsSection />}

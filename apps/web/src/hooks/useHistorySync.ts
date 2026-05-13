@@ -3,6 +3,8 @@ import { buildPath, resolveOptimisticSessionRedirect, useUIStore } from "../stor
 import type { ActivePage } from "../stores/ui";
 import type { ChannelSubPage } from "../stores/ui";
 
+type LegacyActivePage = ActivePage | "connections";
+
 function parseNavFromPath(path: string): {
   channelId: string | null;
   sessionGroupId: string | null;
@@ -37,7 +39,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
-      page: "connections",
+      page: "settings",
       channelSubPage: null,
     };
   }
@@ -147,16 +149,19 @@ export function useHistorySync() {
       ) => void;
     }) => s._restoreNav,
   );
+  const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
 
   useEffect(() => {
+    if (window.location.pathname.startsWith("/connections")) {
+      setSettingsInitialTab("connections");
+    }
     const parsedNav = parseNavFromPath(window.location.pathname);
     const initialRedirect = resolveOptimisticSessionRedirect(
       parsedNav.sessionGroupId,
       parsedNav.sessionId,
     );
     const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
-    const isTopLevelPage =
-      page === "settings" || page === "inbox" || page === "connections" || page === "tickets";
+    const isTopLevelPage = page === "settings" || page === "inbox" || page === "tickets";
     const initialChat =
       isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
@@ -201,11 +206,16 @@ export function useHistorySync() {
         sessionGroupId: string | null;
         sessionId: string | null;
         chatId?: string | null;
-        page?: ActivePage;
+        page?: LegacyActivePage;
         channelSubPage?: ChannelSubPage;
       } | null;
 
       if (state) {
+        if (state.page === "connections") {
+          setSettingsInitialTab("connections");
+          restoreNav(null, null, null, "settings", null, null);
+          return;
+        }
         const redirect = resolveOptimisticSessionRedirect(state.sessionGroupId, state.sessionId);
         if (redirect) {
           history.replaceState(
@@ -242,6 +252,9 @@ export function useHistorySync() {
       }
 
       const nav = parseNavFromPath(window.location.pathname);
+      if (window.location.pathname.startsWith("/connections")) {
+        setSettingsInitialTab("connections");
+      }
       const redirect = resolveOptimisticSessionRedirect(nav.sessionGroupId, nav.sessionId);
       if (redirect) {
         history.replaceState(
@@ -291,5 +304,5 @@ export function useHistorySync() {
       window.removeEventListener("popstate", onPopState);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [restoreNav]);
+  }, [restoreNav, setSettingsInitialTab]);
 }
