@@ -251,6 +251,7 @@ export function createPrismaMock() {
       findUniqueOrThrow: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
+      update: vi.fn(),
     },
     channel: {
       create: vi.fn(),

@@ -518,6 +518,14 @@ export const sessionMutations = {
   clearQueuedMessages: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.clearQueuedMessages(args.sessionId, ctx.userId, requireOrgContext(ctx));
   },
+  reorderQueuedMessages: (_: unknown, args: { sessionId: string; ids: string[] }, ctx: Context) => {
+    return sessionService.reorderQueuedMessages(
+      args.sessionId,
+      args.ids,
+      ctx.userId,
+      requireOrgContext(ctx),
+    );
+  },
 };
 
 export const sessionTypeResolvers = {

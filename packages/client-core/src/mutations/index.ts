@@ -73,6 +73,20 @@ export const CLEAR_QUEUED_MESSAGES_MUTATION = gql`
   }
 `;
 
+export const REORDER_QUEUED_MESSAGES_MUTATION = gql`
+  mutation ReorderQueuedMessages($sessionId: ID!, $ids: [ID!]!) {
+    reorderQueuedMessages(sessionId: $sessionId, ids: $ids) {
+      id
+      sessionId
+      text
+      imageKeys: attachmentKeys
+      interactionMode
+      position
+      createdAt
+    }
+  }
+`;
+
 export const TERMINATE_SESSION_MUTATION = gql`
   mutation TerminateSession($id: ID!) {
     terminateSession(id: $id) {

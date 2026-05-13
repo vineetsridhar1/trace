@@ -4108,6 +4108,79 @@ export class SessionService {
     return true;
   }
 
+  async reorderQueuedMessages(
+    sessionId: string,
+    ids: string[],
+    actorId: string,
+    organizationId: string,
+  ) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true },
+    });
+    if (session.organizationId !== organizationId) {
+      throw new Error("Session does not belong to this organization");
+    }
+
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      throw new Error("Queued message ids must be unique");
+    }
+
+    const queuedMessages = await prisma.queuedMessage.findMany({
+      where: { sessionId },
+      orderBy: { position: "asc" },
+    });
+
+    if (queuedMessages.length !== ids.length) {
+      throw new Error("Queued message order is stale");
+    }
+
+    const queuedIds = new Set(queuedMessages.map((message: { id: string }) => message.id));
+    if (ids.some((id) => !queuedIds.has(id))) {
+      throw new Error("Queued message order contains unknown messages");
+    }
+
+    await prisma.$transaction(
+      ids.map((id, position) =>
+        prisma.queuedMessage.update({
+          where: { id },
+          data: { position },
+        }),
+      ),
+    );
+
+    const byId = new Map(queuedMessages.map((message) => [message.id, message]));
+    const reordered = ids.map((id, position) => ({
+      ...byId.get(id)!,
+      position,
+    }));
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_messages_reordered",
+      payload: {
+        sessionId,
+        queuedMessages: reordered.map((message) => ({
+          id: message.id,
+          sessionId: message.sessionId,
+          text: message.text,
+          attachmentKeys: message.imageKeys,
+          imageKeys: message.imageKeys,
+          interactionMode: message.interactionMode,
+          position: message.position,
+          createdAt: message.createdAt.toISOString(),
+        })),
+      },
+      actorType: "user",
+      actorId,
+    });
+
+    return reordered;
+  }
+
   private async drainNextPendingOrQueuedMessage(sessionId: string) {
     const pending = await prisma.session.findUnique({
       where: { id: sessionId },

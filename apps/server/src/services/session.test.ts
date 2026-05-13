@@ -3495,6 +3495,59 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("reorders queued messages and emits reordered payloads", async () => {
+      const first = {
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "first",
+        imageKeys: [],
+        interactionMode: null,
+        position: 0,
+        createdById: "user-1",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      };
+      const second = {
+        ...first,
+        id: "queued-2",
+        text: "second",
+        position: 1,
+      };
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({ organizationId: "org-1" }),
+      );
+      prismaMock.queuedMessage.findMany.mockResolvedValueOnce([first, second]);
+
+      const reordered = await service.reorderQueuedMessages(
+        "session-1",
+        ["queued-2", "queued-1"],
+        "user-1",
+        "org-1",
+      );
+
+      expect(reordered.map((message) => message.id)).toEqual(["queued-2", "queued-1"]);
+      expect(prismaMock.queuedMessage.update).toHaveBeenCalledWith({
+        where: { id: "queued-2" },
+        data: { position: 0 },
+      });
+      expect(prismaMock.queuedMessage.update).toHaveBeenCalledWith({
+        where: { id: "queued-1" },
+        data: { position: 1 },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "queued_messages_reordered",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            queuedMessages: [
+              expect.objectContaining({ id: "queued-2", position: 0 }),
+              expect.objectContaining({ id: "queued-1", position: 1 }),
+            ],
+          }),
+        }),
+      );
+    });
   });
 
   describe("workspaceReady", () => {
