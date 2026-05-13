@@ -124,7 +124,9 @@ export const ChannelItem = memo(function ChannelItem({
           <ContextMenuContent>
             {canStartSession && (
               <>
-                <ContextMenuItem onClick={() => onToggleSessionScope?.()}>
+                <ContextMenuItem
+                  onMouseDown={() => onToggleSessionScope?.()}
+                >
                   <Users size={14} className="mr-2" />
                   {sessionScope === "mine" ? "Show all sessions" : "Show my sessions"}
                 </ContextMenuItem>
@@ -153,14 +155,14 @@ export const ChannelItem = memo(function ChannelItem({
                 event.stopPropagation();
                 onToggleSessionScope?.();
               }}
-              onMouseDown={(event) => event.stopPropagation()}
-              onPointerDown={(event) => {
+              onMouseDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 if (event.button === 0) {
                   onToggleSessionScope?.();
                 }
               }}
+              onPointerDown={(event) => event.stopPropagation()}
             >
               <AnimatePresence mode="wait" initial={false}>
                 <motion.span
