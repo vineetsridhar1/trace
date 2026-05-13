@@ -47,6 +47,7 @@ export function SidebarChannelSection({
           onClick={() => onChannelClick(channelId)}
           groupId={groupId}
           canExpand={canExpand}
+          canStartSession={channelType === "coding"}
           isExpanded={expanded}
           onToggleExpanded={toggleExpanded}
         />
