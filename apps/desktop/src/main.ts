@@ -10,6 +10,7 @@ import {
 } from "electron";
 import path from "path";
 import crypto from "crypto";
+import { setTimeout } from "node:timers";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
   getRepoConfig,
