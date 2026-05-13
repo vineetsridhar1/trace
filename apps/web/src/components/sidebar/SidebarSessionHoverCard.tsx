@@ -24,29 +24,20 @@ type SidebarSessionGroupInfo = {
 } | null;
 
 export function SidebarSessionHoverCard({
-  agentStatus,
   sessionGroupId,
   sessionId,
   sessionStatus,
   trigger,
 }: {
-  agentStatus: string;
   sessionGroupId: string;
   sessionId: string;
   sessionStatus: string;
   trigger: ReactElement;
 }) {
-  const sessionName = useEntityField("sessions", sessionId, "name");
   const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
-  const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
-  const createdAt = useEntityField("sessions", sessionId, "createdAt");
   const createdBy = useEntityField("sessions", sessionId, "createdBy") as
     | SidebarUserRef
     | undefined;
-  const repo = useEntityField("sessions", sessionId, "repo") as SidebarRepoRef | undefined;
-  const branch = useEntityField("sessions", sessionId, "branch");
-  const tool = useEntityField("sessions", sessionId, "tool");
-  const model = useEntityField("sessions", sessionId, "model");
   const sessionGroup = useEntityField("sessions", sessionId, "sessionGroup") as
     | SidebarSessionGroupInfo
     | undefined;
@@ -64,21 +55,13 @@ export function SidebarSessionHoverCard({
         align="start"
         sideOffset={10}
         alignOffset={-6}
-        className="w-80 rounded-xl border border-white/10 !bg-[var(--trace-window-bg)] p-3 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-xl"
+        className="w-96 rounded-xl border border-white/10 !bg-[var(--trace-window-bg)] p-4 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-xl"
       >
         <SidebarSessionHoverContent
-          agentStatus={agentStatus}
-          branch={branch ?? sessionGroup?.branch ?? null}
-          createdAt={createdAt}
           createdBy={createdBy}
           lastMessageAt={lastMessageAt}
-          model={model ?? null}
-          repo={repo ?? sessionGroup?.repo ?? null}
           sessionGroupName={sessionGroupName ?? sessionGroup?.name ?? null}
-          sessionName={sessionName ?? null}
           sessionStatus={sessionStatus}
-          tool={tool ?? null}
-          updatedAt={updatedAt}
         />
       </HoverCardContent>
     </HoverCard>
@@ -86,87 +69,73 @@ export function SidebarSessionHoverCard({
 }
 
 function SidebarSessionHoverContent({
-  agentStatus,
-  branch,
-  createdAt,
   createdBy,
   lastMessageAt,
-  model,
-  repo,
   sessionGroupName,
-  sessionName,
   sessionStatus,
-  tool,
-  updatedAt,
 }: {
-  agentStatus: string;
-  branch: string | null;
-  createdAt: string | null | undefined;
   createdBy: SidebarUserRef | undefined;
   lastMessageAt: string | null | undefined;
-  model: string | null;
-  repo: SidebarRepoRef | undefined;
   sessionGroupName: string | null;
-  sessionName: string | null;
   sessionStatus: string;
-  tool: string | null;
-  updatedAt: string | null | undefined;
 }) {
   const statusColor = sessionStatusColor[sessionStatus] ?? "text-foreground";
   const statusText = sessionStatusLabel[sessionStatus] ?? formatStatusLabel(sessionStatus);
+  const ownerName = formatOwnerName(createdBy);
+  const ownerEmail = createdBy?.email && createdBy.email !== ownerName ? createdBy.email : null;
 
   return (
-    <div className="min-w-0">
-      <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-2.5">
+    <div className="min-w-0 space-y-4">
+      <h3 className="text-base font-semibold leading-snug text-foreground">
+        {sessionGroupName ?? "Untitled group"}
+      </h3>
+
+      <div className="flex items-center gap-3">
+        <UserAvatar user={createdBy} />
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/60">
-            Session group
-          </p>
-          <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
-            {sessionGroupName ?? "Untitled group"}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-foreground/70">
-            {sessionName ?? "Untitled session"}
-          </p>
+          <p className="truncate text-sm font-medium text-foreground">{ownerName}</p>
+          {ownerEmail && <p className="truncate text-xs text-foreground/70">{ownerEmail}</p>}
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
         <span
           className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/10 px-2 py-1 text-[11px] font-medium",
+            "inline-flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium",
             statusColor,
           )}
         >
-          <Circle size={6} className="fill-current" />
-          {statusText}
+          <Circle size={6} className="shrink-0 fill-current" />
+          <span className="truncate">{statusText}</span>
         </span>
+        <p className="min-w-0 truncate text-right text-xs text-foreground/75">
+          {formatLastMessage(lastMessageAt)}
+        </p>
       </div>
-
-      <dl className="mt-3 grid gap-2 text-xs">
-        <SidebarSessionHoverField label="Owner" value={formatOwner(createdBy)} />
-        <SidebarSessionHoverField label="Last message" value={formatTooltipTime(lastMessageAt)} />
-        <SidebarSessionHoverField label="Updated" value={formatTooltipTime(updatedAt)} />
-        <SidebarSessionHoverField label="Created" value={formatTooltipTime(createdAt)} />
-        {repo?.name && <SidebarSessionHoverField label="Repo" value={repo.name} />}
-        {branch && <SidebarSessionHoverField label="Branch" value={branch} />}
-        <SidebarSessionHoverField label="Agent" value={formatStatusLabel(agentStatus)} />
-        {tool && <SidebarSessionHoverField label="Tool" value={formatStatusLabel(tool)} />}
-        {model && <SidebarSessionHoverField label="Model" value={model} />}
-      </dl>
     </div>
   );
 }
 
-function SidebarSessionHoverField({ label, value }: { label: string; value: string }) {
+function UserAvatar({ user }: { user: SidebarUserRef | undefined }) {
+  const ownerName = formatOwnerName(user);
+  const initial = ownerName.charAt(0).toUpperCase();
+  if (user?.avatarUrl) {
+    return (
+      <img
+        src={user.avatarUrl}
+        alt={ownerName}
+        className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/15"
+      />
+    );
+  }
   return (
-    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] gap-3">
-      <dt className="text-[10px] font-semibold uppercase tracking-wider text-foreground/50">
-        {label}
-      </dt>
-      <dd className="min-w-0 truncate text-right text-xs font-medium text-foreground">{value}</dd>
-    </div>
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-foreground ring-1 ring-white/15">
+      {initial}
+    </span>
   );
 }
 
-function formatOwner(user: SidebarUserRef | undefined): string {
+function formatOwnerName(user: SidebarUserRef | undefined): string {
   return user?.name ?? user?.email ?? "Unknown";
 }
 
@@ -178,15 +147,15 @@ function formatStatusLabel(value: string): string {
     .join(" ");
 }
 
-function formatTooltipTime(timestamp: string | null | undefined): string {
-  if (!timestamp) return "None";
+function formatLastMessage(timestamp: string | null | undefined): string {
+  if (!timestamp) return "No messages yet";
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  if (Number.isNaN(date.getTime())) return "Last activity unknown";
   const exact = date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
-  return `${exact} (${timeAgo(timestamp)})`;
+  return `${timeAgo(timestamp)} · ${exact}`;
 }
