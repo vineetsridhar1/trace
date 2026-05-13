@@ -319,7 +319,6 @@ function OwnedSessionItem({
 
   return (
     <SidebarSessionHoverCard
-      agentStatus={displayAgentStatus}
       sessionGroupId={sessionGroupId}
       sessionId={sessionId}
       sessionStatus={displaySessionStatus}
