@@ -92,7 +92,7 @@ export const ChannelItem = memo(function ChannelItem({
                     }
                   >
                     <ChevronRight
-                      size={13}
+                      size={14}
                       className={
                         isExpanded ? "rotate-90 transition-transform" : "transition-transform"
                       }

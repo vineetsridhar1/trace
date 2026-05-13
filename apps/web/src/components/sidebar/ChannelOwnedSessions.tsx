@@ -221,10 +221,10 @@ function SidebarSessionStatusGroup({
     <div>
       <button
         type="button"
-        className="flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-left text-xs font-semibold transition-colors hover:bg-white/10"
+        className="flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
         onClick={() => onToggle(group.status)}
       >
-        <Icon size={12} className="shrink-0 text-foreground" />
+        <Icon size={14} className="shrink-0 text-foreground" />
         <Circle size={5} className={cn("shrink-0 fill-current", color)} />
         <span className={cn("min-w-0 flex-1 truncate", color)}>{label}</span>
         <span className="shrink-0 text-[11px] text-foreground">
@@ -289,7 +289,7 @@ function OwnedSessionItem({
     <button
       type="button"
       className={cn(
-        "flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-sm leading-none transition-colors",
+        "flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors",
         isActive
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
@@ -308,7 +308,7 @@ function OwnedSessionItem({
       <span className={cn("truncate", hasDoneBadge && "font-semibold")}>
         {name ?? "Untitled session"}
       </span>
-      <span className="ml-auto shrink-0 text-xs text-foreground">{activityLabel}</span>
+      <span className="ml-auto shrink-0 text-[11px] text-foreground">{activityLabel}</span>
     </button>
   );
 }
