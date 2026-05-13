@@ -51,7 +51,7 @@ export function SidebarSessionHoverCard({
         align="start"
         sideOffset={10}
         alignOffset={-6}
-        className="w-96 rounded-xl border border-white/10 !bg-[var(--trace-window-bg)] p-4 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-xl"
+        className="w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
       >
         <SidebarSessionHoverContent
           branch={branch ?? sessionGroup?.branch ?? null}
@@ -80,7 +80,7 @@ function SidebarSessionHoverContent({
 
   return (
     <div className="min-w-0">
-      <h3 className="text-base font-semibold leading-snug text-foreground">
+      <h3 className="text-sm font-semibold leading-snug text-foreground">
         {sessionGroupName ?? "Untitled group"}
       </h3>
 
@@ -92,7 +92,7 @@ function SidebarSessionHoverContent({
       <div className="mt-4 flex items-center gap-3 border-t border-white/10 pt-3">
         <UserAvatar user={createdBy} />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{ownerName}</p>
+          <p className="truncate text-xs font-medium text-foreground">{ownerName}</p>
           {ownerEmail && <p className="truncate text-xs text-foreground/70">{ownerEmail}</p>}
         </div>
       </div>
