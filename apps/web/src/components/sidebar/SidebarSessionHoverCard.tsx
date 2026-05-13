@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { GitBranch } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 
@@ -86,7 +87,12 @@ function SidebarSessionHoverContent({
 
       <div className="mt-1 flex items-center justify-between gap-4 text-xs text-foreground/65">
         <p className="min-w-0 truncate">{formatLastMessage(lastMessageAt)}</p>
-        {branch && <p className="max-w-[45%] shrink-0 truncate text-right">{branch}</p>}
+        {branch && (
+          <p className="flex max-w-[45%] shrink-0 items-center gap-1 truncate text-right">
+            <GitBranch size={11} className="shrink-0" />
+            <span className="truncate">{branch}</span>
+          </p>
+        )}
       </div>
 
       <div className="mt-4 flex items-center gap-3 border-t border-white/10 pt-3">

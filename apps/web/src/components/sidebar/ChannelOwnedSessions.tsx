@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Circle } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, Circle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
@@ -22,6 +22,7 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
+import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
 
 type SessionGroupRef = {
   channel?: { id: string } | null;
@@ -271,8 +272,13 @@ function OwnedSessionItem({
   sessionId: string;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
 }) {
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const name = useEntityField("sessions", sessionId, "name");
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
+  const sessionGroupName = useEntityField("sessionGroups", sessionGroupId ?? "", "name") as
+    | string
+    | null
+    | undefined;
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const prUrl = useEntityField("sessions", sessionId, "prUrl");
@@ -290,39 +296,70 @@ function OwnedSessionItem({
 
   if (!sessionGroupId) return null;
 
-  const button = (
-    <button
-      type="button"
+  const sessionName = name ?? "Untitled session";
+
+  const row = (
+    <div
       className={cn(
-        "flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors",
+        "group/session-row flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-xs leading-none transition-colors",
         sidebarNestedFullWidthRowClass,
         isActive
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
       )}
-      onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}
     >
-      <span
-        className={cn("relative inline-flex h-1.5 w-1.5 shrink-0 items-center justify-center", color)}
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
+        onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}
       >
-        <AgentStatusIcon agentStatus={displayAgentStatus} size={6} />
-        {hasDoneBadge && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
-        )}
-      </span>
-      <span className={cn("truncate", hasDoneBadge && "font-semibold")}>
-        {name ?? "Untitled session"}
-      </span>
-      <span className="ml-auto shrink-0 text-[11px] text-foreground">{activityLabel}</span>
-    </button>
+        <span
+          className={cn(
+            "relative inline-flex h-1.5 w-1.5 shrink-0 items-center justify-center",
+            color,
+          )}
+        >
+          <AgentStatusIcon agentStatus={displayAgentStatus} size={6} />
+          {hasDoneBadge && (
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
+          )}
+        </span>
+        <span className={cn("min-w-0 flex-1 truncate", hasDoneBadge && "font-semibold")}>
+          {sessionName}
+        </span>
+        <span className="shrink-0 text-[11px] text-foreground group-hover/session-row:hidden group-focus-within/session-row:hidden">
+          {activityLabel}
+        </span>
+      </button>
+      <button
+        type="button"
+        className="hidden h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground group-hover/session-row:flex group-focus-within/session-row:flex"
+        title="Archive session"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setArchiveOpen(true);
+        }}
+      >
+        <Archive size={13} />
+      </button>
+    </div>
   );
 
   return (
-    <SidebarSessionHoverCard
-      sessionGroupId={sessionGroupId}
-      sessionId={sessionId}
-      trigger={button}
-    />
+    <>
+      <SidebarSessionHoverCard
+        sessionGroupId={sessionGroupId}
+        sessionId={sessionId}
+        trigger={row}
+      />
+      <ArchiveSessionGroupDialog
+        groupId={sessionGroupId}
+        groupName={sessionGroupName ?? sessionName}
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+      />
+    </>
   );
 }
 
