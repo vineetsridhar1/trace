@@ -4,7 +4,6 @@ import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { selectChannelOrStartSession } from "../lib/channel-click-navigation";
 import { features } from "../lib/features";
 import { navigateToSession, useUIStore, type UIState } from "../stores/ui";
-import { ConnectionsButton } from "./sidebar/ConnectionsButton";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
@@ -155,9 +154,6 @@ export function AppSidebar() {
               </div>
             )}
             <div className="border-t border-white/10">
-              <div className="px-2 py-1.5">
-                <ConnectionsButton />
-              </div>
               <UserMenu />
             </div>
           </SidebarFooter>

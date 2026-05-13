@@ -10,7 +10,6 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { NoOrgWelcome } from "./components/onboarding/NoOrgWelcome";
 import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
-import { ConnectionsView } from "./components/connections/ConnectionsView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { SidebarProvider, SidebarInset } from "./components/ui/sidebar";
@@ -137,8 +136,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <SettingsPage />
                 ) : activePage === "inbox" ? (
                   <InboxView />
-                ) : activePage === "connections" ? (
-                  <ConnectionsView />
                 ) : activePage === "tickets" && features.tickets ? (
                   <TicketsView />
                 ) : shouldRenderChatView ? (

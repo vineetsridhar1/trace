@@ -13,7 +13,7 @@ import {
   resolveSessionGroupIdForSession,
 } from "./ui-navigation";
 
-export type ActivePage = "main" | "settings" | "inbox" | "connections" | "tickets";
+export type ActivePage = "main" | "settings" | "inbox" | "tickets";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
 export interface NavigationState {
   channelId: string | null;
@@ -202,10 +202,6 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
     if (page === "inbox") {
       pushNav(null, null, null, "inbox");
-      return;
-    }
-    if (page === "connections") {
-      pushNav(null, null, null, "connections");
       return;
     }
     if (page === "tickets") {
