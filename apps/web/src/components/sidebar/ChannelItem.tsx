@@ -66,9 +66,9 @@ export const ChannelItem = memo(function ChannelItem({
 
   return (
     <>
-      <ContextMenu>
-        <ContextMenuTrigger>
-          <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <div ref={setNodeRef} style={style} className="relative" {...attributes} {...listeners}>
+        <ContextMenu>
+          <ContextMenuTrigger render={<div />}>
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={isActive}
@@ -119,78 +119,78 @@ export const ChannelItem = memo(function ChannelItem({
                   </span>
                 )}
               </SidebarMenuButton>
-              {canStartSession && (
-                <>
-                  <button
-                    type="button"
-                    className="absolute right-8 top-1/2 z-20 flex h-5 w-9 -translate-y-1/2 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
-                    title="Toggle mine/all sessions"
-                    aria-label={`Sidebar sessions: ${sessionScope}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onContextMenuCapture={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onToggleSessionScope?.();
-                    }}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (event.button === 0) {
-                        onToggleSessionScope?.();
-                      }
-                    }}
-                  >
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.span
-                        key={sessionScope}
-                        initial={{ y: 8, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: -8, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                      >
-                        {sessionScope}
-                      </motion.span>
-                    </AnimatePresence>
-                  </button>
-                  <button
-                    type="button"
-                    className="absolute right-1 top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
-                    title="New session"
-                    aria-label="New session"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      createQuickSession(id);
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <Plus size={14} />
-                  </button>
-                </>
-              )}
             </SidebarMenuItem>
-          </div>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          {canStartSession && (
-            <>
-              <ContextMenuItem onClick={() => onToggleSessionScope?.()}>
-                <Users size={14} className="mr-2" />
-                {sessionScope === "mine" ? "Show all sessions" : "Show my sessions"}
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-            </>
-          )}
-          <ContextMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2 size={14} className="mr-2" />
-            Delete channel
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            {canStartSession && (
+              <>
+                <ContextMenuItem onClick={() => onToggleSessionScope?.()}>
+                  <Users size={14} className="mr-2" />
+                  {sessionScope === "mine" ? "Show all sessions" : "Show my sessions"}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
+            <ContextMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 size={14} className="mr-2" />
+              Delete channel
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+        {canStartSession && (
+          <>
+            <button
+              type="button"
+              className="absolute right-8 top-1/2 z-20 flex h-5 w-9 -translate-y-1/2 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
+              title="Toggle mine/all sessions"
+              aria-label={`Sidebar sessions: ${sessionScope}`}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onContextMenuCapture={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggleSessionScope?.();
+              }}
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.button === 0) {
+                  onToggleSessionScope?.();
+                }
+              }}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={sessionScope}
+                  initial={{ y: 8, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -8, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {sessionScope}
+                </motion.span>
+              </AnimatePresence>
+            </button>
+            <button
+              type="button"
+              className="absolute right-1 top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
+              title="New session"
+              aria-label="New session"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                createQuickSession(id);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <Plus size={14} />
+            </button>
+          </>
+        )}
+      </div>
 
       <DeleteChannelDialog
         channelId={id}
