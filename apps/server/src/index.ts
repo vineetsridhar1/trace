@@ -20,6 +20,7 @@ import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
+import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
@@ -491,10 +492,12 @@ async function main() {
     await cloudMachineService.restoreFromDb();
   }
 
-  // Reattach Slack event bridges for any in-flight sessions.
-  await slackEventBridge.rehydrate().catch((err: unknown) => {
-    console.warn("[slack-bridge] rehydration failed:", (err as Error).message);
-  });
+  // Reattach Slack event bridges only when Slack is configured.
+  if (isSlackConfigured()) {
+    await slackEventBridge.rehydrate().catch((err: unknown) => {
+      console.warn("[slack-bridge] rehydration failed:", (err as Error).message);
+    });
+  }
 
   startupReady = true;
 }

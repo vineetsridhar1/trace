@@ -249,6 +249,7 @@ model Organization {
   cloudMachines CloudMachine[]
   aiConversations  AiConversation[]
   slackInstalls SlackInstall[]
+  slackChannelBindings SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -335,6 +336,7 @@ model User {
   queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
   slackInstalls     SlackInstall[]   @relation("SlackInstallInstaller")
   slackAccounts     SlackAccount[]
+  slackChannelBindings SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -421,6 +423,7 @@ model Channel {
   tickets  Ticket[]
   members  ChannelMember[]
   messages Message[]
+  slackBindings SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -985,15 +988,37 @@ model SlackInstall {
 }
 
 model SlackAccount {
-  id          String   @id @default(uuid())
-  slackUserId String
-  slackTeamId String
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  id                       String      @id @default(uuid())
+  slackUserId              String
+  slackTeamId              String
+  userId                   String
+  user                     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredTool            CodingTool?
+  preferredModel           String?
+  preferredReasoningEffort String?
+  createdAt                DateTime    @default(now())
 
   @@unique([slackUserId, slackTeamId])
   @@index([userId])
+}
+
+model SlackChannelBinding {
+  id              String   @id @default(uuid())
+  slackTeamId     String
+  slackChannelId  String
+  traceChannelId  String
+  organizationId  String
+  boundById       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  traceChannel Channel      @relation(fields: [traceChannelId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  boundBy      User         @relation(fields: [boundById], references: [id], onDelete: Cascade)
+
+  @@unique([slackTeamId, slackChannelId])
+  @@index([traceChannelId])
+  @@index([organizationId])
 }
 
 model SlackThreadSession {
