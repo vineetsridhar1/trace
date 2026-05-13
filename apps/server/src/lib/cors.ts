@@ -23,8 +23,12 @@ export function getAllowedCorsOrigins(options: AllowedCorsOriginsOptions): Set<s
   }
 
   if (options.localMode || options.nodeEnv !== "production") {
-    origins.add("http://localhost:3000");
-    origins.add("http://127.0.0.1:3000");
+    // Vite auto-increments the port when 3000 is taken (e.g. by an ssh tunnel),
+    // so allow a small range of localhost ports in dev/local mode.
+    for (let port = 3000; port <= 3009; port++) {
+      origins.add(`http://localhost:${port}`);
+      origins.add(`http://127.0.0.1:${port}`);
+    }
   }
 
   if (!options.localMode && options.nodeEnv === "production" && origins.size === 0) {

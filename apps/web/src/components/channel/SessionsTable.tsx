@@ -6,6 +6,12 @@ import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog"
 import { motion } from "framer-motion";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
+import {
+  beginActionLatency,
+  expectActionEventLatency,
+  markOptimisticLatency,
+  measureMutationLatency,
+} from "../../lib/action-latency";
 import { RENAME_SESSION_GROUP_MUTATION } from "@trace/client-core";
 import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
@@ -85,10 +91,19 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     setRenamingGroupId(null);
     if (!trimmed || trimmed === group.name.trim()) return;
 
+    const interactionId = beginActionLatency("rename-session-group", { groupId: group.id });
     const rollback = applyOptimisticPatch("sessionGroups", group.id, { name: trimmed });
-    void client
-      .mutation(RENAME_SESSION_GROUP_MUTATION, { id: group.id, name: trimmed })
-      .toPromise()
+    markOptimisticLatency(interactionId);
+    expectActionEventLatency({
+      interactionId,
+      action: "rename-session-group",
+      scopeType: "session",
+      eventType: "session_group_renamed",
+    });
+    void measureMutationLatency(
+      interactionId,
+      client.mutation(RENAME_SESSION_GROUP_MUTATION, { id: group.id, name: trimmed }).toPromise(),
+    )
       .then((result) => {
         if (!result.error) return;
         rollback();

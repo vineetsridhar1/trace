@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
-import { handleOrgEvent, useAuthStore } from "@trace/client-core";
+import { handleOrgEvent, markLatencyEventReceived, useAuthStore } from "@trace/client-core";
 import { client } from "../lib/urql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -38,7 +38,9 @@ export function useOrgEvents() {
           console.error("[orgEvents] subscription error:", result.error);
         }
         if (!result.data?.orgEvents) return;
-        handleOrgEvent(result.data.orgEvents as Event);
+        const event = result.data.orgEvents as Event;
+        markLatencyEventReceived(event, "org");
+        handleOrgEvent(event);
       });
 
     return () => subscription.unsubscribe();

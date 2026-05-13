@@ -69,6 +69,14 @@ type TxClient = Prisma.TransactionClient;
 export class EventService {
   async create(input: CreateEventInput, tx?: TxClient) {
     const db = tx ?? prisma;
+    const serverCreateStartedAt = Date.now();
+    const metadata =
+      input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
+        ? {
+            ...(input.metadata as Record<string, unknown>),
+            latency: { serverCreateStartedAt },
+          }
+        : { latency: { serverCreateStartedAt } };
 
     const event = await db.event.create({
       data: {
@@ -80,7 +88,7 @@ export class EventService {
         actorType: input.actorType,
         actorId: input.actorId,
         parentId: input.parentId,
-        metadata: input.metadata ?? {},
+        metadata: metadata as Prisma.InputJsonValue,
       },
     });
 
@@ -92,24 +100,28 @@ export class EventService {
   }
 
   publishCreated(event: PrismaEvent) {
+    const serverPublishStartedAt = Date.now();
+    const eventWithLatency = this.withPublishLatency(event, serverPublishStartedAt);
     // Broadcast to entity-scoped topic (e.g. channel:<id>:events)
     const topicBuilder = scopeTopicMap[event.scopeType];
     if (topicBuilder) {
-      pubsub.publish(topicBuilder(event.scopeId), { [`${event.scopeType}Events`]: event });
+      pubsub.publish(topicBuilder(event.scopeId), {
+        [`${event.scopeType}Events`]: eventWithLatency,
+      });
     }
 
     // For session-scoped events, also publish to the session-specific topic
     // so session detail views get full payloads via their own subscription.
     if (event.scopeType === "session") {
-      pubsub.publish(topics.sessionEvents(event.scopeId), { sessionEvents: event });
+      pubsub.publish(topics.sessionEvents(event.scopeId), { sessionEvents: eventWithLatency });
     }
 
     // Phase 3B: Skip org broadcast for chat events — they already go to chat:<id>:events
     // and broadcasting to org topic only triggers per-event membership checks for non-members.
     if (event.scopeType === "chat") {
       // Still append to Redis stream for agent worker
-      this.appendToStream(event.organizationId, event);
-      return event;
+      this.appendToStream(event.organizationId, eventWithLatency);
+      return eventWithLatency;
     }
 
     // For session_output events, only broadcast to the org topic when the
@@ -133,7 +145,7 @@ export class EventService {
           actorId: event.actorId,
           parentId: event.parentId,
           timestamp: event.timestamp,
-          metadata: event.metadata,
+          metadata: eventWithLatency.metadata,
           organizationId: event.organizationId,
           payload: this.trimSessionOutputPayload(event.payload as Prisma.InputJsonValue),
         };
@@ -141,16 +153,37 @@ export class EventService {
       }
     } else {
       // All other events: broadcast full event to org topic
-      pubsub.publish(topics.orgEvents(event.organizationId), { orgEvents: event });
+      pubsub.publish(topics.orgEvents(event.organizationId), { orgEvents: eventWithLatency });
     }
 
     // Append to org-scoped Redis Stream for durable consumption by the agent worker
-    this.appendToStream(event.organizationId, event);
-    void pushNotificationService.notifyForEvent(event).catch((err: Error) => {
+    this.appendToStream(event.organizationId, eventWithLatency);
+    void pushNotificationService.notifyForEvent(eventWithLatency).catch((err: Error) => {
       console.error("[push-notifications] event notification failed:", err.message);
     });
 
-    return event;
+    return eventWithLatency;
+  }
+
+  private withPublishLatency(event: PrismaEvent, serverPublishStartedAt: number): PrismaEvent {
+    const metadata =
+      event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+        ? (event.metadata as Record<string, unknown>)
+        : {};
+    const latency =
+      metadata.latency && typeof metadata.latency === "object" && !Array.isArray(metadata.latency)
+        ? (metadata.latency as Record<string, unknown>)
+        : {};
+    return {
+      ...event,
+      metadata: {
+        ...metadata,
+        latency: {
+          ...latency,
+          serverPublishStartedAt,
+        },
+      } as Prisma.JsonValue,
+    };
   }
 
   /**

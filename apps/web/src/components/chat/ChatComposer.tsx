@@ -12,6 +12,12 @@ import {
   reconcileOptimisticChatMessage,
   removeOptimisticChatMessage,
 } from "@trace/client-core";
+import {
+  beginActionLatency,
+  connectClientMutationLatency,
+  markOptimisticLatency,
+  measureMutationLatency,
+} from "../../lib/action-latency";
 
 const SEND_CHAT_MESSAGE = gql`
   mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID, $clientMutationId: String) {
@@ -33,22 +39,28 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
 
   const handleSubmit = useCallback(
     async (html: string, _text: string) => {
+      const interactionId = beginActionLatency("send-chat-message", { chatId });
       // Insert optimistic message so it appears instantly
       const {
         messageId: tempMessageId,
         eventId: tempEventId,
         clientMutationId,
       } = optimisticallyInsertChatMessage(chatId, html, parentId);
+      connectClientMutationLatency(clientMutationId, interactionId);
+      markOptimisticLatency(interactionId);
 
       try {
-        const result = await client
-          .mutation(SEND_CHAT_MESSAGE, {
-            chatId,
-            html,
-            parentId: parentId ?? null,
-            clientMutationId,
-          })
-          .toPromise();
+        const result = await measureMutationLatency(
+          interactionId,
+          client
+            .mutation(SEND_CHAT_MESSAGE, {
+              chatId,
+              html,
+              parentId: parentId ?? null,
+              clientMutationId,
+            })
+            .toPromise(),
+        );
 
         if (result.error) {
           throw result.error;

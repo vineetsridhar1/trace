@@ -7,6 +7,12 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";
+import {
+  beginActionLatency,
+  expectActionEventLatency,
+  markOptimisticLatency,
+  measureMutationLatency,
+} from "../../lib/action-latency";
 
 const SEND_CHANNEL_MESSAGE = gql`
   mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {
@@ -26,15 +32,27 @@ export function ChannelComposer({ channelId, parentId }: { channelId: string; pa
     async (html: string, _text: string) => {
       if (sending) return;
 
+      const interactionId = beginActionLatency("send-channel-message", { channelId });
       setSending(true);
+      markOptimisticLatency(interactionId);
+      expectActionEventLatency({
+        interactionId,
+        action: "send-channel-message",
+        scopeType: "channel",
+        scopeId: channelId,
+        eventType: "message_sent",
+      });
       try {
-        const result = await client
-          .mutation(SEND_CHANNEL_MESSAGE, {
-            channelId,
-            html,
-            parentId: parentId ?? null,
-          })
-          .toPromise();
+        const result = await measureMutationLatency(
+          interactionId,
+          client
+            .mutation(SEND_CHANNEL_MESSAGE, {
+              channelId,
+              html,
+              parentId: parentId ?? null,
+            })
+            .toPromise(),
+        );
 
         if (result.error) {
           throw result.error;

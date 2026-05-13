@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentNode } from "graphql";
 import type { Event, Message } from "@trace/gql";
 import { client } from "../lib/urql";
-import { messageScopeKey, useEntityStore, useMessageIdsForScope } from "@trace/client-core";
+import {
+  markLatencyEventHandled,
+  markLatencyEventReceived,
+  messageScopeKey,
+  useEntityStore,
+  useMessageIdsForScope,
+} from "@trace/client-core";
 
 const PAGE_SIZE = 100;
 
@@ -121,7 +127,13 @@ export function useScopedMessages({
           subscription.resultField,
         );
         if (event) {
+          const startedAt = nowMs();
+          markLatencyEventReceived(
+            event,
+            subscription.resultField === "chatEvents" ? "chat" : "channel",
+          );
           subscription.onEvent(event);
+          markLatencyEventHandled(event, nowMs() - startedAt);
         }
       });
 
@@ -185,4 +197,11 @@ export function useScopedMessages({
     hasOlder,
     fetchOlderMessages,
   };
+}
+
+function nowMs(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
 }

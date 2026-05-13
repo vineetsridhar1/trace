@@ -63,18 +63,28 @@ describe("EventService", () => {
     });
 
     expect(event.id).toBe("event-1");
+    const publishedEvent = expect.objectContaining({
+      id: "event-1",
+      metadata: expect.objectContaining({
+        latency: expect.objectContaining({
+          serverPublishStartedAt: expect.any(Number),
+        }),
+      }),
+    });
     expect(pubsubMock.publish).toHaveBeenNthCalledWith(1, "channel:channel-1:events", {
-      channelEvents: event,
+      channelEvents: publishedEvent,
     });
     expect(pubsubMock.publish).toHaveBeenNthCalledWith(2, "org:org-1:events", {
-      orgEvents: event,
+      orgEvents: publishedEvent,
     });
     expect(redisMock.xadd).toHaveBeenCalledWith(
       "stream:org:org-1:events",
       "*",
       "event",
-      JSON.stringify(event),
+      expect.any(String),
     );
+    const streamPayload = JSON.parse(redisMock.xadd.mock.calls[0][3]);
+    expect(streamPayload).toEqual(publishedEvent);
   });
 
   it("can create events without publishing until explicitly requested", async () => {
@@ -103,18 +113,28 @@ describe("EventService", () => {
 
     service.publishCreated(event);
 
+    const publishedEvent = expect.objectContaining({
+      id: "event-1",
+      metadata: expect.objectContaining({
+        latency: expect.objectContaining({
+          serverPublishStartedAt: expect.any(Number),
+        }),
+      }),
+    });
     expect(pubsubMock.publish).toHaveBeenNthCalledWith(1, "channel:channel-1:events", {
-      channelEvents: event,
+      channelEvents: publishedEvent,
     });
     expect(pubsubMock.publish).toHaveBeenNthCalledWith(2, "org:org-1:events", {
-      orgEvents: event,
+      orgEvents: publishedEvent,
     });
     expect(redisMock.xadd).toHaveBeenCalledWith(
       "stream:org:org-1:events",
       "*",
       "event",
-      JSON.stringify(event),
+      expect.any(String),
     );
+    const streamPayload = JSON.parse(redisMock.xadd.mock.calls[0][3]);
+    expect(streamPayload).toEqual(publishedEvent);
   });
 
   it("queries events in chronological order even when paginating backwards", async () => {

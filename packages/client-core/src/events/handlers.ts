@@ -26,6 +26,11 @@ import {
   takePendingOptimisticSession,
   upsertSessionEventWithOptimisticResolution,
 } from "../mutations/optimistic-message.js";
+import {
+  findLatencyInteractionForEvent,
+  markLatencyEventHandled,
+  recordLatencyMark,
+} from "../latency.js";
 import { notifyForEvent } from "../notifications/registry.js";
 import { getOrgEventUIBindings } from "./ui-bindings.js";
 import {
@@ -131,6 +136,12 @@ function isCurrentUserSession(session: SessionEntity | undefined): session is Se
  * inside a `StoreBatchWriter` so the entire event is one `setState` call.
  */
 export function handleOrgEvent(event: Event): void {
+  const handlerStart = nowMs();
+  const interactionId = findLatencyInteractionForEvent(event);
+  recordLatencyMark(interactionId, "event-handler-start", {
+    eventType: event.eventType,
+    source: "org",
+  });
   const ui = getOrgEventUIBindings();
   const batch = new StoreBatchWriter();
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
@@ -597,6 +608,7 @@ export function handleOrgEvent(event: Event): void {
   }
 
   batch.flush();
+  markLatencyEventHandled(event, nowMs() - handlerStart);
 
   notifyForEvent(event);
 }
@@ -607,5 +619,19 @@ export function handleOrgEvent(event: Event): void {
  * are replaced atomically by the canonical event.
  */
 export function handleSessionEvent(sessionId: string, event: Event & { id: string }): void {
+  const handlerStart = nowMs();
+  const interactionId = findLatencyInteractionForEvent(event);
+  recordLatencyMark(interactionId, "event-handler-start", {
+    eventType: event.eventType,
+    source: "session",
+  });
   upsertSessionEventWithOptimisticResolution(sessionId, event);
+  markLatencyEventHandled(event, nowMs() - handlerStart);
+}
+
+function nowMs(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
 }

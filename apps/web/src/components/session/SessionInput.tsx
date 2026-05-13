@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Cloud, Loader2, Monitor, Paperclip, Send, Square } from "lucide-react";
+import type { QueuedMessage } from "@trace/gql";
 import {
   isSessionPreparing,
   isSessionRuntimeStartingUp,
+  StoreBatchWriter,
   useEntityField,
   useEntityStore,
   type SessionEntity,
@@ -34,6 +36,13 @@ import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import {
+  beginActionLatency,
+  connectClientMutationLatency,
+  expectActionEventLatency,
+  markOptimisticLatency,
+  measureMutationLatency,
+} from "../../lib/action-latency";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
@@ -211,25 +220,70 @@ export function SessionInput({
           }
         }
 
+        const interactionId = beginActionLatency(
+          canQueue ? "queue-session-message" : "send-session-message",
+          { sessionId },
+        );
+
         if (canQueue) {
+          const tempQueuedMessageId = `optimistic:${generateUUID()}`;
+          const tempQueuedMessage: QueuedMessage = {
+            id: tempQueuedMessageId,
+            sessionId,
+            text: wrappedText,
+            attachmentKeys: imageKeys,
+            imageKeys,
+            interactionMode: mode === "code" ? null : mode,
+            position:
+              useEntityStore.getState()._queuedMessageIdsBySession[sessionId]?.length ?? 0,
+            createdAt: new Date().toISOString(),
+          };
+          const optimisticBatch = new StoreBatchWriter();
+          optimisticBatch.upsertQueuedMessage(sessionId, tempQueuedMessageId, tempQueuedMessage);
+          optimisticBatch.flush();
+          markOptimisticLatency(interactionId);
+          expectActionEventLatency({
+            interactionId,
+            action: "queue-session-message",
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "queued_message_added",
+          });
           try {
-            const result = await client
-              .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
-                sessionId,
-                text: wrappedText,
-                attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
-                interactionMode: mode === "code" ? undefined : mode,
-              })
-              .toPromise();
+            const result = await measureMutationLatency(
+              interactionId,
+              client
+                .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+                  sessionId,
+                  text: wrappedText,
+                  attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
+                  interactionMode: mode === "code" ? undefined : mode,
+                })
+                .toPromise(),
+            );
 
             if (result.error) {
               throw result.error;
+            }
+
+            const queuedMessage = result.data?.queueSessionMessage;
+            if (queuedMessage?.id) {
+              const batch = new StoreBatchWriter();
+              batch.removeQueuedMessage(sessionId, tempQueuedMessageId);
+              batch.upsertQueuedMessage(sessionId, queuedMessage.id, {
+                ...queuedMessage,
+                sessionId,
+              });
+              batch.flush();
             }
 
             setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
             for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
             shouldRefocusAfterQueue = true;
           } catch (error) {
+            const rollbackBatch = new StoreBatchWriter();
+            rollbackBatch.removeQueuedMessage(sessionId, tempQueuedMessageId);
+            rollbackBatch.flush();
             setDraftImages(sessionId, (prev) =>
               prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
             );
@@ -271,19 +325,24 @@ export function SessionInput({
               }
             : undefined,
         );
+        connectClientMutationLatency(clientMutationId, interactionId);
+        markOptimisticLatency(interactionId);
 
         setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
 
         try {
-          const result = await client
-            .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-              sessionId,
-              text: wrappedText,
-              attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
-              interactionMode: mode === "code" ? undefined : mode,
-              clientMutationId,
-            })
-            .toPromise();
+          const result = await measureMutationLatency(
+            interactionId,
+            client
+              .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                sessionId,
+                text: wrappedText,
+                attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
+                interactionMode: mode === "code" ? undefined : mode,
+                clientMutationId,
+              })
+              .toPromise(),
+          );
 
           if (result.error) {
             throw result.error;

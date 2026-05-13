@@ -6,6 +6,12 @@ import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@tra
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
+import {
+  beginActionLatency,
+  expectActionEventLatency,
+  markOptimisticLatency,
+  measureMutationLatency,
+} from "../../lib/action-latency";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { DisabledReasonHint } from "../ui/DisabledReasonHint";
@@ -189,6 +195,19 @@ export function SessionInputOptions({
     void fetchAvailableRuntimes();
   }, [fetchAvailableRuntimes]);
 
+  const beginConfigUpdateLatency = useCallback(() => {
+    const interactionId = beginActionLatency("update-session-config", { sessionId });
+    markOptimisticLatency(interactionId);
+    expectActionEventLatency({
+      interactionId,
+      action: "update-session-config",
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+    });
+    return interactionId;
+  }, [sessionId]);
+
   const handleToolChange = useCallback(
     async (newTool: string | null) => {
       if (!newTool || isOptimistic) return;
@@ -199,37 +218,45 @@ export function SessionInputOptions({
         model: newDefault ?? null,
         reasoningEffort: newDefaultReasoningEffort ?? null,
       });
+      const interactionId = beginConfigUpdateLatency();
       try {
-        const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
-            sessionId,
-            tool: newTool,
-          })
-          .toPromise();
+        const result = await measureMutationLatency(
+          interactionId,
+          client
+            .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+              sessionId,
+              tool: newTool,
+            })
+            .toPromise(),
+        );
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
         console.error("Failed to update session tool:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [beginConfigUpdateLatency, isOptimistic, sessionId],
   );
 
   const handleModelChange = useCallback(
     async (newModel: string | null) => {
       if (!newModel || isOptimistic) return;
       const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
+      const interactionId = beginConfigUpdateLatency();
       try {
-        const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
-          .toPromise();
+        const result = await measureMutationLatency(
+          interactionId,
+          client
+            .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
+            .toPromise(),
+        );
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
         console.error("Failed to update session model:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [beginConfigUpdateLatency, isOptimistic, sessionId],
   );
 
   const handleReasoningEffortChange = useCallback(
@@ -238,20 +265,24 @@ export function SessionInputOptions({
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         reasoningEffort: newReasoningEffort,
       });
+      const interactionId = beginConfigUpdateLatency();
       try {
-        const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
-            sessionId,
-            reasoningEffort: newReasoningEffort,
-          })
-          .toPromise();
+        const result = await measureMutationLatency(
+          interactionId,
+          client
+            .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+              sessionId,
+              reasoningEffort: newReasoningEffort,
+            })
+            .toPromise(),
+        );
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
         console.error("Failed to update session reasoning effort:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [beginConfigUpdateLatency, isOptimistic, sessionId],
   );
 
   const handleRuntimeChange = useCallback(
@@ -286,11 +317,15 @@ export function SessionInputOptions({
           hosting: "cloud",
           connection: nextConnection,
         });
+        const interactionId = beginConfigUpdateLatency();
 
         try {
-          const result = await client
-            .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, hosting: "cloud" })
-            .toPromise();
+          const result = await measureMutationLatency(
+            interactionId,
+            client
+              .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, hosting: "cloud" })
+              .toPromise(),
+          );
           if (result.error) throw result.error;
         } catch (error) {
           rollback();
@@ -320,15 +355,19 @@ export function SessionInputOptions({
         hosting: rt?.hostingMode ?? "local",
         connection: nextConnection,
       });
+      const interactionId = beginConfigUpdateLatency();
 
       try {
-        const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
-            sessionId,
-            hosting: "local",
-            runtimeInstanceId: value,
-          })
-          .toPromise();
+        const result = await measureMutationLatency(
+          interactionId,
+          client
+            .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+              sessionId,
+              hosting: "local",
+              runtimeInstanceId: value,
+            })
+            .toPromise(),
+        );
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
@@ -346,6 +385,7 @@ export function SessionInputOptions({
       connection,
       cloudDisabledReason,
       cloudEnvironmentAvailable,
+      beginConfigUpdateLatency,
     ],
   );
 

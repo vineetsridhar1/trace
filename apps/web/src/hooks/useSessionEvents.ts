@@ -4,6 +4,7 @@ import type { Event } from "@trace/gql";
 import {
   eventScopeKey,
   handleSessionEvent,
+  markLatencyEventReceived,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
   useScopedEventIds,
@@ -138,7 +139,9 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
       })
       .subscribe((result: { data?: Record<string, unknown> }) => {
         if (!result.data?.sessionEvents) return;
-        handleSessionEvent(sessionId, result.data.sessionEvents as Event & { id: string });
+        const event = result.data.sessionEvents as Event & { id: string };
+        markLatencyEventReceived(event, "session");
+        handleSessionEvent(sessionId, event);
       });
 
     return () => subscription.unsubscribe();

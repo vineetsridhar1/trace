@@ -2,6 +2,12 @@ import { useState } from "react";
 import { client } from "../../lib/urql";
 import { ARCHIVE_SESSION_GROUP_MUTATION } from "@trace/client-core";
 import {
+  beginActionLatency,
+  expectActionEventLatency,
+  markOptimisticLatency,
+  measureMutationLatency,
+} from "../../lib/action-latency";
+import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
   ResponsiveDialogHeader as DialogHeader,
@@ -32,12 +38,21 @@ export function ArchiveSessionGroupDialog({
   };
 
   const handleArchive = async () => {
+    const interactionId = beginActionLatency("archive-session-group", { groupId });
     setArchiving(true);
+    markOptimisticLatency(interactionId);
     setError(null);
+    expectActionEventLatency({
+      interactionId,
+      action: "archive-session-group",
+      scopeType: "session",
+      eventType: "session_group_archived",
+    });
     try {
-      const result = await client
-        .mutation(ARCHIVE_SESSION_GROUP_MUTATION, { id: groupId })
-        .toPromise();
+      const result = await measureMutationLatency(
+        interactionId,
+        client.mutation(ARCHIVE_SESSION_GROUP_MUTATION, { id: groupId }).toPromise(),
+      );
       if (result.error) {
         setError(result.error.message);
         return;
