@@ -173,6 +173,7 @@ export function SessionInput({
 
       isSendingRef.current = true;
       setIsSending(true);
+      let shouldRefocusAfterQueue = false;
       try {
         const savedImages = [...images];
         const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
@@ -215,6 +216,7 @@ export function SessionInput({
 
             setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
             for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
+            shouldRefocusAfterQueue = true;
           } catch (error) {
             setDraftImages(sessionId, (prev) =>
               prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
@@ -295,10 +297,17 @@ export function SessionInput({
       } finally {
         isSendingRef.current = false;
         setIsSending(false);
+        if (shouldRefocusAfterQueue) {
+          requestAnimationFrame(() => editorRef.current?.focus());
+        }
       }
     },
     [sessionId, mode, canSend, canQueue, images, isNotStarted, hosting, connection],
   );
+
+  const handleQueueSubmit = useCallback(() => {
+    void editorRef.current?.submit();
+  }, []);
 
   // If the user has bridge access (owner or granted), a disconnected session
   // belongs to the recovery panel — not the permission prompt. Non-owners
@@ -416,7 +425,7 @@ export function SessionInput({
         {isActive ? (
           <>
             <button
-              onClick={() => void editorRef.current?.submit()}
+              onClick={handleQueueSubmit}
               disabled={(!hasContent && images.length === 0) || !canSend || isSending}
               className={cn(
                 "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
@@ -436,7 +445,7 @@ export function SessionInput({
           </>
         ) : (
           <button
-            onClick={() => void editorRef.current?.submit()}
+            onClick={handleQueueSubmit}
             disabled={(!hasContent && images.length === 0) || !canSend || isSending}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",

@@ -67,9 +67,45 @@ export const REMOVE_QUEUED_MESSAGE_MUTATION = gql`
   }
 `;
 
+export const STEER_QUEUED_MESSAGE_MUTATION = gql`
+  mutation SteerQueuedMessage($id: ID!) {
+    steerQueuedMessage(id: $id) {
+      id
+    }
+  }
+`;
+
+export const UPDATE_QUEUED_MESSAGE_MUTATION = gql`
+  mutation UpdateQueuedMessage($id: ID!, $text: String!) {
+    updateQueuedMessage(id: $id, text: $text) {
+      id
+      sessionId
+      text
+      imageKeys: attachmentKeys
+      interactionMode
+      position
+      createdAt
+    }
+  }
+`;
+
 export const CLEAR_QUEUED_MESSAGES_MUTATION = gql`
   mutation ClearQueuedMessages($sessionId: ID!) {
     clearQueuedMessages(sessionId: $sessionId)
+  }
+`;
+
+export const REORDER_QUEUED_MESSAGES_MUTATION = gql`
+  mutation ReorderQueuedMessages($sessionId: ID!, $ids: [ID!]!) {
+    reorderQueuedMessages(sessionId: $sessionId, ids: $ids) {
+      id
+      sessionId
+      text
+      imageKeys: attachmentKeys
+      interactionMode
+      position
+      createdAt
+    }
   }
 `;
 

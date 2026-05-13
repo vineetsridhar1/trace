@@ -1113,8 +1113,11 @@ type Mutation {
     imageKeys: [String!]
     interactionMode: String
   ): QueuedMessage!
+  updateQueuedMessage(id: ID!, text: String!): QueuedMessage!
   removeQueuedMessage(id: ID!): Boolean!
+  steerQueuedMessage(id: ID!): Event!
   clearQueuedMessages(sessionId: ID!): Boolean!
+  reorderQueuedMessages(sessionId: ID!, ids: [ID!]!): [QueuedMessage!]!
   retrySessionConnection(sessionId: ID!): Session!
   retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!

@@ -4184,6 +4184,27 @@ export class SessionService {
     return queuedMessage;
   }
 
+  private queuedMessagePayload(message: {
+    id: string;
+    sessionId: string;
+    text: string;
+    imageKeys: string[];
+    interactionMode: string | null;
+    position: number;
+    createdAt: Date;
+  }) {
+    return {
+      id: message.id,
+      sessionId: message.sessionId,
+      text: message.text,
+      attachmentKeys: message.imageKeys,
+      imageKeys: message.imageKeys,
+      interactionMode: message.interactionMode,
+      position: message.position,
+      createdAt: message.createdAt.toISOString(),
+    };
+  }
+
   async removeQueuedMessage(id: string, actorId: string, organizationId: string) {
     const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
       where: { id },
@@ -4208,6 +4229,120 @@ export class SessionService {
     return true;
   }
 
+  async updateQueuedMessage(id: string, text: string, actorId: string, organizationId: string) {
+    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+      where: { id },
+      select: { sessionId: true, organizationId: true, imageKeys: true },
+    });
+    if (queuedMessage.organizationId !== organizationId) {
+      throw new Error("Queued message does not belong to this organization");
+    }
+    if (text.trim().length === 0 && queuedMessage.imageKeys.length === 0) {
+      throw new Error("Queued message text cannot be empty");
+    }
+
+    const { updated, event } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const updated = await tx.queuedMessage.update({
+        where: { id },
+        data: { text },
+      });
+
+      const event = await eventService.create(
+        {
+          organizationId: queuedMessage.organizationId,
+          scopeType: "session",
+          scopeId: queuedMessage.sessionId,
+          eventType: "queued_message_added",
+          payload: {
+            sessionId: queuedMessage.sessionId,
+            queuedMessage: this.queuedMessagePayload(updated),
+          },
+          actorType: "user",
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+
+      return { updated, event };
+    });
+    eventService.publishCreated(event);
+
+    return updated;
+  }
+
+  async steerQueuedMessage(id: string, actorId: string, organizationId: string) {
+    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+      where: { id },
+    });
+    if (queuedMessage.organizationId !== organizationId) {
+      throw new Error("Queued message does not belong to this organization");
+    }
+
+    const removedEvent = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.queuedMessage.delete({ where: { id } });
+      return eventService.create(
+        {
+          organizationId: queuedMessage.organizationId,
+          scopeType: "session",
+          scopeId: queuedMessage.sessionId,
+          eventType: "queued_message_removed",
+          payload: { sessionId: queuedMessage.sessionId, queuedMessageId: id },
+          actorType: "user",
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+    });
+    eventService.publishCreated(removedEvent);
+
+    try {
+      return await this.sendMessage({
+        sessionId: queuedMessage.sessionId,
+        text: queuedMessage.text,
+        imageKeys: queuedMessage.imageKeys,
+        actorType: "user",
+        actorId,
+        interactionMode: queuedMessage.interactionMode ?? undefined,
+      });
+    } catch (error) {
+      const restoredEvent = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const restored = await tx.queuedMessage.create({
+          data: {
+            id: queuedMessage.id,
+            sessionId: queuedMessage.sessionId,
+            text: queuedMessage.text,
+            imageKeys: queuedMessage.imageKeys,
+            interactionMode: queuedMessage.interactionMode,
+            position: queuedMessage.position,
+            createdById: queuedMessage.createdById,
+            organizationId: queuedMessage.organizationId,
+            createdAt: queuedMessage.createdAt,
+          },
+        });
+        return eventService.create(
+          {
+            organizationId: queuedMessage.organizationId,
+            scopeType: "session",
+            scopeId: queuedMessage.sessionId,
+            eventType: "queued_message_added",
+            payload: {
+              sessionId: queuedMessage.sessionId,
+              queuedMessage: this.queuedMessagePayload(restored),
+            },
+            actorType: "user",
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        );
+      });
+      eventService.publishCreated(restoredEvent);
+      throw error;
+    }
+  }
+
   async clearQueuedMessages(sessionId: string, actorId: string, organizationId: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -4230,6 +4365,87 @@ export class SessionService {
     });
 
     return true;
+  }
+
+  async reorderQueuedMessages(
+    sessionId: string,
+    ids: string[],
+    actorId: string,
+    organizationId: string,
+  ) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true },
+    });
+    if (session.organizationId !== organizationId) {
+      throw new Error("Session does not belong to this organization");
+    }
+
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      throw new Error("Queued message ids must be unique");
+    }
+
+    const { reordered, events } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const queuedMessages = await tx.queuedMessage.findMany({
+        where: { sessionId },
+        orderBy: { position: "asc" },
+      });
+
+      if (queuedMessages.length !== ids.length) {
+        throw new Error("Queued message order is stale");
+      }
+
+      const queuedIds = new Set(queuedMessages.map((message: { id: string }) => message.id));
+      if (ids.some((id) => !queuedIds.has(id))) {
+        throw new Error("Queued message order contains unknown messages");
+      }
+
+      await Promise.all(
+        ids.map((id, position) =>
+          tx.queuedMessage.update({
+            where: { id },
+            data: { position },
+          }),
+        ),
+      );
+
+      const byId = new Map(queuedMessages.map((message) => [message.id, message]));
+      const reordered = ids.map((id, position) => ({
+        ...byId.get(id)!,
+        position,
+      }));
+
+      const events: Awaited<ReturnType<typeof eventService.create>>[] = [];
+      for (const message of reordered) {
+        events.push(
+          await eventService.create(
+            {
+              organizationId: session.organizationId,
+              scopeType: "session",
+              scopeId: sessionId,
+              eventType: "queued_message_added",
+              payload: {
+                sessionId,
+                queuedMessage: this.queuedMessagePayload(message),
+              },
+              actorType: "user",
+              actorId,
+              deferPublish: true,
+            },
+            tx,
+          ),
+        );
+      }
+
+      return { reordered, events };
+    });
+
+    for (const event of events) {
+      eventService.publishCreated(event);
+    }
+
+    return reordered;
   }
 
   private async drainNextPendingOrQueuedMessage(sessionId: string) {

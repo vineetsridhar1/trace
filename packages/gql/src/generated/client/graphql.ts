@@ -589,6 +589,7 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -604,6 +605,7 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  steerQueuedMessage: Event;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -620,6 +622,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -869,6 +872,11 @@ export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
 };
 
+export type MutationReorderQueuedMessagesArgs = {
+  ids: Array<Scalars["ID"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type MutationRequestBridgeAccessArgs = {
   requestedCapabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   requestedExpiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
@@ -955,6 +963,10 @@ export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
 
+export type MutationSteerQueuedMessageArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationSubscribeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
@@ -1036,6 +1048,11 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdateQueuedMessageArgs = {
+  id: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
 };
 
 export type MutationUpdateRepoArgs = {
