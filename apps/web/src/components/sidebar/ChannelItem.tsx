@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { ChevronRight, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "@trace/client-core";
@@ -14,6 +14,7 @@ import {
 } from "../ui/context-menu";
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
 import { cn } from "../../lib/utils";
+import { createQuickSession } from "../../lib/create-quick-session";
 
 export const ChannelItem = memo(function ChannelItem({
   id,
@@ -21,6 +22,7 @@ export const ChannelItem = memo(function ChannelItem({
   onClick,
   groupId,
   canExpand = false,
+  canStartSession = false,
   isExpanded = false,
   onToggleExpanded,
 }: {
@@ -29,6 +31,7 @@ export const ChannelItem = memo(function ChannelItem({
   onClick: () => void;
   groupId?: string | null;
   canExpand?: boolean;
+  canStartSession?: boolean;
   isExpanded?: boolean;
   onToggleExpanded?: () => void;
 }) {
@@ -66,6 +69,7 @@ export const ChannelItem = memo(function ChannelItem({
                 tooltip={name ?? ""}
                 className={cn(
                   "h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 pl-2 text-sm font-medium text-foreground",
+                  canStartSession && "pr-7",
                   "hover:!bg-white/10 hover:!text-foreground active:!bg-white/10 active:!text-foreground",
                   "data-[active=true]:!bg-white/10 data-[active=true]:font-medium data-[active=true]:!text-foreground",
                 )}
@@ -108,6 +112,22 @@ export const ChannelItem = memo(function ChannelItem({
                   </span>
                 )}
               </SidebarMenuButton>
+              {canStartSession && (
+                <button
+                  type="button"
+                  className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 opacity-0 transition-colors hover:bg-white/10 hover:text-foreground group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100"
+                  title="New session"
+                  aria-label="New session"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    createQuickSession(id);
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <Plus size={14} />
+                </button>
+              )}
             </SidebarMenuItem>
           </div>
         </ContextMenuTrigger>
