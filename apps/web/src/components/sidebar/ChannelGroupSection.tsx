@@ -12,6 +12,7 @@ import { gql } from "@urql/core";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { groupContainerId, groupSortableIds } from "../../hooks/useChannelDnd";
 import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
+import type { SidebarSessionScope } from "./ChannelOwnedSessions";
 
 const UPDATE_GROUP_MUTATION = gql`
   mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {
@@ -31,6 +32,8 @@ export interface ChannelGroupSectionProps {
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
   onDeleteGroup: (groupId: string) => void;
+  onToggleSessionScope: () => void;
+  sessionScope: SidebarSessionScope;
 }
 
 export function ChannelGroupSection({
@@ -42,6 +45,8 @@ export function ChannelGroupSection({
   onChannelClick,
   onSessionClick,
   onDeleteGroup,
+  onToggleSessionScope,
+  sessionScope,
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
   const collapsed = useEntityField("channelGroups", id, "isCollapsed") ?? false;
@@ -157,6 +162,8 @@ export function ChannelGroupSection({
                     }
                     onChannelClick={onChannelClick}
                     onSessionClick={onSessionClick}
+                    onToggleSessionScope={onToggleSessionScope}
+                    sessionScope={sessionScope}
                   />
                 ))}
               </SortableContext>

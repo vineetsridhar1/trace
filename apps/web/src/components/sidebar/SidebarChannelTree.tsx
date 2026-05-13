@@ -10,6 +10,7 @@ import { ChannelGroupSection } from "./ChannelGroupSection";
 import { SidebarChannelSection } from "./SidebarChannelSection";
 import { Skeleton } from "../ui/skeleton";
 import { SidebarMenu, SidebarMenuItem } from "../ui/sidebar";
+import type { SidebarSessionScope } from "./ChannelOwnedSessions";
 
 const DELETE_GROUP_MUTATION = gql`
   mutation DeleteChannelGroup($id: ID!) {
@@ -31,6 +32,8 @@ export interface SidebarChannelTreeProps {
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
   onDragActiveChange?: (active: boolean) => void;
+  onToggleSessionScope: () => void;
+  sessionScope: SidebarSessionScope;
   topLevelItems: TopLevelItem[];
 }
 
@@ -48,6 +51,8 @@ export function SidebarChannelTree({
   onChannelClick,
   onSessionClick,
   onDragActiveChange,
+  onToggleSessionScope,
+  sessionScope,
   topLevelItems,
 }: SidebarChannelTreeProps) {
   const {
@@ -116,6 +121,8 @@ export function SidebarChannelTree({
                   hasActiveSession={item.id === activeChannelId && activeSessionGroupId !== null}
                   onChannelClick={onChannelClick}
                   onSessionClick={onSessionClick}
+                  onToggleSessionScope={onToggleSessionScope}
+                  sessionScope={sessionScope}
                 />
               ) : (
                 <ChannelGroupSection
@@ -127,9 +134,11 @@ export function SidebarChannelTree({
                   onAddChannel={onAddChannel}
                   onChannelClick={onChannelClick}
                   onSessionClick={onSessionClick}
+                  onToggleSessionScope={onToggleSessionScope}
                   onDeleteGroup={(groupId) =>
                     client.mutation(DELETE_GROUP_MUTATION, { id: groupId }).toPromise()
                   }
+                  sessionScope={sessionScope}
                 />
               ),
             )}

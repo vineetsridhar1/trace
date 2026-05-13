@@ -89,9 +89,9 @@ const INBOX_ITEMS_QUERY = gql`
   }
 `;
 
-const OWNED_SESSIONS_QUERY = gql`
-  query SidebarOwnedSessions($organizationId: ID!) {
-    mySessions(organizationId: $organizationId, includeMerged: false, includeArchived: false) {
+const SIDEBAR_SESSIONS_QUERY = gql`
+  query SidebarSessions($organizationId: ID!) {
+    sessions(organizationId: $organizationId) {
       id
       name
       agentStatus
@@ -232,14 +232,14 @@ export function useSidebarData() {
     }
   }, [activeOrgId, upsertMany]);
 
-  const fetchOwnedSessions = useCallback(async () => {
+  const fetchSidebarSessions = useCallback(async () => {
     if (!activeOrgId) return;
     const result = await client
-      .query(OWNED_SESSIONS_QUERY, { organizationId: activeOrgId })
+      .query(SIDEBAR_SESSIONS_QUERY, { organizationId: activeOrgId })
       .toPromise();
-    if (!result.data?.mySessions) return;
+    if (!result.data?.sessions) return;
 
-    const sessions = result.data.mySessions as Array<EntityTableMap["sessions"] & { id: string }>;
+    const sessions = result.data.sessions as Array<EntityTableMap["sessions"] & { id: string }>;
     const sessionGroups = sessions
       .map((session) => session.sessionGroup)
       .filter((group): group is SessionGroup & { id: string } => Boolean(group?.id))
@@ -277,8 +277,8 @@ export function useSidebarData() {
 
   useEffect(() => {
     fetchInboxItems();
-    fetchOwnedSessions();
-  }, [fetchInboxItems, fetchOwnedSessions, refreshTick]);
+    fetchSidebarSessions();
+  }, [fetchInboxItems, fetchSidebarSessions, refreshTick]);
 
   const chatIds = useEntityIds("chats");
 
