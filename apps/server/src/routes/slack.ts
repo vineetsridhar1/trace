@@ -23,7 +23,11 @@ import {
   signSlackLinkState,
   verifySlackLinkState,
 } from "../lib/slack/user-resolver.js";
-import { buildTraceSessionLink, slackEventBridge } from "../lib/slack/event-bridge.js";
+import { slackEventBridge } from "../lib/slack/event-bridge.js";
+import {
+  startSlackSession,
+  type SlackSessionSettings,
+} from "../lib/slack/session-orchestrator.js";
 import { sessionService } from "../services/session.js";
 
 const JWT_SECRET = resolveJwtSecret();
@@ -821,9 +825,14 @@ type SlackEventBody = {
   ts?: string;
   thread_ts?: string;
   bot_id?: string;
+  app_id?: string;
+  username?: string;
   subtype?: string;
   team?: string;
   channel_type?: string;
+  blocks?: unknown[];
+  attachments?: unknown[];
+  files?: unknown[];
 };
 
 type SlackCommandBody = {
@@ -1073,7 +1082,7 @@ async function postBindPrompt(input: {
 function resolveEffectiveSlackSettings(input: {
   account: Awaited<ReturnType<typeof resolveSlackAccount>>;
   parsed: ParsedSlackPrompt;
-}): { tool: CodingTool; model: string | null; reasoningEffort: string | null; hosting: "cloud" | "local" } {
+}): SlackSessionSettings {
   const tool = input.parsed.tool ?? input.account?.preferredTool ?? "claude_code";
   const model = input.parsed.model ?? input.account?.preferredModel ?? getDefaultModel(tool) ?? null;
   const reasoningEffort =
@@ -1388,7 +1397,6 @@ async function handleAppMention(input: {
     return;
   }
 
-  let session: Awaited<ReturnType<typeof sessionService.start>>;
   let settings: ReturnType<typeof resolveEffectiveSlackSettings>;
   try {
     settings = resolveEffectiveSlackSettings({ account, parsed });
@@ -1406,19 +1414,17 @@ async function handleAppMention(input: {
     }
     return;
   }
-  const { hosting } = settings;
   try {
-    session = await sessionService.start({
-      tool: settings.tool,
-      model: settings.model ?? undefined,
-      reasoningEffort: settings.reasoningEffort ?? undefined,
+    await startSlackSession({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackThreadTs: threadTs,
       organizationId: install.organizationId,
-      createdById: traceUserId,
-      channelId: binding.traceChannelId,
-      hosting,
-      prompt: hosting === "local" ? undefined : prompt,
-      actorType: "user",
-      clientSource: "slack",
+      traceChannelId: binding.traceChannelId,
+      actorUserId: traceUserId,
+      prompt,
+      settings,
+      source: "mention",
     });
   } catch (err: unknown) {
     const message = errorMessage(err);
@@ -1435,70 +1441,6 @@ async function handleAppMention(input: {
         .catch(() => {});
     }
     return;
-  }
-
-  await prisma.slackThreadSession.create({
-    data: {
-      slackTeamId: teamId,
-      slackChannelId: channel,
-      slackThreadTs: threadTs,
-      sessionId: session.id,
-      organizationId: install.organizationId,
-    },
-  });
-
-  slackEventBridge.attach(session.id, {
-    slackTeamId: teamId,
-    slackChannelId: channel,
-    slackThreadTs: threadTs,
-  });
-
-  const client = await getSlackClient(teamId);
-  if (client) {
-    const shortId = session.id.slice(0, 8);
-    const traceLink = await buildTraceSessionLink(session.id);
-    await client.chat
-      .postMessage({
-        channel,
-        thread_ts: threadTs,
-        text: traceLink
-          ? `🟢 Session started — \`${shortId}\` · <${traceLink}|Open in Trace>`
-          : `🟢 Session started — \`${shortId}\``,
-      })
-      .catch((err: unknown) => {
-        console.warn("[slack] failed to post start message:", (err as Error).message);
-      });
-  }
-
-  if (hosting === "local") {
-    try {
-      await sessionService.run(session.id, prompt, undefined, {
-        userId: traceUserId,
-        organizationId: install.organizationId,
-        clientSource: "slack",
-      });
-    } catch (err: unknown) {
-      const message = errorMessage(err);
-      console.warn("[slack] failed to run local session prompt", {
-        teamId,
-        slackUserId,
-        channel,
-        threadTs,
-        sessionId: session.id,
-        error: message,
-      });
-      const client = await getSlackClient(teamId);
-      if (client) {
-        await client.chat
-          .postEphemeral({
-            channel,
-            user: slackUserId,
-            thread_ts: threadTs,
-            text: `Could not send the prompt to the local Trace session: ${message}`,
-          })
-          .catch(() => {});
-      }
-    }
   }
 }
 
@@ -1631,56 +1573,35 @@ async function startSlackSessionFromModal(input: {
     model: input.model,
     reasoningEffort: input.reasoningEffort,
   });
-  const threadTs = `${Date.now() / 1000}`;
-  const session = await sessionService.start({
-    tool: settings.tool,
-    model: settings.model ?? undefined,
-    reasoningEffort: settings.reasoningEffort ?? undefined,
-    organizationId: install.organizationId,
-    createdById: account.userId,
-    channelId: binding.traceChannelId,
-    hosting: input.hosting,
-    prompt: input.hosting === "local" ? undefined : input.prompt,
-    actorType: "user",
-    clientSource: "slack",
-  });
 
-  const client = await getSlackClient(metadata.slackTeamId);
-  const traceLink = await buildTraceSessionLink(session.id);
-  const message = client
-    ? await client.chat.postMessage({
-        channel: metadata.slackChannelId,
-        text: traceLink
-          ? `🟢 Session started — \`${session.id.slice(0, 8)}\` · <${traceLink}|Open in Trace>`
-          : `🟢 Session started — \`${session.id.slice(0, 8)}\``,
-      })
-    : null;
-  const slackThreadTs =
-    typeof message?.ts === "string" && message.ts ? message.ts : threadTs;
-
-  await prisma.slackThreadSession.create({
-    data: {
-      slackTeamId: metadata.slackTeamId,
-      slackChannelId: metadata.slackChannelId,
-      slackThreadTs,
-      sessionId: session.id,
-      organizationId: install.organizationId,
-    },
-  });
-
-  slackEventBridge.attach(session.id, {
+  await startSlackSession({
     slackTeamId: metadata.slackTeamId,
     slackChannelId: metadata.slackChannelId,
-    slackThreadTs,
+    organizationId: install.organizationId,
+    traceChannelId: binding.traceChannelId,
+    actorUserId: account.userId,
+    prompt: input.prompt,
+    settings: { ...settings, hosting: input.hosting },
+    source: "modal",
   });
+}
 
-  if (input.hosting === "local") {
-    await sessionService.run(session.id, input.prompt, undefined, {
-      userId: account.userId,
-      organizationId: install.organizationId,
-      clientSource: "slack",
-    });
-  }
+function isBotMessageCandidate(event: SlackEventBody): boolean {
+  return event.type === "message" && !!event.bot_id && !event.thread_ts;
+}
+
+function isTraceMentionMessage(event: SlackEventBody, botUserId: string): boolean {
+  const rawText = typeof event.text === "string" ? event.text : "";
+  return rawText.includes(`<@${botUserId}>`);
+}
+
+async function handleBotMessageCandidate(_input: {
+  teamId: string;
+  event: SlackEventBody;
+}): Promise<void> {
+  // Intentionally a no-op for now. Keeping this as a named handler preserves
+  // Slack bot/app metadata for future "suggest a Trace session" rules without
+  // allowing arbitrary bots to start sessions.
 }
 
 async function handleMessage(input: {
@@ -1688,19 +1609,21 @@ async function handleMessage(input: {
   event: SlackEventBody;
 }): Promise<void> {
   const { teamId, event } = input;
-  if (event.bot_id) return;
-  if (event.subtype) return;
+  if (isBotMessageCandidate(event)) {
+    await handleBotMessageCandidate({ teamId, event });
+    return;
+  }
 
   const install = await prisma.slackInstall.findUnique({
     where: { slackTeamId: teamId },
     select: { botUserId: true },
   });
-  const rawText = typeof event.text === "string" ? event.text : "";
-  if (install && rawText.includes(`<@${install.botUserId}>`)) {
+  if (install && isTraceMentionMessage(event, install.botUserId)) {
     await handleAppMention({ teamId, event });
     return;
   }
 
+  if (event.subtype) return;
   await handleThreadMessage({ teamId, event });
 }
 
