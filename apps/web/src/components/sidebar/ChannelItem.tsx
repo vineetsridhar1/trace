@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Trash2, Users } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -11,6 +11,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
@@ -122,7 +123,7 @@ export const ChannelItem = memo(function ChannelItem({
                 <>
                   <button
                     type="button"
-                    className="absolute right-8 top-1/2 flex h-5 w-9 -translate-y-1/2 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
+                    className="absolute right-8 top-1/2 z-20 flex h-5 w-9 -translate-y-1/2 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
                     title="Toggle mine/all sessions"
                     aria-label={`Sidebar sessions: ${sessionScope}`}
                     onClick={(event) => {
@@ -130,11 +131,12 @@ export const ChannelItem = memo(function ChannelItem({
                       event.stopPropagation();
                       onToggleSessionScope?.();
                     }}
-                    onContextMenu={(event) => {
+                    onContextMenuCapture={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                       onToggleSessionScope?.();
                     }}
+                    onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
                     <AnimatePresence mode="wait" initial={false}>
@@ -151,7 +153,7 @@ export const ChannelItem = memo(function ChannelItem({
                   </button>
                   <button
                     type="button"
-                    className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
+                    className="absolute right-1 top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
                     title="New session"
                     aria-label="New session"
                     onClick={(event) => {
@@ -169,6 +171,15 @@ export const ChannelItem = memo(function ChannelItem({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
+          {canStartSession && (
+            <>
+              <ContextMenuItem onClick={() => onToggleSessionScope?.()}>
+                <Users size={14} className="mr-2" />
+                {sessionScope === "mine" ? "Show all sessions" : "Show my sessions"}
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+            </>
+          )}
           <ContextMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
             <Trash2 size={14} className="mr-2" />
             Delete channel
