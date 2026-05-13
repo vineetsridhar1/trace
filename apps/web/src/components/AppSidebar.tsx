@@ -161,7 +161,7 @@ export function AppSidebar() {
       </Sidebar>
 
       {state === "collapsed" && !peeking && (
-        <div className="fixed inset-y-0 left-0 z-50 w-2" onMouseEnter={() => setPeeking(true)} />
+        <div className="fixed inset-y-0 left-0 z-50 w-8" onMouseEnter={() => setPeeking(true)} />
       )}
 
       <PeekOverlay
