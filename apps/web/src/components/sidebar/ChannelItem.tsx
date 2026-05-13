@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { ChevronRight, MessageSquare, Code, Trash2 } from "lucide-react";
+import { ChevronRight, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "@trace/client-core";
@@ -14,11 +14,6 @@ import {
 } from "../ui/context-menu";
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
 import { cn } from "../../lib/utils";
-
-function ChannelIcon({ type, className }: { type: string | undefined; className?: string }) {
-  if (type === "text") return <MessageSquare size={16} className={className} />;
-  return <Code size={16} className={className} />;
-}
 
 export const ChannelItem = memo(function ChannelItem({
   id,
@@ -38,7 +33,6 @@ export const ChannelItem = memo(function ChannelItem({
   onToggleExpanded?: () => void;
 }) {
   const name = useEntityField("channels", id, "name");
-  const type = useEntityField("channels", id, "type");
   const hasDoneBadge = useUIStore(
     (s: { channelDoneBadges: Record<string, boolean> }) => !!s.channelDoneBadges[id],
   );
@@ -104,18 +98,15 @@ export const ChannelItem = memo(function ChannelItem({
                     />
                   </span>
                 )}
-                <div className="relative">
-                  <ChannelIcon type={type} className="text-current opacity-50" />
-                  {hasDoneBadge && (
-                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-foreground opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-foreground" />
-                    </span>
-                  )}
-                </div>
                 <span className={hasDoneBadge ? "truncate font-semibold" : "truncate"}>
                   {name}
                 </span>
+                {hasDoneBadge && (
+                  <span className="relative ml-auto flex h-2.5 w-2.5 shrink-0">
+                    <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-foreground opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-foreground" />
+                  </span>
+                )}
               </SidebarMenuButton>
             </SidebarMenuItem>
           </div>
