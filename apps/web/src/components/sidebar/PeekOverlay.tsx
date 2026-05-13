@@ -11,6 +11,11 @@ import { SidebarTabSwitcher } from "./SidebarTabSwitcher";
 import { UserMenu } from "./UserMenu";
 import { getTabFromProgress, getTabIndex, type SidebarTab } from "./sidebarTabs";
 
+const SIDEBAR_TRANSITION = {
+  duration: 0.2,
+  ease: [0.42, 0, 0.58, 1],
+} as const;
+
 interface PeekOverlayProps {
   currentTab: SidebarTab;
   onMouseLeave: () => void;
@@ -98,7 +103,7 @@ export function PeekOverlay({
           initial={{ x: "-100%" }}
           animate={{ x: 0 }}
           exit={{ x: "-100%" }}
-          transition={{ type: "tween", duration: 0.24, ease: [0.42, 0, 0.58, 1] }}
+          transition={{ type: "tween", ...SIDEBAR_TRANSITION }}
           onMouseLeave={handleOverlayMouseLeave}
           className="fixed bottom-2 left-0 top-[calc(env(safe-area-inset-top)+3rem)] z-50 flex w-[calc(22rem+0.5rem)] flex-col pl-2"
         >
