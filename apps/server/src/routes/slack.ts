@@ -194,6 +194,10 @@ function formSelect(
   return `<label style="display:block;text-align:left;margin:12px 0;color:#c7c7d1">${escapeHtml(label)}<select name="${escapeHtml(name)}" style="display:block;width:100%;margin-top:6px;background:#0b0b0e;color:#e6e6ea;border:1px solid #2a2a31;border-radius:8px;padding:10px">${renderedOptions}</select></label>`;
 }
 
+function safeScriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 function defaultToolOptions(): { value: string; label: string }[] {
   return [
     { value: "claude_code", label: "Claude Code" },
@@ -210,6 +214,49 @@ function reasoningOptionsFor(tool: CodingTool): { value: string; label: string }
     value: option.value,
     label: option.label,
   }));
+}
+
+function preferenceOptionsScript(): string {
+  const modelsByTool = Object.fromEntries(
+    defaultToolOptions().map((tool) => [tool.value, modelOptionsFor(tool.value as CodingTool)]),
+  );
+  const reasoningByTool = Object.fromEntries(
+    defaultToolOptions().map((tool) => [tool.value, reasoningOptionsFor(tool.value as CodingTool)]),
+  );
+  const defaultModels = Object.fromEntries(
+    defaultToolOptions().map((tool) => [tool.value, getDefaultModel(tool.value) ?? ""]),
+  );
+  const defaultReasoning = Object.fromEntries(
+    defaultToolOptions().map((tool) => [tool.value, getDefaultReasoningEffort(tool.value) ?? ""]),
+  );
+
+  return `<script>
+(() => {
+  const modelsByTool = ${safeScriptJson(modelsByTool)};
+  const reasoningByTool = ${safeScriptJson(reasoningByTool)};
+  const defaultModels = ${safeScriptJson(defaultModels)};
+  const defaultReasoning = ${safeScriptJson(defaultReasoning)};
+  const tool = document.querySelector('select[name="tool"]');
+  const model = document.querySelector('select[name="model"]');
+  const reasoning = document.querySelector('select[name="reasoningEffort"]');
+  const replaceOptions = (select, options, selectedValue) => {
+    if (!select) return;
+    select.innerHTML = "";
+    for (const option of options || []) {
+      const el = document.createElement("option");
+      el.value = option.value;
+      el.textContent = option.label;
+      if (option.value === selectedValue) el.selected = true;
+      select.appendChild(el);
+    }
+  };
+  tool?.addEventListener("change", () => {
+    const selectedTool = tool.value;
+    replaceOptions(model, modelsByTool[selectedTool], defaultModels[selectedTool]);
+    replaceOptions(reasoning, reasoningByTool[selectedTool], defaultReasoning[selectedTool]);
+  });
+})();
+</script>`;
 }
 
 function validateSlackSessionConfig(input: {
@@ -411,7 +458,7 @@ router.get("/link", async (req: Request, res: Response) => {
   res.status(200).send(
     renderHtml(
       "Link Slack",
-      `<h1>Link Slack account</h1><p>Link your Trace account to <b>${escapeHtml(teamName)}</b> and choose Slack defaults.</p><form method="POST" action="/slack/link/complete"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("tool", "Default tool", selectedTool, defaultToolOptions())}${formSelect("model", "Default model", selectedModel, modelOptionsFor(selectedTool))}${formSelect("reasoningEffort", "Default thinking", selectedReasoning, reasoningOptionsFor(selectedTool))}<button type="submit">Save and link</button></form>`,
+      `<h1>Link Slack account</h1><p>Link your Trace account to <b>${escapeHtml(teamName)}</b> and choose Slack defaults.</p><form method="POST" action="/slack/link/complete"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("tool", "Default tool", selectedTool, defaultToolOptions())}${formSelect("model", "Default model", selectedModel, modelOptionsFor(selectedTool))}${formSelect("reasoningEffort", "Default thinking", selectedReasoning, reasoningOptionsFor(selectedTool))}<button type="submit">Save and link</button></form>${preferenceOptionsScript()}`,
     ),
   );
 });
@@ -528,7 +575,7 @@ router.get("/preferences", async (req: Request, res: Response) => {
   res.status(200).send(
     renderHtml(
       "Slack preferences",
-      `<h1>Slack defaults</h1><p>These defaults are used when you mention <code>@trace</code> without inline overrides.</p><form method="POST" action="/slack/preferences"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("tool", "Default tool", selectedTool, defaultToolOptions())}${formSelect("model", "Default model", account.preferredModel ?? getDefaultModel(selectedTool) ?? "", modelOptionsFor(selectedTool))}${formSelect("reasoningEffort", "Default thinking", account.preferredReasoningEffort ?? getDefaultReasoningEffort(selectedTool) ?? "", reasoningOptionsFor(selectedTool))}<button type="submit">Save preferences</button></form>`,
+      `<h1>Slack defaults</h1><p>These defaults are used when you mention <code>@trace</code> without inline overrides.</p><form method="POST" action="/slack/preferences"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("tool", "Default tool", selectedTool, defaultToolOptions())}${formSelect("model", "Default model", account.preferredModel ?? getDefaultModel(selectedTool) ?? "", modelOptionsFor(selectedTool))}${formSelect("reasoningEffort", "Default thinking", account.preferredReasoningEffort ?? getDefaultReasoningEffort(selectedTool) ?? "", reasoningOptionsFor(selectedTool))}<button type="submit">Save preferences</button></form>${preferenceOptionsScript()}`,
     ),
   );
 });
