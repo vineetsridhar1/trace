@@ -29,10 +29,10 @@ export function UserMenu() {
         </motion.div>
         <span className="flex-1 truncate text-left text-sm text-foreground">{user?.name}</span>
       </PopoverTrigger>
-      <PopoverContent side="top" align="center" sideOffset={4} className="w-56 gap-0 p-1.5">
-        <div className="border-b border-border px-2 py-1.5 mb-1">
-          <p className="text-sm font-medium text-foreground">{user?.name}</p>
-          <p className="text-xs text-foreground">{user?.email}</p>
+      <PopoverContent side="top" align="center" sideOffset={4} className="w-64 gap-0 p-1.5">
+        <div className="mb-1 min-w-0 border-b border-border px-2 py-1.5">
+          <p className="truncate text-sm font-medium text-foreground">{user?.name}</p>
+          <p className="truncate text-xs text-foreground">{user?.email}</p>
         </div>
         <button
           onClick={() => setActivePage("settings")}
