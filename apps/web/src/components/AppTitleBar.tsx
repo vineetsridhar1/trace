@@ -1,17 +1,15 @@
 import { useEntityField } from "@trace/client-core";
 import { useUIStore, type UIState } from "../stores/ui";
 import { OrgSwitcher } from "./sidebar/OrgSwitcher";
-import { SidebarTrigger, useSidebar } from "./ui/sidebar";
+import { SidebarTrigger } from "./ui/sidebar";
 
 export function AppTitleBar() {
-  const { state } = useSidebar();
+  const activePage = useUIStore((s: UIState) => s.activePage);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
-  const sessionGroupName = useEntityField(
-    "sessionGroups",
-    activeSessionGroupId ?? "",
-    "name",
-  ) as string | undefined;
-  const showSessionName = state === "collapsed" && !!sessionGroupName;
+  const sessionGroupName = useEntityField("sessionGroups", activeSessionGroupId ?? "", "name") as
+    | string
+    | undefined;
+  const showSessionName = activePage === "main" && !!activeSessionGroupId && !!sessionGroupName;
 
   return (
     <div className="app-region-drag pointer-events-none fixed left-0 right-0 top-[env(safe-area-inset-top)] z-[100] flex h-12 items-center">
