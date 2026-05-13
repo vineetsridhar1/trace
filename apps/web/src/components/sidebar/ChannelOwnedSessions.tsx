@@ -321,7 +321,6 @@ function OwnedSessionItem({
     <SidebarSessionHoverCard
       sessionGroupId={sessionGroupId}
       sessionId={sessionId}
-      sessionStatus={displaySessionStatus}
       trigger={button}
     />
   );
