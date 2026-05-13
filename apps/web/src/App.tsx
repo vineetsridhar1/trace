@@ -124,7 +124,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
       <BridgeSyncHydrator />
       <div className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] [background:var(--trace-window-bg)]">
         <InstallBanner />
-        <SidebarProvider className="min-h-0 flex-1 pt-2">
+        <SidebarProvider className="min-h-0 flex-1">
           <AppSidebar />
 
           <MainContentFrame>
