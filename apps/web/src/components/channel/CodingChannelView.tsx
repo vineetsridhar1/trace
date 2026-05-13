@@ -7,6 +7,7 @@ import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { StartSessionDialog } from "./StartSessionDialog";
+import { StartSessionComposer } from "./StartSessionComposer";
 import { SessionsTable } from "./SessionsTable";
 import { MergedArchivedPage } from "./MergedArchivedPage";
 import { SidebarTrigger } from "../ui/sidebar";
@@ -149,21 +150,28 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
         <StartSessionDialog channelId={channelId} />
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden">
         {channelSubPage === "merged-archived" ? (
           <MergedArchivedPage channelId={channelId} onBack={() => setChannelSubPage(null)} />
-        ) : loading ? (
-          <div className="space-y-1 px-4 pt-2">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div key={index} className="flex h-10 items-center gap-4 px-2">
-                <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
-                <Skeleton className="h-3.5 w-[40%]" />
-                <Skeleton className="ml-auto h-3.5 w-[10%]" />
-              </div>
-            ))}
-          </div>
         ) : (
-          <SessionsTable channelId={channelId} />
+          <>
+            <StartSessionComposer channelId={channelId} />
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {loading ? (
+                <div className="space-y-1 px-4 pt-2">
+                  {Array.from({ length: 8 }).map((_, index) => (
+                    <div key={index} className="flex h-10 items-center gap-4 px-2">
+                      <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
+                      <Skeleton className="h-3.5 w-[40%]" />
+                      <Skeleton className="ml-auto h-3.5 w-[10%]" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <SessionsTable channelId={channelId} />
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
