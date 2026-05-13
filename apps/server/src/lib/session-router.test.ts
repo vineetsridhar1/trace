@@ -271,6 +271,30 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
     await expect(promise).resolves.toEqual(["taken"]);
   });
 
+  it("accepts workspace slug responses that arrive during send", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    send.mockImplementation((payload: string) => {
+      const command = JSON.parse(payload) as { requestId: string; type: string };
+      expect(command.type).toBe("list_workspace_slugs");
+      router.resolveWorkspaceSlugRequest(command.requestId, ["warm"], undefined, "runtime-1");
+    });
+
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+
+    await expect(router.listWorkspaceSlugs("runtime-1", "repo-1", "org-1")).resolves.toEqual([
+      "warm",
+    ]);
+  });
+
   it("matches workspace slug responses using the org-scoped local runtime key", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
