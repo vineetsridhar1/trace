@@ -520,7 +520,6 @@ export function SessionGroupDetailView({
             panelMode={panelMode}
             isFullscreen={isFullscreen}
             showSidebar={showSidebar}
-            onClose={() => setActiveSessionId(null)}
             onToggleFullscreen={toggleFullscreen}
             onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
           />

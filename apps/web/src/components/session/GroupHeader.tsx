@@ -7,7 +7,6 @@ import {
   Maximize2,
   Minimize2,
   Play,
-  X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
@@ -35,7 +34,6 @@ interface GroupHeaderProps {
   panelMode?: boolean;
   isFullscreen: boolean;
   showSidebar: boolean;
-  onClose: () => void;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
 }
@@ -57,7 +55,6 @@ export function GroupHeader({
   panelMode,
   isFullscreen,
   showSidebar,
-  onClose,
   onToggleFullscreen,
   onToggleSidebar,
 }: GroupHeaderProps) {
@@ -100,14 +97,6 @@ export function GroupHeader({
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-border pb-4 pl-[var(--trace-header-title-offset)] pr-4 pt-0 transition-[padding-left] duration-200 ease-in-out">
-      <button
-        onClick={onClose}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-        title="Close panel"
-      >
-        <X size={16} />
-      </button>
-
       {selectedSessionId && (
         <span
           className={cn(
