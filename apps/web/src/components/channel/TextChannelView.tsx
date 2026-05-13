@@ -1,3 +1,5 @@
+import { MessageSquare } from "lucide-react";
+import { useEntityField } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useChannelMessages } from "../../hooks/useChannelMessages";
 import { useIsMobile } from "../../hooks/use-mobile";
@@ -11,6 +13,7 @@ import { ConnectionStatus } from "../ConnectionStatus";
 const THREAD_WIDTH_KEY = "trace_channel_thread_width";
 
 export function TextChannelView({ channelId }: { channelId: string }) {
+  const channelName = useEntityField("channels", channelId, "name");
   const activeThreadId = useUIStore((s: UIState) => s.activeThreadId);
   const { messageIds, loading, hasOlder, fetchOlderMessages } = useChannelMessages(channelId);
   const isMobile = useIsMobile();
@@ -20,7 +23,9 @@ export function TextChannelView({ channelId }: { channelId: string }) {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
+        <MessageSquare size={16} className="text-muted-foreground" />
+        <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         <ConnectionStatus />
       </div>
 

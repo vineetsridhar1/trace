@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { useAuthStore, useEntityField, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
@@ -12,7 +12,7 @@ import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
-import { SidebarProvider, SidebarInset } from "./components/ui/sidebar";
+import { SidebarProvider, SidebarInset, useSidebar } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
@@ -122,40 +122,51 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   return (
     <TooltipProvider>
       <BridgeSyncHydrator />
-      <div
-        className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] [background:var(--trace-window-bg)]"
-      >
+      <div className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] [background:var(--trace-window-bg)]">
         <InstallBanner />
         <SidebarProvider className="min-h-0 flex-1 pt-2">
           <AppSidebar />
 
-          <div className="app-region-drag flex w-full flex-1 overflow-hidden">
-            <div className="app-region-no-drag flex min-w-0 flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border border-border/80 bg-background/95">
-              <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {activePage === "settings" ? (
-                  <SettingsPage />
-                ) : activePage === "inbox" ? (
-                  <InboxView />
-                ) : activePage === "tickets" && features.tickets ? (
-                  <TicketsView />
-                ) : shouldRenderChatView ? (
-                  <ChatView chatId={activeChatId} />
-                ) : shouldRenderSessionView ? (
-                  <SessionGroupDetailView
-                    key={activeSessionGroupId}
-                    sessionGroupId={activeSessionGroupId}
-                  />
-                ) : shouldRenderChannelView ? (
-                  <ChannelView channelId={activeChannelId} />
-                ) : (
-                  <HomeView />
-                )}
-              </SidebarInset>
-            </div>
-          </div>
+          <MainContentFrame>
+            {activePage === "settings" ? (
+              <SettingsPage />
+            ) : activePage === "inbox" ? (
+              <InboxView />
+            ) : activePage === "tickets" && features.tickets ? (
+              <TicketsView />
+            ) : shouldRenderChatView ? (
+              <ChatView chatId={activeChatId} />
+            ) : shouldRenderSessionView ? (
+              <SessionGroupDetailView
+                key={activeSessionGroupId}
+                sessionGroupId={activeSessionGroupId}
+              />
+            ) : shouldRenderChannelView ? (
+              <ChannelView channelId={activeChannelId} />
+            ) : (
+              <HomeView />
+            )}
+          </MainContentFrame>
           <AppTitleBar />
         </SidebarProvider>
       </div>
     </TooltipProvider>
+  );
+}
+
+function MainContentFrame({ children }: { children: ReactNode }) {
+  const { state } = useSidebar();
+  const style = {
+    "--trace-header-title-offset": state === "collapsed" ? "20rem" : "1rem",
+  } as CSSProperties;
+
+  return (
+    <div className="app-region-drag flex w-full flex-1 overflow-hidden" style={style}>
+      <div className="app-region-no-drag flex min-w-0 flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border border-border/80 bg-background/95">
+        <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {children}
+        </SidebarInset>
+      </div>
+    </div>
   );
 }

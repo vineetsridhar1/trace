@@ -99,7 +99,7 @@ export function GroupHeader({
   const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
 
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 pb-4 pt-0">
+    <div className="flex shrink-0 items-center gap-3 border-b border-border pb-4 pl-[var(--trace-header-title-offset)] pr-4 pt-0 transition-[padding-left] duration-200 ease-in-out">
       <button
         onClick={onClose}
         className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
@@ -121,11 +121,9 @@ export function GroupHeader({
       )}
 
       <div className="min-w-0 flex-1">
-        {panelMode && (
-          <h2 className="truncate text-sm font-semibold text-foreground">
-            {groupName ?? "Session Group"}
-          </h2>
-        )}
+        <h2 className="truncate text-sm font-semibold text-foreground">
+          {groupName ?? "Session Group"}
+        </h2>
         <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
 
