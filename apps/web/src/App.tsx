@@ -22,6 +22,7 @@ import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
 import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestToasts";
 import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
+import { TraceLoader } from "./components/ui/trace-loader";
 import { InstallBanner } from "./components/InstallBanner";
 import { LoginPage } from "./components/auth/LoginPage";
 import { cn } from "./lib/utils";
@@ -29,6 +30,7 @@ import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
 
 const SETTINGS_DETAIL_PANEL_MAX_RATIO = 0.45;
+const SHOW_LOADER_QA = import.meta.env.DEV;
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -51,6 +53,14 @@ export function App() {
 
     void window.trace.setBridgeAuthContext(activeOrgId);
   }, [activeOrgId, user]);
+
+  if (SHOW_LOADER_QA) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-surface-deep">
+        <TraceLoader label="Loading Trace" size={128} />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
