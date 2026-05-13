@@ -14,11 +14,10 @@ An Electron desktop app for monitoring and managing Claude Code sessions.
 
 ### 1. Install dependencies
 
-Install dependencies for both the Electron app and the server:
+Install dependencies for all workspace packages:
 
 ```bash
-npm install
-cd server && npm install
+pnpm install
 ```
 
 ### 2. Set up the database
@@ -31,13 +30,13 @@ createdb trace
 
 ### 3. Configure environment variables
 
-Create a `.env` file in the `server/` directory:
+Create a `.env` file in the server app directory:
 
 ```bash
-cp server/.env.example server/.env
+cp apps/server/.env.example apps/server/.env
 ```
 
-Then edit `server/.env` and fill in your API key:
+Then edit `apps/server/.env` and fill in your API keys:
 
 ```
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/trace?schema=public"
@@ -56,46 +55,57 @@ ANTHROPIC_API_KEY=sk-ant-...
 ### 4. Run database migrations, generate the Prisma client, and seed
 
 ```bash
-cd server
-npx prisma migrate dev
-npx prisma generate
-npx prisma db seed
+cd apps/server
+pnpm prisma migrate dev
+pnpm prisma generate
+pnpm prisma db seed
 ```
 
-This creates all tables, generates the Prisma client into `server/prisma/generated/`, and seeds a default server and channel.
+This creates all tables, generates the Prisma client, and seeds a default server and channel.
 
 ### 5. Generate GraphQL types
 
 Run codegen for both the server and client:
 
 ```bash
-# Server — generates resolver types from schema
-cd server && npm run codegen
+# Server - generates resolver types from schema
+pnpm --filter trace-server codegen
 
-# Client — generates React Apollo hooks and types
-cd .. && npm run codegen
+# Web client - generates React Apollo hooks and types
+pnpm --filter trace-web codegen
+
+# Desktop app - generates React Apollo hooks and types
+pnpm --filter trace codegen
 ```
 
 ### 6. Start the app
 
-You need to run **two processes** — the backend server and the Electron app:
+You need to run at least **two processes**: the backend server and either the web or desktop client.
 
 **Terminal 1 — Server:**
 
 ```bash
-cd server
-npm run dev
+pnpm dev:server
 ```
 
 The server starts on `http://localhost:3100`.
 
-**Terminal 2 — Electron app:**
+**Terminal 2 — Web app:**
 
 ```bash
-npm start
+pnpm dev:web
 ```
 
-**Option 3 -- Render**
+The web app starts on Vite's configured dev port.
+
+**Terminal 2 — Desktop app:**
+
+```bash
+pnpm dev:desktop
+```
+
+**Option 3 -- Render:**
+
 ```bash
 TRACE_PROD=1 pnpm dev:desktop
 ```
