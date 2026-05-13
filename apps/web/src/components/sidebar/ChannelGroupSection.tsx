@@ -11,7 +11,7 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { groupContainerId, groupSortableIds } from "../../hooks/useChannelDnd";
-import { sidebarEdgeRowClass } from "./sidebarItemStyles";
+import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 const UPDATE_GROUP_MUTATION = gql`
   mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {
@@ -92,13 +92,13 @@ export function ChannelGroupSection({
       <div
         className={cn(
           "flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10 group/group-header",
-          sidebarEdgeRowClass,
+          sidebarRootLeftEdgeRowClass,
         )}
         {...attributes}
         {...listeners}
       >
         <button
-          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors"
+          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors"
           onClick={toggleCollapse}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
