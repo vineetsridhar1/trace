@@ -13,6 +13,7 @@ import {
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { DeleteChannelDialog } from "../channel/DeleteChannelDialog";
+import { cn } from "../../lib/utils";
 
 function ChannelIcon({ type, className }: { type: string | undefined; className?: string }) {
   if (type === "text") return <MessageSquare size={16} className={className} />;
@@ -69,7 +70,11 @@ export const ChannelItem = memo(function ChannelItem({
                 isActive={isActive}
                 onClick={onClick}
                 tooltip={name ?? ""}
-                className="h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-foreground hover:bg-white/10 data-[active=true]:bg-white/10 data-[active=true]:text-foreground"
+                className={cn(
+                  "h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 text-sm font-medium text-foreground",
+                  isActive ? "bg-white/10" : "hover:bg-white/10",
+                  "data-[active=true]:bg-white/10 data-[active=true]:font-medium data-[active=true]:text-foreground",
+                )}
               >
                 {canExpand && (
                   <span
