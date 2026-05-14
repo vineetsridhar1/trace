@@ -20,8 +20,8 @@ export interface SpinnerProps extends Omit<ActivityIndicatorProps, "size" | "col
 const GRID_SIZE = 3;
 const PATH_LENGTH = 16;
 const SIZE_PX: Record<NonNullable<SpinnerProps["size"]>, number> = {
-  small: 18,
-  large: 32,
+  small: 22,
+  large: 38,
 };
 const SNAKE_PATH = [
   [0, 0],
