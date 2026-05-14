@@ -191,7 +191,7 @@ export const ChannelItem = memo(function ChannelItem({
         {hasDoneBadge && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute right-1 top-1 z-30 h-2 w-2 rounded-full bg-destructive ring-2 ring-sidebar"
+            className="pointer-events-none absolute right-1 top-1 z-30 h-2 w-2 rounded-full bg-destructive"
           />
         )}
       </div>
