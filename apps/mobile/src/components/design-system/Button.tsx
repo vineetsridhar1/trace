@@ -123,7 +123,7 @@ export function Button({
     variant === "primary" || variant === "destructive" ? "accentForeground" : "foreground";
 
   return (
-    <Animated.View style={animatedStyle}>
+    <Animated.View style={[styles.animatedContainer, animatedStyle, { minHeight: spec.minHeight }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel ?? title}
@@ -150,6 +150,9 @@ export function Button({
 }
 
 const styles = StyleSheet.create({
+  animatedContainer: {
+    alignSelf: "stretch",
+  },
   container: {
     flexDirection: "row",
     alignItems: "center",
