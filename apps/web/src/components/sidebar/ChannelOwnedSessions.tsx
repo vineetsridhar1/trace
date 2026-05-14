@@ -242,7 +242,7 @@ function OwnedSessionGroupItem({
       role="button"
       tabIndex={0}
       className={cn(
-        "group/session-row flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        "group/session-row relative flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         sidebarNestedFullWidthRowClass,
         isActive ? "bg-white/10 text-foreground" : "text-foreground hover:bg-white/10",
       )}
@@ -250,7 +250,7 @@ function OwnedSessionGroupItem({
       onKeyDown={handleRowKeyDown}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <SessionStatusIndicator row={record.row} size={6} />
+        <SessionStatusIndicator row={record.row} size={6} showDonePulse={false} />
         <span className={cn("min-w-0 flex-1 truncate", hasDoneBadge && "font-semibold")}>
           {record.name}
         </span>
@@ -279,6 +279,12 @@ function OwnedSessionGroupItem({
       >
         <Archive size={13} />
       </button>
+      {hasDoneBadge && (
+        <span
+          aria-hidden="true"
+          className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive ring-2 ring-sidebar"
+        />
+      )}
     </div>
   );
 
