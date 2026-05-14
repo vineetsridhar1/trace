@@ -26,6 +26,7 @@ import {
   type SessionStreamItemCache,
   type SessionStreamListItem,
 } from "./sessionStreamItems";
+import { nextFollowLatestState } from "./session-scroll-follow";
 import type { NodeRenderContext } from "./nodes";
 
 interface SessionStreamProps {
@@ -169,13 +170,16 @@ export function SessionStream({
       );
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
-      const scrollingUp = contentOffset.y < previousOffset - 1;
-      if (isUserScrollingRef.current && scrollingUp) {
-        setIsFollowingLatest(false);
-        return;
-      }
-      if (nearBottom) {
-        setIsFollowingLatest(true);
+      const nextFollowingLatest = nextFollowLatestState({
+        currentlyFollowing: isFollowingLatestRef.current,
+        distanceFromBottom,
+        isUserScrolling: isUserScrollingRef.current,
+        nearBottomThreshold: NEAR_BOTTOM_THRESHOLD,
+        previousOffset,
+        nextOffset: contentOffset.y,
+      });
+      setIsFollowingLatest(nextFollowingLatest);
+      if (nearBottom && nextFollowingLatest) {
         clearNewActivity();
       }
     },
