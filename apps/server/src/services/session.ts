@@ -80,6 +80,12 @@ type UserSessionDefaults = {
 
 const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
 const FALLBACK_SESSION_TOOL: CodingTool = "claude_code";
+const LOCAL_TOOL_FALLBACK_ORDER: readonly CodingTool[] = [
+  FALLBACK_SESSION_TOOL,
+  "codex",
+  "pi",
+  "custom",
+];
 const PI_INSTALL_COMMAND = "npm install -g @earendil-works/pi-coding-agent";
 const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
 
@@ -155,6 +161,7 @@ export type SessionConnectionData = {
     | "deprovision_failed";
   environmentId?: string;
   adapterType?: "local" | "provisioned";
+  toolSource?: "default" | "explicit";
   runtimeInstanceId?: string;
   runtimeLabel?: string;
   providerRuntimeId?: string;
@@ -799,6 +806,14 @@ function resolveStoredModelForTool(tool: CodingTool, model: string | null | unde
 function resolveStoredReasoningEffortForTool(tool: CodingTool, effort: string | null | undefined) {
   const trimmed = effort?.trim();
   return trimmed && isSupportedReasoningEffort(tool, trimmed) ? trimmed : undefined;
+}
+
+function selectRuntimeSupportedTool(
+  runtime: Pick<RuntimeInstance, "supportedTools">,
+  preferredTool: CodingTool,
+): CodingTool | null {
+  if (runtime.supportedTools.includes(preferredTool)) return preferredTool;
+  return LOCAL_TOOL_FALLBACK_ORDER.find((tool) => runtime.supportedTools.includes(tool)) ?? null;
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
@@ -1548,7 +1563,7 @@ export class SessionService {
   private async resolveDefaultAccessibleLocalRuntime(params: {
     userId: string;
     organizationId: string;
-    tool: string;
+    tool?: string;
     repoId?: string | null;
     sessionGroupId?: string | null;
   }): Promise<RuntimeInstance | undefined> {
@@ -1561,7 +1576,7 @@ export class SessionService {
     for (const runtime of sessionRouter.listRuntimes({ hostingMode: "local" })) {
       if (runtime.organizationId !== params.organizationId) continue;
       if (!accessibleRuntimeIds.has(runtime.id)) continue;
-      if (!runtime.supportedTools.includes(params.tool)) continue;
+      if (params.tool && !runtime.supportedTools.includes(params.tool)) continue;
       if (params.repoId && !runtime.registeredRepoIds.includes(params.repoId)) continue;
       return runtime;
     }
@@ -1575,11 +1590,16 @@ export class SessionService {
     organizationId: string;
     userId: string;
     hosting: string | null;
-    tool: string;
+    tool: CodingTool;
+    allowToolFallback?: boolean;
     repoId?: string | null;
     connection: unknown;
     failureMessage?: string;
-  }): Promise<{ runtimeId: string | null; runtimeLabel: string | null }> {
+  }): Promise<{
+    runtimeId: string | null;
+    runtimeLabel: string | null;
+    fallbackTool?: CodingTool;
+  }> {
     const conn = this.parseConnection(params.connection);
     if (params.hosting !== "local") {
       return {
@@ -1598,6 +1618,22 @@ export class SessionService {
       });
       const runtime = sessionRouter.getRuntime(conn.runtimeInstanceId, params.organizationId);
       if (runtime) {
+        const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
+        if (!supportsTool) {
+          if (!params.allowToolFallback) {
+            throw new Error("Selected runtime does not support this tool");
+          }
+          const fallbackTool = selectRuntimeSupportedTool(runtime, params.tool);
+          if (!fallbackTool) {
+            throw new Error("Selected runtime does not support any known coding tool");
+          }
+          sessionRouter.bindSession(params.sessionId, runtime.key);
+          return {
+            runtimeId: conn.runtimeInstanceId,
+            runtimeLabel: runtime.label ?? conn.runtimeLabel ?? null,
+            fallbackTool,
+          };
+        }
         sessionRouter.bindSession(params.sessionId, runtime.key);
       }
       return {
@@ -1606,13 +1642,28 @@ export class SessionService {
       };
     }
 
-    const runtime = await this.resolveDefaultAccessibleLocalRuntime({
+    let runtime = await this.resolveDefaultAccessibleLocalRuntime({
       userId: params.userId,
       organizationId: params.organizationId,
       tool: params.tool,
       repoId: params.repoId,
       sessionGroupId: params.sessionGroupId,
     });
+    let fallbackTool: CodingTool | undefined;
+    if (!runtime && params.allowToolFallback) {
+      runtime = await this.resolveDefaultAccessibleLocalRuntime({
+        userId: params.userId,
+        organizationId: params.organizationId,
+        repoId: params.repoId,
+        sessionGroupId: params.sessionGroupId,
+      });
+      fallbackTool = runtime
+        ? (selectRuntimeSupportedTool(runtime, params.tool) ?? undefined)
+        : undefined;
+      if (runtime && !fallbackTool) {
+        throw new Error("Selected runtime does not support any known coding tool");
+      }
+    }
     if (!runtime) {
       throw new Error("No accessible local runtime available");
     }
@@ -1621,6 +1672,7 @@ export class SessionService {
     return {
       runtimeId: runtime.id,
       runtimeLabel: runtime.label,
+      ...(fallbackTool && { fallbackTool }),
     };
   }
 
@@ -2142,15 +2194,8 @@ export class SessionService {
             defaultSessionReasoningEffort: true,
           },
         });
-    const tool = input.tool ?? userDefaults?.defaultSessionTool ?? FALLBACK_SESSION_TOOL;
-    const model = input.model
-      ? validateModelForTool(tool, input.model)
-      : (resolveStoredModelForTool(tool, userDefaults?.defaultSessionModel) ??
-        getDefaultModel(tool));
-    const reasoningEffort = input.reasoningEffort
-      ? validateReasoningEffortForTool(tool, input.reasoningEffort)
-      : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
-        getDefaultReasoningEffort(tool));
+    const hasExplicitTool = !!input.tool;
+    let tool = input.tool ?? userDefaults?.defaultSessionTool ?? FALLBACK_SESSION_TOOL;
 
     const restoreGroup = restoreCheckpoint
       ? await prisma.sessionGroup.findFirst({
@@ -2369,6 +2414,36 @@ export class SessionService {
       );
     }
 
+    if (!hasExplicitTool) {
+      const requestedRuntime = input.runtimeInstanceId
+        ? sessionRouter.getRuntime(input.runtimeInstanceId, input.organizationId)
+        : undefined;
+      const localFallbackRuntime =
+        requestedRuntime?.hostingMode === "local"
+          ? requestedRuntime
+          : deferRuntimeSelection || input.hosting === "local"
+            ? ((await this.resolveDefaultAccessibleLocalRuntime({
+                userId: input.createdById,
+                organizationId: input.organizationId,
+                tool,
+                repoId: resolvedRepoId ?? null,
+                sessionGroupId: existingGroup?.id ?? null,
+              })) ??
+              (await this.resolveDefaultAccessibleLocalRuntime({
+                userId: input.createdById,
+                organizationId: input.organizationId,
+                repoId: resolvedRepoId ?? null,
+                sessionGroupId: existingGroup?.id ?? null,
+              })))
+            : undefined;
+      const fallbackTool = localFallbackRuntime
+        ? selectRuntimeSupportedTool(localFallbackRuntime, tool)
+        : null;
+      if (fallbackTool) {
+        tool = fallbackTool;
+      }
+    }
+
     const requestedEnvironment = deferRuntimeSelection
       ? null
       : await agentEnvironmentService.resolveForSessionRequest({
@@ -2392,6 +2467,15 @@ export class SessionService {
         "No default agent environment is configured. Choose an environment or set an org default in Agent Environments.",
       );
     }
+    const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
+    if (!hasExplicitTool && environmentRuntimeInstanceId) {
+      const runtime = sessionRouter.getRuntime(environmentRuntimeInstanceId, input.organizationId);
+      const fallbackTool = runtime ? selectRuntimeSupportedTool(runtime, tool) : null;
+      if (fallbackTool) {
+        tool = fallbackTool;
+      }
+    }
+
     const environmentHosting =
       requestedEnvironment?.adapterType === "local"
         ? "local"
@@ -2400,8 +2484,8 @@ export class SessionService {
           : null;
 
     let hosting =
-      (deferRuntimeSelection ? "local" : environmentHosting) ??
       input.hosting ??
+      (deferRuntimeSelection ? "local" : environmentHosting) ??
       sourceSession?.hosting ??
       (isLocalMode() ? "local" : "cloud");
     if (isLocalMode() && hosting === "cloud") {
@@ -2411,7 +2495,6 @@ export class SessionService {
       throw new Error("No enabled cloud agent environment is configured");
     }
     let runtimeLabel: string | undefined;
-    const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
     if (
       input.environmentId &&
       input.runtimeInstanceId &&
@@ -2493,6 +2576,16 @@ export class SessionService {
         }
       }
       if (useRequestedRuntime) {
+        if (!runtime.supportedTools.includes(tool)) {
+          if (hasExplicitTool) {
+            throw new Error("Selected runtime does not support this tool");
+          }
+          const fallbackTool = selectRuntimeSupportedTool(runtime, tool);
+          if (!fallbackTool) {
+            throw new Error("Selected runtime does not support any known coding tool");
+          }
+          tool = fallbackTool;
+        }
         if (
           runtime.hostingMode === "local" &&
           resolvedRepoId &&
@@ -2510,13 +2603,27 @@ export class SessionService {
     }
 
     if (!requestedRuntimeInstanceId && hosting === "local" && !deferRuntimeSelection) {
-      const defaultLocalRuntime = await this.resolveDefaultAccessibleLocalRuntime({
+      let defaultLocalRuntime = await this.resolveDefaultAccessibleLocalRuntime({
         userId: input.createdById,
         organizationId: input.organizationId,
         tool,
         repoId: resolvedRepoId ?? null,
         sessionGroupId: existingGroup?.id ?? null,
       });
+      if (!defaultLocalRuntime && !hasExplicitTool) {
+        defaultLocalRuntime = await this.resolveDefaultAccessibleLocalRuntime({
+          userId: input.createdById,
+          organizationId: input.organizationId,
+          repoId: resolvedRepoId ?? null,
+          sessionGroupId: existingGroup?.id ?? null,
+        });
+        const fallbackTool = defaultLocalRuntime
+          ? selectRuntimeSupportedTool(defaultLocalRuntime, tool)
+          : null;
+        if (fallbackTool) {
+          tool = fallbackTool;
+        }
+      }
       if (!defaultLocalRuntime) {
         throw new Error("No accessible local runtime available");
       }
@@ -2529,6 +2636,15 @@ export class SessionService {
         sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
         this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
     }
+
+    const model = input.model
+      ? validateModelForTool(tool, input.model)
+      : (resolveStoredModelForTool(tool, userDefaults?.defaultSessionModel) ??
+        getDefaultModel(tool));
+    const reasoningEffort = input.reasoningEffort
+      ? validateReasoningEffortForTool(tool, input.reasoningEffort)
+      : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
+        getDefaultReasoningEffort(tool));
 
     assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
 
@@ -2547,6 +2663,7 @@ export class SessionService {
       : connJson(
           defaultConnection({
             ...(deferRuntimeSelection && { state: "pending" }),
+            toolSource: hasExplicitTool ? "explicit" : "default",
             ...(requestedEnvironment && {
               environmentId: requestedEnvironment.id,
               adapterType: requestedEnvironment.adapterType,
@@ -3914,6 +4031,13 @@ export class SessionService {
       },
     });
     const conn = this.parseConnection(session.connection);
+    const allowToolFallback =
+      actorType === "user" &&
+      !session.toolChangedAt &&
+      conn.toolSource === "default" &&
+      session.agentStatus === "not_started" &&
+      !session.workdir &&
+      !session.toolSessionId;
     const runtimeBinding =
       actorType === "user"
         ? await this.resolveAccessibleLocalRuntimeBinding({
@@ -3923,6 +4047,7 @@ export class SessionService {
             userId: actorId,
             hosting: session.hosting,
             tool: session.tool,
+            allowToolFallback,
             repoId: session.repoId,
             connection: session.connection,
           })
@@ -3930,6 +4055,45 @@ export class SessionService {
             runtimeId: conn.runtimeInstanceId ?? null,
             runtimeLabel: conn.runtimeLabel ?? null,
           };
+    const activeTool = runtimeBinding.fallbackTool ?? session.tool;
+    const activeModel =
+      activeTool !== session.tool
+        ? (resolveStoredModelForTool(activeTool, session.model) ??
+          getDefaultModel(activeTool) ??
+          null)
+        : session.model;
+    const activeReasoningEffort =
+      activeTool !== session.tool
+        ? (resolveStoredReasoningEffortForTool(activeTool, session.reasoningEffort) ??
+          getDefaultReasoningEffort(activeTool) ??
+          null)
+        : session.reasoningEffort;
+    if (activeTool !== session.tool) {
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: {
+          tool: activeTool,
+          model: activeModel,
+          reasoningEffort: activeReasoningEffort,
+          toolSessionId: null,
+        },
+      });
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "config_changed",
+          tool: activeTool,
+          model: activeModel,
+          reasoningEffort: activeReasoningEffort,
+          toolChanged: false,
+        },
+        actorType,
+        actorId,
+      });
+    }
 
     // Upload keys are scoped to an organization (`uploads/{orgId}/...`).
     // Reject keys whose org segment doesn't match the session's org so a
@@ -3997,9 +4161,9 @@ export class SessionService {
               channelBaseBranch: session.channel?.baseBranch,
             }),
             hosting: session.hosting,
-            tool: session.tool,
-            model: session.model,
-            reasoningEffort: session.reasoningEffort,
+            tool: activeTool,
+            model: activeModel,
+            reasoningEffort: activeReasoningEffort,
             repo: session.repo,
             branch: session.branch,
             createdById: session.createdById,
@@ -4131,9 +4295,9 @@ export class SessionService {
       type: "send" as const,
       sessionId,
       prompt,
-      tool: session.tool,
-      model: session.model ?? undefined,
-      reasoningEffort: session.reasoningEffort ?? undefined,
+      tool: activeTool,
+      model: activeModel ?? undefined,
+      reasoningEffort: activeReasoningEffort ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,

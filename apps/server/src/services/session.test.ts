@@ -736,6 +736,126 @@ describe("SessionService", () => {
       );
     });
 
+    it("falls back from an unsupported default tool to an accessible local runtime tool", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({
+        sessionGroup,
+        tool: "codex",
+        hosting: "local",
+        model: "claude-sonnet-4-20250514",
+      });
+
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        defaultSessionTool: "pi",
+        defaultSessionModel: null,
+        defaultSessionReasoningEffort: null,
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValue(
+        new Set(["runtime-1"]),
+      );
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-1",
+          id: "runtime-1",
+          label: "Laptop",
+          hostingMode: "local",
+          organizationId: "org-1",
+          registeredRepoIds: ["repo-1"],
+          supportedTools: ["codex"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        channelId: "channel-1",
+      });
+
+      expect(getDefaultModelMock).toHaveBeenCalledWith("codex");
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+          }),
+        }),
+      );
+    });
+
+    it("falls back before resolving an explicit local hosting request", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({
+        sessionGroup,
+        tool: "codex",
+        hosting: "local",
+      });
+
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        defaultSessionTool: "pi",
+        defaultSessionModel: null,
+        defaultSessionReasoningEffort: null,
+      });
+      prismaMock.agentEnvironment.findFirst.mockImplementation(async (args) => {
+        const where = args?.where as { adapterType?: string } | undefined;
+        if (where?.adapterType === "local") {
+          return makeAgentEnvironment({
+            adapterType: "local",
+            config: { runtimeSelection: "any_accessible_local" },
+          });
+        }
+        return makeAgentEnvironment();
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValue(
+        new Set(["runtime-1"]),
+      );
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-1",
+          id: "runtime-1",
+          label: "Laptop",
+          hostingMode: "local",
+          organizationId: "org-1",
+          registeredRepoIds: ["repo-1"],
+          supportedTools: ["codex"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        channelId: "channel-1",
+        hosting: "local",
+      });
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+            hosting: "local",
+          }),
+        }),
+      );
+    });
+
     it("rejects an unsupported reasoning effort on start", async () => {
       isSupportedReasoningEffortMock.mockReturnValueOnce(false);
 
@@ -2577,6 +2697,129 @@ describe("SessionService", () => {
           sessionId: "session-1",
           branch: "release",
           preserveBranchName: false,
+        }),
+      );
+    });
+
+    it("falls back from an unsupported default tool when the first message binds a local runtime", async () => {
+      const session = makeSession({
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        hosting: "local",
+        tool: "pi",
+        model: null,
+        reasoningEffort: null,
+        workdir: null,
+        toolSessionId: null,
+        connection: {
+          state: "pending",
+          toolSource: "default",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroup: makeSessionGroup({ slug: "session-slug" }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.update.mockResolvedValue(makeSession({ tool: "codex", hosting: "local" }));
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValue(
+        new Set(["runtime-1"]),
+      );
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-1",
+          id: "runtime-1",
+          label: "Laptop",
+          hostingMode: "local",
+          organizationId: "org-1",
+          registeredRepoIds: ["repo-1"],
+          supportedTools: ["codex"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "start work",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            tool: "codex",
+            toolSessionId: null,
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "config_changed",
+            tool: "codex",
+            toolChanged: false,
+          }),
+        }),
+      );
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          tool: "codex",
+        }),
+      );
+    });
+
+    it("does not fall back when the deferred local session tool was explicit", async () => {
+      const session = makeSession({
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        hosting: "local",
+        tool: "pi",
+        workdir: null,
+        toolSessionId: null,
+        connection: {
+          state: "pending",
+          toolSource: "explicit",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValue(
+        new Set(["runtime-1"]),
+      );
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-1",
+          id: "runtime-1",
+          label: "Laptop",
+          hostingMode: "local",
+          organizationId: "org-1",
+          registeredRepoIds: ["repo-1"],
+          supportedTools: ["codex"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+
+      await expect(
+        service.sendMessage({
+          sessionId: "session-1",
+          text: "start work",
+          actorType: "user",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow("No accessible local runtime available");
+
+      expect(prismaMock.session.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ tool: "codex" }),
         }),
       );
     });
