@@ -111,9 +111,12 @@ export function SessionDefaultsSheetContent() {
 
   return (
     <ScrollView
+      style={styles.scroll}
+      contentInsetAdjustmentBehavior="never"
+      automaticallyAdjustContentInsets={false}
       keyboardShouldPersistTaps="always"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { padding: theme.spacing.lg }]}
     >
       <View style={styles.header}>
         <Text variant="headline">Session defaults</Text>
@@ -220,20 +223,27 @@ export function formatSessionDefaultsSummary(user: {
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    alignSelf: "stretch",
+  },
   content: {
     gap: 16,
+    alignSelf: "stretch",
   },
   header: {
     gap: 4,
+    alignSelf: "stretch",
   },
   section: {
     gap: 8,
+    alignSelf: "stretch",
   },
   sectionTitle: {
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   card: {
+    alignSelf: "stretch",
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
   },
