@@ -1,11 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { router, usePathname } from "expo-router";
 import {
-  FlatList,
   type LayoutChangeEvent,
-  type ListRenderItem,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   View,
@@ -31,8 +27,6 @@ import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 import { ActiveSessionsAccessoryRow } from "./ActiveSessionsAccessoryRow";
 
-const keyExtractor = (id: string) => id;
-
 export function ActiveSessionsAccessory() {
   const pathname = usePathname();
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
@@ -44,14 +38,6 @@ export function ActiveSessionsAccessory() {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const shakeX = useSharedValue(0);
-  const listRef = useRef<FlatList<string>>(null);
-  // "self" = our own onMomentumScrollEnd pushed the index, so the sync effect
-  // should skip scrolling (the list is already there). "external" = 15b swipe.
-  const indexSource = useRef<"self" | "external">("external");
-  // Tracks the last index we scrolled to so width-only re-runs of the sync
-  // effect (tab-bar minimize shrinks the container mid-animation) jump
-  // instead of animating through intermediate pages.
-  const lastScrolledIndexRef = useRef<number | null>(null);
   const [width, setWidth] = useState(0);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
@@ -69,41 +55,6 @@ export function ActiveSessionsAccessory() {
     if (index > max) setIndex(max);
   }, [ids.length, index, setIndex]);
 
-  // Keep scroll position in sync when the index is driven from elsewhere
-  // (e.g. horizontal swipe inside the expanded Session Player in 15b).
-  useEffect(() => {
-    if (indexSource.current === "self") {
-      indexSource.current = "external";
-      lastScrolledIndexRef.current = index;
-      return;
-    }
-    if (width === 0 || ids.length === 0) return;
-    // Animate only on real index changes. A width change (tab-bar minimize
-    // shrinks the accessory) must snap to the same page, not animate through
-    // neighbouring sessions.
-    const animated =
-      lastScrolledIndexRef.current !== null && lastScrolledIndexRef.current !== index;
-    lastScrolledIndexRef.current = index;
-    listRef.current?.scrollToOffset({ offset: index * width, animated });
-  }, [index, width, ids.length]);
-
-  const onMomentumScrollEnd = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (width === 0) return;
-      const next = Math.round(e.nativeEvent.contentOffset.x / width);
-      if (next !== index) {
-        indexSource.current = "self";
-        setIndex(next);
-        haptic.selection();
-      }
-    },
-    [width, index, setIndex],
-  );
-
-  const renderItem: ListRenderItem<string> = useCallback(
-    ({ item }) => <ActiveSessionsAccessoryRow sessionId={item} width={width} theme={theme} />,
-    [width, theme],
-  );
   const isChannelsIndex = pathname === "/channels" || pathname === "/channels/";
 
   const shakeStyle = useAnimatedStyle(() => ({
@@ -149,21 +100,14 @@ export function ActiveSessionsAccessory() {
     );
   }
 
+  const visibleIndex = Math.min(index, ids.length - 1);
+  const sessionId = ids[visibleIndex];
+  if (!sessionId) return null;
+
   return (
     <View style={styles.container} onLayout={onLayout}>
       {width > 0 ? (
-        <FlatList
-          ref={listRef}
-          data={ids}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={width}
-          decelerationRate="fast"
-          onMomentumScrollEnd={onMomentumScrollEnd}
-        />
+        <ActiveSessionsAccessoryRow sessionId={sessionId} width={width} theme={theme} />
       ) : null}
     </View>
   );
