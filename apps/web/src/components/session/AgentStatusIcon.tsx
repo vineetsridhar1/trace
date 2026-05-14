@@ -15,7 +15,14 @@ export function AgentStatusIcon({
   switch (agentStatus) {
     case "preparing":
     case "active":
-      return <TraceLoader size={size} showLabel={false} className={className} color={color} />;
+      return (
+        <TraceLoader
+          size={size}
+          showLabel={false}
+          className={className ? `text-inherit ${className}` : "text-inherit"}
+          color={color}
+        />
+      );
     case "failed":
       return <XCircle size={size} className={className} />;
     default:
