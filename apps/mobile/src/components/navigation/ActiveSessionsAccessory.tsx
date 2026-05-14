@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import {
   FlatList,
   type LayoutChangeEvent,
@@ -10,6 +10,12 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { useShallow } from "zustand/react/shallow";
 import {
   useAuthStore,
@@ -18,6 +24,7 @@ import {
   type EntityState,
 } from "@trace/client-core";
 import { Text } from "@/components/design-system/Text";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { haptic } from "@/lib/haptics";
 import { selectOwnedActiveSessionIds } from "@/lib/activeSessions";
 import { useMobileUIStore } from "@/stores/ui";
@@ -27,6 +34,7 @@ import { ActiveSessionsAccessoryRow } from "./ActiveSessionsAccessoryRow";
 const keyExtractor = (id: string) => id;
 
 export function ActiveSessionsAccessory() {
+  const pathname = usePathname();
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const ids = useEntityStore(
     useShallow((state: EntityState) => selectOwnedActiveSessionIds(state, userId)),
@@ -34,6 +42,8 @@ export function ActiveSessionsAccessory() {
   const index = useMobileUIStore((s) => s.activeAccessoryIndex);
   const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const shakeX = useSharedValue(0);
   const listRef = useRef<FlatList<string>>(null);
   // "self" = our own onMomentumScrollEnd pushed the index, so the sync effect
   // should skip scrolling (the list is already there). "external" = 15b swipe.
@@ -95,23 +105,46 @@ export function ActiveSessionsAccessory() {
     [width, theme],
   );
 
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeX.value }],
+  }));
+
+  const promptForChannel = useCallback(() => {
+    void haptic.warning();
+    if (reducedMotion) return;
+    shakeX.value = withSequence(
+      withTiming(-8, { duration: 45 }),
+      withTiming(8, { duration: 45 }),
+      withTiming(-6, { duration: 45 }),
+      withTiming(6, { duration: 45 }),
+      withTiming(0, { duration: 45 }),
+    );
+  }, [reducedMotion, shakeX]);
+
   const handleStartSession = useCallback(() => {
+    if (pathname === "/channels" || pathname === "/channels/") {
+      promptForChannel();
+      return;
+    }
     void haptic.light();
     router.push("/channels" as never);
-  }, []);
+  }, [pathname, promptForChannel]);
 
   if (ids.length === 0) {
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Start a session"
-        style={styles.emptyAction}
-        onPress={handleStartSession}
-      >
-        <Text variant="callout" color="foreground" style={styles.emptyLabel}>
-          Start a session
-        </Text>
-      </Pressable>
+      <Animated.View style={[styles.emptyActionFrame, shakeStyle]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Start a session"
+          accessibilityHint={pathname === "/channels" ? "Select a channel first." : undefined}
+          style={styles.emptyAction}
+          onPress={handleStartSession}
+        >
+          <Text variant="callout" color="foreground" style={styles.emptyLabel}>
+            Start a session
+          </Text>
+        </Pressable>
+      </Animated.View>
     );
   }
 
@@ -137,6 +170,9 @@ export function ActiveSessionsAccessory() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  emptyActionFrame: {
+    flex: 1,
+  },
   emptyAction: {
     flex: 1,
     alignItems: "center",
