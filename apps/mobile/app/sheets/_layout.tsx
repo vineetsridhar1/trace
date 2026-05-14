@@ -23,6 +23,15 @@ export default function SheetsLayout() {
         headerShown: false,
         contentStyle: { backgroundColor: "#0a0a0a" },
       }}
-    />
+    >
+      <Stack.Screen
+        name="org-switcher"
+        options={{
+          presentation: "modal",
+          animation: "slide_from_bottom",
+          contentStyle: { backgroundColor: "#0a0a0a" },
+        }}
+      />
+    </Stack>
   );
 }
