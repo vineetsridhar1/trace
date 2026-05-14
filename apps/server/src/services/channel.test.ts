@@ -40,6 +40,63 @@ describe("ChannelService", () => {
     vi.clearAllMocks();
   });
 
+  it("lists channels with viewer membership metadata without loading full member records", async () => {
+    prismaMock.channel.findMany.mockResolvedValueOnce([]);
+
+    const service = new ChannelService();
+    await service.listChannels("org-1", "user-1");
+
+    expect(prismaMock.channel.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1" },
+      include: {
+        repo: true,
+        members: {
+          where: { userId: "user-1", leftAt: null },
+          select: { userId: true },
+        },
+        _count: {
+          select: {
+            members: { where: { leftAt: null } },
+          },
+        },
+      },
+    });
+  });
+
+  it("filters listed channels to memberships when memberOnly is true", async () => {
+    prismaMock.channel.findMany.mockResolvedValueOnce([]);
+
+    const service = new ChannelService();
+    await service.listChannels("org-1", "user-1", { memberOnly: true });
+
+    expect(prismaMock.channel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId: "org-1",
+          members: { some: { userId: "user-1", leftAt: null } },
+        },
+      }),
+    );
+  });
+
+  it("resolves lightweight channel membership fields directly", async () => {
+    prismaMock.channelMember.count.mockResolvedValueOnce(2);
+    prismaMock.channelMember.findUnique.mockResolvedValueOnce({ leftAt: null });
+
+    const service = new ChannelService();
+
+    await expect(service.getMemberCount("channel-1")).resolves.toBe(2);
+    await expect(service.isMember("channel-1", "user-1")).resolves.toBe(true);
+
+    expect(prismaMock.channelMember.count).toHaveBeenCalledWith({
+      where: { channelId: "channel-1", leftAt: null },
+    });
+    expect(prismaMock.channelMember.findUnique).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "channel-1", userId: "user-1" } },
+      select: { leftAt: true },
+    });
+  });
+
   it("rejects channel creation when the actor is not an org member", async () => {
     prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("Not found"));
 

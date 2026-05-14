@@ -193,6 +193,7 @@ export type Channel = {
   baseBranch?: Maybe<Scalars["String"]["output"]>;
   groupId?: Maybe<Scalars["ID"]["output"]>;
   id: Scalars["ID"]["output"];
+  memberCount: Scalars["Int"]["output"];
   members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars["String"]["output"];
@@ -202,6 +203,7 @@ export type Channel = {
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
   setupScript?: Maybe<Scalars["String"]["output"]>;
   type: ChannelType;
+  viewerIsMember: Scalars["Boolean"]["output"];
 };
 
 export type ChannelMessagesArgs = {

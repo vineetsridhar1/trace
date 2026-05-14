@@ -127,6 +127,18 @@ export const channelSubscriptions = {
 export const channelTypeResolvers = {
   Channel: {
     members: (channel: { id: string }) => channelService.getMembers(channel.id),
+    memberCount: (channel: { id: string; _count?: { members?: number } }) =>
+      channel._count?.members ?? channelService.getMemberCount(channel.id),
+    viewerIsMember: (
+      channel: { id: string; members?: Array<{ userId: string }> },
+      _: unknown,
+      ctx: Context,
+    ) => {
+      if ("members" in channel && channel.members) {
+        return channel.members.some((member) => member.userId === ctx.userId);
+      }
+      return channelService.isMember(channel.id, ctx.userId);
+    },
     repo: (channel: { repo?: unknown; repoId?: string | null }) => {
       if ("repo" in channel) {
         return channel.repo ?? null;

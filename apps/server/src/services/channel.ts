@@ -29,7 +29,21 @@ export class ChannelService {
       where.members = { some: { userId, leftAt: null } };
     }
 
-    return prisma.channel.findMany({ where, include: { repo: true } });
+    return prisma.channel.findMany({
+      where,
+      include: {
+        repo: true,
+        members: {
+          where: { userId, leftAt: null },
+          select: { userId: true },
+        },
+        _count: {
+          select: {
+            members: { where: { leftAt: null } },
+          },
+        },
+      },
+    });
   }
 
   async getChannel(channelId: string, userId: string) {
@@ -38,7 +52,33 @@ export class ChannelService {
       select: { id: true },
     });
 
-    return prisma.channel.findUnique({ where: { id: channelId }, include: { repo: true } });
+    return prisma.channel.findUnique({
+      where: { id: channelId },
+      include: {
+        repo: true,
+        members: {
+          where: { userId, leftAt: null },
+          select: { userId: true },
+        },
+        _count: {
+          select: {
+            members: { where: { leftAt: null } },
+          },
+        },
+      },
+    });
+  }
+
+  async getMemberCount(channelId: string) {
+    return prisma.channelMember.count({ where: { channelId, leftAt: null } });
+  }
+
+  async isMember(channelId: string, userId: string) {
+    const membership = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId, userId } },
+      select: { leftAt: true },
+    });
+    return membership?.leftAt === null;
   }
 
   async getMembers(channelId: string) {

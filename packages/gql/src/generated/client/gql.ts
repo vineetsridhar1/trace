@@ -46,7 +46,7 @@ type Documents = {
   "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n": typeof types.DeleteOrgSecretDocument;
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateRepoDocument;
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument;
-  "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n": typeof types.AllChannelsDocument;
+  "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      memberCount\n      viewerIsMember\n    }\n  }\n": typeof types.AllChannelsDocument;
   "\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n": typeof types.JoinChannelDocument;
   "\n  mutation LeaveChannel($channelId: ID!) {\n    leaveChannel(channelId: $channelId) {\n      id\n    }\n  }\n": typeof types.LeaveChannelDocument;
   "\n  mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {\n    updateChannelGroup(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateChannelGroupCollapseDocument;
@@ -139,7 +139,7 @@ const documents: Documents = {
     types.CreateRepoDocument,
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n":
     types.CreateDmDocument,
-  "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n":
+  "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      memberCount\n      viewerIsMember\n    }\n  }\n":
     types.AllChannelsDocument,
   "\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n":
     types.JoinChannelDocument,
@@ -405,8 +405,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n",
-): (typeof documents)["\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n"];
+  source: "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      memberCount\n      viewerIsMember\n    }\n  }\n",
+): (typeof documents)["\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      memberCount\n      viewerIsMember\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

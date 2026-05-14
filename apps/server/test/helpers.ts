@@ -264,6 +264,7 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
     },
     channelMember: {
+      count: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),

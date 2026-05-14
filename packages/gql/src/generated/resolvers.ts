@@ -196,6 +196,7 @@ export type Channel = {
   baseBranch?: Maybe<Scalars["String"]["output"]>;
   groupId?: Maybe<Scalars["ID"]["output"]>;
   id: Scalars["ID"]["output"];
+  memberCount: Scalars["Int"]["output"];
   members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars["String"]["output"];
@@ -205,6 +206,7 @@ export type Channel = {
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
   setupScript?: Maybe<Scalars["String"]["output"]>;
   type: ChannelType;
+  viewerIsMember: Scalars["Boolean"]["output"];
 };
 
 export type ChannelMessagesArgs = {
@@ -2317,6 +2319,7 @@ export type ChannelResolvers<
   baseBranch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   groupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  memberCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   members?: Resolver<Array<ResolversTypes["ChannelMember"]>, ParentType, ContextType>;
   messages?: Resolver<
     Array<ResolversTypes["Event"]>,
@@ -2331,6 +2334,7 @@ export type ChannelResolvers<
   runScripts?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
   setupScript?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes["ChannelType"], ParentType, ContextType>;
+  viewerIsMember?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
