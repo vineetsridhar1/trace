@@ -20,7 +20,6 @@ import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
 import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestToasts";
 import { Toaster } from "./components/ui/sonner";
 import { TraceLoader } from "./components/ui/trace-loader";
-import { InstallBanner } from "./components/InstallBanner";
 import { LoginPage } from "./components/auth/LoginPage";
 import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
@@ -128,7 +127,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
           isDesktopShell ? "[background:var(--trace-window-bg)]" : "bg-surface-deep"
         }`}
       >
-        <InstallBanner />
         <SidebarProvider className="min-h-0 flex-1">
           <AppSidebar />
 
