@@ -919,10 +919,7 @@ export class SessionService {
         });
         return candidate;
       } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === "P2002"
-        ) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
           continue;
         }
         throw error;
@@ -1942,20 +1939,32 @@ export class SessionService {
   async list(
     organizationId: string,
     filters?: {
-      agentStatus?: string | null;
-      tool?: string | null;
+      agentStatus?: AgentStatus | null;
+      tool?: CodingTool | null;
       repoId?: string | null;
       channelId?: string | null;
+      includeArchived?: boolean | null;
+      includeMerged?: boolean | null;
+      limit?: number | null;
     },
   ) {
-    const where: Record<string, unknown> = { organizationId };
+    const where: Prisma.SessionWhereInput = { organizationId };
     if (filters?.agentStatus) where.agentStatus = filters.agentStatus;
     if (filters?.tool) where.tool = filters.tool;
     if (filters?.repoId) where.repoId = filters.repoId;
     if (filters?.channelId) where.channelId = filters.channelId;
+    if (filters?.includeMerged === false) where.sessionStatus = { not: "merged" };
+    if (filters?.includeArchived === false) {
+      where.OR = [{ sessionGroupId: null }, { sessionGroup: { archivedAt: null } }];
+    }
+    const limit =
+      typeof filters?.limit === "number" && Number.isFinite(filters.limit)
+        ? Math.max(1, Math.min(Math.trunc(filters.limit), 500))
+        : undefined;
     return prisma.session.findMany({
       where,
-      orderBy: { updatedAt: "desc" },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      ...(limit ? { take: limit } : {}),
       include: SESSION_INCLUDE,
     });
   }
@@ -4277,6 +4286,17 @@ export class SessionService {
       position: message.position,
       createdAt: message.createdAt.toISOString(),
     };
+  }
+
+  async getQueuedMessageSessionId(id: string, organizationId: string): Promise<string> {
+    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+      where: { id },
+      select: { sessionId: true, organizationId: true },
+    });
+    if (queuedMessage.organizationId !== organizationId) {
+      throw new Error("Queued message does not belong to this organization");
+    }
+    return queuedMessage.sessionId;
   }
 
   async removeQueuedMessage(id: string, actorId: string, organizationId: string) {

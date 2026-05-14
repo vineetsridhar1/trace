@@ -185,13 +185,7 @@ export function handleOrgEvent(event: Event): void {
   }
 
   // Queued message events
-  if (event.eventType === "queued_message_added") {
-    const qm = asJsonObject(payload.queuedMessage);
-    if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
-      batch.upsertQueuedMessage(qm.sessionId, qm.id, qm as unknown as QueuedMessage);
-    }
-  }
-  if (event.eventType === "queued_message_updated") {
+  if (event.eventType === "queued_message_added" || event.eventType === "queued_message_updated") {
     const qm = asJsonObject(payload.queuedMessage);
     if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
       batch.upsertQueuedMessage(qm.sessionId, qm.id, qm as unknown as QueuedMessage);

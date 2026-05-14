@@ -32,6 +32,13 @@ vi.mock("../services/session.js", () => ({
     dismiss: vi.fn(),
     delete: vi.fn(),
     sendMessage: vi.fn(),
+    queueMessage: vi.fn(),
+    removeQueuedMessage: vi.fn(),
+    steerQueuedMessage: vi.fn(),
+    updateQueuedMessage: vi.fn(),
+    clearQueuedMessages: vi.fn(),
+    reorderQueuedMessages: vi.fn(),
+    getQueuedMessageSessionId: vi.fn().mockResolvedValue("session-1"),
   },
 }));
 
@@ -156,11 +163,33 @@ describe("GraphQL authz guards", () => {
     await sessionMutations.dismissSession({}, { id: "session-1" }, ctx);
     await sessionMutations.deleteSession({}, { id: "session-1" }, ctx);
     await sessionMutations.sendSessionMessage({}, { sessionId: "session-1", text: "hello" }, ctx);
+    await sessionMutations.queueSessionMessage({}, { sessionId: "session-1", text: "queued" }, ctx);
+    await sessionMutations.removeQueuedMessage({}, { id: "queued-1" }, ctx);
+    await sessionMutations.steerQueuedMessage({}, { id: "queued-1" }, ctx);
+    await sessionMutations.updateQueuedMessage({}, { id: "queued-1", text: "edited" }, ctx);
+    await sessionMutations.clearQueuedMessages({}, { sessionId: "session-1" }, ctx);
+    await sessionMutations.reorderQueuedMessages(
+      {},
+      { sessionId: "session-1", ids: ["queued-1"] },
+      ctx,
+    );
 
     expect(assertScopeAccess).toHaveBeenNthCalledWith(1, "session", "session-1", "user-1", "org-1");
     expect(assertScopeAccess).toHaveBeenNthCalledWith(2, "session", "session-1", "user-1", "org-1");
     expect(assertScopeAccess).toHaveBeenNthCalledWith(3, "session", "session-1", "user-1", "org-1");
     expect(assertScopeAccess).toHaveBeenNthCalledWith(4, "session", "session-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(5, "session", "session-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(6, "session", "session-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(7, "session", "session-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(8, "session", "session-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(9, "session", "session-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(
+      10,
+      "session",
+      "session-1",
+      "user-1",
+      "org-1",
+    );
   });
 
   it("uses the org-scoped runtime key when loading bridge slash commands", async () => {

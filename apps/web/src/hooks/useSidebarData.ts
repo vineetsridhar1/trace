@@ -89,20 +89,28 @@ const INBOX_ITEMS_QUERY = gql`
   }
 `;
 
+const SIDEBAR_SESSION_LIMIT = 300;
+
 const SIDEBAR_SESSIONS_QUERY = gql`
-  query SidebarSessions($organizationId: ID!) {
-    sessions(organizationId: $organizationId) {
+  query SidebarSessions($organizationId: ID!, $limit: Int!) {
+    sessions(
+      organizationId: $organizationId
+      filters: { includeArchived: false, includeMerged: false, limit: $limit }
+    ) {
       id
       name
       agentStatus
       sessionStatus
       tool
       model
+      reasoningEffort
       hosting
       branch
+      workdir
       prUrl
       worktreeDeleted
       sessionGroupId
+      lastUserMessageAt
       lastMessageAt
       connection {
         state
@@ -235,17 +243,24 @@ export function useSidebarData() {
   const fetchSidebarSessions = useCallback(async () => {
     if (!activeOrgId) return;
     const result = await client
-      .query(SIDEBAR_SESSIONS_QUERY, { organizationId: activeOrgId })
+      .query(SIDEBAR_SESSIONS_QUERY, { organizationId: activeOrgId, limit: SIDEBAR_SESSION_LIMIT })
       .toPromise();
     if (!result.data?.sessions) return;
 
-    const sessions = result.data.sessions as Array<EntityTableMap["sessions"] & { id: string }>;
+    const entityState = useEntityStore.getState();
+    const sessions = (
+      result.data.sessions as Array<EntityTableMap["sessions"] & { id: string }>
+    ).map((session) => ({
+      ...(entityState.sessions[session.id] ?? {}),
+      ...session,
+    }));
     const sessionGroups = sessions
       .map((session) => session.sessionGroup)
       .filter((group): group is SessionGroup & { id: string } => Boolean(group?.id))
       .map((group) => ({
+        ...(entityState.sessionGroups[group.id] ?? {}),
         ...group,
-        sessions: [],
+        sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
         _sortTimestamp: group.updatedAt,
       }));
 
