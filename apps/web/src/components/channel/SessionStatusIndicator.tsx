@@ -3,7 +3,15 @@ import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { useUIStore, type UIState } from "../../stores/ui";
 import type { SessionGroupRow } from "./sessions-table-types";
 
-export function SessionStatusIndicator({ row, size = 8 }: { row: SessionGroupRow; size?: number }) {
+export function SessionStatusIndicator({
+  row,
+  size = 8,
+  showDonePulse = true,
+}: {
+  row: SessionGroupRow;
+  size?: number;
+  showDonePulse?: boolean;
+}) {
   const color = sessionStatusColor[row.displaySessionStatus] ?? "text-muted-foreground";
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[row.id]);
 
@@ -13,7 +21,7 @@ export function SessionStatusIndicator({ row, size = 8 }: { row: SessionGroupRow
       style={{ width: size + 4, height: size }}
     >
       <AgentStatusIcon agentStatus={row.displayAgentStatus ?? "done"} size={size} />
-      {hasDoneBadge && (
+      {hasDoneBadge && showDonePulse && (
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
       )}
     </span>
