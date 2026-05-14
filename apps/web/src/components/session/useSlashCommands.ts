@@ -16,13 +16,24 @@ const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map(
   }),
 );
 
+const PI_SLASH_COMMANDS: SlashCommandItem[] = [
+  {
+    id: "login",
+    value: "login",
+    description: "Open Pi login in a terminal",
+    source: "builtin",
+    category: "auth",
+    type: "slash_command",
+  },
+];
+
 export function useSlashCommands(sessionId: string): {
   commands: SlashCommandItem[];
   loading: boolean;
 } {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const [commands, setCommands] = useState<SlashCommandItem[]>(() =>
-    tool === "claude_code" ? BUILTIN_FALLBACK : [],
+    tool === "claude_code" ? BUILTIN_FALLBACK : tool === "pi" ? PI_SLASH_COMMANDS : [],
   );
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +46,12 @@ export function useSlashCommands(sessionId: string): {
 
     let cancelled = false;
     const shouldSeedBuiltins = tool === "claude_code";
-    setCommands(shouldSeedBuiltins ? BUILTIN_FALLBACK : []);
+    const localCommands = tool === "pi" ? PI_SLASH_COMMANDS : [];
+    setCommands(shouldSeedBuiltins ? BUILTIN_FALLBACK : localCommands);
+    if (tool === "pi") {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     client
       .query(SESSION_SLASH_COMMANDS_QUERY, { sessionId }, { requestPolicy: "network-only" })
