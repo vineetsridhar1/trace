@@ -77,7 +77,9 @@ export const ChannelItem = memo(function ChannelItem({
                 className={cn(
                   "h-8 cursor-pointer gap-2 rounded-md bg-transparent px-0 pl-2 text-sm font-medium text-foreground",
                   canStartSession && "pr-16",
+                  isActive && "bg-white/10 text-foreground",
                   "hover:!bg-white/10 hover:!text-foreground active:!bg-white/10 active:!text-foreground",
+                  "data-active:!bg-white/10 data-active:font-medium data-active:!text-foreground",
                   "data-[active=true]:!bg-white/10 data-[active=true]:font-medium data-[active=true]:!text-foreground",
                 )}
               >
