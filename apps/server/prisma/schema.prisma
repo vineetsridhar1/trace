@@ -291,8 +291,8 @@ model User {
   name           String
   avatarUrl      String?
   githubId       Int?         @unique
-  defaultSessionTool CodingTool?
-  defaultSessionModel String?
+  defaultSessionTool            CodingTool?
+  defaultSessionModel           String?
   defaultSessionReasoningEffort String?
 
   orgMemberships    OrgMember[]

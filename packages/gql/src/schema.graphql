@@ -314,9 +314,6 @@ type User {
   email: String!
   name: String!
   avatarUrl: String
-  defaultSessionTool: CodingTool
-  defaultSessionModel: String
-  defaultSessionReasoningEffort: String
   organizations: [OrgMember!]!
 }
 
