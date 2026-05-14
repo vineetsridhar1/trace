@@ -630,6 +630,7 @@ export type Mutation = {
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
+  updateSessionDefaults: User;
   updateTicket: Ticket;
 };
 
@@ -1077,6 +1078,10 @@ export type MutationUpdateSessionConfigArgs = {
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   tool?: InputMaybe<CodingTool>;
+};
+
+export type MutationUpdateSessionDefaultsArgs = {
+  input: UpdateSessionDefaultsInput;
 };
 
 export type MutationUpdateTicketArgs = {
@@ -1650,6 +1655,12 @@ export type StartSessionInput = {
   tool?: InputMaybe<CodingTool>;
 };
 
+export type UpdateSessionDefaultsInput = {
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
 export type Subscription = {
   __typename?: "Subscription";
   branchTurns: Turn;
@@ -1820,6 +1831,9 @@ export type UpdateTicketInput = {
 export type User = {
   __typename?: "User";
   avatarUrl?: Maybe<Scalars["String"]["output"]>;
+  defaultSessionModel?: Maybe<Scalars["String"]["output"]>;
+  defaultSessionReasoningEffort?: Maybe<Scalars["String"]["output"]>;
+  defaultSessionTool?: Maybe<CodingTool>;
   email: Scalars["String"]["output"];
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -3095,6 +3109,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUpdateSessionConfigArgs, "sessionId">
+  >;
+  updateSessionDefaults?: Resolver<
+    ResolversTypes["User"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateSessionDefaultsArgs, "input">
   >;
   updateTicket?: Resolver<
     ResolversTypes["Ticket"],

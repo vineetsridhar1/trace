@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Check, ChevronRight, Circle, GitBranch, Hash, Play } from "lucide-react";
+import { Check, ChevronRight, Circle, GitBranch, Hash, Play, SlidersHorizontal } from "lucide-react";
 import { motion } from "framer-motion";
 import type { OnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { useOnboardingStore } from "../../stores/onboarding";
+import { useUIStore } from "../../stores/ui";
 import { BrowseChannelsDialog } from "../sidebar/BrowseChannelsDialog";
 import { CreateChannelDialog } from "../sidebar/CreateChannelDialog";
 import { CreateRepoDialog } from "../settings/CreateRepoDialog";
@@ -16,6 +17,8 @@ interface Props {
 
 export function OnboardingChecklist({ status }: Props) {
   const invalidateRepos = useOnboardingStore((s) => s.invalidateRepos);
+  const setActivePage = useUIStore((s) => s.setActivePage);
+  const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const [repoOpen, setRepoOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [browseOpen, setBrowseOpen] = useState(false);
@@ -42,6 +45,17 @@ export function OnboardingChecklist({ status }: Props) {
           done={status.hasChannel}
           onBrowseClick={() => setBrowseOpen(true)}
           onCreateClick={() => setCreateOpen(true)}
+        />
+
+        <SimpleRow
+          done={status.hasSessionDefaults}
+          icon={SlidersHorizontal}
+          title="Choose session defaults"
+          description="Pick the coding tool, model, and effort new sessions should use."
+          onClick={() => {
+            setSettingsInitialTab("session-defaults");
+            setActivePage("settings");
+          }}
         />
 
         <SimpleRow

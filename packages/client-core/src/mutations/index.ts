@@ -626,6 +626,20 @@ export const UPDATE_SESSION_CONFIG_MUTATION = gql`
   }
 `;
 
+export const UPDATE_SESSION_DEFAULTS_MUTATION = gql`
+  mutation UpdateSessionDefaults($input: UpdateSessionDefaultsInput!) {
+    updateSessionDefaults(input: $input) {
+      id
+      email
+      name
+      avatarUrl
+      defaultSessionTool
+      defaultSessionModel
+      defaultSessionReasoningEffort
+    }
+  }
+`;
+
 export const UPDATE_REPO_MUTATION = gql`
   mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {
     updateRepo(id: $id, input: $input) {

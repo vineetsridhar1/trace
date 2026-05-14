@@ -1,9 +1,7 @@
 import { toast } from "sonner";
 import { client } from "./urql";
 import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
-import { usePreferencesStore } from "../stores/preferences";
 import { navigateToSession } from "../stores/ui";
-import { getDefaultModel } from "../components/session/modelOptions";
 
 const pendingQuickSessionChannels = new Set<string>();
 
@@ -30,17 +28,12 @@ export async function createQuickSession(channelId: string): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
-  const prefTool = usePreferencesStore.getState().defaultTool;
-  const prefModel = prefTool
-    ? (usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool))
-    : null;
   const channelRepoId = getChannelRepoId(channelId);
 
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
-          ...(prefTool ? { tool: prefTool, model: prefModel ?? undefined } : {}),
           deferRuntimeSelection: true,
           channelId,
           repoId: channelRepoId ?? undefined,
