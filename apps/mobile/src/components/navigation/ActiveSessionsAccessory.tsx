@@ -104,6 +104,7 @@ export function ActiveSessionsAccessory() {
     ({ item }) => <ActiveSessionsAccessoryRow sessionId={item} width={width} theme={theme} />,
     [width, theme],
   );
+  const isChannelsIndex = pathname === "/channels" || pathname === "/channels/";
 
   const shakeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shakeX.value }],
@@ -122,13 +123,13 @@ export function ActiveSessionsAccessory() {
   }, [reducedMotion, shakeX]);
 
   const handleStartSession = useCallback(() => {
-    if (pathname === "/channels" || pathname === "/channels/") {
+    if (isChannelsIndex) {
       promptForChannel();
       return;
     }
     void haptic.light();
     router.push("/channels" as never);
-  }, [pathname, promptForChannel]);
+  }, [isChannelsIndex, promptForChannel]);
 
   if (ids.length === 0) {
     return (
@@ -136,7 +137,7 @@ export function ActiveSessionsAccessory() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Start a session"
-          accessibilityHint={pathname === "/channels" ? "Select a channel first." : undefined}
+          accessibilityHint={isChannelsIndex ? "Select a channel first." : undefined}
           style={styles.emptyAction}
           onPress={handleStartSession}
         >

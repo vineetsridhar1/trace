@@ -2,12 +2,13 @@ import { Redirect, Stack } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 
 /**
- * Root-level parent for every form-sheet route. Sheets must sit outside the
+ * Root-level parent for sheet-style routes. Sheets must sit outside the
  * native tab navigator — otherwise expo-router treats the `sheets` segment
  * as a tab (making it show up in the bottom bar) and iOS presents the route
  * as tab content rather than a modal with detents. Keeping sheets here means
  * `router.push("/sheets/...")` pushes above the tabs at the root stack, so
- * `presentation: 'formSheet'` + detents apply correctly.
+ * `presentation: 'formSheet'` + detents apply correctly for form sheets.
+ * Routes can still override presentation when a full modal is a better fit.
  *
  * `presentation: 'formSheet'` must be declared at route-registration time —
  * the `Sheet` primitive (ticket 12) only toggles `sheetAllowedDetents`,
