@@ -17,11 +17,10 @@ const SNAKE_PATH = [
   [1, 0],
   [2, 0],
   [2, 1],
-  [1, 1],
-  [0, 1],
-  [0, 2],
-  [1, 2],
   [2, 2],
+  [1, 2],
+  [0, 2],
+  [0, 1],
 ] as const;
 
 const snakeIndexByPoint = new Map(SNAKE_PATH.map(([x, y], index) => [`${x}:${y}`, index]));
@@ -71,25 +70,25 @@ export function TraceLoader({
             }
 
             .trace-loader-dot-active {
-              animation: trace-loader-snake 1.8s linear infinite;
-              animation-delay: calc(var(--snake-index) * -200ms);
+              animation: trace-loader-snake 1.2s cubic-bezier(.45,0,.2,1) infinite;
+              animation-delay: calc(var(--snake-index) * -150ms);
             }
 
             @keyframes trace-loader-snake {
               0%, 100% {
                 fill: currentColor;
-                opacity: .24;
-                transform: scale(.74);
+                opacity: .2;
+                transform: scale(.72);
               }
-              8%, 42% {
+              10%, 48% {
                 fill: var(--th-accent-light);
                 opacity: 1;
-                transform: scale(1.28);
+                transform: scale(1.34);
               }
-              52% {
+              62% {
                 fill: var(--th-accent);
-                opacity: .52;
-                transform: scale(.94);
+                opacity: .58;
+                transform: scale(.98);
               }
             }
 
