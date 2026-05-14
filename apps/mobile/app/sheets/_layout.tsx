@@ -21,6 +21,7 @@ export default function SheetsLayout() {
       screenOptions={{
         presentation: "formSheet",
         headerShown: false,
+        contentStyle: { backgroundColor: "#0a0a0a" },
       }}
     />
   );
