@@ -579,6 +579,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createOrgAssistantSession: Session;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -732,6 +733,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateOrgAssistantSessionArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateOrganizationArgs = {
@@ -1217,6 +1222,7 @@ export type Query = {
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgAssistantSession: Session;
+  orgAssistantSessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1353,6 +1359,10 @@ export type QueryMySessionsArgs = {
 };
 
 export type QueryOrgAssistantSessionArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrgAssistantSessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -2831,6 +2841,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationCreateChatArgs, "input">
   >;
+  createOrgAssistantSession?: Resolver<
+    ResolversTypes["Session"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateOrgAssistantSessionArgs, "organizationId">
+  >;
   createOrganization?: Resolver<
     ResolversTypes["OrgMember"],
     ParentType,
@@ -3514,6 +3530,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryOrgAssistantSessionArgs, "organizationId">
+  >;
+  orgAssistantSessions?: Resolver<
+    Array<ResolversTypes["Session"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryOrgAssistantSessionsArgs, "organizationId">
   >;
   orgSecrets?: Resolver<
     Array<ResolversTypes["OrgSecret"]>,

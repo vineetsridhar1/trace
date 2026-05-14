@@ -1076,6 +1076,7 @@ type Query {
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
   orgAssistantSession(organizationId: ID!): Session!
+  orgAssistantSessions(organizationId: ID!): [Session!]!
   suggestedAction(id: ID!): SuggestedAction
   mySessions(
     organizationId: ID!
@@ -1237,6 +1238,7 @@ type Mutation {
     runtimeInstanceId: ID
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
+  createOrgAssistantSession(organizationId: ID!): Session!
   approveSuggestedAction(id: ID!): SuggestedAction!
   dismissSuggestedAction(id: ID!): SuggestedAction!
   sendSessionMessage(

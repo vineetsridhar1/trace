@@ -15,12 +15,30 @@ export const orgAssistantQueries = {
     assertOrgAccess(ctx, args.organizationId);
     return orgAssistantService.getOrCreateOrgAssistantSession(args.organizationId, ctx.userId);
   },
+  orgAssistantSessions: (
+    _: unknown,
+    args: { organizationId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    assertOrgAccess(ctx, args.organizationId);
+    return orgAssistantService.listOrgAssistantSessions(args.organizationId, ctx.userId);
+  },
   suggestedAction: (_: unknown, args: { id: string }, ctx: Context) => {
     return suggestedActionService.get(args.id, requireOrgContext(ctx));
   },
 };
 
 export const orgAssistantMutations = {
+  createOrgAssistantSession: (
+    _: unknown,
+    args: { organizationId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    assertOrgAccess(ctx, args.organizationId);
+    return orgAssistantService.createOrgAssistantSession(args.organizationId, ctx.userId);
+  },
   approveSuggestedAction: (_: unknown, args: { id: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
     return suggestedActionService.approve(args.id, requireOrgContext(ctx), ctx.userId);

@@ -73,10 +73,10 @@ function serializeSession(session: OrgAssistantSessionPayload) {
 }
 
 export class OrgAssistantService {
-  async getOrCreateOrgAssistantSession(orgId: string, userId: string) {
+  async listOrgAssistantSessions(orgId: string, userId: string) {
     await orgMemberService.assertAdmin(userId, orgId);
 
-    const existing = await prisma.session.findFirst({
+    return prisma.session.findMany({
       where: {
         organizationId: orgId,
         kind: "org_assistant",
@@ -84,7 +84,7 @@ export class OrgAssistantService {
         repoId: null,
         sessionGroupId: null,
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { updatedAt: "desc" },
       include: {
         createdBy: true,
         repo: true,
@@ -92,8 +92,16 @@ export class OrgAssistantService {
         sessionGroup: true,
       },
     });
+  }
 
-    if (existing) return existing;
+  async getOrCreateOrgAssistantSession(orgId: string, userId: string) {
+    const existing = await this.listOrgAssistantSessions(orgId, userId);
+    if (existing[0]) return existing[0];
+    return this.createOrgAssistantSession(orgId, userId);
+  }
+
+  async createOrgAssistantSession(orgId: string, userId: string) {
+    await orgMemberService.assertAdmin(userId, orgId);
 
     const defaults = await prisma.user.findUnique({
       where: { id: userId },

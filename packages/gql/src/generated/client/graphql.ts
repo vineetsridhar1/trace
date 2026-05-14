@@ -578,6 +578,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createOrgAssistantSession: Session;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -731,6 +732,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateOrgAssistantSessionArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateOrganizationArgs = {
@@ -1216,6 +1221,7 @@ export type Query = {
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgAssistantSession: Session;
+  orgAssistantSessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1352,6 +1358,10 @@ export type QueryMySessionsArgs = {
 };
 
 export type QueryOrgAssistantSessionArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrgAssistantSessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -1971,56 +1981,76 @@ export type User = {
 
 export type UserRole = "admin" | "member" | "observer";
 
-export type OrgAssistantSessionQueryVariables = Exact<{
+export type AssistantSessionFieldsFragment = {
+  __typename?: "Session";
+  id: string;
+  name: string;
+  kind: SessionKind;
+  agentStatus: AgentStatus;
+  sessionStatus: SessionStatus;
+  tool: CodingTool;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  hosting: HostingMode;
+  branch?: string | null;
+  workdir?: string | null;
+  prUrl?: string | null;
+  worktreeDeleted: boolean;
+  lastUserMessageAt?: string | null;
+  lastMessageAt?: string | null;
+  sessionGroupId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
+  connection?: {
+    __typename?: "SessionConnection";
+    state: SessionConnectionState;
+    runtimeInstanceId?: string | null;
+    runtimeLabel?: string | null;
+    lastError?: string | null;
+    retryCount: number;
+    canRetry: boolean;
+    canMove: boolean;
+    autoRetryable?: boolean | null;
+  } | null;
+  createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+  channel?: { __typename?: "Channel"; id: string } | null;
+  queuedMessages: Array<{
+    __typename?: "QueuedMessage";
+    id: string;
+    sessionId: string;
+    text: string;
+    interactionMode?: string | null;
+    position: number;
+    createdAt: string;
+    imageKeys: Array<string>;
+  }>;
+} & { " $fragmentName"?: "AssistantSessionFieldsFragment" };
+
+export type OrgAssistantSessionsQueryVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
 }>;
 
-export type OrgAssistantSessionQuery = {
+export type OrgAssistantSessionsQuery = {
   __typename?: "Query";
-  orgAssistantSession: {
-    __typename?: "Session";
-    id: string;
-    name: string;
-    kind: SessionKind;
-    agentStatus: AgentStatus;
-    sessionStatus: SessionStatus;
-    tool: CodingTool;
-    model?: string | null;
-    reasoningEffort?: string | null;
-    hosting: HostingMode;
-    branch?: string | null;
-    workdir?: string | null;
-    prUrl?: string | null;
-    worktreeDeleted: boolean;
-    lastUserMessageAt?: string | null;
-    lastMessageAt?: string | null;
-    sessionGroupId?: string | null;
-    createdAt: string;
-    updatedAt: string;
-    repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
-    connection?: {
-      __typename?: "SessionConnection";
-      state: SessionConnectionState;
-      runtimeInstanceId?: string | null;
-      runtimeLabel?: string | null;
-      lastError?: string | null;
-      retryCount: number;
-      canRetry: boolean;
-      canMove: boolean;
-      autoRetryable?: boolean | null;
-    } | null;
-    createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    channel?: { __typename?: "Channel"; id: string } | null;
-    queuedMessages: Array<{
-      __typename?: "QueuedMessage";
-      id: string;
-      sessionId: string;
-      text: string;
-      interactionMode?: string | null;
-      position: number;
-      createdAt: string;
-      imageKeys: Array<string>;
-    }>;
+  orgAssistantSessions: Array<
+    { __typename?: "Session" } & {
+      " $fragmentRefs"?: { AssistantSessionFieldsFragment: AssistantSessionFieldsFragment };
+    }
+  >;
+  orgAssistantSession: { __typename?: "Session" } & {
+    " $fragmentRefs"?: { AssistantSessionFieldsFragment: AssistantSessionFieldsFragment };
+  };
+};
+
+export type CreateOrgAssistantSessionMutationVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type CreateOrgAssistantSessionMutation = {
+  __typename?: "Mutation";
+  createOrgAssistantSession: { __typename?: "Session" } & {
+    " $fragmentRefs"?: { AssistantSessionFieldsFragment: AssistantSessionFieldsFragment };
   };
 };
 
@@ -3378,13 +3408,115 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
-export const OrgAssistantSessionDocument = {
+export const AssistantSessionFieldsFragmentDoc = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "AssistantSessionFields" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "Session" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+          { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+          { kind: "Field", name: { kind: "Name", value: "tool" } },
+          { kind: "Field", name: { kind: "Name", value: "model" } },
+          { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
+          { kind: "Field", name: { kind: "Name", value: "hosting" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repo" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "branch" } },
+          { kind: "Field", name: { kind: "Name", value: "workdir" } },
+          { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+          { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+          { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeLabel" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                { kind: "Field", name: { kind: "Name", value: "retryCount" } },
+                { kind: "Field", name: { kind: "Name", value: "canRetry" } },
+                { kind: "Field", name: { kind: "Name", value: "canMove" } },
+                { kind: "Field", name: { kind: "Name", value: "autoRetryable" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createdBy" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "queuedMessages" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                {
+                  kind: "Field",
+                  alias: { kind: "Name", value: "imageKeys" },
+                  name: { kind: "Name", value: "attachmentKeys" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AssistantSessionFieldsFragment, unknown>;
+export const OrgAssistantSessionsDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "query",
-      name: { kind: "Name", value: "OrgAssistantSession" },
+      name: { kind: "Name", value: "OrgAssistantSessions" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
@@ -3400,6 +3532,23 @@ export const OrgAssistantSessionDocument = {
         selections: [
           {
             kind: "Field",
+            name: { kind: "Name", value: "orgAssistantSessions" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "AssistantSessionFields" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
             name: { kind: "Name", value: "orgAssistantSession" },
             arguments: [
               {
@@ -3411,101 +3560,254 @@ export const OrgAssistantSessionDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "kind" } },
-                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
-                { kind: "Field", name: { kind: "Name", value: "tool" } },
-                { kind: "Field", name: { kind: "Name", value: "model" } },
-                { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
-                { kind: "Field", name: { kind: "Name", value: "hosting" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "repo" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "branch" } },
-                { kind: "Field", name: { kind: "Name", value: "workdir" } },
-                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
-                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "connection" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "state" } },
-                      { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
-                      { kind: "Field", name: { kind: "Name", value: "runtimeLabel" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastError" } },
-                      { kind: "Field", name: { kind: "Name", value: "retryCount" } },
-                      { kind: "Field", name: { kind: "Name", value: "canRetry" } },
-                      { kind: "Field", name: { kind: "Name", value: "canMove" } },
-                      { kind: "Field", name: { kind: "Name", value: "autoRetryable" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "createdBy" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "channel" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "queuedMessages" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
-                      { kind: "Field", name: { kind: "Name", value: "text" } },
-                      {
-                        kind: "Field",
-                        alias: { kind: "Name", value: "imageKeys" },
-                        name: { kind: "Name", value: "attachmentKeys" },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
-                      { kind: "Field", name: { kind: "Name", value: "position" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "FragmentSpread", name: { kind: "Name", value: "AssistantSessionFields" } },
               ],
             },
           },
         ],
       },
     },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "AssistantSessionFields" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "Session" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+          { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+          { kind: "Field", name: { kind: "Name", value: "tool" } },
+          { kind: "Field", name: { kind: "Name", value: "model" } },
+          { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
+          { kind: "Field", name: { kind: "Name", value: "hosting" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repo" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "branch" } },
+          { kind: "Field", name: { kind: "Name", value: "workdir" } },
+          { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+          { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+          { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeLabel" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                { kind: "Field", name: { kind: "Name", value: "retryCount" } },
+                { kind: "Field", name: { kind: "Name", value: "canRetry" } },
+                { kind: "Field", name: { kind: "Name", value: "canMove" } },
+                { kind: "Field", name: { kind: "Name", value: "autoRetryable" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createdBy" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "queuedMessages" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                {
+                  kind: "Field",
+                  alias: { kind: "Name", value: "imageKeys" },
+                  name: { kind: "Name", value: "attachmentKeys" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+        ],
+      },
+    },
   ],
-} as unknown as DocumentNode<OrgAssistantSessionQuery, OrgAssistantSessionQueryVariables>;
+} as unknown as DocumentNode<OrgAssistantSessionsQuery, OrgAssistantSessionsQueryVariables>;
+export const CreateOrgAssistantSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateOrgAssistantSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createOrgAssistantSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "AssistantSessionFields" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "AssistantSessionFields" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "Session" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+          { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+          { kind: "Field", name: { kind: "Name", value: "tool" } },
+          { kind: "Field", name: { kind: "Name", value: "model" } },
+          { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
+          { kind: "Field", name: { kind: "Name", value: "hosting" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "repo" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "branch" } },
+          { kind: "Field", name: { kind: "Name", value: "workdir" } },
+          { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+          { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+          { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "state" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeLabel" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                { kind: "Field", name: { kind: "Name", value: "retryCount" } },
+                { kind: "Field", name: { kind: "Name", value: "canRetry" } },
+                { kind: "Field", name: { kind: "Name", value: "canMove" } },
+                { kind: "Field", name: { kind: "Name", value: "autoRetryable" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createdBy" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "queuedMessages" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                {
+                  kind: "Field",
+                  alias: { kind: "Name", value: "imageKeys" },
+                  name: { kind: "Name", value: "attachmentKeys" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateOrgAssistantSessionMutation,
+  CreateOrgAssistantSessionMutationVariables
+>;
 export const SendChannelMessageDocument = {
   kind: "Document",
   definitions: [
