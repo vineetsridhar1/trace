@@ -2136,10 +2136,8 @@ export class SessionService {
         getDefaultModel(tool));
     const reasoningEffort = input.reasoningEffort
       ? validateReasoningEffortForTool(tool, input.reasoningEffort)
-      : (resolveStoredReasoningEffortForTool(
-          tool,
-          userDefaults?.defaultSessionReasoningEffort,
-        ) ?? getDefaultReasoningEffort(tool));
+      : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
+        getDefaultReasoningEffort(tool));
 
     const restoreGroup = restoreCheckpoint
       ? await prisma.sessionGroup.findFirst({
@@ -6298,7 +6296,7 @@ export class SessionService {
       runtimeInstanceId?: string;
       commitSha?: string | null;
       autoSyncEnabled?: boolean;
-      conflictStrategy?: "discard" | "commit" | "rebase";
+      conflictStrategy?: "discard" | "commit" | "rebase" | "stash";
       commitMessage?: string | null;
     },
   ) {
@@ -7134,7 +7132,7 @@ export class SessionService {
         ? session?.tool === "pi"
           ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
           : `${bridgeLabel} does not support ${session?.tool ?? "this coding tool"}`
-      : `${operation}: ${deliveryResult}`;
+        : `${operation}: ${deliveryResult}`;
     const updated: SessionConnectionData = {
       ...conn,
       state: "disconnected",

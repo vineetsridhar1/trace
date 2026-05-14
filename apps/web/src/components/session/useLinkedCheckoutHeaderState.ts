@@ -47,7 +47,7 @@ export interface LinkedCheckoutHeaderState {
   onLinkRepo: () => Promise<void>;
   onSync: () => Promise<void>;
   onResolveSyncConflict: (input: {
-    strategy: "DISCARD" | "COMMIT" | "REBASE";
+    strategy: "DISCARD" | "COMMIT" | "REBASE" | "STASH";
     commitMessage?: string;
   }) => Promise<void>;
   onCloseSyncConflict: () => void;
@@ -188,7 +188,7 @@ export function useLinkedCheckoutHeaderState({
     effectiveRuntimeInstanceId === runtimeInstanceId;
 
   const runSync = async (options?: {
-    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE";
+    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | "STASH";
     commitMessage?: string;
   }) => {
     if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return null;
@@ -283,7 +283,7 @@ export function useLinkedCheckoutHeaderState({
     strategy,
     commitMessage,
   }: {
-    strategy: "DISCARD" | "COMMIT" | "REBASE";
+    strategy: "DISCARD" | "COMMIT" | "REBASE" | "STASH";
     commitMessage?: string;
   }) => {
     if (!repoId || !groupBranch || !effectiveRuntimeInstanceId || pending) return;
@@ -304,7 +304,11 @@ export function useLinkedCheckoutHeaderState({
         });
       } else if (strategy === "COMMIT") {
         toast.success("Main worktree synced", {
-          description: `Committed local changes and now following ${groupBranch} on ${runtimeDisplayLabel}.`,
+          description: `Committed local changes, pushed to origin when configured, then synced ${runtimeDisplayLabel} to ${groupBranch}.`,
+        });
+      } else if (strategy === "STASH") {
+        toast.success("Main worktree synced", {
+          description: `Stashed local changes and now following ${groupBranch} on ${runtimeDisplayLabel}.`,
         });
       } else {
         toast.success("Main worktree synced", {

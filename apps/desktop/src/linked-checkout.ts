@@ -69,7 +69,7 @@ export interface SyncLinkedCheckoutInput {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
-  conflictStrategy?: "discard" | "commit" | "rebase" | null;
+  conflictStrategy?: "discard" | "commit" | "rebase" | "stash" | null;
   commitMessage?: string | null;
 }
 
@@ -109,6 +109,7 @@ interface ChangedPathState {
 
 const LINKED_CHECKOUT_COMMIT_MESSAGE = "Commit linked checkout changes";
 const LINKED_CHECKOUT_REBASE_STASH_MESSAGE = "Trace linked checkout rebase";
+const LINKED_CHECKOUT_SYNC_STASH_MESSAGE = "Trace linked checkout stash";
 const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 120_000;
 const LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT = 300_000;
 
@@ -420,17 +421,17 @@ async function discardAllChanges(repoPath: string): Promise<void> {
 }
 
 async function stashAllChanges(repoPath: string): Promise<boolean> {
+  return stashAllChangesWithMessage(repoPath, LINKED_CHECKOUT_REBASE_STASH_MESSAGE);
+}
+
+async function stashAllChangesWithMessage(repoPath: string, message: string): Promise<boolean> {
   const before = await hasUncommittedChanges(repoPath);
   if (!before) return false;
 
-  await execFileAsync(
-    "git",
-    ["stash", "push", "--include-untracked", "--message", LINKED_CHECKOUT_REBASE_STASH_MESSAGE],
-    {
-      cwd: repoPath,
-      maxBuffer: GIT_MAX_BUFFER,
-    },
-  );
+  await execFileAsync("git", ["stash", "push", "--include-untracked", "--message", message], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
 
   return true;
 }
@@ -505,6 +506,25 @@ async function fetchOriginIfAvailable(repoPath: string): Promise<void> {
       `[linked-checkout] origin fetch failed; using cached refs: ${formatGitError(error)}`,
     );
   }
+}
+
+async function pushBranchToOriginIfAvailable(repoPath: string, branch: string): Promise<boolean> {
+  assertSafeGitRef(branch);
+  if (branch.includes(":") || branch.startsWith("refs/")) {
+    throw new Error(`Unsafe git ref: ${branch}`);
+  }
+
+  try {
+    await runGit(repoPath, ["remote", "get-url", "origin"]);
+  } catch {
+    return false;
+  }
+
+  await execFileAsync("git", ["push", "origin", `HEAD:refs/heads/${branch}`], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+  return true;
 }
 
 function isMissingRemoteRefError(error: unknown): boolean {
@@ -844,6 +864,7 @@ async function commitChangedPathsToWorktree(
   repoPath: string,
   worktreePath: string,
   changedPaths: string[],
+  targetBranch: string,
   commitMessage: string,
 ): Promise<string> {
   const overlappingStagedPaths = (await listStagedPaths(worktreePath)).filter((changedPath) =>
@@ -884,6 +905,7 @@ async function commitChangedPathsToWorktree(
   }
 
   await restoreRootCheckoutPaths(repoPath, changedPathStates);
+  await pushBranchToOriginIfAvailable(worktreePath, targetBranch);
   return targetCommitSha;
 }
 
@@ -1102,8 +1124,11 @@ export function syncLinkedCheckout(
             repoPath,
             worktreePath,
             changedPaths,
+            input.branch,
             resolveCommitMessage(input.commitMessage),
           );
+        } else if (input.conflictStrategy === "stash") {
+          await stashAllChangesWithMessage(repoPath, LINKED_CHECKOUT_SYNC_STASH_MESSAGE);
         } else if (input.conflictStrategy === "rebase") {
           const hadStash = await stashAllChanges(repoPath);
           await switchToDetachedCommit(repoPath, targetCommitSha);
@@ -1217,6 +1242,7 @@ export function commitLinkedCheckoutChanges(
         repoPath,
         worktreePath,
         changedPaths,
+        attachment.targetBranch,
         resolveCommitMessage(input.message),
       );
       await switchToDetachedCommit(repoPath, targetCommitSha);

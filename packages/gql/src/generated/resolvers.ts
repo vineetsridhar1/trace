@@ -514,7 +514,7 @@ export type LinkedCheckoutStatus = {
   targetBranch?: Maybe<Scalars["String"]["output"]>;
 };
 
-export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE";
+export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
 export type Message = {
   __typename?: "Message";

@@ -28,7 +28,7 @@ interface ActionOutcome {
 }
 
 export interface SyncConflictResolutionInput {
-  conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE";
+  conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | "STASH";
   commitMessage?: string;
 }
 

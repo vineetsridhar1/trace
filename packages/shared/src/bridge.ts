@@ -174,7 +174,7 @@ export interface BridgeSyncLinkedCheckoutCommand {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
-  conflictStrategy?: "discard" | "commit" | "rebase" | null;
+  conflictStrategy?: "discard" | "commit" | "rebase" | "stash" | null;
   commitMessage?: string | null;
 }
 
