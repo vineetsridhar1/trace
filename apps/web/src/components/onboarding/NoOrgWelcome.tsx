@@ -4,6 +4,7 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button } from "../ui/button";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { CreateOrganizationDialog } from "../sidebar/CreateOrganizationDialog";
+import { TraceLoader } from "../ui/trace-loader";
 
 export function NoOrgWelcome() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -68,7 +69,7 @@ export function NoOrgWelcome() {
         <div className="mt-6 flex flex-wrap items-center gap-2">
           {isLocalMode ? <CreateOrganizationDialog /> : null}
           <Button onClick={handleCheckAgain} disabled={checking} className="gap-2">
-            <RefreshCw size={14} className={checking ? "animate-spin" : undefined} />
+            {checking ? <TraceLoader size={14} showLabel={false} /> : <RefreshCw size={14} />}
             {checking ? "Checking..." : "Check again"}
           </Button>
           <Button variant="ghost" onClick={() => void logout()} className="gap-2 text-destructive">

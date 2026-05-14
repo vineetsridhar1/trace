@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
+import { ChevronsUpDown, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { REPO_BRANCHES_QUERY } from "@trace/client-core";
 import { cn } from "../../lib/utils";
+import { TraceLoader } from "../ui/trace-loader";
 
 function describeBranchError(message: string | undefined): string {
   if (message && /Repo not cloned/i.test(message)) {
@@ -98,7 +99,7 @@ export function BranchCombobox({
             placeholder="Search branches..."
             className="flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
           />
-          {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+          {loading && <TraceLoader size={14} showLabel={false} />}
         </div>
         <div className="max-h-48 overflow-y-auto p-1">
           {!loading && error && <p className="px-2 py-1.5 text-xs text-destructive">{error}</p>}

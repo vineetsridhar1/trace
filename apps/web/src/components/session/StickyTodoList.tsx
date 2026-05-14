@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
+import { TraceLoader } from "../ui/trace-loader";
 
 export interface TodoItem {
   content: string;
@@ -57,26 +58,7 @@ export function StickyTodoList({ todos }: { todos: TodoItem[] }) {
         {todos.map((t, i) => (
           <li key={i} className="flex items-center gap-2 text-xs">
             {t.status === "in_progress" ? (
-              <svg
-                className="h-3 w-3 flex-shrink-0 animate-spin text-[var(--th-accent-light)]"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
-                />
-              </svg>
+              <TraceLoader size={12} showLabel={false} className="shrink-0" />
             ) : t.status === "completed" ? (
               <Check className="h-3 w-3 flex-shrink-0 text-green-400" aria-hidden="true" />
             ) : (

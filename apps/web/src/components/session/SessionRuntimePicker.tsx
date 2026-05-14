@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Cloud, Monitor, Loader2 } from "lucide-react";
+import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
@@ -11,6 +11,7 @@ import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
+import { TraceLoader } from "../ui/trace-loader";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 
 interface RuntimeInstance {
@@ -147,7 +148,7 @@ export function SessionRuntimePicker({
 
       {loading ? (
         <div className="flex items-center justify-center py-4">
-          <Loader2 size={16} className="animate-spin text-muted-foreground" />
+          <TraceLoader size={16} showLabel={false} />
         </div>
       ) : (
         <div className="space-y-1">
@@ -164,7 +165,7 @@ export function SessionRuntimePicker({
                   <span className="ml-2 text-xs text-muted-foreground">pulls current branch</span>
                 </div>
                 {moving === "cloud" && (
-                  <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                  <TraceLoader size={12} showLabel={false} />
                 )}
               </button>
             </DisabledTooltip>
@@ -194,7 +195,7 @@ export function SessionRuntimePicker({
                     </span>
                   </div>
                   {moving === rt.id && (
-                    <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                    <TraceLoader size={12} showLabel={false} />
                   )}
                   {lacksRepo && (
                     <span className="flex items-center gap-1 text-xs text-amber-500">

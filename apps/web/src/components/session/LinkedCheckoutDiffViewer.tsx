@@ -1,8 +1,8 @@
 import { DiffEditor } from "@monaco-editor/react";
-import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getLanguageFromPath } from "../../lib/monaco-utils";
 import { queryLinkedCheckoutChangedFile } from "../../stores/linked-checkout";
+import { TraceLoader } from "../ui/trace-loader";
 
 interface LinkedCheckoutDiffViewerProps {
   file: DesktopLinkedCheckoutChangedFile | null;
@@ -78,7 +78,7 @@ export function LinkedCheckoutDiffViewer({
   if (loading && !previewFile) {
     return (
       <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        <TraceLoader size={20} showLabel={false} />
       </div>
     );
   }
@@ -120,7 +120,7 @@ export function LinkedCheckoutDiffViewer({
         }}
         loading={
           <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
-            <Loader2 size={20} className="animate-spin text-muted-foreground" />
+            <TraceLoader size={20} showLabel={false} />
           </div>
         }
       />

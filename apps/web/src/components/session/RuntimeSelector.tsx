@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Monitor, Loader2 } from "lucide-react";
+import { Monitor } from "lucide-react";
 import type { SessionRuntimeInstance } from "@trace/gql";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { client } from "../../lib/urql";
 import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
+import { TraceLoader } from "../ui/trace-loader";
 
 /** Legacy sentinel retained for compatibility with existing callers. */
 export const CLOUD_RUNTIME_ID = "__cloud__";
@@ -76,7 +77,7 @@ export function RuntimeSelector({
   if (loading) {
     return (
       <div className="flex h-9 items-center gap-2 rounded-md border border-border px-3">
-        <Loader2 size={14} className="animate-spin text-muted-foreground" />
+        <TraceLoader size={14} showLabel={false} />
         <span className="text-sm text-muted-foreground">Loading...</span>
       </div>
     );

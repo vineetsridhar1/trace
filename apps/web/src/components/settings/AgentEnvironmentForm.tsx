@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Info, Loader2, Plus, Save } from "lucide-react";
+import { Info, Plus, Save } from "lucide-react";
 import type { AgentEnvironment, OrgSecret } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
@@ -11,6 +11,7 @@ import {
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { TraceLoader } from "../ui/trace-loader";
 import { environmentConfig, type LocalBridgeSummary } from "./agent-environment-utils";
 import {
   CREATE_AGENT_ENVIRONMENT_MUTATION,
@@ -188,7 +189,7 @@ export function AgentEnvironmentForm({
           <DialogFooter>
             <Button type="submit" disabled={!canSubmit}>
               {saving ? (
-                <Loader2 size={14} className="mr-1.5 animate-spin" />
+                <TraceLoader size={14} showLabel={false} className="mr-1.5" />
               ) : environment ? (
                 <Save size={14} className="mr-1.5" />
               ) : (

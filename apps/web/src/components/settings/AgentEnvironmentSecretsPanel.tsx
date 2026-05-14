@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { KeyRound, Loader2, Save, Trash2 } from "lucide-react";
+import { KeyRound, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { OrgSecret } from "@trace/gql";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { TraceLoader } from "../ui/trace-loader";
 import { client } from "../../lib/urql";
 import { DELETE_ORG_SECRET_MUTATION, SET_ORG_SECRET_MUTATION } from "./agent-environment-queries";
 
@@ -72,7 +73,7 @@ export function AgentEnvironmentSecretsPanel({ organizationId, orgSecrets, onSav
         />
         <Button type="submit" disabled={pending !== null || !name.trim() || !value}>
           {pending === "save" ? (
-            <Loader2 size={14} className="mr-1.5 animate-spin" />
+            <TraceLoader size={14} showLabel={false} className="mr-1.5" />
           ) : (
             <Save size={14} className="mr-1.5" />
           )}
@@ -94,7 +95,7 @@ export function AgentEnvironmentSecretsPanel({ organizationId, orgSecrets, onSav
                 onClick={() => void deleteSecret(secret)}
               >
                 {pending === secret.id ? (
-                  <Loader2 size={14} className="animate-spin" />
+                  <TraceLoader size={14} showLabel={false} />
                 ) : (
                   <Trash2 size={14} />
                 )}

@@ -1,4 +1,5 @@
-import { Circle, Loader2, XCircle } from "lucide-react";
+import { Circle, XCircle } from "lucide-react";
+import { TraceLoader } from "../ui/trace-loader";
 
 export function AgentStatusIcon({
   agentStatus,
@@ -12,7 +13,7 @@ export function AgentStatusIcon({
   switch (agentStatus) {
     case "preparing":
     case "active":
-      return <Loader2 size={size} className={`animate-spin ${className ?? ""}`} />;
+      return <TraceLoader size={size} showLabel={false} className={className} />;
     case "failed":
       return <XCircle size={size} className={className} />;
     default:

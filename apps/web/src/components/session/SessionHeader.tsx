@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   History,
   WifiOff,
-  Loader2,
   Monitor,
   Cloud,
   TerminalSquare,
@@ -30,6 +29,7 @@ import { SessionHistory } from "./SessionHistory";
 import { ScrambleText } from "../ui/ScrambleText";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+import { TraceLoader } from "../ui/trace-loader";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
@@ -181,7 +181,7 @@ export function SessionHeader({
           </span>
         ) : (
           <span className="flex shrink-0 items-center gap-1.5 text-xs text-yellow-500">
-            <Loader2 size={12} className="animate-spin" />
+            <TraceLoader size={12} showLabel={false} />
             Reconnecting…
           </span>
         )
@@ -194,7 +194,7 @@ export function SessionHeader({
           ) : connectionState === "stopped" || connectionState === "deprovisioned" ? (
             <AgentStatusIcon agentStatus="stopped" size={10} />
           ) : (
-            <Loader2 size={12} className="animate-spin" />
+            <TraceLoader size={12} showLabel={false} />
           )}
           {runtimeStatusLabel}
         </span>

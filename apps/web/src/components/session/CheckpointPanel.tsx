@@ -16,6 +16,7 @@ import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "@trace/client-core";
 import { RestoreCheckpointDialog, shouldShowRestoreDialog } from "./RestoreCheckpointDialog";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import { TraceLoader } from "../ui/trace-loader";
 
 function formatCheckpointTime(committedAt: string): string {
   return new Date(committedAt).toLocaleString([], {
@@ -212,10 +213,11 @@ export function CheckpointPanel({
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
                 title="Restore as new session"
               >
-                <RotateCcw
-                  size={11}
-                  className={restoringId === checkpoint.id ? "animate-spin" : ""}
-                />
+                {restoringId === checkpoint.id ? (
+                  <TraceLoader size={11} showLabel={false} />
+                ) : (
+                  <RotateCcw size={11} />
+                )}
               </button>
             )}
           </div>

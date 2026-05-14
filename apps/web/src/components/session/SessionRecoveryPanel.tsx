@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, ArrowRightLeft, WifiOff, Loader2 } from "lucide-react";
+import { RefreshCw, ArrowRightLeft, WifiOff } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
@@ -7,6 +7,7 @@ import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
+import { TraceLoader } from "../ui/trace-loader";
 
 /** Max number of automatic retry attempts before giving up */
 const MAX_AUTO_RETRIES = 5;
@@ -110,7 +111,7 @@ export function SessionRecoveryPanel({
         )}
       >
         {autoRetrying ? (
-          <Loader2 size={16} className="shrink-0 text-yellow-500 animate-spin" />
+          <TraceLoader size={16} showLabel={false} className="shrink-0" />
         ) : (
           <WifiOff size={16} className="shrink-0 text-destructive" />
         )}
@@ -139,7 +140,7 @@ export function SessionRecoveryPanel({
               disabled={retrying}
               className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
             >
-              <RefreshCw size={12} className={retrying ? "animate-spin" : ""} />
+              {retrying ? <TraceLoader size={12} showLabel={false} /> : <RefreshCw size={12} />}
               Retry
             </button>
           )}

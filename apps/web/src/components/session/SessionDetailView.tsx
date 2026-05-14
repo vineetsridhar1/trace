@@ -21,13 +21,14 @@ import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { Loader2, AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
+import { AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
+import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -506,7 +507,7 @@ export function SessionDetailView({
 
           {!hideHeader && setupBlocking && (
             <div className="flex items-center gap-2 border-t border-border bg-surface-deep px-4 py-2">
-              <Loader2 size={14} className="animate-spin text-muted-foreground" />
+              <TraceLoader size={14} showLabel={false} />
               <span className="text-xs text-muted-foreground">Setting up environment...</span>
             </div>
           )}
@@ -707,7 +708,11 @@ function RuntimeLifecycleNotice({
                 onClick={handleRetry}
                 className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
               >
-                <RefreshCw size={12} className={action === "retry" ? "animate-spin" : ""} />
+                {action === "retry" ? (
+                  <TraceLoader size={12} showLabel={false} />
+                ) : (
+                  <RefreshCw size={12} />
+                )}
                 Retry
               </button>
             </DisabledTooltip>
@@ -728,7 +733,7 @@ function RuntimeLifecycleNotice({
                 className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
               >
                 {action === "cloud" ? (
-                  <Loader2 size={12} className="animate-spin" />
+                  <TraceLoader size={12} showLabel={false} />
                 ) : (
                   <Cloud size={12} />
                 )}

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import { Loader2, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
+import { TraceLoader } from "../ui/trace-loader";
 import { buildTree, type FileTreeNode } from "./file-explorer-utils";
 import { FileTreeItem } from "./FileTreeItem";
 
@@ -78,7 +79,7 @@ export function FileExplorer({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 size={16} className="animate-spin text-muted-foreground" />
+        <TraceLoader size={16} showLabel={false} />
       </div>
     );
   }

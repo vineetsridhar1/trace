@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
-import { Circle, Loader2, RefreshCw } from "lucide-react";
+import { Circle, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
+import { TraceLoader } from "../ui/trace-loader";
 
 const SESSION_GROUP_BRANCH_DIFF_QUERY = gql`
   query SessionGroupBranchDiff($sessionGroupId: ID!) {
@@ -66,7 +67,7 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 size={16} className="animate-spin text-muted-foreground" />
+        <TraceLoader size={16} showLabel={false} />
       </div>
     );
   }

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { GitCheckpoint } from "@trace/gql";
-import { Cpu, Check, ChevronRight, Loader2 } from "lucide-react";
+import { Cpu, Check, ChevronRight } from "lucide-react";
 import { useScopedEventIdsByParentId } from "@trace/client-core";
 import { SessionMessage } from "../SessionMessage";
 import type { AgentToolResult } from "../groupReadGlob";
 import { formatTime, serializeUnknown } from "./utils";
+import { TraceLoader } from "../../ui/trace-loader";
 
 const TYPE_COLORS: Record<string, { text: string; bg: string }> = {
   Explore: { text: "text-cyan-300", bg: "bg-cyan-400/10" },
@@ -78,7 +79,7 @@ export function SubagentRow({
         )}
 
         {isLoading ? (
-          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-accent" />
+          <TraceLoader size={12} showLabel={false} className="shrink-0" />
         ) : (
           <Check className="h-3 w-3 shrink-0 text-green-400" />
         )}
