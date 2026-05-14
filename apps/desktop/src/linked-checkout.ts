@@ -904,8 +904,8 @@ async function commitChangedPathsToWorktree(
     targetCommitSha = await getCurrentCommitSha(worktreePath);
   }
 
-  await restoreRootCheckoutPaths(repoPath, changedPathStates);
   await pushBranchToOriginIfAvailable(worktreePath, targetBranch);
+  await restoreRootCheckoutPaths(repoPath, changedPathStates);
   return targetCommitSha;
 }
 
