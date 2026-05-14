@@ -26,8 +26,10 @@ const CODEX_MODELS: readonly ModelOption[] = [
 ];
 
 const PI_MODELS: readonly ModelOption[] = [
-  { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5" },
-  { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4" },
+  { value: "openai/gpt-5.5", label: "OpenAI GPT-5.5" },
+  { value: "openai/gpt-5.4", label: "OpenAI GPT-5.4" },
+  { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5 (ChatGPT)" },
+  { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 (ChatGPT)" },
   { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
   { value: "anthropic/claude-opus-4-7", label: "Claude Opus 4.7" },
 ];
@@ -64,7 +66,7 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "claude-opus-4-7[1m]",
   codex: "gpt-5.5",
-  pi: "openai-codex/gpt-5.5",
+  pi: "openai/gpt-5.5",
 };
 
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {

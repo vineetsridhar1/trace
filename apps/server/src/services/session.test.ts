@@ -729,6 +729,45 @@ describe("SessionService", () => {
       );
     });
 
+    it("normalizes legacy Pi OpenAI Codex defaults to the API-key OpenAI provider", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({
+        sessionGroup,
+        tool: "pi",
+        model: "openai/gpt-5.5",
+      });
+
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        defaultSessionTool: "pi",
+        defaultSessionModel: "openai-codex/gpt-5.5",
+        defaultSessionReasoningEffort: "high",
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        channelId: "channel-1",
+      });
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "pi",
+            model: "openai/gpt-5.5",
+            reasoningEffort: "high",
+          }),
+        }),
+      );
+    });
+
     it("rejects an unsupported reasoning effort on start", async () => {
       isSupportedReasoningEffortMock.mockReturnValueOnce(false);
 

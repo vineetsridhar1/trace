@@ -104,7 +104,7 @@ describe("coding tool adapter process exit fallback", () => {
     adapter.run({
       prompt: "implement feature",
       cwd: "/tmp",
-      model: "openai-codex/gpt-5.5",
+      model: "openai/gpt-5.5",
       reasoningEffort: "high",
       toolSessionId: "session-123",
       onOutput,
@@ -119,7 +119,7 @@ describe("coding tool adapter process exit fallback", () => {
         "--session",
         "session-123",
         "--model",
-        "openai-codex/gpt-5.5",
+        "openai/gpt-5.5",
         "--thinking",
         "high",
         "implement feature",
