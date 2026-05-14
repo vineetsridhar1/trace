@@ -421,6 +421,7 @@ export function MembersSection() {
                       className="h-7 w-7 text-muted-foreground hover:text-destructive"
                       onClick={() => handleRemoveMember(member.user.id)}
                       disabled={removingId === member.user.id}
+                      aria-label={`Remove ${member.user.name} from organization`}
                     >
                       <Trash2 size={14} />
                     </Button>

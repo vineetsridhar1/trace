@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Organization, User, UserRole } from "@trace/gql";
+import type { Platform } from "../platform.js";
 import { getPlatform } from "../platform.js";
 import { useEntityStore } from "./entity.js";
 
@@ -28,6 +29,7 @@ export interface AuthState {
   fetchMe: () => Promise<void>;
   logout: (options?: LogoutOptions) => Promise<void>;
   setActiveOrg: (orgId: string) => void;
+  removeOrgMembership: (organizationId: string) => void;
 }
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
@@ -39,6 +41,30 @@ function shouldUseBearerAuth(): boolean {
 async function readActiveOrgId(): Promise<string | null> {
   const value = await getPlatform().storage.getItem(ACTIVE_ORG_KEY);
   return value ?? null;
+}
+
+function writeActiveOrgId(
+  orgId: string | null,
+  options: { ignoreMissingPlatform?: boolean } = {},
+): void {
+  let storage: Platform["storage"];
+  try {
+    storage = getPlatform().storage;
+  } catch (err) {
+    if (options.ignoreMissingPlatform) return;
+    throw err;
+  }
+
+  try {
+    const operation = orgId
+      ? storage.setItem(ACTIVE_ORG_KEY, orgId)
+      : storage.removeItem(ACTIVE_ORG_KEY);
+    Promise.resolve(operation).catch((err: unknown) => {
+      console.error("[auth] failed to persist active org", err);
+    });
+  } catch (err) {
+    console.error("[auth] failed to persist active org", err);
+  }
 }
 
 export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
@@ -161,9 +187,25 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
 
   setActiveOrg: (orgId: string) => {
     set({ activeOrgId: orgId });
-    Promise.resolve(getPlatform().storage.setItem(ACTIVE_ORG_KEY, orgId)).catch((err: unknown) => {
-      console.error("[auth] failed to persist active org", err);
+    writeActiveOrgId(orgId);
+  },
+
+  removeOrgMembership: (organizationId: string) => {
+    let nextActiveOrgId: string | null = null;
+
+    set((state: AuthState) => {
+      const orgMemberships = state.orgMemberships.filter(
+        (membership) => membership.organizationId !== organizationId,
+      );
+      nextActiveOrgId =
+        state.activeOrgId === organizationId
+          ? (orgMemberships[0]?.organizationId ?? null)
+          : state.activeOrgId;
+
+      return { orgMemberships, activeOrgId: nextActiveOrgId };
     });
+
+    writeActiveOrgId(nextActiveOrgId, { ignoreMissingPlatform: true });
   },
 }));
 

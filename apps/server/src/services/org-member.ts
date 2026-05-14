@@ -78,8 +78,29 @@ export class OrgMemberService {
       throw new Error("The AI agent cannot be removed from an organization");
     }
 
-    await prisma.orgMember.delete({
-      where: { userId_organizationId: { userId, organizationId } },
+    await prisma.$transaction(async (tx) => {
+      const member = await tx.orgMember.findUniqueOrThrow({
+        where: { userId_organizationId: { userId, organizationId } },
+        select: { role: true },
+      });
+
+      if (member.role === "admin") {
+        const adminCount = await tx.orgMember.count({
+          where: {
+            organizationId,
+            role: "admin",
+            userId: { not: TRACE_AI_USER_ID },
+          },
+        });
+
+        if (adminCount <= 1) {
+          throw new Error("Cannot remove the last organization admin");
+        }
+      }
+
+      await tx.orgMember.delete({
+        where: { userId_organizationId: { userId, organizationId } },
+      });
     });
 
     await eventService.create({
@@ -104,13 +125,36 @@ export class OrgMemberService {
     userId: string;
     role: UserRole;
   }) {
-    return prisma.orgMember.update({
-      where: { userId_organizationId: { userId, organizationId } },
-      data: { role },
-      include: {
-        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        organization: { select: { id: true, name: true } },
-      },
+    return prisma.$transaction(async (tx) => {
+      if (role !== "admin") {
+        const member = await tx.orgMember.findUniqueOrThrow({
+          where: { userId_organizationId: { userId, organizationId } },
+          select: { role: true },
+        });
+
+        if (member.role === "admin") {
+          const adminCount = await tx.orgMember.count({
+            where: {
+              organizationId,
+              role: "admin",
+              userId: { not: TRACE_AI_USER_ID },
+            },
+          });
+
+          if (adminCount <= 1) {
+            throw new Error("Cannot demote the last organization admin");
+          }
+        }
+      }
+
+      return tx.orgMember.update({
+        where: { userId_organizationId: { userId, organizationId } },
+        data: { role },
+        include: {
+          user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          organization: { select: { id: true, name: true } },
+        },
+      });
     });
   }
 

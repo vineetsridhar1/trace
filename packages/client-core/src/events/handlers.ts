@@ -141,8 +141,19 @@ function isCurrentUserSession(session: SessionEntity | undefined): session is Se
  */
 export function handleOrgEvent(event: Event): void {
   const ui = getOrgEventUIBindings();
-  const batch = new StoreBatchWriter();
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
+
+  if (event.eventType === "member_left" && event.scopeType === "system") {
+    const userId = payload.userId as string | undefined;
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (userId && userId === currentUserId) {
+      useAuthStore.getState().removeOrgMembership(event.scopeId);
+      useEntityStore.getState().reset();
+      return;
+    }
+  }
+
+  const batch = new StoreBatchWriter();
 
   // Upsert the event into its scoped bucket. Note: session_output events
   // arrive with trimmed payloads from the org subscription. The session

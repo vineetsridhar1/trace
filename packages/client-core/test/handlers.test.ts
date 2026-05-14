@@ -169,6 +169,46 @@ describe("handleOrgEvent", () => {
     ]);
   });
 
+  it("removes the active org from auth state when the current user is removed", () => {
+    useAuthStore.setState({
+      user: { id: "user-1" } as never,
+      activeOrgId: "org-1",
+      orgMemberships: [
+        {
+          organizationId: "org-1",
+          role: "admin",
+          joinedAt: "2026-01-01T00:00:00.000Z",
+          organization: { id: "org-1", name: "Primary" },
+        },
+        {
+          organizationId: "org-2",
+          role: "member",
+          joinedAt: "2026-01-01T00:00:00.000Z",
+          organization: { id: "org-2", name: "Backup" },
+        },
+      ],
+    });
+    useEntityStore.setState({
+      channels: { "channel-1": { id: "channel-1" } as never },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "member_left",
+        scopeType: "system",
+        scopeId: "org-1",
+        payload: { userId: "user-1" },
+      }),
+    );
+
+    const authState = useAuthStore.getState();
+    expect(authState.activeOrgId).toBe("org-2");
+    expect(authState.orgMemberships.map((membership) => membership.organizationId)).toEqual([
+      "org-2",
+    ]);
+    expect(useEntityStore.getState().channels).toEqual({});
+  });
+
   it("upserts created channels only when the current user is a member", () => {
     useAuthStore.setState({
       user: { id: "user-1" } as never,
