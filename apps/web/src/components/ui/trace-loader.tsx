@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface TraceLoaderProps {
   className?: string;
+  color?: CSSProperties["color"];
   label?: string;
   showLabel?: boolean;
   size?: number;
@@ -55,6 +56,7 @@ type SnakeDotStyle = CSSProperties & {
 
 export function TraceLoader({
   className,
+  color,
   label = "Loading",
   showLabel = true,
   size = 96,
@@ -63,7 +65,12 @@ export function TraceLoader({
 
   return (
     <div
-      className={cn("inline-flex flex-col items-center justify-center gap-3 text-muted-foreground", className)}
+      className={cn(
+        "inline-flex flex-col items-center justify-center gap-3",
+        color ? undefined : "text-muted-foreground",
+        className,
+      )}
+      style={color ? { color } : undefined}
       role="status"
       aria-label={label}
     >

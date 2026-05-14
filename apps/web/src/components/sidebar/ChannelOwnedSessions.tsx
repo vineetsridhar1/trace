@@ -352,7 +352,7 @@ function OwnedSessionItem({
             color,
           )}
         >
-          <AgentStatusIcon agentStatus={displayAgentStatus} size={6} />
+          <AgentStatusIcon agentStatus={displayAgentStatus} size={6} color="inherit" />
           {hasDoneBadge && (
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
           )}
