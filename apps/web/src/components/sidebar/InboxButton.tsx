@@ -3,6 +3,7 @@ import { useAuthStore, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import type { InboxItemStatus } from "@trace/gql";
 import { cn } from "../../lib/utils";
+import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 export function InboxButton() {
   const activePage = useUIStore((s) => s.activePage);
@@ -20,7 +21,9 @@ export function InboxButton() {
       type="button"
       onClick={() => setActivePage("inbox")}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 pl-4 text-sm font-medium transition-colors",
+        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+        sidebarRootLeftEdgeRowClass,
+        "pl-4",
         activePage === "inbox"
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
@@ -29,7 +32,7 @@ export function InboxButton() {
       <Inbox size={16} />
       <span>Inbox</span>
       {count > 0 && (
-        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
+        <span className="ml-auto mr-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
           {count}
         </span>
       )}
