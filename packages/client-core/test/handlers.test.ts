@@ -169,6 +169,55 @@ describe("handleOrgEvent", () => {
     ]);
   });
 
+  it("upserts created channels only when the current user is a member", () => {
+    useAuthStore.setState({
+      user: { id: "user-1" } as never,
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "channel_created",
+        scopeType: "channel",
+        scopeId: "channel-1",
+        payload: {
+          channel: {
+            id: "channel-1",
+            name: "backend",
+            members: [{ user: { id: "user-1" }, joinedAt: "2026-01-01T00:00:00.000Z" }],
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().channels["channel-1"]).toMatchObject({
+      id: "channel-1",
+      name: "backend",
+    });
+  });
+
+  it("ignores created channels when the current user is not a member", () => {
+    useAuthStore.setState({
+      user: { id: "user-1" } as never,
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "channel_created",
+        scopeType: "channel",
+        scopeId: "channel-2",
+        payload: {
+          channel: {
+            id: "channel-2",
+            name: "frontend",
+            members: [{ user: { id: "user-2" }, joinedAt: "2026-01-01T00:00:00.000Z" }],
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().channels["channel-2"]).toBeUndefined();
+  });
+
   it("upserts a new session and its session group on session_started", () => {
     const event = makeEvent({
       eventType: "session_started",
