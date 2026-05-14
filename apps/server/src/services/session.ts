@@ -48,7 +48,8 @@ import {
 } from "../lib/session-group-status.js";
 import { isLocalMode } from "../lib/mode.js";
 
-export type StartSessionServiceInput = StartSessionInput & {
+export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
+  tool?: CodingTool | null;
   sessionGroupId?: string | null;
   sourceSessionId?: string | null;
   organizationId: string;
@@ -71,7 +72,14 @@ type PendingInputInfo = {
   toolUseId: string | null;
 };
 
+type UserSessionDefaults = {
+  defaultSessionTool: CodingTool | null;
+  defaultSessionModel: string | null;
+  defaultSessionReasoningEffort: string | null;
+};
+
 const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
+const FALLBACK_SESSION_TOOL: CodingTool = "claude_code";
 
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
@@ -774,6 +782,16 @@ function validateReasoningEffortForTool(tool: string, effort: string): string {
     throw new Error(`Unsupported reasoning effort "${trimmed}" for tool "${tool}"`);
   }
   return trimmed;
+}
+
+function resolveStoredModelForTool(tool: CodingTool, model: string | null | undefined) {
+  const trimmed = model?.trim();
+  return trimmed && isSupportedModel(tool, trimmed) ? trimmed : undefined;
+}
+
+function resolveStoredReasoningEffortForTool(tool: CodingTool, effort: string | null | undefined) {
+  const trimmed = effort?.trim();
+  return trimmed && isSupportedReasoningEffort(tool, trimmed) ? trimmed : undefined;
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
@@ -2099,12 +2117,27 @@ export class SessionService {
       throw new Error("Git checkpoint not found");
     }
 
+    const userDefaults: UserSessionDefaults | null = input.tool
+      ? null
+      : await prisma.user.findUnique({
+          where: { id: input.createdById },
+          select: {
+            defaultSessionTool: true,
+            defaultSessionModel: true,
+            defaultSessionReasoningEffort: true,
+          },
+        });
+    const tool = input.tool ?? userDefaults?.defaultSessionTool ?? FALLBACK_SESSION_TOOL;
     const model = input.model
-      ? validateModelForTool(input.tool, input.model)
-      : getDefaultModel(input.tool);
+      ? validateModelForTool(tool, input.model)
+      : (resolveStoredModelForTool(tool, userDefaults?.defaultSessionModel) ??
+        getDefaultModel(tool));
     const reasoningEffort = input.reasoningEffort
-      ? validateReasoningEffortForTool(input.tool, input.reasoningEffort)
-      : getDefaultReasoningEffort(input.tool);
+      ? validateReasoningEffortForTool(tool, input.reasoningEffort)
+      : (resolveStoredReasoningEffortForTool(
+          tool,
+          userDefaults?.defaultSessionReasoningEffort,
+        ) ?? getDefaultReasoningEffort(tool));
 
     const restoreGroup = restoreCheckpoint
       ? await prisma.sessionGroup.findFirst({
@@ -2330,7 +2363,7 @@ export class SessionService {
           environmentId: input.environmentId ?? null,
           adapterType:
             input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
-          tool: input.tool,
+          tool,
           actorType: input.actorType ?? "user",
           actorId: input.createdById,
         });
@@ -2408,7 +2441,7 @@ export class SessionService {
         const fallbackRuntime = await this.resolveDefaultAccessibleLocalRuntime({
           userId: input.createdById,
           organizationId: input.organizationId,
-          tool: input.tool,
+          tool,
           repoId: resolvedRepoId ?? null,
           sessionGroupId: existingGroup?.id ?? null,
         });
@@ -2467,7 +2500,7 @@ export class SessionService {
       const defaultLocalRuntime = await this.resolveDefaultAccessibleLocalRuntime({
         userId: input.createdById,
         organizationId: input.organizationId,
-        tool: input.tool,
+        tool,
         repoId: resolvedRepoId ?? null,
         sessionGroupId: existingGroup?.id ?? null,
       });
@@ -2556,7 +2589,7 @@ export class SessionService {
           name,
           agentStatus: initialAgentStatus,
           sessionStatus: initialSessionStatus,
-          tool: input.tool,
+          tool,
           model: model ?? undefined,
           reasoningEffort: reasoningEffort ?? undefined,
           hosting,
@@ -2590,6 +2623,15 @@ export class SessionService {
           }),
         },
         include: SESSION_INCLUDE,
+      });
+
+      await tx.user.update({
+        where: { id: input.createdById },
+        data: {
+          defaultSessionTool: tool,
+          defaultSessionModel: model ?? null,
+          defaultSessionReasoningEffort: reasoningEffort ?? null,
+        },
       });
 
       if (sourceTicketLinks.length > 0) {
@@ -3352,6 +3394,20 @@ export class SessionService {
       data,
       include: SESSION_INCLUDE,
     });
+
+    if (
+      actorType === "user" &&
+      (config.tool != null || nextModel !== undefined || nextReasoningEffort !== undefined)
+    ) {
+      await prisma.user.update({
+        where: { id: actorId },
+        data: {
+          defaultSessionTool: session.tool,
+          defaultSessionModel: session.model,
+          defaultSessionReasoningEffort: session.reasoningEffort,
+        },
+      });
+    }
 
     // Sync group connection if runtime changed
     if (runtimeChanged && session.sessionGroupId) {

@@ -692,6 +692,49 @@ describe("SessionService", () => {
       );
     });
 
+    it("uses the user's last session config when no tool is provided", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({ sessionGroup, tool: "codex", model: "gpt-5.5" });
+
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        defaultSessionTool: "codex",
+        defaultSessionModel: "gpt-5.5",
+        defaultSessionReasoningEffort: "high",
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        channelId: "channel-1",
+      });
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+            model: "gpt-5.5",
+            reasoningEffort: "high",
+          }),
+        }),
+      );
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: {
+          defaultSessionTool: "codex",
+          defaultSessionModel: "gpt-5.5",
+          defaultSessionReasoningEffort: "high",
+        },
+      });
+    });
+
     it("rejects an unsupported reasoning effort on start", async () => {
       isSupportedReasoningEffortMock.mockReturnValueOnce(false);
 
@@ -3280,6 +3323,14 @@ describe("SessionService", () => {
           }),
         }),
       );
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: {
+          defaultSessionTool: "claude_code",
+          defaultSessionModel: "claude-sonnet-4-20250514",
+          defaultSessionReasoningEffort: "xhigh",
+        },
+      });
     });
 
     it("resets reasoning effort to the new tool default when switching tools", async () => {

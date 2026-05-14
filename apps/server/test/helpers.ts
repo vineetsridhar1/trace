@@ -51,6 +51,7 @@ export function createPrismaMock() {
       findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
       upsert: vi.fn(),
+      update: vi.fn(),
     },
     orgMember: {
       count: vi.fn(),

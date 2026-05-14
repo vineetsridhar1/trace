@@ -1648,7 +1648,7 @@ export type StartSessionInput = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
   ticketId?: InputMaybe<Scalars["ID"]["input"]>;
-  tool: CodingTool;
+  tool?: InputMaybe<CodingTool>;
 };
 
 export type Subscription = {
@@ -1821,6 +1821,9 @@ export type UpdateTicketInput = {
 export type User = {
   __typename?: "User";
   avatarUrl?: Maybe<Scalars["String"]["output"]>;
+  defaultSessionModel?: Maybe<Scalars["String"]["output"]>;
+  defaultSessionReasoningEffort?: Maybe<Scalars["String"]["output"]>;
+  defaultSessionTool?: Maybe<CodingTool>;
   email: Scalars["String"]["output"];
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
