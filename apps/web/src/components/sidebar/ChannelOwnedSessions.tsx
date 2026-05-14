@@ -282,7 +282,7 @@ function OwnedSessionGroupItem({
       {hasDoneBadge && (
         <span
           aria-hidden="true"
-          className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive"
+          className="absolute right-1 top-1 h-2 w-2 animate-pulse rounded-full bg-destructive"
         />
       )}
     </div>
