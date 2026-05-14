@@ -8,6 +8,7 @@ import {
   GitPullRequest,
   Laptop,
   Link2,
+  Mail,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuthStore } from "@trace/client-core";
@@ -222,6 +223,8 @@ function OwnedSessionGroupItem({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[record.id]);
+  const markChannelDone = useUIStore((s: UIState) => s.markChannelDone);
+  const markSessionGroupDone = useUIStore((s: UIState) => s.markSessionGroupDone);
   const attached = useAttachedCheckoutForGroup(record.id);
 
   const isActive = activeSessionGroupId === record.id;
@@ -305,6 +308,15 @@ function OwnedSessionGroupItem({
           <ContextMenuItem onClick={openSessionGroup}>
             <ExternalLink size={14} className="mr-1.5 text-muted-foreground" />
             Open workspace
+          </ContextMenuItem>
+          <ContextMenuItem
+            onClick={() => {
+              markChannelDone(channelId);
+              markSessionGroupDone(record.id);
+            }}
+          >
+            <Mail size={14} className="mr-1.5 text-muted-foreground" />
+            Mark as unread
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setArchiveOpen(true)}>
             <Archive size={14} className="mr-1.5 text-muted-foreground" />

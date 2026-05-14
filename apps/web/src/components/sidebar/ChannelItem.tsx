@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { ChevronRight, Plus, Trash2, Users } from "lucide-react";
+import { ChevronRight, Mail, Plus, Trash2, Users } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -46,6 +46,7 @@ export const ChannelItem = memo(function ChannelItem({
   const hasDoneBadge = useUIStore(
     (s: { channelDoneBadges: Record<string, boolean> }) => !!s.channelDoneBadges[id],
   );
+  const markChannelDone = useUIStore((s) => s.markChannelDone);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const sortableData = useMemo(
@@ -118,6 +119,10 @@ export const ChannelItem = memo(function ChannelItem({
             </SidebarMenuItem>
           </ContextMenuTrigger>
           <ContextMenuContent>
+            <ContextMenuItem onClick={() => markChannelDone(id)}>
+              <Mail size={14} className="mr-2" />
+              Mark as unread
+            </ContextMenuItem>
             {canStartSession && (
               <>
                 <ContextMenuItem
