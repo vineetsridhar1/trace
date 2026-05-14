@@ -224,26 +224,26 @@ export function formatSessionDefaultsSummary(user: {
 
 const styles = StyleSheet.create({
   scroll: {
-    alignSelf: "stretch",
+    flex: 1,
   },
   content: {
     gap: 16,
-    alignSelf: "stretch",
+    paddingBottom: 32,
   },
   header: {
     gap: 4,
-    alignSelf: "stretch",
+    width: "100%",
   },
   section: {
     gap: 8,
-    alignSelf: "stretch",
+    width: "100%",
   },
   sectionTitle: {
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   card: {
-    alignSelf: "stretch",
+    width: "100%",
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
   },
