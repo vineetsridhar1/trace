@@ -59,6 +59,10 @@ export interface MobileUIState {
   browserUrlGroupId: string | null;
   setBrowserUrl: (url: string | null, groupId: string | null) => void;
 
+  pendingTerminalInitialCommands: Record<string, string>;
+  queueTerminalInitialCommand: (sessionId: string, command: string) => void;
+  consumeTerminalInitialCommand: (sessionId: string) => string | null;
+
   reset: () => void;
 }
 
@@ -77,6 +81,7 @@ const initial = {
   homeRepoFilter: null as string | null,
   browserUrl: null as string | null,
   browserUrlGroupId: null as string | null,
+  pendingTerminalInitialCommands: {} as Record<string, string>,
 };
 
 export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUIState>) => ({
@@ -118,6 +123,25 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setHomeRepoFilter: (id) => set({ homeRepoFilter: id }),
 
   setBrowserUrl: (url, groupId) => set({ browserUrl: url, browserUrlGroupId: groupId }),
+
+  queueTerminalInitialCommand: (sessionId, command) =>
+    set((s) => ({
+      pendingTerminalInitialCommands: {
+        ...s.pendingTerminalInitialCommands,
+        [sessionId]: command,
+      },
+    })),
+  consumeTerminalInitialCommand: (sessionId) => {
+    let command: string | null = null;
+    set((s) => {
+      command = s.pendingTerminalInitialCommands[sessionId] ?? null;
+      if (command == null) return {};
+      const next = { ...s.pendingTerminalInitialCommands };
+      delete next[sessionId];
+      return { pendingTerminalInitialCommands: next };
+    });
+    return command;
+  },
 
   reset: () => set(initial),
 }));

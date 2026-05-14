@@ -44,6 +44,8 @@ export class PiAdapter implements CodingToolAdapter {
   private sessionId: string | null = null;
   private resultEmitted = false;
   private processGeneration = 0;
+  private sawErrorEvent = false;
+  private lastErrorMessage: string | null = null;
 
   run({
     prompt,
@@ -55,6 +57,8 @@ export class PiAdapter implements CodingToolAdapter {
     toolSessionId,
   }: RunOptions) {
     this.resultEmitted = false;
+    this.sawErrorEvent = false;
+    this.lastErrorMessage = null;
 
     if (toolSessionId && !this.sessionId) {
       this.sessionId = toolSessionId;
@@ -103,10 +107,11 @@ export class PiAdapter implements CodingToolAdapter {
 
       if (!this.resultEmitted) {
         const exitError = code !== 0 && code !== null;
+        const isError = exitError || this.sawErrorEvent;
         if (exitError && stderrChunks.length > 0) {
           onOutput({ type: "error", message: stderrChunks.join("\n") });
         }
-        onOutput({ type: "result", subtype: exitError ? "error" : "success" });
+        onOutput({ type: "result", subtype: isError ? "error" : "success" });
       }
 
       onComplete();
@@ -174,6 +179,10 @@ export class PiAdapter implements CodingToolAdapter {
     if (type === "message_end") {
       const message = asRecord(data.message);
       if (message?.role === "assistant") {
+        const errorMessage = this.extractPiErrorMessage(message) ?? this.extractPiErrorMessage(data);
+        if (errorMessage) {
+          this.emitError(errorMessage, onOutput);
+        }
         const blocks = this.normalizeAssistantBlocks(message.content);
         if (blocks.length > 0) {
           onOutput({ type: "assistant", message: { content: blocks } });
@@ -209,8 +218,12 @@ export class PiAdapter implements CodingToolAdapter {
     }
 
     if (type === "agent_end") {
+      const errorMessage = this.extractPiErrorMessage(data);
+      if (errorMessage) {
+        this.emitError(errorMessage, onOutput);
+      }
       this.resultEmitted = true;
-      onOutput({ type: "result", subtype: "success" });
+      onOutput({ type: "result", subtype: this.sawErrorEvent ? "error" : "success" });
       return;
     }
 
@@ -221,8 +234,22 @@ export class PiAdapter implements CodingToolAdapter {
           : typeof data.errorMessage === "string"
             ? data.errorMessage
             : "Pi extension error";
-      onOutput({ type: "error", message });
+      this.emitError(message, onOutput);
     }
+  }
+
+  private extractPiErrorMessage(data: Record<string, unknown>): string | null {
+    const stopReason = data.stopReason ?? data.stop_reason;
+    const errorMessage = data.errorMessage ?? data.error_message;
+    if (typeof errorMessage === "string" && errorMessage.trim()) return errorMessage;
+    return stopReason === "error" ? "Pi run failed" : null;
+  }
+
+  private emitError(message: string, onOutput: (event: ToolOutput) => void) {
+    this.sawErrorEvent = true;
+    if (this.lastErrorMessage === message) return;
+    this.lastErrorMessage = message;
+    onOutput({ type: "error", message });
   }
 
   private normalizeAssistantBlocks(content: unknown): MessageBlock[] {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, View, type TextInput } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import { File as ExpoFile } from "expo-file-system";
@@ -31,6 +32,7 @@ import {
 import { getClient } from "@/lib/urql";
 import { createQuickSession } from "@/lib/createQuickSession";
 import { useDraftsStore, type FileAttachment } from "@/stores/drafts";
+import { useMobileUIStore } from "@/stores/ui";
 import { alpha, useTheme } from "@/theme";
 import { AttachmentBar } from "./AttachmentBar";
 import { AttachmentPickerSheetContent } from "./AttachmentPickerSheetContent";
@@ -80,6 +82,7 @@ export function SessionInputComposer({
   keyboardVisible = false,
 }: SessionInputComposerProps) {
   const theme = useTheme();
+  const router = useRouter();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const resolvedBottomSafeAreaInset = bottomSafeAreaInset ?? insets.bottom;
@@ -100,6 +103,10 @@ export function SessionInputComposer({
     | undefined;
   const channel = useEntityField("sessions", sessionId, "channel") as
     | { id: string }
+    | null
+    | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
     | null
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
@@ -350,6 +357,20 @@ export function SessionInputComposer({
       }
     }
 
+    if (currentTool === "pi" && trimmed === "/login") {
+      if (!sessionGroupId) {
+        setErrorDraft(trimmed);
+        setErrorMessage("Cannot open Pi login terminal for this session");
+        return;
+      }
+      useMobileUIStore.getState().queueTerminalInitialCommand(sessionId, "pi\n/login");
+      onSuccess();
+      void haptic.selection();
+      Keyboard.dismiss();
+      router.push(`/sessions/${sessionGroupId}/${sessionId}?pane=terminal`);
+      return;
+    }
+
     if (!canSubmit) return;
     if (canChangeBridge) {
       void haptic.selection();
@@ -358,7 +379,20 @@ export function SessionInputComposer({
       return;
     }
     void runSubmit(trimmed, mode);
-  }, [canChangeBridge, canInteract, canSubmit, channel?.id, mode, onSuccess, runSubmit, trimmed]);
+  }, [
+    canChangeBridge,
+    canInteract,
+    canSubmit,
+    channel?.id,
+    currentTool,
+    mode,
+    onSuccess,
+    router,
+    runSubmit,
+    sessionGroupId,
+    sessionId,
+    trimmed,
+  ]);
 
   const handleSendAfterRuntimeSelect = useCallback(async () => {
     if (!canSubmit) return;
