@@ -80,6 +80,8 @@ type UserSessionDefaults = {
 
 const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
 const FALLBACK_SESSION_TOOL: CodingTool = "claude_code";
+const PI_INSTALL_COMMAND = "npm install -g @earendil-works/pi-coding-agent";
+const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
 
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
@@ -7123,14 +7125,15 @@ export class SessionService {
 
     const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
     const unsupportedHomeTool = deliveryResult === "no_runtime" && !!conn.runtimeInstanceId;
+    const bridgeLabel = conn.runtimeLabel ?? "The selected bridge";
     const lastError = homeOffline
       ? conn.runtimeLabel
         ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
         : "The original bridge is offline — use Move to continue on another bridge"
       : unsupportedHomeTool
-        ? conn.runtimeLabel
-          ? `${conn.runtimeLabel} does not support ${session?.tool ?? "this coding tool"}`
-          : `The selected bridge does not support ${session?.tool ?? "this coding tool"}`
+        ? session?.tool === "pi"
+          ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
+          : `${bridgeLabel} does not support ${session?.tool ?? "this coding tool"}`
       : `${operation}: ${deliveryResult}`;
     const updated: SessionConnectionData = {
       ...conn,

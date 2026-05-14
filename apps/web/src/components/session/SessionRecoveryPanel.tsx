@@ -14,6 +14,28 @@ const MAX_AUTO_RETRIES = 5;
 
 /** Base delay in ms for exponential backoff (doubles each attempt: 2s, 4s, 8s, 16s, 32s) */
 const BASE_DELAY_MS = 2_000;
+const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
+
+function ConnectionErrorText({ message }: { message: string }) {
+  if (!message.includes(PI_INSTALL_DOCS_URL)) {
+    return <p className="truncate text-xs text-muted-foreground">{message}</p>;
+  }
+
+  const [beforeLink] = message.split(` Docs: ${PI_INSTALL_DOCS_URL}`);
+  return (
+    <p className="text-xs text-muted-foreground">
+      {beforeLink}{" "}
+      <a
+        href={PI_INSTALL_DOCS_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="font-medium text-foreground underline underline-offset-2"
+      >
+        Pi install docs
+      </a>
+    </p>
+  );
+}
 
 export function SessionRecoveryPanel({
   sessionId,
@@ -119,9 +141,7 @@ export function SessionRecoveryPanel({
           <p className="text-sm font-medium text-foreground">
             {autoRetrying ? "Reconnecting…" : "Connection lost"}
           </p>
-          {lastError && !autoRetrying && (
-            <p className="text-xs text-muted-foreground truncate">{lastError}</p>
-          )}
+          {lastError && !autoRetrying && <ConnectionErrorText message={lastError} />}
           {autoRetrying && (
             <p className="text-xs text-muted-foreground">
               Attempt {autoRetryCount + 1} of {MAX_AUTO_RETRIES}
