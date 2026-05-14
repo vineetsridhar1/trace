@@ -25,9 +25,18 @@ const CODEX_MODELS: readonly ModelOption[] = [
   { value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
 ];
 
+const PI_MODELS: readonly ModelOption[] = [
+  { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5 via Pi" },
+  { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 via Pi" },
+  { value: "openai-codex/gpt-5.3-codex", label: "Codex GPT-5.3 via Pi" },
+  { value: "openai-codex/gpt-5.2-codex", label: "Codex GPT-5.2 via Pi" },
+  { value: "openai-codex/gpt-5.2", label: "Codex GPT-5.2 via Pi" },
+];
+
 const MODEL_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ModelOption[]>> = {
   claude_code: CLAUDE_CODE_MODELS,
   codex: CODEX_MODELS,
+  pi: PI_MODELS,
 };
 
 const CLAUDE_CODE_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
@@ -50,16 +59,19 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
   {
     claude_code: CLAUDE_CODE_REASONING_EFFORTS,
     codex: CODEX_REASONING_EFFORTS,
+    pi: CODEX_REASONING_EFFORTS,
   };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "claude-opus-4-7[1m]",
   codex: "gpt-5.5",
+  pi: "openai-codex/gpt-5.5",
 };
 
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "auto",
   codex: "medium",
+  pi: "medium",
 };
 
 const MODEL_LABEL_MAP = new Map<string, string>(

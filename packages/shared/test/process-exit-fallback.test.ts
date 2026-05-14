@@ -4,6 +4,7 @@ import { spawn } from "child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
 import { CodexAdapter } from "../src/adapters/codex.js";
+import { PiAdapter } from "../src/adapters/pi.js";
 
 class FakeChildProcess extends EventEmitter {
   stdout = new PassThrough();
@@ -72,5 +73,117 @@ describe("coding tool adapter process exit fallback", () => {
     vi.advanceTimersByTime(1);
     expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("completes a Pi run when the process exits but stdio never closes", () => {
+    const adapter = new PiAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "wait for checks",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].emit("exit", 0);
+    vi.advanceTimersByTime(999);
+    expect(onComplete).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes Pi model, thinking, and session flags and normalizes JSON events", () => {
+    const adapter = new PiAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "implement feature",
+      cwd: "/tmp",
+      model: "openai-codex/gpt-5.5",
+      reasoningEffort: "high",
+      toolSessionId: "session-123",
+      onOutput,
+      onComplete,
+    });
+
+    expect(spawn).toHaveBeenCalledWith(
+      "pi",
+      [
+        "--mode",
+        "json",
+        "--session",
+        "session-123",
+        "--model",
+        "openai-codex/gpt-5.5",
+        "--thinking",
+        "high",
+        "implement feature",
+      ],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "session", version: 3, id: "session-456" })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "tool_execution_start",
+        toolCallId: "call-1",
+        toolName: "bash",
+        args: { command: "pnpm test" },
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "tool_execution_end",
+        toolCallId: "call-1",
+        toolName: "bash",
+        result: { content: [{ type: "text", text: "ok" }] },
+        isError: false,
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "message_end",
+        message: { role: "assistant", content: [{ type: "text", text: "done" }] },
+      })}\n`,
+    );
+
+    expect(adapter.getSessionId()).toBe("session-456");
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: "call-1",
+            name: "bash",
+            input: { command: "pnpm test" },
+          },
+        ],
+      },
+    });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "call-1",
+            name: "bash",
+            content: "ok",
+          },
+        ],
+      },
+    });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "done" }] },
+    });
   });
 });

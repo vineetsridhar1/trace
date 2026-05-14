@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import crypto from "crypto";
 import { promisify } from "util";
 import type {
@@ -34,7 +34,7 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";
-import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
+import { ClaudeCodeAdapter, CodexAdapter, PiAdapter } from "@trace/shared/adapters";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
   commitLinkedCheckoutChanges,
@@ -60,6 +60,15 @@ const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
 const LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS = 15_000;
 const execFileAsync = promisify(execFile);
+
+function hasExecutable(command: string): boolean {
+  try {
+    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 2_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function inspectGitCheckpoint(
   cwd: string,
@@ -466,10 +475,12 @@ export class BridgeClient implements IBridgeClient {
     // using our stable instanceId, so we don't need to report session lists.
     const config = readConfig();
     const label = this.getLabel();
+    const supportedTools = ["claude_code", "codex", "custom"];
+    if (hasExecutable("pi")) supportedTools.push("pi");
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
       label,
-      supportedTools: ["claude_code", "codex", "custom"],
+      supportedTools,
       registeredRepoIds: Object.keys(config.repos),
     });
     this.send({
@@ -477,7 +488,7 @@ export class BridgeClient implements IBridgeClient {
       instanceId: this.instanceId,
       label,
       hostingMode: "local",
-      supportedTools: ["claude_code", "codex", "custom"],
+      supportedTools,
       registeredRepoIds: Object.keys(config.repos),
       activeTerminals: this.terminalManager.getActiveTerminals(),
     });
@@ -520,6 +531,8 @@ export class BridgeClient implements IBridgeClient {
 
   private createAdapter(tool?: string): CodingToolAdapter {
     switch (tool) {
+      case "pi":
+        return new PiAdapter();
       case "codex":
         return new CodexAdapter();
       case "claude_code":

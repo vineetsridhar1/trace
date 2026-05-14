@@ -69,7 +69,8 @@ export function SessionModelPickerSheetContent({
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
 
-  const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
+  const currentTool: CodingTool =
+    tool === "codex" || tool === "pi" ? (tool as CodingTool) : "claude_code";
   const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
   const isDisconnected = connection?.state === "disconnected";
   const canInteract = !isTerminal && !isDisconnected && agentStatus !== "active" && !isOptimistic;

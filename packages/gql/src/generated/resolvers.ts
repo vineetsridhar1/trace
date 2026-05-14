@@ -257,7 +257,7 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
-export type CodingTool = "claude_code" | "codex" | "custom";
+export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 
 export type ConnectionsBridge = {
   __typename?: "ConnectionsBridge";
@@ -1657,12 +1657,6 @@ export type StartSessionInput = {
   tool?: InputMaybe<CodingTool>;
 };
 
-export type UpdateSessionDefaultsInput = {
-  model?: InputMaybe<Scalars["String"]["input"]>;
-  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
-  tool?: InputMaybe<CodingTool>;
-};
-
 export type Subscription = {
   __typename?: "Subscription";
   branchTurns: Turn;
@@ -1820,6 +1814,12 @@ export type UpdateChannelInput = {
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateSessionDefaultsInput = {
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
 };
 
 export type UpdateTicketInput = {
@@ -2041,6 +2041,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
   UpdateRepoInput: UpdateRepoInput;
+  UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
   UserRole: UserRole;
@@ -2128,6 +2129,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
   UpdateRepoInput: UpdateRepoInput;
+  UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
 }>;
@@ -3810,6 +3812,13 @@ export type UserResolvers<
   ParentType extends ResolversParentTypes["User"] = ResolversParentTypes["User"],
 > = ResolversObject<{
   avatarUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  defaultSessionModel?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  defaultSessionReasoningEffort?: Resolver<
+    Maybe<ResolversTypes["String"]>,
+    ParentType,
+    ContextType
+  >;
+  defaultSessionTool?: Resolver<Maybe<ResolversTypes["CodingTool"]>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
