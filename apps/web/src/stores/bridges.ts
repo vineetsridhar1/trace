@@ -14,12 +14,16 @@ export interface BridgesState {
    * "is this session group currently synced to one of my bridges?"
    */
   attachedByGroupId: Record<string, AttachedCheckoutInfo>;
+  attachedListByGroupId: Record<string, AttachedCheckoutInfo[]>;
   setBridges: (bridges: MyBridgeSummary[]) => void;
 }
+
+const EMPTY_ATTACHED_CHECKOUTS: AttachedCheckoutInfo[] = [];
 
 export const useBridgesStore = create<BridgesState>((set) => ({
   bridges: [],
   attachedByGroupId: {},
+  attachedListByGroupId: {},
   setBridges: (bridges: MyBridgeSummary[]) => {
     // Invariant: a session group is bound to exactly one runtime (via
     // `SessionGroup.connection.runtimeInstanceId`), so the same groupId
@@ -27,17 +31,23 @@ export const useBridgesStore = create<BridgesState>((set) => ({
     // (data corruption / race), last-write-wins — which bridge wins is
     // arbitrary, so don't rely on this collision behavior.
     const attachedByGroupId: Record<string, AttachedCheckoutInfo> = {};
+    const attachedListByGroupId: Record<string, AttachedCheckoutInfo[]> = {};
     for (const bridge of bridges) {
       if (!bridge.connected) continue;
       for (const checkout of bridge.linkedCheckouts) {
-        attachedByGroupId[checkout.sessionGroup.id] = {
+        const attached: AttachedCheckoutInfo = {
           bridgeLabel: bridge.label,
           bridgeInstanceId: bridge.instanceId,
           checkout,
         };
+        attachedByGroupId[checkout.sessionGroup.id] = attached;
+        attachedListByGroupId[checkout.sessionGroup.id] = [
+          ...(attachedListByGroupId[checkout.sessionGroup.id] ?? []),
+          attached,
+        ];
       }
     }
-    set({ bridges, attachedByGroupId });
+    set({ bridges, attachedByGroupId, attachedListByGroupId });
   },
 }));
 
@@ -57,21 +67,9 @@ export function useAttachedCheckoutForGroup(
 export function useAttachedCheckoutsForGroup(
   sessionGroupId: string | null | undefined,
 ): AttachedCheckoutInfo[] {
-  return useBridgesStore((s: BridgesState) => {
-    if (!sessionGroupId) return [];
-
-    const attached: AttachedCheckoutInfo[] = [];
-    for (const bridge of s.bridges) {
-      if (!bridge.connected) continue;
-      for (const checkout of bridge.linkedCheckouts) {
-        if (checkout.sessionGroup.id !== sessionGroupId) continue;
-        attached.push({
-          bridgeLabel: bridge.label,
-          bridgeInstanceId: bridge.instanceId,
-          checkout,
-        });
-      }
-    }
-    return attached;
-  });
+  return useBridgesStore((s: BridgesState) =>
+    sessionGroupId
+      ? (s.attachedListByGroupId[sessionGroupId] ?? EMPTY_ATTACHED_CHECKOUTS)
+      : EMPTY_ATTACHED_CHECKOUTS,
+  );
 }
