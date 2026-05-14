@@ -700,6 +700,14 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         const imageUrls = Array.isArray(msg.imageUrls)
           ? (msg.imageUrls as unknown[]).filter((url): url is string => typeof url === "string")
           : undefined;
+        const env =
+          msg.env && typeof msg.env === "object" && !Array.isArray(msg.env)
+            ? Object.fromEntries(
+                Object.entries(msg.env).filter(
+                  (entry): entry is [string, string] => typeof entry[1] === "string",
+                ),
+              )
+            : undefined;
         const toolSessionId = msg.toolSessionId as string;
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.recoverMissingToolSession(sessionId, {
@@ -714,6 +722,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 ? (msg.checkpointContext as GitCheckpointContext)
                 : null,
             imageUrls,
+            env,
           });
         });
       } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {

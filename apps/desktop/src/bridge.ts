@@ -597,6 +597,7 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId,
     checkpointContext,
     imageUrls,
+    env,
   }: {
     sessionId: string;
     prompt: string;
@@ -608,6 +609,7 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId?: string;
     checkpointContext?: GitCheckpointContext | null;
     imageUrls?: string[];
+    env?: Record<string, string>;
   }) {
     if (!cwd) {
       console.warn(
@@ -706,6 +708,7 @@ export class BridgeClient implements IBridgeClient {
         interactionMode,
         checkpointContext,
         imageUrls,
+        env,
       });
       return true;
     };
@@ -798,6 +801,7 @@ export class BridgeClient implements IBridgeClient {
       model,
       reasoningEffort,
       toolSessionId,
+      env,
     });
   }
 
@@ -815,6 +819,7 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
+          env: cmd.env,
         });
         break;
       }
@@ -830,6 +835,7 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
+          env: cmd.env,
         });
         break;
       }

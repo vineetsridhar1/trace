@@ -10,6 +10,7 @@ import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 import { GitCheckpointChips } from "./messages/GitCheckpointChips";
+import { SuggestedActionCard } from "./messages/SuggestedActionCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
 
@@ -234,6 +235,13 @@ export const SessionMessage = memo(function SessionMessage({
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );
+
+    case "suggested_action_created":
+    case "suggested_action_approved":
+    case "suggested_action_dismissed": {
+      const suggestedAction = asJsonObject(payload?.suggestedAction);
+      return suggestedAction ? <SuggestedActionCard suggestedAction={suggestedAction} /> : null;
+    }
 
     case "session_terminated": {
       if (payload?.reason === "bridge_complete") return null;

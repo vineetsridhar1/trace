@@ -146,6 +146,27 @@ enum TurnRole {
   ASSISTANT
 }
 
+enum SessionKind {
+  coding
+  org_assistant
+}
+
+enum SuggestedActionStatus {
+  pending
+  approved
+  dismissed
+}
+
+enum SuggestedActionType {
+  send_session_message
+  create_session
+}
+
+enum SuggestedActionTargetType {
+  session
+  organization
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -212,6 +233,9 @@ enum EventType {
   session_runtime_deprovision_failed
   session_runtime_disconnected
   session_runtime_reconnected
+  suggested_action_created
+  suggested_action_approved
+  suggested_action_dismissed
 }
 
 model Organization {
@@ -237,6 +261,8 @@ model Organization {
   orgSecrets    OrgSecret[]
   cloudMachines CloudMachine[]
   aiConversations  AiConversation[]
+  suggestedActions SuggestedAction[]
+  assistantCapabilityTokens AssistantCapabilityToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -467,6 +493,7 @@ model SessionGroup {
 model Session {
   id             String       @id @default(uuid())
   name           String
+  kind           SessionKind   @default(coding)
   agentStatus    AgentStatus   @default(not_started)
   sessionStatus  SessionStatus @default(in_progress)
   tool           CodingTool
@@ -498,13 +525,62 @@ model Session {
 
   projects        SessionProject[]
   queuedMessages  QueuedMessage[]
+  suggestedActions SuggestedAction[] @relation("AssistantSessionSuggestedActions")
+  capabilityTokens AssistantCapabilityToken[] @relation("AssistantSessionCapabilityTokens")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
+  @@index([organizationId, kind, updatedAt])
   @@index([channelId, updatedAt])
+}
+
+model SuggestedAction {
+  id                    String                    @id @default(uuid())
+  organizationId        String
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assistantSessionId    String
+  assistantSession      Session                   @relation("AssistantSessionSuggestedActions", fields: [assistantSessionId], references: [id], onDelete: Cascade)
+  status                SuggestedActionStatus     @default(pending)
+  actionType            SuggestedActionType
+  targetType            SuggestedActionTargetType
+  targetId              String?
+  input                 Json
+  rationale             String?
+  proposedByActorType   ActorType
+  proposedByActorId     String
+  approvedByActorType   ActorType?
+  approvedByActorId     String?
+  approvedAt            DateTime?
+  dismissedByActorType  ActorType?
+  dismissedByActorId    String?
+  dismissedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([assistantSessionId, createdAt])
+}
+
+model AssistantCapabilityToken {
+  id                 String    @id @default(uuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assistantSessionId String
+  assistantSession   Session   @relation("AssistantSessionCapabilityTokens", fields: [assistantSessionId], references: [id], onDelete: Cascade)
+  agentActorId       String
+  scopes             String[]  @default([])
+  tokenHash          String    @unique
+  expiresAt          DateTime
+  revokedAt          DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, assistantSessionId])
+  @@index([expiresAt])
 }
 
 model QueuedMessage {

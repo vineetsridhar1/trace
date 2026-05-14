@@ -31,6 +31,7 @@ export class CodexAdapter implements CodingToolAdapter {
     reasoningEffort,
     toolSessionId,
     interactionMode,
+    env,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
@@ -64,7 +65,7 @@ export class CodexAdapter implements CodingToolAdapter {
     const child = spawn("codex", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: { ...process.env, ...env },
       detached: true,
     });
     this.process = child;

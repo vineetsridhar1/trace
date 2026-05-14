@@ -345,6 +345,7 @@ export class ContainerBridge implements IBridgeClient {
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
+          env: cmd.env,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
           this.send({
@@ -679,6 +680,7 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode,
     toolSessionId,
     imageUrls,
+    env,
   }: {
     sessionId: string;
     prompt: string;
@@ -689,6 +691,7 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
+    env?: Record<string, string>;
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
@@ -770,6 +773,7 @@ export class ContainerBridge implements IBridgeClient {
         message,
         interactionMode,
         imageUrls,
+        env,
       });
       return true;
     };
@@ -862,6 +866,7 @@ export class ContainerBridge implements IBridgeClient {
       model,
       reasoningEffort,
       toolSessionId,
+      env,
     });
   }
 }

@@ -198,6 +198,27 @@ enum TurnRole {
   ASSISTANT
 }
 
+enum SessionKind {
+  coding
+  org_assistant
+}
+
+enum SuggestedActionStatus {
+  pending
+  approved
+  dismissed
+}
+
+enum SuggestedActionType {
+  send_session_message
+  create_session
+}
+
+enum SuggestedActionTargetType {
+  session
+  organization
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -264,6 +285,9 @@ enum EventType {
   session_runtime_deprovision_failed
   session_runtime_disconnected
   session_runtime_reconnected
+  suggested_action_created
+  suggested_action_approved
+  suggested_action_dismissed
 }
 
 # --- Core Types ---
@@ -395,6 +419,7 @@ type SessionGroup {
 type Session {
   id: ID!
   name: String!
+  kind: SessionKind!
   agentStatus: AgentStatus!
   sessionStatus: SessionStatus!
   tool: CodingTool!
@@ -419,6 +444,25 @@ type Session {
   lastUserMessageAt: DateTime
   lastMessageAt: DateTime
   queuedMessages: [QueuedMessage!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type SuggestedAction {
+  id: ID!
+  organizationId: ID!
+  assistantSessionId: ID!
+  status: SuggestedActionStatus!
+  actionType: SuggestedActionType!
+  targetType: SuggestedActionTargetType!
+  targetId: ID
+  input: JSON!
+  rationale: String
+  proposedBy: Actor!
+  approvedBy: Actor
+  approvedAt: DateTime
+  dismissedBy: Actor
+  dismissedAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -886,6 +930,15 @@ input StartSessionInput {
   interactionMode: String
 }
 
+input CreateSuggestedActionInput {
+  assistantSessionId: ID!
+  actionType: SuggestedActionType!
+  targetType: SuggestedActionTargetType!
+  targetId: ID
+  input: JSON!
+  rationale: String
+}
+
 input UpdateSessionDefaultsInput {
   tool: CodingTool
   model: String
@@ -1022,6 +1075,8 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
+  orgAssistantSession(organizationId: ID!): Session!
+  suggestedAction(id: ID!): SuggestedAction
   mySessions(
     organizationId: ID!
     agentStatus: AgentStatus
@@ -1182,6 +1237,8 @@ type Mutation {
     runtimeInstanceId: ID
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
+  approveSuggestedAction(id: ID!): SuggestedAction!
+  dismissSuggestedAction(id: ID!): SuggestedAction!
   sendSessionMessage(
     sessionId: ID!
     text: String!

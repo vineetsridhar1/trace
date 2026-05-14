@@ -17,6 +17,24 @@ export const RUN_SESSION_MUTATION = gql`
   }
 `;
 
+export const APPROVE_SUGGESTED_ACTION_MUTATION = gql`
+  mutation ApproveSuggestedAction($id: ID!) {
+    approveSuggestedAction(id: $id) {
+      id
+      status
+    }
+  }
+`;
+
+export const DISMISS_SUGGESTED_ACTION_MUTATION = gql`
+  mutation DismissSuggestedAction($id: ID!) {
+    dismissSuggestedAction(id: $id) {
+      id
+      status
+    }
+  }
+`;
+
 export const SEND_SESSION_MESSAGE_MUTATION = gql`
   mutation SendSessionMessage(
     $sessionId: ID!

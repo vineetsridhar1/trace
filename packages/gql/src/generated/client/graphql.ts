@@ -337,6 +337,15 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateSuggestedActionInput = {
+  actionType: SuggestedActionType;
+  assistantSessionId: Scalars["ID"]["input"];
+  input: Scalars["JSON"]["input"];
+  rationale?: InputMaybe<Scalars["String"]["input"]>;
+  targetId?: InputMaybe<Scalars["ID"]["input"]>;
+  targetType: SuggestedActionTargetType;
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -429,6 +438,9 @@ export type EventType =
   | "session_runtime_stopping"
   | "session_started"
   | "session_terminated"
+  | "suggested_action_approved"
+  | "suggested_action_created"
+  | "suggested_action_dismissed"
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"
@@ -554,6 +566,7 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  approveSuggestedAction: SuggestedAction;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
@@ -583,6 +596,7 @@ export type Mutation = {
   destroyTerminal: Scalars["Boolean"]["output"];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
+  dismissSuggestedAction: SuggestedAction;
   editChannelMessage: Message;
   editChatMessage: Message;
   joinChannel: Channel;
@@ -660,6 +674,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
   scopeType?: InputMaybe<BridgeAccessScopeType>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationApproveSuggestedActionArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationArchiveSessionGroupArgs = {
@@ -787,6 +805,10 @@ export type MutationDismissInboxItemArgs = {
 };
 
 export type MutationDismissSessionArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type MutationDismissSuggestedActionArgs = {
   id: Scalars["ID"]["input"];
 };
 
@@ -1193,6 +1215,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orgAssistantSession: Session;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1216,6 +1239,7 @@ export type Query = {
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
+  suggestedAction?: Maybe<SuggestedAction>;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -1324,6 +1348,10 @@ export type QueryMySessionsArgs = {
   agentStatus?: InputMaybe<AgentStatus>;
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrgAssistantSessionArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -1441,6 +1469,10 @@ export type QuerySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QuerySuggestedActionArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type QueryThreadRepliesArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
@@ -1512,6 +1544,7 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
+  kind: SessionKind;
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
@@ -1627,6 +1660,8 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionKind = "coding" | "org_assistant";
 
 export type SessionPromptIndexItem = {
   __typename?: "SessionPromptIndexItem";
@@ -1783,6 +1818,32 @@ export type SubscriptionUserNotificationsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type SuggestedAction = {
+  __typename?: "SuggestedAction";
+  actionType: SuggestedActionType;
+  approvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  approvedBy?: Maybe<Actor>;
+  assistantSessionId: Scalars["ID"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  dismissedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  dismissedBy?: Maybe<Actor>;
+  id: Scalars["ID"]["output"];
+  input: Scalars["JSON"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  proposedBy: Actor;
+  rationale?: Maybe<Scalars["String"]["output"]>;
+  status: SuggestedActionStatus;
+  targetId?: Maybe<Scalars["ID"]["output"]>;
+  targetType: SuggestedActionTargetType;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type SuggestedActionStatus = "approved" | "dismissed" | "pending";
+
+export type SuggestedActionTargetType = "organization" | "session";
+
+export type SuggestedActionType = "create_session" | "send_session_message";
+
 export type Terminal = {
   __typename?: "Terminal";
   id: Scalars["ID"]["output"];
@@ -1909,6 +1970,59 @@ export type User = {
 };
 
 export type UserRole = "admin" | "member" | "observer";
+
+export type OrgAssistantSessionQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type OrgAssistantSessionQuery = {
+  __typename?: "Query";
+  orgAssistantSession: {
+    __typename?: "Session";
+    id: string;
+    name: string;
+    kind: SessionKind;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    tool: CodingTool;
+    model?: string | null;
+    reasoningEffort?: string | null;
+    hosting: HostingMode;
+    branch?: string | null;
+    workdir?: string | null;
+    prUrl?: string | null;
+    worktreeDeleted: boolean;
+    lastUserMessageAt?: string | null;
+    lastMessageAt?: string | null;
+    sessionGroupId?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
+    connection?: {
+      __typename?: "SessionConnection";
+      state: SessionConnectionState;
+      runtimeInstanceId?: string | null;
+      runtimeLabel?: string | null;
+      lastError?: string | null;
+      retryCount: number;
+      canRetry: boolean;
+      canMove: boolean;
+      autoRetryable?: boolean | null;
+    } | null;
+    createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+    channel?: { __typename?: "Channel"; id: string } | null;
+    queuedMessages: Array<{
+      __typename?: "QueuedMessage";
+      id: string;
+      sessionId: string;
+      text: string;
+      interactionMode?: string | null;
+      position: number;
+      createdAt: string;
+      imageKeys: Array<string>;
+    }>;
+  };
+};
 
 export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
@@ -3264,6 +3378,134 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
+export const OrgAssistantSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "OrgAssistantSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "orgAssistantSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "tool" } },
+                { kind: "Field", name: { kind: "Name", value: "model" } },
+                { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
+                { kind: "Field", name: { kind: "Name", value: "hosting" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "branch" } },
+                { kind: "Field", name: { kind: "Name", value: "workdir" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "state" } },
+                      { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                      { kind: "Field", name: { kind: "Name", value: "runtimeLabel" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                      { kind: "Field", name: { kind: "Name", value: "retryCount" } },
+                      { kind: "Field", name: { kind: "Name", value: "canRetry" } },
+                      { kind: "Field", name: { kind: "Name", value: "canMove" } },
+                      { kind: "Field", name: { kind: "Name", value: "autoRetryable" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "createdBy" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "channel" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "queuedMessages" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                      { kind: "Field", name: { kind: "Name", value: "text" } },
+                      {
+                        kind: "Field",
+                        alias: { kind: "Name", value: "imageKeys" },
+                        name: { kind: "Name", value: "attachmentKeys" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
+                      { kind: "Field", name: { kind: "Name", value: "position" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<OrgAssistantSessionQuery, OrgAssistantSessionQueryVariables>;
 export const SendChannelMessageDocument = {
   kind: "Document",
   definitions: [

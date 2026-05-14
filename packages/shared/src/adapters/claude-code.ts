@@ -33,6 +33,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     model,
     reasoningEffort,
     toolSessionId,
+    env,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
@@ -65,7 +66,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: { ...process.env, ...env },
       detached: true,
     });
     this.process = child;

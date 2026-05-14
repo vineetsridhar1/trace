@@ -12,6 +12,7 @@ import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
+import { OrgAssistantView } from "./components/assistant/OrgAssistantView";
 import { SidebarProvider, SidebarInset, useSidebar } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useOrgEvents } from "./hooks/useOrgEvents";
@@ -133,6 +134,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
           <MainContentFrame>
             {activePage === "settings" ? (
               <SettingsPage />
+            ) : activePage === "assistant" ? (
+              <OrgAssistantView />
             ) : activePage === "inbox" ? (
               <InboxView />
             ) : activePage === "tickets" && features.tickets ? (

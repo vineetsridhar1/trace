@@ -159,6 +159,7 @@ export interface RunOptions {
   reasoningEffort?: string;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
+  env?: Record<string, string>;
 }
 
 /**

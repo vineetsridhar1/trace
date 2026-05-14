@@ -338,6 +338,15 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateSuggestedActionInput = {
+  actionType: SuggestedActionType;
+  assistantSessionId: Scalars["ID"]["input"];
+  input: Scalars["JSON"]["input"];
+  rationale?: InputMaybe<Scalars["String"]["input"]>;
+  targetId?: InputMaybe<Scalars["ID"]["input"]>;
+  targetType: SuggestedActionTargetType;
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -430,6 +439,9 @@ export type EventType =
   | "session_runtime_stopping"
   | "session_started"
   | "session_terminated"
+  | "suggested_action_approved"
+  | "suggested_action_created"
+  | "suggested_action_dismissed"
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"
@@ -555,6 +567,7 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  approveSuggestedAction: SuggestedAction;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
@@ -584,6 +597,7 @@ export type Mutation = {
   destroyTerminal: Scalars["Boolean"]["output"];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
+  dismissSuggestedAction: SuggestedAction;
   editChannelMessage: Message;
   editChatMessage: Message;
   joinChannel: Channel;
@@ -661,6 +675,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
   scopeType?: InputMaybe<BridgeAccessScopeType>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationApproveSuggestedActionArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationArchiveSessionGroupArgs = {
@@ -788,6 +806,10 @@ export type MutationDismissInboxItemArgs = {
 };
 
 export type MutationDismissSessionArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type MutationDismissSuggestedActionArgs = {
   id: Scalars["ID"]["input"];
 };
 
@@ -1194,6 +1216,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orgAssistantSession: Session;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1217,6 +1240,7 @@ export type Query = {
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
+  suggestedAction?: Maybe<SuggestedAction>;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -1325,6 +1349,10 @@ export type QueryMySessionsArgs = {
   agentStatus?: InputMaybe<AgentStatus>;
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrgAssistantSessionArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -1442,6 +1470,10 @@ export type QuerySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QuerySuggestedActionArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type QueryThreadRepliesArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
@@ -1513,6 +1545,7 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
+  kind: SessionKind;
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
@@ -1628,6 +1661,8 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionKind = "coding" | "org_assistant";
 
 export type SessionPromptIndexItem = {
   __typename?: "SessionPromptIndexItem";
@@ -1783,6 +1818,32 @@ export type SubscriptionTicketEventsArgs = {
 export type SubscriptionUserNotificationsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
+
+export type SuggestedAction = {
+  __typename?: "SuggestedAction";
+  actionType: SuggestedActionType;
+  approvedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  approvedBy?: Maybe<Actor>;
+  assistantSessionId: Scalars["ID"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  dismissedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  dismissedBy?: Maybe<Actor>;
+  id: Scalars["ID"]["output"];
+  input: Scalars["JSON"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  proposedBy: Actor;
+  rationale?: Maybe<Scalars["String"]["output"]>;
+  status: SuggestedActionStatus;
+  targetId?: Maybe<Scalars["ID"]["output"]>;
+  targetType: SuggestedActionTargetType;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type SuggestedActionStatus = "approved" | "dismissed" | "pending";
+
+export type SuggestedActionTargetType = "organization" | "session";
+
+export type SuggestedActionType = "create_session" | "send_session_message";
 
 export type Terminal = {
   __typename?: "Terminal";
@@ -2039,6 +2100,7 @@ export type ResolversTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
+  CreateSuggestedActionInput: CreateSuggestedActionInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
@@ -2084,6 +2146,7 @@ export type ResolversTypes = ResolversObject<{
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
   SessionGroupStatus: SessionGroupStatus;
+  SessionKind: SessionKind;
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
@@ -2101,6 +2164,10 @@ export type ResolversTypes = ResolversObject<{
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars["String"]["output"]>;
   Subscription: ResolverTypeWrapper<{}>;
+  SuggestedAction: ResolverTypeWrapper<SuggestedAction>;
+  SuggestedActionStatus: SuggestedActionStatus;
+  SuggestedActionTargetType: SuggestedActionTargetType;
+  SuggestedActionType: SuggestedActionType;
   Terminal: ResolverTypeWrapper<Terminal>;
   TerminalEndpoint: ResolverTypeWrapper<TerminalEndpoint>;
   ThreadSummary: ResolverTypeWrapper<ThreadSummary>;
@@ -2152,6 +2219,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
+  CreateSuggestedActionInput: CreateSuggestedActionInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
   Event: Event;
@@ -2195,6 +2263,7 @@ export type ResolversParentTypes = ResolversObject<{
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
   Subscription: {};
+  SuggestedAction: SuggestedAction;
   Terminal: Terminal;
   TerminalEndpoint: TerminalEndpoint;
   ThreadSummary: ThreadSummary;
@@ -2687,6 +2756,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationApproveBridgeAccessRequestArgs, "requestId">
   >;
+  approveSuggestedAction?: Resolver<
+    ResolversTypes["SuggestedAction"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationApproveSuggestedActionArgs, "id">
+  >;
   archiveSessionGroup?: Resolver<
     Maybe<ResolversTypes["SessionGroup"]>,
     ParentType,
@@ -2863,6 +2938,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationDismissSessionArgs, "id">
+  >;
+  dismissSuggestedAction?: Resolver<
+    ResolversTypes["SuggestedAction"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDismissSuggestedActionArgs, "id">
   >;
   editChannelMessage?: Resolver<
     ResolversTypes["Message"],
@@ -3428,6 +3509,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryMySessionsArgs, "organizationId">
   >;
+  orgAssistantSession?: Resolver<
+    ResolversTypes["Session"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryOrgAssistantSessionArgs, "organizationId">
+  >;
   orgSecrets?: Resolver<
     Array<ResolversTypes["OrgSecret"]>,
     ParentType,
@@ -3566,6 +3653,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionsArgs, "organizationId">
   >;
+  suggestedAction?: Resolver<
+    Maybe<ResolversTypes["SuggestedAction"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySuggestedActionArgs, "id">
+  >;
   threadReplies?: Resolver<
     Array<ResolversTypes["Message"]>,
     ParentType,
@@ -3635,6 +3728,7 @@ export type SessionResolvers<
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes["HostingMode"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  kind?: Resolver<ResolversTypes["SessionKind"], ParentType, ContextType>;
   lastMessageAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   lastUserMessageAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
@@ -3872,6 +3966,30 @@ export type SubscriptionResolvers<
   >;
 }>;
 
+export type SuggestedActionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SuggestedAction"] =
+    ResolversParentTypes["SuggestedAction"],
+> = ResolversObject<{
+  actionType?: Resolver<ResolversTypes["SuggestedActionType"], ParentType, ContextType>;
+  approvedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  approvedBy?: Resolver<Maybe<ResolversTypes["Actor"]>, ParentType, ContextType>;
+  assistantSessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  dismissedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  dismissedBy?: Resolver<Maybe<ResolversTypes["Actor"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  input?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  proposedBy?: Resolver<ResolversTypes["Actor"], ParentType, ContextType>;
+  rationale?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["SuggestedActionStatus"], ParentType, ContextType>;
+  targetId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  targetType?: Resolver<ResolversTypes["SuggestedActionTargetType"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type TerminalResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Terminal"] = ResolversParentTypes["Terminal"],
@@ -4023,6 +4141,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionTimelinePage?: SessionTimelinePageResolvers<ContextType>;
   SlashCommand?: SlashCommandResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
+  SuggestedAction?: SuggestedActionResolvers<ContextType>;
   Terminal?: TerminalResolvers<ContextType>;
   TerminalEndpoint?: TerminalEndpointResolvers<ContextType>;
   ThreadSummary?: ThreadSummaryResolvers<ContextType>;

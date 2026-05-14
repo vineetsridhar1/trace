@@ -47,6 +47,8 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { isLocalMode } from "../lib/mode.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
+import { assistantCapabilityTokenService } from "./assistant-capability-token.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -492,6 +494,7 @@ const LOCAL_FILE_ACCESS_DENIED_ERROR =
 function serializeSession(session: {
   id: string;
   name: string;
+  kind?: string;
   agentStatus: AgentStatus;
   sessionStatus: SessionStatus;
   tool: string;
@@ -516,6 +519,7 @@ function serializeSession(session: {
   return {
     id: session.id,
     name: session.name,
+    kind: session.kind ?? "coding",
     agentStatus: session.agentStatus,
     sessionStatus: session.sessionStatus,
     tool: session.tool,
@@ -635,6 +639,10 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
+const ORG_ASSISTANT_INSTRUCTION = `\n\n<system-instruction>
+You are Trace's org assistant. Read Trace through the trace CLI using the capability token in your environment. Do not perform real writes directly. For proposed writes, use trace suggest commands so the user can explicitly approve or dismiss them. Cite source sessions, tickets, or events when answering factual questions.
+</system-instruction>`;
+
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
@@ -645,6 +653,21 @@ function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolea
   if (hasRepo) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
+}
+
+function appendOrgAssistantInstructions(prompt: string): string {
+  return appendPromptInstructions(prompt, { hasRepo: false }) + ORG_ASSISTANT_INSTRUCTION;
+}
+
+function traceApiUrl(): string {
+  const configured = process.env.TRACE_API_URL ?? process.env.TRACE_SERVER_URL;
+  if (configured?.trim()) return configured.trim();
+  const port = 4000 + Number(process.env.TRACE_PORT || 0);
+  return `http://localhost:${port}`;
+}
+
+function traceCliPath(): string {
+  return `${process.cwd()}/packages/cli/bin`;
 }
 
 function buildBaseBranchInstruction(baseBranch: string): string {
@@ -830,6 +853,29 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  private async buildOrgAssistantRunEnv(session: {
+    id: string;
+    organizationId: string;
+    kind?: string | null;
+  }): Promise<Record<string, string> | undefined> {
+    if (session.kind !== "org_assistant") return undefined;
+
+    const { token } = await assistantCapabilityTokenService.issue({
+      organizationId: session.organizationId,
+      assistantSessionId: session.id,
+      agentActorId: TRACE_AI_USER_ID,
+    });
+
+    return {
+      TRACE_API_URL: traceApiUrl(),
+      TRACE_ORG_ID: session.organizationId,
+      TRACE_ASSISTANT_SESSION_ID: session.id,
+      TRACE_ACTOR_ID: TRACE_AI_USER_ID,
+      TRACE_CAPABILITY_TOKEN: token,
+      PATH: `${traceCliPath()}:${process.env.PATH ?? ""}`,
+    };
+  }
+
   /**
    * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
    * Resolves repo/branch/hosting and delegates to the session router.
@@ -3056,7 +3102,10 @@ export class SessionService {
     // Append system instructions (title, auto-save) to the prompt
     const isFirstRun = !session.toolSessionId;
     if (resolvedPrompt) {
-      resolvedPrompt = appendPromptInstructions(resolvedPrompt, { hasRepo: !!session.repo });
+      resolvedPrompt =
+        session.kind === "org_assistant"
+          ? appendOrgAssistantInstructions(resolvedPrompt)
+          : appendPromptInstructions(resolvedPrompt, { hasRepo: !!session.repo });
     }
 
     // Append base branch instruction when the channel specifies one
@@ -3084,6 +3133,7 @@ export class SessionService {
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
+      env: await this.buildOrgAssistantRunEnv(session),
     };
 
     const deliveryResult = sessionRouter.send(id, command, {
@@ -3327,6 +3377,7 @@ export class SessionService {
       select: {
         hosting: true,
         organizationId: true,
+        kind: true,
         agentStatus: true,
         sessionStatus: true,
         worktreeDeleted: true,
@@ -3616,6 +3667,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        kind: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -4008,6 +4060,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        kind: true,
         agentStatus: true,
         sessionStatus: true,
         hosting: true,
@@ -4265,7 +4318,10 @@ export class SessionService {
     }
 
     // Append system instructions (title, auto-save) to the prompt
-    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+    prompt =
+      session.kind === "org_assistant"
+        ? appendOrgAssistantInstructions(prompt)
+        : appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
 
     const checkpointContext =
       session.repoId && session.sessionGroupId
@@ -4303,6 +4359,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
       imageUrls,
+      env: await this.buildOrgAssistantRunEnv({ ...session, id: sessionId }),
     };
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
@@ -5174,6 +5231,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        kind: true,
         agentStatus: true,
         sessionStatus: true,
         worktreeDeleted: true,
@@ -5236,6 +5294,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        kind: true,
         agentStatus: true,
         sessionStatus: true,
         connection: true,
@@ -5346,12 +5405,14 @@ export class SessionService {
       interactionMode?: string;
       checkpointContext?: GitCheckpointContext | null;
       imageUrls?: string[];
+      env?: Record<string, string>;
     },
   ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
         organizationId: true,
+        kind: true,
         agentStatus: true,
         sessionStatus: true,
         worktreeDeleted: true,
@@ -5372,7 +5433,10 @@ export class SessionService {
 
     const context = await buildConversationContext(sessionId);
     let prompt = buildToolSessionRecoveryPrompt(context);
-    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+    prompt =
+      session.kind === "org_assistant"
+        ? appendOrgAssistantInstructions(prompt)
+        : appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
 
     const promptEvent = await prisma.event.findFirst({
       where: {
@@ -5414,6 +5478,9 @@ export class SessionService {
         cwd: session.workdir ?? undefined,
         checkpointContext,
         imageUrls: options.imageUrls,
+        env:
+          options.env ??
+          (await this.buildOrgAssistantRunEnv({ ...session, id: sessionId })),
       },
       { expectedHomeRuntimeId: conn.runtimeInstanceId, organizationId: session.organizationId },
     );
@@ -7153,6 +7220,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        kind: true,
         tool: true,
         model: true,
         reasoningEffort: true,
@@ -7209,6 +7277,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
+      env: await this.buildOrgAssistantRunEnv({ ...session, id: sessionId }),
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -7221,6 +7290,7 @@ export class SessionService {
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
+      env?: Record<string, string>;
     };
 
     const conn = this.parseConnection(session.connection);

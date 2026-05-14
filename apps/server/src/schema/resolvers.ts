@@ -55,6 +55,11 @@ import {
   aiConversationSubscriptions,
   aiConversationTypeResolvers,
 } from "./ai-conversation.js";
+import {
+  orgAssistantQueries,
+  orgAssistantMutations,
+  orgAssistantTypeResolvers,
+} from "./org-assistant.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
@@ -73,6 +78,7 @@ export const resolvers = {
   ...sessionTypeResolvers,
   ...bridgeAccessTypeResolvers,
   ...aiConversationTypeResolvers,
+  ...orgAssistantTypeResolvers,
 
   User: {
     organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),
@@ -106,6 +112,7 @@ export const resolvers = {
     ...participantQueries,
     ...threadQueries,
     ...aiConversationQueries,
+    ...orgAssistantQueries,
   },
 
   Mutation: {
@@ -124,6 +131,7 @@ export const resolvers = {
     ...chatMutations,
     ...participantMutations,
     ...aiConversationMutations,
+    ...orgAssistantMutations,
   },
 
   Subscription: {

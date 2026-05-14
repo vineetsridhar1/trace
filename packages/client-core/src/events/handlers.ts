@@ -13,6 +13,7 @@ import type {
   Repo,
   ScopeType,
   SessionStatus,
+  SuggestedAction,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -233,6 +234,21 @@ export function handleOrgEvent(event: Event): void {
     event.eventType === "agent_environment_updated"
   ) {
     upsertAgentEnvironmentFromPayload(batch, payload);
+  }
+
+  if (
+    event.eventType === "suggested_action_created" ||
+    event.eventType === "suggested_action_approved" ||
+    event.eventType === "suggested_action_dismissed"
+  ) {
+    const suggestedAction = asJsonObject(payload.suggestedAction);
+    if (suggestedAction && typeof suggestedAction.id === "string") {
+      batch.upsert(
+        "suggestedActions",
+        suggestedAction.id,
+        suggestedAction as unknown as SuggestedAction,
+      );
+    }
   }
   if (event.eventType === "agent_environment_deleted") {
     const environment = asJsonObject(payload.agentEnvironment);

@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -eu
+
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+CLI_ROOT="$DIR/.."
+
+if [ -f "$CLI_ROOT/dist/index.js" ]; then
+  exec node "$CLI_ROOT/dist/index.js" "$@"
+fi
+
+exec pnpm --dir "$CLI_ROOT" exec tsx src/index.ts "$@"

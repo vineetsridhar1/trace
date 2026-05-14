@@ -21,7 +21,12 @@ export function getPreferredSidebarTab(
 ) {
   if (!features.messaging) return "main";
   if (activeChatId) return "dm";
-  if (activeChannelId || activePage === "inbox" || activePage === "tickets")
+  if (
+    activeChannelId ||
+    activePage === "inbox" ||
+    activePage === "tickets" ||
+    activePage === "assistant"
+  )
     return "main";
   return currentTab;
 }

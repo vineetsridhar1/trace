@@ -33,6 +33,16 @@ function parseNavFromPath(path: string): {
       channelSubPage: null,
     };
   }
+  if (path.startsWith("/assistant")) {
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "assistant",
+      channelSubPage: null,
+    };
+  }
   if (path.startsWith("/connections")) {
     return {
       channelId: null,
@@ -161,7 +171,8 @@ export function useHistorySync() {
       parsedNav.sessionId,
     );
     const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
-    const isTopLevelPage = page === "settings" || page === "inbox" || page === "tickets";
+    const isTopLevelPage =
+      page === "settings" || page === "inbox" || page === "tickets" || page === "assistant";
     const initialChat =
       isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =

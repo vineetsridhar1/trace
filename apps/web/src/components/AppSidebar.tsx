@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { Bot } from "lucide-react";
+import { useAuthStore } from "@trace/client-core";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { selectChannelOrStartSession } from "../lib/channel-click-navigation";
@@ -18,6 +20,11 @@ export function AppSidebar() {
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
+  const setActivePage = useUIStore((s: UIState) => s.setActivePage);
+  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const isAdmin = useAuthStore((s) =>
+    s.orgMemberships.some((membership) => membership.organizationId === activeOrgId && membership.role === "admin"),
+  );
   const { state, isMobile, setOpenMobile } = useSidebar();
   const sidebarData = useSidebarData();
 
@@ -52,6 +59,11 @@ export function AppSidebar() {
     },
     [closeSidebar],
   );
+
+  const handleAssistantClick = useCallback(() => {
+    setActivePage("assistant");
+    closeSidebar();
+  }, [closeSidebar, setActivePage]);
 
   const [peeking, setPeeking] = useState(false);
   const initialTab: SidebarTab = features.messaging && activeChatId ? "dm" : "main";
@@ -99,6 +111,22 @@ export function AppSidebar() {
           style={{ backgroundColor: "transparent" }}
         >
           <div className="app-region-drag h-12 shrink-0" />
+          {isAdmin ? (
+            <div className="app-region-no-drag px-3 pb-2">
+              <button
+                type="button"
+                onClick={handleAssistantClick}
+                className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors ${
+                  activePage === "assistant"
+                    ? "bg-white/15 text-foreground"
+                    : "text-sidebar-foreground hover:bg-white/10"
+                }`}
+              >
+                <Bot className="size-4" />
+                <span className="truncate">Assistant</span>
+              </button>
+            </div>
+          ) : null}
           <SidebarContent className="app-region-no-drag overflow-hidden">
             {features.messaging ? (
               <div

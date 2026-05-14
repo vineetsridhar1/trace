@@ -18,6 +18,7 @@ import { authRouter } from "./routes/auth.js";
 import { uploadRouter } from "./routes/upload.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
+import { agentToolsRouter } from "./routes/agent-tools.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
@@ -114,6 +115,7 @@ async function main() {
 
   app.use(express.json());
   app.use(cookieParser());
+  app.use("/agent-tools", agentToolsRouter);
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (
       SAFE_HTTP_METHODS.has(req.method) ||
