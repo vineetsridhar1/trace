@@ -83,6 +83,15 @@ function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: Jso
   }
 }
 
+function channelPayloadHasMember(channel: JsonObject, userId: string | null | undefined): boolean {
+  if (!userId || !Array.isArray(channel.members)) return false;
+  return channel.members.some((item: unknown) => {
+    const member = asJsonObject(item);
+    const user = asJsonObject(member?.user);
+    return user?.id === userId;
+  });
+}
+
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
   if (explicit) return explicit;
@@ -252,7 +261,12 @@ export function handleOrgEvent(event: Event): void {
   // New channel — upsert directly from payload
   if (event.eventType === "channel_created") {
     const channel = asJsonObject(payload.channel);
-    if (channel && typeof channel.id === "string") {
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (
+      channel &&
+      typeof channel.id === "string" &&
+      channelPayloadHasMember(channel, currentUserId)
+    ) {
       batch.upsert("channels", channel.id, channel as unknown as Channel);
     }
   }

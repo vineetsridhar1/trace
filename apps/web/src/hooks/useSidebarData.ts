@@ -103,6 +103,9 @@ export function useSidebarData() {
       ) => void;
     }) => s.upsertMany,
   );
+  const removeEntity = useEntityStore(
+    (s: { remove: (entityType: keyof EntityTableMap, id: string) => void }) => s.remove,
+  );
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [chatsLoading, setChatsLoading] = useState(features.messaging);
@@ -113,10 +116,17 @@ export function useSidebarData() {
       .query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true })
       .toPromise();
     if (result.data?.channels) {
-      upsertMany("channels", result.data.channels as Array<Channel & { id: string }>);
+      const memberChannels = result.data.channels as Array<Channel & { id: string }>;
+      const memberChannelIds = new Set(memberChannels.map((channel) => channel.id));
+      upsertMany("channels", memberChannels);
+      for (const channelId of Object.keys(useEntityStore.getState().channels)) {
+        if (!memberChannelIds.has(channelId)) {
+          removeEntity("channels", channelId);
+        }
+      }
     }
     setChannelsLoading(false);
-  }, [activeOrgId, upsertMany]);
+  }, [activeOrgId, removeEntity, upsertMany]);
 
   const fetchChannelGroups = useCallback(async () => {
     if (!activeOrgId) return;
@@ -205,6 +215,10 @@ export function useSidebarData() {
       }
     }
     const { activeChannelId, activeChatId, activePage } = useUIStore.getState();
+    if (activeChannelId && !allChannelIds.includes(activeChannelId)) {
+      useUIStore.getState().setActiveChannelId(allChannelIds[0] ?? null);
+      return;
+    }
     if (activeChannelId || activeChatId || activePage !== "main") return;
     if (allChannelIds.length > 0) {
       useUIStore.getState().setActiveChannelId(allChannelIds[0]);
