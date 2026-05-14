@@ -51,7 +51,7 @@ interface SessionStreamListProps {
   onScrollEndDrag: () => void;
   onMomentumScrollBegin: () => void;
   onMomentumScrollEnd: () => void;
-  onContentSizeChange: () => void;
+  onContentSizeChange: (width: number, height: number) => void;
   fetchOlderEvents: () => Promise<void>;
 }
 

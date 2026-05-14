@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextFollowLatestState } from "./session-scroll-follow";
+import { nextFollowLatestState, offsetAfterPrepend } from "./session-scroll-follow";
 
 const NEAR_BOTTOM_THRESHOLD = 120;
 
@@ -41,5 +41,27 @@ describe("nextFollowLatestState", () => {
         nextOffset: 1000,
       }),
     ).toBe(false);
+  });
+});
+
+describe("offsetAfterPrepend", () => {
+  it("keeps the same visible content when rows are inserted above the viewport", () => {
+    expect(
+      offsetAfterPrepend({
+        previousContentHeight: 2000,
+        nextContentHeight: 2600,
+        anchorOffset: 120,
+      }),
+    ).toBe(720);
+  });
+
+  it("keeps offsets non-negative when content above shrinks", () => {
+    expect(
+      offsetAfterPrepend({
+        previousContentHeight: 2000,
+        nextContentHeight: 1800,
+        anchorOffset: 120,
+      }),
+    ).toBe(0);
   });
 });

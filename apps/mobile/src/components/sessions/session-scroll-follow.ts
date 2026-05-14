@@ -9,6 +9,12 @@ interface NextFollowLatestInput {
   nextOffset: number;
 }
 
+interface PrependOffsetInput {
+  previousContentHeight: number;
+  nextContentHeight: number;
+  anchorOffset: number;
+}
+
 export function nextFollowLatestState({
   currentlyFollowing,
   distanceFromBottom,
@@ -24,4 +30,12 @@ export function nextFollowLatestState({
     return true;
   }
   return currentlyFollowing;
+}
+
+export function offsetAfterPrepend({
+  previousContentHeight,
+  nextContentHeight,
+  anchorOffset,
+}: PrependOffsetInput): number {
+  return Math.max(0, anchorOffset + nextContentHeight - previousContentHeight);
 }

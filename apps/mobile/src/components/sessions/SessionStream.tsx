@@ -26,7 +26,7 @@ import {
   type SessionStreamItemCache,
   type SessionStreamListItem,
 } from "./sessionStreamItems";
-import { nextFollowLatestState } from "./session-scroll-follow";
+import { nextFollowLatestState, offsetAfterPrepend } from "./session-scroll-follow";
 import type { NodeRenderContext } from "./nodes";
 
 interface SessionStreamProps {
@@ -84,8 +84,12 @@ export function SessionStream({
   const isNearBottomRef = useRef(true);
   const isFollowingLatestRef = useRef(true);
   const isUserScrollingRef = useRef(false);
+  const currentContentHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
+  const prependAnchorRef = useRef<{ contentHeight: number; offset: number } | null>(null);
+  const prependAnchorClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousBottomInsetRef = useRef(bottomInset ?? 0);
+  const loadingOlderRef = useRef(loadingOlder);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isScrollActive, setIsScrollActive] = useState(false);
   const [isFollowingLatest, setIsFollowingLatestState] = useState(true);
@@ -163,6 +167,7 @@ export function SessionStream({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
       const previousOffset = currentScrollOffsetRef.current;
+      currentContentHeightRef.current = contentSize.height;
       currentScrollOffsetRef.current = contentOffset.y;
       const distanceFromBottom = Math.max(
         0,
@@ -193,6 +198,13 @@ export function SessionStream({
     }
   }, []);
 
+  const clearPrependAnchorTimer = useCallback(() => {
+    if (prependAnchorClearTimerRef.current) {
+      clearTimeout(prependAnchorClearTimerRef.current);
+      prependAnchorClearTimerRef.current = null;
+    }
+  }, []);
+
   const handleScrollActive = useCallback(() => {
     clearScrollSettleTimer();
     isUserScrollingRef.current = true;
@@ -209,6 +221,11 @@ export function SessionStream({
   }, [clearScrollSettleTimer]);
 
   useEffect(() => clearScrollSettleTimer, [clearScrollSettleTimer]);
+  useEffect(() => clearPrependAnchorTimer, [clearPrependAnchorTimer]);
+
+  useEffect(() => {
+    loadingOlderRef.current = loadingOlder;
+  }, [loadingOlder]);
 
   useEffect(() => {
     const nextBottomInset = bottomInset ?? 0;
@@ -228,12 +245,57 @@ export function SessionStream({
     listRef.current?.scrollToEnd({ animated: true });
   }, [clearNewActivity, setIsFollowingLatest]);
 
-  const handleContentSizeChange = useCallback(() => {
-    if (!isFollowingLatestRef.current) return;
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToEnd({ animated: false });
-    });
-  }, []);
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      currentContentHeightRef.current = height;
+      const prependAnchor = prependAnchorRef.current;
+      if (prependAnchor) {
+        const nextOffset = offsetAfterPrepend({
+          previousContentHeight: prependAnchor.contentHeight,
+          nextContentHeight: height,
+          anchorOffset: prependAnchor.offset,
+        });
+        listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
+        currentScrollOffsetRef.current = nextOffset;
+        if (!loadingOlderRef.current) {
+          clearPrependAnchorTimer();
+          prependAnchorRef.current = null;
+        }
+        return;
+      }
+
+      if (!isFollowingLatestRef.current) return;
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToEnd({ animated: false });
+      });
+    },
+    [clearPrependAnchorTimer],
+  );
+
+  const handleFetchOlderEvents = useCallback(async () => {
+    clearPrependAnchorTimer();
+    if (!prependAnchorRef.current) {
+      prependAnchorRef.current = {
+        contentHeight: currentContentHeightRef.current,
+        offset: currentScrollOffsetRef.current,
+      };
+    }
+    loadingOlderRef.current = true;
+    setIsFollowingLatest(false);
+    let loadedOlderEvents = false;
+    try {
+      loadedOlderEvents = await fetchOlderEvents();
+    } finally {
+      loadingOlderRef.current = false;
+      if (!loadedOlderEvents && prependAnchorRef.current) {
+        clearPrependAnchorTimer();
+        prependAnchorClearTimerRef.current = setTimeout(() => {
+          prependAnchorClearTimerRef.current = null;
+          prependAnchorRef.current = null;
+        }, SCROLL_SETTLE_MS);
+      }
+    }
+  }, [clearPrependAnchorTimer, fetchOlderEvents, setIsFollowingLatest]);
 
   const timestampRevealGesture = Gesture.Simultaneous(
     Gesture.Pan()
@@ -292,7 +354,7 @@ export function SessionStream({
             onMomentumScrollBegin={handleScrollActive}
             onMomentumScrollEnd={handleScrollSettling}
             onContentSizeChange={handleContentSizeChange}
-            fetchOlderEvents={fetchOlderEvents}
+            fetchOlderEvents={handleFetchOlderEvents}
           />
         </Animated.View>
       </GestureDetector>
