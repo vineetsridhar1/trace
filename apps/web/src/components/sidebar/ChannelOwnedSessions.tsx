@@ -243,6 +243,7 @@ function SidebarSessionStatusGroup({
   onToggle: (status: string) => void;
 }) {
   const Icon = collapsed ? ChevronRight : ChevronDown;
+  const color = sessionStatusColor[group.status] ?? "text-muted-foreground";
   const label = sessionStatusLabel[group.status] ?? group.status;
 
   return (
@@ -256,7 +257,7 @@ function SidebarSessionStatusGroup({
         onClick={() => onToggle(group.status)}
       >
         <Icon size={14} className="shrink-0 text-foreground" />
-        <span className="min-w-0 flex-1 truncate text-foreground">{label}</span>
+        <span className={cn("min-w-0 flex-1 truncate", color)}>{label}</span>
         <span className="shrink-0 text-[11px] text-foreground">
           {group.sessionIds.length}
         </span>
