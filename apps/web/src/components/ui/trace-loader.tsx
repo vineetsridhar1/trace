@@ -59,6 +59,8 @@ export function TraceLoader({
   showLabel = true,
   size = 96,
 }: TraceLoaderProps) {
+  const renderedSize = Math.max(size, 16);
+
   return (
     <div
       className={cn("inline-flex flex-col items-center justify-center gap-3 text-muted-foreground", className)}
@@ -66,8 +68,8 @@ export function TraceLoader({
       aria-label={label}
     >
       <svg
-        width={size}
-        height={size}
+        width={renderedSize}
+        height={renderedSize}
         viewBox="0 0 120 120"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
