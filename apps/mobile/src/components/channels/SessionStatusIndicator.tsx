@@ -1,27 +1,18 @@
-import { useEffect } from "react";
 import { View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
 import type { SessionGroupStatus, SessionStatus } from "@trace/gql";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { TraceLoader } from "@/components/design-system";
 import { statusIndicatorColor } from "@/lib/sessionGroupStatus";
 import { useTheme } from "@/theme";
 
 export interface SessionStatusIndicatorProps {
   status: SessionGroupStatus | SessionStatus | null | undefined;
-  /** Latest session's `agentStatus` — drives the spinner/X overlay. */
+  /** Latest session's `agentStatus` — drives the loader/X overlay. */
   agentStatus: string | null | undefined;
   size?: number;
 }
 
-type IndicatorKind = "dot" | "spinner" | "x";
+type IndicatorKind = "dot" | "loader" | "x";
 
 function indicatorKind(
   status: SessionGroupStatus | SessionStatus | null | undefined,
@@ -34,7 +25,7 @@ function indicatorKind(
     return "dot";
   }
   if (status === "failed" || agentStatus === "failed") return "x";
-  if (agentStatus === "active" || agentStatus === "preparing") return "spinner";
+  if (agentStatus === "active" || agentStatus === "preparing") return "loader";
   return "dot";
 }
 
@@ -44,7 +35,6 @@ export function SessionStatusIndicator({
   size = 10,
 }: SessionStatusIndicatorProps) {
   const theme = useTheme();
-  const reducedMotion = useReducedMotion();
   const color = statusIndicatorColor(theme, status);
   const kind = indicatorKind(status, agentStatus);
 
@@ -60,8 +50,8 @@ export function SessionStatusIndicator({
     );
   }
 
-  if (kind === "spinner") {
-    return <SpinningRing size={size} color={color} reducedMotion={reducedMotion} />;
+  if (kind === "loader") {
+    return <TraceLoader size={size} color={color} />;
   }
 
   return (
@@ -72,55 +62,6 @@ export function SessionStatusIndicator({
         borderRadius: size / 2,
         backgroundColor: color,
       }}
-    />
-  );
-}
-
-function SpinningRing({
-  size,
-  color,
-  reducedMotion,
-}: {
-  size: number;
-  color: string;
-  reducedMotion: boolean;
-}) {
-  const rotation = useSharedValue(0);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      cancelAnimation(rotation);
-      rotation.value = 0;
-      return;
-    }
-    rotation.value = withRepeat(
-      withTiming(360, { duration: 900, easing: Easing.linear }),
-      -1,
-      false,
-    );
-    return () => {
-      cancelAnimation(rotation);
-    };
-  }, [reducedMotion, rotation]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: 1.5,
-          borderColor: color,
-          // Missing-segment trick gives the rotating ring its sense of motion.
-          borderTopColor: "transparent",
-        },
-        animatedStyle,
-      ]}
     />
   );
 }
