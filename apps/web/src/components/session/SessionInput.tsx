@@ -28,7 +28,11 @@ import {
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
 } from "@trace/client-core";
-import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";
+import {
+  ChatEditor,
+  type ChatEditorHandle,
+  type ChatEditorSubmitOptions,
+} from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
@@ -178,9 +182,10 @@ export function SessionInput({
   );
 
   const handleSubmit = useCallback(
-    async (_html: string, text: string) => {
+    async (_html: string, text: string, options?: ChatEditorSubmitOptions) => {
       if (isSendingRef.current) return;
       if ((!text && images.length === 0) || !canSend) return;
+      const shouldSteer = options?.metaKey === true || options?.ctrlKey === true;
 
       if (text === "/clear") {
         const channelId = useUIStore.getState().activeChannelId;
@@ -262,7 +267,7 @@ export function SessionInput({
           }
         }
 
-        if (canQueue) {
+        if (canQueue && !shouldSteer) {
           try {
             const result = await client
               .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {

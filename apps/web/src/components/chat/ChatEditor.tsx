@@ -39,13 +39,18 @@ export interface SlashCommandItem {
 
 export interface ChatEditorHandle {
   focus: () => void;
-  submit: () => Promise<boolean>;
+  submit: (options?: ChatEditorSubmitOptions) => Promise<boolean>;
   getText: () => string;
   clear: () => void;
 }
 
+export interface ChatEditorSubmitOptions {
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+}
+
 interface ChatEditorProps {
-  onSubmit: (html: string, text: string) => void | Promise<void>;
+  onSubmit: (html: string, text: string, options?: ChatEditorSubmitOptions) => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
   initialHtml?: string;
@@ -255,31 +260,34 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     [enableSlashCommands, insertSlashCommandText],
   );
 
-  const submit = useCallback(async () => {
-    const editor = quillRef.current?.getEditor();
-    if (!editor || disabled) return false;
+  const submit = useCallback(
+    async (options?: ChatEditorSubmitOptions) => {
+      const editor = quillRef.current?.getEditor();
+      if (!editor || disabled) return false;
 
-    const html = editor.root.innerHTML;
-    const text = editor.getText().trim();
-    if (!text && !hasAttachmentsRef.current) return false;
+      const html = editor.root.innerHTML;
+      const text = editor.getText().trim();
+      if (!text && !hasAttachmentsRef.current) return false;
 
-    // Clear input immediately so it feels instant — the optimistic message
-    // is already in the store by the time onSubmit returns synchronously.
-    clearEditor();
+      // Clear input immediately so it feels instant — the optimistic message
+      // is already in the store by the time onSubmit returns synchronously.
+      clearEditor();
 
-    try {
-      await Promise.resolve(onSubmit(html, text));
-      return true;
-    } catch {
-      // Restore editor content on failure so the user can retry.
-      // Only use the Quill imperative path — handleChange will propagate to setValue.
-      const ed = quillRef.current?.getEditor();
-      if (ed) {
-        ed.clipboard.dangerouslyPasteHTML(html);
+      try {
+        await Promise.resolve(onSubmit(html, text, options));
+        return true;
+      } catch {
+        // Restore editor content on failure so the user can retry.
+        // Only use the Quill imperative path — handleChange will propagate to setValue.
+        const ed = quillRef.current?.getEditor();
+        if (ed) {
+          ed.clipboard.dangerouslyPasteHTML(html);
+        }
+        return false;
       }
-      return false;
-    }
-  }, [clearEditor, disabled, onSubmit]);
+    },
+    [clearEditor, disabled, onSubmit],
+  );
 
   useImperativeHandle(
     ref,
@@ -310,7 +318,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
           return;
         }
         e.preventDefault();
-        void submit();
+        void submit({ metaKey: e.metaKey, ctrlKey: e.ctrlKey });
       }
     },
     [isMentionMenuOpen, submit],
