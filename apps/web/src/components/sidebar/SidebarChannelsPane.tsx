@@ -10,11 +10,35 @@ import { TicketsButton } from "./TicketsButton";
 import { SidebarChannelTree } from "./SidebarChannelTree";
 import type { SidebarSessionScope } from "./ChannelOwnedSessions";
 
-const SIDEBAR_SESSION_SCOPE_KEY = "trace:sidebar-session-scope";
+const SIDEBAR_SESSION_SCOPES_KEY = "trace:sidebar-session-scopes";
 const SIDEBAR_SESSION_SCOPE_EVENT = "trace:sidebar-session-scope-change";
 
-function readSidebarSessionScope(): SidebarSessionScope {
-  return localStorage.getItem(SIDEBAR_SESSION_SCOPE_KEY) === "all" ? "all" : "mine";
+type SidebarSessionScopes = Record<string, SidebarSessionScope>;
+
+function isSidebarSessionScope(value: unknown): value is SidebarSessionScope {
+  return value === "mine" || value === "all";
+}
+
+function readSidebarSessionScopes(): SidebarSessionScopes {
+  const rawScopes = localStorage.getItem(SIDEBAR_SESSION_SCOPES_KEY);
+  if (!rawScopes) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(rawScopes);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, SidebarSessionScope] =>
+        isSidebarSessionScope(entry[1]),
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeSidebarSessionScopes(scopes: SidebarSessionScopes): void {
+  localStorage.setItem(SIDEBAR_SESSION_SCOPES_KEY, JSON.stringify(scopes));
 }
 
 export interface SidebarChannelsPaneProps {
@@ -50,19 +74,27 @@ export function SidebarChannelsPane({
 }: SidebarChannelsPaneProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
-  const [sessionScope, setSessionScope] = useState<SidebarSessionScope>(readSidebarSessionScope);
+  const [sessionScopes, setSessionScopes] =
+    useState<SidebarSessionScopes>(readSidebarSessionScopes);
 
   useEffect(() => {
-    const handleScopeChange = () => setSessionScope(readSidebarSessionScope());
+    const handleScopeChange = () => setSessionScopes(readSidebarSessionScopes());
     window.addEventListener(SIDEBAR_SESSION_SCOPE_EVENT, handleScopeChange);
-    return () => window.removeEventListener(SIDEBAR_SESSION_SCOPE_EVENT, handleScopeChange);
+    window.addEventListener("storage", handleScopeChange);
+    return () => {
+      window.removeEventListener(SIDEBAR_SESSION_SCOPE_EVENT, handleScopeChange);
+      window.removeEventListener("storage", handleScopeChange);
+    };
   }, []);
 
-  const toggleSessionScope = useCallback(() => {
-    const current = readSidebarSessionScope();
-    const next = current === "mine" ? "all" : "mine";
-    localStorage.setItem(SIDEBAR_SESSION_SCOPE_KEY, next);
-    setSessionScope(next);
+  const toggleSessionScope = useCallback((channelId: string) => {
+    const storedScopes = readSidebarSessionScopes();
+    const current = storedScopes[channelId] ?? "mine";
+    const next: SidebarSessionScope = current === "mine" ? "all" : "mine";
+    const nextScopes = { ...storedScopes, [channelId]: next };
+
+    writeSidebarSessionScopes(nextScopes);
+    setSessionScopes(nextScopes);
     window.dispatchEvent(new Event(SIDEBAR_SESSION_SCOPE_EVENT));
   }, []);
 
@@ -111,7 +143,7 @@ export function SidebarChannelsPane({
           onChannelClick={onChannelClick}
           onSessionClick={onSessionClick}
           onDragActiveChange={onDragActiveChange}
-          sessionScope={sessionScope}
+          sessionScopes={sessionScopes}
           topLevelItems={topLevelItems}
         />
       </div>

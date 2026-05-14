@@ -28,7 +28,7 @@ export function SidebarChannelSection({
   hasActiveSession: boolean;
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
-  onToggleSessionScope: () => void;
+  onToggleSessionScope: (channelId: string) => void;
   sessionScope: SidebarSessionScope;
 }) {
   const channelType = useEntityField("channels", channelId, "type");
@@ -56,7 +56,7 @@ export function SidebarChannelSection({
           groupId={groupId}
           canExpand={canExpand}
           canStartSession={channelType === "coding"}
-          onToggleSessionScope={onToggleSessionScope}
+          onToggleSessionScope={() => onToggleSessionScope(channelId)}
           isExpanded={expanded}
           sessionScope={sessionScope}
           onToggleExpanded={toggleExpanded}
