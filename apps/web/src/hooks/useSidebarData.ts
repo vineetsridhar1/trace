@@ -89,29 +89,27 @@ const INBOX_ITEMS_QUERY = gql`
   }
 `;
 
-const SIDEBAR_SESSION_LIMIT = 300;
-
-const SIDEBAR_SESSIONS_QUERY = gql`
-  query SidebarSessions($organizationId: ID!, $limit: Int!) {
-    sessions(
-      organizationId: $organizationId
-      filters: { includeArchived: false, includeMerged: false, limit: $limit }
-    ) {
+const SIDEBAR_SESSION_GROUPS_QUERY = gql`
+  query SidebarSessionGroups($channelId: ID!, $archived: Boolean) {
+    sessionGroups(channelId: $channelId, archived: $archived) {
       id
       name
-      agentStatus
-      sessionStatus
-      tool
-      model
-      reasoningEffort
-      hosting
-      branch
-      workdir
+      slug
+      status
       prUrl
       worktreeDeleted
-      sessionGroupId
-      lastUserMessageAt
-      lastMessageAt
+      archivedAt
+      setupStatus
+      setupError
+      channel {
+        id
+      }
+      repo {
+        id
+        name
+      }
+      branch
+      workdir
       connection {
         state
         runtimeInstanceId
@@ -122,37 +120,24 @@ const SIDEBAR_SESSIONS_QUERY = gql`
         canMove
         autoRetryable
       }
-      createdBy {
+      createdAt
+      updatedAt
+      sessions {
         id
         name
-        avatarUrl
-      }
-      repo {
-        id
-        name
-      }
-      channel {
-        id
-      }
-      sessionGroup {
-        id
-        name
-        slug
-        status
-        prUrl
-        worktreeDeleted
-        archivedAt
-        setupStatus
-        setupError
-        channel {
-          id
-        }
-        repo {
-          id
-          name
-        }
+        agentStatus
+        sessionStatus
+        tool
+        model
+        reasoningEffort
+        hosting
         branch
         workdir
+        prUrl
+        worktreeDeleted
+        sessionGroupId
+        lastUserMessageAt
+        lastMessageAt
         connection {
           state
           runtimeInstanceId
@@ -163,11 +148,21 @@ const SIDEBAR_SESSIONS_QUERY = gql`
           canMove
           autoRetryable
         }
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
+        repo {
+          id
+          name
+        }
+        channel {
+          id
+        }
         createdAt
         updatedAt
       }
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -250,31 +245,37 @@ export function useSidebarData() {
     }
   }, [activeOrgId, upsertMany]);
 
-  const fetchSidebarSessions = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client
-      .query(SIDEBAR_SESSIONS_QUERY, { organizationId: activeOrgId, limit: SIDEBAR_SESSION_LIMIT })
-      .toPromise();
-    if (!result.data?.sessions) return;
+  const fetchSidebarSessionGroups = useCallback(async (channelIds: string[]) => {
+    if (!activeOrgId || channelIds.length === 0) return;
+    const results = await Promise.all(
+      channelIds.map((channelId) =>
+        client
+          .query(SIDEBAR_SESSION_GROUPS_QUERY, { channelId, archived: false })
+          .toPromise(),
+      ),
+    );
+
+    const groups = results.flatMap((result) =>
+      result.data?.sessionGroups
+        ? (result.data.sessionGroups as Array<SessionGroup & { id: string }>)
+        : [],
+    );
+    if (groups.length === 0) return;
 
     const entityState = useEntityStore.getState();
-    const sessions = (
-      result.data.sessions as Array<EntityTableMap["sessions"] & { id: string }>
-    ).map((session) => ({
-      ...(entityState.sessions[session.id] ?? {}),
-      ...session,
+    const sessions = groups.flatMap((group) => group.sessions ?? []);
+    const sessionGroups = groups.map((group) => ({
+      ...(entityState.sessionGroups[group.id] ?? {}),
+      ...group,
+      sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
+      _sortTimestamp:
+        group.sessions?.[0]?.lastMessageAt ??
+        group.sessions?.[0]?.lastUserMessageAt ??
+        group.sessions?.[0]?.updatedAt ??
+        group.updatedAt,
     }));
-    const sessionGroups = sessions
-      .map((session) => session.sessionGroup)
-      .filter((group): group is SessionGroup & { id: string } => Boolean(group?.id))
-      .map((group) => ({
-        ...(entityState.sessionGroups[group.id] ?? {}),
-        ...group,
-        sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
-        _sortTimestamp: group.updatedAt,
-      }));
 
-    upsertMany("sessions", sessions);
+    upsertMany("sessions", sessions as Array<EntityTableMap["sessions"] & { id: string }>);
     upsertMany(
       "sessionGroups",
       sessionGroups as Array<EntityTableMap["sessionGroups"] & { id: string }>,
@@ -302,8 +303,7 @@ export function useSidebarData() {
 
   useEffect(() => {
     fetchInboxItems();
-    fetchSidebarSessions();
-  }, [fetchInboxItems, fetchSidebarSessions, refreshTick]);
+  }, [fetchInboxItems, refreshTick]);
 
   const chatIds = useEntityIds("chats");
 
@@ -401,6 +401,16 @@ export function useSidebarData() {
   const channelGroupsById = useEntityStore(
     (s: { channelGroups: Record<string, ChannelGroup> }) => s.channelGroups,
   );
+
+  const codingChannelIds = useMemo(
+    () => allChannelIds.filter((id) => channelsById[id]?.type === "coding"),
+    [allChannelIds, channelsById],
+  );
+
+  useEffect(() => {
+    if (channelsLoading) return;
+    fetchSidebarSessionGroups(codingChannelIds);
+  }, [channelsLoading, codingChannelIds, fetchSidebarSessionGroups, refreshTick]);
 
   return {
     activeOrgId,
