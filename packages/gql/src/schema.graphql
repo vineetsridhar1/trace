@@ -314,6 +314,9 @@ type User {
   email: String!
   name: String!
   avatarUrl: String
+  defaultSessionTool: CodingTool
+  defaultSessionModel: String
+  defaultSessionReasoningEffort: String
   organizations: [OrgMember!]!
 }
 
@@ -821,7 +824,7 @@ input ReorderChannelsInput {
 }
 
 input StartSessionInput {
-  tool: CodingTool!
+  tool: CodingTool
   model: String
   reasoningEffort: String
   environmentId: ID

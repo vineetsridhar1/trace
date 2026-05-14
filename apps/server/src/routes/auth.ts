@@ -693,6 +693,9 @@ router.get("/auth/me", async (req: Request, res: Response) => {
         email: true,
         name: true,
         avatarUrl: true,
+        defaultSessionTool: true,
+        defaultSessionModel: true,
+        defaultSessionReasoningEffort: true,
         orgMemberships: {
           select: {
             organizationId: true,

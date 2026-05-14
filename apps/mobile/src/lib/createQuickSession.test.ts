@@ -139,8 +139,6 @@ describe("createQuickSession", () => {
 
     expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
       input: {
-        tool: "claude_code",
-        model: expect.any(String),
         deferRuntimeSelection: true,
         channelId: "channel_1",
         repoId: "repo_channel",

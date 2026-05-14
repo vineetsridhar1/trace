@@ -9,14 +9,12 @@ import {
   useEntityStore,
   type SessionEntity,
 } from "@trace/client-core";
-import { getDefaultModel } from "@trace/shared";
 import type { CodingTool } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
-const DEFAULT_TOOL: CodingTool = "claude_code";
 const pendingQuickSessionChannels = new Set<string>();
 
 interface CreateAgentTabOptions {
@@ -33,17 +31,12 @@ export async function createQuickSession(channelId: string): Promise<void> {
   const channel = useEntityStore.getState().channels[channelId];
   const channelRepoId = channel?.repo?.id;
 
-  const tool = DEFAULT_TOOL;
-  const model = getDefaultModel(tool);
-
   void haptic.light();
 
   try {
     const result = await getClient()
       .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
         input: {
-          tool,
-          model,
           deferRuntimeSelection: true,
           channelId,
           repoId: channelRepoId,
