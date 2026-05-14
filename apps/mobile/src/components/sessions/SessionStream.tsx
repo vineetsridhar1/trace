@@ -26,8 +26,21 @@ import {
   type SessionStreamItemCache,
   type SessionStreamListItem,
 } from "./sessionStreamItems";
-import { nextFollowLatestState, offsetAfterPrepend } from "./session-scroll-follow";
+import {
+  nextFollowLatestState,
+  offsetAfterPrepend,
+  shouldCompensatePrependAnchor,
+} from "./session-scroll-follow";
 import type { NodeRenderContext } from "./nodes";
+
+interface PrependAnchor {
+  contentHeight: number;
+  offset: number;
+  previousFirstKey: string | null;
+  hasPrepended: boolean;
+  loadedOlderEvents: boolean | null;
+  lastCompensatedHeight: number;
+}
 
 interface SessionStreamProps {
   sessionId: string;
@@ -86,13 +99,7 @@ export function SessionStream({
   const isUserScrollingRef = useRef(false);
   const currentContentHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
-  const prependAnchorRef = useRef<{
-    contentHeight: number;
-    offset: number;
-    previousFirstKey: string | null;
-    hasPrepended: boolean;
-    loadedOlderEvents: boolean | null;
-  } | null>(null);
+  const prependAnchorRef = useRef<PrependAnchor | null>(null);
   const prependAnchorClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousBottomInsetRef = useRef(bottomInset ?? 0);
   const loadingOlderRef = useRef(loadingOlder);
@@ -247,8 +254,16 @@ export function SessionStream({
     if (!prependAnchor) return;
     if (prependAnchor.previousFirstKey !== firstStreamItemKey) {
       prependAnchor.hasPrepended = true;
+      clearPrependAnchorTimer();
     }
-  }, [firstStreamItemKey]);
+    if (
+      !isScrollActive &&
+      prependAnchor.loadedOlderEvents === true &&
+      !prependAnchor.hasPrepended
+    ) {
+      schedulePrependAnchorClear();
+    }
+  }, [clearPrependAnchorTimer, firstStreamItemKey, isScrollActive, schedulePrependAnchorClear]);
 
   useEffect(() => {
     const nextBottomInset = bottomInset ?? 0;
@@ -275,12 +290,25 @@ export function SessionStream({
       if (prependAnchor) {
         if (prependAnchor.previousFirstKey !== firstStreamItemKey) {
           prependAnchor.hasPrepended = true;
+          clearPrependAnchorTimer();
+        }
+        if (
+          !shouldCompensatePrependAnchor({
+            hasPrepended: prependAnchor.hasPrepended,
+            isLoadingOlder: loadingOlderRef.current,
+            loadedOlderEvents: prependAnchor.loadedOlderEvents,
+            nextContentHeight: height,
+            lastCompensatedHeight: prependAnchor.lastCompensatedHeight,
+          })
+        ) {
+          return;
         }
         const nextOffset = offsetAfterPrepend({
           previousContentHeight: prependAnchor.contentHeight,
           nextContentHeight: height,
           anchorOffset: prependAnchor.offset,
         });
+        prependAnchor.lastCompensatedHeight = height;
         requestAnimationFrame(() => {
           listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
           currentScrollOffsetRef.current = nextOffset;
@@ -303,20 +331,20 @@ export function SessionStream({
         listRef.current?.scrollToEnd({ animated: false });
       });
     },
-    [firstStreamItemKey, schedulePrependAnchorClear],
+    [clearPrependAnchorTimer, firstStreamItemKey, schedulePrependAnchorClear],
   );
 
   const handleFetchOlderEvents = useCallback(async () => {
+    if (loadingOlderRef.current || prependAnchorRef.current) return;
     clearPrependAnchorTimer();
-    if (!prependAnchorRef.current) {
-      prependAnchorRef.current = {
-        contentHeight: currentContentHeightRef.current,
-        offset: currentScrollOffsetRef.current,
-        previousFirstKey: firstStreamItemKey,
-        hasPrepended: false,
-        loadedOlderEvents: null,
-      };
-    }
+    prependAnchorRef.current = {
+      contentHeight: currentContentHeightRef.current,
+      offset: currentScrollOffsetRef.current,
+      previousFirstKey: firstStreamItemKey,
+      hasPrepended: false,
+      loadedOlderEvents: null,
+      lastCompensatedHeight: currentContentHeightRef.current,
+    };
     loadingOlderRef.current = true;
     setIsFollowingLatest(false);
     let loadedOlderEvents = false;

@@ -15,6 +15,14 @@ interface PrependOffsetInput {
   anchorOffset: number;
 }
 
+interface ShouldCompensatePrependAnchorInput {
+  hasPrepended: boolean;
+  isLoadingOlder: boolean;
+  loadedOlderEvents: boolean | null;
+  nextContentHeight: number;
+  lastCompensatedHeight: number;
+}
+
 export function nextFollowLatestState({
   currentlyFollowing,
   distanceFromBottom,
@@ -38,4 +46,17 @@ export function offsetAfterPrepend({
   anchorOffset,
 }: PrependOffsetInput): number {
   return Math.max(0, anchorOffset + nextContentHeight - previousContentHeight);
+}
+
+export function shouldCompensatePrependAnchor({
+  hasPrepended,
+  isLoadingOlder,
+  loadedOlderEvents,
+  nextContentHeight,
+  lastCompensatedHeight,
+}: ShouldCompensatePrependAnchorInput): boolean {
+  if (hasPrepended) return true;
+  if (isLoadingOlder) return true;
+  if (loadedOlderEvents === false) return true;
+  return loadedOlderEvents !== null && nextContentHeight < lastCompensatedHeight;
 }

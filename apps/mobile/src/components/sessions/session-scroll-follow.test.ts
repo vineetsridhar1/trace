@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { nextFollowLatestState, offsetAfterPrepend } from "./session-scroll-follow";
+import {
+  nextFollowLatestState,
+  offsetAfterPrepend,
+  shouldCompensatePrependAnchor,
+} from "./session-scroll-follow";
 
 const NEAR_BOTTOM_THRESHOLD = 120;
 
@@ -63,5 +67,55 @@ describe("offsetAfterPrepend", () => {
         anchorOffset: 120,
       }),
     ).toBe(0);
+  });
+});
+
+describe("shouldCompensatePrependAnchor", () => {
+  it("compensates loading header height changes before rows prepend", () => {
+    expect(
+      shouldCompensatePrependAnchor({
+        hasPrepended: false,
+        isLoadingOlder: true,
+        loadedOlderEvents: null,
+        nextContentHeight: 2040,
+        lastCompensatedHeight: 2000,
+      }),
+    ).toBe(true);
+  });
+
+  it("compensates all content height changes after a prepend is observed", () => {
+    expect(
+      shouldCompensatePrependAnchor({
+        hasPrepended: true,
+        isLoadingOlder: false,
+        loadedOlderEvents: true,
+        nextContentHeight: 2600,
+        lastCompensatedHeight: 2040,
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores bottom growth before the older rows render", () => {
+    expect(
+      shouldCompensatePrependAnchor({
+        hasPrepended: false,
+        isLoadingOlder: false,
+        loadedOlderEvents: true,
+        nextContentHeight: 2100,
+        lastCompensatedHeight: 2040,
+      }),
+    ).toBe(false);
+  });
+
+  it("compensates loading header removal before older rows render", () => {
+    expect(
+      shouldCompensatePrependAnchor({
+        hasPrepended: false,
+        isLoadingOlder: false,
+        loadedOlderEvents: true,
+        nextContentHeight: 2000,
+        lastCompensatedHeight: 2040,
+      }),
+    ).toBe(true);
   });
 });
