@@ -52,7 +52,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="light" />
       <KeyboardProvider>
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false, contentStyle: styles.stackContent }} />
       </KeyboardProvider>
     </GestureHandlerRootView>
   );
@@ -61,6 +61,10 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: "#0a0a0a",
+  },
+  stackContent: {
+    backgroundColor: "#0a0a0a",
   },
   splash: {
     flex: 1,
