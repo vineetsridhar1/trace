@@ -33,7 +33,8 @@ export function SidebarChannelSection({
 }) {
   const channelType = useEntityField("channels", channelId, "type");
   const sessionGroups = useSidebarSessionStatusGroupsForChannel(channelId, sessionScope);
-  const canExpand = channelType !== "text" && sessionGroups.length > 0;
+  const showsSessionList = channelType === "coding" || sessionGroups.length > 0;
+  const canExpand = showsSessionList;
   const [expanded, setExpanded] = useState(() => {
     return localStorage.getItem(channelExpandedStorageKey(channelId)) !== "false";
   });
@@ -62,7 +63,7 @@ export function SidebarChannelSection({
           onToggleExpanded={toggleExpanded}
         />
       </SidebarMenu>
-      {canExpand && (
+      {showsSessionList && (
         <ChannelOwnedSessions
           channelId={channelId}
           groups={sessionGroups}

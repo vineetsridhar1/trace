@@ -19,6 +19,7 @@ import { useSessionGroupRows } from "../channel/useSessionGroupRows";
 import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
+import { createQuickSession } from "../../lib/create-quick-session";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
@@ -112,8 +113,6 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
     });
   }, []);
 
-  if (groups.length === 0) return null;
-
   return (
     <AnimatePresence initial={false}>
       {expanded && (
@@ -125,16 +124,29 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
           className="overflow-hidden"
         >
           <div className="mt-1 space-y-1">
-            {groups.map((group) => (
-              <SidebarSessionStatusGroup
-                key={group.status}
-                channelId={channelId}
-                collapsed={collapsedStatuses.has(group.status)}
-                group={group}
-                onSessionClick={onSessionClick}
-                onToggle={toggleStatus}
-              />
-            ))}
+            {groups.length === 0 ? (
+              <button
+                type="button"
+                className={cn(
+                  "flex h-7 w-full cursor-pointer items-center rounded-md px-1.5 text-left text-xs text-foreground/45 transition-colors hover:bg-white/10 hover:text-foreground/70",
+                  sidebarNestedFullWidthRowClass,
+                )}
+                onClick={() => createQuickSession(channelId)}
+              >
+                <span className="truncate">Create a session</span>
+              </button>
+            ) : (
+              groups.map((group) => (
+                <SidebarSessionStatusGroup
+                  key={group.status}
+                  channelId={channelId}
+                  collapsed={collapsedStatuses.has(group.status)}
+                  group={group}
+                  onSessionClick={onSessionClick}
+                  onToggle={toggleStatus}
+                />
+              ))
+            )}
           </div>
         </motion.div>
       )}
