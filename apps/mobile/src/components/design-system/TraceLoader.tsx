@@ -13,15 +13,15 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { alpha, useTheme, type Theme } from "@/theme";
 
 export interface TraceLoaderProps extends ViewProps {
-  size?: "small" | "large";
-  color?: keyof Theme["colors"];
+  size?: "small" | "large" | number;
+  color?: keyof Theme["colors"] | (string & {});
   animating?: boolean;
   hidesWhenStopped?: boolean;
 }
 
 const GRID_SIZE = 3;
 const PATH_LENGTH = 16;
-const SIZE_PX: Record<NonNullable<TraceLoaderProps["size"]>, number> = {
+const SIZE_PX: Record<"small" | "large", number> = {
   small: 22,
   large: 38,
 };
@@ -68,12 +68,12 @@ export function TraceLoader({
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
-  const dimension = SIZE_PX[size];
+  const dimension = typeof size === "number" ? size : SIZE_PX[size];
   const dotSize = dimension * 0.25;
   const lightSize = dimension * 0.28;
   const spacing = (dimension - dotSize) / 2;
-  const baseColor = alpha(theme.colors[color], 0.24);
-  const activeColor = theme.colors[color];
+  const activeColor = resolveColor(theme, color);
+  const baseColor = alpha(activeColor, 0.24);
   const shouldAnimate = animating && !reducedMotion;
 
   useEffect(() => {
@@ -198,3 +198,11 @@ const styles = StyleSheet.create({
     position: "absolute",
   },
 });
+
+function resolveColor(theme: Theme, color: NonNullable<TraceLoaderProps["color"]>) {
+  if (Object.prototype.hasOwnProperty.call(theme.colors, color)) {
+    return theme.colors[color as keyof Theme["colors"]];
+  }
+
+  return color;
+}
