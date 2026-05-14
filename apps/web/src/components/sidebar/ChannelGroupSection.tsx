@@ -32,8 +32,8 @@ export interface ChannelGroupSectionProps {
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDeleteGroup: (groupId: string) => void;
-  onToggleSessionScope: () => void;
-  sessionScope: SidebarSessionScope;
+  onToggleSessionScope: (channelId: string) => void;
+  sessionScopes: Record<string, SidebarSessionScope>;
 }
 
 export function ChannelGroupSection({
@@ -46,7 +46,7 @@ export function ChannelGroupSection({
   onSessionClick,
   onDeleteGroup,
   onToggleSessionScope,
-  sessionScope,
+  sessionScopes,
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
   const collapsed = useEntityField("channelGroups", id, "isCollapsed") ?? false;
@@ -163,7 +163,7 @@ export function ChannelGroupSection({
                     onChannelClick={onChannelClick}
                     onSessionClick={onSessionClick}
                     onToggleSessionScope={onToggleSessionScope}
-                    sessionScope={sessionScope}
+                    sessionScope={sessionScopes[channelId] ?? "mine"}
                   />
                 ))}
               </SortableContext>

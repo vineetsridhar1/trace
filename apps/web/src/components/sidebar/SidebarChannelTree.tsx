@@ -32,8 +32,8 @@ export interface SidebarChannelTreeProps {
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDragActiveChange?: (active: boolean) => void;
-  onToggleSessionScope: () => void;
-  sessionScope: SidebarSessionScope;
+  onToggleSessionScope: (channelId: string) => void;
+  sessionScopes: Record<string, SidebarSessionScope>;
   topLevelItems: TopLevelItem[];
 }
 
@@ -52,7 +52,7 @@ export function SidebarChannelTree({
   onSessionClick,
   onDragActiveChange,
   onToggleSessionScope,
-  sessionScope,
+  sessionScopes,
   topLevelItems,
 }: SidebarChannelTreeProps) {
   const {
@@ -122,7 +122,7 @@ export function SidebarChannelTree({
                   onChannelClick={onChannelClick}
                   onSessionClick={onSessionClick}
                   onToggleSessionScope={onToggleSessionScope}
-                  sessionScope={sessionScope}
+                  sessionScope={sessionScopes[item.id] ?? "mine"}
                 />
               ) : (
                 <ChannelGroupSection
@@ -138,7 +138,7 @@ export function SidebarChannelTree({
                   onDeleteGroup={(groupId) =>
                     client.mutation(DELETE_GROUP_MUTATION, { id: groupId }).toPromise()
                   }
-                  sessionScope={sessionScope}
+                  sessionScopes={sessionScopes}
                 />
               ),
             )}
