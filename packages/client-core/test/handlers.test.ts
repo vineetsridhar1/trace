@@ -513,7 +513,7 @@ describe("handleOrgEvent", () => {
     expect(session.gitCheckpoints[0].id).toBe("ckpt-1");
   });
 
-  it("handles queued message lifecycle events", () => {
+  it("handles queued message add, update, reorder, and removal events", () => {
     handleOrgEvent(
       makeEvent({
         eventType: "queued_message_added",
@@ -542,14 +542,14 @@ describe("handleOrgEvent", () => {
             id: "qm-1",
             sessionId: "session-1",
             text: "edited",
-            position: 0,
+            position: 1,
             createdAt: "2026-01-01T00:00:00.000Z",
           },
         },
       }),
     );
 
-    expect(useEntityStore.getState().queuedMessages["qm-1"]).toMatchObject({ text: "edited" });
+    expect(useEntityStore.getState().queuedMessages["qm-1"].text).toBe("edited");
 
     handleOrgEvent(
       makeEvent({

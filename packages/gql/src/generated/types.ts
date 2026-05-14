@@ -1544,6 +1544,9 @@ export type SessionEndpoints = {
 export type SessionFilters = {
   agentStatus?: InputMaybe<AgentStatus>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
+  includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   tool?: InputMaybe<CodingTool>;
 };

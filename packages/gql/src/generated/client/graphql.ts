@@ -1546,6 +1546,9 @@ export type SessionEndpoints = {
 export type SessionFilters = {
   agentStatus?: InputMaybe<AgentStatus>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
+  includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   tool?: InputMaybe<CodingTool>;
 };
@@ -2975,6 +2978,78 @@ export type InboxItemsQuery = {
     sourceId: string;
     createdAt: string;
     resolvedAt?: string | null;
+  }>;
+};
+
+export type SidebarSessionsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+  limit: Scalars["Int"]["input"];
+}>;
+
+export type SidebarSessionsQuery = {
+  __typename?: "Query";
+  sessions: Array<{
+    __typename?: "Session";
+    id: string;
+    name: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    tool: CodingTool;
+    model?: string | null;
+    reasoningEffort?: string | null;
+    hosting: HostingMode;
+    branch?: string | null;
+    workdir?: string | null;
+    prUrl?: string | null;
+    worktreeDeleted: boolean;
+    sessionGroupId?: string | null;
+    lastUserMessageAt?: string | null;
+    lastMessageAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    connection?: {
+      __typename?: "SessionConnection";
+      state: SessionConnectionState;
+      runtimeInstanceId?: string | null;
+      runtimeLabel?: string | null;
+      lastError?: string | null;
+      retryCount: number;
+      canRetry: boolean;
+      canMove: boolean;
+      autoRetryable?: boolean | null;
+    } | null;
+    createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+    repo?: { __typename?: "Repo"; id: string; name: string } | null;
+    channel?: { __typename?: "Channel"; id: string } | null;
+    sessionGroup?: {
+      __typename?: "SessionGroup";
+      id: string;
+      name: string;
+      slug?: string | null;
+      status: SessionGroupStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      archivedAt?: string | null;
+      setupStatus: SetupStatus;
+      setupError?: string | null;
+      branch?: string | null;
+      workdir?: string | null;
+      createdAt: string;
+      updatedAt: string;
+      channel?: { __typename?: "Channel"; id: string } | null;
+      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      connection?: {
+        __typename?: "SessionConnection";
+        state: SessionConnectionState;
+        runtimeInstanceId?: string | null;
+        runtimeLabel?: string | null;
+        lastError?: string | null;
+        retryCount: number;
+        canRetry: boolean;
+        canMove: boolean;
+        autoRetryable?: boolean | null;
+      } | null;
+    } | null;
   }>;
 };
 
@@ -6682,6 +6757,202 @@ export const InboxItemsDocument = {
     },
   ],
 } as unknown as DocumentNode<InboxItemsQuery, InboxItemsQueryVariables>;
+export const SidebarSessionsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SidebarSessions" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filters" },
+                value: {
+                  kind: "ObjectValue",
+                  fields: [
+                    {
+                      kind: "ObjectField",
+                      name: { kind: "Name", value: "includeArchived" },
+                      value: { kind: "BooleanValue", value: false },
+                    },
+                    {
+                      kind: "ObjectField",
+                      name: { kind: "Name", value: "includeMerged" },
+                      value: { kind: "BooleanValue", value: false },
+                    },
+                    {
+                      kind: "ObjectField",
+                      name: { kind: "Name", value: "limit" },
+                      value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+                    },
+                  ],
+                },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "tool" } },
+                { kind: "Field", name: { kind: "Name", value: "model" } },
+                { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
+                { kind: "Field", name: { kind: "Name", value: "hosting" } },
+                { kind: "Field", name: { kind: "Name", value: "branch" } },
+                { kind: "Field", name: { kind: "Name", value: "workdir" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "state" } },
+                      { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                      { kind: "Field", name: { kind: "Name", value: "runtimeLabel" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                      { kind: "Field", name: { kind: "Name", value: "retryCount" } },
+                      { kind: "Field", name: { kind: "Name", value: "canRetry" } },
+                      { kind: "Field", name: { kind: "Name", value: "canMove" } },
+                      { kind: "Field", name: { kind: "Name", value: "autoRetryable" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "createdBy" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "channel" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessionGroup" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "slug" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "setupStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "setupError" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "channel" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "repo" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                          ],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "branch" } },
+                      { kind: "Field", name: { kind: "Name", value: "workdir" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "connection" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "state" } },
+                            { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                            { kind: "Field", name: { kind: "Name", value: "runtimeLabel" } },
+                            { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                            { kind: "Field", name: { kind: "Name", value: "retryCount" } },
+                            { kind: "Field", name: { kind: "Name", value: "canRetry" } },
+                            { kind: "Field", name: { kind: "Name", value: "canMove" } },
+                            { kind: "Field", name: { kind: "Name", value: "autoRetryable" } },
+                          ],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SidebarSessionsQuery, SidebarSessionsQueryVariables>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [

@@ -500,7 +500,7 @@ export const sessionMutations = {
       args.runtimeInstanceId ?? undefined,
     );
   },
-  queueSessionMessage: (
+  queueSessionMessage: async (
     _: unknown,
     args: {
       sessionId: string;
@@ -511,40 +511,49 @@ export const sessionMutations = {
     },
     ctx: Context,
   ) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     return sessionService.queueMessage({
       sessionId: args.sessionId,
       text: args.text,
       imageKeys: args.attachmentKeys ?? args.imageKeys ?? undefined,
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
-      organizationId: requireOrgContext(ctx),
+      organizationId: orgId,
       clientSource: ctx.clientSource,
     });
   },
-  removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.removeQueuedMessage(args.id, ctx.userId, requireOrgContext(ctx));
+  removeQueuedMessage: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
+    await assertScopeAccess("session", sessionId, ctx.userId, orgId);
+    return sessionService.removeQueuedMessage(args.id, ctx.userId, orgId);
   },
-  steerQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.steerQueuedMessage(args.id, ctx.userId, requireOrgContext(ctx));
+  steerQueuedMessage: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
+    await assertScopeAccess("session", sessionId, ctx.userId, orgId);
+    return sessionService.steerQueuedMessage(args.id, ctx.userId, orgId);
   },
-  updateQueuedMessage: (_: unknown, args: { id: string; text: string }, ctx: Context) => {
-    return sessionService.updateQueuedMessage(
-      args.id,
-      args.text,
-      ctx.userId,
-      requireOrgContext(ctx),
-    );
+  updateQueuedMessage: async (_: unknown, args: { id: string; text: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
+    await assertScopeAccess("session", sessionId, ctx.userId, orgId);
+    return sessionService.updateQueuedMessage(args.id, args.text, ctx.userId, orgId);
   },
-  clearQueuedMessages: (_: unknown, args: { sessionId: string }, ctx: Context) => {
-    return sessionService.clearQueuedMessages(args.sessionId, ctx.userId, requireOrgContext(ctx));
+  clearQueuedMessages: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
+    return sessionService.clearQueuedMessages(args.sessionId, ctx.userId, orgId);
   },
-  reorderQueuedMessages: (_: unknown, args: { sessionId: string; ids: string[] }, ctx: Context) => {
-    return sessionService.reorderQueuedMessages(
-      args.sessionId,
-      args.ids,
-      ctx.userId,
-      requireOrgContext(ctx),
-    );
+  reorderQueuedMessages: async (
+    _: unknown,
+    args: { sessionId: string; ids: string[] },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
+    return sessionService.reorderQueuedMessages(args.sessionId, args.ids, ctx.userId, orgId);
   },
 };
 
