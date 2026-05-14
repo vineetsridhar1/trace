@@ -21,6 +21,7 @@ import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
 import { isBridgeTerminalAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
 import { TerminalSocket } from "@/lib/terminal-ws";
 import { getClient } from "@/lib/urql";
+import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 
 interface SessionTerminalPanelProps {
@@ -183,6 +184,14 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
             setStatus("active");
             setMessage(null);
             inject("window.__traceFocus && window.__traceFocus();");
+            {
+              const initialCommand = useMobileUIStore
+                .getState()
+                .consumeTerminalInitialCommand(sessionId);
+              if (initialCommand) {
+                socket.write(initialCommand);
+              }
+            }
             break;
           case "output":
             writeTerminal(event.data);

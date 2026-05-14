@@ -24,6 +24,12 @@ interface MockAttachmentSheetProps {
   onPickImages: () => void;
 }
 
+interface MockActionButtonProps {
+  accessibilityLabel: string;
+  disabled?: boolean;
+  onPress: () => void;
+}
+
 interface MockDraftAttachment {
   id: string;
   filename: string;
@@ -60,10 +66,13 @@ async function waitForDraftAttachmentCount(count: number): Promise<void> {
 let latestComposerProps: MockComposerProps | null = null;
 let latestAttachButtonProps: MockAttachButtonProps | null = null;
 let latestAttachmentSheetProps: MockAttachmentSheetProps | null = null;
+let latestActionButtonProps: MockActionButtonProps | null = null;
 let latestOnFailure: ((draft: string, message: string) => void) | null = null;
 let latestOnSuccess: (() => void) | null = null;
 let draftAttachments: MockDraftAttachment[] = [];
+let mockTool = "codex";
 const submitMock = vi.fn();
+const routerPushMock = vi.fn();
 
 vi.mock("react-native", () => ({
   AccessibilityInfo: {
@@ -94,6 +103,12 @@ vi.mock("expo-file-system", () => ({
 
 vi.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: vi.fn(),
+}));
+
+vi.mock("expo-router", () => ({
+  useRouter: () => ({
+    push: routerPushMock,
+  }),
 }));
 
 vi.mock("react-native-reanimated", () => {
@@ -138,7 +153,7 @@ vi.mock("@trace/client-core", () => ({
       case "worktreeDeleted":
         return false;
       case "tool":
-        return "codex";
+        return mockTool;
       case "model":
         return "gpt-5";
       case "hosting":
@@ -147,6 +162,8 @@ vi.mock("@trace/client-core", () => ({
         return { state: "connected", canRetry: false };
       case "channel":
         return { id: "channel-1" };
+      case "sessionGroupId":
+        return "group-1";
       case "_optimistic":
         return false;
       default:
@@ -284,7 +301,10 @@ vi.mock("./SessionRuntimePickerSheetContent", () => ({
 }));
 
 vi.mock("./session-input-composer/SessionComposerActionButton", () => ({
-  SessionComposerActionButton: () => null,
+  SessionComposerActionButton: (props: MockActionButtonProps) => {
+    latestActionButtonProps = props;
+    return React.createElement("SessionComposerActionButton", props);
+  },
 }));
 
 vi.mock("./session-input-composer/SessionComposerBottomSheet", () => ({
@@ -346,10 +366,13 @@ describe("SessionInputComposer", () => {
     latestComposerProps = null;
     latestAttachButtonProps = null;
     latestAttachmentSheetProps = null;
+    latestActionButtonProps = null;
     latestOnFailure = null;
     latestOnSuccess = null;
     draftAttachments = [];
+    mockTool = "codex";
     submitMock.mockClear();
+    routerPushMock.mockClear();
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0);
@@ -401,6 +424,31 @@ describe("SessionInputComposer", () => {
     });
 
     expect(submitMock).toHaveBeenCalledWith("", "code");
+  });
+
+  it("opens Pi login in the terminal pane instead of submitting it as a prompt", async () => {
+    mockTool = "pi";
+    const { useMobileUIStore } = await import("@/stores/ui");
+    useMobileUIStore.getState().reset();
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+    });
+
+    await act(async () => {
+      latestComposerProps?.onChangeText?.("/login");
+    });
+
+    await act(async () => {
+      latestActionButtonProps?.onPress();
+    });
+
+    expect(submitMock).not.toHaveBeenCalled();
+    expect(routerPushMock).toHaveBeenCalledWith("/sessions/group-1/session-1?pane=terminal");
+    expect(useMobileUIStore.getState().consumeTerminalInitialCommand("session-1")).toBe(
+      "pi\n/login",
+    );
   });
 
   it("opens an attachment sheet and stores picked files", async () => {

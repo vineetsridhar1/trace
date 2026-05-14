@@ -9,6 +9,15 @@ const BUILTIN_FALLBACK: SessionSlashCommand[] = BUILTIN_SLASH_COMMANDS.map((comm
   source: "builtin",
 }));
 
+const PI_SLASH_COMMANDS: SessionSlashCommand[] = [
+  {
+    name: "login",
+    description: "Open Pi login in a terminal",
+    source: "builtin",
+    category: "special",
+  },
+];
+
 const slashCommandCache = new Map<string, SessionSlashCommand[]>();
 const slashCommandRequests = new Map<string, Promise<SessionSlashCommand[] | null>>();
 
@@ -76,15 +85,23 @@ export function useSlashCommands(sessionId: string): {
   const connection = useEntityField("sessions", sessionId, "connection");
   const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const isClaudeSession = tool === "claude_code";
+  const isPiSession = tool === "pi";
   const runtimeInstanceId = getRuntimeInstanceId(connection);
   const cacheKey = getSlashCommandCacheKey(sessionId, runtimeInstanceId, workdir);
   const [commands, setCommands] = useState<SessionSlashCommand[]>(() => {
+    if (isPiSession) return PI_SLASH_COMMANDS;
     if (!isClaudeSession) return [];
     return slashCommandCache.get(cacheKey) ?? BUILTIN_FALLBACK;
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (sessionId && isPiSession) {
+      setCommands(PI_SLASH_COMMANDS);
+      setLoading(false);
+      return;
+    }
+
     if (!sessionId || !isClaudeSession) {
       setCommands([]);
       setLoading(false);
@@ -110,7 +127,7 @@ export function useSlashCommands(sessionId: string): {
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, isClaudeSession, sessionId]);
+  }, [cacheKey, isClaudeSession, isPiSession, sessionId]);
 
   return { commands, loading };
 }

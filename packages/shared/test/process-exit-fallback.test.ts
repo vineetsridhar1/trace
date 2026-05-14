@@ -186,4 +186,36 @@ describe("coding tool adapter process exit fallback", () => {
       message: { content: [{ type: "text", text: "done" }] },
     });
   });
+
+  it("marks Pi runs as failed when assistant events report an error stop reason", () => {
+    const adapter = new PiAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "use bad model",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          stopReason: "error",
+          errorMessage: "Model is not available",
+          content: [],
+        },
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(`${JSON.stringify({ type: "agent_end" })}\n`);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "error",
+      message: "Model is not available",
+    });
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "error" });
+  });
 });
