@@ -347,6 +347,8 @@ type Channel {
   setupScript: String
   runScripts: JSON
   members: [ChannelMember!]!
+  memberCount: Int!
+  viewerIsMember: Boolean!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
 }

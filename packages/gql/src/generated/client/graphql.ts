@@ -195,6 +195,7 @@ export type Channel = {
   baseBranch?: Maybe<Scalars["String"]["output"]>;
   groupId?: Maybe<Scalars["ID"]["output"]>;
   id: Scalars["ID"]["output"];
+  memberCount: Scalars["Int"]["output"];
   members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars["String"]["output"];
@@ -204,6 +205,7 @@ export type Channel = {
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
   setupScript?: Maybe<Scalars["String"]["output"]>;
   type: ChannelType;
+  viewerIsMember: Scalars["Boolean"]["output"];
 };
 
 export type ChannelMessagesArgs = {
@@ -2549,11 +2551,8 @@ export type AllChannelsQuery = {
     id: string;
     name: string;
     type: ChannelType;
-    members: Array<{
-      __typename?: "ChannelMember";
-      joinedAt: string;
-      user: { __typename?: "User"; id: string };
-    }>;
+    memberCount: number;
+    viewerIsMember: boolean;
   }>;
 };
 
@@ -5264,24 +5263,8 @@ export const AllChannelsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "type" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "members" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "user" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-                        },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "joinedAt" } },
-                    ],
-                  },
-                },
+                { kind: "Field", name: { kind: "Name", value: "memberCount" } },
+                { kind: "Field", name: { kind: "Name", value: "viewerIsMember" } },
               ],
             },
           },

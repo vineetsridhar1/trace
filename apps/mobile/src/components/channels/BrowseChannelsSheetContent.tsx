@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, StyleSheet, TextInput, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
-import { SymbolView } from "expo-symbols";
 import { gql } from "@urql/core";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import type { ChannelType } from "@trace/gql";
-import { Button, EmptyState, Text, TraceLoader } from "@/components/design-system";
+import { EmptyState, Text, TraceLoader } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { useTheme } from "@/theme";
+import { BrowseChannelRow } from "./BrowseChannelRow";
+import type { BrowseChannel } from "./browse-channel-types";
 
 const ALL_CHANNELS_QUERY = gql`
   query MobileBrowseChannels($organizationId: ID!) {
@@ -18,12 +18,8 @@ const ALL_CHANNELS_QUERY = gql`
       id
       name
       type
-      members {
-        user {
-          id
-        }
-        joinedAt
-      }
+      memberCount
+      viewerIsMember
     }
   }
 `;
@@ -36,17 +32,9 @@ const JOIN_CHANNEL_MUTATION = gql`
   }
 `;
 
-interface BrowseChannel {
-  id: string;
-  name: string;
-  type: ChannelType;
-  members: Array<{ user: { id: string }; joinedAt: string }>;
-}
-
 export function BrowseChannelsSheetContent() {
   const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const userId = useAuthStore((s: AuthState) => s.user?.id);
   const [channels, setChannels] = useState<BrowseChannel[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -89,7 +77,7 @@ export function BrowseChannelsSheetContent() {
 
   const handleJoin = useCallback(
     async (channel: BrowseChannel) => {
-      if (!activeOrgId || !userId || pendingChannelId) return;
+      if (!activeOrgId || pendingChannelId) return;
       setPendingChannelId(channel.id);
       try {
         const result = await getClient()
@@ -103,11 +91,14 @@ export function BrowseChannelsSheetContent() {
         }
 
         void haptic.success();
-        const joinedAt = new Date().toISOString();
         setChannels((current) =>
           current.map((item) =>
             item.id === channel.id
-              ? { ...item, members: [...item.members, { user: { id: userId }, joinedAt }] }
+              ? {
+                  ...item,
+                  viewerIsMember: true,
+                  memberCount: item.viewerIsMember ? item.memberCount : item.memberCount + 1,
+                }
               : item,
           ),
         );
@@ -119,23 +110,22 @@ export function BrowseChannelsSheetContent() {
         setPendingChannelId(null);
       }
     },
-    [activeOrgId, pendingChannelId, userId],
+    [activeOrgId, pendingChannelId],
   );
 
   const renderItem = useCallback(
     ({ item }: { item: BrowseChannel }) => {
-      const joined = item.members.some((member) => member.user.id === userId);
       return (
         <BrowseChannelRow
           channel={item}
-          joined={joined}
+          joined={item.viewerIsMember}
           joining={pendingChannelId === item.id}
           disabled={Boolean(pendingChannelId) && pendingChannelId !== item.id}
           onJoin={() => void handleJoin(item)}
         />
       );
     },
-    [handleJoin, pendingChannelId, userId],
+    [handleJoin, pendingChannelId],
   );
 
   return (
@@ -192,58 +182,6 @@ export function BrowseChannelsSheetContent() {
   );
 }
 
-function BrowseChannelRow({
-  channel,
-  joined,
-  joining,
-  disabled,
-  onJoin,
-}: {
-  channel: BrowseChannel;
-  joined: boolean;
-  joining: boolean;
-  disabled: boolean;
-  onJoin: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View
-      style={[
-        styles.row,
-        {
-          borderBottomColor: theme.colors.border,
-        },
-      ]}
-    >
-      <View style={styles.rowText}>
-        <Text variant="body" numberOfLines={1}>
-          {channel.name}
-        </Text>
-        <Text variant="footnote" color="mutedForeground" numberOfLines={1}>
-          {channel.members.length} {channel.members.length === 1 ? "member" : "members"}
-        </Text>
-      </View>
-      {joined ? (
-        <View style={styles.joined}>
-          <SymbolView name="checkmark.circle.fill" size={17} tintColor={theme.colors.accent} />
-          <Text variant="footnote" color="mutedForeground">
-            Joined
-          </Text>
-        </View>
-      ) : (
-        <Button
-          title="Join"
-          size="sm"
-          variant="secondary"
-          loading={joining}
-          disabled={disabled}
-          onPress={onJoin}
-        />
-      )}
-    </View>
-  );
-}
-
 function keyExtractor(item: BrowseChannel): string {
   return item.id;
 }
@@ -269,23 +207,5 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 24,
-  },
-  row: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 12,
-  },
-  rowText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
-  },
-  joined: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
   },
 });

@@ -21,12 +21,8 @@ const ALL_CHANNELS_QUERY = gql`
       id
       name
       type
-      members {
-        user {
-          id
-        }
-        joinedAt
-      }
+      memberCount
+      viewerIsMember
     }
   }
 `;
@@ -51,7 +47,8 @@ interface BrowseChannel {
   id: string;
   name: string;
   type: ChannelType;
-  members: Array<{ user: { id: string }; joinedAt: string }>;
+  memberCount: number;
+  viewerIsMember: boolean;
 }
 
 function ChannelTypeIcon({ type }: { type: ChannelType }) {
@@ -80,7 +77,6 @@ export function BrowseChannelsDialog({
   const [loadedOrgId, setLoadedOrgId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
-  const userId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
 
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
@@ -161,9 +157,6 @@ export function BrowseChannelsDialog({
             )}
             {!loading &&
               filtered.map((ch: BrowseChannel) => {
-                const isMember = ch.members.some(
-                  (m: { user: { id: string } }) => m.user.id === userId,
-                );
                 const isPending = pendingAction === ch.id;
                 return (
                   <div
@@ -174,12 +167,12 @@ export function BrowseChannelsDialog({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{ch.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {ch.members.length} {ch.members.length === 1 ? "member" : "members"}
+                        {ch.memberCount} {ch.memberCount === 1 ? "member" : "members"}
                         {" · "}
                         {ch.type === "text" ? "Text" : "Coding"}
                       </p>
                     </div>
-                    {isMember ? (
+                    {ch.viewerIsMember ? (
                       <Button
                         variant="ghost"
                         size="sm"
