@@ -1,6 +1,5 @@
 import { Home } from "lucide-react";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { cn } from "../../lib/utils";
 import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
@@ -9,7 +8,6 @@ export function HomeButton() {
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const setActiveChannelId = useUIStore((s: UIState) => s.setActiveChannelId);
-  const { allDone } = useOnboardingStatus();
 
   const isActive = activePage === "main" && !activeChannelId && !activeChatId;
 
@@ -28,7 +26,6 @@ export function HomeButton() {
     >
       <Home size={16} />
       <span>Home</span>
-      {!allDone && <span className="ml-auto mr-2 h-2 w-2 rounded-full bg-accent" aria-hidden="true" />}
     </button>
   );
 }
