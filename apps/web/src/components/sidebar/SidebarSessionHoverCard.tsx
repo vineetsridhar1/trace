@@ -27,22 +27,27 @@ export function SidebarSessionHoverCard({
   trigger,
 }: {
   sessionGroupId: string;
-  sessionId: string;
+  sessionId: string | null;
   trigger: ReactElement;
 }) {
-  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
-  const branch = useEntityField("sessions", sessionId, "branch");
-  const createdBy = useEntityField("sessions", sessionId, "createdBy") as
+  const resolvedSessionId = sessionId ?? "";
+  const lastMessageAt = useEntityField("sessions", resolvedSessionId, "lastMessageAt");
+  const branch = useEntityField("sessions", resolvedSessionId, "branch");
+  const createdBy = useEntityField("sessions", resolvedSessionId, "createdBy") as
     | SidebarUserRef
     | undefined;
-  const sessionGroup = useEntityField("sessions", sessionId, "sessionGroup") as
+  const sessionGroup = useEntityField("sessions", resolvedSessionId, "sessionGroup") as
     | SidebarSessionGroupInfo
     | undefined;
-  const sessionGroupName = useEntityField(
-    "sessionGroups",
-    sessionGroupId,
-    "name",
-  ) as string | null | undefined;
+  const groupBranch = useEntityField("sessionGroups", sessionGroupId, "branch") as
+    | string
+    | null
+    | undefined;
+  const groupUpdatedAt = useEntityField("sessionGroups", sessionGroupId, "updatedAt");
+  const sessionGroupName = useEntityField("sessionGroups", sessionGroupId, "name") as
+    | string
+    | null
+    | undefined;
 
   return (
     <HoverCard>
@@ -55,9 +60,9 @@ export function SidebarSessionHoverCard({
         className="pointer-events-none w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
       >
         <SidebarSessionHoverContent
-          branch={branch ?? sessionGroup?.branch ?? null}
+          branch={branch ?? groupBranch ?? sessionGroup?.branch ?? null}
           createdBy={createdBy}
-          lastMessageAt={lastMessageAt}
+          lastMessageAt={lastMessageAt ?? groupUpdatedAt}
           sessionGroupName={sessionGroupName ?? sessionGroup?.name ?? null}
         />
       </HoverCardContent>

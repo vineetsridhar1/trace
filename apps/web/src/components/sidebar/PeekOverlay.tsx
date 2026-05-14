@@ -4,7 +4,7 @@ import { useSidebarData } from "../../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
 import { selectChannelOrStartSession } from "../../lib/channel-click-navigation";
 import { features } from "../../lib/features";
-import { navigateToSession, useUIStore } from "../../stores/ui";
+import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { SidebarChannelsPane } from "./SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./SidebarDirectMessagesPane";
 import { SidebarTabSwitcher } from "./SidebarTabSwitcher";
@@ -76,8 +76,8 @@ export function PeekOverlay({
   );
 
   const handleSessionClick = useCallback(
-    (channelId: string, sessionGroupId: string, sessionId: string) => {
-      navigateToSession(channelId, sessionGroupId, sessionId);
+    (channelId: string, sessionGroupId: string, sessionId: string | null) => {
+      navigateToSessionGroup(channelId, sessionGroupId, sessionId);
       onMouseLeave();
     },
     [onMouseLeave],

@@ -3,7 +3,7 @@ import { useEntityField } from "@trace/client-core";
 import { ChannelItem } from "./ChannelItem";
 import {
   ChannelOwnedSessions,
-  useSidebarSessionIdsForChannel,
+  useSidebarSessionStatusGroupsForChannel,
   type SidebarSessionScope,
 } from "./ChannelOwnedSessions";
 import { SidebarMenu } from "../ui/sidebar";
@@ -27,13 +27,13 @@ export function SidebarChannelSection({
   isChannelActive: boolean;
   hasActiveSession: boolean;
   onChannelClick: (id: string) => void;
-  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onToggleSessionScope: () => void;
   sessionScope: SidebarSessionScope;
 }) {
   const channelType = useEntityField("channels", channelId, "type");
-  const sessionIds = useSidebarSessionIdsForChannel(channelId, sessionScope);
-  const canExpand = channelType !== "text" && sessionIds.length > 0;
+  const sessionGroups = useSidebarSessionStatusGroupsForChannel(channelId, sessionScope);
+  const canExpand = channelType !== "text" && sessionGroups.length > 0;
   const [expanded, setExpanded] = useState(() => {
     return localStorage.getItem(channelExpandedStorageKey(channelId)) !== "false";
   });
@@ -65,7 +65,7 @@ export function SidebarChannelSection({
       {canExpand && (
         <ChannelOwnedSessions
           channelId={channelId}
-          sessionIds={sessionIds}
+          groups={sessionGroups}
           expanded={expanded}
           onSessionClick={onSessionClick}
         />

@@ -30,7 +30,7 @@ export interface ChannelGroupSectionProps {
   activeSessionGroupId: string | null;
   onAddChannel: (groupId: string) => void;
   onChannelClick: (id: string) => void;
-  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDeleteGroup: (groupId: string) => void;
   onToggleSessionScope: () => void;
   sessionScope: SidebarSessionScope;
