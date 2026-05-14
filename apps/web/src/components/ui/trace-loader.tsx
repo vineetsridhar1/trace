@@ -69,31 +69,39 @@ export function TraceLoader({
               transform-origin: center;
             }
 
-            .trace-loader-dot-active {
-              animation: trace-loader-snake 1.2s cubic-bezier(.45,0,.2,1) infinite;
+            .trace-loader-light {
+              opacity: 0;
+              animation: trace-loader-light 1.2s linear infinite;
               animation-delay: calc(var(--snake-index) * -150ms);
+              transform-box: fill-box;
+              transform-origin: center;
             }
 
-            @keyframes trace-loader-snake {
+            @keyframes trace-loader-light {
               0%, 100% {
-                fill: currentColor;
-                opacity: .2;
-                transform: scale(.72);
+                opacity: 0;
+                transform: scale(.82);
               }
-              10%, 48% {
-                fill: var(--th-accent-light);
+              14% {
+                opacity: .26;
+                transform: scale(.94);
+              }
+              32% {
                 opacity: 1;
-                transform: scale(1.34);
+                transform: scale(1.18);
               }
-              62% {
-                fill: var(--th-accent);
-                opacity: .58;
-                transform: scale(.98);
+              50% {
+                opacity: .74;
+                transform: scale(1.08);
+              }
+              68% {
+                opacity: .18;
+                transform: scale(.9);
               }
             }
 
             @media (prefers-reduced-motion: reduce) {
-              .trace-loader-dot-active {
+              .trace-loader-light {
                 animation: none;
               }
             }
@@ -106,15 +114,19 @@ export function TraceLoader({
           const isSnakeDot = dot.snakeIndex !== undefined;
 
           return (
-            <circle
-              key={dot.id}
-              className={cn("trace-loader-dot", isSnakeDot && "trace-loader-dot-active")}
-              cx={cx}
-              cy={cy}
-              r="4.5"
-              fill="currentColor"
-              style={isSnakeDot ? ({ "--snake-index": dot.snakeIndex } as SnakeDotStyle) : undefined}
-            />
+            <g key={dot.id}>
+              <circle className="trace-loader-dot" cx={cx} cy={cy} r="4.5" fill="currentColor" />
+              {isSnakeDot ? (
+                <circle
+                  className="trace-loader-light"
+                  cx={cx}
+                  cy={cy}
+                  r="5"
+                  fill="var(--th-accent-light)"
+                  style={{ "--snake-index": dot.snakeIndex } as SnakeDotStyle}
+                />
+              ) : null}
+            </g>
           );
         })}
       </svg>
