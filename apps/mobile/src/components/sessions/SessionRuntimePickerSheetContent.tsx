@@ -8,7 +8,7 @@ import {
   useEntityField,
 } from "@trace/client-core";
 import type { BridgeAccessCapability, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { ListRow, Spinner, Text } from "@/components/design-system";
+import { ListRow, TraceLoader, Text } from "@/components/design-system";
 import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
@@ -70,7 +70,7 @@ function RuntimeRequestPill({
       ]}
     >
       {loading ? (
-        <Spinner size="small" color="foreground" />
+        <TraceLoader size="small" color="foreground" />
       ) : (
         <Text variant="subheadline" color="foreground" align="center">
           {title}

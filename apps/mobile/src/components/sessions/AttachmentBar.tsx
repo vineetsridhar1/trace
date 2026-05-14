@@ -1,6 +1,6 @@
 import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { isPreviewableImageMimeType } from "@/lib/attachment-utils";
 import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
@@ -75,7 +75,7 @@ export function AttachmentBar({ attachments, onRemove }: Props) {
                   { backgroundColor: alpha("#000000", 0.4) },
                 ]}
               >
-                <Spinner size="small" />
+                <TraceLoader size="small" />
               </View>
             ) : null}
             <Pressable

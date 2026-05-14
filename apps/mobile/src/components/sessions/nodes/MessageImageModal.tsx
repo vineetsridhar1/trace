@@ -1,6 +1,6 @@
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Image } from "react-native";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import type { MessageImageItem } from "./message-image-utils";
 import { fitMessageImageSurface } from "./message-image-utils";
@@ -50,7 +50,7 @@ export function MessageImageModal({ item, onClose }: MessageImageModalProps) {
                 <Image source={{ uri }} resizeMode="contain" style={styles.modalImage} />
               </Pressable>
             ) : loading ? (
-              <Spinner size="large" />
+              <TraceLoader size="large" />
             ) : (
               <Text color="mutedForeground">{failed ? "Image unavailable" : item?.label}</Text>
             )}

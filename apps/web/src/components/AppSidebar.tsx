@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
+import { selectChannelOrStartSession } from "../lib/channel-click-navigation";
 import { features } from "../lib/features";
 import { useUIStore, type UIState } from "../stores/ui";
 import { ConnectionsButton } from "./sidebar/ConnectionsButton";
@@ -15,7 +16,6 @@ import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "./ui/sidebar
 export function AppSidebar() {
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
-  const setActiveChannelId = useUIStore((s: UIState) => s.setActiveChannelId);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -31,10 +31,10 @@ export function AppSidebar() {
 
   const handleChannelClick = useCallback(
     (id: string) => {
-      setActiveChannelId(id);
+      selectChannelOrStartSession(id);
       closeSidebar();
     },
-    [setActiveChannelId, closeSidebar],
+    [closeSidebar],
   );
 
   const handleChatClick = useCallback(

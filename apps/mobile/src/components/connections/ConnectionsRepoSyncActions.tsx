@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useTheme, type Theme } from "@/theme";
 import type { ConnectionLinkedCheckout } from "@/hooks/useConnections";
@@ -113,7 +113,7 @@ function ActionButton({
       ]}
     >
       {loading ? (
-        <Spinner size="small" color="foreground" />
+        <TraceLoader size="small" color="foreground" />
       ) : (
         <SymbolView
           name={symbol}

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
-import { EmptyState, Spinner } from "@/components/design-system";
+import { EmptyState, TraceLoader } from "@/components/design-system";
 import { useLatestSessionIdForGroup } from "@/hooks/useChannelSessionGroups";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useTheme } from "@/theme";
@@ -23,7 +23,7 @@ export default function SessionGroupRedirectScreen() {
       <Stack.Screen options={{ title: "Session Group" }} />
       <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
         {loading || latestSessionId ? (
-          <Spinner size="small" color="mutedForeground" />
+          <TraceLoader size="small" color="mutedForeground" />
         ) : error ? (
           <EmptyState
             icon="exclamationmark.triangle"

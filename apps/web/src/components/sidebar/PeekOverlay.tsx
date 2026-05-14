@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSidebarData } from "../../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
+import { selectChannelOrStartSession } from "../../lib/channel-click-navigation";
 import { features } from "../../lib/features";
 import { useUIStore } from "../../stores/ui";
 import { SidebarChannelsPane } from "./SidebarChannelsPane";
@@ -27,9 +28,6 @@ export function PeekOverlay({
 }: PeekOverlayProps) {
   const sidebarData = useSidebarData();
   const activeChannelId = useUIStore((s: { activeChannelId: string | null }) => s.activeChannelId);
-  const setActiveChannelId = useUIStore(
-    (s: { setActiveChannelId: (id: string | null) => void }) => s.setActiveChannelId,
-  );
   const activeChatId = useUIStore((s: { activeChatId: string | null }) => s.activeChatId);
   const setActiveChatId = useUIStore(
     (s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId,
@@ -55,10 +53,10 @@ export function PeekOverlay({
 
   const handleChannelClick = useCallback(
     (id: string) => {
-      setActiveChannelId(id);
+      selectChannelOrStartSession(id);
       onMouseLeave();
     },
-    [setActiveChannelId, onMouseLeave],
+    [onMouseLeave],
   );
 
   const handleChatClick = useCallback(

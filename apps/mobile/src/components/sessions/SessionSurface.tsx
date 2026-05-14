@@ -11,7 +11,7 @@ import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
 import {
@@ -184,7 +184,7 @@ export function SessionSurface({
   if (!groupId || (loading && !groupName)) {
     return (
       <View style={[styles.loading, { backgroundColor: theme.colors.background }]}>
-        <Spinner size="small" color="mutedForeground" />
+        <TraceLoader size="small" color="mutedForeground" />
       </View>
     );
   }

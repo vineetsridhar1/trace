@@ -8,7 +8,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { Spinner } from "@/components/design-system";
+import { TraceLoader } from "@/components/design-system";
 import { useNotificationNavigation } from "@/lib/notification-navigation";
 import { markAppBackgrounded, markAppForegrounded, markAppInteractive } from "@/lib/perf";
 
@@ -42,7 +42,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={styles.root}>
         <StatusBar style="light" />
         <View style={styles.splash}>
-          <Spinner size="large" color="foreground" />
+          <TraceLoader size="large" color="foreground" />
         </View>
       </GestureHandlerRootView>
     );

@@ -6,7 +6,7 @@ import * as Clipboard from "expo-clipboard";
 import type { BarcodeScanningResult } from "expo-camera";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { Button, Screen, Spinner, Text } from "@/components/design-system";
+import { Button, Screen, TraceLoader, Text } from "@/components/design-system";
 import {
   activateHostedConnection,
   activatePairedLocalConnection,
@@ -423,7 +423,7 @@ export default function PairScreen() {
           ) : (
             <View style={[styles.cameraFallback, { backgroundColor: theme.colors.surface }]}>
               {cameraPermission === "checking" ? (
-                <Spinner size="large" color="foreground" />
+                <TraceLoader size="large" color="foreground" />
               ) : cameraPermission === "unsupported" ? (
                 <Text variant="callout" color="mutedForeground" align="center">
                   {CAMERA_UNAVAILABLE_MESSAGE}

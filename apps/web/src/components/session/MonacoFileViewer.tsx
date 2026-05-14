@@ -23,8 +23,9 @@ export function MonacoFileViewer({
   filePath: string;
 }) {
   const renderViewer = getFileRenderViewer(filePath);
+  const defaultViewMode = renderViewer?.defaultMode ?? "raw";
   const [content, setContent] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<FileViewMode>(renderViewer?.defaultMode ?? "raw");
+  const [viewMode, setViewMode] = useState<FileViewMode>(defaultViewMode);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +58,10 @@ export function MonacoFileViewer({
   useEffect(() => {
     fetchContent(false);
   }, [fetchContent]);
+
+  useEffect(() => {
+    setViewMode(defaultViewMode);
+  }, [filePath, defaultViewMode]);
 
   if (loading) {
     return (

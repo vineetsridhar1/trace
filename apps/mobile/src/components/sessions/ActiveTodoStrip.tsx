@@ -8,7 +8,7 @@ import {
   useScopedEventIds,
   useScopedEvents,
 } from "@trace/client-core";
-import { Glass, Spinner, Text } from "@/components/design-system";
+import { Glass, TraceLoader, Text } from "@/components/design-system";
 import { extractLatestTodos, type TodoItem } from "@/lib/extract-todos";
 import { alpha, useTheme } from "@/theme";
 
@@ -67,7 +67,7 @@ export function ActiveTodoStrip({ sessionId }: ActiveTodoStripProps) {
       <View style={styles.row}>
         <View style={styles.indicator}>
           {focus.status === "in_progress" ? (
-            <Spinner size="small" color="accent" />
+            <TraceLoader size="small" color="accent" />
           ) : (
             <SymbolView
               name="circle"

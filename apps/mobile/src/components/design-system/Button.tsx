@@ -5,7 +5,7 @@ import * as Haptics from "expo-haptics";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useTheme, type Theme, type TypographyVariant } from "@/theme";
 import { Text } from "./Text";
-import { Spinner } from "./Spinner";
+import { TraceLoader } from "./TraceLoader";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -135,7 +135,7 @@ export function Button({
         style={[styles.container, containerStyle]}
       >
         {loading ? (
-          <Spinner size="small" color={spinnerColor} />
+          <TraceLoader size="small" color={spinnerColor} />
         ) : (
           <>
             {icon}

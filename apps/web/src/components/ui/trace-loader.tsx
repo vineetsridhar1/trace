@@ -143,7 +143,7 @@ export function TraceLoader({
               cx={cx}
               cy={cy}
               r="5"
-              fill="var(--th-accent-light)"
+              fill="currentColor"
               style={{ "--snake-index": dot.snakeIndex } as SnakeDotStyle}
             />
           );
