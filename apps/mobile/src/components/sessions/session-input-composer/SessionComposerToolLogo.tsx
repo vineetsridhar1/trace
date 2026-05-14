@@ -1,4 +1,5 @@
-import { Image, Text, View } from "react-native";
+import { Image } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import type { CodingTool } from "@trace/gql";
 import { useTheme } from "@/theme";
 
@@ -17,25 +18,14 @@ export function SessionComposerToolLogo({ tool, size }: SessionComposerToolLogoP
 
   if (tool === "pi") {
     return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text
-          style={{
-            color: theme.colors.foreground,
-            fontSize: size * 0.75,
-            fontWeight: "700",
-            lineHeight: size,
-          }}
-        >
-          Pi
-        </Text>
-      </View>
+      <Svg width={size} height={size} viewBox="0 0 800 800">
+        <Path
+          fill={theme.colors.foreground}
+          fillRule="evenodd"
+          d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"
+        />
+        <Path fill={theme.colors.foreground} d="M517.36 400 H634.72 V634.72 H517.36 Z" />
+      </Svg>
     );
   }
 

@@ -1,7 +1,7 @@
-import type { SVGProps } from "react";
+import type { CSSProperties, HTMLAttributes, ImgHTMLAttributes, SVGProps } from "react";
 
 /** Claude / Anthropic starburst logo (uses the PNG from /public) */
-export function ClaudeIcon({ className, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) {
+export function ClaudeIcon({ className, ...props }: ImgHTMLAttributes<HTMLImageElement>) {
   return <img src="/claude-logo.png" alt="Claude" className={className} {...props} />;
 }
 
@@ -14,14 +14,19 @@ export function CodexIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function PiIcon(props: SVGProps<SVGSVGElement>) {
+export function PiIcon({ className, style, ...props }: HTMLAttributes<HTMLSpanElement>) {
+  const maskStyle: CSSProperties = {
+    WebkitMask: "url(/pi-logo.svg) center / contain no-repeat",
+    mask: "url(/pi-logo.svg) center / contain no-repeat",
+    ...style,
+  };
+
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
-      <path d="M5 7h14" strokeLinecap="round" />
-      <path d="M9 7v10" strokeLinecap="round" />
-      <path d="M15 7v10" strokeLinecap="round" />
-      <path d="M8 17h2.5" strokeLinecap="round" />
-      <path d="M13.5 17H16" strokeLinecap="round" />
-    </svg>
+    <span
+      aria-hidden="true"
+      className={["inline-block bg-current", className].filter(Boolean).join(" ")}
+      style={maskStyle}
+      {...props}
+    />
   );
 }
