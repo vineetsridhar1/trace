@@ -13,3 +13,15 @@ export function CodexIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function PiIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+      <path d="M5 7h14" strokeLinecap="round" />
+      <path d="M9 7v10" strokeLinecap="round" />
+      <path d="M15 7v10" strokeLinecap="round" />
+      <path d="M8 17h2.5" strokeLinecap="round" />
+      <path d="M13.5 17H16" strokeLinecap="round" />
+    </svg>
+  );
+}

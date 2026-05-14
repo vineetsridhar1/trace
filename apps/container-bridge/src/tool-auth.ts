@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 
 let codexLoginPromise: Promise<void> | null = null;
 let codexLoggedIn = false;
@@ -7,6 +7,21 @@ const TOOL_ENV_VARS: Partial<Record<string, string>> = {
   claude_code: "ANTHROPIC_API_KEY",
   codex: "OPENAI_API_KEY",
 };
+
+function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(binary, ["--version"], { timeout: 2_000 }, (error) => {
+      if (error) {
+        reject(new Error(`Cannot run ${tool}: the \`${binary}\` binary was not found on PATH.`));
+      } else {
+        resolve();
+      }
+    });
+    child.on("error", () => {
+      reject(new Error(`Cannot run ${tool}: the \`${binary}\` binary was not found on PATH.`));
+    });
+  });
+}
 
 async function loginCodex(): Promise<void> {
   if (codexLoggedIn) return;
@@ -59,6 +74,8 @@ export async function ensureToolReady(tool: string): Promise<void> {
 
   if (tool === "codex") {
     await loginCodex();
+  } else if (tool === "pi") {
+    await ensureBinaryAvailable("pi", "pi");
   }
 }
 

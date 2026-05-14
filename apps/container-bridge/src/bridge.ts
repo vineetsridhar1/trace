@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import crypto from "crypto";
 import { promisify } from "util";
 import type {
@@ -32,7 +32,7 @@ import {
   inspectSessionGitSyncStatus,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
-import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
+import { ClaudeCodeAdapter, CodexAdapter, PiAdapter } from "@trace/shared/adapters";
 import {
   ensureRepo,
   createWorktree,
@@ -47,6 +47,15 @@ import { TerminalManager } from "@trace/shared/adapters";
 const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 1;
 const AGENT_VERSION = "0.1.0";
+
+function hasExecutable(command: string): boolean {
+  try {
+    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 2_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function inspectGitCheckpoint(
   cwd: string,
@@ -153,6 +162,8 @@ export class ContainerBridge implements IBridgeClient {
       const provisionedRuntimeInstanceId = process.env.TRACE_RUNTIME_INSTANCE_ID?.trim();
       const instanceId = provisionedRuntimeInstanceId ?? `cloud-machine-${this.machineId}`;
       const registeredRepoIds = provisionedRuntimeInstanceId ? [] : listClonedRepoIds();
+      const supportedTools = ["claude_code", "codex"];
+      if (hasExecutable("pi")) supportedTools.push("pi");
       // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
       // they intentionally register no pre-existing repos.
       this.send({
@@ -162,7 +173,7 @@ export class ContainerBridge implements IBridgeClient {
         hostingMode: "cloud",
         protocolVersion: BRIDGE_PROTOCOL_VERSION,
         agentVersion: AGENT_VERSION,
-        supportedTools: ["claude_code", "codex"],
+        supportedTools,
         registeredRepoIds,
         activeTerminals: this.terminalManager.getActiveTerminals(),
       });
@@ -309,6 +320,8 @@ export class ContainerBridge implements IBridgeClient {
   private createAdapter(tool?: string): CodingToolAdapter {
     const resolvedTool = tool ?? this.defaultTool;
     switch (resolvedTool) {
+      case "pi":
+        return new PiAdapter();
       case "codex":
         return new CodexAdapter();
       case "claude_code":

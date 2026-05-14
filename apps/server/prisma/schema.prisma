@@ -74,6 +74,7 @@ enum CodingTool {
   claude_code
   codex
   custom
+  pi
 }
 
 enum ChatType {

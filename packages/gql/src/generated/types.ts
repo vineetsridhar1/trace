@@ -254,7 +254,7 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
-export type CodingTool = "claude_code" | "codex" | "custom";
+export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 
 export type ConnectionsBridge = {
   __typename?: "ConnectionsBridge";
@@ -1654,12 +1654,6 @@ export type StartSessionInput = {
   tool?: InputMaybe<CodingTool>;
 };
 
-export type UpdateSessionDefaultsInput = {
-  model?: InputMaybe<Scalars["String"]["input"]>;
-  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
-  tool?: InputMaybe<CodingTool>;
-};
-
 export type Subscription = {
   __typename?: "Subscription";
   branchTurns: Turn;
@@ -1817,6 +1811,12 @@ export type UpdateChannelInput = {
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateSessionDefaultsInput = {
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
 };
 
 export type UpdateTicketInput = {

@@ -69,6 +69,17 @@ describe("ProvisionedRuntimeAdapter", () => {
     ).rejects.toThrow("startupTimeoutSeconds must be a positive integer");
   });
 
+  it("allows Pi in provisioned runtime tool capabilities", async () => {
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        capabilities: { supportedTools: ["claude_code", "codex", "pi"] },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it("allows loopback HTTP provisioned URLs outside production", async () => {
     const adapter = new ProvisionedRuntimeAdapter();
 

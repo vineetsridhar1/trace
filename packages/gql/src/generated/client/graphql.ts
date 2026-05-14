@@ -256,7 +256,7 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
-export type CodingTool = "claude_code" | "codex" | "custom";
+export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 
 export type ConnectionsBridge = {
   __typename?: "ConnectionsBridge";
@@ -1656,12 +1656,6 @@ export type StartSessionInput = {
   tool?: InputMaybe<CodingTool>;
 };
 
-export type UpdateSessionDefaultsInput = {
-  model?: InputMaybe<Scalars["String"]["input"]>;
-  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
-  tool?: InputMaybe<CodingTool>;
-};
-
 export type Subscription = {
   __typename?: "Subscription";
   branchTurns: Turn;
@@ -1819,6 +1813,12 @@ export type UpdateChannelInput = {
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateSessionDefaultsInput = {
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
 };
 
 export type UpdateTicketInput = {
@@ -2994,32 +2994,30 @@ export type InboxItemsQuery = {
   }>;
 };
 
-export type SidebarSessionsQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-  limit: Scalars["Int"]["input"];
+export type SidebarSessionGroupsQueryVariables = Exact<{
+  channelId: Scalars["ID"]["input"];
+  archived?: InputMaybe<Scalars["Boolean"]["input"]>;
 }>;
 
-export type SidebarSessionsQuery = {
+export type SidebarSessionGroupsQuery = {
   __typename?: "Query";
-  sessions: Array<{
-    __typename?: "Session";
+  sessionGroups: Array<{
+    __typename?: "SessionGroup";
     id: string;
     name: string;
-    agentStatus: AgentStatus;
-    sessionStatus: SessionStatus;
-    tool: CodingTool;
-    model?: string | null;
-    reasoningEffort?: string | null;
-    hosting: HostingMode;
-    branch?: string | null;
-    workdir?: string | null;
+    slug?: string | null;
+    status: SessionGroupStatus;
     prUrl?: string | null;
     worktreeDeleted: boolean;
-    sessionGroupId?: string | null;
-    lastUserMessageAt?: string | null;
-    lastMessageAt?: string | null;
+    archivedAt?: string | null;
+    setupStatus: SetupStatus;
+    setupError?: string | null;
+    branch?: string | null;
+    workdir?: string | null;
     createdAt: string;
     updatedAt: string;
+    channel?: { __typename?: "Channel"; id: string } | null;
+    repo?: { __typename?: "Repo"; id: string; name: string } | null;
     connection?: {
       __typename?: "SessionConnection";
       state: SessionConnectionState;
@@ -3031,26 +3029,25 @@ export type SidebarSessionsQuery = {
       canMove: boolean;
       autoRetryable?: boolean | null;
     } | null;
-    createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    repo?: { __typename?: "Repo"; id: string; name: string } | null;
-    channel?: { __typename?: "Channel"; id: string } | null;
-    sessionGroup?: {
-      __typename?: "SessionGroup";
+    sessions: Array<{
+      __typename?: "Session";
       id: string;
       name: string;
-      slug?: string | null;
-      status: SessionGroupStatus;
-      prUrl?: string | null;
-      worktreeDeleted: boolean;
-      archivedAt?: string | null;
-      setupStatus: SetupStatus;
-      setupError?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      tool: CodingTool;
+      model?: string | null;
+      reasoningEffort?: string | null;
+      hosting: HostingMode;
       branch?: string | null;
       workdir?: string | null;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      sessionGroupId?: string | null;
+      lastUserMessageAt?: string | null;
+      lastMessageAt?: string | null;
       createdAt: string;
       updatedAt: string;
-      channel?: { __typename?: "Channel"; id: string } | null;
-      repo?: { __typename?: "Repo"; id: string; name: string } | null;
       connection?: {
         __typename?: "SessionConnection";
         state: SessionConnectionState;
@@ -3062,7 +3059,10 @@ export type SidebarSessionsQuery = {
         canMove: boolean;
         autoRetryable?: boolean | null;
       } | null;
-    } | null;
+      createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+      repo?: { __typename?: "Repo"; id: string; name: string } | null;
+      channel?: { __typename?: "Channel"; id: string } | null;
+    }>;
   }>;
 };
 
@@ -6754,17 +6754,17 @@ export const InboxItemsDocument = {
     },
   ],
 } as unknown as DocumentNode<InboxItemsQuery, InboxItemsQueryVariables>;
-export const SidebarSessionsDocument = {
+export const SidebarSessionGroupsDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "query",
-      name: { kind: "Name", value: "SidebarSessions" },
+      name: { kind: "Name", value: "SidebarSessionGroups" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          variable: { kind: "Variable", name: { kind: "Name", value: "channelId" } },
           type: {
             kind: "NonNullType",
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
@@ -6772,11 +6772,8 @@ export const SidebarSessionsDocument = {
         },
         {
           kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
-          },
+          variable: { kind: "Variable", name: { kind: "Name", value: "archived" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
         },
       ],
       selectionSet: {
@@ -6784,36 +6781,17 @@ export const SidebarSessionsDocument = {
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "sessions" },
+            name: { kind: "Name", value: "sessionGroups" },
             arguments: [
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+                name: { kind: "Name", value: "channelId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "channelId" } },
               },
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "filters" },
-                value: {
-                  kind: "ObjectValue",
-                  fields: [
-                    {
-                      kind: "ObjectField",
-                      name: { kind: "Name", value: "includeArchived" },
-                      value: { kind: "BooleanValue", value: false },
-                    },
-                    {
-                      kind: "ObjectField",
-                      name: { kind: "Name", value: "includeMerged" },
-                      value: { kind: "BooleanValue", value: false },
-                    },
-                    {
-                      kind: "ObjectField",
-                      name: { kind: "Name", value: "limit" },
-                      value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
-                    },
-                  ],
-                },
+                name: { kind: "Name", value: "archived" },
+                value: { kind: "Variable", name: { kind: "Name", value: "archived" } },
               },
             ],
             selectionSet: {
@@ -6821,19 +6799,34 @@ export const SidebarSessionsDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
-                { kind: "Field", name: { kind: "Name", value: "tool" } },
-                { kind: "Field", name: { kind: "Name", value: "model" } },
-                { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
-                { kind: "Field", name: { kind: "Name", value: "hosting" } },
-                { kind: "Field", name: { kind: "Name", value: "branch" } },
-                { kind: "Field", name: { kind: "Name", value: "workdir" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
-                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "setupStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "setupError" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "channel" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "branch" } },
+                { kind: "Field", name: { kind: "Name", value: "workdir" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "connection" },
@@ -6851,73 +6844,29 @@ export const SidebarSessionsDocument = {
                     ],
                   },
                 },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "createdBy" },
+                  name: { kind: "Name", value: "sessions" },
                   selectionSet: {
                     kind: "SelectionSet",
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "repo" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "channel" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sessionGroup" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "slug" } },
-                      { kind: "Field", name: { kind: "Name", value: "status" } },
-                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                      { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "setupStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "setupError" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "channel" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-                        },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "repo" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                          ],
-                        },
-                      },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "tool" } },
+                      { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
+                      { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
                       { kind: "Field", name: { kind: "Name", value: "workdir" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -6935,13 +6884,42 @@ export const SidebarSessionsDocument = {
                           ],
                         },
                       },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "createdBy" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "repo" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "channel" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                        },
+                      },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                       { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                     ],
                   },
                 },
-                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
               ],
             },
           },
@@ -6949,7 +6927,7 @@ export const SidebarSessionsDocument = {
       },
     },
   ],
-} as unknown as DocumentNode<SidebarSessionsQuery, SidebarSessionsQueryVariables>;
+} as unknown as DocumentNode<SidebarSessionGroupsQuery, SidebarSessionGroupsQueryVariables>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [

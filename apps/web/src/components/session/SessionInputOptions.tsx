@@ -19,7 +19,7 @@ import {
   getReasoningEffortLabel,
   type ReasoningEffortOption,
 } from "./modelOptions";
-import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
+import { ClaudeIcon, CodexIcon, PiIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
@@ -31,12 +31,19 @@ const CLOUD_RUNTIME_ID = "__cloud__";
 const TOOL_LABELS: Record<string, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
+  pi: "Pi",
 };
 
 const EFFORT_LINE_HEIGHT = 16;
 
 function getToolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? tool;
+}
+
+function ToolIcon({ tool, className }: { tool: string; className?: string }) {
+  if (tool === "claude_code") return <ClaudeIcon className={className} />;
+  if (tool === "pi") return <PiIcon className={className} />;
+  return <CodexIcon className={className} />;
 }
 
 function EffortDots({ index, total }: { index: number; total: number }) {
@@ -419,11 +426,7 @@ export function SessionInputOptions({
         <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
           <SelectValue>
             <span className="flex items-center gap-1.5">
-              {currentTool === "claude_code" ? (
-                <ClaudeIcon className="size-3.5" />
-              ) : (
-                <CodexIcon className="size-3.5" />
-              )}
+              <ToolIcon tool={currentTool} className="size-3.5" />
               {getToolLabel(currentTool)}
             </span>
           </SelectValue>
@@ -437,6 +440,11 @@ export function SessionInputOptions({
           <SelectItem value="codex">
             <span className="flex items-center gap-1.5">
               <CodexIcon className="size-3.5" /> Codex
+            </span>
+          </SelectItem>
+          <SelectItem value="pi">
+            <span className="flex items-center gap-1.5">
+              <PiIcon className="size-3.5" /> Pi
             </span>
           </SelectItem>
         </SelectContent>
