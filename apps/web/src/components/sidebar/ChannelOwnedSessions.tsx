@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import {
   Archive,
   ChevronDown,
@@ -323,22 +323,28 @@ function OwnedSessionItem({
 
   const sessionName = name ?? "Untitled session";
   const sessionUrl = `${window.location.origin}/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
+  const openSession = () => onSessionClick(channelId, sessionGroupId, sessionId);
+  const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openSession();
+  };
 
   const row = (
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        "group/session-row flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-xs leading-none transition-colors",
+        "group/session-row flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         sidebarNestedFullWidthRowClass,
         isActive
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
       )}
+      onClick={openSession}
+      onKeyDown={handleRowKeyDown}
     >
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
-        onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}
-      >
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <span
           className={cn(
             "relative inline-flex h-1.5 w-1.5 shrink-0 items-center justify-center",
@@ -356,7 +362,7 @@ function OwnedSessionItem({
         <span className="shrink-0 text-[11px] text-foreground group-hover/session-row:hidden group-focus-within/session-row:hidden">
           {activityLabel}
         </span>
-      </button>
+      </div>
       <button
         type="button"
         className="hidden h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground group-hover/session-row:flex group-focus-within/session-row:flex"
@@ -383,7 +389,7 @@ function OwnedSessionItem({
           />
         </ContextMenuTrigger>
         <ContextMenuContent className="w-56">
-          <ContextMenuItem onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}>
+          <ContextMenuItem onClick={openSession}>
             <ExternalLink size={14} className="mr-1.5 text-muted-foreground" />
             Open session
           </ContextMenuItem>
