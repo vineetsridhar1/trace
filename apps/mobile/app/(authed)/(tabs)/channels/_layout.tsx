@@ -1,7 +1,5 @@
 import { Stack, useRouter } from "expo-router";
-import { StyleSheet, View } from "react-native";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { IconButton } from "@/components/design-system";
 import { TopBarPill } from "@/components/navigation/TopBarPill";
 
 export default function ChannelsLayout() {
@@ -22,25 +20,26 @@ export default function ChannelsLayout() {
           title: "Channels",
           headerLargeTitle: true,
           headerRight: () => (
-            <View style={styles.headerActions}>
-              <IconButton
-                symbol="magnifyingglass"
-                accessibilityLabel="Browse channels"
-                onPress={() => router.push("/sheets/browse-channels")}
-              />
-              <TopBarPill
-                avatar={
-                  user
-                    ? {
-                        name: user.name ?? user.email ?? "?",
-                        uri: user.avatarUrl,
-                        accessibilityLabel: "Account",
-                        onPress: () => router.push("/sheets/account"),
-                      }
-                    : undefined
-                }
-              />
-            </View>
+            <TopBarPill
+              actions={[
+                {
+                  id: "browse-channels",
+                  symbol: "magnifyingglass",
+                  accessibilityLabel: "Browse channels",
+                  onPress: () => router.push("/sheets/browse-channels"),
+                },
+              ]}
+              avatar={
+                user
+                  ? {
+                      name: user.name ?? user.email ?? "?",
+                      uri: user.avatarUrl,
+                      accessibilityLabel: "Account",
+                      onPress: () => router.push("/sheets/account"),
+                    }
+                  : undefined
+              }
+            />
           ),
         }}
       />
@@ -61,11 +60,3 @@ export default function ChannelsLayout() {
     </Stack>
   );
 }
-
-const styles = StyleSheet.create({
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-});
