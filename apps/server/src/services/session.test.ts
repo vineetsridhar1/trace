@@ -2679,6 +2679,64 @@ describe("SessionService", () => {
       expect(connectionLostCalls.length).toBeGreaterThan(0);
     });
 
+    it("does not auto-retry when the home runtime does not support the session tool", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          tool: "pi",
+          model: "openai-codex/gpt-5.5",
+          workdir: "/Users/laptop-a/worktree",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 2,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        tool: "pi",
+        hosting: "local",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 2,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroupId: "group-1",
+      });
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      sessionRouterMock.send.mockReturnValue("no_runtime");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "run via pi",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      const connectionWrites = prismaMock.session.update.mock.calls.filter((call: unknown[]) => {
+        const arg = call[0] as { data?: { connection?: { autoRetryable?: boolean } } } | undefined;
+        return arg?.data?.connection !== undefined;
+      });
+      expect(connectionWrites.length).toBeGreaterThan(0);
+      const lastConn = connectionWrites[connectionWrites.length - 1][0].data.connection as {
+        autoRetryable?: boolean;
+        lastError?: string;
+        retryCount?: number;
+      };
+      expect(lastConn.autoRetryable).toBe(false);
+      expect(lastConn.retryCount).toBe(3);
+      expect(lastConn.lastError).toBe("Laptop A does not support pi");
+    });
+
     it("does not deliver cloud sends to an in-memory binding without a persisted cloud runtime", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({
