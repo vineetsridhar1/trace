@@ -26,7 +26,10 @@ const TOOL_LABELS: Record<string, string> = {
 
 type SessionDefaultsPatch = Pick<
   User,
-  "defaultSessionTool" | "defaultSessionModel" | "defaultSessionReasoningEffort"
+  | "defaultSessionTool"
+  | "defaultSessionModel"
+  | "defaultSessionReasoningEffort"
+  | "autoArchiveMergedSessions"
 >;
 
 function updateAuthUser(patch: SessionDefaultsPatch) {
@@ -36,13 +39,12 @@ function updateAuthUser(patch: SessionDefaultsPatch) {
 }
 
 async function saveDefaults(input: {
-  tool: string | null;
+  tool?: string | null;
   model?: string | null;
   reasoningEffort?: string | null;
+  autoArchiveMergedSessions?: boolean;
 }) {
-  const result = await client
-    .mutation(UPDATE_SESSION_DEFAULTS_MUTATION, { input })
-    .toPromise();
+  const result = await client.mutation(UPDATE_SESSION_DEFAULTS_MUTATION, { input }).toPromise();
   if (result.error) throw result.error;
   const user = result.data?.updateSessionDefaults as SessionDefaultsPatch | undefined;
   if (user) updateAuthUser(user);
@@ -53,6 +55,7 @@ export function SessionDefaultsSection() {
   const defaultTool = user?.defaultSessionTool ?? null;
   const defaultModel = user?.defaultSessionModel ?? null;
   const defaultReasoningEffort = user?.defaultSessionReasoningEffort ?? null;
+  const autoArchiveMergedSessions = user?.autoArchiveMergedSessions ?? true;
   const effectiveTool = defaultTool ?? "claude_code";
   const modelOptions = getModelsForTool(effectiveTool);
   const reasoningEffortOptions = getReasoningEffortsForTool(effectiveTool);
@@ -105,6 +108,17 @@ export function SessionDefaultsSection() {
     }
   };
 
+  const handleAutoArchiveChange = async (value: string | null) => {
+    if (!value) return;
+    try {
+      await saveDefaults({ autoArchiveMergedSessions: value === "yes" });
+    } catch (error) {
+      toast.error("Failed to update session defaults", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
+
   return (
     <div>
       <div className="mb-4">
@@ -146,7 +160,11 @@ export function SessionDefaultsSection() {
             >
               <SelectTrigger className="w-full">
                 <SelectValue>
-                  {defaultModel ? getModelLabel(defaultModel) : defaultTool ? "None" : "Choose tool"}
+                  {defaultModel
+                    ? getModelLabel(defaultModel)
+                    : defaultTool
+                      ? "None"
+                      : "Choose tool"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -190,6 +208,24 @@ export function SessionDefaultsSection() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div className="border-t border-border pt-4">
+          <label className="mb-1.5 block text-sm text-muted-foreground">
+            Auto archive merged sessions
+          </label>
+          <Select
+            value={autoArchiveMergedSessions ? "yes" : "no"}
+            onValueChange={handleAutoArchiveChange}
+          >
+            <SelectTrigger className="w-full md:w-56">
+              <SelectValue>{autoArchiveMergedSessions ? "Yes" : "No"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="yes">Yes</SelectItem>
+              <SelectItem value="no">No</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>

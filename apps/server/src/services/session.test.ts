@@ -3495,6 +3495,22 @@ describe("SessionService", () => {
         },
       });
     });
+
+    it("updates auto-archive preference without clearing model defaults", async () => {
+      prismaMock.user.update.mockResolvedValueOnce({
+        id: "user-1",
+        autoArchiveMergedSessions: false,
+      });
+
+      await service.updateDefaults("user-1", { autoArchiveMergedSessions: false });
+
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: {
+          autoArchiveMergedSessions: false,
+        },
+      });
+    });
   });
 
   describe("queueMessage", () => {
@@ -6459,6 +6475,45 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
+            worktreeDeleted: false,
+          }),
+        }),
+      );
+    });
+
+    it("keeps the worktree when the session owner disables auto-archive on merge", async () => {
+      const prUrl = "https://github.com/trace/trace/pull/100";
+
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({ prUrl }).mockResolvedValueOnce({
+        ...makeSessionGroup({ prUrl, workdir: "/tmp/trace/workspace", worktreeDeleted: false }),
+        sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+      });
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        createdBy: { autoArchiveMergedSessions: false },
+      });
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
+
+      await service.markPrMerged({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl,
+        organizationId: "org-1",
+      });
+
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+      expect(terminalRelayMock.destroyAllForSessionGroup).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ prUrl }),
+        }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledTimes(1);
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            sessionStatus: "merged",
             worktreeDeleted: false,
           }),
         }),

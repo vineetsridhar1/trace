@@ -696,6 +696,7 @@ router.get("/auth/me", async (req: Request, res: Response) => {
         defaultSessionTool: true,
         defaultSessionModel: true,
         defaultSessionReasoningEffort: true,
+        autoArchiveMergedSessions: true,
         orgMemberships: {
           select: {
             organizationId: true,

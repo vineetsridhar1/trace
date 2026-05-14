@@ -1817,6 +1817,7 @@ export type UpdateRepoInput = {
 };
 
 export type UpdateSessionDefaultsInput = {
+  autoArchiveMergedSessions?: InputMaybe<Scalars["Boolean"]["input"]>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   tool?: InputMaybe<CodingTool>;
@@ -1832,6 +1833,7 @@ export type UpdateTicketInput = {
 
 export type User = {
   __typename?: "User";
+  autoArchiveMergedSessions: Scalars["Boolean"]["output"];
   avatarUrl?: Maybe<Scalars["String"]["output"]>;
   defaultSessionModel?: Maybe<Scalars["String"]["output"]>;
   defaultSessionReasoningEffort?: Maybe<Scalars["String"]["output"]>;
@@ -3811,6 +3813,7 @@ export type UserResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["User"] = ResolversParentTypes["User"],
 > = ResolversObject<{
+  autoArchiveMergedSessions?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   avatarUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   defaultSessionModel?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   defaultSessionReasoningEffort?: Resolver<

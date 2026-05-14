@@ -3441,25 +3441,33 @@ export class SessionService {
   }
 
   async updateDefaults(userId: string, input: UpdateSessionDefaultsInput) {
-    const tool = input.tool ?? null;
-    const model = tool
-      ? input.model
-        ? validateModelForTool(tool, input.model)
-        : (getDefaultModel(tool) ?? null)
-      : null;
-    const reasoningEffort = tool
-      ? input.reasoningEffort
-        ? validateReasoningEffortForTool(tool, input.reasoningEffort)
-        : (getDefaultReasoningEffort(tool) ?? null)
-      : null;
+    const data: Prisma.UserUpdateInput = {};
+
+    if (Object.prototype.hasOwnProperty.call(input, "tool")) {
+      const tool = input.tool ?? null;
+      const model = tool
+        ? input.model
+          ? validateModelForTool(tool, input.model)
+          : (getDefaultModel(tool) ?? null)
+        : null;
+      const reasoningEffort = tool
+        ? input.reasoningEffort
+          ? validateReasoningEffortForTool(tool, input.reasoningEffort)
+          : (getDefaultReasoningEffort(tool) ?? null)
+        : null;
+
+      data.defaultSessionTool = tool;
+      data.defaultSessionModel = model;
+      data.defaultSessionReasoningEffort = reasoningEffort;
+    }
+
+    if (typeof input.autoArchiveMergedSessions === "boolean") {
+      data.autoArchiveMergedSessions = input.autoArchiveMergedSessions;
+    }
 
     return prisma.user.update({
       where: { id: userId },
-      data: {
-        defaultSessionTool: tool,
-        defaultSessionModel: model,
-        defaultSessionReasoningEffort: reasoningEffort,
-      },
+      data,
     });
   }
 
@@ -7440,6 +7448,16 @@ export class SessionService {
     });
     if (group?.prUrl && group.prUrl !== prUrl) return;
 
+    const eventSession = await prisma.session.findUnique({
+      where: { id: eventSessionId },
+      select: {
+        createdBy: {
+          select: { autoArchiveMergedSessions: true },
+        },
+      },
+    });
+    const shouldAutoArchive = eventSession?.createdBy?.autoArchiveMergedSessions ?? true;
+
     // Transition ALL sessions in the group to merged, not just the event session
     const { count } = await prisma.session.updateMany({
       where: { sessionGroupId, sessionStatus: { not: "merged" } },
@@ -7452,7 +7470,9 @@ export class SessionService {
     // remove the on-disk worktree before we clear it from persisted state.
     await this.syncGroupWorkspaceState(sessionGroupId, { prUrl });
 
-    const worktreeDeleted = await this.fullyUnloadSession(eventSessionId, true);
+    const worktreeDeleted = shouldAutoArchive
+      ? await this.fullyUnloadSession(eventSessionId, true)
+      : false;
     const sessionGroup = await this.loadSessionGroupSnapshot(sessionGroupId);
 
     await eventService.create({

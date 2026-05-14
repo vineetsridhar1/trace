@@ -388,7 +388,11 @@ export function SessionGroupDetailView({
     return (
       bridgeInteractionAllowed &&
       isConnected &&
-      !isTerminalStatus(selectedSession.agentStatus, selectedSession.sessionStatus) &&
+      !isTerminalStatus(
+        selectedSession.agentStatus,
+        selectedSession.sessionStatus,
+        groupWorktreeDeleted,
+      ) &&
       !groupWorktreeDeleted
     );
   })();

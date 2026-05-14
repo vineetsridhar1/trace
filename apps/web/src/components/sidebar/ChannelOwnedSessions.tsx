@@ -59,7 +59,7 @@ export function useSidebarSessionStatusGroupsForChannel(
   scope: SidebarSessionScope,
 ): SidebarSessionStatusGroup[] {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
-  const rows = useSessionGroupRows(channelId);
+  const rows = useSessionGroupRows(channelId, { includeActiveMerged: true });
 
   return useMemo(() => {
     const groups = new Map<string, SidebarSessionGroupRecord[]>();

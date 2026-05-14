@@ -295,6 +295,7 @@ model User {
   defaultSessionTool            CodingTool?
   defaultSessionModel           String?
   defaultSessionReasoningEffort String?
+  autoArchiveMergedSessions      Boolean      @default(true)
 
   orgMemberships    OrgMember[]
   mobilePairingTokens MobilePairingToken[] @relation("MobilePairingTokenOwner")

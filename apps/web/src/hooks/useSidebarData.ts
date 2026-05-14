@@ -90,8 +90,8 @@ const INBOX_ITEMS_QUERY = gql`
 `;
 
 const SIDEBAR_SESSION_GROUPS_QUERY = gql`
-  query SidebarSessionGroups($channelId: ID!, $archived: Boolean) {
-    sessionGroups(channelId: $channelId, archived: $archived) {
+  query SidebarSessionGroups($channelId: ID!, $archived: Boolean, $status: SessionGroupStatus) {
+    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {
       id
       name
       slug
@@ -245,42 +245,51 @@ export function useSidebarData() {
     }
   }, [activeOrgId, upsertMany]);
 
-  const fetchSidebarSessionGroups = useCallback(async (channelIds: string[]) => {
-    if (!activeOrgId || channelIds.length === 0) return;
-    const results = await Promise.all(
-      channelIds.map((channelId) =>
-        client
-          .query(SIDEBAR_SESSION_GROUPS_QUERY, { channelId, archived: false })
-          .toPromise(),
-      ),
-    );
+  const fetchSidebarSessionGroups = useCallback(
+    async (channelIds: string[]) => {
+      if (!activeOrgId || channelIds.length === 0) return;
+      const results = await Promise.all(
+        channelIds.flatMap((channelId) => [
+          client.query(SIDEBAR_SESSION_GROUPS_QUERY, { channelId, archived: false }).toPromise(),
+          client
+            .query(SIDEBAR_SESSION_GROUPS_QUERY, { channelId, archived: false, status: "merged" })
+            .toPromise(),
+        ]),
+      );
 
-    const groups = results.flatMap((result) =>
-      result.data?.sessionGroups
-        ? (result.data.sessionGroups as Array<SessionGroup & { id: string }>)
-        : [],
-    );
-    if (groups.length === 0) return;
+      const groupsById = new Map<string, SessionGroup & { id: string }>();
+      for (const result of results) {
+        const sessionGroups = result.data?.sessionGroups
+          ? (result.data.sessionGroups as Array<SessionGroup & { id: string }>)
+          : [];
+        for (const group of sessionGroups) {
+          groupsById.set(group.id, group);
+        }
+      }
+      const groups = [...groupsById.values()];
+      if (groups.length === 0) return;
 
-    const entityState = useEntityStore.getState();
-    const sessions = groups.flatMap((group) => group.sessions ?? []);
-    const sessionGroups = groups.map((group) => ({
-      ...(entityState.sessionGroups[group.id] ?? {}),
-      ...group,
-      sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
-      _sortTimestamp:
-        group.sessions?.[0]?.lastMessageAt ??
-        group.sessions?.[0]?.lastUserMessageAt ??
-        group.sessions?.[0]?.updatedAt ??
-        group.updatedAt,
-    }));
+      const entityState = useEntityStore.getState();
+      const sessions = groups.flatMap((group) => group.sessions ?? []);
+      const sessionGroups = groups.map((group) => ({
+        ...(entityState.sessionGroups[group.id] ?? {}),
+        ...group,
+        sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
+        _sortTimestamp:
+          group.sessions?.[0]?.lastMessageAt ??
+          group.sessions?.[0]?.lastUserMessageAt ??
+          group.sessions?.[0]?.updatedAt ??
+          group.updatedAt,
+      }));
 
-    upsertMany("sessions", sessions as Array<EntityTableMap["sessions"] & { id: string }>);
-    upsertMany(
-      "sessionGroups",
-      sessionGroups as Array<EntityTableMap["sessionGroups"] & { id: string }>,
-    );
-  }, [activeOrgId, upsertMany]);
+      upsertMany("sessions", sessions as Array<EntityTableMap["sessions"] & { id: string }>);
+      upsertMany(
+        "sessionGroups",
+        sessionGroups as Array<EntityTableMap["sessionGroups"] & { id: string }>,
+      );
+    },
+    [activeOrgId, upsertMany],
+  );
 
   // Initial fetch — channels, channelGroups, and chats are kept fresh by useOrgEvents,
   // so they don't need to refetch on refreshTick. Only inbox items need periodic refresh.

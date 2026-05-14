@@ -96,7 +96,7 @@ function areRowSelectionsEqual(
 
 export function useSessionGroupRows(
   channelId: string,
-  options?: { archived?: boolean; status?: string },
+  options?: { archived?: boolean; status?: string; includeActiveMerged?: boolean },
 ): SessionGroupRow[] {
   const selectedRows = useStoreWithEqualityFn(
     useEntityStore,
@@ -171,6 +171,9 @@ export function useSessionGroupRows(
         if (options?.status) {
           if (row.displaySessionStatus !== options.status) continue;
         } else if (row.displaySessionStatus === "merged") {
+          if (options?.includeActiveMerged === true && !row.worktreeDeleted) {
+            rows.push({ row, signature: buildRowSignature(row) });
+          }
           continue;
         }
 
