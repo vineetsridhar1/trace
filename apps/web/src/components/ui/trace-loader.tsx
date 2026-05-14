@@ -86,7 +86,7 @@ export function TraceLoader({
         <style>
           {`
             .trace-loader-dot {
-              opacity: .36;
+              opacity: .5;
               transform-box: fill-box;
               transform-origin: center;
             }
@@ -109,11 +109,11 @@ export function TraceLoader({
                 transform: scale(.96);
               }
               12% {
-                opacity: 1;
+                opacity: .7;
                 transform: scale(1.28);
               }
               24% {
-                opacity: .94;
+                opacity: .7;
                 transform: scale(1.14);
               }
               34% {
