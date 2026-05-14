@@ -1,5 +1,11 @@
 import type { Context } from "../context.js";
-import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from "@trace/gql";
+import type {
+  AgentStatus,
+  CodingTool,
+  SessionFilters,
+  StartSessionInput,
+  UpdateSessionDefaultsInput,
+} from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -319,6 +325,14 @@ export const sessionMutations = {
       ctx.actorType,
       ctx.userId,
     );
+  },
+  updateSessionDefaults: (
+    _: unknown,
+    args: { input: UpdateSessionDefaultsInput },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.updateDefaults(ctx.userId, args.input);
   },
   sendSessionMessage: async (
     _: unknown,

@@ -5,6 +5,7 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Avatar, ListRow, Text } from "@/components/design-system";
 import { handleMobileSignOut } from "@/lib/auth";
 import { useTheme } from "@/theme";
+import { formatSessionDefaultsSummary } from "./SessionDefaultsSheetContent";
 
 const APP_VERSION = Constants.expoConfig?.version ?? "0.0.1";
 const BUILD_NUMBER = Constants.nativeBuildVersion ?? "dev";
@@ -25,6 +26,10 @@ export function AccountSheetContent() {
   const userEmail = user?.email ?? "Signed in";
   function openOrgSwitcher() {
     router.push("/sheets/org-switcher");
+  }
+
+  function openSessionDefaults() {
+    router.push("/sheets/session-defaults");
   }
 
   function confirmSignOut() {
@@ -84,6 +89,13 @@ export function AccountSheetContent() {
           subtitle={activeOrg?.organization.name ?? "No active organization"}
           disclosureIndicator
           onPress={openOrgSwitcher}
+          separator
+        />
+        <ListRow
+          title="Session defaults"
+          subtitle={user ? formatSessionDefaultsSummary(user) : "Choose tool, model, and effort"}
+          disclosureIndicator
+          onPress={openSessionDefaults}
           separator={__DEV__}
         />
         {__DEV__ ? (

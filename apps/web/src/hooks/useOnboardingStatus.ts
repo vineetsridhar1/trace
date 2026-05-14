@@ -7,6 +7,7 @@ export interface OnboardingStatus {
   loading: boolean;
   hasRepo: boolean;
   hasChannel: boolean;
+  hasSessionDefaults: boolean;
   hasSession: boolean;
   firstCodingChannelId: string | null;
   allDone: boolean;
@@ -16,6 +17,7 @@ export interface OnboardingStatus {
 
 export function useOnboardingStatus(): OnboardingStatus {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const defaultSessionTool = useAuthStore((s: AuthState) => s.user?.defaultSessionTool ?? null);
   const reposLoadedForOrg = useOnboardingStore((s) => s.reposLoadedForOrg);
   const repoCount = useOnboardingStore((s) => s.repoCount);
   const sessionCount = useOnboardingStore((s) => s.sessionCount);
@@ -38,15 +40,19 @@ export function useOnboardingStatus(): OnboardingStatus {
 
   const hasRepo = repoCount > 0;
   const hasChannel = channelCount > 0;
+  const hasSessionDefaults = !!defaultSessionTool;
   const hasSession = sessionCount > 0 || entitySessionCount > 0;
-  const completedCount = [hasRepo, hasChannel, hasSession].filter(Boolean).length;
-  const totalCount = 3;
+  const completedCount = [hasRepo, hasChannel, hasSessionDefaults, hasSession].filter(
+    Boolean,
+  ).length;
+  const totalCount = 4;
   const allDone = completedCount === totalCount;
 
   return {
     loading: false,
     hasRepo,
     hasChannel,
+    hasSessionDefaults,
     hasSession,
     firstCodingChannelId,
     allDone,

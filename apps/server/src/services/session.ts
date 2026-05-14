@@ -1,4 +1,4 @@
-import type { StartSessionInput, ActorType } from "@trace/gql";
+import type { StartSessionInput, UpdateSessionDefaultsInput, ActorType } from "@trace/gql";
 import type { AgentStatus, SessionStatus, CodingTool } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
@@ -2625,15 +2625,6 @@ export class SessionService {
         include: SESSION_INCLUDE,
       });
 
-      await tx.user.update({
-        where: { id: input.createdById },
-        data: {
-          defaultSessionTool: tool,
-          defaultSessionModel: model ?? null,
-          defaultSessionReasoningEffort: reasoningEffort ?? null,
-        },
-      });
-
       if (sourceTicketLinks.length > 0) {
         await tx.ticketLink.createMany({
           data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
@@ -3395,20 +3386,6 @@ export class SessionService {
       include: SESSION_INCLUDE,
     });
 
-    if (
-      actorType === "user" &&
-      (config.tool != null || nextModel !== undefined || nextReasoningEffort !== undefined)
-    ) {
-      await prisma.user.update({
-        where: { id: actorId },
-        data: {
-          defaultSessionTool: session.tool,
-          defaultSessionModel: session.model,
-          defaultSessionReasoningEffort: session.reasoningEffort,
-        },
-      });
-    }
-
     // Sync group connection if runtime changed
     if (runtimeChanged && session.sessionGroupId) {
       await this.syncGroupWorkspaceState(session.sessionGroupId, {
@@ -3461,6 +3438,29 @@ export class SessionService {
     }
 
     return session;
+  }
+
+  async updateDefaults(userId: string, input: UpdateSessionDefaultsInput) {
+    const tool = input.tool ?? null;
+    const model = tool
+      ? input.model
+        ? validateModelForTool(tool, input.model)
+        : (getDefaultModel(tool) ?? null)
+      : null;
+    const reasoningEffort = tool
+      ? input.reasoningEffort
+        ? validateReasoningEffortForTool(tool, input.reasoningEffort)
+        : (getDefaultReasoningEffort(tool) ?? null)
+      : null;
+
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        defaultSessionTool: tool,
+        defaultSessionModel: model,
+        defaultSessionReasoningEffort: reasoningEffort,
+      },
+    });
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {

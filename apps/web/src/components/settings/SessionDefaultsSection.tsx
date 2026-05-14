@@ -1,6 +1,16 @@
+import { toast } from "sonner";
+import type { User } from "@trace/gql";
+import { UPDATE_SESSION_DEFAULTS_MUTATION, useAuthStore, type AuthState } from "@trace/client-core";
+import { client } from "../../lib/urql";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { usePreferencesStore } from "../../stores/preferences";
-import { getModelsForTool, getDefaultModel, getModelLabel } from "../session/modelOptions";
+import {
+  getDefaultModel,
+  getDefaultReasoningEffort,
+  getModelLabel,
+  getModelsForTool,
+  getReasoningEffortLabel,
+  getReasoningEffortsForTool,
+} from "../session/modelOptions";
 
 const TOOL_OPTIONS = [
   { value: "claude_code", label: "Claude Code" },
@@ -12,35 +22,84 @@ const TOOL_LABELS: Record<string, string> = {
   codex: "Codex",
 };
 
-export function SessionDefaultsSection() {
-  const defaultTool = usePreferencesStore((s: { defaultTool: string | null }) => s.defaultTool);
-  const defaultModel = usePreferencesStore((s: { defaultModel: string | null }) => s.defaultModel);
-  const setDefaultTool = usePreferencesStore(
-    (s: { setDefaultTool: (tool: string | null) => void }) => s.setDefaultTool,
-  );
-  const setDefaultModel = usePreferencesStore(
-    (s: { setDefaultModel: (model: string | null) => void }) => s.setDefaultModel,
-  );
+type SessionDefaultsPatch = Pick<
+  User,
+  "defaultSessionTool" | "defaultSessionModel" | "defaultSessionReasoningEffort"
+>;
 
+function updateAuthUser(patch: SessionDefaultsPatch) {
+  useAuthStore.setState((state: AuthState) => ({
+    user: state.user ? { ...state.user, ...patch } : state.user,
+  }));
+}
+
+async function saveDefaults(input: {
+  tool: string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+}) {
+  const result = await client
+    .mutation(UPDATE_SESSION_DEFAULTS_MUTATION, { input })
+    .toPromise();
+  if (result.error) throw result.error;
+  const user = result.data?.updateSessionDefaults as SessionDefaultsPatch | undefined;
+  if (user) updateAuthUser(user);
+}
+
+export function SessionDefaultsSection() {
+  const user = useAuthStore((s: AuthState) => s.user);
+  const defaultTool = user?.defaultSessionTool ?? null;
+  const defaultModel = user?.defaultSessionModel ?? null;
+  const defaultReasoningEffort = user?.defaultSessionReasoningEffort ?? null;
   const effectiveTool = defaultTool ?? "claude_code";
   const modelOptions = getModelsForTool(effectiveTool);
+  const reasoningEffortOptions = getReasoningEffortsForTool(effectiveTool);
 
-  const handleToolChange = (value: string | null) => {
-    if (!value || value === "__none__") {
-      setDefaultTool(null);
-      setDefaultModel(null);
-    } else {
-      setDefaultTool(value);
-      // Reset model to the tool's default when tool changes
-      setDefaultModel(getDefaultModel(value) ?? null);
+  const handleToolChange = async (value: string | null) => {
+    try {
+      if (!value || value === "__none__") {
+        await saveDefaults({ tool: null });
+        return;
+      }
+      await saveDefaults({
+        tool: value,
+        model: getDefaultModel(value) ?? null,
+        reasoningEffort: getDefaultReasoningEffort(value) ?? null,
+      });
+    } catch (error) {
+      toast.error("Failed to update session defaults", {
+        description: error instanceof Error ? error.message : undefined,
+      });
     }
   };
 
-  const handleModelChange = (value: string | null) => {
-    if (!value || value === "__none__") {
-      setDefaultModel(null);
-    } else {
-      setDefaultModel(value);
+  const handleModelChange = async (value: string | null) => {
+    if (!defaultTool || !value || value === "__none__") return;
+    try {
+      await saveDefaults({
+        tool: defaultTool,
+        model: value,
+        reasoningEffort: defaultReasoningEffort,
+      });
+    } catch (error) {
+      toast.error("Failed to update session defaults", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
+
+  const handleReasoningEffortChange = async (value: string | null) => {
+    if (!defaultTool || !value || value === "__none__") return;
+    try {
+      await saveDefaults({
+        tool: defaultTool,
+        model: defaultModel,
+        reasoningEffort: value,
+      });
+    } catch (error) {
+      toast.error("Failed to update session defaults", {
+        description: error instanceof Error ? error.message : undefined,
+      });
     }
   };
 
@@ -49,12 +108,12 @@ export function SessionDefaultsSection() {
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">Session Defaults</h2>
         <p className="text-sm text-muted-foreground">
-          Set your preferred coding tool and model. New sessions will use these by default.
+          Set your preferred coding tool, model, and effort. New sessions use these defaults.
         </p>
       </div>
 
-      <div className="rounded-lg border border-border bg-surface-deep p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
             <label className="mb-1.5 block text-sm text-muted-foreground">
               Default Coding Tool
@@ -62,11 +121,11 @@ export function SessionDefaultsSection() {
             <Select value={defaultTool ?? "__none__"} onValueChange={handleToolChange}>
               <SelectTrigger className="w-full">
                 <SelectValue>
-                  {defaultTool ? (TOOL_LABELS[defaultTool] ?? defaultTool) : "None (use default)"}
+                  {defaultTool ? (TOOL_LABELS[defaultTool] ?? defaultTool) : "None"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">None (use default)</SelectItem>
+                <SelectItem value="__none__">None</SelectItem>
                 {TOOL_OPTIONS.map((t) => (
                   <SelectItem key={t.value} value={t.value}>
                     {t.label}
@@ -78,17 +137,52 @@ export function SessionDefaultsSection() {
 
           <div>
             <label className="mb-1.5 block text-sm text-muted-foreground">Default Model</label>
-            <Select value={defaultModel ?? "__none__"} onValueChange={handleModelChange}>
+            <Select
+              value={defaultModel ?? "__none__"}
+              onValueChange={handleModelChange}
+              disabled={!defaultTool}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue>
-                  {defaultModel ? getModelLabel(defaultModel) : "None (use default)"}
+                  {defaultModel ? getModelLabel(defaultModel) : defaultTool ? "None" : "Choose tool"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">None (use default)</SelectItem>
+                <SelectItem value="__none__" disabled>
+                  None
+                </SelectItem>
                 {modelOptions.map((m: { value: string; label: string }) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm text-muted-foreground">Default Effort</label>
+            <Select
+              value={defaultReasoningEffort ?? "__none__"}
+              onValueChange={handleReasoningEffortChange}
+              disabled={!defaultTool}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {defaultReasoningEffort
+                    ? getReasoningEffortLabel(defaultReasoningEffort)
+                    : defaultTool
+                      ? "None"
+                      : "Choose tool"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__" disabled>
+                  None
+                </SelectItem>
+                {reasoningEffortOptions.map((effort: { value: string; label: string }) => (
+                  <SelectItem key={effort.value} value={effort.value}>
+                    {effort.label}
                   </SelectItem>
                 ))}
               </SelectContent>

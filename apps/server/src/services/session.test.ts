@@ -108,6 +108,7 @@ import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
 import {
+  getDefaultModel,
   getDefaultReasoningEffort,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
@@ -131,6 +132,7 @@ const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
   typeof runtimeAccessService
 >;
 const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
+const getDefaultModelMock = vi.mocked(getDefaultModel);
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
 const isSupportedReasoningEffortMock = vi.mocked(isSupportedReasoningEffort);
 
@@ -725,14 +727,6 @@ describe("SessionService", () => {
           }),
         }),
       );
-      expect(prismaMock.user.update).toHaveBeenCalledWith({
-        where: { id: "user-1" },
-        data: {
-          defaultSessionTool: "codex",
-          defaultSessionModel: "gpt-5.5",
-          defaultSessionReasoningEffort: "high",
-        },
-      });
     });
 
     it("rejects an unsupported reasoning effort on start", async () => {
@@ -3323,14 +3317,6 @@ describe("SessionService", () => {
           }),
         }),
       );
-      expect(prismaMock.user.update).toHaveBeenCalledWith({
-        where: { id: "user-1" },
-        data: {
-          defaultSessionTool: "claude_code",
-          defaultSessionModel: "claude-sonnet-4-20250514",
-          defaultSessionReasoningEffort: "xhigh",
-        },
-      });
     });
 
     it("resets reasoning effort to the new tool default when switching tools", async () => {
@@ -3400,6 +3386,54 @@ describe("SessionService", () => {
       ).rejects.toThrow("Cloud sessions require the repo to have a remote URL.");
 
       expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateDefaults", () => {
+    it("stores explicit user session defaults", async () => {
+      prismaMock.user.update.mockResolvedValueOnce({
+        id: "user-1",
+        defaultSessionTool: "codex",
+        defaultSessionModel: "gpt-5.5",
+        defaultSessionReasoningEffort: "high",
+      });
+
+      await service.updateDefaults("user-1", {
+        tool: "codex",
+        model: "gpt-5.5",
+        reasoningEffort: "high",
+      });
+
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: {
+          defaultSessionTool: "codex",
+          defaultSessionModel: "gpt-5.5",
+          defaultSessionReasoningEffort: "high",
+        },
+      });
+    });
+
+    it("uses tool defaults when model and effort are omitted", async () => {
+      getDefaultModelMock.mockReturnValueOnce("gpt-5.5");
+      getDefaultReasoningEffortMock.mockReturnValueOnce("medium");
+      prismaMock.user.update.mockResolvedValueOnce({
+        id: "user-1",
+        defaultSessionTool: "codex",
+        defaultSessionModel: "gpt-5.5",
+        defaultSessionReasoningEffort: "medium",
+      });
+
+      await service.updateDefaults("user-1", { tool: "codex" });
+
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: {
+          defaultSessionTool: "codex",
+          defaultSessionModel: "gpt-5.5",
+          defaultSessionReasoningEffort: "medium",
+        },
+      });
     });
   });
 

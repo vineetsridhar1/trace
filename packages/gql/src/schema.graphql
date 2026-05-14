@@ -314,6 +314,9 @@ type User {
   email: String!
   name: String!
   avatarUrl: String
+  defaultSessionTool: CodingTool
+  defaultSessionModel: String
+  defaultSessionReasoningEffort: String
   organizations: [OrgMember!]!
 }
 
@@ -842,6 +845,12 @@ input StartSessionInput {
   interactionMode: String
 }
 
+input UpdateSessionDefaultsInput {
+  tool: CodingTool
+  model: String
+  reasoningEffort: String
+}
+
 input SessionFilters {
   agentStatus: AgentStatus
   tool: CodingTool
@@ -1107,6 +1116,7 @@ type Mutation {
     hosting: HostingMode
     runtimeInstanceId: ID
   ): Session!
+  updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
   sendSessionMessage(
     sessionId: ID!
     text: String!
