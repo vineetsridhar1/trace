@@ -706,4 +706,28 @@ describe("linked checkout commit-back", () => {
       "Commit with custom message",
     );
   }, 15_000);
+
+  it("pushes committed attached main-worktree changes to origin", async () => {
+    const { repoPath, worktreePath, originPath } = await createRepoFixtureWithOrigin();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "commit option pushes\n");
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      message: "Commit option pushes to origin",
+    });
+
+    expect(result.ok).toBe(true);
+    const worktreeCommit = await git(worktreePath, ["rev-parse", "HEAD"]);
+    expect(await git(originPath, ["rev-parse", "refs/heads/trace/raccoon"])).toBe(worktreeCommit);
+  }, 15_000);
 });
