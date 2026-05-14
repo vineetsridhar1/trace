@@ -63,6 +63,7 @@ export function Sheet({
     <>
       <Stack.Screen
         options={{
+          contentStyle: { backgroundColor: theme.colors.surface },
           sheetAllowedDetents: allowed,
           sheetGrabberVisible: grabberVisible,
           sheetCornerRadius: theme.radius.xl,
