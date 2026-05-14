@@ -159,7 +159,7 @@ export class PiAdapter implements CodingToolAdapter {
       if (!isCurrentProcess()) return;
       const message =
         err.code === "ENOENT"
-          ? "Cannot run Pi: the `pi` binary was not found on PATH."
+          ? "Pi is not installed or not on PATH. Install it with: npm install -g @earendil-works/pi-coding-agent"
           : err.message;
       onOutput({ type: "error", message });
       onComplete();
