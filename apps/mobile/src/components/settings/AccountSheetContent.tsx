@@ -29,7 +29,7 @@ export function AccountSheetContent() {
   }
 
   function openSessionDefaults() {
-    router.push("/sheets/session-defaults");
+    router.replace("/sheets/session-defaults");
   }
 
   function confirmSignOut() {
