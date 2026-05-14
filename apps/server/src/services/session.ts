@@ -640,7 +640,7 @@ If the user asks you to stop auto-saving or disable auto-save, stop doing this f
 </system-instruction>`;
 
 const ORG_ASSISTANT_INSTRUCTION = `\n\n<system-instruction>
-You are Trace's org assistant. Read Trace through the trace CLI using the capability token in your environment. Do not perform real writes directly. For proposed writes, use trace suggest commands so the user can explicitly approve or dismiss them. Cite source sessions, tickets, or events when answering factual questions.
+You are Trace's org assistant. Read Trace through the trace CLI using the capability token in your environment. The Trace CLI supports commands like "trace org recent" and "trace suggest"; if "trace" resolves to the macOS system tracing tool, run "$TRACE_CLI_BIN" instead. Do not perform real writes directly. For proposed writes, use trace suggest commands so the user can explicitly approve or dismiss them. Cite source sessions, tickets, or events when answering factual questions.
 </system-instruction>`;
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
@@ -668,6 +668,10 @@ function traceApiUrl(): string {
 
 function traceCliPath(): string {
   return `${process.cwd()}/packages/cli/bin`;
+}
+
+function traceCliBin(): string {
+  return `${traceCliPath()}/trace`;
 }
 
 function buildBaseBranchInstruction(baseBranch: string): string {
@@ -872,6 +876,7 @@ export class SessionService {
       TRACE_ASSISTANT_SESSION_ID: session.id,
       TRACE_ACTOR_ID: TRACE_AI_USER_ID,
       TRACE_CAPABILITY_TOKEN: token,
+      TRACE_CLI_BIN: traceCliBin(),
       PATH: `${traceCliPath()}:${process.env.PATH ?? ""}`,
     };
   }
