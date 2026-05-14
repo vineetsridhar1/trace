@@ -2734,7 +2734,9 @@ describe("SessionService", () => {
       };
       expect(lastConn.autoRetryable).toBe(false);
       expect(lastConn.retryCount).toBe(3);
-      expect(lastConn.lastError).toBe("Laptop A does not support pi");
+      expect(lastConn.lastError).toContain("Laptop A does not have Pi installed");
+      expect(lastConn.lastError).toContain("npm install -g @earendil-works/pi-coding-agent");
+      expect(lastConn.lastError).toContain("https://pi.dev/docs/latest/quickstart");
     });
 
     it("does not deliver cloud sends to an in-memory binding without a persisted cloud runtime", async () => {
