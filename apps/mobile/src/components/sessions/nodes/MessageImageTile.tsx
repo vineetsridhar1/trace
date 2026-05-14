@@ -1,5 +1,5 @@
 import { Image, Pressable, StyleSheet, View } from "react-native";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import type { MessageImageItem } from "./message-image-utils";
 import { useResolvedMessageImageUri } from "./useResolvedMessageImage";
@@ -35,7 +35,7 @@ export function MessageImageTile({ item, single, onOpen }: MessageImageTileProps
       ) : (
         <View style={styles.placeholder}>
           {loading ? (
-            <Spinner size="small" />
+            <TraceLoader size="small" />
           ) : (
             <Text variant="caption1" color="mutedForeground" align="center">
               {failed ? "Image unavailable" : item.label}

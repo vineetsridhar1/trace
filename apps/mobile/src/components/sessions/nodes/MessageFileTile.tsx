@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import type { MessageFileItem } from "./message-image-utils";
 
@@ -32,7 +32,7 @@ export function MessageFileTile({ item, loading, single, onOpen }: MessageFileTi
     >
       <View style={[styles.iconFrame, { backgroundColor: alpha(theme.colors.foreground, 0.06) }]}>
         {loading ? (
-          <Spinner size="small" />
+          <TraceLoader size="small" />
         ) : (
           <SymbolView
             name="doc"

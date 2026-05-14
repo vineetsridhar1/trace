@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { Glass, Spinner, Text } from "@/components/design-system";
+import { Glass, TraceLoader, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 
 type ConnectionStateSource = {
@@ -80,7 +80,7 @@ export function CloudRuntimeNotice({ connectionState }: { connectionState: strin
         </View>
         <View style={styles.noticeCopy}>
           <View style={styles.titleRow}>
-            {failed ? null : <Spinner size="small" color="mutedForeground" />}
+            {failed ? null : <TraceLoader size="small" color="mutedForeground" />}
             <Text variant="subheadline" color="foreground">
               {label}
             </Text>

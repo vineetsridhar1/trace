@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import { serializeUnknown, truncate } from "./utils";
 
@@ -45,7 +45,7 @@ export function SubagentRow({ description, subagentType, isLoading, result }: Su
         ]}
       >
         {isLoading ? (
-          <Spinner size="small" color="mutedForeground" />
+          <TraceLoader size="small" color="mutedForeground" />
         ) : (
           <SymbolView
             name="checkmark.circle.fill"

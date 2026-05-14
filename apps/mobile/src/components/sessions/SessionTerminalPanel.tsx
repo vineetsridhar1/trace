@@ -16,7 +16,7 @@ import {
 } from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
-import { Button, Spinner, Text } from "@/components/design-system";
+import { Button, TraceLoader, Text } from "@/components/design-system";
 import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
 import { isBridgeTerminalAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
 import { TerminalSocket } from "@/lib/terminal-ws";
@@ -442,7 +442,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
 
         {!webReady && status === "loading" ? (
           <View style={styles.overlay}>
-            <Spinner size="small" color="mutedForeground" />
+            <TraceLoader size="small" color="mutedForeground" />
           </View>
         ) : null}
 

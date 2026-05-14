@@ -8,7 +8,7 @@ import {
   useEntityField,
 } from "@trace/client-core";
 import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { ListRow, Spinner, Text } from "@/components/design-system";
+import { ListRow, TraceLoader, Text } from "@/components/design-system";
 import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { canUseMobileCloudHosting } from "@/lib/session-hosting";
@@ -209,7 +209,7 @@ export function SessionMovePickerSheetContent({
       >
         {loading ? (
           <View style={styles.loadingRow}>
-            <Spinner size="small" color="mutedForeground" />
+            <TraceLoader size="small" color="mutedForeground" />
           </View>
         ) : (
           rows.map((row, index) => (
@@ -221,7 +221,7 @@ export function SessionMovePickerSheetContent({
                 <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
               }
               trailing={
-                moving === row.value ? <Spinner size="small" color="mutedForeground" /> : undefined
+                moving === row.value ? <TraceLoader size="small" color="mutedForeground" /> : undefined
               }
               onPress={
                 !row.disabled && moving === null

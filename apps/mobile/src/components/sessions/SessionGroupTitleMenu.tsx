@@ -21,7 +21,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSessionPreparing, useEntityField } from "@trace/client-core";
 import type { SessionGroupStatus } from "@trace/gql";
-import { ListRow, Spinner, Text } from "@/components/design-system";
+import { ListRow, TraceLoader, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
@@ -341,7 +341,7 @@ function TitleRow({
             {name}
           </Text>
         ) : (
-          <Spinner size="small" color="mutedForeground" />
+          <TraceLoader size="small" color="mutedForeground" />
         )}
       </View>
     </View>

@@ -1868,7 +1868,7 @@ export class SessionService {
       );
     }
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const group = await tx.sessionGroup.findFirst({
         where: { id: groupId, organizationId },
         select: {
@@ -1894,7 +1894,7 @@ export class SessionService {
       if (!sessionGroup) throw new Error("Session group not found");
 
       if (group.name !== trimmedName) {
-        await eventService.create(
+        const event = await eventService.create(
           {
             organizationId,
             scopeType: "session",
@@ -1907,13 +1907,21 @@ export class SessionService {
             },
             actorType,
             actorId,
+            deferPublish: true,
           },
           tx,
         );
+        return { sessionGroup, event };
       }
 
-      return sessionGroup;
+      return { sessionGroup, event: null };
     });
+
+    if (result.event) {
+      eventService.publishCreated(result.event);
+    }
+
+    return result.sessionGroup;
   }
 
   async getGroupStatusSources(sessionGroupId: string) {

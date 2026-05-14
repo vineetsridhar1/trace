@@ -1,5 +1,6 @@
 export { Screen, type ScreenProps } from "./Screen";
 export { Text, type TextProps } from "./Text";
+export { TraceLoader, type TraceLoaderProps } from "./TraceLoader";
 export { Spinner, type SpinnerProps } from "./Spinner";
 export {
   Button,

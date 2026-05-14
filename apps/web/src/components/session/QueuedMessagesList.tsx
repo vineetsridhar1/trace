@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
 import {
@@ -225,6 +225,7 @@ function patchQueuedMessagePositions(ids: string[]) {
 export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
   const ids = useQueuedMessageIdsForSession(sessionId);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const reorderRequestIdRef = useRef(0);
 
   const handleClearAll = () => {
     client
@@ -243,18 +244,25 @@ export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
       if (oldIndex === -1 || newIndex === -1) return;
 
       const nextIds = arrayMove(ids, oldIndex, newIndex);
+      const requestId = reorderRequestIdRef.current + 1;
+      reorderRequestIdRef.current = requestId;
       const rollback = patchQueuedMessagePositions(nextIds);
+      const rollbackIfCurrent = () => {
+        if (reorderRequestIdRef.current === requestId) {
+          rollback();
+        }
+      };
       client
         .mutation(REORDER_QUEUED_MESSAGES_MUTATION, { sessionId, ids: nextIds })
         .toPromise()
         .then((result) => {
           if (result.error) {
-            rollback();
+            rollbackIfCurrent();
             toast.error("Failed to reorder queued messages");
           }
         })
         .catch(() => {
-          rollback();
+          rollbackIfCurrent();
           toast.error("Failed to reorder queued messages");
         });
     },

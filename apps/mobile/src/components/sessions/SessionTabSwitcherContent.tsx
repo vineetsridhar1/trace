@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
-import { EmptyState, ListRow, Spinner, Text } from "@/components/design-system";
+import { EmptyState, ListRow, TraceLoader, Text } from "@/components/design-system";
 import {
   useEnsureSessionGroupDetail,
   useSessionGroupSessionIds,
@@ -84,7 +84,7 @@ export function SessionTabSwitcherContent({
   if (loading && !groupName) {
     return (
       <View style={styles.center}>
-        <Spinner size="small" color="mutedForeground" />
+        <TraceLoader size="small" color="mutedForeground" />
       </View>
     );
   }
@@ -146,7 +146,7 @@ export function SessionTabSwitcherContent({
           }
           leading={
             creating ? (
-              <Spinner size="small" color="mutedForeground" />
+              <TraceLoader size="small" color="mutedForeground" />
             ) : (
               <SymbolView
                 name="plus.rectangle.on.rectangle"

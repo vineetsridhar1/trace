@@ -1,14 +1,14 @@
 import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import type { AgentStatus } from "@trace/gql";
-import { Button, Spinner, Text } from "@/components/design-system";
+import { Button, TraceLoader, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 
 /** Solid stream surface shown while initial events are loading. */
 export function SessionStreamSkeleton() {
   return (
     <View style={styles.loadingState}>
-      <Spinner size="small" color="mutedForeground" />
+      <TraceLoader size="small" color="mutedForeground" />
     </View>
   );
 }

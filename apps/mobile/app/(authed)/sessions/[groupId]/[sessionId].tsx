@@ -6,7 +6,7 @@ import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, EmptyState, Screen, Spinner } from "@/components/design-system";
+import { Button, EmptyState, Screen, TraceLoader } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
@@ -162,7 +162,7 @@ export default function SessionStreamScreen() {
       <View style={styles.content}>
         {showLoading ? (
           <View style={styles.center}>
-            <Spinner size="small" color="mutedForeground" />
+            <TraceLoader size="small" color="mutedForeground" />
           </View>
         ) : missingGroup ? (
           <View style={styles.center}>

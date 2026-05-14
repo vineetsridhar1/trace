@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
-import { Spinner, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useTheme, type Theme } from "@/theme";
 import {
@@ -129,7 +129,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingRow]}>
-        <Spinner size="small" color="mutedForeground" />
+        <TraceLoader size="small" color="mutedForeground" />
         <Text variant="footnote" color="mutedForeground">
           Checking local checkout…
         </Text>
@@ -332,7 +332,7 @@ function ActionButton({
       ]}
     >
       {loading ? (
-        <Spinner size="small" color={fg} />
+        <TraceLoader size="small" color={fg} />
       ) : (
         <SymbolView
           name={symbol}
