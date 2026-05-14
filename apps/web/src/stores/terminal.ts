@@ -10,6 +10,13 @@ export interface TerminalEntry {
   status: TerminalStatus;
   customName?: string;
   initialCommand?: string;
+  submitInitialCommand?: boolean;
+}
+
+interface AddTerminalOptions {
+  customName?: string;
+  initialCommand?: string;
+  submitInitialCommand?: boolean;
 }
 
 interface TerminalState {
@@ -19,7 +26,7 @@ interface TerminalState {
     sessionId: string,
     sessionGroupId: string,
     status?: TerminalStatus,
-    opts?: { customName?: string; initialCommand?: string },
+    opts?: AddTerminalOptions,
   ) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   renameTerminal: (id: string, name: string) => void;
@@ -36,7 +43,7 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
     sessionId: string,
     sessionGroupId: string,
     status?: TerminalStatus,
-    opts?: { customName?: string; initialCommand?: string },
+    opts?: AddTerminalOptions,
   ) =>
     set((state: TerminalState) => ({
       terminals: {
@@ -48,6 +55,7 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
           status: status ?? "connecting",
           customName: opts?.customName,
           initialCommand: opts?.initialCommand,
+          submitInitialCommand: opts?.submitInitialCommand,
         },
       },
     })),

@@ -8,7 +8,11 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
+import {
+  CREATE_TERMINAL_MUTATION,
+  SEND_SESSION_MESSAGE_MUTATION,
+  QUEUE_SESSION_MESSAGE_MUTATION,
+} from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -33,6 +37,7 @@ import { uploadFile } from "../../lib/upload";
 import { generateUUID } from "@trace/client-core";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
+import { useTerminalStore } from "../../stores/terminal";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
@@ -55,6 +60,7 @@ export function SessionInput({
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
@@ -180,6 +186,50 @@ export function SessionInput({
         const channelId = useUIStore.getState().activeChannelId;
         if (channelId) {
           void createQuickSession(channelId);
+        }
+        return;
+      }
+
+      if (tool === "pi" && text === "/login") {
+        if (!sessionGroupId) {
+          toast.error("Cannot open Pi login terminal for this session");
+          return;
+        }
+        isSendingRef.current = true;
+        setIsSending(true);
+        try {
+          const result = await client
+            .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
+            .toPromise();
+
+          if (result.error) {
+            throw result.error;
+          }
+
+          const terminal = result.data?.createTerminal as { id: string } | null | undefined;
+          if (!terminal) {
+            throw new Error("Failed to open terminal");
+          }
+
+          useTerminalStore
+            .getState()
+            .addTerminal(terminal.id, sessionId, sessionGroupId, "connecting", {
+              customName: "Pi Login",
+              initialCommand: "pi\n/login",
+              submitInitialCommand: false,
+            });
+
+          const ui = useUIStore.getState();
+          ui.setActiveSessionId(sessionId);
+          ui.setActiveTerminalId(terminal.id);
+          ui.setShowTerminalPanel(true);
+          setDraftText(sessionId, "", "");
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to open Pi login terminal");
+          throw error;
+        } finally {
+          isSendingRef.current = false;
+          setIsSending(false);
         }
         return;
       }
@@ -315,7 +365,19 @@ export function SessionInput({
         }
       }
     },
-    [sessionId, mode, canSend, canQueue, images, isNotStarted, hosting, connection],
+    [
+      sessionId,
+      sessionGroupId,
+      mode,
+      canSend,
+      canQueue,
+      images,
+      isNotStarted,
+      hosting,
+      connection,
+      tool,
+      setDraftText,
+    ],
   );
 
   const handleQueueSubmit = useCallback(() => {

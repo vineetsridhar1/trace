@@ -79,7 +79,8 @@ export function TerminalInstance({
           const entry = useTerminalStore.getState().terminals[terminalId];
           if (entry?.initialCommand && !initialCommandSentRef.current) {
             initialCommandSentRef.current = true;
-            socket.write(entry.initialCommand + "\n");
+            const suffix = entry.submitInitialCommand === false ? "" : "\n";
+            socket.write(entry.initialCommand + suffix);
           }
           break;
         }
