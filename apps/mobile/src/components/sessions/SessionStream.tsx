@@ -81,10 +81,13 @@ export function SessionStream({
     });
   const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
   const isNearBottomRef = useRef(true);
+  const isFollowingLatestRef = useRef(true);
+  const isUserScrollingRef = useRef(false);
   const currentScrollOffsetRef = useRef(0);
   const previousBottomInsetRef = useRef(bottomInset ?? 0);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isScrollActive, setIsScrollActive] = useState(false);
+  const [isFollowingLatest, setIsFollowingLatestState] = useState(true);
   const {
     nodes,
     completedAgentTools,
@@ -113,7 +116,7 @@ export function SessionStream({
   const { newActivityCount, clearNewActivity } = useNewActivityTracker(
     nodes,
     listRef,
-    isNearBottomRef,
+    isFollowingLatestRef,
   );
 
   const renderContext = useMemo<NodeRenderContext>(
@@ -149,16 +152,34 @@ export function SessionStream({
     opacity: contentOpacity.value,
   }));
 
+  const setIsFollowingLatest = useCallback((next: boolean) => {
+    if (isFollowingLatestRef.current === next) return;
+    isFollowingLatestRef.current = next;
+    setIsFollowingLatestState(next);
+  }, []);
+
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      const previousOffset = currentScrollOffsetRef.current;
       currentScrollOffsetRef.current = contentOffset.y;
-      const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+      const distanceFromBottom = Math.max(
+        0,
+        contentSize.height - contentOffset.y - layoutMeasurement.height,
+      );
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
-      if (nearBottom) clearNewActivity();
+      const scrollingUp = contentOffset.y < previousOffset - 1;
+      if (isUserScrollingRef.current && scrollingUp) {
+        setIsFollowingLatest(false);
+        return;
+      }
+      if (nearBottom) {
+        setIsFollowingLatest(true);
+        clearNewActivity();
+      }
     },
-    [clearNewActivity],
+    [clearNewActivity, setIsFollowingLatest],
   );
 
   const clearScrollSettleTimer = useCallback(() => {
@@ -170,6 +191,7 @@ export function SessionStream({
 
   const handleScrollActive = useCallback(() => {
     clearScrollSettleTimer();
+    isUserScrollingRef.current = true;
     setIsScrollActive(true);
   }, [clearScrollSettleTimer]);
 
@@ -177,6 +199,7 @@ export function SessionStream({
     clearScrollSettleTimer();
     scrollSettleTimerRef.current = setTimeout(() => {
       scrollSettleTimerRef.current = null;
+      isUserScrollingRef.current = false;
       setIsScrollActive(false);
     }, SCROLL_SETTLE_MS);
   }, [clearScrollSettleTimer]);
@@ -187,7 +210,7 @@ export function SessionStream({
     const nextBottomInset = bottomInset ?? 0;
     const previousBottomInset = previousBottomInsetRef.current;
     const insetDelta = nextBottomInset - previousBottomInset;
-    if (insetDelta !== 0 && isNearBottomRef.current) {
+    if (insetDelta !== 0 && isFollowingLatestRef.current) {
       const nextOffset = Math.max(0, currentScrollOffsetRef.current + insetDelta);
       listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
       currentScrollOffsetRef.current = nextOffset;
@@ -196,9 +219,17 @@ export function SessionStream({
   }, [bottomInset]);
 
   const handlePillPress = useCallback(() => {
+    setIsFollowingLatest(true);
     clearNewActivity();
     listRef.current?.scrollToEnd({ animated: true });
-  }, [clearNewActivity]);
+  }, [clearNewActivity, setIsFollowingLatest]);
+
+  const handleContentSizeChange = useCallback(() => {
+    if (!isFollowingLatestRef.current) return;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: false });
+    });
+  }, []);
 
   const timestampRevealGesture = Gesture.Simultaneous(
     Gesture.Pan()
@@ -256,13 +287,14 @@ export function SessionStream({
             onScrollEndDrag={handleScrollSettling}
             onMomentumScrollBegin={handleScrollActive}
             onMomentumScrollEnd={handleScrollSettling}
+            onContentSizeChange={handleContentSizeChange}
             fetchOlderEvents={fetchOlderEvents}
           />
         </Animated.View>
       </GestureDetector>
       <NewActivityPill
         count={newActivityCount}
-        visible={newActivityCount > 0}
+        visible={!isFollowingLatest || newActivityCount > 0}
         onPress={handlePillPress}
         bottomOffset={floatingBottomOffset ?? bottomInset}
       />

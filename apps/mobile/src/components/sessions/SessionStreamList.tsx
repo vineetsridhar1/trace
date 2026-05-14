@@ -51,6 +51,7 @@ interface SessionStreamListProps {
   onScrollEndDrag: () => void;
   onMomentumScrollBegin: () => void;
   onMomentumScrollEnd: () => void;
+  onContentSizeChange: () => void;
   fetchOlderEvents: () => Promise<void>;
 }
 
@@ -73,6 +74,7 @@ export function SessionStreamList({
   onScrollEndDrag,
   onMomentumScrollBegin,
   onMomentumScrollEnd,
+  onContentSizeChange,
   fetchOlderEvents,
 }: SessionStreamListProps) {
   const theme = useTheme();
@@ -133,14 +135,13 @@ export function SessionStreamList({
       onScrollEndDrag={onScrollEndDrag}
       onMomentumScrollBegin={onMomentumScrollBegin}
       onMomentumScrollEnd={onMomentumScrollEnd}
+      onContentSizeChange={onContentSizeChange}
       scrollEventThrottle={16}
       keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
       keyboardShouldPersistTaps="handled"
       onStartReached={hasOlder && !loadingOlder ? fetchOlderEvents : undefined}
       onStartReachedThreshold={0.2}
       maintainVisibleContentPosition={{
-        autoscrollToBottomThreshold: 0.2,
-        animateAutoScrollToBottom: true,
         startRenderingFromBottom: true,
       }}
       contentContainerStyle={{

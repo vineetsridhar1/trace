@@ -47,7 +47,7 @@ export function NewActivityPill({
     onPress();
   }
 
-  const label = `${count} new`;
+  const label = count > 0 ? `${count} new` : "Latest";
 
   if (!visible) {
     return null;
@@ -60,7 +60,9 @@ export function NewActivityPill({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Jump to new activity: ${label}`}
+        accessibilityLabel={
+          count > 0 ? `Jump to new activity: ${label}` : "Jump to latest activity"
+        }
         onPress={handlePress}
         hitSlop={8}
       >
