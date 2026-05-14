@@ -9,8 +9,8 @@ export function SessionStatusIndicator({ row, size = 8 }: { row: SessionGroupRow
 
   return (
     <span
-      className={`relative shrink-0 inline-flex items-center justify-center ${color}`}
-      style={{ width: size, height: size }}
+      className={`relative inline-flex shrink-0 items-center justify-center pl-1 ${color}`}
+      style={{ width: size + 4, height: size }}
     >
       <AgentStatusIcon agentStatus={row.displayAgentStatus ?? "done"} size={size} />
       {hasDoneBadge && (

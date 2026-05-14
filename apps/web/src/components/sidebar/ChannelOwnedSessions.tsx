@@ -348,7 +348,7 @@ function OwnedSessionItem({
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span
           className={cn(
-            "relative inline-flex h-1.5 w-1.5 shrink-0 items-center justify-center",
+            "relative inline-flex h-1.5 w-2.5 shrink-0 items-center justify-center pl-1",
             color,
           )}
         >
