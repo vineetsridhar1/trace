@@ -7112,6 +7112,7 @@ export class SessionService {
       select: {
         agentStatus: true,
         sessionStatus: true,
+        tool: true,
         hosting: true,
         connection: true,
         sessionGroupId: true,
@@ -7121,10 +7122,15 @@ export class SessionService {
     const conn = this.parseConnection(session?.connection);
 
     const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
+    const unsupportedHomeTool = deliveryResult === "no_runtime" && !!conn.runtimeInstanceId;
     const lastError = homeOffline
       ? conn.runtimeLabel
         ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
         : "The original bridge is offline — use Move to continue on another bridge"
+      : unsupportedHomeTool
+        ? conn.runtimeLabel
+          ? `${conn.runtimeLabel} does not support ${session?.tool ?? "this coding tool"}`
+          : `The selected bridge does not support ${session?.tool ?? "this coding tool"}`
       : `${operation}: ${deliveryResult}`;
     const updated: SessionConnectionData = {
       ...conn,
@@ -7135,7 +7141,7 @@ export class SessionService {
       canRetry: true,
       canMove: true,
       // Don't spin the auto-retry loop for a non-transient failure.
-      autoRetryable: session?.hosting !== "cloud" && !homeOffline,
+      autoRetryable: session?.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
     };
 
     await prisma.session.update({
