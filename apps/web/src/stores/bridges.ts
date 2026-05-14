@@ -53,3 +53,25 @@ export function useAttachedCheckoutForGroup(
     sessionGroupId ? (s.attachedByGroupId[sessionGroupId] ?? null) : null,
   );
 }
+
+export function useAttachedCheckoutsForGroup(
+  sessionGroupId: string | null | undefined,
+): AttachedCheckoutInfo[] {
+  return useBridgesStore((s: BridgesState) => {
+    if (!sessionGroupId) return [];
+
+    const attached: AttachedCheckoutInfo[] = [];
+    for (const bridge of s.bridges) {
+      if (!bridge.connected) continue;
+      for (const checkout of bridge.linkedCheckouts) {
+        if (checkout.sessionGroup.id !== sessionGroupId) continue;
+        attached.push({
+          bridgeLabel: bridge.label,
+          bridgeInstanceId: bridge.instanceId,
+          checkout,
+        });
+      }
+    }
+    return attached;
+  });
+}

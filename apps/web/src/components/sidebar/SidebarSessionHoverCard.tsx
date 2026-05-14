@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
-import { GitBranch } from "lucide-react";
+import { GitBranch, Laptop } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
+import { useAttachedCheckoutsForGroup } from "../../stores/bridges";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 
 type SidebarUserRef = {
@@ -48,6 +49,8 @@ export function SidebarSessionHoverCard({
     | string
     | null
     | undefined;
+  const attachedCheckouts = useAttachedCheckoutsForGroup(sessionGroupId);
+  const syncedBridgeLabels = attachedCheckouts.map((attached) => attached.bridgeLabel);
 
   return (
     <HoverCard>
@@ -64,6 +67,7 @@ export function SidebarSessionHoverCard({
           createdBy={createdBy}
           lastMessageAt={lastMessageAt ?? groupUpdatedAt}
           sessionGroupName={sessionGroupName ?? sessionGroup?.name ?? null}
+          syncedBridgeLabels={syncedBridgeLabels}
         />
       </HoverCardContent>
     </HoverCard>
@@ -75,14 +79,17 @@ function SidebarSessionHoverContent({
   createdBy,
   lastMessageAt,
   sessionGroupName,
+  syncedBridgeLabels,
 }: {
   branch: string | null;
   createdBy: SidebarUserRef | undefined;
   lastMessageAt: string | null | undefined;
   sessionGroupName: string | null;
+  syncedBridgeLabels: string[];
 }) {
   const ownerName = formatOwnerName(createdBy);
   const ownerEmail = createdBy?.email && createdBy.email !== ownerName ? createdBy.email : null;
+  const syncedLabel = formatBridgeList(syncedBridgeLabels);
 
   return (
     <div className="min-w-0">
@@ -99,6 +106,13 @@ function SidebarSessionHoverContent({
           </p>
         )}
       </div>
+
+      {syncedLabel && (
+        <div className="mt-3 flex min-w-0 items-center gap-1.5 text-xs text-emerald-400">
+          <Laptop size={12} className="shrink-0" />
+          <span className="min-w-0 truncate">Synced on {syncedLabel}</span>
+        </div>
+      )}
 
       <div className="mt-4 flex items-center gap-3 border-t border-white/10 pt-3">
         <UserAvatar user={createdBy} />
@@ -144,4 +158,13 @@ function formatLastMessage(timestamp: string | null | undefined): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatBridgeList(labels: string[]): string | null {
+  const uniqueLabels = [...new Set(labels.map((label) => label.trim()).filter(Boolean))];
+  if (uniqueLabels.length === 0) return null;
+  if (uniqueLabels.length === 1) return uniqueLabels[0];
+  if (uniqueLabels.length === 2) return `${uniqueLabels[0]} and ${uniqueLabels[1]}`;
+
+  return `${uniqueLabels.slice(0, -1).join(", ")}, and ${uniqueLabels[uniqueLabels.length - 1]}`;
 }
