@@ -53,12 +53,18 @@ export function LinkedCheckoutSyncConflictDialog({
   );
   const trimmedCommitMessage = commitMessage.trim();
   const commitDisabled = pending || trimmedCommitMessage.length === 0;
+  const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen: boolean) => !nextOpen && !pending && onClose()}>
       <DialogContent
         showCloseButton={!pending}
-        className="grid-rows-[auto_minmax(0,1fr)] h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-2rem)]"
+        className={cn(
+          "grid-rows-[auto_minmax(0,1fr)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-2rem)]",
+          isDesktopShell
+            ? "top-[calc(50dvh+1.5rem)] h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)]"
+            : "h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)]",
+        )}
       >
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle className="flex items-center gap-2">
