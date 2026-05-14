@@ -18,22 +18,18 @@ import { getClient } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
 import { useRefreshStatusStore } from "@/stores/refresh-status";
 
-const ORGANIZATION_QUERY = gql`
-  query MobileOrganization($id: ID!) {
-    organization(id: $id) {
+const CHANNELS_QUERY = gql`
+  query MobileChannels($organizationId: ID!, $memberOnly: Boolean) {
+    channels(organizationId: $organizationId, memberOnly: $memberOnly) {
       id
       name
-      channels {
+      type
+      position
+      groupId
+      baseBranch
+      repo {
         id
         name
-        type
-        position
-        groupId
-        baseBranch
-        repo {
-          id
-          name
-        }
       }
     }
   }
@@ -155,8 +151,10 @@ export interface RefreshOrgDataResult {
 async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResult> {
   const client = getClient();
 
-  const [orgResult, groupsResult, sessionsResult] = await Promise.all([
-    client.query(ORGANIZATION_QUERY, { id: activeOrgId }).toPromise(),
+  const [channelsResult, groupsResult, sessionsResult] = await Promise.all([
+    client
+      .query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true })
+      .toPromise(),
     client.query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId }).toPromise(),
     client
       .query(MY_SESSIONS_QUERY, {
@@ -167,7 +165,7 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
       .toPromise(),
   ]);
   if (
-    isUnauthorized(orgResult.error) ||
+    isUnauthorized(channelsResult.error) ||
     isUnauthorized(groupsResult.error) ||
     isUnauthorized(sessionsResult.error)
   ) {
@@ -190,10 +188,8 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
   const upsertMany = useEntityStore.getState().upsertMany;
   const setOrgStatus = useRefreshStatusStore.getState().setOrgStatus;
 
-  const channels = (orgResult.data?.organization?.channels ?? []) as Array<
-    Channel & { id: string }
-  >;
-  if (orgResult.data?.organization) {
+  const channels = (channelsResult.data?.channels ?? []) as Array<Channel & { id: string }>;
+  if (channelsResult.data?.channels) {
     if (channels.length > 0) upsertMany("channels", channels);
     reconcileEntitySnapshot(
       "channels",
@@ -235,8 +231,8 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
 
   const status = {
     channelsError:
-      orgResult.error || groupsResult.error
-        ? userFacingError(orgResult.error ?? groupsResult.error, "Couldn't refresh channels.")
+      channelsResult.error || groupsResult.error
+        ? userFacingError(channelsResult.error ?? groupsResult.error, "Couldn't refresh channels.")
         : null,
     homeError: sessionsResult.error
       ? userFacingError(sessionsResult.error, "Couldn't refresh your home feed.")
