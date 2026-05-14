@@ -17,13 +17,20 @@ const SNAKE_PATH = [
   [1, 0],
   [2, 0],
   [2, 1],
+  [1, 1],
+  [0, 1],
+  [0, 2],
+  [1, 2],
   [2, 2],
+  [2, 1],
+  [2, 0],
+  [1, 0],
+  [1, 1],
   [1, 2],
   [0, 2],
   [0, 1],
 ] as const;
 
-const snakeIndexByPoint = new Map(SNAKE_PATH.map(([x, y], index) => [`${x}:${y}`, index]));
 const dots = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
   const x = index % GRID_SIZE;
   const y = Math.floor(index / GRID_SIZE);
@@ -32,9 +39,15 @@ const dots = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
     id: `${x}:${y}`,
     x,
     y,
-    snakeIndex: snakeIndexByPoint.get(`${x}:${y}`),
   };
 });
+
+const snakeLights = SNAKE_PATH.map(([x, y], index) => ({
+  id: `${x}:${y}:${index}`,
+  x,
+  y,
+  snakeIndex: index,
+}));
 
 type SnakeDotStyle = CSSProperties & {
   "--snake-index": number;
@@ -71,8 +84,8 @@ export function TraceLoader({
 
             .trace-loader-light {
               opacity: 0;
-              animation: trace-loader-light 1.2s linear infinite;
-              animation-delay: calc(var(--snake-index) * -150ms);
+              animation: trace-loader-light 1.6s linear infinite;
+              animation-delay: calc(var(--snake-index) * -100ms);
               transform-box: fill-box;
               transform-origin: center;
             }
@@ -82,19 +95,19 @@ export function TraceLoader({
                 opacity: 0;
                 transform: scale(.82);
               }
-              14% {
+              8% {
                 opacity: .26;
                 transform: scale(.94);
               }
-              32% {
+              16% {
                 opacity: 1;
                 transform: scale(1.18);
               }
-              50% {
+              24% {
                 opacity: .74;
                 transform: scale(1.08);
               }
-              68% {
+              34% {
                 opacity: .18;
                 transform: scale(.9);
               }
@@ -111,22 +124,26 @@ export function TraceLoader({
         {dots.map((dot) => {
           const cx = GRID_ORIGIN + dot.x * DOT_SPACING;
           const cy = GRID_ORIGIN + dot.y * DOT_SPACING;
-          const isSnakeDot = dot.snakeIndex !== undefined;
 
           return (
-            <g key={dot.id}>
-              <circle className="trace-loader-dot" cx={cx} cy={cy} r="4.5" fill="currentColor" />
-              {isSnakeDot ? (
-                <circle
-                  className="trace-loader-light"
-                  cx={cx}
-                  cy={cy}
-                  r="5"
-                  fill="var(--th-accent-light)"
-                  style={{ "--snake-index": dot.snakeIndex } as SnakeDotStyle}
-                />
-              ) : null}
-            </g>
+            <circle key={dot.id} className="trace-loader-dot" cx={cx} cy={cy} r="4.5" fill="currentColor" />
+          );
+        })}
+
+        {snakeLights.map((dot) => {
+          const cx = GRID_ORIGIN + dot.x * DOT_SPACING;
+          const cy = GRID_ORIGIN + dot.y * DOT_SPACING;
+
+          return (
+            <circle
+              key={dot.id}
+              className="trace-loader-light"
+              cx={cx}
+              cy={cy}
+              r="5"
+              fill="var(--th-accent-light)"
+              style={{ "--snake-index": dot.snakeIndex } as SnakeDotStyle}
+            />
           );
         })}
       </svg>
