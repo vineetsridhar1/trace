@@ -6,26 +6,17 @@ import {
   Copy,
   ExternalLink,
   GitPullRequest,
+  Laptop,
   Link2,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useStoreWithEqualityFn } from "zustand/traditional";
-import {
-  useAuthStore,
-  useEntityField,
-  useEntityIds,
-  useEntityStore,
-  getSessionChannelId,
-} from "@trace/client-core";
-import type { AuthState, EntityState, EntityTableMap } from "@trace/client-core";
-import { AgentStatusIcon } from "../session/AgentStatusIcon";
-import {
-  getDisplayAgentStatus,
-  getDisplaySessionStatus,
-  sessionStatusColor,
-  sessionStatusLabel,
-} from "../session/sessionStatus";
-import { sessionStatusGroupOrder } from "../channel/sessions-table-types";
+import { useAuthStore } from "@trace/client-core";
+import type { AuthState } from "@trace/client-core";
+import { useAttachedCheckoutForGroup } from "../../stores/bridges";
+import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
+import { sessionStatusGroupOrder, type SessionGroupRow } from "../channel/sessions-table-types";
+import { useSessionGroupRows } from "../channel/useSessionGroupRows";
+import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
@@ -39,118 +30,41 @@ import {
   ContextMenuTrigger,
 } from "../ui/context-menu";
 
-type SessionGroupRef = {
-  channel?: { id: string } | null;
-  archivedAt?: string | null;
-  status?: string | null;
-} | null;
-
 export type SidebarSessionScope = "mine" | "all";
 
-type SidebarSessionRecord = {
+type CreatedByRef = {
+  id?: string | null;
+} | null;
+
+export type SidebarSessionGroupRecord = {
   id: string;
   name: string;
+  latestSessionId: string | null;
+  prUrl: string | null;
   sortTimestamp: string;
   status: string;
+  workdir: string | null;
+  row: SessionGroupRow;
 };
 
-type SidebarSessionStatusGroup = {
+export type SidebarSessionStatusGroup = {
   status: string;
-  sessionIds: string[];
+  records: SidebarSessionGroupRecord[];
 };
 
-function getSidebarSessionChannelId(session: EntityTableMap["sessions"]): string | null {
-  return (
-    getSessionChannelId(session) ??
-    ((session.sessionGroup as SessionGroupRef | undefined)?.channel?.id ?? null)
-  );
-}
-
-export function useSidebarSessionIdsForChannel(
+export function useSidebarSessionStatusGroupsForChannel(
   channelId: string,
   scope: SidebarSessionScope,
-): string[] {
+): SidebarSessionStatusGroup[] {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
-  return useEntityIds(
-    "sessions",
-    (session) => {
-      const sessionGroup = session.sessionGroup as SessionGroupRef | undefined;
-      return (
-        (scope === "all" || (Boolean(userId) && session.createdBy?.id === userId)) &&
-        Boolean(session.sessionGroupId) &&
-        !sessionGroup?.archivedAt &&
-        sessionGroup?.status !== "merged" &&
-        getSidebarSessionChannelId(session) === channelId
-      );
-    },
-    (a, b) => {
-      const aSort = a.lastMessageAt ?? a.updatedAt ?? a.createdAt;
-      const bSort = b.lastMessageAt ?? b.updatedAt ?? b.createdAt;
-      const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
-      if (diff !== 0) return diff;
-      return a.name.localeCompare(b.name);
-    },
-  );
-}
-
-function areSidebarSessionRecordsEqual(
-  previous: SidebarSessionRecord[],
-  next: SidebarSessionRecord[],
-): boolean {
-  if (previous.length !== next.length) return false;
-  for (let i = 0; i < previous.length; i++) {
-    const a = previous[i];
-    const b = next[i];
-    if (
-      a.id !== b.id ||
-      a.name !== b.name ||
-      a.sortTimestamp !== b.sortTimestamp ||
-      a.status !== b.status
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function sortSessionRecords(a: SidebarSessionRecord, b: SidebarSessionRecord): number {
-  const diff = new Date(b.sortTimestamp).getTime() - new Date(a.sortTimestamp).getTime();
-  if (diff !== 0) return diff;
-  return a.name.localeCompare(b.name);
-}
-
-function useSidebarSessionStatusGroups(sessionIds: string[]): SidebarSessionStatusGroup[] {
-  const records = useStoreWithEqualityFn(
-    useEntityStore,
-    (state: EntityState): SidebarSessionRecord[] =>
-      sessionIds
-        .map((sessionId: string) => {
-          const session = state.sessions[sessionId];
-          if (!session) return null;
-
-          const sessionGroup = session.sessionGroup as SessionGroupRef | undefined;
-          const status = getDisplaySessionStatus(
-            session.sessionStatus ?? undefined,
-            session.prUrl ?? undefined,
-            session.agentStatus ?? undefined,
-            sessionGroup?.archivedAt ?? undefined,
-          );
-
-          return {
-            id: session.id,
-            name: session.name ?? "",
-            sortTimestamp: session.lastMessageAt ?? session.updatedAt ?? session.createdAt,
-            status,
-          };
-        })
-        .filter((record): record is SidebarSessionRecord => record !== null),
-    areSidebarSessionRecordsEqual,
-  );
+  const rows = useSessionGroupRows(channelId);
 
   return useMemo(() => {
-    const groups = new Map<string, SidebarSessionRecord[]>();
+    const groups = new Map<string, SidebarSessionGroupRecord[]>();
 
-    for (const record of records) {
+    for (const row of rows) {
+      if (!isRowVisibleForScope(row, scope, userId)) continue;
+      const record = buildSidebarSessionGroupRecord(row);
       const statusRecords = groups.get(record.status) ?? [];
       statusRecords.push(record);
       groups.set(record.status, statusRecords);
@@ -162,29 +76,28 @@ function useSidebarSessionStatusGroups(sessionIds: string[]): SidebarSessionStat
           (sessionStatusGroupOrder[statusA] ?? 99) - (sessionStatusGroupOrder[statusB] ?? 99);
         if (statusDiff !== 0) return statusDiff;
         return (
-          Math.max(...recordsB.map((record) => new Date(record.sortTimestamp).getTime()), 0) -
-          Math.max(...recordsA.map((record) => new Date(record.sortTimestamp).getTime()), 0)
+          Math.max(...recordsB.map((record) => getRecordSortTime(record)), 0) -
+          Math.max(...recordsA.map((record) => getRecordSortTime(record)), 0)
         );
       })
       .map(([status, statusRecords]) => ({
         status,
-        sessionIds: [...statusRecords].sort(sortSessionRecords).map((record) => record.id),
+        records: [...statusRecords].sort(sortSessionGroupRecords),
       }));
-  }, [records]);
+  }, [rows, scope, userId]);
 }
 
 export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
   channelId,
-  sessionIds,
+  groups,
   expanded,
   onSessionClick,
 }: {
   channelId: string;
-  sessionIds: string[];
+  groups: SidebarSessionStatusGroup[];
   expanded: boolean;
-  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
 }) {
-  const groups = useSidebarSessionStatusGroups(sessionIds);
   const [collapsedStatuses, setCollapsedStatuses] = useState<ReadonlySet<string>>(() => new Set());
 
   const toggleStatus = useCallback((status: string) => {
@@ -199,7 +112,7 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
     });
   }, []);
 
-  if (sessionIds.length === 0) return null;
+  if (groups.length === 0) return null;
 
   return (
     <AnimatePresence initial={false}>
@@ -239,7 +152,7 @@ function SidebarSessionStatusGroup({
   channelId: string;
   collapsed: boolean;
   group: SidebarSessionStatusGroup;
-  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onToggle: (status: string) => void;
 }) {
   const Icon = collapsed ? ChevronRight : ChevronDown;
@@ -258,9 +171,7 @@ function SidebarSessionStatusGroup({
       >
         <Icon size={14} className="shrink-0 text-foreground" />
         <span className={cn("min-w-0 flex-1 truncate", color)}>{label}</span>
-        <span className="shrink-0 text-[11px] text-foreground">
-          {group.sessionIds.length}
-        </span>
+        <span className="shrink-0 text-[11px] text-foreground">{group.records.length}</span>
       </button>
       <AnimatePresence initial={false}>
         {!collapsed && (
@@ -272,11 +183,11 @@ function SidebarSessionStatusGroup({
             className="overflow-hidden"
           >
             <div className="mt-0.5 space-y-0.5">
-              {group.sessionIds.map((sessionId) => (
-                <OwnedSessionItem
-                  key={sessionId}
+              {group.records.map((record) => (
+                <OwnedSessionGroupItem
+                  key={record.id}
                   channelId={channelId}
-                  sessionId={sessionId}
+                  record={record}
                   onSessionClick={onSessionClick}
                 />
               ))}
@@ -288,47 +199,31 @@ function SidebarSessionStatusGroup({
   );
 }
 
-function OwnedSessionItem({
+function OwnedSessionGroupItem({
   channelId,
-  sessionId,
+  record,
   onSessionClick,
 }: {
   channelId: string;
-  sessionId: string;
-  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  record: SidebarSessionGroupRecord;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
 }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const name = useEntityField("sessions", sessionId, "name");
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
-  const sessionGroupName = useEntityField("sessionGroups", sessionGroupId ?? "", "name") as
-    | string
-    | null
-    | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
-  const prUrl = useEntityField("sessions", sessionId, "prUrl");
-  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
-  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
-  const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
-  const createdAt = useEntityField("sessions", sessionId, "createdAt");
-  const activeSessionId = useUIStore((s: UIState) => s.activeSessionId);
-  const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionDoneBadges[sessionId]);
+  const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
+  const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[record.id]);
+  const attached = useAttachedCheckoutForGroup(record.id);
 
-  const displaySessionStatus = getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
-  const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, prUrl);
-  const color = sessionStatusColor[displaySessionStatus] ?? "text-muted-foreground";
-  const isActive = activeSessionId === sessionId;
-  const activityLabel = formatSidebarActivity(lastMessageAt ?? updatedAt ?? createdAt);
-
-  if (!sessionGroupId) return null;
-
-  const sessionName = name ?? "Untitled session";
-  const sessionUrl = `${window.location.origin}/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
-  const openSession = () => onSessionClick(channelId, sessionGroupId, sessionId);
+  const isActive = activeSessionGroupId === record.id;
+  const activityLabel = formatSidebarActivity(record.sortTimestamp);
+  const groupUrl = record.latestSessionId
+    ? `${window.location.origin}/c/${channelId}/g/${record.id}/s/${record.latestSessionId}`
+    : `${window.location.origin}/c/${channelId}/g/${record.id}`;
+  const workdir = record.workdir;
+  const openSessionGroup = () => onSessionClick(channelId, record.id, record.latestSessionId);
   const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    openSession();
+    openSessionGroup();
   };
 
   const row = (
@@ -338,28 +233,25 @@ function OwnedSessionItem({
       className={cn(
         "group/session-row flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         sidebarNestedFullWidthRowClass,
-        isActive
-          ? "bg-white/10 text-foreground"
-          : "text-foreground hover:bg-white/10",
+        isActive ? "bg-white/10 text-foreground" : "text-foreground hover:bg-white/10",
       )}
-      onClick={openSession}
+      onClick={openSessionGroup}
       onKeyDown={handleRowKeyDown}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span
-          className={cn(
-            "relative inline-flex h-1.5 w-2.5 shrink-0 items-center justify-center pl-1",
-            color,
-          )}
-        >
-          <AgentStatusIcon agentStatus={displayAgentStatus} size={6} color="inherit" />
-          {hasDoneBadge && (
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
-          )}
-        </span>
+        <SessionStatusIndicator row={record.row} size={6} />
         <span className={cn("min-w-0 flex-1 truncate", hasDoneBadge && "font-semibold")}>
-          {sessionName}
+          {record.name}
         </span>
+        {attached && (
+          <span
+            title={`Synced to ${attached.bridgeLabel}`}
+            className="inline-flex shrink-0"
+            aria-label={`Synced to ${attached.bridgeLabel}`}
+          >
+            <Laptop className="h-3.5 w-3.5 text-emerald-500" />
+          </span>
+        )}
         <span className="shrink-0 text-[11px] text-foreground group-hover/session-row:hidden group-focus-within/session-row:hidden">
           {activityLabel}
         </span>
@@ -367,7 +259,7 @@ function OwnedSessionItem({
       <button
         type="button"
         className="hidden h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground group-hover/session-row:flex group-focus-within/session-row:flex"
-        title="Archive session"
+        title="Archive workspace"
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -384,19 +276,19 @@ function OwnedSessionItem({
       <ContextMenu>
         <ContextMenuTrigger className="block" render={<div />}>
           <SidebarSessionHoverCard
-            sessionGroupId={sessionGroupId}
-            sessionId={sessionId}
+            sessionGroupId={record.id}
+            sessionId={record.latestSessionId}
             trigger={row}
           />
         </ContextMenuTrigger>
         <ContextMenuContent className="w-56">
-          <ContextMenuItem onClick={openSession}>
+          <ContextMenuItem onClick={openSessionGroup}>
             <ExternalLink size={14} className="mr-1.5 text-muted-foreground" />
-            Open session
+            Open workspace
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setArchiveOpen(true)}>
             <Archive size={14} className="mr-1.5 text-muted-foreground" />
-            Archive session
+            Archive workspace
           </ContextMenuItem>
           <ContextMenuSeparator />
           {workdir && (
@@ -405,18 +297,18 @@ function OwnedSessionItem({
               Copy working directory
             </ContextMenuItem>
           )}
-          <ContextMenuItem onClick={() => void navigator.clipboard.writeText(sessionId)}>
+          <ContextMenuItem onClick={() => void navigator.clipboard.writeText(record.id)}>
             <Copy size={14} className="mr-1.5 text-muted-foreground" />
-            Copy session ID
+            Copy workspace ID
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => void navigator.clipboard.writeText(sessionUrl)}>
+          <ContextMenuItem onClick={() => void navigator.clipboard.writeText(groupUrl)}>
             <Link2 size={14} className="mr-1.5 text-muted-foreground" />
             Copy deeplink
           </ContextMenuItem>
-          {prUrl && (
+          {record.prUrl && (
             <ContextMenuItem
               render={
-                <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                <a href={record.prUrl} target="_blank" rel="noopener noreferrer">
                   <GitPullRequest size={14} className="mr-1.5 text-muted-foreground" />
                   View PR
                 </a>
@@ -426,13 +318,54 @@ function OwnedSessionItem({
         </ContextMenuContent>
       </ContextMenu>
       <ArchiveSessionGroupDialog
-        groupId={sessionGroupId}
-        groupName={sessionGroupName ?? sessionName}
+        groupId={record.id}
+        groupName={record.name}
         open={archiveOpen}
         onOpenChange={setArchiveOpen}
       />
     </>
   );
+}
+
+function isRowVisibleForScope(
+  row: SessionGroupRow,
+  scope: SidebarSessionScope,
+  userId: string | null,
+): boolean {
+  if (scope === "all") return true;
+  if (!userId) return false;
+  const createdBy = row.createdBySession?.createdBy as CreatedByRef | undefined;
+  return createdBy?.id === userId;
+}
+
+function buildSidebarSessionGroupRecord(row: SessionGroupRow): SidebarSessionGroupRecord {
+  return {
+    id: row.id,
+    name: row.name ?? "Untitled workspace",
+    latestSessionId: row.latestSession?.id ?? null,
+    prUrl: (row.prUrl as string | null | undefined) ?? row.latestSession?.prUrl ?? null,
+    sortTimestamp: getRowSortTimestamp(row),
+    status: row.displaySessionStatus,
+    workdir: (row.workdir as string | null | undefined) ?? row.latestSession?.workdir ?? null,
+    row,
+  };
+}
+
+function getRowSortTimestamp(row: SessionGroupRow): string {
+  return row._groupLastMessageAt ?? row._sortTimestamp ?? row.updatedAt ?? row.createdAt;
+}
+
+function getRecordSortTime(record: SidebarSessionGroupRecord): number {
+  return new Date(record.sortTimestamp).getTime();
+}
+
+function sortSessionGroupRecords(
+  a: SidebarSessionGroupRecord,
+  b: SidebarSessionGroupRecord,
+): number {
+  const diff = getRecordSortTime(b) - getRecordSortTime(a);
+  if (diff !== 0) return diff;
+  return a.id.localeCompare(b.id);
 }
 
 function formatSidebarActivity(timestamp: string | undefined): string {

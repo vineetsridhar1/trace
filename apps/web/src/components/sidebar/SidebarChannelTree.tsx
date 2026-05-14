@@ -30,7 +30,7 @@ export interface SidebarChannelTreeProps {
   groupIds: string[];
   onAddChannel: (groupId: string) => void;
   onChannelClick: (id: string) => void;
-  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDragActiveChange?: (active: boolean) => void;
   onToggleSessionScope: () => void;
   sessionScope: SidebarSessionScope;

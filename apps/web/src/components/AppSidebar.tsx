@@ -3,7 +3,7 @@ import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { selectChannelOrStartSession } from "../lib/channel-click-navigation";
 import { features } from "../lib/features";
-import { navigateToSession, useUIStore, type UIState } from "../stores/ui";
+import { navigateToSessionGroup, useUIStore, type UIState } from "../stores/ui";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
@@ -46,8 +46,8 @@ export function AppSidebar() {
   );
 
   const handleSessionClick = useCallback(
-    (channelId: string, sessionGroupId: string, sessionId: string) => {
-      navigateToSession(channelId, sessionGroupId, sessionId);
+    (channelId: string, sessionGroupId: string, sessionId: string | null) => {
+      navigateToSessionGroup(channelId, sessionGroupId, sessionId);
       closeSidebar();
     },
     [closeSidebar],

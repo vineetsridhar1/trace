@@ -28,7 +28,7 @@ export interface SidebarChannelsPaneProps {
   channelsLoading: boolean;
   groupIds: string[];
   onChannelClick: (id: string) => void;
-  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDragActiveChange?: (active: boolean) => void;
   topLevelItems: TopLevelItem[];
 }
