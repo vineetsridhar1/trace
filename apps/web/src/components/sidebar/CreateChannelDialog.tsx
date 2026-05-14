@@ -218,7 +218,7 @@ export function CreateChannelDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <button
         className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10"
-        title="Create channel or group"
+        title="Create project or group"
         onClick={handleTriggerClick}
       >
         <Plus size={16} />
@@ -236,9 +236,9 @@ export function CreateChannelDialog({
               >
                 <Code size={20} className="text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Channel</p>
+                  <p className="text-sm font-medium">Project</p>
                   <p className="text-xs text-muted-foreground">
-                    Create a new channel for messaging or sessions
+                    Create a new project for messaging or sessions
                   </p>
                 </div>
               </button>
@@ -248,9 +248,9 @@ export function CreateChannelDialog({
               >
                 <FolderPlus size={20} className="text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Channel Group</p>
+                  <p className="text-sm font-medium">Project Group</p>
                   <p className="text-xs text-muted-foreground">
-                    Organize channels into collapsible groups
+                    Organize projects into collapsible groups
                   </p>
                 </div>
               </button>
@@ -261,11 +261,11 @@ export function CreateChannelDialog({
         {mode === "channel" && (
           <form onSubmit={handleCreateChannel}>
             <DialogHeader>
-              <DialogTitle>Create Channel</DialogTitle>
+              <DialogTitle>Create Project</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">Channel name</label>
+                <label className="mb-1.5 block text-sm text-muted-foreground">Project name</label>
                 <Input
                   value={name}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
@@ -275,7 +275,7 @@ export function CreateChannelDialog({
               </div>
               {TYPE_OPTIONS.length > 1 && (
                 <div>
-                  <label className="mb-1.5 block text-sm text-muted-foreground">Channel type</label>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">Project type</label>
                   <div className="grid grid-cols-2 gap-2">
                     {TYPE_OPTIONS.map((opt) => {
                       const Icon = opt.icon;
@@ -348,7 +348,7 @@ export function CreateChannelDialog({
                   <label className="mb-1.5 block text-sm text-muted-foreground">Base branch</label>
                   <BranchCombobox repoId={repoId} value={baseBranch} onChange={setBaseBranch} />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Sessions in this channel will merge into this branch.
+                    Sessions in this project will merge into this branch.
                   </p>
                 </div>
               )}
@@ -370,7 +370,7 @@ export function CreateChannelDialog({
         {mode === "group" && (
           <form onSubmit={handleCreateGroup}>
             <DialogHeader>
-              <DialogTitle>Create Channel Group</DialogTitle>
+              <DialogTitle>Create Project Group</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
