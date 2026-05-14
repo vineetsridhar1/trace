@@ -86,7 +86,13 @@ export function SessionStream({
   const isUserScrollingRef = useRef(false);
   const currentContentHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
-  const prependAnchorRef = useRef<{ contentHeight: number; offset: number } | null>(null);
+  const prependAnchorRef = useRef<{
+    contentHeight: number;
+    offset: number;
+    previousFirstKey: string | null;
+    hasPrepended: boolean;
+    loadedOlderEvents: boolean | null;
+  } | null>(null);
   const prependAnchorClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousBottomInsetRef = useRef(bottomInset ?? 0);
   const loadingOlderRef = useRef(loadingOlder);
@@ -139,6 +145,7 @@ export function SessionStream({
     streamItemCacheRef.current = result.cache;
     return result.items;
   }, [nodes, scopedEvents]);
+  const firstStreamItemKey = streamItems[0]?.key ?? null;
   useEffect(() => {
     if (!renderEvents || nodes.length === 0) {
       hasRenderedNodesRef.current = false;
@@ -205,6 +212,14 @@ export function SessionStream({
     }
   }, []);
 
+  const schedulePrependAnchorClear = useCallback(() => {
+    clearPrependAnchorTimer();
+    prependAnchorClearTimerRef.current = setTimeout(() => {
+      prependAnchorClearTimerRef.current = null;
+      prependAnchorRef.current = null;
+    }, SCROLL_SETTLE_MS);
+  }, [clearPrependAnchorTimer]);
+
   const handleScrollActive = useCallback(() => {
     clearScrollSettleTimer();
     isUserScrollingRef.current = true;
@@ -226,6 +241,14 @@ export function SessionStream({
   useEffect(() => {
     loadingOlderRef.current = loadingOlder;
   }, [loadingOlder]);
+
+  useEffect(() => {
+    const prependAnchor = prependAnchorRef.current;
+    if (!prependAnchor) return;
+    if (prependAnchor.previousFirstKey !== firstStreamItemKey) {
+      prependAnchor.hasPrepended = true;
+    }
+  }, [firstStreamItemKey]);
 
   useEffect(() => {
     const nextBottomInset = bottomInset ?? 0;
@@ -250,16 +273,27 @@ export function SessionStream({
       currentContentHeightRef.current = height;
       const prependAnchor = prependAnchorRef.current;
       if (prependAnchor) {
+        if (prependAnchor.previousFirstKey !== firstStreamItemKey) {
+          prependAnchor.hasPrepended = true;
+        }
         const nextOffset = offsetAfterPrepend({
           previousContentHeight: prependAnchor.contentHeight,
           nextContentHeight: height,
           anchorOffset: prependAnchor.offset,
         });
-        listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
-        currentScrollOffsetRef.current = nextOffset;
-        if (!loadingOlderRef.current) {
-          clearPrependAnchorTimer();
-          prependAnchorRef.current = null;
+        requestAnimationFrame(() => {
+          listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
+          currentScrollOffsetRef.current = nextOffset;
+          requestAnimationFrame(() => {
+            listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
+            currentScrollOffsetRef.current = nextOffset;
+          });
+        });
+        if (
+          !loadingOlderRef.current &&
+          (prependAnchor.hasPrepended || prependAnchor.loadedOlderEvents === false)
+        ) {
+          schedulePrependAnchorClear();
         }
         return;
       }
@@ -269,7 +303,7 @@ export function SessionStream({
         listRef.current?.scrollToEnd({ animated: false });
       });
     },
-    [clearPrependAnchorTimer],
+    [firstStreamItemKey, schedulePrependAnchorClear],
   );
 
   const handleFetchOlderEvents = useCallback(async () => {
@@ -278,6 +312,9 @@ export function SessionStream({
       prependAnchorRef.current = {
         contentHeight: currentContentHeightRef.current,
         offset: currentScrollOffsetRef.current,
+        previousFirstKey: firstStreamItemKey,
+        hasPrepended: false,
+        loadedOlderEvents: null,
       };
     }
     loadingOlderRef.current = true;
@@ -287,15 +324,20 @@ export function SessionStream({
       loadedOlderEvents = await fetchOlderEvents();
     } finally {
       loadingOlderRef.current = false;
-      if (!loadedOlderEvents && prependAnchorRef.current) {
-        clearPrependAnchorTimer();
-        prependAnchorClearTimerRef.current = setTimeout(() => {
-          prependAnchorClearTimerRef.current = null;
-          prependAnchorRef.current = null;
-        }, SCROLL_SETTLE_MS);
+      if (prependAnchorRef.current) {
+        prependAnchorRef.current.loadedOlderEvents = loadedOlderEvents;
+      }
+      if (!loadedOlderEvents) {
+        schedulePrependAnchorClear();
       }
     }
-  }, [clearPrependAnchorTimer, fetchOlderEvents, setIsFollowingLatest]);
+  }, [
+    clearPrependAnchorTimer,
+    fetchOlderEvents,
+    firstStreamItemKey,
+    schedulePrependAnchorClear,
+    setIsFollowingLatest,
+  ]);
 
   const timestampRevealGesture = Gesture.Simultaneous(
     Gesture.Pan()
