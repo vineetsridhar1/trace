@@ -18,15 +18,15 @@ interface ScrollToEndRef {
 }
 
 /**
- * Watches the tail of the node list and either auto-scrolls (when the user
- * is near the bottom) or increments a counter surfaced by the "new activity"
+ * Watches the tail of the node list and either auto-scrolls (when the stream
+ * is following latest output) or increments a counter surfaced by the "new activity"
  * pill. Pagination prepends older events and must not register as activity,
  * so we track the tail key rather than the list length.
  */
 export function useNewActivityTracker(
   nodes: SessionNode[],
   listRef: MutableRefObject<ScrollToEndRef | null>,
-  isNearBottomRef: MutableRefObject<boolean>,
+  shouldFollowLatestRef: MutableRefObject<boolean>,
 ): UseNewActivityTrackerResult {
   const prevTailKeyRef = useRef<string | null>(null);
   const [newActivityCount, setNewActivityCount] = useState(0);
@@ -43,14 +43,14 @@ export function useNewActivityTracker(
     const prevIdx = nodes.findIndex((n) => nodeKey(n) === prevTail);
     const delta = prevIdx === -1 ? 1 : nodes.length - 1 - prevIdx;
     if (delta <= 0) return;
-    if (isNearBottomRef.current) {
+    if (shouldFollowLatestRef.current) {
       requestAnimationFrame(() => {
         listRef.current?.scrollToEnd({ animated: true });
       });
       return;
     }
     setNewActivityCount((c) => c + delta);
-  }, [nodes, listRef, isNearBottomRef]);
+  }, [nodes, listRef, shouldFollowLatestRef]);
 
   return {
     newActivityCount,

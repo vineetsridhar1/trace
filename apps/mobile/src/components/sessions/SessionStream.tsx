@@ -26,7 +26,21 @@ import {
   type SessionStreamItemCache,
   type SessionStreamListItem,
 } from "./sessionStreamItems";
+import {
+  nextFollowLatestState,
+  offsetAfterPrepend,
+  shouldCompensatePrependAnchor,
+} from "./session-scroll-follow";
 import type { NodeRenderContext } from "./nodes";
+
+interface PrependAnchor {
+  contentHeight: number;
+  offset: number;
+  previousFirstKey: string | null;
+  hasPrepended: boolean;
+  loadedOlderEvents: boolean | null;
+  lastCompensatedHeight: number;
+}
 
 interface SessionStreamProps {
   sessionId: string;
@@ -81,10 +95,17 @@ export function SessionStream({
     });
   const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
   const isNearBottomRef = useRef(true);
+  const isFollowingLatestRef = useRef(true);
+  const isUserScrollingRef = useRef(false);
+  const currentContentHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
+  const prependAnchorRef = useRef<PrependAnchor | null>(null);
+  const prependAnchorClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousBottomInsetRef = useRef(bottomInset ?? 0);
+  const loadingOlderRef = useRef(loadingOlder);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isScrollActive, setIsScrollActive] = useState(false);
+  const [isFollowingLatest, setIsFollowingLatestState] = useState(true);
   const {
     nodes,
     completedAgentTools,
@@ -113,7 +134,7 @@ export function SessionStream({
   const { newActivityCount, clearNewActivity } = useNewActivityTracker(
     nodes,
     listRef,
-    isNearBottomRef,
+    isFollowingLatestRef,
   );
 
   const renderContext = useMemo<NodeRenderContext>(
@@ -131,6 +152,7 @@ export function SessionStream({
     streamItemCacheRef.current = result.cache;
     return result.items;
   }, [nodes, scopedEvents]);
+  const firstStreamItemKey = streamItems[0]?.key ?? null;
   useEffect(() => {
     if (!renderEvents || nodes.length === 0) {
       hasRenderedNodesRef.current = false;
@@ -149,16 +171,38 @@ export function SessionStream({
     opacity: contentOpacity.value,
   }));
 
+  const setIsFollowingLatest = useCallback((next: boolean) => {
+    if (isFollowingLatestRef.current === next) return;
+    isFollowingLatestRef.current = next;
+    setIsFollowingLatestState(next);
+  }, []);
+
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      const previousOffset = currentScrollOffsetRef.current;
+      currentContentHeightRef.current = contentSize.height;
       currentScrollOffsetRef.current = contentOffset.y;
-      const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+      const distanceFromBottom = Math.max(
+        0,
+        contentSize.height - contentOffset.y - layoutMeasurement.height,
+      );
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
-      if (nearBottom) clearNewActivity();
+      const nextFollowingLatest = nextFollowLatestState({
+        currentlyFollowing: isFollowingLatestRef.current,
+        distanceFromBottom,
+        isUserScrolling: isUserScrollingRef.current,
+        nearBottomThreshold: NEAR_BOTTOM_THRESHOLD,
+        previousOffset,
+        nextOffset: contentOffset.y,
+      });
+      setIsFollowingLatest(nextFollowingLatest);
+      if (nearBottom && nextFollowingLatest) {
+        clearNewActivity();
+      }
     },
-    [clearNewActivity],
+    [clearNewActivity, setIsFollowingLatest],
   );
 
   const clearScrollSettleTimer = useCallback(() => {
@@ -168,8 +212,24 @@ export function SessionStream({
     }
   }, []);
 
+  const clearPrependAnchorTimer = useCallback(() => {
+    if (prependAnchorClearTimerRef.current) {
+      clearTimeout(prependAnchorClearTimerRef.current);
+      prependAnchorClearTimerRef.current = null;
+    }
+  }, []);
+
+  const schedulePrependAnchorClear = useCallback(() => {
+    clearPrependAnchorTimer();
+    prependAnchorClearTimerRef.current = setTimeout(() => {
+      prependAnchorClearTimerRef.current = null;
+      prependAnchorRef.current = null;
+    }, SCROLL_SETTLE_MS);
+  }, [clearPrependAnchorTimer]);
+
   const handleScrollActive = useCallback(() => {
     clearScrollSettleTimer();
+    isUserScrollingRef.current = true;
     setIsScrollActive(true);
   }, [clearScrollSettleTimer]);
 
@@ -177,17 +237,39 @@ export function SessionStream({
     clearScrollSettleTimer();
     scrollSettleTimerRef.current = setTimeout(() => {
       scrollSettleTimerRef.current = null;
+      isUserScrollingRef.current = false;
       setIsScrollActive(false);
     }, SCROLL_SETTLE_MS);
   }, [clearScrollSettleTimer]);
 
   useEffect(() => clearScrollSettleTimer, [clearScrollSettleTimer]);
+  useEffect(() => clearPrependAnchorTimer, [clearPrependAnchorTimer]);
+
+  useEffect(() => {
+    loadingOlderRef.current = loadingOlder;
+  }, [loadingOlder]);
+
+  useEffect(() => {
+    const prependAnchor = prependAnchorRef.current;
+    if (!prependAnchor) return;
+    if (prependAnchor.previousFirstKey !== firstStreamItemKey) {
+      prependAnchor.hasPrepended = true;
+      clearPrependAnchorTimer();
+    }
+    if (
+      !isScrollActive &&
+      prependAnchor.loadedOlderEvents === true &&
+      !prependAnchor.hasPrepended
+    ) {
+      schedulePrependAnchorClear();
+    }
+  }, [clearPrependAnchorTimer, firstStreamItemKey, isScrollActive, schedulePrependAnchorClear]);
 
   useEffect(() => {
     const nextBottomInset = bottomInset ?? 0;
     const previousBottomInset = previousBottomInsetRef.current;
     const insetDelta = nextBottomInset - previousBottomInset;
-    if (insetDelta !== 0 && isNearBottomRef.current) {
+    if (insetDelta !== 0 && isFollowingLatestRef.current) {
       const nextOffset = Math.max(0, currentScrollOffsetRef.current + insetDelta);
       listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
       currentScrollOffsetRef.current = nextOffset;
@@ -196,9 +278,94 @@ export function SessionStream({
   }, [bottomInset]);
 
   const handlePillPress = useCallback(() => {
+    setIsFollowingLatest(true);
     clearNewActivity();
     listRef.current?.scrollToEnd({ animated: true });
-  }, [clearNewActivity]);
+  }, [clearNewActivity, setIsFollowingLatest]);
+
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      currentContentHeightRef.current = height;
+      const prependAnchor = prependAnchorRef.current;
+      if (prependAnchor) {
+        if (prependAnchor.previousFirstKey !== firstStreamItemKey) {
+          prependAnchor.hasPrepended = true;
+          clearPrependAnchorTimer();
+        }
+        if (
+          !shouldCompensatePrependAnchor({
+            hasPrepended: prependAnchor.hasPrepended,
+            isLoadingOlder: loadingOlderRef.current,
+            loadedOlderEvents: prependAnchor.loadedOlderEvents,
+            nextContentHeight: height,
+            lastCompensatedHeight: prependAnchor.lastCompensatedHeight,
+          })
+        ) {
+          return;
+        }
+        const nextOffset = offsetAfterPrepend({
+          previousContentHeight: prependAnchor.contentHeight,
+          nextContentHeight: height,
+          anchorOffset: prependAnchor.offset,
+        });
+        prependAnchor.lastCompensatedHeight = height;
+        requestAnimationFrame(() => {
+          listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
+          currentScrollOffsetRef.current = nextOffset;
+          requestAnimationFrame(() => {
+            listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
+            currentScrollOffsetRef.current = nextOffset;
+          });
+        });
+        if (
+          !loadingOlderRef.current &&
+          (prependAnchor.hasPrepended || prependAnchor.loadedOlderEvents === false)
+        ) {
+          schedulePrependAnchorClear();
+        }
+        return;
+      }
+
+      if (!isFollowingLatestRef.current) return;
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToEnd({ animated: false });
+      });
+    },
+    [clearPrependAnchorTimer, firstStreamItemKey, schedulePrependAnchorClear],
+  );
+
+  const handleFetchOlderEvents = useCallback(async () => {
+    if (loadingOlderRef.current || prependAnchorRef.current) return;
+    clearPrependAnchorTimer();
+    prependAnchorRef.current = {
+      contentHeight: currentContentHeightRef.current,
+      offset: currentScrollOffsetRef.current,
+      previousFirstKey: firstStreamItemKey,
+      hasPrepended: false,
+      loadedOlderEvents: null,
+      lastCompensatedHeight: currentContentHeightRef.current,
+    };
+    loadingOlderRef.current = true;
+    setIsFollowingLatest(false);
+    let loadedOlderEvents = false;
+    try {
+      loadedOlderEvents = await fetchOlderEvents();
+    } finally {
+      loadingOlderRef.current = false;
+      if (prependAnchorRef.current) {
+        prependAnchorRef.current.loadedOlderEvents = loadedOlderEvents;
+      }
+      if (!loadedOlderEvents) {
+        schedulePrependAnchorClear();
+      }
+    }
+  }, [
+    clearPrependAnchorTimer,
+    fetchOlderEvents,
+    firstStreamItemKey,
+    schedulePrependAnchorClear,
+    setIsFollowingLatest,
+  ]);
 
   const timestampRevealGesture = Gesture.Simultaneous(
     Gesture.Pan()
@@ -256,13 +423,14 @@ export function SessionStream({
             onScrollEndDrag={handleScrollSettling}
             onMomentumScrollBegin={handleScrollActive}
             onMomentumScrollEnd={handleScrollSettling}
-            fetchOlderEvents={fetchOlderEvents}
+            onContentSizeChange={handleContentSizeChange}
+            fetchOlderEvents={handleFetchOlderEvents}
           />
         </Animated.View>
       </GestureDetector>
       <NewActivityPill
         count={newActivityCount}
-        visible={newActivityCount > 0}
+        visible={!isFollowingLatest || newActivityCount > 0}
         onPress={handlePillPress}
         bottomOffset={floatingBottomOffset ?? bottomInset}
       />

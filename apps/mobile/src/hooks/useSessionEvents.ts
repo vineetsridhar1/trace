@@ -27,7 +27,7 @@ interface UseSessionEventsResult {
   hasOlder: boolean;
   error: string | null;
   fetchEvents: () => Promise<void>;
-  fetchOlderEvents: () => Promise<void>;
+  fetchOlderEvents: () => Promise<boolean>;
 }
 
 interface UseSessionEventsOptions {
@@ -250,7 +250,7 @@ export function useSessionEvents(
       loadingOlderRef.current ||
       !hasOlderRef.current
     ) {
-      return;
+      return false;
     }
 
     loadingOlderRef.current = true;
@@ -270,16 +270,18 @@ export function useSessionEvents(
       loadingOlderRef.current = false;
       setLoadingOlder(false);
       void handleUnauthorized();
-      return;
+      return false;
     }
     if (result.error) {
       loadingOlderRef.current = false;
       setLoadingOlder(false);
-      return;
+      return false;
     }
 
+    let loadedOlderEvents = false;
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
+      loadedOlderEvents = events.length > 0;
       upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
 
       if (events.length < PAGE_SIZE) {
@@ -292,6 +294,7 @@ export function useSessionEvents(
     }
     loadingOlderRef.current = false;
     setLoadingOlder(false);
+    return loadedOlderEvents;
   }, [activeOrgId, commitEnabled, fetchEnabled, sessionId]);
 
   return {
