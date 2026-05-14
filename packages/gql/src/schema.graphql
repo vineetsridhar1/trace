@@ -1249,6 +1249,7 @@ enum LinkedCheckoutSyncConflictStrategy {
   DISCARD
   COMMIT
   REBASE
+  STASH
 }
 
 # --- Subscriptions ---

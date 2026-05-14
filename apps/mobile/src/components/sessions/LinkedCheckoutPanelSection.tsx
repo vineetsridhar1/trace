@@ -89,7 +89,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
       strategy,
       commitMessage,
     }: {
-      strategy: "DISCARD" | "COMMIT" | "REBASE";
+      strategy: "DISCARD" | "COMMIT" | "REBASE" | "STASH";
       commitMessage?: string;
     }) => {
       void haptic.light();

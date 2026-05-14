@@ -428,7 +428,7 @@ export const sessionMutations = {
       runtimeInstanceId?: string | null;
       commitSha?: string | null;
       autoSyncEnabled?: boolean | null;
-      conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | null;
+      conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | "STASH" | null;
       commitMessage?: string | null;
     },
     ctx: Context,
@@ -452,7 +452,9 @@ export const sessionMutations = {
               ? "commit"
               : args.conflictStrategy === "REBASE"
                 ? "rebase"
-                : undefined,
+                : args.conflictStrategy === "STASH"
+                  ? "stash"
+                  : undefined,
         commitMessage: args.commitMessage ?? undefined,
       },
     );

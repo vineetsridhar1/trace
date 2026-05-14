@@ -5,7 +5,7 @@ import { Button, Text } from "@/components/design-system";
 import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
 import { alpha, useTheme } from "@/theme";
 
-type ConflictStrategy = "DISCARD" | "COMMIT" | "REBASE";
+type ConflictStrategy = "DISCARD" | "COMMIT" | "REBASE" | "STASH";
 
 interface LinkedCheckoutSyncConflictSheetProps {
   open: boolean;
@@ -98,7 +98,7 @@ export function LinkedCheckoutSyncConflictSheet({
           </View>
           <Text variant="footnote" color="mutedForeground">
             Import the current main-worktree changes into the session branch, create a commit, then
-            sync to that new commit.
+            sync to that new commit. Trace also pushes the commit to origin when configured.
           </Text>
 
           {selectedCommit ? (
@@ -135,6 +135,30 @@ export function LinkedCheckoutSyncConflictSheet({
         </Pressable>
 
         <View style={styles.optionColumn}>
+          <View style={[styles.card, cardBorder]}>
+            <View style={styles.cardHeader}>
+              <SymbolView
+                name="tray.and.arrow.down"
+                size={16}
+                tintColor={theme.colors.mutedForeground}
+              />
+              <Text variant="subheadline">Stash changes</Text>
+            </View>
+            <Text variant="footnote" color="mutedForeground">
+              Save the main-worktree edits to the git stash, then sync cleanly.
+            </Text>
+            <View style={styles.buttonSlot}>
+              <Button
+                title="Stash And Sync"
+                variant="secondary"
+                size="sm"
+                disabled={pending}
+                loading={pending}
+                onPress={() => void onResolve({ strategy: "STASH" })}
+              />
+            </View>
+          </View>
+
           <View style={[styles.card, cardBorder]}>
             <View style={styles.cardHeader}>
               <SymbolView name="trash" size={16} tintColor={theme.colors.mutedForeground} />

@@ -1397,7 +1397,7 @@ export class SessionRouter {
       branch: string;
       commitSha?: string | null;
       autoSyncEnabled?: boolean;
-      conflictStrategy?: "discard" | "commit" | "rebase";
+      conflictStrategy?: "discard" | "commit" | "rebase" | "stash";
       commitMessage?: string | null;
     },
     timeoutMs = 60_000,

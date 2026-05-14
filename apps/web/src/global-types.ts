@@ -85,7 +85,7 @@ declare global {
     branch: string;
     commitSha?: string | null;
     autoSyncEnabled?: boolean;
-    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | null;
+    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | "STASH" | null;
     commitMessage?: string | null;
   };
 

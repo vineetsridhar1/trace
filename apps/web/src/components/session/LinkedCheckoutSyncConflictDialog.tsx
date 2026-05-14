@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { GitBranch, GitCommitHorizontal, RefreshCw, TriangleAlert } from "lucide-react";
+import { Archive, GitBranch, GitCommitHorizontal, RefreshCw, TriangleAlert } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
@@ -16,7 +16,7 @@ interface LinkedCheckoutSyncConflictDialogProps {
   pending: boolean;
   onClose: () => void;
   onResolve: (input: {
-    strategy: "DISCARD" | "COMMIT" | "REBASE";
+    strategy: "DISCARD" | "COMMIT" | "REBASE" | "STASH";
     commitMessage?: string;
   }) => Promise<void>;
 }
@@ -141,7 +141,8 @@ export function LinkedCheckoutSyncConflictDialog({
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Save the current main-worktree changes as a commit on the session branch, then sync
-                your checkout to that new commit.
+                your checkout to that new commit. Trace also pushes the commit to origin when the
+                remote is configured.
               </p>
               <Textarea
                 className="mt-3 min-h-20"
@@ -158,6 +159,26 @@ export function LinkedCheckoutSyncConflictDialog({
                   disabled={commitDisabled}
                 >
                   Commit And Sync
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-border p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Archive size={14} className="text-muted-foreground" />
+                Stash The Changes
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Save these main-worktree edits to the git stash, then sync cleanly. The stash entry
+                stays available in the checkout for later manual apply.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => void onResolve({ strategy: "STASH" })}
+                  disabled={pending}
+                >
+                  Stash And Sync
                 </Button>
               </div>
             </div>

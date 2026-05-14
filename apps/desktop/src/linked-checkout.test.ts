@@ -122,6 +122,44 @@ async function createRepoFixtureWithStaleOrigin(): Promise<{
   return { repoPath, latestSha };
 }
 
+async function createRepoFixtureWithOrigin(): Promise<{
+  repoPath: string;
+  worktreePath: string;
+  originPath: string;
+}> {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-origin-"));
+  const sourcePath = path.join(rootDir, "source");
+  const originPath = path.join(rootDir, "origin.git");
+  const repoPath = path.join(rootDir, "repo");
+  const worktreePath = path.join(rootDir, "worktree");
+
+  fs.mkdirSync(sourcePath, { recursive: true });
+  await git(sourcePath, ["init", "-b", "main"]);
+  await git(sourcePath, ["config", "user.name", "Trace Test"]);
+  await git(sourcePath, ["config", "user.email", "trace@example.com"]);
+
+  fs.writeFileSync(path.join(sourcePath, "app.txt"), "base\n");
+  fs.writeFileSync(path.join(sourcePath, "notes.txt"), "notes base\n");
+  await git(sourcePath, ["add", "app.txt", "notes.txt"]);
+  await git(sourcePath, ["commit", "-m", "initial commit"]);
+  await git(sourcePath, ["branch", "trace/raccoon"]);
+
+  await git(rootDir, ["clone", "--bare", sourcePath, originPath]);
+  await git(rootDir, ["clone", originPath, repoPath]);
+  await git(repoPath, ["config", "user.name", "Trace Test"]);
+  await git(repoPath, ["config", "user.email", "trace@example.com"]);
+  await git(repoPath, [
+    "worktree",
+    "add",
+    "-b",
+    "trace/raccoon",
+    worktreePath,
+    "origin/trace/raccoon",
+  ]);
+
+  return { repoPath, worktreePath, originPath };
+}
+
 async function createRepoFixtureWithNarrowOrigin(): Promise<{
   repoPath: string;
   sourcePath: string;
@@ -518,6 +556,47 @@ describe("linked checkout commit-back", () => {
     expect(fs.readFileSync(path.join(worktreePath, "app.txt"), "utf8")).toBe("carry me over\n");
     expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("carry me over\n");
     expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+  }, 15_000);
+
+  it("pushes committed main-worktree changes to origin during sync", async () => {
+    const { repoPath, worktreePath, originPath } = await createRepoFixtureWithOrigin();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "carry me to origin\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "commit",
+      commitMessage: "Carry local changes into Trace",
+    });
+
+    expect(result.ok).toBe(true);
+    const worktreeCommit = await git(worktreePath, ["rev-parse", "HEAD"]);
+    expect(await git(originPath, ["rev-parse", "refs/heads/trace/raccoon"])).toBe(worktreeCommit);
+  }, 15_000);
+
+  it("stashes main-worktree changes before syncing when requested", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "stash this\n");
+    fs.writeFileSync(path.join(repoPath, "scratch.txt"), "temp\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "stash",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status.hasUncommittedChanges).toBe(false);
+    expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("base\n");
+    expect(fs.existsSync(path.join(repoPath, "scratch.txt"))).toBe(false);
+    expect(await git(repoPath, ["stash", "list"])).toContain("Trace linked checkout stash");
   }, 15_000);
 
   it("replays main-worktree changes on top of the synced commit", async () => {
