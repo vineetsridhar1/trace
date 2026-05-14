@@ -1822,9 +1822,6 @@ export type UpdateTicketInput = {
 export type User = {
   __typename?: "User";
   avatarUrl?: Maybe<Scalars["String"]["output"]>;
-  defaultSessionModel?: Maybe<Scalars["String"]["output"]>;
-  defaultSessionReasoningEffort?: Maybe<Scalars["String"]["output"]>;
-  defaultSessionTool?: Maybe<CodingTool>;
   email: Scalars["String"]["output"];
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
