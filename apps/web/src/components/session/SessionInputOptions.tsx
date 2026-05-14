@@ -11,9 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import {
+  getDefaultModelForProvider,
   getModelsForTool,
   getDefaultModel,
   getModelLabel,
+  getModelProviderForModel,
+  getModelProviderGroupsForTool,
   getReasoningEffortsForTool,
   getDefaultReasoningEffort,
   getReasoningEffortLabel,
@@ -157,6 +160,10 @@ export function SessionInputOptions({
   const currentTool = tool ?? "claude_code";
   const modelOptions = getModelsForTool(currentTool);
   const currentModel = model ?? getDefaultModel(currentTool);
+  const modelProviderGroups = getModelProviderGroupsForTool(currentTool);
+  const currentModelProvider =
+    getModelProviderForModel(currentTool, currentModel) ?? modelProviderGroups[0];
+  const visibleModelOptions = currentModelProvider?.models ?? modelOptions;
   const reasoningEffortOptions = getReasoningEffortsForTool(currentTool);
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
@@ -237,6 +244,14 @@ export function SessionInputOptions({
       }
     },
     [isOptimistic, sessionId],
+  );
+
+  const handleModelProviderChange = useCallback(
+    async (provider: string | null) => {
+      if (!provider) return;
+      await handleModelChange(getDefaultModelForProvider(currentTool, provider) ?? null);
+    },
+    [currentTool, handleModelChange],
   );
 
   const handleReasoningEffortChange = useCallback(
@@ -449,7 +464,28 @@ export function SessionInputOptions({
           </SelectItem>
         </SelectContent>
       </Select>
-      {modelOptions.length > 0 && (
+      {modelProviderGroups.length > 0 && currentModelProvider && (
+        <Select
+          value={currentModelProvider.value}
+          onValueChange={handleModelProviderChange}
+          disabled={isActive || isOptimistic}
+        >
+          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
+            <SelectValue>{currentModelProvider.label}</SelectValue>
+          </SelectTrigger>
+          <SelectContent className="min-w-48">
+            {modelProviderGroups.map((group) => (
+              <SelectItem key={group.value} value={group.value}>
+                <span className="flex flex-col items-start gap-0.5">
+                  <span>{group.label}</span>
+                  <span className="text-xs text-muted-foreground">{group.description}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {visibleModelOptions.length > 0 && (
         <Select
           value={currentModel ?? ""}
           onValueChange={handleModelChange}
@@ -459,7 +495,7 @@ export function SessionInputOptions({
             <SelectValue>{currentModel ? getModelLabel(currentModel) : ""}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {modelOptions.map((m: { value: string; label: string }) => (
+            {visibleModelOptions.map((m: { value: string; label: string }) => (
               <SelectItem key={m.value} value={m.value}>
                 {m.label}
               </SelectItem>

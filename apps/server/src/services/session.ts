@@ -786,16 +786,9 @@ function validateReasoningEffortForTool(tool: string, effort: string): string {
   return trimmed;
 }
 
-const LEGACY_PI_API_MODEL_MAP: Readonly<Record<string, string>> = {
-  "openai-codex/gpt-5.5": "openai/gpt-5.5",
-  "openai-codex/gpt-5.4": "openai/gpt-5.4",
-};
-
 function resolveStoredModelForTool(tool: CodingTool, model: string | null | undefined) {
   const trimmed = model?.trim();
-  if (!trimmed) return undefined;
-  const normalized = tool === "pi" ? (LEGACY_PI_API_MODEL_MAP[trimmed] ?? trimmed) : trimmed;
-  return isSupportedModel(tool, normalized) ? normalized : undefined;
+  return trimmed && isSupportedModel(tool, trimmed) ? trimmed : undefined;
 }
 
 function resolveStoredReasoningEffortForTool(tool: CodingTool, effort: string | null | undefined) {

@@ -7,11 +7,14 @@ export type {
 export { hasPlanBlock, hasQuestionBlock, parseQuestion } from "./adapters/coding-tool.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
-export type { ModelOption, ReasoningEffortOption } from "./models.js";
+export type { ModelOption, ModelProviderGroup, ReasoningEffortOption } from "./models.js";
 export {
+  getDefaultModelForProvider,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,
+  getModelProviderForModel,
+  getModelProviderGroupsForTool,
   getModelsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,

@@ -4,9 +4,12 @@ import { UPDATE_SESSION_DEFAULTS_MUTATION, useAuthStore, type AuthState } from "
 import { client } from "../../lib/urql";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import {
+  getDefaultModelForProvider,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,
+  getModelProviderForModel,
+  getModelProviderGroupsForTool,
   getModelsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
@@ -55,6 +58,10 @@ export function SessionDefaultsSection() {
   const defaultReasoningEffort = user?.defaultSessionReasoningEffort ?? null;
   const effectiveTool = defaultTool ?? "claude_code";
   const modelOptions = getModelsForTool(effectiveTool);
+  const modelProviderGroups = getModelProviderGroupsForTool(effectiveTool);
+  const currentModelProvider =
+    getModelProviderForModel(effectiveTool, defaultModel) ?? modelProviderGroups[0];
+  const visibleModelOptions = currentModelProvider?.models ?? modelOptions;
   const reasoningEffortOptions = getReasoningEffortsForTool(effectiveTool);
 
   const handleToolChange = async (value: string | null) => {
@@ -90,6 +97,21 @@ export function SessionDefaultsSection() {
     }
   };
 
+  const handleModelProviderChange = async (value: string | null) => {
+    if (!defaultTool || !value || value === "__none__") return;
+    try {
+      await saveDefaults({
+        tool: defaultTool,
+        model: getDefaultModelForProvider(defaultTool, value) ?? null,
+        reasoningEffort: defaultReasoningEffort,
+      });
+    } catch (error) {
+      toast.error("Failed to update session defaults", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
+
   const handleReasoningEffortChange = async (value: string | null) => {
     if (!defaultTool || !value || value === "__none__") return;
     try {
@@ -115,7 +137,13 @@ export function SessionDefaultsSection() {
       </div>
 
       <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div
+          className={
+            modelProviderGroups.length > 0
+              ? "grid grid-cols-1 gap-4 md:grid-cols-4"
+              : "grid grid-cols-1 gap-4 md:grid-cols-3"
+          }
+        >
           <div>
             <label className="mb-1.5 block text-sm text-muted-foreground">
               Default Coding Tool
@@ -137,6 +165,35 @@ export function SessionDefaultsSection() {
             </Select>
           </div>
 
+          {modelProviderGroups.length > 0 && currentModelProvider && (
+            <div>
+              <label className="mb-1.5 block text-sm text-muted-foreground">
+                Default Provider
+              </label>
+              <Select
+                value={currentModelProvider.value}
+                onValueChange={handleModelProviderChange}
+                disabled={!defaultTool}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>{currentModelProvider.label}</SelectValue>
+                </SelectTrigger>
+                <SelectContent className="min-w-56">
+                  {modelProviderGroups.map((group) => (
+                    <SelectItem key={group.value} value={group.value}>
+                      <span className="flex flex-col items-start gap-0.5">
+                        <span>{group.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {group.description}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <label className="mb-1.5 block text-sm text-muted-foreground">Default Model</label>
             <Select
@@ -153,7 +210,7 @@ export function SessionDefaultsSection() {
                 <SelectItem value="__none__" disabled>
                   None
                 </SelectItem>
-                {modelOptions.map((m: { value: string; label: string }) => (
+                {visibleModelOptions.map((m: { value: string; label: string }) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
                   </SelectItem>

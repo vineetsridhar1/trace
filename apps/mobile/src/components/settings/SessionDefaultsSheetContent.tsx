@@ -8,9 +8,12 @@ import {
 } from "@trace/client-core";
 import type { CodingTool, User } from "@trace/gql";
 import {
+  getDefaultModelForProvider,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,
+  getModelProviderForModel,
+  getModelProviderGroupsForTool,
   getModelsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
@@ -84,6 +87,13 @@ export function SessionDefaultsSheetContent() {
   const [pending, setPending] = useState(false);
 
   const modelOptions = useMemo(() => getModelsForTool(effectiveTool), [effectiveTool]);
+  const modelProviderGroups = useMemo(
+    () => getModelProviderGroupsForTool(effectiveTool),
+    [effectiveTool],
+  );
+  const currentModelProvider =
+    getModelProviderForModel(effectiveTool, selectedModel) ?? modelProviderGroups[0];
+  const visibleModelOptions = currentModelProvider?.models ?? modelOptions;
   const reasoningEffortOptions = useMemo(
     () => getReasoningEffortsForTool(effectiveTool),
     [effectiveTool],
@@ -146,8 +156,38 @@ export function SessionDefaultsSheetContent() {
         ))}
       </Section>
 
+      {modelProviderGroups.length > 0 && currentModelProvider ? (
+        <Section title="Provider">
+          {modelProviderGroups.map((option, index) => (
+            <ListRow
+              key={option.value}
+              title={option.label}
+              subtitle={option.description}
+              trailing={
+                currentModelProvider.value === option.value ? (
+                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                ) : undefined
+              }
+              onPress={
+                selectedTool && currentModelProvider.value !== option.value
+                  ? () =>
+                      void handleSave({
+                        tool: selectedTool,
+                        model: getDefaultModelForProvider(selectedTool, option.value) ?? null,
+                        reasoningEffort: selectedReasoningEffort,
+                      })
+                  : undefined
+              }
+              haptic={currentModelProvider.value === option.value ? "none" : "selection"}
+              separator={index < modelProviderGroups.length - 1}
+              style={pending || !selectedTool ? styles.disabledRow : undefined}
+            />
+          ))}
+        </Section>
+      ) : null}
+
       <Section title="Model">
-        {modelOptions.map((option, index) => (
+        {visibleModelOptions.map((option, index) => (
           <ListRow
             key={option.value}
             title={option.label}
@@ -167,7 +207,7 @@ export function SessionDefaultsSheetContent() {
                 : undefined
             }
             haptic={selectedModel === option.value ? "none" : "selection"}
-            separator={index < modelOptions.length - 1}
+            separator={index < visibleModelOptions.length - 1}
             style={pending || !selectedTool ? styles.disabledRow : undefined}
           />
         ))}

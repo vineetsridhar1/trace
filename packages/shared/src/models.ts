@@ -3,6 +3,13 @@ export interface ModelOption {
   label: string;
 }
 
+export interface ModelProviderGroup {
+  value: string;
+  label: string;
+  description: string;
+  models: readonly ModelOption[];
+}
+
 export interface ReasoningEffortOption {
   value: string;
   label: string;
@@ -32,6 +39,27 @@ const PI_MODELS: readonly ModelOption[] = [
   { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 (ChatGPT)" },
   { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
   { value: "anthropic/claude-opus-4-7", label: "Claude Opus 4.7" },
+];
+
+const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
+  {
+    value: "openai",
+    label: "OpenAI API",
+    description: "Uses an OpenAI API key",
+    models: PI_MODELS.slice(0, 2),
+  },
+  {
+    value: "openai-codex",
+    label: "ChatGPT",
+    description: "Uses a ChatGPT Plus or Pro subscription",
+    models: PI_MODELS.slice(2, 4),
+  },
+  {
+    value: "anthropic",
+    label: "Anthropic API",
+    description: "Uses an Anthropic API key",
+    models: PI_MODELS.slice(4),
+  },
 ];
 
 const MODEL_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ModelOption[]>> = {
@@ -89,6 +117,28 @@ const REASONING_EFFORT_LABEL_MAP = new Map<string, string>(
 
 export function getModelsForTool(tool: string): readonly ModelOption[] {
   return MODEL_OPTIONS_BY_TOOL[tool] ?? [];
+}
+
+export function getModelProviderGroupsForTool(tool: string): readonly ModelProviderGroup[] {
+  return tool === "pi" ? PI_MODEL_PROVIDER_GROUPS : [];
+}
+
+export function getModelProviderForModel(
+  tool: string,
+  model: string | null | undefined,
+): ModelProviderGroup | undefined {
+  if (!model) return undefined;
+  return getModelProviderGroupsForTool(tool).find((group) =>
+    group.models.some((option) => option.value === model),
+  );
+}
+
+export function getDefaultModelForProvider(
+  tool: string,
+  provider: string,
+): string | undefined {
+  return getModelProviderGroupsForTool(tool).find((group) => group.value === provider)?.models[0]
+    ?.value;
 }
 
 export function getDefaultModel(tool: string): string | undefined {
