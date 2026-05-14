@@ -244,8 +244,10 @@ enum EventType {
   chat_member_removed
   chat_renamed
   queued_message_added
+  queued_message_updated
   queued_message_removed
   queued_messages_cleared
+  queued_messages_reordered
   queued_messages_drained
   agent_environment_created
   agent_environment_updated

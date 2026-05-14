@@ -3602,30 +3602,22 @@ describe("SessionService", () => {
       });
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          eventType: "queued_message_added",
+          eventType: "queued_messages_reordered",
           deferPublish: true,
           payload: expect.objectContaining({
             sessionId: "session-1",
-            queuedMessage: expect.objectContaining({ id: "queued-2", position: 0 }),
+            queuedMessages: [
+              expect.objectContaining({ id: "queued-2", position: 0 }),
+              expect.objectContaining({ id: "queued-1", position: 1 }),
+            ],
           }),
         }),
         prismaMock,
       );
-      expect(eventServiceMock.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventType: "queued_message_added",
-          deferPublish: true,
-          payload: expect.objectContaining({
-            sessionId: "session-1",
-            queuedMessage: expect.objectContaining({ id: "queued-1", position: 1 }),
-          }),
-        }),
-        prismaMock,
-      );
-      expect(eventServiceMock.publishCreated).toHaveBeenCalledTimes(2);
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledTimes(1);
     });
 
-    it("updates queued message text and emits an upsert event", async () => {
+    it("updates queued message text and emits an update event", async () => {
       const updated = {
         id: "queued-1",
         sessionId: "session-1",
@@ -3652,7 +3644,7 @@ describe("SessionService", () => {
       });
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          eventType: "queued_message_added",
+          eventType: "queued_message_updated",
           deferPublish: true,
           payload: expect.objectContaining({
             sessionId: "session-1",

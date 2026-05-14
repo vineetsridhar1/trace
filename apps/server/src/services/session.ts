@@ -4326,7 +4326,7 @@ export class SessionService {
           organizationId: queuedMessage.organizationId,
           scopeType: "session",
           scopeId: queuedMessage.sessionId,
-          eventType: "queued_message_added",
+          eventType: "queued_message_updated",
           payload: {
             sessionId: queuedMessage.sessionId,
             queuedMessage: this.queuedMessagePayload(updated),
@@ -4460,7 +4460,7 @@ export class SessionService {
       throw new Error("Queued message ids must be unique");
     }
 
-    const { reordered, events } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const { reordered, event } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const queuedMessages = await tx.queuedMessage.findMany({
         where: { sessionId },
         orderBy: { position: "asc" },
@@ -4490,34 +4490,27 @@ export class SessionService {
         position,
       }));
 
-      const events: Awaited<ReturnType<typeof eventService.create>>[] = [];
-      for (const message of reordered) {
-        events.push(
-          await eventService.create(
-            {
-              organizationId: session.organizationId,
-              scopeType: "session",
-              scopeId: sessionId,
-              eventType: "queued_message_added",
-              payload: {
-                sessionId,
-                queuedMessage: this.queuedMessagePayload(message),
-              },
-              actorType: "user",
-              actorId,
-              deferPublish: true,
-            },
-            tx,
-          ),
-        );
-      }
+      const event = await eventService.create(
+        {
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "queued_messages_reordered",
+          payload: {
+            sessionId,
+            queuedMessages: reordered.map((message) => this.queuedMessagePayload(message)),
+          },
+          actorType: "user",
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
 
-      return { reordered, events };
+      return { reordered, event };
     });
 
-    for (const event of events) {
-      eventService.publishCreated(event);
-    }
+    eventService.publishCreated(event);
 
     return reordered;
   }

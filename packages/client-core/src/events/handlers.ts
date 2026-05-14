@@ -191,6 +191,12 @@ export function handleOrgEvent(event: Event): void {
       batch.upsertQueuedMessage(qm.sessionId, qm.id, qm as unknown as QueuedMessage);
     }
   }
+  if (event.eventType === "queued_message_updated") {
+    const qm = asJsonObject(payload.queuedMessage);
+    if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
+      batch.upsertQueuedMessage(qm.sessionId, qm.id, qm as unknown as QueuedMessage);
+    }
+  }
   if (event.eventType === "queued_message_removed") {
     const qmId = payload.queuedMessageId as string | undefined;
     const sid = payload.sessionId as string | undefined;
@@ -202,6 +208,17 @@ export function handleOrgEvent(event: Event): void {
     const sid = payload.sessionId as string | undefined;
     if (sid) {
       batch.clearQueuedMessagesForSession(sid);
+    }
+  }
+  if (event.eventType === "queued_messages_reordered") {
+    const queuedMessages = payload.queuedMessages;
+    if (Array.isArray(queuedMessages)) {
+      for (const queuedMessage of queuedMessages) {
+        const qm = asJsonObject(queuedMessage);
+        if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
+          batch.upsertQueuedMessage(qm.sessionId, qm.id, qm as unknown as QueuedMessage);
+        }
+      }
     }
   }
   if (event.eventType === "queued_messages_drained") {
