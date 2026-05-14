@@ -318,6 +318,7 @@ type User {
   defaultSessionTool: CodingTool
   defaultSessionModel: String
   defaultSessionReasoningEffort: String
+  autoArchiveMergedSessions: Boolean!
   organizations: [OrgMember!]!
 }
 
@@ -850,6 +851,7 @@ input UpdateSessionDefaultsInput {
   tool: CodingTool
   model: String
   reasoningEffort: String
+  autoArchiveMergedSessions: Boolean
 }
 
 input SessionFilters {

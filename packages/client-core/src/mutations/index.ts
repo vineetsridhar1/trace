@@ -636,6 +636,7 @@ export const UPDATE_SESSION_DEFAULTS_MUTATION = gql`
       defaultSessionTool
       defaultSessionModel
       defaultSessionReasoningEffort
+      autoArchiveMergedSessions
     }
   }
 `;

@@ -2,7 +2,7 @@
 import { JsonValue } from "../../json";
 import { TypedDocumentNode as DocumentNode } from "@graphql-typed-document-node/core";
 export type Maybe<T> = T | null;
-export type InputMaybe<T> = T | null | undefined;
+export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
@@ -1816,6 +1816,7 @@ export type UpdateRepoInput = {
 };
 
 export type UpdateSessionDefaultsInput = {
+  autoArchiveMergedSessions?: InputMaybe<Scalars["Boolean"]["input"]>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   tool?: InputMaybe<CodingTool>;
@@ -1831,6 +1832,7 @@ export type UpdateTicketInput = {
 
 export type User = {
   __typename?: "User";
+  autoArchiveMergedSessions: Scalars["Boolean"]["output"];
   avatarUrl?: Maybe<Scalars["String"]["output"]>;
   defaultSessionModel?: Maybe<Scalars["String"]["output"]>;
   defaultSessionReasoningEffort?: Maybe<Scalars["String"]["output"]>;
@@ -2997,6 +2999,7 @@ export type InboxItemsQuery = {
 export type SidebarSessionGroupsQueryVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
+  status?: InputMaybe<SessionGroupStatus>;
 }>;
 
 export type SidebarSessionGroupsQuery = {
@@ -6775,6 +6778,11 @@ export const SidebarSessionGroupsDocument = {
           variable: { kind: "Variable", name: { kind: "Name", value: "archived" } },
           type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "status" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "SessionGroupStatus" } },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -6792,6 +6800,11 @@ export const SidebarSessionGroupsDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "archived" },
                 value: { kind: "Variable", name: { kind: "Name", value: "archived" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "status" },
+                value: { kind: "Variable", name: { kind: "Name", value: "status" } },
               },
             ],
             selectionSet: {

@@ -270,7 +270,7 @@ export function SessionDetailView({
   const canAccessTerminal =
     bridgeInteractionAllowed &&
     isConnected &&
-    !isTerminalStatus(agentStatus, sessionStatus) &&
+    !isTerminalStatus(agentStatus, sessionStatus, worktreeDeleted) &&
     !worktreeDeleted &&
     !setupBlocking;
 
@@ -425,17 +425,20 @@ export function SessionDetailView({
 
   const latestTodos = useMemo(
     () =>
-      agentStatus && !isTerminalStatus(agentStatus, sessionStatus)
+      agentStatus && !isTerminalStatus(agentStatus, sessionStatus, worktreeDeleted)
         ? extractLatestTodos(eventIds, events)
         : null,
-    [eventIds, events, agentStatus, sessionStatus],
+    [eventIds, events, agentStatus, sessionStatus, worktreeDeleted],
   );
 
   const [showTerminal, setShowTerminal] = useState(false);
 
   // Auto-close terminal when session enters a terminal state or worktree is deleted
   useEffect(() => {
-    if ((isTerminalStatus(agentStatus, sessionStatus) || worktreeDeleted) && showTerminal) {
+    if (
+      (isTerminalStatus(agentStatus, sessionStatus, worktreeDeleted) || worktreeDeleted) &&
+      showTerminal
+    ) {
       setShowTerminal(false);
     }
   }, [agentStatus, sessionStatus, worktreeDeleted, showTerminal]);

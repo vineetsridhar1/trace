@@ -487,8 +487,8 @@ export function handleOrgEvent(event: Event): void {
         updatedAt: event.timestamp,
         _sortTimestamp: event.timestamp,
       };
-      if (payload.worktreeDeleted === true) {
-        sessionPatch.worktreeDeleted = true;
+      if (typeof payload.worktreeDeleted === "boolean") {
+        sessionPatch.worktreeDeleted = payload.worktreeDeleted;
       }
       batch.patch("sessions", event.scopeId, sessionPatch);
 
@@ -525,7 +525,7 @@ export function handleOrgEvent(event: Event): void {
               batch.patch("sessions", siblingId, {
                 agentStatus: "done" as AgentStatus,
                 sessionStatus: "merged" as SessionStatus,
-                worktreeDeleted: true,
+                worktreeDeleted: payload.worktreeDeleted === true,
                 updatedAt: event.timestamp,
                 _sortTimestamp: event.timestamp,
               });

@@ -210,8 +210,13 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
 export function isTerminalStatus(
   agentStatus: string | undefined,
   sessionStatus?: string | undefined,
+  worktreeDeleted?: boolean | undefined,
 ): boolean {
-  return agentStatus === "failed" || agentStatus === "stopped" || sessionStatus === "merged";
+  return (
+    agentStatus === "failed" ||
+    agentStatus === "stopped" ||
+    (sessionStatus === "merged" && worktreeDeleted !== false)
+  );
 }
 
 /** Check if a session can accept new messages (not disconnected and not fully unloaded) */
