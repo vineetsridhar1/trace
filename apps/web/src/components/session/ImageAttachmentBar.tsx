@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { FileText, Loader2, X } from "lucide-react";
+import { FileText, X } from "lucide-react";
 import { ImageLightbox } from "./ImageLightbox";
+import { TraceLoader } from "../ui/trace-loader";
 
 export interface FileAttachment {
   id: string;
@@ -50,7 +51,7 @@ export function ImageAttachmentBar({
               )}
               {attachment.uploading && (
                 <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/40">
-                  <Loader2 size={16} className="animate-spin text-white" />
+                  <TraceLoader size={16} showLabel={false} />
                 </div>
               )}
               <button

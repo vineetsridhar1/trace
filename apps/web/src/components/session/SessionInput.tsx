@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Cloud, Loader2, Monitor, Paperclip, Send, Square } from "lucide-react";
+import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
 import {
   isSessionPreparing,
   isSessionRuntimeStartingUp,
@@ -16,6 +16,7 @@ import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
+import { TraceLoader } from "../ui/trace-loader";
 import { cn } from "../../lib/utils";
 import { toast } from "sonner";
 import {
@@ -359,7 +360,7 @@ export function SessionInput({
     >
       {preparing && (
         <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 size={12} className="shrink-0 animate-spin text-yellow-500" />
+          <TraceLoader size={12} showLabel={false} className="shrink-0" />
           <span>Preparing workspace…</span>
         </div>
       )}

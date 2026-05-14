@@ -3,7 +3,7 @@ import { ChatMessage } from "./ChatMessage";
 import { ChatMessageErrorBoundary } from "./ChatMessageErrorBoundary";
 import { useEntityStore, type EntityState } from "@trace/client-core";
 import { useShallow } from "zustand/react/shallow";
-import { Loader2 } from "lucide-react";
+import { TraceLoader } from "../ui/trace-loader";
 
 /** Max gap in ms between messages from the same user to be grouped (5 min like Slack) */
 const GROUP_THRESHOLD_MS = 5 * 60 * 1000;
@@ -83,7 +83,7 @@ export function ChatMessageList({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin" />
+          <TraceLoader size={24} showLabel={false} />
           <span className="text-sm">Fetching messages…</span>
         </div>
       </div>

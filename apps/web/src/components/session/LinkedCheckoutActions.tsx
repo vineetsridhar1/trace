@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
+import { TraceLoader } from "../ui/trace-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { LinkedCheckoutSyncConflictDialog } from "./LinkedCheckoutSyncConflictDialog";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
@@ -155,7 +156,7 @@ export function LinkedCheckoutActions({ state }: Props) {
             }
           >
             {pendingAction === "sync" ? (
-              <Loader2 size={14} className="animate-spin" />
+              <TraceLoader size={14} showLabel={false} />
             ) : (
               <RefreshCw size={14} />
             )}

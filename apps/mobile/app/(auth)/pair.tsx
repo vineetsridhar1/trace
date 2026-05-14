@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import type { BarcodeScanningResult } from "expo-camera";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { Button, Screen, Text } from "@/components/design-system";
+import { Button, Screen, Spinner, Text } from "@/components/design-system";
 import {
   activateHostedConnection,
   activatePairedLocalConnection,
@@ -423,7 +423,7 @@ export default function PairScreen() {
           ) : (
             <View style={[styles.cameraFallback, { backgroundColor: theme.colors.surface }]}>
               {cameraPermission === "checking" ? (
-                <ActivityIndicator color={theme.colors.foreground} />
+                <Spinner size="large" color="foreground" />
               ) : cameraPermission === "unsupported" ? (
                 <Text variant="callout" color="mutedForeground" align="center">
                   {CAMERA_UNAVAILABLE_MESSAGE}

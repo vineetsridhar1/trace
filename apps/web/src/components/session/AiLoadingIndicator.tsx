@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { TraceLoader } from "../ui/trace-loader";
 
 interface AiLoadingIndicatorProps {
   model: string;
@@ -36,7 +36,7 @@ export function AiLoadingIndicator({ model, startedAt }: AiLoadingIndicatorProps
 
   return (
     <div className="mt-2 flex h-7 items-center gap-1.5">
-      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+      <TraceLoader size={14} showLabel={false} />
       <span className="text-[11px] text-muted-foreground">
         {model} is working • {formatTime(elapsed)}
       </span>

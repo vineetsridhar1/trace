@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "framer-motion";
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -10,6 +10,7 @@ import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
+import { TraceLoader } from "../ui/trace-loader";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
@@ -373,7 +374,7 @@ export function SessionMessageList({
 
         {loadingOlder && (
           <div className="flex items-center justify-center py-3">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <TraceLoader size={16} showLabel={false} />
             <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
           </div>
         )}

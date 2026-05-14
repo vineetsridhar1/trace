@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { gql } from "@urql/core";
-import { Code2, Eye, Loader2, RefreshCw } from "lucide-react";
+import { Code2, Eye, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { getLanguageFromPath } from "../../lib/monaco-utils";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
+import { TraceLoader } from "../ui/trace-loader";
 import { getFileRenderViewer, type FileViewMode } from "./file-render-viewers";
 
 const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
@@ -60,7 +61,7 @@ export function MonacoFileViewer({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        <TraceLoader size={20} showLabel={false} />
       </div>
     );
   }
@@ -162,7 +163,7 @@ export function MonacoFileViewer({
             }}
             loading={
               <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
-                <Loader2 size={20} className="animate-spin text-muted-foreground" />
+                <TraceLoader size={20} showLabel={false} />
               </div>
             }
           />

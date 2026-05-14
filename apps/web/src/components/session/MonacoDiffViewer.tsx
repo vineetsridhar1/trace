@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
 import { gql } from "@urql/core";
-import { Loader2 } from "lucide-react";
 import { client } from "../../lib/urql";
 import { getLanguageFromPath } from "../../lib/monaco-utils";
+import { TraceLoader } from "../ui/trace-loader";
 
 const SESSION_GROUP_FILE_AT_REF_QUERY = gql`
   query SessionGroupFileAtRef($sessionGroupId: ID!, $filePath: String!, $ref: String!) {
@@ -91,7 +91,7 @@ export function MonacoDiffViewer({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        <TraceLoader size={20} showLabel={false} />
       </div>
     );
   }
@@ -130,7 +130,7 @@ export function MonacoDiffViewer({
         }}
         loading={
           <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
-            <Loader2 size={20} className="animate-spin text-muted-foreground" />
+            <TraceLoader size={20} showLabel={false} />
           </div>
         }
       />

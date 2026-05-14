@@ -1,7 +1,8 @@
-import { Loader2, MoreHorizontal, PlugZap, Trash2 } from "lucide-react";
+import { MoreHorizontal, PlugZap, Trash2 } from "lucide-react";
 import type { AgentEnvironment } from "@trace/gql";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
+import { TraceLoader } from "../ui/trace-loader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,7 +71,7 @@ export function AgentEnvironmentRow({
           className="shrink-0"
         >
           {pending ? (
-            <Loader2 size={14} className="mr-1.5 animate-spin" />
+            <TraceLoader size={14} showLabel={false} className="mr-1.5" />
           ) : (
             <PlugZap size={14} className="mr-1.5" />
           )}
