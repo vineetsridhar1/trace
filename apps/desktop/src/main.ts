@@ -94,7 +94,7 @@ function createWindow() {
           vibrancy: "fullscreen-ui" as const,
           visualEffectState: "active" as const,
           titleBarStyle: "hiddenInset" as const,
-          trafficLightPosition: { x: 18, y: 10 } as const,
+          trafficLightPosition: { x: 18, y: 13 } as const,
         }
       : {}),
     ...(process.platform === "win32"
