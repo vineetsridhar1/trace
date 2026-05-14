@@ -35,7 +35,11 @@ export function OrgSwitcherContent() {
   }
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      style={styles.scroller}
+      contentContainerStyle={styles.content}
+    >
       <View style={styles.header}>
         <Text variant="headline">Switch organization</Text>
         <Text variant="footnote" color="mutedForeground">
@@ -96,8 +100,12 @@ export function OrgSwitcherContent() {
 }
 
 const styles = StyleSheet.create({
+  scroller: {
+    flex: 1,
+  },
   content: {
     gap: 16,
+    paddingBottom: 32,
   },
   header: {
     gap: 4,
