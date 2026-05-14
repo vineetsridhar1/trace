@@ -26,17 +26,10 @@ const CODEX_MODELS: readonly ModelOption[] = [
 ];
 
 const PI_MODELS: readonly ModelOption[] = [
-  { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5 via Pi" },
-  { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 via Pi" },
-  { value: "openai-codex/gpt-5.4-mini", label: "Codex GPT-5.4 Mini via Pi" },
-  { value: "openai-codex/gpt-5.3-codex", label: "Codex GPT-5.3 Codex via Pi" },
-  { value: "openai-codex/gpt-5.2-codex", label: "Codex GPT-5.2 Codex via Pi" },
-  { value: "openai-codex/gpt-5.2", label: "Codex GPT-5.2 via Pi" },
-  { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6 via Pi" },
-  { value: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5 via Pi" },
-  { value: "anthropic/claude-opus-4-7", label: "Claude Opus 4.7 via Pi" },
-  { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6 via Pi" },
-  { value: "anthropic/claude-haiku-4-5", label: "Claude Haiku 4.5 via Pi" },
+  { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5" },
+  { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4" },
+  { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { value: "anthropic/claude-opus-4-7", label: "Claude Opus 4.7" },
 ];
 
 const MODEL_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ModelOption[]>> = {
