@@ -114,12 +114,6 @@ export const ChannelItem = memo(function ChannelItem({
                 <span className={hasDoneBadge ? "truncate font-semibold" : "truncate"}>
                   {name}
                 </span>
-                {hasDoneBadge && (
-                  <span className="relative ml-auto flex h-2.5 w-2.5 shrink-0">
-                    <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-foreground opacity-75" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-foreground" />
-                  </span>
-                )}
               </SidebarMenuButton>
             </SidebarMenuItem>
           </ContextMenuTrigger>
@@ -193,6 +187,12 @@ export const ChannelItem = memo(function ChannelItem({
               <Plus size={14} />
             </button>
           </>
+        )}
+        {hasDoneBadge && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1 top-1 z-30 h-2 w-2 rounded-full bg-destructive ring-2 ring-sidebar"
+          />
         )}
       </div>
 
