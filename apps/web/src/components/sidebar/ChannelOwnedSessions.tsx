@@ -171,7 +171,6 @@ function SidebarSessionStatusGroup({
       >
         <Icon size={14} className="shrink-0 text-foreground" />
         <span className={cn("min-w-0 flex-1 truncate", color)}>{label}</span>
-        <span className="shrink-0 text-[11px] text-foreground">{group.records.length}</span>
       </button>
       <AnimatePresence initial={false}>
         {!collapsed && (

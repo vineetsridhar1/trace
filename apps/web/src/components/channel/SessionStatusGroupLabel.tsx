@@ -1,7 +1,7 @@
 import { Circle } from "lucide-react";
 import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 
-export function SessionStatusGroupLabel({ count, status }: { count: number; status: string }) {
+export function SessionStatusGroupLabel({ status }: { status: string }) {
   const color = sessionStatusColor[status] ?? "text-muted-foreground";
   const label = sessionStatusLabel[status] ?? status;
 
@@ -9,7 +9,6 @@ export function SessionStatusGroupLabel({ count, status }: { count: number; stat
     <div className={`flex items-center gap-2 ${color}`}>
       <Circle size={6} className="shrink-0 fill-current" />
       <span className="text-sm font-semibold">{label}</span>
-      <span className="text-xs text-muted-foreground">{count}</span>
     </div>
   );
 }
