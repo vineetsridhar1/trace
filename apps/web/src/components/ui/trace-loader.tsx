@@ -84,8 +84,8 @@ export function TraceLoader({
 
             .trace-loader-light {
               opacity: 0;
-              animation: trace-loader-light 1.6s linear infinite;
-              animation-delay: calc(var(--snake-index) * -100ms);
+              animation: trace-loader-light 1.28s linear infinite;
+              animation-delay: calc(var(--snake-index) * -80ms);
               transform-box: fill-box;
               transform-origin: center;
             }
@@ -93,22 +93,22 @@ export function TraceLoader({
             @keyframes trace-loader-light {
               0%, 100% {
                 opacity: 0;
-                transform: scale(.82);
+                transform: scale(.84);
               }
-              8% {
-                opacity: .26;
-                transform: scale(.94);
+              6% {
+                opacity: .18;
+                transform: scale(.92);
               }
-              16% {
+              12% {
                 opacity: 1;
-                transform: scale(1.18);
+                transform: scale(1.22);
               }
               24% {
-                opacity: .74;
+                opacity: .86;
                 transform: scale(1.08);
               }
               34% {
-                opacity: .18;
+                opacity: 0;
                 transform: scale(.9);
               }
             }
