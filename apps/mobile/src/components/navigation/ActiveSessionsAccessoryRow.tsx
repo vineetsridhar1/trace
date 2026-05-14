@@ -19,8 +19,6 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   theme: Theme;
 }) {
   const name = useEntityField("sessions", sessionId, "name");
-  const sessionBranch = useEntityField("sessions", sessionId, "branch");
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const workdir = useEntityField("sessions", sessionId, "workdir");
@@ -28,7 +26,6 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt");
   const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
   const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
-  const groupBranch = useEntityField("sessionGroups", sessionGroupId ?? "", "branch");
 
   const onPress = useCallback(() => {
     haptic.light();
@@ -37,7 +34,6 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   }, [sessionId]);
 
   if (!name) return null;
-  const branch = sessionBranch ?? groupBranch ?? null;
   const lastSentAt = lastMessageAt ?? lastUserMessageAt ?? updatedAt ?? null;
   const lastSentLabel = lastSentAt ? timeAgo(lastSentAt) : "";
   const indicatorAgentStatus = isSessionPreparing({
@@ -58,6 +54,13 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
       style={[styles.row, { width }]}
       onPress={onPress}
     >
+      <SymbolView
+        name="chevron.up"
+        size={14}
+        tintColor={theme.colors.mutedForeground}
+        weight="medium"
+        style={styles.chevron}
+      />
       <View style={styles.leading}>
         <SessionStatusIndicator
           status={sessionStatus}
@@ -69,39 +72,12 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
         <Text variant="callout" numberOfLines={1} style={styles.title}>
           {name}
         </Text>
-        {branch || lastSentLabel ? (
-          <View style={styles.metaRow}>
-            {branch ? (
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.branch,
-                  theme.typography.mono,
-                  { color: theme.colors.dimForeground, fontSize: 12 },
-                ]}
-              >
-                {branch}
-              </Text>
-            ) : null}
-            {lastSentLabel ? (
-              <Text
-                variant="caption2"
-                color="dimForeground"
-                numberOfLines={1}
-                style={[styles.timestamp, branch ? styles.timestampWithBranch : undefined]}
-              >
-                {lastSentLabel}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
       </View>
-      <SymbolView
-        name="chevron.up"
-        size={14}
-        tintColor={theme.colors.mutedForeground}
-        weight="medium"
-      />
+      {lastSentLabel ? (
+        <Text variant="caption2" color="dimForeground" numberOfLines={1} style={styles.timestamp}>
+          {lastSentLabel}
+        </Text>
+      ) : null}
     </Pressable>
   );
 });
@@ -110,25 +86,21 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 8,
+    height: 44,
+    overflow: "hidden",
+    paddingHorizontal: 10,
+  },
+  chevron: {
+    height: 14,
+    width: 14,
   },
   leading: {
-    width: 16,
+    width: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  text: { flex: 1, minWidth: 0, paddingTop: 2, paddingBottom: 2 },
+  text: { flex: 1, minWidth: 0 },
   title: { fontWeight: "600" },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 0,
-    minHeight: 16,
-    marginTop: -1,
-  },
-  branch: { flexShrink: 1, lineHeight: 16 },
-  timestamp: { lineHeight: 16 },
-  timestampWithBranch: { marginLeft: 10 },
+  timestamp: { flexShrink: 0, lineHeight: 14 },
 });
