@@ -2,6 +2,7 @@ import { Home } from "lucide-react";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { cn } from "../../lib/utils";
+import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 export function HomeButton() {
   const activePage = useUIStore((s: UIState) => s.activePage);
@@ -17,7 +18,9 @@ export function HomeButton() {
       type="button"
       onClick={() => setActiveChannelId(null)}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 pl-4 text-sm font-medium transition-colors",
+        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+        sidebarRootLeftEdgeRowClass,
+        "pl-4",
         isActive
           ? "bg-white/10 text-foreground"
           : "text-foreground hover:bg-white/10",
@@ -25,7 +28,7 @@ export function HomeButton() {
     >
       <Home size={16} />
       <span>Home</span>
-      {!allDone && <span className="ml-auto h-2 w-2 rounded-full bg-accent" aria-hidden="true" />}
+      {!allDone && <span className="ml-auto mr-2 h-2 w-2 rounded-full bg-accent" aria-hidden="true" />}
     </button>
   );
 }
