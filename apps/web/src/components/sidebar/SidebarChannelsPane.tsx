@@ -59,12 +59,11 @@ export function SidebarChannelsPane({
   }, []);
 
   const toggleSessionScope = useCallback(() => {
-    setSessionScope((current) => {
-      const next = current === "mine" ? "all" : "mine";
-      localStorage.setItem(SIDEBAR_SESSION_SCOPE_KEY, next);
-      window.dispatchEvent(new Event(SIDEBAR_SESSION_SCOPE_EVENT));
-      return next;
-    });
+    const current = readSidebarSessionScope();
+    const next = current === "mine" ? "all" : "mine";
+    localStorage.setItem(SIDEBAR_SESSION_SCOPE_KEY, next);
+    setSessionScope(next);
+    window.dispatchEvent(new Event(SIDEBAR_SESSION_SCOPE_EVENT));
   }, []);
 
   return (
