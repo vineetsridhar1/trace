@@ -9,34 +9,19 @@ interface TraceLoaderProps {
   size?: number;
 }
 
-const GRID_SIZE = 6;
-const DOT_SPACING = 14;
-const GRID_ORIGIN = 25;
+const GRID_SIZE = 3;
+const DOT_SPACING = 22;
+const GRID_ORIGIN = 38;
 const SNAKE_PATH = [
   [0, 0],
   [1, 0],
   [2, 0],
-  [3, 0],
-  [4, 0],
-  [5, 0],
-  [5, 1],
-  [4, 1],
-  [3, 1],
   [2, 1],
   [1, 1],
   [0, 1],
   [0, 2],
   [1, 2],
   [2, 2],
-  [3, 2],
-  [4, 2],
-  [5, 2],
-  [5, 3],
-  [4, 3],
-  [3, 3],
-  [2, 3],
-  [1, 3],
-  [0, 3],
 ] as const;
 
 const snakeIndexByPoint = new Map(SNAKE_PATH.map(([x, y], index) => [`${x}:${y}`, index]));
@@ -86,8 +71,8 @@ export function TraceLoader({
             }
 
             .trace-loader-dot-active {
-              animation: trace-loader-snake 2.4s linear infinite;
-              animation-delay: calc(var(--snake-index) * 100ms);
+              animation: trace-loader-snake 1.8s linear infinite;
+              animation-delay: calc(var(--snake-index) * -200ms);
             }
 
             @keyframes trace-loader-snake {
@@ -96,12 +81,12 @@ export function TraceLoader({
                 opacity: .24;
                 transform: scale(.74);
               }
-              4%, 18% {
+              8%, 42% {
                 fill: var(--th-accent-light);
                 opacity: 1;
                 transform: scale(1.28);
               }
-              24% {
+              52% {
                 fill: var(--th-accent);
                 opacity: .52;
                 transform: scale(.94);
@@ -127,7 +112,7 @@ export function TraceLoader({
               className={cn("trace-loader-dot", isSnakeDot && "trace-loader-dot-active")}
               cx={cx}
               cy={cy}
-              r="3.5"
+              r="4.5"
               fill="currentColor"
               style={isSnakeDot ? ({ "--snake-index": dot.snakeIndex } as SnakeDotStyle) : undefined}
             />
