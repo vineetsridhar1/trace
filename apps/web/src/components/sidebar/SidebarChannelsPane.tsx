@@ -8,38 +8,13 @@ import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
 import { SidebarChannelTree } from "./SidebarChannelTree";
-import type { SidebarSessionScope } from "./ChannelOwnedSessions";
+import {
+  readSidebarSessionScopes,
+  toggleSidebarSessionScope,
+  type SidebarSessionScopes,
+} from "./sidebarSessionScopes";
 
-const SIDEBAR_SESSION_SCOPES_KEY = "trace:sidebar-session-scopes";
 const SIDEBAR_SESSION_SCOPE_EVENT = "trace:sidebar-session-scope-change";
-
-type SidebarSessionScopes = Record<string, SidebarSessionScope>;
-
-function isSidebarSessionScope(value: unknown): value is SidebarSessionScope {
-  return value === "mine" || value === "all";
-}
-
-function readSidebarSessionScopes(): SidebarSessionScopes {
-  const rawScopes = localStorage.getItem(SIDEBAR_SESSION_SCOPES_KEY);
-  if (!rawScopes) return {};
-
-  try {
-    const parsed: unknown = JSON.parse(rawScopes);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-
-    return Object.fromEntries(
-      Object.entries(parsed).filter((entry): entry is [string, SidebarSessionScope] =>
-        isSidebarSessionScope(entry[1]),
-      ),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function writeSidebarSessionScopes(scopes: SidebarSessionScopes): void {
-  localStorage.setItem(SIDEBAR_SESSION_SCOPES_KEY, JSON.stringify(scopes));
-}
 
 export interface SidebarChannelsPaneProps {
   activeChannelId: string | null;
@@ -88,12 +63,7 @@ export function SidebarChannelsPane({
   }, []);
 
   const toggleSessionScope = useCallback((channelId: string) => {
-    const storedScopes = readSidebarSessionScopes();
-    const current = storedScopes[channelId] ?? "mine";
-    const next: SidebarSessionScope = current === "mine" ? "all" : "mine";
-    const nextScopes = { ...storedScopes, [channelId]: next };
-
-    writeSidebarSessionScopes(nextScopes);
+    const nextScopes = toggleSidebarSessionScope(channelId);
     setSessionScopes(nextScopes);
     window.dispatchEvent(new Event(SIDEBAR_SESSION_SCOPE_EVENT));
   }, []);
