@@ -77,11 +77,11 @@ export function SidebarChannelsPane({
           {features.tickets && <TicketsButton />}
         </div>
 
-        <div className="flex items-center justify-between px-2">
+        <div className="group/projects-header flex items-center justify-between px-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
             Projects
           </span>
-          <div className="flex items-center gap-0.5">
+          <div className="pointer-events-none flex items-center gap-0.5 opacity-0 transition-opacity group-hover/projects-header:pointer-events-auto group-hover/projects-header:opacity-100 group-focus-within/projects-header:pointer-events-auto group-focus-within/projects-header:opacity-100">
             <BrowseChannelsDialog />
             <CreateChannelDialog
               open={createDialogOpen}
