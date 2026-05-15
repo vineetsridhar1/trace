@@ -185,26 +185,47 @@ function CollapsedEventsNode({
         accessibilityRole="button"
         accessibilityLabel={`${open ? "Hide" : "Show"} activity: ${summaryLabel}`}
         onPress={toggleOpen}
-        style={[
+        style={({ pressed }) => [
           styles.collapsedHeader,
           {
-            backgroundColor: "rgba(38,38,38,0.4)",
+            backgroundColor:
+              pressed || open ? alpha(theme.colors.surfaceElevated, 0.5) : "transparent",
             borderRadius: theme.radius.sm,
             gap: theme.spacing.xs,
             paddingHorizontal: theme.spacing.sm,
-            paddingVertical: theme.spacing.xs,
+            paddingVertical: 4,
           },
         ]}
       >
         <SymbolView
           name={open ? "chevron.down" : "chevron.right"}
-          size={10}
-          tintColor={theme.colors.mutedForeground}
+          size={14}
+          tintColor={open ? theme.colors.foreground : theme.colors.mutedForeground}
           resizeMode="scaleAspectFit"
           style={styles.collapsedChevron}
         />
-        <Text variant="caption1" color="mutedForeground" style={styles.collapsedTitle}>
-          Activity · {summaryLabel}
+        <Text
+          variant="caption1"
+          color={open ? "foreground" : "mutedForeground"}
+          style={styles.collapsedTitle}
+        >
+          Activity
+        </Text>
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          style={[
+            styles.collapsedDot,
+            { backgroundColor: open ? theme.colors.foreground : theme.colors.mutedForeground },
+          ]}
+        />
+        <Text
+          variant="caption1"
+          color={open ? "foreground" : "mutedForeground"}
+          numberOfLines={1}
+          style={styles.collapsedSummary}
+        >
+          {summaryLabel}
         </Text>
       </Pressable>
 
@@ -213,11 +234,10 @@ function CollapsedEventsNode({
           style={[
             styles.collapsedBody,
             {
-              backgroundColor: alpha(theme.colors.surfaceElevated, 0.4),
-              borderColor: theme.colors.borderMuted,
-              borderRadius: theme.radius.md,
               gap: theme.spacing.sm,
-              padding: theme.spacing.sm,
+              paddingBottom: theme.spacing.xs,
+              paddingLeft: 28,
+              paddingTop: theme.spacing.xs,
             },
           ]}
         >
@@ -331,22 +351,33 @@ function prUrlFrom(payload: JsonObject | undefined): string | null {
 }
 
 const styles = StyleSheet.create({
-  collapsedWrapper: { overflow: "hidden" },
+  collapsedWrapper: {
+    alignItems: "flex-start",
+    overflow: "hidden",
+  },
   collapsedHeader: {
     alignItems: "center",
     flexDirection: "row",
+    maxWidth: "100%",
   },
   collapsedChevron: {
-    height: 12,
-    width: 12,
+    height: 14,
+    width: 14,
   },
   collapsedTitle: {
-    flex: 1,
-    fontFamily: "Menlo",
+    fontWeight: "600",
+  },
+  collapsedDot: {
+    borderRadius: 2,
+    height: 4,
+    opacity: 0.45,
+    width: 4,
+  },
+  collapsedSummary: {
+    flexShrink: 1,
   },
   collapsedBody: {
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 6,
+    alignSelf: "stretch",
   },
   collapsedState: {
     alignItems: "center",
