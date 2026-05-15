@@ -187,7 +187,7 @@ function CollapsedEventsNode({
       >
         <SymbolView
           name={open ? "chevron.down" : "chevron.right"}
-          size={12}
+          size={9}
           tintColor={open ? theme.colors.mutedForeground : theme.colors.dimForeground}
           resizeMode="scaleAspectFit"
           style={styles.collapsedChevron}
@@ -333,8 +333,8 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   collapsedChevron: {
-    height: 14,
-    width: 14,
+    height: 10,
+    width: 10,
   },
   collapsedTitle: {
     fontWeight: "400",
