@@ -8,6 +8,7 @@ import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
 import type { CollapsedSessionEventsSummary } from "../../hooks/useSessionEvents";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
+import { getSessionVirtualPadding } from "./sessionVirtualPadding";
 import { TraceLoader } from "../ui/trace-loader";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
@@ -99,6 +100,7 @@ export function SessionMessageList({
     estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
     overscan: 8,
     getItemKey,
+    useAnimationFrameWithResizeObserver: true,
     measureElement: (element: Element) => {
       const height = element.getBoundingClientRect().height;
       const index = element.getAttribute("data-index");
@@ -341,6 +343,7 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
+  const { paddingTop, paddingBottom } = getSessionVirtualPadding(virtualItems, totalSize);
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
@@ -387,27 +390,17 @@ export function SessionMessageList({
           <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
         )}
 
-        <div
-          style={{
-            height: totalSize,
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {virtualItems.map((virtualRow: { key: React.Key; index: number; start: number }) => {
+        {/* Visible rows stay in document flow; virtual padding preserves scroll height. */}
+        <div style={{ minHeight: totalSize, width: "100%" }}>
+          {paddingTop > 0 ? <div aria-hidden="true" style={{ height: paddingTop }} /> : null}
+
+          {virtualItems.map((virtualRow: { key: React.Key; index: number }) => {
             const node = nodes[virtualRow.index];
             return (
               <div
                 key={virtualRow.key}
                 ref={virtualizer.measureElement}
                 data-index={virtualRow.index}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
                 className="pb-3"
               >
                 {node.kind === "collapsed-events" ? (
@@ -432,6 +425,8 @@ export function SessionMessageList({
               </div>
             );
           })}
+
+          {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: paddingBottom }} /> : null}
         </div>
       </div>
     </div>
