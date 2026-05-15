@@ -85,12 +85,12 @@ export function ToolModelPicker({
         ? getModelProviderForModel(nextTool, model)?.value
         : nextProviderGroups[0]?.value;
     setPickerProvider(nextProvider ?? null);
+    setLayer(nextProviderGroups.length > 0 ? "providers" : "models");
+    if (nextTool === tool) return;
+
     setPending(true);
     try {
-      if (nextTool !== tool) {
-        await onToolChange(nextTool);
-      }
-      setLayer(nextProviderGroups.length > 0 ? "providers" : "models");
+      await onToolChange(nextTool);
     } finally {
       setPending(false);
     }
@@ -146,7 +146,7 @@ export function ToolModelPicker({
                   type="button"
                   disabled={pending}
                   onClick={() => void handleToolSelect(option.value)}
-                  className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-popover-foreground outline-none transition-colors hover:bg-white/10 disabled:opacity-50"
+                  className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-popover-foreground outline-none transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ToolIcon tool={option.value} className="size-4" />
                   <span className="flex-1 truncate">{option.label}</span>
@@ -170,7 +170,7 @@ export function ToolModelPicker({
                 <button
                   type="button"
                   onClick={() => setLayer("tools")}
-                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-white/10 hover:text-foreground"
                   aria-label="Back to tools"
                 >
                   <ArrowLeft className="size-4" />
@@ -184,7 +184,7 @@ export function ToolModelPicker({
                   type="button"
                   disabled={pending}
                   onClick={() => handleProviderSelect(group.value)}
-                  className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-popover-foreground outline-none transition-colors hover:bg-white/10 disabled:opacity-50"
+                  className="flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-popover-foreground outline-none transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="flex flex-1 flex-col gap-0.5 truncate">
                     <span className="truncate">{group.label}</span>
@@ -212,7 +212,7 @@ export function ToolModelPicker({
                 <button
                   type="button"
                   onClick={handleModelBack}
-                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-white/10 hover:text-foreground"
                   aria-label={providerGroups.length > 0 ? "Back to providers" : "Back to tools"}
                 >
                   <ArrowLeft className="size-4" />
@@ -230,7 +230,7 @@ export function ToolModelPicker({
                     disabled={pending}
                     onClick={() => void handleModelSelect(option.value)}
                     className={cn(
-                      "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm outline-none transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-50",
+                      "flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm outline-none transition-colors hover:bg-white/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
                       activeModel === option.value ? "text-foreground" : "text-muted-foreground",
                     )}
                   >
