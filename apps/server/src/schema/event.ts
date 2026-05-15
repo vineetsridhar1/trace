@@ -62,7 +62,9 @@ export const eventQueries = {
       scope?: ScopeInput;
       types?: EventType[];
       after?: Date;
+      afterEventId?: string;
       before?: Date;
+      beforeEventId?: string;
       limit?: number;
       excludePayloadTypes?: string[];
     },
@@ -85,7 +87,9 @@ export const eventQueries = {
       scopeId: args.scope?.id,
       types: args.types,
       after: args.after,
+      afterEventId: args.afterEventId,
       before: args.before,
+      beforeEventId: args.beforeEventId,
       limit: args.limit,
       excludePayloadTypes: args.excludePayloadTypes,
     });
@@ -155,6 +159,7 @@ export const eventQueries = {
       organizationId: string;
       sessionId: string;
       before?: Date;
+      beforeEventId?: string;
       limit?: number;
       excludePayloadTypes?: string[];
     },
@@ -171,6 +176,7 @@ export const eventQueries = {
       organizationId: args.organizationId,
       sessionId: args.sessionId,
       before: args.before,
+      beforeEventId: args.beforeEventId,
       limit: args.limit,
       excludePayloadTypes: args.excludePayloadTypes,
     });

@@ -6,6 +6,7 @@ export const SESSION_TIMELINE_QUERY = gql`
     $sessionId: ID!
     $limit: Int
     $before: DateTime
+    $beforeEventId: ID
     $excludePayloadTypes: [String!]
   ) {
     sessionTimeline(
@@ -13,6 +14,7 @@ export const SESSION_TIMELINE_QUERY = gql`
       sessionId: $sessionId
       limit: $limit
       before: $before
+      beforeEventId: $beforeEventId
       excludePayloadTypes: $excludePayloadTypes
     ) {
       mode
@@ -38,7 +40,9 @@ export const SESSION_TIMELINE_QUERY = gql`
         }
         collapsed {
           id
+          startEventId
           startTimestamp
+          endEventId
           endTimestamp
         }
       }
@@ -52,7 +56,9 @@ export const SESSION_EVENTS_QUERY = gql`
     $scope: ScopeInput
     $limit: Int
     $after: DateTime
+    $afterEventId: ID
     $before: DateTime
+    $beforeEventId: ID
     $excludePayloadTypes: [String!]
   ) {
     events(
@@ -60,7 +66,9 @@ export const SESSION_EVENTS_QUERY = gql`
       scope: $scope
       limit: $limit
       after: $after
+      afterEventId: $afterEventId
       before: $before
+      beforeEventId: $beforeEventId
       excludePayloadTypes: $excludePayloadTypes
     ) {
       id

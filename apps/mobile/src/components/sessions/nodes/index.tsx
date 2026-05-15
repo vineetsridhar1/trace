@@ -85,7 +85,10 @@ function CollapsedEventsNode({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eventIds, setEventIds] = useState<string[]>([]);
-  const [cursor, setCursor] = useState(collapsed.startTimestamp);
+  const [cursor, setCursor] = useState({
+    timestamp: collapsed.startTimestamp,
+    eventId: collapsed.startEventId,
+  });
   const [hasMore, setHasMore] = useState(true);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const scopeKey = eventScopeKey("session", context.sessionId);
@@ -96,9 +99,9 @@ function CollapsedEventsNode({
     setLoading(false);
     setError(null);
     setEventIds([]);
-    setCursor(collapsed.startTimestamp);
+    setCursor({ timestamp: collapsed.startTimestamp, eventId: collapsed.startEventId });
     setHasMore(true);
-  }, [collapsed.id, collapsed.startTimestamp]);
+  }, [collapsed.id, collapsed.startEventId, collapsed.startTimestamp]);
 
   const fetchNext = useCallback(async () => {
     if (!activeOrgId || loading || !hasMore) return;
@@ -110,8 +113,10 @@ function CollapsedEventsNode({
         organizationId: activeOrgId,
         scope: { type: "session", id: context.sessionId },
         limit: COLLAPSED_PAGE_SIZE,
-        after: cursor,
+        after: cursor.timestamp,
+        afterEventId: cursor.eventId,
         before: collapsed.endTimestamp,
+        beforeEventId: collapsed.endEventId,
         excludePayloadTypes: COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES,
       })
       .toPromise();
@@ -141,12 +146,23 @@ function CollapsedEventsNode({
         }
         return next;
       });
-      setCursor(events[events.length - 1].timestamp);
+      setCursor({
+        timestamp: events[events.length - 1].timestamp,
+        eventId: events[events.length - 1].id,
+      });
     }
 
     setHasMore(events.length === COLLAPSED_PAGE_SIZE);
     setLoading(false);
-  }, [activeOrgId, collapsed.endTimestamp, context.sessionId, cursor, hasMore, loading]);
+  }, [
+    activeOrgId,
+    collapsed.endEventId,
+    collapsed.endTimestamp,
+    context.sessionId,
+    cursor,
+    hasMore,
+    loading,
+  ]);
 
   const hidden = useMemo(() => buildSessionNodes(eventIds, scopedEvents), [eventIds, scopedEvents]);
   const emptyAfterLoad = open && !loading && !error && !hasMore && hidden.nodes.length === 0;

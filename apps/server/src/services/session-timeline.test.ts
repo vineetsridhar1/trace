@@ -134,7 +134,9 @@ describe("SessionTimelineService", () => {
     ]);
     expect(page.items[1].collapsed).toEqual({
       id: "collapsed:user-1:assistant-final",
+      startEventId: userEvent.id,
       startTimestamp: userEvent.timestamp,
+      endEventId: finalEvent.id,
       endTimestamp: finalEvent.timestamp,
     });
     expect(page.items[2].event?.id).toBe("assistant-final");
@@ -146,7 +148,7 @@ describe("SessionTimelineService", () => {
         scopeType: "session",
         scopeId: "session-1",
       }),
-      orderBy: { timestamp: "desc" },
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
       take: 400,
     });
   });
@@ -295,6 +297,116 @@ describe("SessionTimelineService", () => {
       "assistant-2",
       "collapsed:assistant-2:user-3",
     ]);
+    expect(page.items[1].collapsed).toEqual({
+      id: "collapsed:user-2:assistant-2",
+      startEventId: user2.id,
+      startTimestamp: user2.timestamp,
+      endEventId: assistant2.id,
+      endTimestamp: assistant2.timestamp,
+    });
     expect(page.items[3].collapsed?.endTimestamp).toEqual(user3.timestamp);
+  });
+
+  it("keeps PR lifecycle events visible in compact timelines", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      payload: { prompt: "Implement this" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const prEvent = event({
+      id: "pr-opened",
+      eventType: "session_pr_opened",
+      payload: { url: "https://github.com/acme/repo/pull/1" },
+      timestamp: new Date("2026-05-14T10:03:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp: new Date("2026-05-14T10:05:00.000Z"),
+    });
+    const hiddenCandidate = event({
+      id: "hidden-tool",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-1", name: "Read", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      finalEvent,
+      prEvent,
+      hiddenCandidate,
+      userEvent,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-1",
+      "collapsed:user-1:pr-opened",
+      "pr-opened",
+      "assistant-final",
+    ]);
+  });
+
+  it("uses event ids to build collapsed ranges for events sharing a timestamp", async () => {
+    const timestamp = new Date("2026-05-14T10:00:00.000Z");
+    const userEvent = event({
+      id: "a-user",
+      eventType: "session_started",
+      actorType: "user",
+      payload: { prompt: "Implement this" },
+      timestamp,
+    });
+    const hiddenCandidate = event({
+      id: "b-hidden",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-1", name: "Read", input: {} }] },
+      },
+      timestamp,
+    });
+    const finalEvent = event({
+      id: "c-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp,
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([finalEvent, hiddenCandidate, userEvent]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items[1].collapsed).toEqual({
+      id: "collapsed:a-user:c-final",
+      startEventId: userEvent.id,
+      startTimestamp: timestamp,
+      endEventId: finalEvent.id,
+      endTimestamp: timestamp,
+    });
   });
 });

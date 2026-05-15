@@ -24,7 +24,9 @@ export interface EventQueryOpts {
   scopeId?: string;
   types?: EventType[];
   after?: Date;
+  afterEventId?: string;
   before?: Date;
+  beforeEventId?: string;
   limit?: number;
   /** When true, exclude events that are thread replies (parentId IS NOT NULL) */
   excludeReplies?: boolean;
@@ -88,6 +90,24 @@ const scopeTopicMap: Record<string, (id: string) => string> = {
 };
 
 type TxClient = Prisma.TransactionClient;
+
+function eventCursorWhere(
+  direction: "after" | "before",
+  timestamp: Date,
+  eventId: string | undefined,
+): Prisma.EventWhereInput {
+  const filters: Prisma.EventWhereInput[] = [
+    { timestamp: direction === "after" ? { gt: timestamp } : { lt: timestamp } },
+  ];
+
+  if (eventId) {
+    filters.push({
+      AND: [{ timestamp }, { id: direction === "after" ? { gt: eventId } : { lt: eventId } }],
+    });
+  }
+
+  return { OR: filters };
+}
 
 export class EventService {
   async create(input: CreateEventInput, tx?: TxClient) {
@@ -228,10 +248,16 @@ export class EventService {
     if (opts.types?.length) where.eventType = { in: opts.types };
     if (opts.excludeReplies) where.parentId = null;
     Object.assign(where, excludeSessionOutputPayloadTypesWhere(opts.excludePayloadTypes));
-    const timestampFilter: Record<string, Date> = {};
-    if (opts.after) timestampFilter.gt = opts.after;
-    if (opts.before) timestampFilter.lt = opts.before;
-    if (Object.keys(timestampFilter).length > 0) where.timestamp = timestampFilter;
+    const cursorFilters: Prisma.EventWhereInput[] = [];
+    if (opts.after) {
+      cursorFilters.push(eventCursorWhere("after", opts.after, opts.afterEventId));
+    }
+    if (opts.before) {
+      cursorFilters.push(eventCursorWhere("before", opts.before, opts.beforeEventId));
+    }
+    if (cursorFilters.length > 0) {
+      where.AND = cursorFilters;
+    }
 
     // When paginating backwards (before cursor), fetch in desc order then reverse
     // so the caller always gets events in ascending chronological order.
@@ -240,7 +266,10 @@ export class EventService {
 
     const events = await prisma.event.findMany({
       where,
-      orderBy: { timestamp: isBefore ? "desc" : "asc" },
+      orderBy: [
+        { timestamp: isBefore ? "desc" : "asc" },
+        { id: isBefore ? "desc" : "asc" },
+      ],
       take: limit,
     });
 

@@ -47,7 +47,10 @@ export function CollapsedSessionEventsRow({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eventIds, setEventIds] = useState<string[]>([]);
-  const [cursor, setCursor] = useState(collapsed.startTimestamp);
+  const [cursor, setCursor] = useState({
+    timestamp: collapsed.startTimestamp,
+    eventId: collapsed.startEventId,
+  });
   const [hasMore, setHasMore] = useState(true);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const scopeKey = useEventScopeKey();
@@ -58,9 +61,9 @@ export function CollapsedSessionEventsRow({
     setLoading(false);
     setError(null);
     setEventIds([]);
-    setCursor(collapsed.startTimestamp);
+    setCursor({ timestamp: collapsed.startTimestamp, eventId: collapsed.startEventId });
     setHasMore(true);
-  }, [collapsed.id, collapsed.startTimestamp]);
+  }, [collapsed.id, collapsed.startEventId, collapsed.startTimestamp]);
 
   const fetchNext = useCallback(async () => {
     if (!activeOrgId || loading || !hasMore) return;
@@ -72,8 +75,10 @@ export function CollapsedSessionEventsRow({
         organizationId: activeOrgId,
         scope: { type: "session", id: sessionId },
         limit: COLLAPSED_PAGE_SIZE,
-        after: cursor,
+        after: cursor.timestamp,
+        afterEventId: cursor.eventId,
         before: collapsed.endTimestamp,
+        beforeEventId: collapsed.endEventId,
         excludePayloadTypes: COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES,
       })
       .toPromise();
@@ -103,12 +108,23 @@ export function CollapsedSessionEventsRow({
         }
         return next;
       });
-      setCursor(events[events.length - 1].timestamp);
+      setCursor({
+        timestamp: events[events.length - 1].timestamp,
+        eventId: events[events.length - 1].id,
+      });
     }
 
     setHasMore(events.length === COLLAPSED_PAGE_SIZE);
     setLoading(false);
-  }, [activeOrgId, collapsed.endTimestamp, cursor, hasMore, loading, sessionId]);
+  }, [
+    activeOrgId,
+    collapsed.endEventId,
+    collapsed.endTimestamp,
+    cursor,
+    hasMore,
+    loading,
+    sessionId,
+  ]);
 
   const handleToggle = useCallback(() => {
     const nextOpen = !open;

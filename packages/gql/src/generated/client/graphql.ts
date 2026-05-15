@@ -260,8 +260,10 @@ export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
+  endEventId: Scalars["ID"]["output"];
   endTimestamp: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  startEventId: Scalars["ID"]["output"];
   startTimestamp: Scalars["DateTime"]["output"];
 };
 
@@ -1288,7 +1290,9 @@ export type QueryChatMessagesArgs = {
 
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -1410,6 +1414,7 @@ export type QuerySessionTerminalsArgs = {
 
 export type QuerySessionTimelineArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -2887,6 +2892,7 @@ export type SessionTimelineQueryVariables = Exact<{
   sessionId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]> | Scalars["String"]["input"]>;
 }>;
 
@@ -2921,7 +2927,9 @@ export type SessionTimelineQuery = {
       collapsed?: {
         __typename?: "CollapsedSessionEvents";
         id: string;
+        startEventId: string;
         startTimestamp: string;
+        endEventId: string;
         endTimestamp: string;
       } | null;
     }>;
@@ -2933,7 +2941,9 @@ export type SessionEventsQueryVariables = Exact<{
   scope?: InputMaybe<ScopeInput>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]> | Scalars["String"]["input"]>;
 }>;
 
@@ -6429,6 +6439,11 @@ export const SessionTimelineDocument = {
         },
         {
           kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "beforeEventId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+        },
+        {
+          kind: "VariableDefinition",
           variable: { kind: "Variable", name: { kind: "Name", value: "excludePayloadTypes" } },
           type: {
             kind: "ListType",
@@ -6465,6 +6480,11 @@ export const SessionTimelineDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "before" },
                 value: { kind: "Variable", name: { kind: "Name", value: "before" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "beforeEventId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "beforeEventId" } },
               },
               {
                 kind: "Argument",
@@ -6522,7 +6542,9 @@ export const SessionTimelineDocument = {
                           kind: "SelectionSet",
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "startEventId" } },
                             { kind: "Field", name: { kind: "Name", value: "startTimestamp" } },
+                            { kind: "Field", name: { kind: "Name", value: "endEventId" } },
                             { kind: "Field", name: { kind: "Name", value: "endTimestamp" } },
                           ],
                         },
@@ -6571,8 +6593,18 @@ export const SessionEventsDocument = {
         },
         {
           kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "afterEventId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+        },
+        {
+          kind: "VariableDefinition",
           variable: { kind: "Variable", name: { kind: "Name", value: "before" } },
           type: { kind: "NamedType", name: { kind: "Name", value: "DateTime" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "beforeEventId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
         },
         {
           kind: "VariableDefinition",
@@ -6615,8 +6647,18 @@ export const SessionEventsDocument = {
               },
               {
                 kind: "Argument",
+                name: { kind: "Name", value: "afterEventId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "afterEventId" } },
+              },
+              {
+                kind: "Argument",
                 name: { kind: "Name", value: "before" },
                 value: { kind: "Variable", name: { kind: "Name", value: "before" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "beforeEventId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "beforeEventId" } },
               },
               {
                 kind: "Argument",

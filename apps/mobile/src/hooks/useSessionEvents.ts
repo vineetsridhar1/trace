@@ -24,6 +24,7 @@ import {
   asCollapsedSummary,
   asFetchedEvent,
   asRecord,
+  type EventCursor,
   type SessionTimelineDisplayItem,
 } from "./session-events-timeline";
 
@@ -38,6 +39,14 @@ function isCompletedSessionEvent(event: Event): boolean {
   if (event.eventType !== "session_terminated") return false;
   const payload = payloadRecord(event);
   return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
+}
+
+function isPrLifecycleEvent(event: Event): boolean {
+  return (
+    event.eventType === "session_pr_opened" ||
+    event.eventType === "session_pr_merged" ||
+    event.eventType === "session_pr_closed"
+  );
 }
 
 function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
@@ -66,6 +75,7 @@ function isRenderableCompactEvent(event: Event | undefined): event is Event & { 
     const payload = payloadRecord(event);
     return typeof payload?.text === "string" && payload.text.trim() !== "";
   }
+  if (isPrLifecycleEvent(event)) return true;
   if (event.eventType !== "session_output") return false;
 
   const payload = payloadRecord(event);
@@ -102,8 +112,12 @@ function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {
     timelineMode,
     timelineItems: items,
     hasOlder: page?.hasOlder === true,
-    oldestTimestamp: events[0]?.timestamp ?? null,
+    oldestCursor: eventCursor(events[0]),
   };
+}
+
+function eventCursor(event: (Event & { id: string }) | undefined): EventCursor | null {
+  return event ? { timestamp: event.timestamp, eventId: event.id } : null;
 }
 
 function appendEventItem(
@@ -156,7 +170,7 @@ export function useSessionEvents(
   const [timelineItems, setTimelineItems] =
     useState<SessionTimelineDisplayItem[]>(EMPTY_TIMELINE_ITEMS);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const oldestTimestampRef = useRef<string | null>(null);
+  const oldestCursorRef = useRef<EventCursor | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
   const timelineModeRef = useRef<SessionTimelineMode>("live");
@@ -169,7 +183,7 @@ export function useSessionEvents(
       upsertFetchedSessionEventsWithOptimisticResolution(sessionId, pending.events);
       setHasOlder(pending.hasOlder);
       hasOlderRef.current = pending.hasOlder;
-      oldestTimestampRef.current = pending.oldestTimestamp;
+      oldestCursorRef.current = pending.oldestCursor;
       setTimelineMode(pending.timelineMode);
       timelineModeRef.current = pending.timelineMode;
       setTimelineItems(pending.timelineItems);
@@ -279,6 +293,7 @@ export function useSessionEvents(
       setTimelineMode("live");
       timelineModeRef.current = "live";
       setTimelineItems(EMPTY_TIMELINE_ITEMS);
+      oldestCursorRef.current = null;
       return;
     }
     void fetchEvents();
@@ -358,7 +373,7 @@ export function useSessionEvents(
       !fetchEnabled ||
       !commitEnabled ||
       !activeOrgId ||
-      !oldestTimestampRef.current ||
+      !oldestCursorRef.current ||
       loadingOlderRef.current ||
       !hasOlderRef.current
     ) {
@@ -374,7 +389,8 @@ export function useSessionEvents(
           organizationId: activeOrgId,
           sessionId,
           limit: PAGE_SIZE,
-          before: oldestTimestampRef.current,
+          before: oldestCursorRef.current.timestamp,
+          beforeEventId: oldestCursorRef.current.eventId,
           excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
         })
         .toPromise();
@@ -400,14 +416,14 @@ export function useSessionEvents(
         setTimelineItems((current) => [...pending.timelineItems, ...current]);
         setHasOlder(pending.hasOlder);
         hasOlderRef.current = pending.hasOlder;
-        oldestTimestampRef.current = pending.oldestTimestamp;
+        oldestCursorRef.current = pending.oldestCursor;
       } else {
         setTimelineMode("live");
         timelineModeRef.current = "live";
         setTimelineItems(EMPTY_TIMELINE_ITEMS);
         setHasOlder(pending.hasOlder);
         hasOlderRef.current = pending.hasOlder;
-        oldestTimestampRef.current = pending.oldestTimestamp;
+        oldestCursorRef.current = pending.oldestCursor;
       }
 
       loadingOlderRef.current = false;
@@ -420,7 +436,8 @@ export function useSessionEvents(
         organizationId: activeOrgId,
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
-        before: oldestTimestampRef.current,
+        before: oldestCursorRef.current.timestamp,
+        beforeEventId: oldestCursorRef.current.eventId,
         excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
       })
       .toPromise();
@@ -446,7 +463,7 @@ export function useSessionEvents(
         hasOlderRef.current = false;
       }
       if (events.length > 0) {
-        oldestTimestampRef.current = events[0].timestamp;
+        oldestCursorRef.current = eventCursor(events[0]);
       }
     }
     loadingOlderRef.current = false;

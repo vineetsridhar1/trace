@@ -1,10 +1,10 @@
 import type { Event, SessionTimelineMode } from "@trace/gql";
-import type { SessionTimelineDisplayItem } from "./session-events-timeline";
+import type { EventCursor, SessionTimelineDisplayItem } from "./session-events-timeline";
 
 export interface PendingFetchedEvents {
   events: Array<Event & { id: string }>;
   hasOlder: boolean;
-  oldestTimestamp: string | null;
+  oldestCursor: EventCursor | null;
   timelineMode: SessionTimelineMode;
   timelineItems: SessionTimelineDisplayItem[];
 }

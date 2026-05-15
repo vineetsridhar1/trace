@@ -508,7 +508,9 @@ enum SessionTimelineItemKind {
 
 type CollapsedSessionEvents {
   id: ID!
+  startEventId: ID!
   startTimestamp: DateTime!
+  endEventId: ID!
   endTimestamp: DateTime!
 }
 
@@ -1026,7 +1028,9 @@ type Query {
     scope: ScopeInput
     types: [String!]
     after: DateTime
+    afterEventId: ID
     before: DateTime
+    beforeEventId: ID
     limit: Int
     excludePayloadTypes: [String!]
   ): [Event!]!
@@ -1034,6 +1038,7 @@ type Query {
     organizationId: ID!
     sessionId: ID!
     before: DateTime
+    beforeEventId: ID
     limit: Int
     excludePayloadTypes: [String!]
   ): SessionTimelinePage!

@@ -8,7 +8,9 @@ const COMPACT_CANDIDATE_OVERFETCH = 4;
 
 export interface CollapsedSessionEventRange {
   id: string;
+  startEventId: string;
   startTimestamp: Date;
+  endEventId: string;
   endTimestamp: Date;
 }
 
@@ -36,8 +38,44 @@ export interface SessionTimelineQueryOpts {
   organizationId: string;
   sessionId: string;
   before?: Date;
+  beforeEventId?: string;
   limit?: number;
   excludePayloadTypes?: string[];
+}
+
+const COMPACT_VISIBLE_EVENT_TYPES = [
+  "session_started",
+  "message_sent",
+  "session_pr_opened",
+  "session_pr_merged",
+  "session_pr_closed",
+] as const;
+
+function compareEvents(
+  a: Pick<PrismaEvent, "timestamp" | "id">,
+  b: Pick<PrismaEvent, "timestamp" | "id">,
+): number {
+  const timestampDiff = a.timestamp.getTime() - b.timestamp.getTime();
+  if (timestampDiff !== 0) return timestampDiff;
+  return a.id.localeCompare(b.id);
+}
+
+function eventBeforeCursorWhere(
+  timestamp: Date,
+  eventId: string | undefined,
+  inclusive: boolean,
+): Prisma.EventWhereInput {
+  const filters: Prisma.EventWhereInput[] = [
+    { timestamp: inclusive && !eventId ? { lte: timestamp } : { lt: timestamp } },
+  ];
+
+  if (eventId) {
+    filters.push({
+      AND: [{ timestamp }, { id: inclusive ? { lte: eventId } : { lt: eventId } }],
+    });
+  }
+
+  return { OR: filters };
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -114,6 +152,14 @@ function isCompletionEvent(event: PrismaEvent): boolean {
   );
 }
 
+function isPrLifecycleEvent(event: PrismaEvent): boolean {
+  return (
+    event.eventType === "session_pr_opened" ||
+    event.eventType === "session_pr_merged" ||
+    event.eventType === "session_pr_closed"
+  );
+}
+
 function isThinkingCandidate(event: PrismaEvent): boolean {
   return (
     event.eventType === "session_output" &&
@@ -139,6 +185,12 @@ function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
       continue;
     }
 
+    if (isPrLifecycleEvent(event)) {
+      flushAssistant();
+      visibleIds.add(event.id);
+      continue;
+    }
+
     if (isAssistantTextEvent(event)) {
       latestAssistantInTurn = event;
       continue;
@@ -159,16 +211,15 @@ function compactCandidateWhere(
   organizationId: string,
   sessionId: string,
   excludePayloadTypes: string[] | undefined,
-  timestamp?: Prisma.DateTimeFilter,
+  cursor?: Prisma.EventWhereInput,
 ): Prisma.EventWhereInput {
   return {
     organizationId,
     scopeType: "session",
     scopeId: sessionId,
     parentId: null,
-    ...(timestamp ? { timestamp } : {}),
     OR: [
-      { eventType: { in: ["session_started", "message_sent"] } },
+      { eventType: { in: [...COMPACT_VISIBLE_EVENT_TYPES] } },
       {
         eventType: "session_output",
         OR: [
@@ -177,6 +228,7 @@ function compactCandidateWhere(
         ],
       },
     ],
+    ...(cursor ? { AND: [cursor] } : {}),
     ...excludeSessionOutputPayloadTypesWhere(excludePayloadTypes),
   };
 }
@@ -193,18 +245,21 @@ async function fetchCompactCandidates(opts: SessionTimelineQueryOpts, limit: num
   const chunkSize = Math.max(DEFAULT_PAGE_SIZE, limit * COMPACT_CANDIDATE_OVERFETCH);
   const candidatesDesc: PrismaEvent[] = [];
   let cursor = opts.before;
+  let cursorEventId = opts.beforeEventId;
   let includeCursor = Boolean(opts.before);
 
   for (;;) {
-    const timestamp = cursor ? (includeCursor ? { lte: cursor } : { lt: cursor }) : undefined;
+    const cursorWhere = cursor
+      ? eventBeforeCursorWhere(cursor, cursorEventId, includeCursor)
+      : undefined;
     const chunk = await prisma.event.findMany({
       where: compactCandidateWhere(
         opts.organizationId,
         opts.sessionId,
         opts.excludePayloadTypes,
-        timestamp,
+        cursorWhere,
       ),
-      orderBy: { timestamp: "desc" },
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
       take: chunkSize,
     });
 
@@ -216,6 +271,7 @@ async function fetchCompactCandidates(opts: SessionTimelineQueryOpts, limit: num
     if (visibleCount >= limit + 2 || !hasMoreCandidates) break;
 
     cursor = chunk[chunk.length - 1].timestamp;
+    cursorEventId = chunk[chunk.length - 1].id;
     includeCursor = false;
   }
 
@@ -235,12 +291,12 @@ function collapsedRangeIdsWithThinking(
   for (const candidate of candidates) {
     while (
       gapIndex < endpoints.length - 1 &&
-      candidate.timestamp >= endpoints[gapIndex + 1].timestamp
+      compareEvents(candidate, endpoints[gapIndex + 1]) >= 0
     ) {
       gapIndex++;
     }
     if (gapIndex >= endpoints.length - 1) break;
-    if (candidate.timestamp <= endpoints[gapIndex].timestamp) continue;
+    if (compareEvents(candidate, endpoints[gapIndex]) <= 0) continue;
     if (endpointIds.has(candidate.id)) continue;
     if (!isThinkingCandidate(candidate)) continue;
 
@@ -275,6 +331,7 @@ export class SessionTimelineService {
       scopeType: "session",
       scopeId: opts.sessionId,
       before: opts.before,
+      beforeEventId: opts.beforeEventId,
       limit,
       excludePayloadTypes: opts.excludePayloadTypes,
     });
@@ -305,7 +362,9 @@ export class SessionTimelineService {
     const hasAnchor =
       opts.before !== undefined &&
       visibleEvents.length > 0 &&
-      sameTimestamp(visibleEvents[visibleEvents.length - 1].timestamp, opts.before);
+      (opts.beforeEventId
+        ? visibleEvents[visibleEvents.length - 1].id === opts.beforeEventId
+        : sameTimestamp(visibleEvents[visibleEvents.length - 1].timestamp, opts.before));
     const anchor = hasAnchor ? visibleEvents[visibleEvents.length - 1] : null;
     const selectableEvents = anchor ? visibleEvents.slice(0, -1) : visibleEvents;
     const hasOlder = selectableEvents.length > limit;
@@ -316,7 +375,6 @@ export class SessionTimelineService {
     let previous: PrismaEvent | null = null;
 
     const pushCollapsedRange = (rangeStart: PrismaEvent, rangeEnd: PrismaEvent) => {
-      if (sameTimestamp(rangeStart.timestamp, rangeEnd.timestamp)) return;
       const id = collapsedRangeId(rangeStart, rangeEnd);
       if (!rangesWithThinking.has(id)) return;
       items.push({
@@ -325,7 +383,9 @@ export class SessionTimelineService {
         event: null,
         collapsed: {
           id,
+          startEventId: rangeStart.id,
           startTimestamp: rangeStart.timestamp,
+          endEventId: rangeEnd.id,
           endTimestamp: rangeEnd.timestamp,
         },
       });

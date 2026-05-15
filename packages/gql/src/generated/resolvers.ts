@@ -261,8 +261,10 @@ export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
+  endEventId: Scalars["ID"]["output"];
   endTimestamp: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  startEventId: Scalars["ID"]["output"];
   startTimestamp: Scalars["DateTime"]["output"];
 };
 
@@ -1289,7 +1291,9 @@ export type QueryChatMessagesArgs = {
 
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -1411,6 +1415,7 @@ export type QuerySessionTerminalsArgs = {
 
 export type QuerySessionTimelineArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -2455,8 +2460,10 @@ export type CollapsedSessionEventsResolvers<
   ParentType extends ResolversParentTypes["CollapsedSessionEvents"] =
     ResolversParentTypes["CollapsedSessionEvents"],
 > = ResolversObject<{
+  endEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   endTimestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   startTimestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;

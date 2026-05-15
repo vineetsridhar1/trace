@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { gql } from "@urql/core";
-import type { Event, SessionTimelineItemKind, SessionTimelineMode } from "@trace/gql";
+import type { Event, SessionTimelineMode } from "@trace/gql";
 import {
   eventScopeKey,
   handleSessionEvent,
@@ -22,6 +22,7 @@ const SESSION_TIMELINE_QUERY = gql`
     $sessionId: ID!
     $limit: Int
     $before: DateTime
+    $beforeEventId: ID
     $excludePayloadTypes: [String!]
   ) {
     sessionTimeline(
@@ -29,6 +30,7 @@ const SESSION_TIMELINE_QUERY = gql`
       sessionId: $sessionId
       limit: $limit
       before: $before
+      beforeEventId: $beforeEventId
       excludePayloadTypes: $excludePayloadTypes
     ) {
       mode
@@ -54,7 +56,9 @@ const SESSION_TIMELINE_QUERY = gql`
         }
         collapsed {
           id
+          startEventId
           startTimestamp
+          endEventId
           endTimestamp
         }
       }
@@ -68,7 +72,9 @@ export const SESSION_EVENTS_QUERY = gql`
     $scope: ScopeInput
     $limit: Int
     $after: DateTime
+    $afterEventId: ID
     $before: DateTime
+    $beforeEventId: ID
     $excludePayloadTypes: [String!]
   ) {
     events(
@@ -76,7 +82,9 @@ export const SESSION_EVENTS_QUERY = gql`
       scope: $scope
       limit: $limit
       after: $after
+      afterEventId: $afterEventId
       before: $before
+      beforeEventId: $beforeEventId
       excludePayloadTypes: $excludePayloadTypes
     ) {
       id
@@ -120,14 +128,21 @@ const SESSION_EVENTS_SUBSCRIPTION = gql`
 
 export interface CollapsedSessionEventsSummary {
   id: string;
+  startEventId: string;
   startTimestamp: string;
+  endEventId: string;
   endTimestamp: string;
 }
 
+interface EventCursor {
+  timestamp: string;
+  eventId: string;
+}
+
 export type SessionTimelineDisplayItem =
-  | { kind: Extract<SessionTimelineItemKind, "event">; id: string }
+  | { kind: "event"; id: string }
   | {
-      kind: Extract<SessionTimelineItemKind, "collapsed_events">;
+      kind: "collapsed_events";
       id: string;
       collapsed: CollapsedSessionEventsSummary;
     };
@@ -147,7 +162,9 @@ function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummary | nul
   const record = asRecord(value);
   if (
     typeof record?.id !== "string" ||
+    typeof record.startEventId !== "string" ||
     typeof record.startTimestamp !== "string" ||
+    typeof record.endEventId !== "string" ||
     typeof record.endTimestamp !== "string"
   ) {
     return null;
@@ -155,7 +172,9 @@ function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummary | nul
 
   return {
     id: record.id,
+    startEventId: record.startEventId,
     startTimestamp: record.startTimestamp,
+    endEventId: record.endEventId,
     endTimestamp: record.endTimestamp,
   };
 }
@@ -168,6 +187,14 @@ function isCompletedSessionEvent(event: Event): boolean {
   if (event.eventType !== "session_terminated") return false;
   const payload = payloadRecord(event);
   return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
+}
+
+function isPrLifecycleEvent(event: Event): boolean {
+  return (
+    event.eventType === "session_pr_opened" ||
+    event.eventType === "session_pr_merged" ||
+    event.eventType === "session_pr_closed"
+  );
 }
 
 function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
@@ -196,6 +223,7 @@ function isRenderableCompactEvent(event: Event | undefined): event is Event & { 
     const payload = payloadRecord(event);
     return typeof payload?.text === "string" && payload.text.trim() !== "";
   }
+  if (isPrLifecycleEvent(event)) return true;
   if (event.eventType !== "session_output") return false;
 
   const payload = payloadRecord(event);
@@ -251,12 +279,25 @@ function appendEventItem(
   return [...items, { kind: "event" as const, id: event.id }];
 }
 
-function timelineItemEndTimestamp(
+function timelineItemEndCursor(
   item: SessionTimelineDisplayItem,
   events: Record<string, Event>,
-): string | null {
-  if (item.kind === "collapsed_events") return item.collapsed.endTimestamp;
-  return events[item.id]?.timestamp ?? null;
+): EventCursor | null {
+  if (item.kind === "collapsed_events") {
+    return { timestamp: item.collapsed.endTimestamp, eventId: item.collapsed.endEventId };
+  }
+  const event = events[item.id];
+  return event ? { timestamp: event.timestamp, eventId: item.id } : null;
+}
+
+function eventCursor(event: (Event & { id: string }) | undefined): EventCursor | null {
+  return event ? { timestamp: event.timestamp, eventId: event.id } : null;
+}
+
+function compareCursor(a: EventCursor, b: EventCursor): number {
+  const timestampDiff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+  if (timestampDiff !== 0) return timestampDiff;
+  return a.eventId.localeCompare(b.eventId);
 }
 
 export function useSessionEvents(sessionId: string, options?: { skip?: boolean }) {
@@ -268,7 +309,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
   const [timelineMode, setTimelineMode] = useState<SessionTimelineMode>("live");
   const [compactItems, setCompactItems] = useState<SessionTimelineDisplayItem[] | null>(null);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
-  const oldestTimestampRef = useRef<string | null>(null);
+  const oldestCursorRef = useRef<EventCursor | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
   const timelineModeRef = useRef<SessionTimelineMode>("live");
@@ -279,7 +320,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     setTimelineMode("live");
     timelineModeRef.current = "live";
     setCompactItems(null);
-    oldestTimestampRef.current = null;
+    oldestCursorRef.current = null;
     hasOlderRef.current = true;
   }, [sessionId]);
 
@@ -316,7 +357,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
       setCompactItems(page.items);
       setHasOlder(page.hasOlder);
       hasOlderRef.current = page.hasOlder;
-      oldestTimestampRef.current = page.events[0]?.timestamp ?? null;
+      oldestCursorRef.current = eventCursor(page.events[0]);
     } else {
       setTimelineMode("live");
       timelineModeRef.current = "live";
@@ -330,7 +371,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         hasOlderRef.current = true;
       }
       if (page.events.length > 0) {
-        oldestTimestampRef.current = page.events[0].timestamp;
+        oldestCursorRef.current = eventCursor(page.events[0]);
       }
     }
     setLoading(false);
@@ -344,6 +385,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
       setCompactItems(null);
       setTimelineMode("live");
       timelineModeRef.current = "live";
+      oldestCursorRef.current = null;
       setError(null);
       return;
     }
@@ -381,7 +423,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     if (
       skip ||
       !activeOrgId ||
-      !oldestTimestampRef.current ||
+      !oldestCursorRef.current ||
       loadingOlderRef.current ||
       !hasOlderRef.current
     ) {
@@ -397,7 +439,8 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
           organizationId: activeOrgId,
           sessionId,
           limit: PAGE_SIZE,
-          before: oldestTimestampRef.current,
+          before: oldestCursorRef.current.timestamp,
+          beforeEventId: oldestCursorRef.current.eventId,
           excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
         })
         .toPromise();
@@ -417,14 +460,14 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         setCompactItems((current) => [...page.items, ...(current ?? [])]);
         setHasOlder(page.hasOlder);
         hasOlderRef.current = page.hasOlder;
-        oldestTimestampRef.current = page.events[0]?.timestamp ?? null;
+        oldestCursorRef.current = eventCursor(page.events[0]);
       } else {
         setTimelineMode("live");
         timelineModeRef.current = "live";
         setCompactItems(null);
         setHasOlder(page.hasOlder);
         hasOlderRef.current = page.hasOlder;
-        oldestTimestampRef.current = page.events[0]?.timestamp ?? null;
+        oldestCursorRef.current = eventCursor(page.events[0]);
       }
 
       loadingOlderRef.current = false;
@@ -437,7 +480,8 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         organizationId: activeOrgId,
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
-        before: oldestTimestampRef.current,
+        before: oldestCursorRef.current.timestamp,
+        beforeEventId: oldestCursorRef.current.eventId,
         excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
       })
       .toPromise();
@@ -457,7 +501,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         hasOlderRef.current = false;
       }
       if (events.length > 0) {
-        oldestTimestampRef.current = events[0].timestamp;
+        oldestCursorRef.current = eventCursor(events[0]);
       }
     }
     loadingOlderRef.current = false;
@@ -474,27 +518,29 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     }
     return ids;
   }, [compactItems]);
-  const compactTailTimestamp = useMemo(() => {
+  const compactTailCursor = useMemo(() => {
     if (!compactItems || compactItems.length === 0) return null;
     for (let i = compactItems.length - 1; i >= 0; i--) {
-      const timestamp = timelineItemEndTimestamp(compactItems[i], scopedEvents);
-      if (timestamp) return timestamp;
+      const cursor = timelineItemEndCursor(compactItems[i], scopedEvents);
+      if (cursor) return cursor;
     }
     return null;
   }, [compactItems, scopedEvents]);
   const compactLiveTailItems = useMemo<SessionTimelineDisplayItem[]>(() => {
-    if (timelineMode !== "compact" || !compactEventIdSet || !compactTailTimestamp) return [];
+    if (timelineMode !== "compact" || !compactEventIdSet || !compactTailCursor) return [];
 
     const items: SessionTimelineDisplayItem[] = [];
     for (const id of eventIds) {
       if (compactEventIdSet.has(id)) continue;
       const event = scopedEvents[id];
       if (!isRenderableCompactEvent(event)) continue;
-      if (event.timestamp <= compactTailTimestamp) continue;
+      if (compareCursor({ timestamp: event.timestamp, eventId: id }, compactTailCursor) <= 0) {
+        continue;
+      }
       items.push({ kind: "event", id });
     }
     return items;
-  }, [compactEventIdSet, compactTailTimestamp, eventIds, scopedEvents, timelineMode]);
+  }, [compactEventIdSet, compactTailCursor, eventIds, scopedEvents, timelineMode]);
   const displayCompactItems = useMemo(
     () =>
       compactItems

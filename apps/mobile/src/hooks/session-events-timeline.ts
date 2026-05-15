@@ -1,15 +1,22 @@
-import type { Event, SessionTimelineItemKind } from "@trace/gql";
+import type { Event } from "@trace/gql";
 
 export interface CollapsedSessionEventsSummary {
   id: string;
+  startEventId: string;
   startTimestamp: string;
+  endEventId: string;
   endTimestamp: string;
 }
 
+export interface EventCursor {
+  timestamp: string;
+  eventId: string;
+}
+
 export type SessionTimelineDisplayItem =
-  | { kind: Extract<SessionTimelineItemKind, "event">; id: string }
+  | { kind: "event"; id: string }
   | {
-      kind: Extract<SessionTimelineItemKind, "collapsed_events">;
+      kind: "collapsed_events";
       id: string;
       collapsed: CollapsedSessionEventsSummary;
     };
@@ -29,7 +36,9 @@ export function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummar
   const record = asRecord(value);
   if (
     typeof record?.id !== "string" ||
+    typeof record.startEventId !== "string" ||
     typeof record.startTimestamp !== "string" ||
+    typeof record.endEventId !== "string" ||
     typeof record.endTimestamp !== "string"
   ) {
     return null;
@@ -37,7 +46,9 @@ export function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummar
 
   return {
     id: record.id,
+    startEventId: record.startEventId,
     startTimestamp: record.startTimestamp,
+    endEventId: record.endEventId,
     endTimestamp: record.endTimestamp,
   };
 }
