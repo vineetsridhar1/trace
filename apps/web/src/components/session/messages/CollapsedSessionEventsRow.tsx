@@ -122,6 +122,9 @@ export function CollapsedSessionEventsRow({
     () => buildSessionNodes(eventIds, scopedEvents),
     [eventIds, scopedEvents],
   );
+  const emptyAfterLoad = open && !loading && !error && !hasMore && nodes.length === 0;
+
+  if (emptyAfterLoad) return null;
 
   return (
     <div className="overflow-hidden rounded-md">

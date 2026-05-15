@@ -149,6 +149,7 @@ function CollapsedEventsNode({
   }, [activeOrgId, collapsed.endTimestamp, context.sessionId, cursor, hasMore, loading]);
 
   const hidden = useMemo(() => buildSessionNodes(eventIds, scopedEvents), [eventIds, scopedEvents]);
+  const emptyAfterLoad = open && !loading && !error && !hasMore && hidden.nodes.length === 0;
 
   const toggleOpen = useCallback(() => {
     const nextOpen = !open;
@@ -166,6 +167,8 @@ function CollapsedEventsNode({
     }),
     [context, hidden.completedAgentTools, hidden.toolResultByUseId],
   );
+
+  if (emptyAfterLoad) return null;
 
   return (
     <View style={styles.collapsedWrapper}>
