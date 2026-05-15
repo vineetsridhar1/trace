@@ -442,9 +442,9 @@
 }
 
 .read-group-body.open {
-  max-height: 520px;
+  max-height: none;
   opacity: 1;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .read-group-subline {
