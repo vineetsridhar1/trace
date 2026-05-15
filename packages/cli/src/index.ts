@@ -56,6 +56,10 @@ function readFlag(args: string[], name: string): string | undefined {
   return args[index + 1];
 }
 
+function isHelp(args: string[]): boolean {
+  return args.length === 0 || args.includes("--help") || args.includes("-h") || args[0] === "help";
+}
+
 async function request(env: TraceEnv, method: HttpMethod, path: string, body?: unknown) {
   const response = await fetch(new URL(path, env.apiUrl), {
     method,
@@ -66,7 +70,15 @@ async function request(env: TraceEnv, method: HttpMethod, path: string, body?: u
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = text
+    ? (() => {
+        try {
+          return JSON.parse(text) as unknown;
+        } catch {
+          return text;
+        }
+      })()
+    : null;
   if (!response.ok) {
     const message =
       data && typeof data === "object" && "error" in data && typeof data.error === "string"
@@ -78,6 +90,8 @@ async function request(env: TraceEnv, method: HttpMethod, path: string, body?: u
 }
 
 async function main(argv: string[]) {
+  if (isHelp(argv)) return usage();
+
   const env = readEnv();
   const [area, command, ...rest] = argv;
 
@@ -135,6 +149,10 @@ async function main(argv: string[]) {
 
 main(process.argv.slice(2))
   .then((data) => {
+    if (typeof data === "string") {
+      process.stdout.write(`${data}\n`);
+      return;
+    }
     if (data !== undefined) {
       process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
     }

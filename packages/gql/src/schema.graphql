@@ -930,15 +930,6 @@ input StartSessionInput {
   interactionMode: String
 }
 
-input CreateSuggestedActionInput {
-  assistantSessionId: ID!
-  actionType: SuggestedActionType!
-  targetType: SuggestedActionTargetType!
-  targetId: ID
-  input: JSON!
-  rationale: String
-}
-
 input UpdateSessionDefaultsInput {
   tool: CodingTool
   model: String

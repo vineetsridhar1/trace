@@ -50,8 +50,10 @@ export const sessionQueries = {
     const filters = args.filters ? { ...args.filters } : undefined;
     return sessionService.list(args.organizationId, filters);
   },
-  session: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.get(args.id, requireOrgContext(ctx));
+  session: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.id, ctx.userId, orgId);
+    return sessionService.get(args.id, orgId);
   },
   mySessions: (
     _: unknown,
@@ -78,9 +80,10 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.search(orgId, args.query, args.channelId ?? undefined);
   },
-  availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+  availableSessionRuntimes: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
     const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     return sessionService.listAvailableRuntimes(args.sessionId, orgId, ctx.userId);
   },
   availableRuntimes: (
@@ -182,6 +185,7 @@ export const sessionQueries = {
     if (!ctx.userId) throw new AuthenticationError();
 
     const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     const session = await prisma.session.findFirst({
       where: { id: args.sessionId, organizationId: orgId },
       select: {
@@ -267,15 +271,17 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
-  runSession: (
+  runSession: async (
     _: unknown,
     args: { id: string; prompt?: string | null; interactionMode?: string | null },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.id, ctx.userId, orgId);
     return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined, {
       userId: ctx.userId,
-      organizationId: requireOrgContext(ctx),
+      organizationId: orgId,
       clientSource: ctx.clientSource,
     });
   },
@@ -306,7 +312,7 @@ export const sessionMutations = {
   deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },
-  updateSessionConfig: (
+  updateSessionConfig: async (
     _: unknown,
     args: {
       sessionId: string;
@@ -318,9 +324,11 @@ export const sessionMutations = {
     },
     ctx: Context,
   ) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     return sessionService.updateConfig(
       args.sessionId,
-      requireOrgContext(ctx),
+      orgId,
       {
         tool: args.tool ?? undefined,
         model: args.model ?? undefined,
@@ -364,10 +372,12 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
-  retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+  retrySessionConnection: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     return sessionService.retryConnection(
       args.sessionId,
-      requireOrgContext(ctx),
+      orgId,
       ctx.actorType,
       ctx.userId,
     );
@@ -380,7 +390,7 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  moveSessionToRuntime: (
+  moveSessionToRuntime: async (
     _: unknown,
     args: {
       sessionId: string;
@@ -388,18 +398,22 @@ export const sessionMutations = {
     },
     ctx: Context,
   ) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     return sessionService.moveToRuntime(
       args.sessionId,
       args.runtimeInstanceId,
-      requireOrgContext(ctx),
+      orgId,
       ctx.actorType,
       ctx.userId,
     );
   },
-  moveSessionToCloud: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+  moveSessionToCloud: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     return sessionService.moveToCloud(
       args.sessionId,
-      requireOrgContext(ctx),
+      orgId,
       ctx.actorType,
       ctx.userId,
     );

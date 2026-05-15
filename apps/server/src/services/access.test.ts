@@ -5,7 +5,14 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
+vi.mock("./org-member.js", () => ({
+  orgMemberService: {
+    assertAdmin: vi.fn(),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
+import { orgMemberService } from "./org-member.js";
 import {
   assertChatAccess,
   assertChannelAccess,
@@ -71,6 +78,29 @@ describe("access service", () => {
     await expect(assertScopeAccess("unknown", "id", "user-1", "org-1")).rejects.toThrow(
       "Unsupported scope type: unknown",
     );
+  });
+
+  it("does not require admin access for regular sessions", async () => {
+    prismaMock.session.findFirst.mockResolvedValueOnce({ id: "session-1", kind: "coding" });
+
+    await expect(
+      assertScopeAccess("session", "session-1", "user-1", "org-1"),
+    ).resolves.toBeUndefined();
+
+    expect(orgMemberService.assertAdmin).not.toHaveBeenCalled();
+  });
+
+  it("requires admin access for org assistant sessions", async () => {
+    prismaMock.session.findFirst.mockResolvedValueOnce({
+      id: "session-1",
+      kind: "org_assistant",
+    });
+
+    await expect(
+      assertScopeAccess("session", "session-1", "user-1", "org-1"),
+    ).resolves.toBeUndefined();
+
+    expect(orgMemberService.assertAdmin).toHaveBeenCalledWith("user-1", "org-1");
   });
 
   it("validates thread access through the root message and chat membership", async () => {

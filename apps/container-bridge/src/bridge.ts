@@ -57,6 +57,30 @@ function hasExecutable(command: string): boolean {
   }
 }
 
+function findTraceCliBin(): string | null {
+  const configured = process.env.TRACE_CLI_BIN;
+  if (configured && fs.existsSync(configured)) return configured;
+
+  const candidates = [
+    path.resolve(process.cwd(), "packages/cli/bin/trace"),
+    path.resolve(process.cwd(), "../packages/cli/bin/trace"),
+    path.resolve(process.cwd(), "../../packages/cli/bin/trace"),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+function withTraceCliEnv(env: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!env?.TRACE_CAPABILITY_TOKEN) return env;
+  const traceCliBin = findTraceCliBin();
+  if (!traceCliBin) return env;
+  const traceCliDir = path.dirname(traceCliBin);
+  return {
+    ...env,
+    TRACE_CLI_BIN: traceCliBin,
+    PATH: `${traceCliDir}:${env.PATH ?? process.env.PATH ?? ""}`,
+  };
+}
+
 async function inspectGitCheckpoint(
   cwd: string,
   trigger: GitCheckpointTrigger,
@@ -866,7 +890,7 @@ export class ContainerBridge implements IBridgeClient {
       model,
       reasoningEffort,
       toolSessionId,
-      env,
+      env: withTraceCliEnv(env),
     });
   }
 }

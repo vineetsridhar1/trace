@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionService } from "./session.js";
+import { orgMemberService } from "./org-member.js";
 
 type SuggestedActionInput = Record<string, unknown>;
 
@@ -25,6 +26,9 @@ function validateInput(actionType: string, input: SuggestedActionInput): void {
   if (actionType === "create_session") {
     if (typeof input.prompt !== "string" || input.prompt.trim().length === 0) {
       throw new ValidationError("create_session requires input.prompt");
+    }
+    if (input.title != null && typeof input.title !== "string") {
+      throw new ValidationError("create_session input.title must be a string");
     }
     return;
   }
@@ -79,7 +83,8 @@ function serializeSuggestedAction(action: {
 }
 
 export class SuggestedActionService {
-  async get(id: string, organizationId: string) {
+  async get(id: string, organizationId: string, userId: string) {
+    await orgMemberService.assertAdmin(userId, organizationId);
     return prisma.suggestedAction.findFirst({ where: { id, organizationId } });
   }
 
@@ -149,9 +154,25 @@ export class SuggestedActionService {
   }
 
   async approve(id: string, organizationId: string, userId: string) {
+    await orgMemberService.assertAdmin(userId, organizationId);
+
+    const claimed = await prisma.suggestedAction.updateMany({
+      where: { id, organizationId, status: "pending" },
+      data: {
+        status: "approved",
+        approvedByActorType: "user",
+        approvedByActorId: userId,
+        approvedAt: new Date(),
+      },
+    });
+    if (claimed.count === 0) {
+      const existing = await prisma.suggestedAction.findFirst({ where: { id, organizationId } });
+      if (!existing) throw new ValidationError("Suggested action not found");
+      throw new ValidationError("Suggested action is not pending");
+    }
+
     const action = await prisma.suggestedAction.findFirst({ where: { id, organizationId } });
     if (!action) throw new ValidationError("Suggested action not found");
-    if (action.status !== "pending") throw new ValidationError("Suggested action is not pending");
 
     const input = jsonRecord(action.input);
     validateInput(action.actionType, input);
@@ -165,46 +186,36 @@ export class SuggestedActionService {
         actorId: userId,
       });
     } else if (action.actionType === "create_session") {
+      const title = typeof input.title === "string" ? input.title.trim() : "";
       await sessionService.start({
         organizationId,
         createdById: userId,
         actorType: "user",
         prompt: String(input.prompt),
+        name: title || undefined,
         channelId: typeof input.channelId === "string" ? input.channelId : undefined,
         repoId: typeof input.repoId === "string" ? input.repoId : undefined,
       });
     }
 
-    const updated = await prisma.suggestedAction.update({
-      where: { id },
-      data: {
-        status: "approved",
-        approvedByActorType: "user",
-        approvedByActorId: userId,
-        approvedAt: new Date(),
-      },
-    });
-
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: updated.assistantSessionId,
+      scopeId: action.assistantSessionId,
       eventType: "suggested_action_approved",
-      payload: { suggestedAction: serializeSuggestedAction(updated) } as Prisma.InputJsonValue,
+      payload: { suggestedAction: serializeSuggestedAction(action) } as Prisma.InputJsonValue,
       actorType: "user",
       actorId: userId,
     });
 
-    return updated;
+    return action;
   }
 
   async dismiss(id: string, organizationId: string, userId: string) {
-    const action = await prisma.suggestedAction.findFirst({ where: { id, organizationId } });
-    if (!action) throw new ValidationError("Suggested action not found");
-    if (action.status !== "pending") throw new ValidationError("Suggested action is not pending");
+    await orgMemberService.assertAdmin(userId, organizationId);
 
-    const updated = await prisma.suggestedAction.update({
-      where: { id },
+    const claimed = await prisma.suggestedAction.updateMany({
+      where: { id, organizationId, status: "pending" },
       data: {
         status: "dismissed",
         dismissedByActorType: "user",
@@ -212,18 +223,26 @@ export class SuggestedActionService {
         dismissedAt: new Date(),
       },
     });
+    if (claimed.count === 0) {
+      const existing = await prisma.suggestedAction.findFirst({ where: { id, organizationId } });
+      if (!existing) throw new ValidationError("Suggested action not found");
+      throw new ValidationError("Suggested action is not pending");
+    }
+
+    const action = await prisma.suggestedAction.findFirst({ where: { id, organizationId } });
+    if (!action) throw new ValidationError("Suggested action not found");
 
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: updated.assistantSessionId,
+      scopeId: action.assistantSessionId,
       eventType: "suggested_action_dismissed",
-      payload: { suggestedAction: serializeSuggestedAction(updated) } as Prisma.InputJsonValue,
+      payload: { suggestedAction: serializeSuggestedAction(action) } as Prisma.InputJsonValue,
       actorType: "user",
       actorId: userId,
     });
 
-    return updated;
+    return action;
   }
 }
 

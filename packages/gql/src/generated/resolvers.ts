@@ -338,15 +338,6 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
-export type CreateSuggestedActionInput = {
-  actionType: SuggestedActionType;
-  assistantSessionId: Scalars["ID"]["input"];
-  input: Scalars["JSON"]["input"];
-  rationale?: InputMaybe<Scalars["String"]["input"]>;
-  targetId?: InputMaybe<Scalars["ID"]["input"]>;
-  targetType: SuggestedActionTargetType;
-};
-
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -2110,7 +2101,6 @@ export type ResolversTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
-  CreateSuggestedActionInput: CreateSuggestedActionInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
@@ -2229,7 +2219,6 @@ export type ResolversParentTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
-  CreateSuggestedActionInput: CreateSuggestedActionInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
   Event: Event;

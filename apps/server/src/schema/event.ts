@@ -6,11 +6,18 @@ import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { assertChannelAccess, assertChatAccess, assertScopeAccess } from "../services/access.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
+import { prisma } from "../lib/db.js";
 
 const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
   "message_sent",
   "message_edited",
   "message_deleted",
+]);
+
+const ASSISTANT_ONLY_EVENT_TYPES = new Set<EventType>([
+  "suggested_action_created",
+  "suggested_action_approved",
+  "suggested_action_dismissed",
 ]);
 
 function canViewSystemEvent(
@@ -52,6 +59,21 @@ function canViewSystemEvent(
     return true;
   }
   return false;
+}
+
+function payloadSessionKind(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const session = (payload as { session?: unknown }).session;
+  if (!session || typeof session !== "object" || Array.isArray(session)) return null;
+  const kind = (session as { kind?: unknown }).kind;
+  return typeof kind === "string" ? kind : null;
+}
+
+function isAssistantOnlyEvent(event: { eventType: EventType; payload?: unknown }): boolean {
+  return (
+    ASSISTANT_ONLY_EVENT_TYPES.has(event.eventType) ||
+    payloadSessionKind(event.payload) === "org_assistant"
+  );
 }
 
 export const eventQueries = {
@@ -101,6 +123,7 @@ export const eventQueries = {
     // Batch-check membership instead of per-event N+1 queries
     const chatIds = new Set<string>();
     const channelIds = new Set<string>();
+    const sessionIds = new Set<string>();
     for (const event of events) {
       if (event.scopeType === "chat") {
         chatIds.add(event.scopeId);
@@ -109,11 +132,13 @@ export const eventQueries = {
         CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
       ) {
         channelIds.add(event.scopeId);
+      } else if (event.scopeType === "session") {
+        sessionIds.add(event.scopeId);
       }
     }
 
-    // Two batch queries instead of N individual queries
-    const [chatMembership, channelMembership] = await Promise.all([
+    // Batch queries instead of N individual queries
+    const [chatMembership, channelMembership, sessionKinds] = await Promise.all([
       chatIds.size > 0
         ? Promise.all([...chatIds].map((id) => ctx.chatMembershipLoader.load(id))).then(
             (results) => {
@@ -132,6 +157,14 @@ export const eventQueries = {
             },
           )
         : Promise.resolve(new Map<string, boolean>()),
+      sessionIds.size > 0
+        ? prisma.session
+            .findMany({
+              where: { id: { in: [...sessionIds] }, organizationId: args.organizationId },
+              select: { id: true, kind: true },
+            })
+            .then((sessions) => new Map(sessions.map((session) => [session.id, session.kind])))
+        : Promise.resolve(new Map<string, string>()),
     ]);
 
     return events.filter(
@@ -147,6 +180,13 @@ export const eventQueries = {
           CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
         ) {
           return channelMembership.get(event.scopeId) ?? false;
+        }
+        if (event.scopeType === "session") {
+          const eventWithType = { ...event, eventType: event.eventType as EventType };
+          const kind = sessionKinds.get(event.scopeId);
+          if (kind === "org_assistant" || isAssistantOnlyEvent(eventWithType)) {
+            return ctx.role === "admin";
+          }
         }
         return true;
       },
@@ -236,8 +276,9 @@ export const eventSubscriptions = {
         throw new Error("Not authorized for this organization");
       }
 
-      // Per-connection membership cache to avoid per-event DB calls
+      // Per-connection membership/session cache to avoid per-event DB calls
       const membershipCache = new Map<string, boolean>();
+      const sessionKindCache = new Map<string, string | null>();
 
       return filterAsyncIterator(
         pubsub.asyncIterator<{
@@ -264,6 +305,9 @@ export const eventSubscriptions = {
           ) {
             membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
           }
+          if (event.eventType === "session_started" && event.scopeType === "session") {
+            sessionKindCache.set(event.scopeId, payloadSessionKind(event.payload));
+          }
 
           if (event.scopeType === "chat") {
             const cacheKey = `chat:${event.scopeId}`;
@@ -283,6 +327,20 @@ export const eventSubscriptions = {
             const result = await ctx.channelMembershipLoader.load(event.scopeId);
             membershipCache.set(cacheKey, result);
             return result;
+          }
+          if (event.scopeType === "session") {
+            if (isAssistantOnlyEvent(event)) return ctx.role === "admin";
+
+            if (!sessionKindCache.has(event.scopeId)) {
+              const session = await prisma.session.findFirst({
+                where: { id: event.scopeId, organizationId: args.organizationId },
+                select: { kind: true },
+              });
+              sessionKindCache.set(event.scopeId, session?.kind ?? null);
+            }
+            if (sessionKindCache.get(event.scopeId) === "org_assistant") {
+              return ctx.role === "admin";
+            }
           }
           return true;
         },

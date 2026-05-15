@@ -337,15 +337,6 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
-export type CreateSuggestedActionInput = {
-  actionType: SuggestedActionType;
-  assistantSessionId: Scalars["ID"]["input"];
-  input: Scalars["JSON"]["input"];
-  rationale?: InputMaybe<Scalars["String"]["input"]>;
-  targetId?: InputMaybe<Scalars["ID"]["input"]>;
-  targetType: SuggestedActionTargetType;
-};
-
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;

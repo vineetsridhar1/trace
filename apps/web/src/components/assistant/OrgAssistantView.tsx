@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bot, MessageSquarePlus } from "lucide-react";
 import type { Session } from "@trace/gql";
-import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { useAuthStore, useEntitiesByIds, useEntityIds, useEntityStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SessionDetailView } from "../session/SessionDetailView";
 import { Button } from "../ui/button";
@@ -18,12 +18,35 @@ function assistantSessionIdFromPath(): string | null {
 }
 
 function pushAssistantSessionNav(sessionId: string): void {
-  history.pushState({ page: "assistant", assistantSessionId: sessionId }, "", `/assistant/${sessionId}`);
+  history.pushState(
+    {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "assistant",
+      assistantSessionId: sessionId,
+      channelSubPage: null,
+    },
+    "",
+    `/assistant/${sessionId}`,
+  );
 }
 
 export function OrgAssistantView() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const sessionIds = useEntityIds(
+    "sessions",
+    (session) => session.kind === "org_assistant",
+    (a, b) => {
+      const aTime = a.lastMessageAt ?? a.updatedAt ?? a.createdAt;
+      const bTime = b.lastMessageAt ?? b.updatedAt ?? b.createdAt;
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    },
+  );
+  const sessions = useEntitiesByIds("sessions", sessionIds).filter(
+    (session): session is Session => session !== null,
+  );
   const [sessionId, setSessionId] = useState<string | null>(() => assistantSessionIdFromPath());
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -35,10 +58,7 @@ export function OrgAssistantView() {
   );
 
   const storeSessions = useCallback((nextSessions: Session[]) => {
-    for (const session of nextSessions) {
-      useEntityStore.getState().upsert("sessions", session.id, session);
-    }
-    setSessions(nextSessions);
+    useEntityStore.getState().upsertMany("sessions", nextSessions);
   }, []);
 
   const selectSession = useCallback((nextSessionId: string) => {
@@ -79,7 +99,15 @@ export function OrgAssistantView() {
         if (nextSessions[0]) {
           setSessionId(nextSessions[0].id);
           history.replaceState(
-            { page: "assistant", assistantSessionId: nextSessions[0].id },
+            {
+              channelId: null,
+              sessionGroupId: null,
+              sessionId: null,
+              chatId: null,
+              page: "assistant",
+              assistantSessionId: nextSessions[0].id,
+              channelSubPage: null,
+            },
             "",
             `/assistant/${nextSessions[0].id}`,
           );
@@ -103,7 +131,6 @@ export function OrgAssistantView() {
         const session = result.data?.createOrgAssistantSession as Session | undefined;
         if (!session) return;
         useEntityStore.getState().upsert("sessions", session.id, session);
-        setSessions((current) => [session, ...current.filter((candidate) => candidate.id !== session.id)]);
         selectSession(session.id);
       })
       .finally(() => setCreating(false));

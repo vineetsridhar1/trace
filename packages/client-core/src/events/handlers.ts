@@ -15,7 +15,12 @@ import type {
   SessionStatus,
   SuggestedAction,
 } from "@trace/gql";
-import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
+import {
+  StoreBatchWriter,
+  useEntityStore,
+  type SessionEntity,
+  type SessionGroupEntity,
+} from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
 import { getSessionChannelId } from "../lib/session-group.js";
 import {
@@ -644,4 +649,22 @@ export function handleOrgEvent(event: Event): void {
  */
 export function handleSessionEvent(sessionId: string, event: Event & { id: string }): void {
   upsertSessionEventWithOptimisticResolution(sessionId, event);
+
+  if (
+    event.eventType === "suggested_action_created" ||
+    event.eventType === "suggested_action_approved" ||
+    event.eventType === "suggested_action_dismissed"
+  ) {
+    const payload = asJsonObject(event.payload);
+    const suggestedAction = asJsonObject(payload?.suggestedAction);
+    if (suggestedAction && typeof suggestedAction.id === "string") {
+      useEntityStore
+        .getState()
+        .upsert(
+          "suggestedActions",
+          suggestedAction.id,
+          suggestedAction as unknown as SuggestedAction,
+        );
+    }
+  }
 }

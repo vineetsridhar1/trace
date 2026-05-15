@@ -52,6 +52,7 @@ import { assistantCapabilityTokenService } from "./assistant-capability-token.js
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
+  name?: string | null;
   sessionGroupId?: string | null;
   sourceSessionId?: string | null;
   organizationId: string;
@@ -666,14 +667,6 @@ function traceApiUrl(): string {
   return `http://localhost:${port}`;
 }
 
-function traceCliPath(): string {
-  return `${process.cwd()}/packages/cli/bin`;
-}
-
-function traceCliBin(): string {
-  return `${traceCliPath()}/trace`;
-}
-
 function buildBaseBranchInstruction(baseBranch: string): string {
   return `\n\n<system-instruction>
 This session is working off the base branch "${baseBranch}". All work should be branched from this base branch, and when merging, merge into "${baseBranch}" (not main/master). When pushing, ensure your branch is based on origin/${baseBranch}.
@@ -876,8 +869,6 @@ export class SessionService {
       TRACE_ASSISTANT_SESSION_ID: session.id,
       TRACE_ACTOR_ID: TRACE_AI_USER_ID,
       TRACE_CAPABILITY_TOKEN: token,
-      TRACE_CLI_BIN: traceCliBin(),
-      PATH: `${traceCliPath()}:${process.env.PATH ?? ""}`,
     };
   }
 
@@ -2084,7 +2075,7 @@ export class SessionService {
       limit?: number | null;
     },
   ) {
-    const where: Prisma.SessionWhereInput = { organizationId };
+    const where: Prisma.SessionWhereInput = { organizationId, kind: "coding" };
     if (filters?.agentStatus) where.agentStatus = filters.agentStatus;
     if (filters?.tool) where.tool = filters.tool;
     if (filters?.repoId) where.repoId = filters.repoId;
@@ -2125,7 +2116,7 @@ export class SessionService {
       includeArchived?: boolean;
     },
   ) {
-    const where: Prisma.SessionWhereInput = { organizationId, createdById: userId };
+    const where: Prisma.SessionWhereInput = { organizationId, createdById: userId, kind: "coding" };
     if (options?.agentStatus) where.agentStatus = options.agentStatus as AgentStatus;
     if (options?.includeMerged === false) where.sessionStatus = { not: "merged" };
 
@@ -2151,6 +2142,7 @@ export class SessionService {
 
     const sessionWhere: Prisma.SessionWhereInput = {
       organizationId,
+      kind: "coding",
       name: { contains: trimmed, mode: "insensitive" },
     };
     if (channelId) sessionWhere.channelId = channelId;
@@ -2434,13 +2426,16 @@ export class SessionService {
       });
     }
 
-    const name = input.prompt
-      ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
-      : restoreCheckpoint
-        ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
-            .trim()
-            .slice(0, MAX_SESSION_NAME_LENGTH)
-        : `Session ${new Date().toLocaleString()}`;
+    const explicitName = input.name?.trim().slice(0, MAX_SESSION_NAME_LENGTH);
+    const name = explicitName
+      ? explicitName
+      : input.prompt
+        ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
+        : restoreCheckpoint
+          ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
+              .trim()
+              .slice(0, MAX_SESSION_NAME_LENGTH)
+          : `Session ${new Date().toLocaleString()}`;
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.

@@ -469,6 +469,7 @@ describe("SessionService", () => {
         where: {
           organizationId: "org-1",
           createdById: "user-1",
+          kind: "coding",
           sessionStatus: { not: "merged" },
           OR: [
             { sessionGroupId: null },
@@ -496,6 +497,7 @@ describe("SessionService", () => {
         where: {
           organizationId: "org-1",
           createdById: "user-1",
+          kind: "coding",
           agentStatus: "active",
         },
         orderBy: { updatedAt: "desc" },
@@ -529,6 +531,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.findMany).toHaveBeenCalledWith({
         where: {
           organizationId: "org-1",
+          kind: "coding",
           name: { contains: "deploy", mode: "insensitive" },
         },
         orderBy: { updatedAt: "desc" },

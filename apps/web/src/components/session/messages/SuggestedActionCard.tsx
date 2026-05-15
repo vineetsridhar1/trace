@@ -4,18 +4,26 @@ import { asJsonObject } from "@trace/shared";
 import {
   APPROVE_SUGGESTED_ACTION_MUTATION,
   DISMISS_SUGGESTED_ACTION_MUTATION,
+  useEntityField,
 } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { Button } from "../../ui/button";
 import { cn } from "../../../lib/utils";
 
 type SuggestedActionCardProps = {
-  suggestedAction: Record<string, unknown>;
+  suggestedActionId: string;
+  initialSuggestedAction: Record<string, unknown>;
 };
 
-function actionTitle(actionType: string, targetId: string | null): string {
+function actionTitle(
+  actionType: string,
+  targetId: string | null,
+  input: Record<string, unknown> | null,
+): string {
   if (actionType === "send_session_message") return `Send message to ${targetId ?? "session"}`;
-  if (actionType === "create_session") return "Create session";
+  if (actionType === "create_session") {
+    return typeof input?.title === "string" && input.title.trim() ? input.title : "Create session";
+  }
   return "Suggested action";
 }
 
@@ -29,34 +37,55 @@ function actionBody(actionType: string, input: Record<string, unknown> | null): 
   return JSON.stringify(input ?? {}, null, 2);
 }
 
-export function SuggestedActionCard({ suggestedAction }: SuggestedActionCardProps) {
+export function SuggestedActionCard({
+  suggestedActionId,
+  initialSuggestedAction,
+}: SuggestedActionCardProps) {
   const [busy, setBusy] = useState<"approve" | "dismiss" | null>(null);
-  const id = typeof suggestedAction.id === "string" ? suggestedAction.id : "";
-  const status = typeof suggestedAction.status === "string" ? suggestedAction.status : "pending";
+  const storedStatus = useEntityField("suggestedActions", suggestedActionId, "status") as
+    | string
+    | undefined;
+  const storedActionType = useEntityField("suggestedActions", suggestedActionId, "actionType") as
+    | string
+    | undefined;
+  const storedTargetId = useEntityField("suggestedActions", suggestedActionId, "targetId") as
+    | string
+    | null
+    | undefined;
+  const storedRationale = useEntityField("suggestedActions", suggestedActionId, "rationale") as
+    | string
+    | null
+    | undefined;
+  const storedInput = useEntityField("suggestedActions", suggestedActionId, "input");
+
+  const status = storedStatus ?? (typeof initialSuggestedAction.status === "string" ? initialSuggestedAction.status : "pending");
   const actionType =
-    typeof suggestedAction.actionType === "string" ? suggestedAction.actionType : "unknown";
+    storedActionType ??
+    (typeof initialSuggestedAction.actionType === "string"
+      ? initialSuggestedAction.actionType
+      : "unknown");
   const targetId =
-    typeof suggestedAction.targetId === "string" ? suggestedAction.targetId : null;
+    storedTargetId ??
+    (typeof initialSuggestedAction.targetId === "string" ? initialSuggestedAction.targetId : null);
   const rationale =
-    typeof suggestedAction.rationale === "string" ? suggestedAction.rationale : null;
-  const input = asJsonObject(suggestedAction.input);
+    storedRationale ??
+    (typeof initialSuggestedAction.rationale === "string" ? initialSuggestedAction.rationale : null);
+  const input = asJsonObject(storedInput ?? initialSuggestedAction.input);
   const pending = status === "pending";
 
   async function approve() {
-    if (!id) return;
     setBusy("approve");
     try {
-      await client.mutation(APPROVE_SUGGESTED_ACTION_MUTATION, { id }).toPromise();
+      await client.mutation(APPROVE_SUGGESTED_ACTION_MUTATION, { id: suggestedActionId }).toPromise();
     } finally {
       setBusy(null);
     }
   }
 
   async function dismiss() {
-    if (!id) return;
     setBusy("dismiss");
     try {
-      await client.mutation(DISMISS_SUGGESTED_ACTION_MUTATION, { id }).toPromise();
+      await client.mutation(DISMISS_SUGGESTED_ACTION_MUTATION, { id: suggestedActionId }).toPromise();
     } finally {
       setBusy(null);
     }
@@ -70,7 +99,7 @@ export function SuggestedActionCard({ suggestedAction }: SuggestedActionCardProp
             Suggested action
           </div>
           <div className="mt-1 text-sm font-medium text-foreground">
-            {actionTitle(actionType, targetId)}
+            {actionTitle(actionType, targetId, input ?? null)}
           </div>
         </div>
         <div

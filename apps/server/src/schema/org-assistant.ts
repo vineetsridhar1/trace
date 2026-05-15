@@ -25,7 +25,8 @@ export const orgAssistantQueries = {
     return orgAssistantService.listOrgAssistantSessions(args.organizationId, ctx.userId);
   },
   suggestedAction: (_: unknown, args: { id: string }, ctx: Context) => {
-    return suggestedActionService.get(args.id, requireOrgContext(ctx));
+    if (!ctx.userId) throw new AuthenticationError();
+    return suggestedActionService.get(args.id, requireOrgContext(ctx), ctx.userId);
   },
 };
 

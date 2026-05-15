@@ -1,11 +1,12 @@
 import { prisma } from "../lib/db.js";
+import { orgMemberService } from "./org-member.js";
 
 async function assertOrgEntityExists(
   model: "channel" | "session" | "ticket" | "project",
   id: string,
   organizationId: string,
 ) {
-  let entity: { id: string } | null = null;
+  let entity: { id: string; kind?: string } | null = null;
 
   switch (model) {
     case "channel":
@@ -17,7 +18,7 @@ async function assertOrgEntityExists(
     case "session":
       entity = await prisma.session.findFirst({
         where: { id, organizationId },
-        select: { id: true },
+        select: { id: true, kind: true },
       });
       break;
     case "ticket":
@@ -37,6 +38,8 @@ async function assertOrgEntityExists(
   if (!entity) {
     throw new Error("Not authorized for this scope");
   }
+
+  return entity;
 }
 
 export async function isActiveChatMember(chatId: string, userId: string) {
@@ -96,10 +99,14 @@ export async function assertScopeAccess(
     case "channel":
       await assertChannelAccess(scopeId, userId);
       return;
-    case "session":
+    case "session": {
       if (!organizationId) throw new Error("Organization context required for session access");
-      await assertOrgEntityExists("session", scopeId, organizationId);
+      const session = await assertOrgEntityExists("session", scopeId, organizationId);
+      if (session.kind === "org_assistant") {
+        await orgMemberService.assertAdmin(userId, organizationId);
+      }
       return;
+    }
     case "ticket":
       if (!organizationId) throw new Error("Organization context required for ticket access");
       await assertOrgEntityExists("ticket", scopeId, organizationId);

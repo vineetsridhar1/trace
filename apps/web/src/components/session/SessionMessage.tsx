@@ -236,12 +236,22 @@ export const SessionMessage = memo(function SessionMessage({
         />
       );
 
-    case "suggested_action_created":
-    case "suggested_action_approved":
-    case "suggested_action_dismissed": {
+    case "suggested_action_created": {
       const suggestedAction = asJsonObject(payload?.suggestedAction);
-      return suggestedAction ? <SuggestedActionCard suggestedAction={suggestedAction} /> : null;
+      if (!suggestedAction || typeof suggestedAction.id !== "string") return null;
+      return (
+        <SuggestedActionCard
+          suggestedActionId={suggestedAction.id}
+          initialSuggestedAction={suggestedAction}
+        />
+      );
     }
+
+    case "suggested_action_approved":
+      return <SystemBadge text="Suggested action approved" />;
+
+    case "suggested_action_dismissed":
+      return <SystemBadge text="Suggested action dismissed" />;
 
     case "session_terminated": {
       if (payload?.reason === "bridge_complete") return null;

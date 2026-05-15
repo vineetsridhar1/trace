@@ -85,6 +85,7 @@ export class OrgAssistantService {
         sessionGroupId: null,
       },
       orderBy: { updatedAt: "desc" },
+      take: 100,
       include: {
         createdBy: true,
         repo: true,

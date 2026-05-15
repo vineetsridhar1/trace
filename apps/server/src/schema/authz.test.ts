@@ -28,6 +28,7 @@ vi.mock("../services/session.js", () => ({
     list: vi.fn(),
     listByUser: vi.fn(),
     get: vi.fn(),
+    run: vi.fn(),
     terminate: vi.fn(),
     dismiss: vi.fn(),
     delete: vi.fn(),
@@ -158,7 +159,9 @@ describe("GraphQL authz guards", () => {
     expect(aiConversationService.createConversation).not.toHaveBeenCalled();
   });
 
-  it("guards session mutations by active org and scope", async () => {
+  it("guards session queries and mutations by active org and scope", async () => {
+    await sessionQueries.session({}, { id: "session-1" }, ctx);
+    await sessionMutations.runSession({}, { id: "session-1", prompt: "go" }, ctx);
     await sessionMutations.terminateSession({}, { id: "session-1" }, ctx);
     await sessionMutations.dismissSession({}, { id: "session-1" }, ctx);
     await sessionMutations.deleteSession({}, { id: "session-1" }, ctx);
@@ -174,22 +177,15 @@ describe("GraphQL authz guards", () => {
       ctx,
     );
 
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(1, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(2, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(3, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(4, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(5, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(6, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(7, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(8, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(9, "session", "session-1", "user-1", "org-1");
-    expect(assertScopeAccess).toHaveBeenNthCalledWith(
-      10,
-      "session",
-      "session-1",
-      "user-1",
-      "org-1",
-    );
+    for (let call = 1; call <= 12; call += 1) {
+      expect(assertScopeAccess).toHaveBeenNthCalledWith(
+        call,
+        "session",
+        "session-1",
+        "user-1",
+        "org-1",
+      );
+    }
   });
 
   it("uses the org-scoped runtime key when loading bridge slash commands", async () => {
