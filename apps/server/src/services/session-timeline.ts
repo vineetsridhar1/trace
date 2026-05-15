@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { eventService, excludeSessionOutputPayloadTypesWhere } from "./event.js";
 
 const DEFAULT_PAGE_SIZE = 100;
+const COMPACT_CANDIDATE_OVERFETCH = 4;
 
 export interface CollapsedSessionEventRange {
   id: string;
@@ -107,22 +108,12 @@ function countHiddenToolCalls(event: Pick<PrismaEvent, "eventType" | "payload">)
   return countToolUseBlocks(event.payload);
 }
 
-function summarizeHiddenCandidateRange(
-  candidates: PrismaEvent[],
-  startTimestamp: Date,
-  endTimestamp: Date,
+function countHiddenEventSummary(
+  event: Pick<PrismaEvent, "eventType" | "payload">,
 ): Pick<CollapsedSessionEventRange, "toolCallCount" | "messageCount"> {
-  let toolCallCount = 0;
-  let messageCount = 0;
-  for (const event of candidates) {
-    if (event.timestamp <= startTimestamp || event.timestamp >= endTimestamp) continue;
-    toolCallCount += countHiddenToolCalls(event);
-    messageCount += countHiddenMessages(event);
-  }
-
   return {
-    toolCallCount,
-    messageCount,
+    toolCallCount: countHiddenToolCalls(event),
+    messageCount: countHiddenMessages(event),
   };
 }
 
@@ -172,12 +163,14 @@ function compactCandidateWhere(
   organizationId: string,
   sessionId: string,
   excludePayloadTypes: string[] | undefined,
+  timestamp?: Prisma.DateTimeFilter,
 ): Prisma.EventWhereInput {
   return {
     organizationId,
     scopeType: "session",
     scopeId: sessionId,
     parentId: null,
+    ...(timestamp ? { timestamp } : {}),
     OR: [
       { eventType: { in: ["session_started", "message_sent"] } },
       {
@@ -187,6 +180,109 @@ function compactCandidateWhere(
     ],
     ...excludeSessionOutputPayloadTypesWhere(excludePayloadTypes),
   };
+}
+
+function collapsedRangeId(previous: PrismaEvent, event: PrismaEvent): string {
+  return `collapsed:${previous.id}:${event.id}`;
+}
+
+function sameTimestamp(a: Date, b: Date): boolean {
+  return a.getTime() === b.getTime();
+}
+
+async function fetchCompactCandidates(opts: SessionTimelineQueryOpts, limit: number) {
+  const chunkSize = Math.max(DEFAULT_PAGE_SIZE, limit * COMPACT_CANDIDATE_OVERFETCH);
+  const candidatesDesc: PrismaEvent[] = [];
+  let cursor = opts.before;
+  let includeCursor = Boolean(opts.before);
+
+  for (;;) {
+    const timestamp = cursor ? (includeCursor ? { lte: cursor } : { lt: cursor }) : undefined;
+    const chunk = await prisma.event.findMany({
+      where: compactCandidateWhere(
+        opts.organizationId,
+        opts.sessionId,
+        opts.excludePayloadTypes,
+        timestamp,
+      ),
+      orderBy: { timestamp: "desc" },
+      take: chunkSize,
+    });
+
+    if (chunk.length === 0) break;
+
+    candidatesDesc.push(...chunk);
+    const visibleCount = compactVisibleEvents([...candidatesDesc].reverse()).length;
+    const hasMoreCandidates = chunk.length === chunkSize;
+    if (visibleCount >= limit + 2 || !hasMoreCandidates) break;
+
+    cursor = chunk[chunk.length - 1].timestamp;
+    includeCursor = false;
+  }
+
+  return candidatesDesc.reverse();
+}
+
+async function summarizeHiddenRanges(
+  opts: SessionTimelineQueryOpts,
+  endpoints: PrismaEvent[],
+): Promise<
+  Map<string, Pick<CollapsedSessionEventRange, "eventCount" | "toolCallCount" | "messageCount">>
+> {
+  const summaries = new Map<
+    string,
+    Pick<CollapsedSessionEventRange, "eventCount" | "toolCallCount" | "messageCount">
+  >();
+
+  for (let i = 1; i < endpoints.length; i++) {
+    summaries.set(collapsedRangeId(endpoints[i - 1], endpoints[i]), {
+      eventCount: 0,
+      toolCallCount: 0,
+      messageCount: 0,
+    });
+  }
+
+  if (endpoints.length < 2) return summaries;
+
+  const endpointIds = new Set(endpoints.map((event) => event.id));
+  const hiddenEvents = await prisma.event.findMany({
+    where: {
+      ...hiddenRangeWhere(
+        opts.organizationId,
+        opts.sessionId,
+        endpoints[0].timestamp,
+        endpoints[endpoints.length - 1].timestamp,
+        opts.excludePayloadTypes,
+      ),
+      id: { notIn: [...endpointIds] },
+    },
+    orderBy: { timestamp: "asc" },
+    select: { eventType: true, payload: true, timestamp: true },
+  });
+
+  let gapIndex = 0;
+  for (const event of hiddenEvents) {
+    while (
+      gapIndex < endpoints.length - 1 &&
+      event.timestamp >= endpoints[gapIndex + 1].timestamp
+    ) {
+      gapIndex++;
+    }
+    if (gapIndex >= endpoints.length - 1) break;
+    if (event.timestamp <= endpoints[gapIndex].timestamp) continue;
+
+    const summary = summaries.get(
+      collapsedRangeId(endpoints[gapIndex], endpoints[gapIndex + 1]),
+    );
+    if (!summary) continue;
+
+    const counts = countHiddenEventSummary(event);
+    summary.eventCount++;
+    summary.toolCallCount += counts.toolCallCount;
+    summary.messageCount += counts.messageCount;
+  }
+
+  return summaries;
 }
 
 function hiddenRangeWhere(
@@ -249,58 +345,58 @@ export class SessionTimelineService {
   private async queryCompact(
     opts: SessionTimelineQueryOpts,
   ): Promise<SessionTimelineServicePage | null> {
-    const candidates = await prisma.event.findMany({
-      where: compactCandidateWhere(opts.organizationId, opts.sessionId, opts.excludePayloadTypes),
-      orderBy: { timestamp: "asc" },
-    });
+    const limit = opts.limit ?? DEFAULT_PAGE_SIZE;
+    const candidates = await fetchCompactCandidates(opts, limit);
     const visibleEvents = compactVisibleEvents(candidates);
     const hasUser = visibleEvents.some(isUserEvent);
     const hasAssistant = visibleEvents.some(isAssistantTextEvent);
 
     if (!hasUser || !hasAssistant) return null;
 
+    const hasAnchor =
+      opts.before !== undefined &&
+      visibleEvents.length > 0 &&
+      sameTimestamp(visibleEvents[visibleEvents.length - 1].timestamp, opts.before);
+    const anchor = hasAnchor ? visibleEvents[visibleEvents.length - 1] : null;
+    const selectableEvents = anchor ? visibleEvents.slice(0, -1) : visibleEvents;
+    const hasOlder = selectableEvents.length > limit;
+    const pageEvents = selectableEvents.slice(Math.max(0, selectableEvents.length - limit));
+    const rangeEndpoints = anchor ? [...pageEvents, anchor] : pageEvents;
+    const summaries = await summarizeHiddenRanges(opts, rangeEndpoints);
     const items: SessionTimelineServiceItem[] = [];
     let previous: PrismaEvent | null = null;
 
-    for (const event of visibleEvents) {
-      if (previous) {
-        const eventCount = await prisma.event.count({
-          where: hiddenRangeWhere(
-            opts.organizationId,
-            opts.sessionId,
-            previous.timestamp,
-            event.timestamp,
-            opts.excludePayloadTypes,
-          ),
-        });
+    const pushCollapsedRange = (rangeStart: PrismaEvent, rangeEnd: PrismaEvent) => {
+      const summary = summaries.get(collapsedRangeId(rangeStart, rangeEnd));
+      if (!summary || summary.eventCount === 0) return;
+      const id = collapsedRangeId(rangeStart, rangeEnd);
+      items.push({
+        id,
+        kind: "collapsed_events",
+        event: null,
+        collapsed: {
+          id,
+          ...summary,
+          startTimestamp: rangeStart.timestamp,
+          endTimestamp: rangeEnd.timestamp,
+        },
+      });
+    };
 
-        if (eventCount > 0) {
-          const summary = summarizeHiddenCandidateRange(
-            candidates,
-            previous.timestamp,
-            event.timestamp,
-          );
-          const id = `collapsed:${previous.id}:${event.id}`;
-          items.push({
-            id,
-            kind: "collapsed_events",
-            event: null,
-            collapsed: {
-              id,
-              ...summary,
-              eventCount,
-              startTimestamp: previous.timestamp,
-              endTimestamp: event.timestamp,
-            },
-          });
-        }
+    for (const event of pageEvents) {
+      if (previous) {
+        pushCollapsedRange(previous, event);
       }
 
       items.push({ id: event.id, kind: "event", event, collapsed: null });
       previous = event;
     }
 
-    return { mode: "compact", items, hasOlder: false };
+    if (previous && anchor) {
+      pushCollapsedRange(previous, anchor);
+    }
+
+    return { mode: "compact", items, hasOlder };
   }
 }
 

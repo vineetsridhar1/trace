@@ -64,8 +64,8 @@ function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {
     events,
     timelineMode,
     timelineItems: items,
-    hasOlder: timelineMode === "compact" ? false : page?.hasOlder === true,
-    oldestTimestamp: timelineMode === "compact" ? null : (events[0]?.timestamp ?? null),
+    hasOlder: page?.hasOlder === true,
+    oldestTimestamp: events[0]?.timestamp ?? null,
   };
 }
 
@@ -251,11 +251,7 @@ export function useSessionEvents(
           if (isCompletedSessionEvent(event)) {
             void fetchEvents();
           } else if (timelineModeRef.current === "compact") {
-            setTimelineMode("live");
-            timelineModeRef.current = "live";
-            setTimelineItems(EMPTY_TIMELINE_ITEMS);
-            setHasOlder(true);
-            hasOlderRef.current = true;
+            void fetchEvents();
           }
         } else {
           eventBufferRef.current.storeLiveEvent(event);
@@ -318,6 +314,53 @@ export function useSessionEvents(
 
     loadingOlderRef.current = true;
     setLoadingOlder(true);
+
+    if (timelineModeRef.current === "compact") {
+      const result = await getClient()
+        .query(SESSION_TIMELINE_QUERY, {
+          organizationId: activeOrgId,
+          sessionId,
+          limit: PAGE_SIZE,
+          before: oldestTimestampRef.current,
+          excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
+        })
+        .toPromise();
+
+      if (isUnauthorized(result.error)) {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+        void handleUnauthorized();
+        return;
+      }
+      if (result.error) {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+        return;
+      }
+
+      const pending = pendingFromTimelinePage(result.data?.sessionTimeline);
+      if (pending.events.length > 0) {
+        upsertFetchedSessionEventsWithOptimisticResolution(sessionId, pending.events);
+      }
+
+      if (pending.timelineMode === "compact") {
+        setTimelineItems((current) => [...pending.timelineItems, ...current]);
+        setHasOlder(pending.hasOlder);
+        hasOlderRef.current = pending.hasOlder;
+        oldestTimestampRef.current = pending.oldestTimestamp;
+      } else {
+        setTimelineMode("live");
+        timelineModeRef.current = "live";
+        setTimelineItems(EMPTY_TIMELINE_ITEMS);
+        setHasOlder(pending.hasOlder);
+        hasOlderRef.current = pending.hasOlder;
+        oldestTimestampRef.current = pending.oldestTimestamp;
+      }
+
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      return;
+    }
 
     const result = await getClient()
       .query(SESSION_EVENTS_QUERY, {

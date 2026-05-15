@@ -178,6 +178,41 @@ function isCompletedSessionEvent(event: Event): boolean {
   return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
 }
 
+interface ParsedSessionTimelinePage {
+  mode: SessionTimelineMode;
+  hasOlder: boolean;
+  items: SessionTimelineDisplayItem[];
+  events: Array<Event & { id: string }>;
+}
+
+function parseSessionTimelinePage(value: unknown): ParsedSessionTimelinePage {
+  const page = asRecord(value);
+  const rawItems = Array.isArray(page?.items) ? page.items : [];
+  const events: Array<Event & { id: string }> = [];
+  const items: SessionTimelineDisplayItem[] = [];
+
+  for (const rawItem of rawItems) {
+    const item = asRecord(rawItem);
+    if (item?.kind === "event") {
+      const event = asFetchedEvent(item.event);
+      if (!event) continue;
+      events.push(event);
+      items.push({ kind: "event", id: event.id });
+    } else if (item?.kind === "collapsed_events") {
+      const collapsed = asCollapsedSummary(item.collapsed);
+      if (!collapsed) continue;
+      items.push({ kind: "collapsed_events", id: collapsed.id, collapsed });
+    }
+  }
+
+  return {
+    mode: page?.mode === "compact" ? "compact" : "live",
+    hasOlder: page?.hasOlder === true,
+    items,
+    events,
+  };
+}
+
 export function useSessionEvents(sessionId: string, options?: { skip?: boolean }) {
   const skip = options?.skip === true;
   const [loading, setLoading] = useState(!skip);
@@ -222,51 +257,33 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
       return;
     }
 
-    const page = asRecord(result.data?.sessionTimeline);
-    const rawItems = Array.isArray(page?.items) ? page.items : [];
-    const events: Array<Event & { id: string }> = [];
-    const items: SessionTimelineDisplayItem[] = [];
+    const page = parseSessionTimelinePage(result.data?.sessionTimeline);
 
-    for (const rawItem of rawItems) {
-      const item = asRecord(rawItem);
-      if (item?.kind === "event") {
-        const event = asFetchedEvent(item.event);
-        if (!event) continue;
-        events.push(event);
-        items.push({ kind: "event", id: event.id });
-      } else if (item?.kind === "collapsed_events") {
-        const collapsed = asCollapsedSummary(item.collapsed);
-        if (!collapsed) continue;
-        items.push({ kind: "collapsed_events", id: collapsed.id, collapsed });
-      }
+    if (page.events.length > 0) {
+      upsertFetchedSessionEventsWithOptimisticResolution(sessionId, page.events);
     }
 
-    if (events.length > 0) {
-      upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
-    }
-
-    if (page?.mode === "compact") {
+    if (page.mode === "compact") {
       setTimelineMode("compact");
       timelineModeRef.current = "compact";
-      setCompactItems(items);
-      setHasOlder(false);
-      hasOlderRef.current = false;
-      oldestTimestampRef.current = null;
+      setCompactItems(page.items);
+      setHasOlder(page.hasOlder);
+      hasOlderRef.current = page.hasOlder;
+      oldestTimestampRef.current = page.events[0]?.timestamp ?? null;
     } else {
       setTimelineMode("live");
       timelineModeRef.current = "live";
       setCompactItems(null);
 
-      const pageHasOlder = page?.hasOlder === true;
-      if (!pageHasOlder) {
+      if (!page.hasOlder) {
         setHasOlder(false);
         hasOlderRef.current = false;
       } else {
         setHasOlder(true);
         hasOlderRef.current = true;
       }
-      if (events.length > 0) {
-        oldestTimestampRef.current = events[0].timestamp;
+      if (page.events.length > 0) {
+        oldestTimestampRef.current = page.events[0].timestamp;
       }
     }
     setLoading(false);
@@ -305,11 +322,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         if (isCompletedSessionEvent(event)) {
           void fetchEvents();
         } else if (timelineModeRef.current === "compact") {
-          setTimelineMode("live");
-          timelineModeRef.current = "live";
-          setCompactItems(null);
-          setHasOlder(true);
-          hasOlderRef.current = true;
+          void fetchEvents();
         }
       });
 
@@ -330,6 +343,47 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
 
     loadingOlderRef.current = true;
     setLoadingOlder(true);
+
+    if (timelineModeRef.current === "compact") {
+      const result = await client
+        .query(SESSION_TIMELINE_QUERY, {
+          organizationId: activeOrgId,
+          sessionId,
+          limit: PAGE_SIZE,
+          before: oldestTimestampRef.current,
+          excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
+        })
+        .toPromise();
+
+      if (result.error) {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+        return;
+      }
+
+      const page = parseSessionTimelinePage(result.data?.sessionTimeline);
+      if (page.events.length > 0) {
+        upsertFetchedSessionEventsWithOptimisticResolution(sessionId, page.events);
+      }
+
+      if (page.mode === "compact") {
+        setCompactItems((current) => [...page.items, ...(current ?? [])]);
+        setHasOlder(page.hasOlder);
+        hasOlderRef.current = page.hasOlder;
+        oldestTimestampRef.current = page.events[0]?.timestamp ?? null;
+      } else {
+        setTimelineMode("live");
+        timelineModeRef.current = "live";
+        setCompactItems(null);
+        setHasOlder(page.hasOlder);
+        hasOlderRef.current = page.hasOlder;
+        oldestTimestampRef.current = page.events[0]?.timestamp ?? null;
+      }
+
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      return;
+    }
 
     const result = await client
       .query(SESSION_EVENTS_QUERY, {
