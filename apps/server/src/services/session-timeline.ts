@@ -122,7 +122,7 @@ function hasRenderableSessionOutput(payload: unknown): boolean {
   if (data?.type === "assistant" || data?.type === "user") {
     return hasRenderableContentBlock(payload);
   }
-  return data?.type === "result" || data?.type === "error";
+  return data?.type === "error";
 }
 
 function isRenderableHiddenEvent(

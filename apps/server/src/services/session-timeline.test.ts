@@ -137,7 +137,7 @@ describe("SessionTimelineService", () => {
     expect(page.mode).toBe("compact");
     expect(page.hasOlder).toBe(false);
     expect(page.items.map((item) => item.kind)).toEqual(["event", "collapsed_events", "event"]);
-    expect(page.items[1].collapsed?.eventCount).toBe(12);
+    expect(page.items[1].collapsed?.eventCount).toBe(2);
     expect(page.items[1].collapsed?.toolCallCount).toBe(2);
     expect(page.items[1].collapsed?.messageCount).toBe(1);
     expect(prismaMock.event.findMany).toHaveBeenNthCalledWith(2, {
@@ -279,12 +279,18 @@ describe("SessionTimelineService", () => {
     });
     const hiddenBetweenUser2AndAssistant2 = event({
       id: "hidden-a",
-      payload: { type: "result" },
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-a", name: "Read", input: {} }] },
+      },
       timestamp: new Date("2026-05-14T10:02:30.000Z"),
     });
     const hiddenBetweenAssistant2AndUser3 = event({
       id: "hidden-b",
-      payload: { type: "result" },
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-b", name: "Grep", input: {} }] },
+      },
       timestamp: new Date("2026-05-14T10:03:30.000Z"),
     });
 

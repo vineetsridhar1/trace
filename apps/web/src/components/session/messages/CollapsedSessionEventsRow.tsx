@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Event, GitCheckpoint } from "@trace/gql";
 import {
@@ -19,6 +19,7 @@ import { cn } from "../../../lib/utils";
 import { TraceLoader } from "../../ui/trace-loader";
 
 const COLLAPSED_PAGE_SIZE = 100;
+const COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES = [...HIDDEN_SESSION_PAYLOAD_TYPES, "result"];
 
 interface CollapsedSessionEventsRowProps {
   sessionId: string;
@@ -63,6 +64,15 @@ export function CollapsedSessionEventsRow({
   const scopeKey = useEventScopeKey();
   const scopedEvents = useScopedEvents(scopeKey);
 
+  useEffect(() => {
+    setOpen(false);
+    setLoading(false);
+    setError(null);
+    setEventIds([]);
+    setCursor(collapsed.startTimestamp);
+    setHasMore(collapsed.eventCount > 0);
+  }, [collapsed.eventCount, collapsed.id, collapsed.startTimestamp]);
+
   const fetchNext = useCallback(async () => {
     if (!activeOrgId || loading || !hasMore) return;
 
@@ -75,7 +85,7 @@ export function CollapsedSessionEventsRow({
         limit: COLLAPSED_PAGE_SIZE,
         after: cursor,
         before: collapsed.endTimestamp,
-        excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
+        excludePayloadTypes: COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES,
       })
       .toPromise();
 

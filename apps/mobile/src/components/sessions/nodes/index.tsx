@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import {
@@ -71,6 +71,18 @@ interface EventNodeProps {
 }
 
 const COLLAPSED_PAGE_SIZE = 100;
+const COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES = [...HIDDEN_SESSION_PAYLOAD_TYPES, "result"];
+
+function pluralize(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function collapsedSummaryLabel(collapsed: CollapsedSessionEventsSummary): string {
+  const parts = [];
+  if (collapsed.toolCallCount > 0) parts.push(pluralize(collapsed.toolCallCount, "tool call"));
+  if (collapsed.messageCount > 0) parts.push(pluralize(collapsed.messageCount, "message"));
+  return parts.length > 0 ? parts.join(", ") : pluralize(collapsed.eventCount, "event");
+}
 
 function CollapsedEventsNode({
   collapsed,
@@ -90,6 +102,15 @@ function CollapsedEventsNode({
   const scopeKey = eventScopeKey("session", context.sessionId);
   const scopedEvents = useScopedEvents(scopeKey);
 
+  useEffect(() => {
+    setOpen(false);
+    setLoading(false);
+    setError(null);
+    setEventIds([]);
+    setCursor(collapsed.startTimestamp);
+    setHasMore(collapsed.eventCount > 0);
+  }, [collapsed.eventCount, collapsed.id, collapsed.startTimestamp]);
+
   const fetchNext = useCallback(async () => {
     if (!activeOrgId || loading || !hasMore) return;
 
@@ -102,7 +123,7 @@ function CollapsedEventsNode({
         limit: COLLAPSED_PAGE_SIZE,
         after: cursor,
         before: collapsed.endTimestamp,
-        excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
+        excludePayloadTypes: COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES,
       })
       .toPromise();
 
@@ -139,6 +160,7 @@ function CollapsedEventsNode({
   }, [activeOrgId, collapsed.endTimestamp, context.sessionId, cursor, hasMore, loading]);
 
   const hidden = useMemo(() => buildSessionNodes(eventIds, scopedEvents), [eventIds, scopedEvents]);
+  const summaryLabel = collapsedSummaryLabel(collapsed);
 
   const toggleOpen = useCallback(() => {
     const nextOpen = !open;
@@ -161,7 +183,7 @@ function CollapsedEventsNode({
     <View style={styles.collapsedWrapper}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${collapsed.eventCount} intermediate events`}
+        accessibilityLabel={`${open ? "Hide" : "Show"} activity: ${summaryLabel}`}
         onPress={toggleOpen}
         style={[
           styles.collapsedHeader,
@@ -182,7 +204,7 @@ function CollapsedEventsNode({
           style={styles.collapsedChevron}
         />
         <Text variant="caption1" color="mutedForeground" style={styles.collapsedTitle}>
-          {collapsed.eventCount} intermediate event{collapsed.eventCount === 1 ? "" : "s"}
+          Activity · {summaryLabel}
         </Text>
       </Pressable>
 
