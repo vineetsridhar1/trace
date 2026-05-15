@@ -128,9 +128,9 @@ export function CollapsedSessionEventsRow({
       <button
         type="button"
         className={cn(
-          "group inline-flex max-w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm leading-6 text-muted-foreground transition-colors",
-          "hover:bg-surface-elevated/50 hover:text-foreground",
-          open && "text-foreground",
+          "group inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-xs leading-5 text-muted-foreground/80 transition-colors",
+          "hover:text-muted-foreground",
+          open && "text-muted-foreground",
         )}
         aria-expanded={open}
         aria-label={`${open ? "Hide" : "Show"} thinking`}
@@ -138,10 +138,10 @@ export function CollapsedSessionEventsRow({
       >
         <ChevronRight
           aria-hidden="true"
-          className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-90")}
+          className={cn("size-3 shrink-0 transition-transform duration-200", open && "rotate-90")}
           strokeWidth={2}
         />
-        <span className="shrink-0 font-medium">Show thinking</span>
+        <span className="shrink-0">Show thinking</span>
       </button>
 
       <div className={`read-group-body ${open ? "open" : ""}`}>

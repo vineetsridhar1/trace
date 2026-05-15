@@ -177,24 +177,24 @@ function CollapsedEventsNode({
           styles.collapsedHeader,
           {
             backgroundColor:
-              pressed || open ? alpha(theme.colors.surfaceElevated, 0.5) : "transparent",
+              pressed || open ? alpha(theme.colors.surfaceElevated, 0.25) : "transparent",
             borderRadius: theme.radius.sm,
-            gap: theme.spacing.xs,
-            paddingHorizontal: theme.spacing.sm,
-            paddingVertical: 4,
+            gap: 3,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
           },
         ]}
       >
         <SymbolView
           name={open ? "chevron.down" : "chevron.right"}
-          size={14}
-          tintColor={open ? theme.colors.foreground : theme.colors.mutedForeground}
+          size={12}
+          tintColor={open ? theme.colors.mutedForeground : theme.colors.dimForeground}
           resizeMode="scaleAspectFit"
           style={styles.collapsedChevron}
         />
         <Text
-          variant="caption1"
-          color={open ? "foreground" : "mutedForeground"}
+          variant="caption2"
+          color={open ? "mutedForeground" : "dimForeground"}
           style={styles.collapsedTitle}
         >
           Show thinking
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     width: 14,
   },
   collapsedTitle: {
-    fontWeight: "600",
+    fontWeight: "400",
   },
   collapsedBody: {
     alignSelf: "stretch",
