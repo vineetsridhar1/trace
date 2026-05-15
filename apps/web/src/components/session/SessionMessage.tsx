@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
-import { asJsonObject, type JsonObject } from "@trace/shared";
+import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
 import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
@@ -15,15 +15,9 @@ import type { AgentToolResult } from "./groupReadGlob";
 
 const AGENT_NAMES = new Set(["agent", "task"]);
 
-function asStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.every((v) => typeof v === "string") ? value : undefined;
-}
-
-function imageKeysFromPayload(payload: JsonObject | null | undefined): string[] | undefined {
-  const attachmentKeys = asStringArray(payload?.attachmentKeys);
-  if (attachmentKeys && attachmentKeys.length > 0) return attachmentKeys;
-  return asStringArray(payload?.imageKeys) ?? attachmentKeys;
+function optionalAttachmentKeys(payload: JsonObject | null | undefined): string[] | undefined {
+  const keys = attachmentKeysFromPayload(payload);
+  return keys.length > 0 ? keys : undefined;
 }
 
 /** Safely read a string from an unknown value, returning fallback if not a string */
@@ -200,7 +194,7 @@ export const SessionMessage = memo(function SessionMessage({
 
   switch (eventType) {
     case "session_started": {
-      const imageKeys = imageKeysFromPayload(payload);
+      const imageKeys = optionalAttachmentKeys(payload);
       return typeof payload?.prompt === "string" || (imageKeys && imageKeys.length > 0) ? (
         <UserBubble
           text={str(payload?.prompt)}
@@ -236,7 +230,7 @@ export const SessionMessage = memo(function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={imageKeysFromPayload(payload)}
+          imageKeys={optionalAttachmentKeys(payload)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );

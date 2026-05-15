@@ -162,7 +162,6 @@ describe("SessionTimelineService", () => {
       payload: {
         text: "",
         attachmentKeys: ["uploads/org-1/image.png"],
-        imageKeys: ["uploads/org-1/image.png"],
       },
       timestamp: new Date("2026-05-14T10:00:00.000Z"),
     });

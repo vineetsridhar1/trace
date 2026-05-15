@@ -7,6 +7,11 @@ export type {
 export { hasPlanBlock, hasQuestionBlock, parseQuestion } from "./adapters/coding-tool.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
+export {
+  attachmentKeysFromPayload,
+  hasAttachmentKeys,
+  hasVisibleUserSessionContent,
+} from "./session-content.js";
 export type { ModelOption, ModelProviderGroup, ReasoningEffortOption } from "./models.js";
 export {
   getDefaultModel,

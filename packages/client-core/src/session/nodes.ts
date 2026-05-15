@@ -1,5 +1,11 @@
 import type { Event } from "@trace/gql";
-import { asJsonObject, parseQuestion, type JsonObject, type Question } from "@trace/shared";
+import {
+  asJsonObject,
+  hasVisibleUserSessionContent,
+  parseQuestion,
+  type JsonObject,
+  type Question,
+} from "@trace/shared";
 import { HIDDEN_SESSION_PAYLOAD_TYPE_SET } from "./event-filters.js";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
@@ -32,14 +38,6 @@ const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
  * in toolResultByUseId and rendered inline inside the matching ToolCallRow) or
  * assistant events whose only text blocks are whitespace.
  */
-function hasNonEmptyStringKey(value: unknown): boolean {
-  return Array.isArray(value) && value.some((key) => typeof key === "string" && key.length > 0);
-}
-
-function hasAttachmentKeys(payload: JsonObject | undefined): boolean {
-  return hasNonEmptyStringKey(payload?.attachmentKeys) || hasNonEmptyStringKey(payload?.imageKeys);
-}
-
 function isEmptySessionOutput(payload: JsonObject | undefined): boolean {
   if (!payload) return true;
   const type = payload.type;
@@ -263,7 +261,10 @@ export function buildSessionNodes(
     }
     if (event.eventType === "session_started") {
       const payload = asJsonObject(event.payload);
-      if (!payload?.prompt && !hasAttachmentKeys(payload) && payload?.type !== "runtime_move") {
+      if (
+        !hasVisibleUserSessionContent(event.eventType, event.payload) &&
+        payload?.type !== "runtime_move"
+      ) {
         continue;
       }
     }

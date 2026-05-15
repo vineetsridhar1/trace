@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { gql } from "@urql/core";
 import type { Event, SessionTimelineMode } from "@trace/gql";
+import { hasVisibleUserSessionContent } from "@trace/shared";
 import {
   eventScopeKey,
   handleSessionEvent,
@@ -183,14 +184,6 @@ function payloadRecord(event: Event): Record<string, unknown> | null {
   return asRecord(event.payload);
 }
 
-function hasNonEmptyStringKey(value: unknown): boolean {
-  return Array.isArray(value) && value.some((key) => typeof key === "string" && key.length > 0);
-}
-
-function hasAttachmentKeys(payload: Record<string, unknown> | null): boolean {
-  return hasNonEmptyStringKey(payload?.attachmentKeys) || hasNonEmptyStringKey(payload?.imageKeys);
-}
-
 function isCompletedSessionEvent(event: Event): boolean {
   if (event.eventType !== "session_terminated") return false;
   const payload = payloadRecord(event);
@@ -223,19 +216,8 @@ function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
 function isRenderableCompactEvent(event: Event | undefined): event is Event & { id: string } {
   if (!event || event.parentId) return false;
 
-  if (event.eventType === "session_started") {
-    const payload = payloadRecord(event);
-    return (
-      (typeof payload?.prompt === "string" && payload.prompt.trim() !== "") ||
-      hasAttachmentKeys(payload)
-    );
-  }
-  if (event.eventType === "message_sent") {
-    const payload = payloadRecord(event);
-    return (
-      (typeof payload?.text === "string" && payload.text.trim() !== "") ||
-      hasAttachmentKeys(payload)
-    );
+  if (event.eventType === "session_started" || event.eventType === "message_sent") {
+    return hasVisibleUserSessionContent(event.eventType, event.payload);
   }
   if (isPrLifecycleEvent(event)) return true;
   if (event.eventType !== "session_output") return false;
