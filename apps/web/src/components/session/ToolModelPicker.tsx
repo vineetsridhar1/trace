@@ -115,9 +115,15 @@ export function ToolModelPicker({
       <PopoverContent align="start" className="w-72 overflow-hidden p-1.5">
         <AnimatePresence mode="wait" initial={false}>
           {layer === "tools" ? (
-            <ToolLayer currentTool={tool} pending={pending} onSelect={handleToolSelect} />
+            <ToolLayer
+              key="tools"
+              currentTool={tool}
+              pending={pending}
+              onSelect={handleToolSelect}
+            />
           ) : layer === "providers" ? (
             <ProviderLayer
+              key="providers"
               pickerTool={pickerTool}
               providerGroups={providerGroups}
               activeProviderValue={activeProvider?.value}
@@ -127,6 +133,7 @@ export function ToolModelPicker({
             />
           ) : (
             <ModelLayer
+              key="models"
               pickerTool={pickerTool}
               headerLabel={activeProvider?.label ?? getToolLabel(pickerTool)}
               modelOptions={modelOptions}
