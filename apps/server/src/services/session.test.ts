@@ -319,8 +319,14 @@ describe("SessionService", () => {
       expect(isFullyUnloadedSession("stopped", "in_progress")).toBe(true);
     });
 
-    it("returns true for merged session status", () => {
+    it("returns true for merged session status when worktree state is unknown or deleted", () => {
       expect(isFullyUnloadedSession("done", "merged")).toBe(true);
+      expect(isFullyUnloadedSession("done", "merged", true)).toBe(true);
+    });
+
+    it("returns false for merged session status when the worktree is retained", () => {
+      expect(isFullyUnloadedSession("done", "merged", false)).toBe(false);
+      expect(isFullyUnloadedSession("active", "merged", false)).toBe(false);
     });
 
     it("returns false for active agent with non-merged session status", () => {
@@ -3132,7 +3138,7 @@ describe("SessionService", () => {
         session: {
           agentStatus: "done" as const,
           sessionStatus: "merged" as const,
-          worktreeDeleted: false,
+          worktreeDeleted: true,
           connection: {
             state: "failed",
             runtimeInstanceId: "runtime-a",
@@ -4902,9 +4908,9 @@ describe("SessionService", () => {
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
     });
 
-    it("rejects moving a merged session", async () => {
+    it("rejects moving a merged session with a deleted worktree", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
-        makeSession({ sessionStatus: "merged" }),
+        makeSession({ sessionStatus: "merged", worktreeDeleted: true }),
       );
 
       await expect(
@@ -5792,9 +5798,9 @@ describe("SessionService", () => {
       );
     });
 
-    it("rejects moving a merged session to cloud", async () => {
+    it("rejects moving a merged session with a deleted worktree to cloud", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
-        makeSession({ sessionStatus: "merged" }),
+        makeSession({ sessionStatus: "merged", worktreeDeleted: true }),
       );
 
       await expect(service.moveToCloud("session-1", "org-1", "user", "user-1")).rejects.toThrow(

@@ -35,8 +35,14 @@ vi.mock("./runtime-access.js", () => ({
 
 vi.mock("./session.js", () => {
   return {
-    isFullyUnloadedSession: (agentStatus: string, sessionStatus: string) =>
-      agentStatus === "failed" || agentStatus === "stopped" || sessionStatus === "merged",
+    isFullyUnloadedSession: (
+      agentStatus: string,
+      sessionStatus: string,
+      worktreeDeleted?: boolean | null,
+    ) =>
+      agentStatus === "failed" ||
+      agentStatus === "stopped" ||
+      (sessionStatus === "merged" && worktreeDeleted !== false),
   };
 });
 
@@ -75,6 +81,40 @@ describe("TerminalService", () => {
         createdById: "user-1",
         agentStatus: "active",
         sessionStatus: "in_progress",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
+      });
+
+      const result = await terminalService.create({
+        sessionId: "session-1",
+        cols: 80,
+        rows: 24,
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual({ id: "term-1", sessionId: "session-1" });
+      expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
+        "session-1",
+        "group-1",
+        "org-1",
+        "runtime-1",
+        "user-1",
+        80,
+        24,
+        "/workspace",
+      );
+    });
+
+    it("creates a terminal for a merged session with a retained worktree", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        hosting: "cloud",
+        createdById: "user-1",
+        agentStatus: "done",
+        sessionStatus: "merged",
         connection: { runtimeInstanceId: "runtime-1" },
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });

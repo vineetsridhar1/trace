@@ -67,6 +67,9 @@ export function SessionHeader({
     | null
     | undefined;
   const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
+    | boolean
+    | undefined;
   const lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
     | string
     | null
@@ -89,9 +92,10 @@ export function SessionHeader({
     sessionGroupId ?? null,
   );
   const bridgeInteractionAllowed = isBridgeInteractionAllowed(moveBridgeAccess);
-  const canMoveSession = sessionStatus !== "merged" && bridgeInteractionAllowed;
+  const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
+  const canMoveSession = !mergedUnavailable && bridgeInteractionAllowed;
   const moveDisabledReason =
-    sessionStatus === "merged"
+    mergedUnavailable
       ? "Cannot move a merged session"
       : !bridgeInteractionAllowed
         ? "You don't have access to this bridge"

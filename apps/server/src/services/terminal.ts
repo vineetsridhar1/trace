@@ -167,7 +167,13 @@ class TerminalService {
       },
     });
     if (!session) throw new Error("Session not found");
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+    if (
+      isFullyUnloadedSession(
+        session.agentStatus,
+        session.sessionStatus,
+        session.sessionGroup?.worktreeDeleted,
+      )
+    ) {
       throw new Error(`Cannot create terminal on a ${session.agentStatus} session`);
     }
     if (session.sessionGroup?.worktreeDeleted) {

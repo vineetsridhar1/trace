@@ -306,6 +306,7 @@ function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean 
 }
 
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
+  if (sessionStatus === "merged") return "merged";
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
 }
 
@@ -805,8 +806,12 @@ const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stoppe
 export function isFullyUnloadedSession(
   agentStatus: AgentStatus,
   sessionStatus: SessionStatus,
+  worktreeDeleted?: boolean | null,
 ): boolean {
-  return FULLY_UNLOADED_AGENT_STATUSES.includes(agentStatus) || sessionStatus === "merged";
+  return (
+    FULLY_UNLOADED_AGENT_STATUSES.includes(agentStatus) ||
+    (sessionStatus === "merged" && worktreeDeleted !== false)
+  );
 }
 
 export class SessionService {
@@ -2895,7 +2900,9 @@ export class SessionService {
     }
 
     // Fully unloaded sessions cannot accept follow-up work.
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+    if (
+      isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted)
+    ) {
       return session;
     }
 
@@ -2982,7 +2989,7 @@ export class SessionService {
       where: { id },
       data: {
         agentStatus: "active",
-        sessionStatus: "in_progress",
+        sessionStatus: getRunningSessionStatus(session.sessionStatus),
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
@@ -3201,11 +3208,14 @@ export class SessionService {
         organizationId: true,
         agentStatus: true,
         sessionStatus: true,
+        worktreeDeleted: true,
         sessionGroupId: true,
       },
     });
 
-    if (isFullyUnloadedSession(current.agentStatus, current.sessionStatus)) {
+    if (
+      isFullyUnloadedSession(current.agentStatus, current.sessionStatus, current.worktreeDeleted)
+    ) {
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
 
@@ -4995,6 +5005,7 @@ export class SessionService {
         organizationId: true,
         agentStatus: true,
         sessionStatus: true,
+        worktreeDeleted: true,
         hosting: true,
         connection: true,
         sessionGroupId: true,
@@ -5003,7 +5014,8 @@ export class SessionService {
     if (!session) return;
 
     // Fully unloaded sessions are excluded from reconnect/disconnect handling.
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted))
+      return;
 
     const conn = this.parseConnection(session.connection);
     const updated: SessionConnectionData = {
@@ -5171,6 +5183,7 @@ export class SessionService {
         organizationId: true,
         agentStatus: true,
         sessionStatus: true,
+        worktreeDeleted: true,
         tool: true,
         model: true,
         reasoningEffort: true,
@@ -5183,7 +5196,8 @@ export class SessionService {
     });
     if (!session) return;
     if (session.toolSessionId !== options.toolSessionId) return;
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted))
+      return;
 
     const context = await buildConversationContext(sessionId);
     let prompt = buildToolSessionRecoveryPrompt(context);
@@ -5410,7 +5424,9 @@ export class SessionService {
 
     const conn = this.parseConnection(session.connection);
 
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+    if (
+      isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted)
+    ) {
       const retryableFailedSession =
         session.agentStatus === "failed" &&
         session.sessionStatus !== "merged" &&
@@ -5908,7 +5924,7 @@ export class SessionService {
       where: { id: session.id },
       data: {
         agentStatus: "not_started",
-        sessionStatus: "in_progress",
+        sessionStatus: getRunningSessionStatus(session.sessionStatus),
         createdById: actorId,
         hosting: targetHosting,
         branch: sourceBranch,
@@ -6014,7 +6030,7 @@ export class SessionService {
       include: { ...SESSION_INCLUDE, projects: true },
     });
 
-    if (session.sessionStatus === "merged") {
+    if (session.sessionStatus === "merged" && session.worktreeDeleted !== false) {
       throw new Error("Cannot move a merged session");
     }
     const sourceRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
@@ -6075,7 +6091,7 @@ export class SessionService {
       include: { ...SESSION_INCLUDE, projects: true },
     });
 
-    if (session.sessionStatus === "merged") {
+    if (session.sessionStatus === "merged" && session.worktreeDeleted !== false) {
       throw new Error("Cannot move a merged session");
     }
     await this.assertRuntimeAccess({
@@ -7130,13 +7146,19 @@ export class SessionService {
       select: {
         agentStatus: true,
         sessionStatus: true,
+        worktreeDeleted: true,
         tool: true,
         hosting: true,
         connection: true,
         sessionGroupId: true,
       },
     });
-    if (session && isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
+    if (
+      session &&
+      isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted)
+    ) {
+      return;
+    }
     const conn = this.parseConnection(session?.connection);
 
     const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
