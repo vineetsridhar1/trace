@@ -18,8 +18,11 @@ export function useListboxNav(itemCount: number, autoFocusIndex = 0): ListboxNav
 
   useEffect(() => {
     if (itemCount === 0) return;
-    const target = itemRefs.current[Math.max(0, Math.min(autoFocusIndex, itemCount - 1))];
-    target?.focus();
+    const frame = requestAnimationFrame(() => {
+      const target = itemRefs.current[Math.max(0, Math.min(autoFocusIndex, itemCount - 1))];
+      target?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [autoFocusIndex, itemCount]);
 
   const focusAt = useCallback(
