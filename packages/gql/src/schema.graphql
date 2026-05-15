@@ -509,6 +509,8 @@ enum SessionTimelineItemKind {
 type CollapsedSessionEvents {
   id: ID!
   eventCount: Int!
+  toolCallCount: Int!
+  messageCount: Int!
   startTimestamp: DateTime!
   endTimestamp: DateTime!
 }

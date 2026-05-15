@@ -77,13 +77,40 @@ describe("SessionTimelineService", () => {
       },
       timestamp: new Date("2026-05-14T10:05:00.000Z"),
     });
+    const hiddenCandidateEvents = [
+      event({
+        id: "hidden-tool-1",
+        payload: {
+          type: "assistant",
+          message: {
+            content: [
+              { type: "tool_use", id: "tool-1", name: "Read", input: {} },
+              { type: "tool_use", id: "tool-2", name: "Edit", input: {} },
+            ],
+          },
+        },
+        timestamp: new Date("2026-05-14T10:01:00.000Z"),
+      }),
+      event({
+        id: "hidden-message-1",
+        payload: {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "Working on it." }] },
+        },
+        timestamp: new Date("2026-05-14T10:02:00.000Z"),
+      }),
+    ];
 
     prismaMock.session.findUnique.mockResolvedValueOnce({
       organizationId: "org-1",
       agentStatus: "done",
       sessionStatus: "in_progress",
     });
-    prismaMock.event.findMany.mockResolvedValueOnce([userEvent, finalEvent]);
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      userEvent,
+      ...hiddenCandidateEvents,
+      finalEvent,
+    ]);
     prismaMock.event.count.mockResolvedValueOnce(12);
 
     const page = await new SessionTimelineService().query({
@@ -96,6 +123,8 @@ describe("SessionTimelineService", () => {
     expect(page.hasOlder).toBe(false);
     expect(page.items.map((item) => item.kind)).toEqual(["event", "collapsed_events", "event"]);
     expect(page.items[1].collapsed?.eventCount).toBe(12);
+    expect(page.items[1].collapsed?.toolCallCount).toBe(2);
+    expect(page.items[1].collapsed?.messageCount).toBe(1);
     expect(prismaMock.event.count).toHaveBeenCalledWith({
       where: expect.objectContaining({
         organizationId: "org-1",

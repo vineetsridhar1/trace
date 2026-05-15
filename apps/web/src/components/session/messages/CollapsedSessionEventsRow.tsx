@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronRight, FilePenLine, FileText } from "lucide-react";
 import type { Event, GitCheckpoint } from "@trace/gql";
 import {
   upsertFetchedSessionEventsWithOptimisticResolution,
@@ -15,7 +15,7 @@ import {
   type CollapsedSessionEventsSummary,
 } from "../../../hooks/useSessionEvents";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../../../lib/session-event-filters";
-import { formatTime } from "./utils";
+import { cn } from "../../../lib/utils";
 import { TraceLoader } from "../../ui/trace-loader";
 
 const COLLAPSED_PAGE_SIZE = 100;
@@ -35,6 +35,17 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function asFetchedEvent(value: unknown): (Event & { id: string }) | null {
   const record = asRecord(value);
   return typeof record?.id === "string" ? (record as Event & { id: string }) : null;
+}
+
+function pluralize(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function collapsedSummaryLabel(collapsed: CollapsedSessionEventsSummary): string {
+  const parts = [];
+  if (collapsed.toolCallCount > 0) parts.push(pluralize(collapsed.toolCallCount, "tool call"));
+  if (collapsed.messageCount > 0) parts.push(pluralize(collapsed.messageCount, "message"));
+  return parts.length > 0 ? parts.join(", ") : pluralize(collapsed.eventCount, "event");
 }
 
 export function CollapsedSessionEventsRow({
@@ -112,23 +123,40 @@ export function CollapsedSessionEventsRow({
     () => buildSessionNodes(eventIds, scopedEvents),
     [eventIds, scopedEvents],
   );
+  const summaryLabel = collapsedSummaryLabel(collapsed);
 
   return (
-    <div className="tool-cmd-row">
-      <button type="button" className="tool-cmd-button" onClick={handleToggle}>
-        <span className={`read-group-chevron ${open ? "open" : ""}`}>
-          <ChevronDown size={10} />
-        </span>
-        <code className="tool-cmd-code opacity-60 font-light">
-          {collapsed.eventCount} intermediate event{collapsed.eventCount === 1 ? "" : "s"}
+    <div className="overflow-hidden rounded-md">
+      <button
+        type="button"
+        className={cn(
+          "group inline-flex max-w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[15px] leading-6 text-muted-foreground transition-colors",
+          "hover:bg-surface-elevated/60 hover:text-foreground",
+          open && "text-foreground",
+        )}
+        aria-expanded={open}
+        aria-label={`${open ? "Hide" : "Show"} ${summaryLabel}`}
+        onClick={handleToggle}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={cn("size-4 shrink-0 transition-transform duration-200", open && "rotate-90")}
+          strokeWidth={2}
+        />
+        <span className="min-w-0 truncate font-medium">{summaryLabel}</span>
+        <FileText aria-hidden="true" className="size-4 shrink-0 opacity-85" strokeWidth={1.8} />
+        <FilePenLine
+          aria-hidden="true"
+          className="size-4 shrink-0 opacity-85"
+          strokeWidth={1.8}
+        />
+        <code className="shrink-0 font-mono text-[15px] font-medium leading-none text-muted-foreground group-hover:text-foreground">
+          &gt;_
         </code>
-        <span className="tool-cmd-time">
-          {formatTime(collapsed.startTimestamp)} - {formatTime(collapsed.endTimestamp)}
-        </span>
       </button>
 
       <div className={`read-group-body ${open ? "open" : ""}`}>
-        <div className="space-y-2 py-2 pl-3">
+        <div className="space-y-2 py-2 pl-7">
           {loading && eventIds.length === 0 ? (
             <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
               <TraceLoader size={12} showLabel={false} />

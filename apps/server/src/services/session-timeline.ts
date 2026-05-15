@@ -8,6 +8,8 @@ const DEFAULT_PAGE_SIZE = 100;
 export interface CollapsedSessionEventRange {
   id: string;
   eventCount: number;
+  toolCallCount: number;
+  messageCount: number;
   startTimestamp: Date;
   endTimestamp: Date;
 }
@@ -46,21 +48,42 @@ function asObject(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function hasTextBlock(payload: unknown): boolean {
+function messageContentBlocks(payload: unknown): Record<string, unknown>[] {
   const data = asObject(payload);
-  if (data?.type !== "assistant") return false;
+  if (data?.type !== "assistant" && data?.type !== "user") return [];
 
   const message = asObject(data.message);
   const content = message?.content;
-  if (!Array.isArray(content)) return false;
+  if (!Array.isArray(content)) return [];
 
-  return content.some((rawBlock) => {
+  return content.flatMap((rawBlock) => {
     const block = asObject(rawBlock);
-    return block?.type === "text" && typeof block.text === "string" && block.text.trim() !== "";
+    return block ? [block] : [];
   });
 }
 
-function hasUserContent(event: PrismaEvent): boolean {
+function hasAssistantTextBlock(payload: unknown): boolean {
+  const data = asObject(payload);
+  if (data?.type !== "assistant") return false;
+
+  return messageContentBlocks(payload).some(
+    (block) => block.type === "text" && typeof block.text === "string" && block.text.trim() !== "",
+  );
+}
+
+function hasRenderedTextBlock(payload: unknown): boolean {
+  return messageContentBlocks(payload).some(
+    (block) => block.type === "text" && typeof block.text === "string" && block.text.trim() !== "",
+  );
+}
+
+function countToolUseBlocks(payload: unknown): number {
+  return messageContentBlocks(payload).reduce((count, block) => {
+    return block.type === "tool_use" ? count + 1 : count;
+  }, 0);
+}
+
+function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): boolean {
   const payload = asObject(event.payload);
   if (event.eventType === "session_started") {
     return typeof payload?.prompt === "string" && payload.prompt.trim() !== "";
@@ -69,6 +92,38 @@ function hasUserContent(event: PrismaEvent): boolean {
     return typeof payload?.text === "string" && payload.text.trim() !== "";
   }
   return false;
+}
+
+function countHiddenMessages(event: Pick<PrismaEvent, "eventType" | "payload">): number {
+  if (event.eventType === "session_started" || event.eventType === "message_sent") {
+    return hasUserContent(event) ? 1 : 0;
+  }
+  if (event.eventType !== "session_output") return 0;
+  return hasRenderedTextBlock(event.payload) ? 1 : 0;
+}
+
+function countHiddenToolCalls(event: Pick<PrismaEvent, "eventType" | "payload">): number {
+  if (event.eventType !== "session_output") return 0;
+  return countToolUseBlocks(event.payload);
+}
+
+function summarizeHiddenCandidateRange(
+  candidates: PrismaEvent[],
+  startTimestamp: Date,
+  endTimestamp: Date,
+): Pick<CollapsedSessionEventRange, "toolCallCount" | "messageCount"> {
+  let toolCallCount = 0;
+  let messageCount = 0;
+  for (const event of candidates) {
+    if (event.timestamp <= startTimestamp || event.timestamp >= endTimestamp) continue;
+    toolCallCount += countHiddenToolCalls(event);
+    messageCount += countHiddenMessages(event);
+  }
+
+  return {
+    toolCallCount,
+    messageCount,
+  };
 }
 
 function isUserEvent(event: PrismaEvent): boolean {
@@ -80,7 +135,9 @@ function isUserEvent(event: PrismaEvent): boolean {
 
 function isAssistantTextEvent(event: PrismaEvent): boolean {
   return (
-    event.eventType === "session_output" && event.parentId == null && hasTextBlock(event.payload)
+    event.eventType === "session_output" &&
+    event.parentId == null &&
+    hasAssistantTextBlock(event.payload)
   );
 }
 
@@ -218,6 +275,11 @@ export class SessionTimelineService {
         });
 
         if (eventCount > 0) {
+          const summary = summarizeHiddenCandidateRange(
+            candidates,
+            previous.timestamp,
+            event.timestamp,
+          );
           const id = `collapsed:${previous.id}:${event.id}`;
           items.push({
             id,
@@ -225,6 +287,7 @@ export class SessionTimelineService {
             event: null,
             collapsed: {
               id,
+              ...summary,
               eventCount,
               startTimestamp: previous.timestamp,
               endTimestamp: event.timestamp,

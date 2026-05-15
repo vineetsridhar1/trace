@@ -3,6 +3,8 @@ import type { Event, SessionTimelineItemKind } from "@trace/gql";
 export interface CollapsedSessionEventsSummary {
   id: string;
   eventCount: number;
+  toolCallCount: number;
+  messageCount: number;
   startTimestamp: string;
   endTimestamp: string;
 }
@@ -31,6 +33,8 @@ export function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummar
   if (
     typeof record?.id !== "string" ||
     typeof record.eventCount !== "number" ||
+    typeof record.toolCallCount !== "number" ||
+    typeof record.messageCount !== "number" ||
     typeof record.startTimestamp !== "string" ||
     typeof record.endTimestamp !== "string"
   ) {
@@ -40,6 +44,8 @@ export function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummar
   return {
     id: record.id,
     eventCount: record.eventCount,
+    toolCallCount: record.toolCallCount,
+    messageCount: record.messageCount,
     startTimestamp: record.startTimestamp,
     endTimestamp: record.endTimestamp,
   };

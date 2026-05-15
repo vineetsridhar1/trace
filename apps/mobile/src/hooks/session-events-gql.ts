@@ -39,6 +39,8 @@ export const SESSION_TIMELINE_QUERY = gql`
         collapsed {
           id
           eventCount
+          toolCallCount
+          messageCount
           startTimestamp
           endTimestamp
         }

@@ -261,7 +261,9 @@ export type CollapsedSessionEvents = {
   endTimestamp: Scalars["DateTime"]["output"];
   eventCount: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
+  messageCount: Scalars["Int"]["output"];
   startTimestamp: Scalars["DateTime"]["output"];
+  toolCallCount: Scalars["Int"]["output"];
 };
 
 export type ConnectionsBridge = {
