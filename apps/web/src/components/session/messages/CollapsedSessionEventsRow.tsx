@@ -128,7 +128,7 @@ export function CollapsedSessionEventsRow({
       <button
         type="button"
         className={cn(
-          "group inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-xs leading-5 text-muted-foreground/80 transition-colors",
+          "group inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-xs leading-5 text-muted-foreground/80 transition-colors",
           "hover:text-muted-foreground",
           open && "text-muted-foreground",
         )}
