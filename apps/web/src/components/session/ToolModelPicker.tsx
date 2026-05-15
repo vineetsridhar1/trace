@@ -151,9 +151,14 @@ export function ToolModelPicker({
                   <ToolIcon tool={option.value} className="size-4" />
                   <span className="flex-1 truncate">{option.label}</span>
                   {tool === option.value ? (
-                    <Check className="size-4 text-muted-foreground" />
+                    <Check className="size-4 text-foreground" />
                   ) : null}
-                  <ChevronRight className="size-4 text-muted-foreground" />
+                  <ChevronRight
+                    className={cn(
+                      "size-4",
+                      tool === option.value ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  />
                 </button>
               ))}
             </motion.div>
@@ -193,9 +198,16 @@ export function ToolModelPicker({
                     </span>
                   </span>
                   {activeProvider?.value === group.value ? (
-                    <Check className="size-4 text-muted-foreground" />
+                    <Check className="size-4 text-foreground" />
                   ) : null}
-                  <ChevronRight className="size-4 text-muted-foreground" />
+                  <ChevronRight
+                    className={cn(
+                      "size-4",
+                      activeProvider?.value === group.value
+                        ? "text-foreground"
+                        : "text-muted-foreground",
+                    )}
+                  />
                 </button>
               ))}
             </motion.div>
