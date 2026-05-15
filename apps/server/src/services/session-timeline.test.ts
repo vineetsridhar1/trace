@@ -153,6 +153,64 @@ describe("SessionTimelineService", () => {
     });
   });
 
+  it("keeps attachment-only user messages visible in compact timelines", async () => {
+    const userEvent = event({
+      id: "user-image",
+      eventType: "message_sent",
+      actorType: "user",
+      actorId: "user-1",
+      payload: {
+        text: "",
+        attachmentKeys: ["uploads/org-1/image.png"],
+      },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const hiddenCandidate = event({
+      id: "hidden-tool",
+      payload: {
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", id: "tool-1", name: "Read", input: {} }],
+        },
+      },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "I can see it now." }] },
+      },
+      timestamp: new Date("2026-05-14T10:02:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([finalEvent, hiddenCandidate, userEvent]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-image",
+      "collapsed:user-image:assistant-final",
+      "assistant-final",
+    ]);
+    expect(page.items[1].collapsed).toEqual({
+      id: "collapsed:user-image:assistant-final",
+      startEventId: userEvent.id,
+      startTimestamp: userEvent.timestamp,
+      endEventId: finalEvent.id,
+      endTimestamp: finalEvent.timestamp,
+    });
+    expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it("skips collapsed ranges when fetched candidates have no hidden thinking", async () => {
     const userEvent = event({
       id: "user-1",

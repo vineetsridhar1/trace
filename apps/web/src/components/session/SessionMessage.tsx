@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
-import { asJsonObject, type JsonObject } from "@trace/shared";
+import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
 import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
@@ -15,9 +15,9 @@ import type { AgentToolResult } from "./groupReadGlob";
 
 const AGENT_NAMES = new Set(["agent", "task"]);
 
-function asStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.every((v) => typeof v === "string") ? value : undefined;
+function optionalAttachmentKeys(payload: JsonObject | null | undefined): string[] | undefined {
+  const keys = attachmentKeysFromPayload(payload);
+  return keys.length > 0 ? keys : undefined;
 }
 
 /** Safely read a string from an unknown value, returning fallback if not a string */
@@ -193,14 +193,15 @@ export const SessionMessage = memo(function SessionMessage({
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
-    case "session_started":
-      return typeof payload?.prompt === "string" ? (
+    case "session_started": {
+      const imageKeys = optionalAttachmentKeys(payload);
+      return typeof payload?.prompt === "string" || (imageKeys && imageKeys.length > 0) ? (
         <UserBubble
-          text={payload.prompt}
+          text={str(payload?.prompt)}
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
+          imageKeys={imageKeys}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : payload?.type === "runtime_move" ? (
@@ -208,6 +209,7 @@ export const SessionMessage = memo(function SessionMessage({
       ) : (
         <SystemBadge text="Session started" />
       );
+    }
 
     case "session_output":
       return payload
@@ -228,7 +230,7 @@ export const SessionMessage = memo(function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
+          imageKeys={optionalAttachmentKeys(payload)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );

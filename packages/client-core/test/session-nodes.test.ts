@@ -33,6 +33,19 @@ describe("buildSessionNodes", () => {
     expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
   });
 
+  it("keeps attachment-only session_started events", () => {
+    const event = makeEvent({
+      payload: {
+        prompt: "",
+        attachmentKeys: ["uploads/org-1/image.png"],
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
+  });
+
   it("still hides prompt-less session_started events without a move marker", () => {
     const event = makeEvent();
 

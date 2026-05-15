@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { gql } from "@urql/core";
 import type { Event, SessionTimelineMode } from "@trace/gql";
+import { hasVisibleUserSessionContent } from "@trace/shared";
 import {
   eventScopeKey,
   handleSessionEvent,
@@ -215,13 +216,8 @@ function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
 function isRenderableCompactEvent(event: Event | undefined): event is Event & { id: string } {
   if (!event || event.parentId) return false;
 
-  if (event.eventType === "session_started") {
-    const payload = payloadRecord(event);
-    return typeof payload?.prompt === "string" && payload.prompt.trim() !== "";
-  }
-  if (event.eventType === "message_sent") {
-    const payload = payloadRecord(event);
-    return typeof payload?.text === "string" && payload.text.trim() !== "";
+  if (event.eventType === "session_started" || event.eventType === "message_sent") {
+    return hasVisibleUserSessionContent(event.eventType, event.payload);
   }
   if (isPrLifecycleEvent(event)) return true;
   if (event.eventType !== "session_output") return false;

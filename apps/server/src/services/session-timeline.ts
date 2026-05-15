@@ -1,5 +1,6 @@
 import type { Event as PrismaEvent, Prisma } from "@prisma/client";
 import type { SessionTimelineMode } from "@trace/gql";
+import { hasVisibleUserSessionContent } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService, excludeSessionOutputPayloadTypesWhere } from "./event.js";
 
@@ -120,14 +121,7 @@ function hasThinkingBlock(payload: unknown): boolean {
 }
 
 function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): boolean {
-  const payload = asObject(event.payload);
-  if (event.eventType === "session_started") {
-    return typeof payload?.prompt === "string" && payload.prompt.trim() !== "";
-  }
-  if (event.eventType === "message_sent") {
-    return typeof payload?.text === "string" && payload.text.trim() !== "";
-  }
-  return false;
+  return hasVisibleUserSessionContent(event.eventType, event.payload);
 }
 
 function isUserEvent(event: PrismaEvent): boolean {

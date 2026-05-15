@@ -1,5 +1,11 @@
 import type { Event } from "@trace/gql";
-import { asJsonObject, parseQuestion, type JsonObject, type Question } from "@trace/shared";
+import {
+  asJsonObject,
+  hasVisibleUserSessionContent,
+  parseQuestion,
+  type JsonObject,
+  type Question,
+} from "@trace/shared";
 import { HIDDEN_SESSION_PAYLOAD_TYPE_SET } from "./event-filters.js";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
@@ -253,12 +259,14 @@ export function buildSessionNodes(
     if (HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(event.eventType)) {
       continue;
     }
-    if (
-      event.eventType === "session_started" &&
-      !asJsonObject(event.payload)?.prompt &&
-      asJsonObject(event.payload)?.type !== "runtime_move"
-    ) {
-      continue;
+    if (event.eventType === "session_started") {
+      const payload = asJsonObject(event.payload);
+      if (
+        !hasVisibleUserSessionContent(event.eventType, event.payload) &&
+        payload?.type !== "runtime_move"
+      ) {
+        continue;
+      }
     }
 
     // Subagent child events render nested inside their parent's SubagentRow — never as top-level nodes.

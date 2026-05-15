@@ -172,6 +172,11 @@ export {
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
 export {
+  attachmentKeysFromPayload,
+  hasAttachmentKeys,
+  hasVisibleUserSessionContent,
+} from "./session-content.js";
+export {
   CLOUD_MACHINE_RUNTIME_PREFIX,
   PROVISIONED_RUNTIME_PREFIX,
   isCloudMachineRuntimeId,

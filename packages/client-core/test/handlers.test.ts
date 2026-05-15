@@ -362,7 +362,7 @@ describe("handleOrgEvent", () => {
       makeEvent({
         eventType: "session_pr_merged",
         scopeId: "session-1",
-        payload: { agentStatus: "done", sessionStatus: "merged" },
+        payload: { agentStatus: "done", sessionStatus: "merged", worktreeDeleted: true },
       }),
     );
 
