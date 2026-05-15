@@ -37,37 +37,22 @@ let mutationVariables: Record<string, unknown> | null = null;
 const onFailure = vi.fn();
 const onSuccess = vi.fn();
 const uploadFileMock = vi.fn();
-const optimisticallyInsertSessionMessageMock = vi.fn(
-  (_sessionId: string, _text: string, _options?: unknown) => ({
-    eventId: "optimistic-event",
-    clientMutationId: "client-mutation",
-  }),
-);
-const reconcileOptimisticSessionMessageMock = vi.fn(
-  (_sessionId: string, _eventId: string, _realId: string) => undefined,
-);
-const removeOptimisticSessionMessageMock = vi.fn(
-  (_sessionId: string, _eventId: string) => undefined,
-);
-let entityState: {
-  sessions: Record<string, Record<string, unknown>>;
-  patch: (entity: string, id: string, patch: Record<string, unknown>) => void;
-};
+const reconcileOptimisticSessionMessageMock = vi.fn();
+const removeOptimisticSessionMessageMock = vi.fn();
 
 vi.mock("@trace/client-core", () => ({
-  optimisticallyInsertSessionMessage: (...args: [string, string, unknown?]) =>
-    optimisticallyInsertSessionMessageMock(...args),
+  optimisticallyInsertSessionMessage: vi.fn(() => ({
+    eventId: "optimistic-event",
+    clientMutationId: "client-mutation",
+  })),
   QUEUE_SESSION_MESSAGE_MUTATION: "queueSessionMessage",
-  reconcileOptimisticSessionMessage: (...args: [string, string, string]) =>
+  reconcileOptimisticSessionMessage: (...args: unknown[]) =>
     reconcileOptimisticSessionMessageMock(...args),
-  removeOptimisticSessionMessage: (...args: [string, string]) =>
+  removeOptimisticSessionMessage: (...args: unknown[]) =>
     removeOptimisticSessionMessageMock(...args),
   SEND_SESSION_MESSAGE_MUTATION: "sendSessionMessage",
   useAuthStore: {
     getState: () => ({ activeOrgId: "org-1" }),
-  },
-  useEntityStore: {
-    getState: () => entityState,
   },
   wrapPrompt: (_mode: ComposerMode, draft: string) => `wrapped:${draft}`,
 }));
@@ -128,24 +113,8 @@ describe("useComposerSubmit", () => {
     onFailure.mockClear();
     onSuccess.mockClear();
     uploadFileMock.mockReset();
-    optimisticallyInsertSessionMessageMock.mockClear();
     reconcileOptimisticSessionMessageMock.mockClear();
     removeOptimisticSessionMessageMock.mockClear();
-    entityState = {
-      sessions: {
-        "session-1": {
-          id: "session-1",
-          agentStatus: "done",
-          sessionStatus: "in_progress",
-          hosting: "cloud",
-          workdir: "/workspace",
-          connection: { state: "connected" },
-        },
-      },
-      patch: (_entity, id, patch) => {
-        entityState.sessions[id] = { ...(entityState.sessions[id] ?? {}), ...patch };
-      },
-    };
     draftState = {
       attachments: {
         "session-1": [
@@ -240,36 +209,5 @@ describe("useComposerSubmit", () => {
     expect(onSuccess).toHaveBeenCalledTimes(1);
     expect(onFailure).not.toHaveBeenCalled();
     expect(reconcileOptimisticSessionMessageMock).not.toHaveBeenCalled();
-  });
-
-  it("switches deferred cloud sessions to the runtime startup state immediately", async () => {
-    draftState.attachments = {};
-    entityState.sessions["session-1"] = {
-      id: "session-1",
-      agentStatus: "not_started",
-      sessionStatus: "in_progress",
-      hosting: "cloud",
-      workdir: null,
-      connection: { state: "pending" },
-    };
-
-    await act(async () => {
-      TestRenderer.create(<Harness />);
-    });
-
-    await act(async () => {
-      await submit?.("start this", "code");
-    });
-
-    expect(entityState.sessions["session-1"]).toMatchObject({
-      agentStatus: "active",
-      sessionStatus: "in_progress",
-      connection: { state: "requested" },
-    });
-    expect(optimisticallyInsertSessionMessageMock).toHaveBeenCalledWith(
-      "session-1",
-      "wrapped:start this",
-      { deliveryStatus: "pending_runtime" },
-    );
   });
 });

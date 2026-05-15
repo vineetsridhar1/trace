@@ -586,14 +586,6 @@ export function handleOrgEvent(event: Event): void {
       ...(isConversationalMessage ? { lastMessageAt: event.timestamp } : {}),
       ...(isUserMessage ? { lastUserMessageAt: event.timestamp } : {}),
     };
-    const agentStatus = payload.agentStatus as AgentStatus | undefined;
-    const sessionStatus = payload.sessionStatus as SessionStatus | undefined;
-    if (agentStatus) {
-      updates.agentStatus = agentStatus;
-    }
-    if (sessionStatus) {
-      updates.sessionStatus = sessionStatus;
-    }
     const bumpActivitySort = isConversationalMessage;
     if (bumpActivitySort) {
       updates._sortTimestamp = event.timestamp;
