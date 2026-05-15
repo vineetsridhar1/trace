@@ -77,6 +77,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: ["92b9-74-13-227-36.ngrok-free.app"],
     host: true,
     port: 3000 + offset,
     proxy: {
