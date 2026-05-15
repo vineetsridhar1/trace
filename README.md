@@ -1,6 +1,15 @@
 # Trace
 
-An Electron desktop app for monitoring and managing Claude Code sessions.
+A unified AI-native platform that collapses project management, team communication, and AI-assisted development into a single product. Built as a monorepo with a GraphQL backend, web frontend, and Electron desktop app.
+
+## Architecture
+
+- **Backend:** Express + Apollo GraphQL server with PostgreSQL + Prisma ORM
+- **Web Client:** React + Vite + urql + Zustand + Tailwind CSS
+- **Desktop Client:** Electron app with local session bridge
+- **Shared UI:** React component library used by both web and desktop clients
+
+The server provides a GraphQL API and WebSocket support for real-time subscriptions. Both OpenAI and Anthropic are supported as AI providers.
 
 ## Prerequisites
 
@@ -10,11 +19,9 @@ An Electron desktop app for monitoring and managing Claude Code sessions.
 - **Linux:** `make`, `python3`, and `build-essential`
 - **Windows:** Python 3 and a C++ compiler (e.g. via `npm install -g windows-build-tools`)
 
-## Getting Started
+## Quick Start
 
 ### 1. Install dependencies
-
-Install dependencies for all workspace packages:
 
 ```bash
 pnpm install
@@ -30,29 +37,28 @@ createdb trace
 
 ### 3. Configure environment variables
 
-Create a `.env` file in the server app directory:
+Copy the example env file and add your API keys:
 
 ```bash
 cp apps/server/.env.example apps/server/.env
 ```
 
-Then edit `apps/server/.env` and fill in your API keys:
+Edit `apps/server/.env`:
 
 ```
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/trace?schema=public"
 PORT=3100
 
-# AI Provider: "openai" or "anthropic" (defaults to "openai")
-AI_PROVIDER=openai
-
-# OpenAI (required if AI_PROVIDER=openai)
-OPENAI_API_KEY=sk-...
-
-# Anthropic (required if AI_PROVIDER=anthropic)
+# AI Provider: "openai" or "anthropic"
+AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Or for OpenAI:
+# AI_PROVIDER=openai
+# OPENAI_API_KEY=sk-...
 ```
 
-### 4. Run database migrations, generate the Prisma client, and seed
+### 4. Set up the database schema
 
 ```bash
 cd apps/server
@@ -61,51 +67,83 @@ pnpm prisma generate
 pnpm prisma db seed
 ```
 
-This creates all tables, generates the Prisma client, and seeds a default server and channel.
-
 ### 5. Generate GraphQL types
 
-Run codegen for both the server and client:
-
 ```bash
-# Server - generates resolver types from schema
+# Server
 pnpm --filter trace-server codegen
 
-# Web client - generates React Apollo hooks and types
+# Web client
 pnpm --filter trace-web codegen
 
-# Desktop app - generates React Apollo hooks and types
+# Desktop app
 pnpm --filter trace codegen
 ```
 
-### 6. Start the app
+### 6. Start the development servers
 
-You need to run at least **two processes**: the backend server and either the web or desktop client.
+Open three terminal tabs:
 
-**Terminal 1 — Server:**
+**Terminal 1 — Backend server:**
 
 ```bash
 pnpm dev:server
 ```
 
-The server starts on `http://localhost:3100`.
+Server runs on `http://localhost:3100`.
 
-**Terminal 2 — Web app:**
+**Terminal 2 — Web client:**
 
 ```bash
 pnpm dev:web
 ```
 
-The web app starts on Vite's configured dev port.
+Web app runs on Vite's default dev port (usually `http://localhost:5173`).
 
-**Terminal 2 — Desktop app:**
+**Terminal 3 — Desktop app:**
 
 ```bash
 pnpm dev:desktop
 ```
 
-**Option 3 -- Render:**
+Or for production build testing:
 
 ```bash
 TRACE_PROD=1 pnpm dev:desktop
 ```
+
+## Development
+
+### Useful commands
+
+```bash
+pnpm dev              # Run all services in parallel
+pnpm dev:server       # Backend only
+pnpm dev:web          # Web frontend only
+pnpm dev:desktop      # Electron app only
+pnpm build            # Build all packages
+```
+
+### Project structure
+
+```
+apps/
+  server/             # Express + Apollo GraphQL backend
+  web/                # React web client
+  desktop/            # Electron desktop client
+packages/
+  shared-ui/          # Shared React components
+```
+
+### GraphQL Development
+
+- Schema source: `apps/server/src/schema/`
+- Run `pnpm codegen` in each app to regenerate types from schema changes
+- The server reads the generated schema at startup
+
+## Notes
+
+- All code changes should follow the patterns in `CLAUDE.md`
+- The Electron app includes IPC bridge for local session control
+- The server uses JWT tokens for authentication
+- Real-time updates flow through GraphQL subscriptions for web clients and WebSocket for the Electron bridge
