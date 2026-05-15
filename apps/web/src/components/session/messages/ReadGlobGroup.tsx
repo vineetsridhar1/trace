@@ -33,17 +33,19 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
       </button>
 
       <div className={`read-group-body ${open ? "open" : ""}`}>
-        <div className="space-y-0.5 py-1">
-          {items.map((item) => (
-            <div key={item.id} className="read-group-subline">
-              <span className="font-semibold text-primary">{item.toolName}</span>
-              <span className="mx-2 text-muted-foreground">&middot;</span>
-              <span className="truncate text-muted-foreground">{item.filePath}</span>
-              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
-                {formatTime(item.timestamp)}
-              </span>
-            </div>
-          ))}
+        <div>
+          <div className="space-y-0.5 py-1">
+            {items.map((item) => (
+              <div key={item.id} className="read-group-subline">
+                <span className="font-semibold text-primary">{item.toolName}</span>
+                <span className="mx-2 text-muted-foreground">&middot;</span>
+                <span className="truncate text-muted-foreground">{item.filePath}</span>
+                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
+                  {formatTime(item.timestamp)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

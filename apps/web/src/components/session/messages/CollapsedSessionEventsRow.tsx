@@ -152,35 +152,37 @@ export function CollapsedSessionEventsRow({
       </button>
 
       <div className={`read-group-body ${open ? "open" : ""}`}>
-        <div className="space-y-2 py-2 pl-7">
-          {loading && eventIds.length === 0 ? (
-            <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
-              <TraceLoader size={12} showLabel={false} />
-              Loading intermediate events...
-            </div>
-          ) : error ? (
-            <div className="px-2 py-1 text-xs text-destructive">{error}</div>
-          ) : (
-            nodes.map((node) => (
-              <SessionNodeRenderer
-                key={node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id}
-                node={node}
-                gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                completedAgentTools={completedAgentTools}
-                toolResultByUseId={toolResultByUseId}
-              />
-            ))
-          )}
+        <div>
+          <div className="space-y-2 py-2 pl-7">
+            {loading && eventIds.length === 0 ? (
+              <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+                <TraceLoader size={12} showLabel={false} />
+                Loading intermediate events...
+              </div>
+            ) : error ? (
+              <div className="px-2 py-1 text-xs text-destructive">{error}</div>
+            ) : (
+              nodes.map((node) => (
+                <SessionNodeRenderer
+                  key={node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id}
+                  node={node}
+                  gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                  completedAgentTools={completedAgentTools}
+                  toolResultByUseId={toolResultByUseId}
+                />
+              ))
+            )}
 
-          {hasMore && !loading && !error ? (
-            <button
-              type="button"
-              className="ml-2 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-surface-elevated hover:text-foreground"
-              onClick={() => void fetchNext()}
-            >
-              Load more
-            </button>
-          ) : null}
+            {hasMore && !loading && !error ? (
+              <button
+                type="button"
+                className="ml-2 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-surface-elevated hover:text-foreground"
+                onClick={() => void fetchNext()}
+              >
+                Load more
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
