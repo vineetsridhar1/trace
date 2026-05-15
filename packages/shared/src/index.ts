@@ -158,7 +158,6 @@ export type {
 } from "./adapters/llm.js";
 export type { ModelOption, ModelProviderGroup, ReasoningEffortOption } from "./models.js";
 export {
-  getDefaultModelForProvider,
   getModelsForTool,
   getDefaultModel,
   getModelLabel,

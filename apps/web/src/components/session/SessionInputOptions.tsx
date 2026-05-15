@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
-import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
+import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
@@ -18,6 +18,7 @@ import {
   type ReasoningEffortOption,
 } from "./modelOptions";
 import { ToolModelPicker } from "./ToolModelPicker";
+import { normalizeTool, type ToolOptionValue } from "./picker/pickerShared";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
@@ -136,7 +137,7 @@ export function SessionInputOptions({
   const channelRepoId = repo?.id;
   const cloudDisabledReason = repoRemoteKnownMissing(repo) ? CLOUD_REPO_REMOTE_REQUIRED : null;
 
-  const currentTool = tool ?? "claude_code";
+  const currentTool: ToolOptionValue = normalizeTool(tool ?? "claude_code");
   const currentModel = model ?? getDefaultModel(currentTool);
   const reasoningEffortOptions = getReasoningEffortsForTool(currentTool);
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
@@ -178,12 +179,12 @@ export function SessionInputOptions({
   }, [fetchAvailableRuntimes]);
 
   const handleToolChange = useCallback(
-    async (newTool: string | null) => {
-      if (!newTool || isOptimistic) return;
+    async (newTool: ToolOptionValue) => {
+      if (isOptimistic) return;
       const newDefault = getDefaultModel(newTool);
       const newDefaultReasoningEffort = getDefaultReasoningEffort(newTool);
       const rollback = applyOptimisticPatch("sessions", sessionId, {
-        tool: newTool as CodingTool,
+        tool: newTool,
         model: newDefault ?? null,
         reasoningEffort: newDefaultReasoningEffort ?? null,
       });
@@ -204,8 +205,8 @@ export function SessionInputOptions({
   );
 
   const handleModelChange = useCallback(
-    async (newModel: string | null) => {
-      if (!newModel || isOptimistic) return;
+    async (newModel: string) => {
+      if (isOptimistic) return;
       const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
       try {
         const result = await client

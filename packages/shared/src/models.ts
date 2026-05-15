@@ -133,14 +133,6 @@ export function getModelProviderForModel(
   );
 }
 
-export function getDefaultModelForProvider(
-  tool: string,
-  provider: string,
-): string | undefined {
-  return getModelProviderGroupsForTool(tool).find((group) => group.value === provider)?.models[0]
-    ?.value;
-}
-
 export function getDefaultModel(tool: string): string | undefined {
   return DEFAULT_MODEL_BY_TOOL[tool];
 }

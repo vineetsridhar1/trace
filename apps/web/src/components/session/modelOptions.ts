@@ -1,6 +1,5 @@
 export type { ModelOption, ReasoningEffortOption } from "@trace/shared";
 export {
-  getDefaultModelForProvider,
   getModelsForTool,
   getDefaultModel,
   getModelLabel,

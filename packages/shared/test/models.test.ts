@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  getDefaultModelForProvider,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelProviderForModel,
@@ -68,9 +67,6 @@ describe("model catalog", () => {
     ]);
     expect(getModelProviderForModel("pi", "openai-codex/gpt-5.5")?.value).toBe(
       "openai-codex",
-    );
-    expect(getDefaultModelForProvider("pi", "anthropic")).toBe(
-      "anthropic/claude-sonnet-4-6",
     );
   });
 });
