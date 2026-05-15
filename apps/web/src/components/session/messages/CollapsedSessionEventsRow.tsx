@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ChevronRight, FilePenLine, FileText } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { Event, GitCheckpoint } from "@trace/gql";
 import {
   upsertFetchedSessionEventsWithOptimisticResolution,
@@ -130,29 +130,25 @@ export function CollapsedSessionEventsRow({
       <button
         type="button"
         className={cn(
-          "group inline-flex max-w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[15px] leading-6 text-muted-foreground transition-colors",
-          "hover:bg-surface-elevated/60 hover:text-foreground",
+          "group inline-flex max-w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm leading-6 text-muted-foreground transition-colors",
+          "hover:bg-surface-elevated/50 hover:text-foreground",
           open && "text-foreground",
         )}
         aria-expanded={open}
-        aria-label={`${open ? "Hide" : "Show"} ${summaryLabel}`}
+        aria-label={`${open ? "Hide" : "Show"} activity: ${summaryLabel}`}
         onClick={handleToggle}
       >
         <ChevronRight
           aria-hidden="true"
-          className={cn("size-4 shrink-0 transition-transform duration-200", open && "rotate-90")}
+          className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-90")}
           strokeWidth={2}
         />
-        <span className="min-w-0 truncate font-medium">{summaryLabel}</span>
-        <FileText aria-hidden="true" className="size-4 shrink-0 opacity-85" strokeWidth={1.8} />
-        <FilePenLine
+        <span className="shrink-0 font-medium">Activity</span>
+        <span
           aria-hidden="true"
-          className="size-4 shrink-0 opacity-85"
-          strokeWidth={1.8}
+          className="size-1 shrink-0 rounded-full bg-muted-foreground/45 transition-colors group-hover:bg-foreground/55"
         />
-        <code className="shrink-0 font-mono text-[15px] font-medium leading-none text-muted-foreground group-hover:text-foreground">
-          &gt;_
-        </code>
+        <span className="min-w-0 truncate">{summaryLabel}</span>
       </button>
 
       <div className={`read-group-body ${open ? "open" : ""}`}>
