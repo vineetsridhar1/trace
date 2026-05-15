@@ -57,7 +57,7 @@ const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
   {
     value: "anthropic",
     label: "Claude",
-    description: "Uses a Claude subscription or Anthropic API key",
+    description: "Uses a Claude subscription",
     models: PI_MODELS.slice(4),
   },
 ];
