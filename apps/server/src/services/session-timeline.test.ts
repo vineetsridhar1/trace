@@ -78,6 +78,11 @@ describe("SessionTimelineService", () => {
       },
       timestamp: new Date("2026-05-14T10:05:00.000Z"),
     });
+    const resultEvent = event({
+      id: "result",
+      payload: { type: "result" },
+      timestamp: new Date("2026-05-14T10:05:01.000Z"),
+    });
     const hiddenCandidateEvents = [
       event({
         id: "hidden-tool-1",
@@ -107,6 +112,7 @@ describe("SessionTimelineService", () => {
       sessionStatus: "in_progress",
     });
     prismaMock.event.findMany.mockResolvedValueOnce([
+      resultEvent,
       finalEvent,
       ...[...hiddenCandidateEvents].reverse(),
       userEvent,
@@ -120,12 +126,19 @@ describe("SessionTimelineService", () => {
 
     expect(page.mode).toBe("compact");
     expect(page.hasOlder).toBe(false);
-    expect(page.items.map((item) => item.kind)).toEqual(["event", "collapsed_events", "event"]);
+    expect(page.items.map((item) => item.kind)).toEqual([
+      "event",
+      "collapsed_events",
+      "event",
+      "collapsed_events",
+      "event",
+    ]);
     expect(page.items[1].collapsed).toEqual({
       id: "collapsed:user-1:assistant-final",
       startTimestamp: userEvent.timestamp,
       endTimestamp: finalEvent.timestamp,
     });
+    expect(page.items[4].event?.id).toBe("result");
     expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.event.findMany).toHaveBeenNthCalledWith(1, {
       where: expect.objectContaining({
@@ -245,13 +258,7 @@ describe("SessionTimelineService", () => {
       agentStatus: "done",
       sessionStatus: "in_progress",
     });
-    prismaMock.event.findMany.mockResolvedValueOnce([
-      user3,
-      assistant2,
-      user2,
-      assistant1,
-      user1,
-    ]);
+    prismaMock.event.findMany.mockResolvedValueOnce([user3, assistant2, user2, assistant1, user1]);
 
     const page = await new SessionTimelineService().query({
       organizationId: "org-1",

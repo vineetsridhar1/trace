@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
+  HIDDEN_SESSION_PAYLOAD_TYPE_SET,
   handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
@@ -39,6 +40,42 @@ function isCompletedSessionEvent(event: Event): boolean {
   return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
 }
 
+function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
+  const message = asRecord(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return false;
+
+  return content.some((rawBlock) => {
+    const block = asRecord(rawBlock);
+    if (!block) return false;
+    if (block.type === "text") {
+      return typeof block.text === "string" && block.text.trim() !== "";
+    }
+    return block.type === "tool_use" || block.type === "plan" || block.type === "question";
+  });
+}
+
+function isRenderableCompactEvent(event: Event | undefined): event is Event & { id: string } {
+  if (!event || event.parentId) return false;
+
+  if (event.eventType === "session_started") {
+    const payload = payloadRecord(event);
+    return typeof payload?.prompt === "string" && payload.prompt.trim() !== "";
+  }
+  if (event.eventType === "message_sent") {
+    const payload = payloadRecord(event);
+    return typeof payload?.text === "string" && payload.text.trim() !== "";
+  }
+  if (event.eventType !== "session_output") return false;
+
+  const payload = payloadRecord(event);
+  if (!payload) return false;
+  const type = payload.type;
+  if (typeof type === "string" && HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(type)) return false;
+  if (type === "assistant" || type === "user") return hasRenderableContentBlock(payload);
+  return type === "result" || type === "error";
+}
+
 function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {
   const page = asRecord(value);
   const rawItems = Array.isArray(page?.items) ? page.items : [];
@@ -71,10 +108,11 @@ function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {
 
 function appendEventItem(
   current: SessionTimelineDisplayItem[],
-  eventId: string,
+  event: Event & { id: string },
 ): SessionTimelineDisplayItem[] {
-  if (current.some((item) => item.kind === "event" && item.id === eventId)) return current;
-  return [...current, { kind: "event" as const, id: eventId }];
+  if (!isRenderableCompactEvent(event)) return current;
+  if (current.some((item) => item.kind === "event" && item.id === event.id)) return current;
+  return [...current, { kind: "event" as const, id: event.id }];
 }
 
 interface UseSessionEventsResult {
@@ -149,21 +187,6 @@ export function useSessionEvents(
     [sessionId],
   );
 
-  const flushBufferedEvents = useCallback(() => {
-    const flushed = eventBufferRef.current.flush();
-    if (flushed.fetched) {
-      commitFetchedEvents(flushed.fetched);
-    }
-
-    if (flushed.error) {
-      setError(flushed.error);
-    }
-
-    for (const event of flushed.liveEvents) {
-      commitLiveEvent(event);
-    }
-  }, [commitFetchedEvents, commitLiveEvent]);
-
   const fetchEvents = useCallback(async () => {
     if (!fetchEnabled) return;
     if (!activeOrgId) {
@@ -212,6 +235,33 @@ export function useSessionEvents(
     setLoading(false);
   }, [activeOrgId, commitFetchedEvents, fetchEnabled, sessionId]);
 
+  const commitLiveEventWithTimeline = useCallback(
+    (event: Event & { id: string }) => {
+      commitLiveEvent(event);
+      if (isCompletedSessionEvent(event)) {
+        void fetchEvents();
+      } else if (timelineModeRef.current === "compact") {
+        setTimelineItems((current) => appendEventItem(current, event));
+      }
+    },
+    [commitLiveEvent, fetchEvents],
+  );
+
+  const flushBufferedEvents = useCallback(() => {
+    const flushed = eventBufferRef.current.flush();
+    if (flushed.fetched) {
+      commitFetchedEvents(flushed.fetched);
+    }
+
+    if (flushed.error) {
+      setError(flushed.error);
+    }
+
+    for (const event of flushed.liveEvents) {
+      commitLiveEventWithTimeline(event);
+    }
+  }, [commitFetchedEvents, commitLiveEventWithTimeline]);
+
   useEffect(() => {
     commitEnabledRef.current = commitEnabled;
     if (commitEnabled) flushBufferedEvents();
@@ -255,12 +305,7 @@ export function useSessionEvents(
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
         if (commitEnabledRef.current) {
-          commitLiveEvent(event);
-          if (isCompletedSessionEvent(event)) {
-            void fetchEvents();
-          } else if (timelineModeRef.current === "compact") {
-            setTimelineItems((current) => appendEventItem(current, event.id));
-          }
+          commitLiveEventWithTimeline(event);
         } else {
           eventBufferRef.current.storeLiveEvent(event);
         }
@@ -286,7 +331,7 @@ export function useSessionEvents(
       eventSub.unsubscribe();
       statusSub.unsubscribe();
     };
-  }, [activeOrgId, commitLiveEvent, fetchEnabled, fetchEvents, sessionId]);
+  }, [activeOrgId, commitLiveEventWithTimeline, fetchEnabled, sessionId]);
 
   // Catch up missed events after a WS reconnect: the server's pubsub has no
   // replay, so anything the agent emitted while we were disconnected is lost

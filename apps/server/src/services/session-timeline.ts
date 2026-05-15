@@ -95,6 +95,13 @@ function isAssistantTextEvent(event: PrismaEvent): boolean {
   );
 }
 
+function isCompletionEvent(event: PrismaEvent): boolean {
+  const payload = asObject(event.payload);
+  return (
+    event.eventType === "session_output" && event.parentId == null && payload?.type === "result"
+  );
+}
+
 function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
   const visibleIds = new Set<string>();
   let latestAssistantInTurn: PrismaEvent | null = null;
@@ -114,6 +121,12 @@ function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
 
     if (isAssistantTextEvent(event)) {
       latestAssistantInTurn = event;
+      continue;
+    }
+
+    if (isCompletionEvent(event)) {
+      flushAssistant();
+      visibleIds.add(event.id);
     }
   }
 
@@ -138,7 +151,10 @@ function compactCandidateWhere(
       { eventType: { in: ["session_started", "message_sent"] } },
       {
         eventType: "session_output",
-        payload: { path: ["type"], equals: "assistant" },
+        OR: [
+          { payload: { path: ["type"], equals: "assistant" } },
+          { payload: { path: ["type"], equals: "result" } },
+        ],
       },
     ],
     ...excludeSessionOutputPayloadTypesWhere(excludePayloadTypes),
