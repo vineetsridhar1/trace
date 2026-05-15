@@ -8,6 +8,7 @@ import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
 import type { CollapsedSessionEventsSummary } from "../../hooks/useSessionEvents";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
+import { getSessionVirtualPadding } from "./sessionVirtualPadding";
 import { TraceLoader } from "../ui/trace-loader";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
@@ -342,10 +343,7 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
-  const firstVirtualItem = virtualItems[0];
-  const lastVirtualItem = virtualItems[virtualItems.length - 1];
-  const paddingTop = firstVirtualItem?.start ?? 0;
-  const paddingBottom = lastVirtualItem ? Math.max(0, totalSize - lastVirtualItem.end) : 0;
+  const { paddingTop, paddingBottom } = getSessionVirtualPadding(virtualItems, totalSize);
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
@@ -392,7 +390,7 @@ export function SessionMessageList({
           <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
         )}
 
-        {/* Keep visible rows in normal flow so stale estimates cannot make them overlap. */}
+        {/* Visible rows stay in document flow; virtual padding preserves scroll height. */}
         <div style={{ minHeight: totalSize, width: "100%" }}>
           {paddingTop > 0 ? <div aria-hidden="true" style={{ height: paddingTop }} /> : null}
 
