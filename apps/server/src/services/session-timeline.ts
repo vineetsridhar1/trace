@@ -78,6 +78,15 @@ function hasRenderedTextBlock(payload: unknown): boolean {
   );
 }
 
+function hasRenderableContentBlock(payload: unknown): boolean {
+  return messageContentBlocks(payload).some((block) => {
+    if (block.type === "text") {
+      return typeof block.text === "string" && block.text.trim() !== "";
+    }
+    return block.type === "tool_use" || block.type === "plan" || block.type === "question";
+  });
+}
+
 function countToolUseBlocks(payload: unknown): number {
   return messageContentBlocks(payload).reduce((count, block) => {
     return block.type === "tool_use" ? count + 1 : count;
@@ -108,10 +117,42 @@ function countHiddenToolCalls(event: Pick<PrismaEvent, "eventType" | "payload">)
   return countToolUseBlocks(event.payload);
 }
 
+function hasRenderableSessionOutput(payload: unknown): boolean {
+  const data = asObject(payload);
+  if (data?.type === "assistant" || data?.type === "user") {
+    return hasRenderableContentBlock(payload);
+  }
+  return data?.type === "result" || data?.type === "error";
+}
+
+function isRenderableHiddenEvent(
+  event: Pick<PrismaEvent, "eventType" | "payload" | "parentId">,
+): boolean {
+  if (event.parentId) return false;
+
+  if (event.eventType === "session_started" || event.eventType === "message_sent") {
+    return hasUserContent(event);
+  }
+  if (event.eventType === "session_output") {
+    return hasRenderableSessionOutput(event.payload);
+  }
+
+  return false;
+}
+
 function countHiddenEventSummary(
-  event: Pick<PrismaEvent, "eventType" | "payload">,
-): Pick<CollapsedSessionEventRange, "toolCallCount" | "messageCount"> {
+  event: Pick<PrismaEvent, "eventType" | "payload" | "parentId">,
+): Pick<CollapsedSessionEventRange, "eventCount" | "toolCallCount" | "messageCount"> {
+  if (!isRenderableHiddenEvent(event)) {
+    return {
+      eventCount: 0,
+      toolCallCount: 0,
+      messageCount: 0,
+    };
+  }
+
   return {
+    eventCount: 1,
     toolCallCount: countHiddenToolCalls(event),
     messageCount: countHiddenMessages(event),
   };
@@ -257,7 +298,7 @@ async function summarizeHiddenRanges(
       id: { notIn: [...endpointIds] },
     },
     orderBy: { timestamp: "asc" },
-    select: { eventType: true, payload: true, timestamp: true },
+    select: { eventType: true, payload: true, parentId: true, timestamp: true },
   });
 
   let gapIndex = 0;
@@ -277,7 +318,7 @@ async function summarizeHiddenRanges(
     if (!summary) continue;
 
     const counts = countHiddenEventSummary(event);
-    summary.eventCount++;
+    summary.eventCount += counts.eventCount;
     summary.toolCallCount += counts.toolCallCount;
     summary.messageCount += counts.messageCount;
   }

@@ -102,6 +102,11 @@ describe("SessionTimelineService", () => {
     ];
     const hiddenRangeEvents = [
       ...hiddenCandidateEvents,
+      event({
+        id: "hidden-connection-lost",
+        payload: { type: "connection_lost" },
+        timestamp: new Date("2026-05-14T10:02:30.000Z"),
+      }),
       ...Array.from({ length: 10 }, (_, i) =>
         event({
           id: `hidden-${i}`,
@@ -143,8 +148,71 @@ describe("SessionTimelineService", () => {
         timestamp: { gt: userEvent.timestamp, lt: finalEvent.timestamp },
       }),
       orderBy: { timestamp: "asc" },
-      select: { eventType: true, payload: true, timestamp: true },
+      select: { eventType: true, payload: true, parentId: true, timestamp: true },
     });
+  });
+
+  it("does not create collapsed ranges for hidden events that render no activity", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { prompt: "Implement this" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp: new Date("2026-05-14T10:05:00.000Z"),
+    });
+    const hiddenNoiseEvents = [
+      event({
+        id: "hidden-connection-lost",
+        payload: { type: "connection_lost" },
+        timestamp: new Date("2026-05-14T10:01:00.000Z"),
+      }),
+      event({
+        id: "hidden-tool-result-only",
+        payload: {
+          type: "user",
+          message: {
+            content: [{ type: "tool_result", tool_use_id: "tool-1", content: "ok" }],
+          },
+        },
+        timestamp: new Date("2026-05-14T10:02:00.000Z"),
+      }),
+      event({
+        id: "hidden-child-output",
+        parentId: "subagent-parent",
+        payload: {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "Nested child output" }] },
+        },
+        timestamp: new Date("2026-05-14T10:03:00.000Z"),
+      }),
+    ];
+
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([finalEvent, userEvent]);
+    prismaMock.event.findMany.mockResolvedValueOnce(hiddenNoiseEvents);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      excludePayloadTypes: ["workspace_ready"],
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.kind)).toEqual(["event", "event"]);
+    expect(page.items.map((item) => item.id)).toEqual(["user-1", "assistant-final"]);
   });
 
   it("falls back to live pages when a completed session has no final assistant text", async () => {
