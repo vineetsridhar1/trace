@@ -1,0 +1,412 @@
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import type { Event as PrismaEvent } from "@prisma/client";
+
+vi.mock("../lib/db.js", async () => {
+  const { createPrismaMock } = await import("../../test/helpers.js");
+  return { prisma: createPrismaMock() };
+});
+
+vi.mock("../lib/pubsub.js", async () => {
+  const { createPubsubMock } = await import("../../test/helpers.js");
+  return {
+    pubsub: createPubsubMock(),
+    topics: {
+      channelEvents: (id: string) => `channel:${id}:events`,
+      chatEvents: (id: string) => `chat:${id}:events`,
+      ticketEvents: (id: string) => `ticket:${id}:events`,
+      orgEvents: (id: string) => `org:${id}:events`,
+      sessionEvents: (id: string) => `session:${id}:events`,
+    },
+  };
+});
+
+vi.mock("../lib/redis.js", async () => {
+  const { createRedisMock } = await import("../../test/helpers.js");
+  return { redis: createRedisMock() };
+});
+
+vi.mock("./pushNotificationService.js", () => ({
+  pushNotificationService: { notifyForEvent: vi.fn() },
+}));
+
+import { prisma } from "../lib/db.js";
+import { SessionTimelineService } from "./session-timeline.js";
+
+type PrismaMock = {
+  session: { findUnique: Mock };
+  event: { findMany: Mock };
+};
+
+const prismaMock = prisma as unknown as PrismaMock;
+
+function event(partial: Partial<PrismaEvent> & { id: string; timestamp: Date }): PrismaEvent {
+  return {
+    id: partial.id,
+    organizationId: partial.organizationId ?? "org-1",
+    scopeType: partial.scopeType ?? "session",
+    scopeId: partial.scopeId ?? "session-1",
+    eventType: partial.eventType ?? "session_output",
+    payload: partial.payload ?? {},
+    actorType: partial.actorType ?? "agent",
+    actorId: partial.actorId ?? "agent-1",
+    parentId: partial.parentId ?? null,
+    metadata: partial.metadata ?? {},
+    timestamp: partial.timestamp,
+  };
+}
+
+describe("SessionTimelineService", () => {
+  beforeEach(() => {
+    prismaMock.session.findUnique.mockReset();
+    prismaMock.event.findMany.mockReset();
+  });
+
+  it("returns compact completed timelines with lazy collapsed ranges", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { prompt: "Implement this" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp: new Date("2026-05-14T10:05:00.000Z"),
+    });
+    const resultEvent = event({
+      id: "result",
+      payload: { type: "result" },
+      timestamp: new Date("2026-05-14T10:05:01.000Z"),
+    });
+    const hiddenCandidateEvents = [
+      event({
+        id: "hidden-tool-1",
+        payload: {
+          type: "assistant",
+          message: {
+            content: [
+              { type: "tool_use", id: "tool-1", name: "Read", input: {} },
+              { type: "tool_use", id: "tool-2", name: "Edit", input: {} },
+            ],
+          },
+        },
+        timestamp: new Date("2026-05-14T10:01:00.000Z"),
+      }),
+      event({
+        id: "hidden-message-1",
+        payload: {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "Working on it." }] },
+        },
+        timestamp: new Date("2026-05-14T10:02:00.000Z"),
+      }),
+    ];
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      resultEvent,
+      finalEvent,
+      ...[...hiddenCandidateEvents].reverse(),
+      userEvent,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      excludePayloadTypes: ["workspace_ready"],
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.hasOlder).toBe(false);
+    expect(page.items.map((item) => item.kind)).toEqual([
+      "event",
+      "collapsed_events",
+      "event",
+      "event",
+    ]);
+    expect(page.items[1].collapsed).toEqual({
+      id: "collapsed:user-1:assistant-final",
+      startEventId: userEvent.id,
+      startTimestamp: userEvent.timestamp,
+      endEventId: finalEvent.id,
+      endTimestamp: finalEvent.timestamp,
+    });
+    expect(page.items[2].event?.id).toBe("assistant-final");
+    expect(page.items[3].event?.id).toBe("result");
+    expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.event.findMany).toHaveBeenNthCalledWith(1, {
+      where: expect.objectContaining({
+        organizationId: "org-1",
+        scopeType: "session",
+        scopeId: "session-1",
+      }),
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      take: 400,
+    });
+  });
+
+  it("skips collapsed ranges when fetched candidates have no hidden thinking", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { prompt: "Implement this" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp: new Date("2026-05-14T10:05:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([finalEvent, userEvent]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      excludePayloadTypes: ["workspace_ready"],
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.kind)).toEqual(["event", "event"]);
+    expect(page.items.map((item) => item.id)).toEqual(["user-1", "assistant-final"]);
+    expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to live pages when a completed session has no final assistant text", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { prompt: "Implement this" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([userEvent]);
+    prismaMock.event.findMany.mockResolvedValueOnce([userEvent]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      before: new Date("2026-05-14T11:00:00.000Z"),
+      limit: 100,
+    });
+
+    expect(page.mode).toBe("live");
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].event?.id).toBe("user-1");
+  });
+
+  it("pages compact timelines before an anchor and preserves the boundary collapsed range", async () => {
+    const user1 = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      payload: { prompt: "First" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const assistant1 = event({
+      id: "assistant-1",
+      payload: { type: "assistant", message: { content: [{ type: "text", text: "One" }] } },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    const user2 = event({
+      id: "user-2",
+      eventType: "message_sent",
+      actorType: "user",
+      payload: { text: "Second" },
+      timestamp: new Date("2026-05-14T10:02:00.000Z"),
+    });
+    const assistant2 = event({
+      id: "assistant-2",
+      payload: { type: "assistant", message: { content: [{ type: "text", text: "Two" }] } },
+      timestamp: new Date("2026-05-14T10:03:00.000Z"),
+    });
+    const user3 = event({
+      id: "user-3",
+      eventType: "message_sent",
+      actorType: "user",
+      payload: { text: "Third" },
+      timestamp: new Date("2026-05-14T10:04:00.000Z"),
+    });
+    const hiddenBetweenUser2AndAssistant2 = event({
+      id: "hidden-a",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-a", name: "Read", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:02:30.000Z"),
+    });
+    const hiddenBetweenAssistant2AndUser3 = event({
+      id: "hidden-b",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-b", name: "Grep", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:03:30.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      user3,
+      hiddenBetweenAssistant2AndUser3,
+      assistant2,
+      hiddenBetweenUser2AndAssistant2,
+      user2,
+      assistant1,
+      user1,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      before: user3.timestamp,
+      limit: 2,
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.hasOlder).toBe(true);
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-2",
+      "collapsed:user-2:assistant-2",
+      "assistant-2",
+      "collapsed:assistant-2:user-3",
+    ]);
+    expect(page.items[1].collapsed).toEqual({
+      id: "collapsed:user-2:assistant-2",
+      startEventId: user2.id,
+      startTimestamp: user2.timestamp,
+      endEventId: assistant2.id,
+      endTimestamp: assistant2.timestamp,
+    });
+    expect(page.items[3].collapsed?.endTimestamp).toEqual(user3.timestamp);
+  });
+
+  it("keeps PR lifecycle events visible in compact timelines", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      payload: { prompt: "Implement this" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const prEvent = event({
+      id: "pr-opened",
+      eventType: "session_pr_opened",
+      payload: { url: "https://github.com/acme/repo/pull/1" },
+      timestamp: new Date("2026-05-14T10:03:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp: new Date("2026-05-14T10:05:00.000Z"),
+    });
+    const hiddenCandidate = event({
+      id: "hidden-tool",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-1", name: "Read", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      finalEvent,
+      prEvent,
+      hiddenCandidate,
+      userEvent,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-1",
+      "collapsed:user-1:pr-opened",
+      "pr-opened",
+      "assistant-final",
+    ]);
+  });
+
+  it("uses event ids to build collapsed ranges for events sharing a timestamp", async () => {
+    const timestamp = new Date("2026-05-14T10:00:00.000Z");
+    const userEvent = event({
+      id: "a-user",
+      eventType: "session_started",
+      actorType: "user",
+      payload: { prompt: "Implement this" },
+      timestamp,
+    });
+    const hiddenCandidate = event({
+      id: "b-hidden",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-1", name: "Read", input: {} }] },
+      },
+      timestamp,
+    });
+    const finalEvent = event({
+      id: "c-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp,
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([finalEvent, hiddenCandidate, userEvent]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items[1].collapsed).toEqual({
+      id: "collapsed:a-user:c-final",
+      startEventId: userEvent.id,
+      startTimestamp: timestamp,
+      endEventId: finalEvent.id,
+      endTimestamp: timestamp,
+    });
+  });
+});

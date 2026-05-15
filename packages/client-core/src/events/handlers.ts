@@ -14,12 +14,7 @@ import type {
   ScopeType,
   SessionStatus,
 } from "@trace/gql";
-import {
-  StoreBatchWriter,
-  useEntityStore,
-  type SessionEntity,
-  type SessionGroupEntity,
-} from "../stores/entity.js";
+import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
 import { getSessionChannelId } from "../lib/session-group.js";
 import {

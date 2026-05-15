@@ -12,7 +12,7 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 import { EventScopeContext } from "./EventScopeContext";
-import { SessionMessageList } from "./SessionMessageList";
+import { SessionMessageList, type SessionListNode } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
@@ -179,10 +179,16 @@ export function SessionDetailView({
   onScrollComplete?: () => void;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
-  const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(
-    sessionId,
-    { skip: isOptimistic === true },
-  );
+  const {
+    eventIds,
+    timelineItems,
+    timelineMode,
+    loading,
+    loadingOlder,
+    hasOlder,
+    error,
+    fetchOlderEvents,
+  } = useSessionEvents(sessionId, { skip: isOptimistic === true });
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -341,6 +347,29 @@ export function SessionDetailView({
     () => buildSessionNodes(eventIds, events),
     [eventIds, events],
   );
+  const listNodes = useMemo<SessionListNode[]>(() => {
+    if (timelineMode !== "compact") return nodes;
+
+    const nodesByEventId = new Map<string, SessionListNode>();
+    for (const node of nodes) {
+      if (node.kind === "readglob-group") {
+        nodesByEventId.set(node.items[0].id, node);
+      } else {
+        nodesByEventId.set(node.id, node);
+      }
+    }
+
+    return timelineItems.map((item) => {
+      if (item.kind === "collapsed_events") {
+        return {
+          kind: "collapsed-events" as const,
+          id: item.id,
+          collapsed: item.collapsed,
+        };
+      }
+      return nodesByEventId.get(item.id) ?? { kind: "event", id: item.id };
+    });
+  }, [nodes, timelineItems, timelineMode]);
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);
@@ -472,7 +501,8 @@ export function SessionDetailView({
             ) : (
               <SessionMessageList
                 key={sessionId}
-                nodes={nodes}
+                sessionId={sessionId}
+                nodes={listNodes}
                 gitCheckpoints={gitCheckpoints ?? []}
                 initialLoading={initialEventsLoading}
                 hasOlder={hasOlder}

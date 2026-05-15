@@ -24,6 +24,7 @@ export interface UseSessionNodesResult {
 interface UseSessionNodesOptions {
   enabled?: boolean;
   frozen?: boolean;
+  eventIds?: string[];
 }
 
 const DISABLED_SCOPE_KEY = "__session_nodes_disabled__";
@@ -59,8 +60,9 @@ export function useSessionNodes(
 ): UseSessionNodesResult {
   const enabled = options.enabled ?? true;
   const frozen = options.frozen ?? false;
+  const eventIdsOverride = options.eventIds;
   const scopeKey = enabled ? eventScopeKey("session", sessionId) : DISABLED_SCOPE_KEY;
-  const snapshot = useScopedEventSnapshot(scopeKey, frozen);
+  const snapshot = useScopedEventSnapshot(scopeKey, frozen, eventIdsOverride);
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -127,7 +129,11 @@ export function useSessionNodes(
   };
 }
 
-function useScopedEventSnapshot(scopeKey: string, frozen: boolean): ScopedEventSnapshot {
+function useScopedEventSnapshot(
+  scopeKey: string,
+  frozen: boolean,
+  eventIdsOverride?: string[],
+): ScopedEventSnapshot {
   const snapshotRef = useRef<ScopedEventSnapshot>({
     scopeKey,
     events: EMPTY_EVENTS,
@@ -143,7 +149,7 @@ function useScopedEventSnapshot(scopeKey: string, frozen: boolean): ScopedEventS
     }
 
     const events = state.eventsByScope[scopeKey] ?? EMPTY_EVENTS;
-    const eventIds = state._eventIdsByScope[scopeKey] ?? EMPTY_EVENT_IDS;
+    const eventIds = eventIdsOverride ?? state._eventIdsByScope[scopeKey] ?? EMPTY_EVENT_IDS;
     if (
       previousSnapshot.scopeKey === scopeKey &&
       bucketRef.current === events &&

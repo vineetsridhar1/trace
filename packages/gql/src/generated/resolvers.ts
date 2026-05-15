@@ -259,6 +259,15 @@ export type ChatType = "dm" | "group";
 
 export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 
+export type CollapsedSessionEvents = {
+  __typename?: "CollapsedSessionEvents";
+  endEventId: Scalars["ID"]["output"];
+  endTimestamp: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  startEventId: Scalars["ID"]["output"];
+  startTimestamp: Scalars["DateTime"]["output"];
+};
+
 export type ConnectionsBridge = {
   __typename?: "ConnectionsBridge";
   bridge: BridgeRuntime;
@@ -1204,6 +1213,7 @@ export type Query = {
   sessionGroups: Array<SessionGroup>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
+  sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
@@ -1281,7 +1291,9 @@ export type QueryChatMessagesArgs = {
 
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -1398,6 +1410,15 @@ export type QuerySessionSlashCommandsArgs = {
 };
 
 export type QuerySessionTerminalsArgs = {
+  sessionId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionTimelineArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
 
@@ -1612,6 +1633,25 @@ export type SessionSearchResults = {
 };
 
 export type SessionStatus = "in_progress" | "in_review" | "merged" | "needs_input";
+
+export type SessionTimelineItem = {
+  __typename?: "SessionTimelineItem";
+  collapsed?: Maybe<CollapsedSessionEvents>;
+  event?: Maybe<Event>;
+  id: Scalars["ID"]["output"];
+  kind: SessionTimelineItemKind;
+};
+
+export type SessionTimelineItemKind = "collapsed_events" | "event";
+
+export type SessionTimelineMode = "compact" | "live";
+
+export type SessionTimelinePage = {
+  __typename?: "SessionTimelinePage";
+  hasOlder: Scalars["Boolean"]["output"];
+  items: Array<SessionTimelineItem>;
+  mode: SessionTimelineMode;
+};
 
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
@@ -1964,6 +2004,7 @@ export type ResolversTypes = ResolversObject<{
   ChatMember: ResolverTypeWrapper<ChatMember>;
   ChatType: ChatType;
   CodingTool: CodingTool;
+  CollapsedSessionEvents: ResolverTypeWrapper<CollapsedSessionEvents>;
   ConnectionsBridge: ResolverTypeWrapper<ConnectionsBridge>;
   ConnectionsRepoEntry: ResolverTypeWrapper<ConnectionsRepoEntry>;
   CreateAgentEnvironmentInput: CreateAgentEnvironmentInput;
@@ -2022,6 +2063,10 @@ export type ResolversTypes = ResolversObject<{
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
   SessionStatus: SessionStatus;
+  SessionTimelineItem: ResolverTypeWrapper<SessionTimelineItem>;
+  SessionTimelineItemKind: SessionTimelineItemKind;
+  SessionTimelineMode: SessionTimelineMode;
+  SessionTimelinePage: ResolverTypeWrapper<SessionTimelinePage>;
   SetApiTokenInput: SetApiTokenInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SetupStatus: SetupStatus;
@@ -2071,6 +2116,7 @@ export type ResolversParentTypes = ResolversObject<{
   ChannelMember: ChannelMember;
   Chat: Chat;
   ChatMember: ChatMember;
+  CollapsedSessionEvents: CollapsedSessionEvents;
   ConnectionsBridge: ConnectionsBridge;
   ConnectionsRepoEntry: ConnectionsRepoEntry;
   CreateAgentEnvironmentInput: CreateAgentEnvironmentInput;
@@ -2115,6 +2161,8 @@ export type ResolversParentTypes = ResolversObject<{
   SessionGroup: SessionGroup;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
+  SessionTimelineItem: SessionTimelineItem;
+  SessionTimelinePage: SessionTimelinePage;
   SetApiTokenInput: SetApiTokenInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
@@ -2404,6 +2452,19 @@ export type ChatMemberResolvers<
 > = ResolversObject<{
   joinedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   user?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type CollapsedSessionEventsResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["CollapsedSessionEvents"] =
+    ResolversParentTypes["CollapsedSessionEvents"],
+> = ResolversObject<{
+  endEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  endTimestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startTimestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3455,6 +3516,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionTerminalsArgs, "sessionId">
   >;
+  sessionTimeline?: Resolver<
+    ResolversTypes["SessionTimelinePage"],
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionTimelineArgs, "organizationId" | "sessionId">
+  >;
   sessions?: Resolver<
     Array<ResolversTypes["Session"]>,
     ParentType,
@@ -3641,6 +3708,29 @@ export type SessionSearchResultsResolvers<
 > = ResolversObject<{
   sessionGroups?: Resolver<Array<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionTimelineItemResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionTimelineItem"] =
+    ResolversParentTypes["SessionTimelineItem"],
+> = ResolversObject<{
+  collapsed?: Resolver<Maybe<ResolversTypes["CollapsedSessionEvents"]>, ParentType, ContextType>;
+  event?: Resolver<Maybe<ResolversTypes["Event"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  kind?: Resolver<ResolversTypes["SessionTimelineItemKind"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionTimelinePageResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionTimelinePage"] =
+    ResolversParentTypes["SessionTimelinePage"],
+> = ResolversObject<{
+  hasOlder?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  items?: Resolver<Array<ResolversTypes["SessionTimelineItem"]>, ParentType, ContextType>;
+  mode?: Resolver<ResolversTypes["SessionTimelineMode"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3848,6 +3938,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ChannelMember?: ChannelMemberResolvers<ContextType>;
   Chat?: ChatResolvers<ContextType>;
   ChatMember?: ChatMemberResolvers<ContextType>;
+  CollapsedSessionEvents?: CollapsedSessionEventsResolvers<ContextType>;
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
@@ -3876,6 +3967,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;
+  SessionTimelineItem?: SessionTimelineItemResolvers<ContextType>;
+  SessionTimelinePage?: SessionTimelinePageResolvers<ContextType>;
   SlashCommand?: SlashCommandResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   Terminal?: TerminalResolvers<ContextType>;

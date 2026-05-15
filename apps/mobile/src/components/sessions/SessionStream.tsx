@@ -25,6 +25,7 @@ import {
   buildSessionStreamItems,
   type SessionStreamItemCache,
   type SessionStreamListItem,
+  type SessionStreamNode,
 } from "./sessionStreamItems";
 import type { NodeRenderContext } from "./nodes";
 
@@ -74,11 +75,20 @@ export function SessionStream({
   renderEvents = true,
 }: SessionStreamProps) {
   const theme = useTheme();
-  const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
-    useSessionEvents(sessionId, {
-      fetchEnabled: loadEvents,
-      commitEnabled: commitEvents,
-    });
+  const {
+    loading,
+    loadingOlder,
+    hasOlder,
+    error,
+    eventIds,
+    timelineItems,
+    timelineMode,
+    fetchEvents,
+    fetchOlderEvents,
+  } = useSessionEvents(sessionId, {
+    fetchEnabled: loadEvents,
+    commitEnabled: commitEvents,
+  });
   const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
   const isNearBottomRef = useRef(true);
   const currentScrollOffsetRef = useRef(0);
@@ -91,7 +101,11 @@ export function SessionStream({
     toolResultByUseId,
     gitCheckpointsByPromptEventId,
     events: scopedEvents,
-  } = useSessionNodes(sessionId, { enabled: renderEvents, frozen: isScrollActive });
+  } = useSessionNodes(sessionId, {
+    enabled: renderEvents,
+    frozen: isScrollActive,
+    eventIds: timelineMode === "compact" ? eventIds : undefined,
+  });
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const workdir = useEntityField("sessions", sessionId, "workdir");
@@ -106,10 +120,33 @@ export function SessionStream({
     lastMessageAt,
     connection,
   });
+  const listNodes = useMemo<SessionStreamNode[]>(() => {
+    if (timelineMode !== "compact") return nodes;
+
+    const nodesByEventId = new Map<string, SessionStreamNode>();
+    for (const node of nodes) {
+      if (node.kind === "readglob-group") {
+        nodesByEventId.set(node.items[0].id, node);
+      } else {
+        nodesByEventId.set(node.id, node);
+      }
+    }
+
+    return timelineItems.map((item) => {
+      if (item.kind === "collapsed_events") {
+        return {
+          kind: "collapsed-events" as const,
+          id: item.id,
+          collapsed: item.collapsed,
+        };
+      }
+      return nodesByEventId.get(item.id) ?? { kind: "event", id: item.id };
+    });
+  }, [nodes, timelineItems, timelineMode]);
 
   const timestampRevealX = useSharedValue(0);
-  const contentOpacity = useSharedValue(nodes.length > 0 ? 1 : 0);
-  const hasRenderedNodesRef = useRef(nodes.length > 0);
+  const contentOpacity = useSharedValue(listNodes.length > 0 ? 1 : 0);
+  const hasRenderedNodesRef = useRef(listNodes.length > 0);
   const { newActivityCount, clearNewActivity } = useNewActivityTracker(
     nodes,
     listRef,
@@ -127,12 +164,12 @@ export function SessionStream({
   );
   const streamItemCacheRef = useRef<SessionStreamItemCache | undefined>(undefined);
   const streamItems = useMemo(() => {
-    const result = buildSessionStreamItems(nodes, scopedEvents, streamItemCacheRef.current);
+    const result = buildSessionStreamItems(listNodes, scopedEvents, streamItemCacheRef.current);
     streamItemCacheRef.current = result.cache;
     return result.items;
-  }, [nodes, scopedEvents]);
+  }, [listNodes, scopedEvents]);
   useEffect(() => {
-    if (!renderEvents || nodes.length === 0) {
+    if (!renderEvents || listNodes.length === 0) {
       hasRenderedNodesRef.current = false;
       contentOpacity.value = 0;
       return;
@@ -144,7 +181,7 @@ export function SessionStream({
       return;
     }
     contentOpacity.value = 1;
-  }, [contentOpacity, nodes.length, renderEvents]);
+  }, [contentOpacity, listNodes.length, renderEvents]);
   const contentFadeStyle = useAnimatedStyle(() => ({
     opacity: contentOpacity.value,
   }));
@@ -212,16 +249,16 @@ export function SessionStream({
     Gesture.Native(),
   );
 
-  if (!renderEvents || ((loading || !commitEvents) && nodes.length === 0)) {
+  if (!renderEvents || ((loading || !commitEvents) && listNodes.length === 0)) {
     return <SessionStreamSkeleton />;
   }
   // A not_started session has no events yet by design — the initial events
   // query commonly 404s for optimistic/pending session ids. Fall through to
   // the friendly empty state instead of surfacing a retry banner.
-  if (!loading && nodes.length === 0 && error && agentStatus !== "not_started") {
+  if (!loading && listNodes.length === 0 && error && agentStatus !== "not_started") {
     return <SessionStreamError error={error} onRetry={() => void fetchEvents()} />;
   }
-  if (!loading && nodes.length === 0) {
+  if (!loading && listNodes.length === 0) {
     return (
       <SessionStreamEmpty
         agentStatus={agentStatus}

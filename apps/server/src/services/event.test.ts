@@ -133,12 +133,50 @@ describe("EventService", () => {
       where: {
         organizationId: "org-1",
         scopeType: "chat",
-        timestamp: { lt: new Date("2026-03-21T00:00:00.000Z") },
+        AND: [
+          {
+            OR: [{ timestamp: { lt: new Date("2026-03-21T00:00:00.000Z") } }],
+          },
+        ],
       },
-      orderBy: { timestamp: "desc" },
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
       take: 2,
     });
     expect(results).toEqual([older, newer]);
+  });
+
+  it("uses event ids as tie breakers when querying same-timestamp cursors", async () => {
+    prismaMock.event.findMany.mockResolvedValueOnce([]);
+
+    const service = new EventService();
+    await service.query("org-1", {
+      scopeType: "chat",
+      before: new Date("2026-03-21T00:00:00.000Z"),
+      beforeEventId: "event-b",
+      limit: 2,
+    });
+
+    expect(prismaMock.event.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        scopeType: "chat",
+        AND: [
+          {
+            OR: [
+              { timestamp: { lt: new Date("2026-03-21T00:00:00.000Z") } },
+              {
+                AND: [
+                  { timestamp: new Date("2026-03-21T00:00:00.000Z") },
+                  { id: { lt: "event-b" } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      take: 2,
+    });
   });
 
   it("skips Redis stream appends in local mode", async () => {

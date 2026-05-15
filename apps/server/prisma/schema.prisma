@@ -635,6 +635,7 @@ model Event {
   gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
 
   @@index([organizationId, scopeType, scopeId])
+  @@index([organizationId, scopeType, scopeId, timestamp])
   @@index([organizationId, eventType])
   @@index([organizationId, timestamp])
   @@index([parentId])

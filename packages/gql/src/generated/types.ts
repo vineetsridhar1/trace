@@ -256,6 +256,15 @@ export type ChatType = "dm" | "group";
 
 export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 
+export type CollapsedSessionEvents = {
+  __typename?: "CollapsedSessionEvents";
+  endEventId: Scalars["ID"]["output"];
+  endTimestamp: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  startEventId: Scalars["ID"]["output"];
+  startTimestamp: Scalars["DateTime"]["output"];
+};
+
 export type ConnectionsBridge = {
   __typename?: "ConnectionsBridge";
   bridge: BridgeRuntime;
@@ -1201,6 +1210,7 @@ export type Query = {
   sessionGroups: Array<SessionGroup>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
+  sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
@@ -1278,7 +1288,9 @@ export type QueryChatMessagesArgs = {
 
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   organizationId: Scalars["ID"]["input"];
@@ -1395,6 +1407,15 @@ export type QuerySessionSlashCommandsArgs = {
 };
 
 export type QuerySessionTerminalsArgs = {
+  sessionId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionTimelineArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  beforeEventId?: InputMaybe<Scalars["ID"]["input"]>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
 
@@ -1609,6 +1630,25 @@ export type SessionSearchResults = {
 };
 
 export type SessionStatus = "in_progress" | "in_review" | "merged" | "needs_input";
+
+export type SessionTimelineItem = {
+  __typename?: "SessionTimelineItem";
+  collapsed?: Maybe<CollapsedSessionEvents>;
+  event?: Maybe<Event>;
+  id: Scalars["ID"]["output"];
+  kind: SessionTimelineItemKind;
+};
+
+export type SessionTimelineItemKind = "collapsed_events" | "event";
+
+export type SessionTimelineMode = "compact" | "live";
+
+export type SessionTimelinePage = {
+  __typename?: "SessionTimelinePage";
+  hasOlder: Scalars["Boolean"]["output"];
+  items: Array<SessionTimelineItem>;
+  mode: SessionTimelineMode;
+};
 
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;

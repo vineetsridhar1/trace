@@ -17,11 +17,13 @@ function makeEvent(id: string, timestamp: string): Event & { id: string } {
   };
 }
 
-function makeFetched(ids: string[], oldestTimestamp: string): PendingFetchedEvents {
+function makeFetched(ids: string[], oldestCursorTimestamp: string): PendingFetchedEvents {
   return {
     events: ids.map((id, index) => makeEvent(id, `2026-04-22T00:00:0${index}Z`)),
     hasOlder: ids.length > 1,
-    oldestTimestamp,
+    oldestCursor: { timestamp: oldestCursorTimestamp, eventId: ids[0] ?? "event-1" },
+    timelineMode: "live",
+    timelineItems: ids.map((id) => ({ kind: "event", id })),
   };
 }
 
