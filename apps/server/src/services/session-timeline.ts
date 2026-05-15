@@ -69,6 +69,18 @@ function hasAssistantTextBlock(payload: unknown): boolean {
   );
 }
 
+function hasThinkingBlock(payload: unknown): boolean {
+  const data = asObject(payload);
+  if (data?.type !== "assistant") return false;
+
+  return messageContentBlocks(payload).some((block) => {
+    if (block.type === "text") {
+      return typeof block.text === "string" && block.text.trim() !== "";
+    }
+    return block.type === "tool_use" || block.type === "plan" || block.type === "question";
+  });
+}
+
 function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): boolean {
   const payload = asObject(event.payload);
   if (event.eventType === "session_started") {
@@ -99,6 +111,14 @@ function isCompletionEvent(event: PrismaEvent): boolean {
   const payload = asObject(event.payload);
   return (
     event.eventType === "session_output" && event.parentId == null && payload?.type === "result"
+  );
+}
+
+function isThinkingCandidate(event: PrismaEvent): boolean {
+  return (
+    event.eventType === "session_output" &&
+    event.parentId == null &&
+    hasThinkingBlock(event.payload)
   );
 }
 
@@ -202,6 +222,34 @@ async function fetchCompactCandidates(opts: SessionTimelineQueryOpts, limit: num
   return candidatesDesc.reverse();
 }
 
+function collapsedRangeIdsWithThinking(
+  candidates: PrismaEvent[],
+  endpoints: PrismaEvent[],
+): Set<string> {
+  const ranges = new Set<string>();
+  if (endpoints.length < 2) return ranges;
+
+  const endpointIds = new Set(endpoints.map((event) => event.id));
+  let gapIndex = 0;
+
+  for (const candidate of candidates) {
+    while (
+      gapIndex < endpoints.length - 1 &&
+      candidate.timestamp >= endpoints[gapIndex + 1].timestamp
+    ) {
+      gapIndex++;
+    }
+    if (gapIndex >= endpoints.length - 1) break;
+    if (candidate.timestamp <= endpoints[gapIndex].timestamp) continue;
+    if (endpointIds.has(candidate.id)) continue;
+    if (!isThinkingCandidate(candidate)) continue;
+
+    ranges.add(collapsedRangeId(endpoints[gapIndex], endpoints[gapIndex + 1]));
+  }
+
+  return ranges;
+}
+
 export class SessionTimelineService {
   async query(opts: SessionTimelineQueryOpts): Promise<SessionTimelineServicePage> {
     const session = await prisma.session.findUnique({
@@ -263,12 +311,14 @@ export class SessionTimelineService {
     const hasOlder = selectableEvents.length > limit;
     const pageEvents = selectableEvents.slice(Math.max(0, selectableEvents.length - limit));
     const rangeEndpoints = anchor ? [...pageEvents, anchor] : pageEvents;
+    const rangesWithThinking = collapsedRangeIdsWithThinking(candidates, rangeEndpoints);
     const items: SessionTimelineServiceItem[] = [];
     let previous: PrismaEvent | null = null;
 
     const pushCollapsedRange = (rangeStart: PrismaEvent, rangeEnd: PrismaEvent) => {
       if (sameTimestamp(rangeStart.timestamp, rangeEnd.timestamp)) return;
       const id = collapsedRangeId(rangeStart, rangeEnd);
+      if (!rangesWithThinking.has(id)) return;
       items.push({
         id,
         kind: "collapsed_events",

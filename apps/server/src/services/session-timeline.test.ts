@@ -130,7 +130,6 @@ describe("SessionTimelineService", () => {
       "event",
       "collapsed_events",
       "event",
-      "collapsed_events",
       "event",
     ]);
     expect(page.items[1].collapsed).toEqual({
@@ -138,7 +137,8 @@ describe("SessionTimelineService", () => {
       startTimestamp: userEvent.timestamp,
       endTimestamp: finalEvent.timestamp,
     });
-    expect(page.items[4].event?.id).toBe("result");
+    expect(page.items[2].event?.id).toBe("assistant-final");
+    expect(page.items[3].event?.id).toBe("result");
     expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.event.findMany).toHaveBeenNthCalledWith(1, {
       where: expect.objectContaining({
@@ -151,7 +151,7 @@ describe("SessionTimelineService", () => {
     });
   });
 
-  it("does not scan hidden events before creating a lazy collapsed range", async () => {
+  it("skips collapsed ranges when fetched candidates have no hidden thinking", async () => {
     const userEvent = event({
       id: "user-1",
       eventType: "session_started",
@@ -182,12 +182,8 @@ describe("SessionTimelineService", () => {
     });
 
     expect(page.mode).toBe("compact");
-    expect(page.items.map((item) => item.kind)).toEqual(["event", "collapsed_events", "event"]);
-    expect(page.items.map((item) => item.id)).toEqual([
-      "user-1",
-      "collapsed:user-1:assistant-final",
-      "assistant-final",
-    ]);
+    expect(page.items.map((item) => item.kind)).toEqual(["event", "event"]);
+    expect(page.items.map((item) => item.id)).toEqual(["user-1", "assistant-final"]);
     expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
   });
 
@@ -253,12 +249,36 @@ describe("SessionTimelineService", () => {
       payload: { text: "Third" },
       timestamp: new Date("2026-05-14T10:04:00.000Z"),
     });
+    const hiddenBetweenUser2AndAssistant2 = event({
+      id: "hidden-a",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-a", name: "Read", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:02:30.000Z"),
+    });
+    const hiddenBetweenAssistant2AndUser3 = event({
+      id: "hidden-b",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-b", name: "Grep", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:03:30.000Z"),
+    });
     prismaMock.session.findUnique.mockResolvedValueOnce({
       organizationId: "org-1",
       agentStatus: "done",
       sessionStatus: "in_progress",
     });
-    prismaMock.event.findMany.mockResolvedValueOnce([user3, assistant2, user2, assistant1, user1]);
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      user3,
+      hiddenBetweenAssistant2AndUser3,
+      assistant2,
+      hiddenBetweenUser2AndAssistant2,
+      user2,
+      assistant1,
+      user1,
+    ]);
 
     const page = await new SessionTimelineService().query({
       organizationId: "org-1",
