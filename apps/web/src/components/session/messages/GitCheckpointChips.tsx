@@ -3,14 +3,19 @@ import { GitCommitHorizontal } from "lucide-react";
 import { shortSha } from "@trace/shared";
 import { useCheckpointOpen } from "../CheckpointOpenContext";
 
+const MAX_VISIBLE_CHECKPOINT_CHIPS = 3;
+
 export function GitCheckpointChips({ checkpoints }: { checkpoints: GitCheckpoint[] }) {
   const openCheckpointPanel = useCheckpointOpen();
 
   if (checkpoints.length === 0) return null;
 
+  const visibleCheckpoints = checkpoints.slice(0, MAX_VISIBLE_CHECKPOINT_CHIPS);
+  const hiddenCount = checkpoints.length - visibleCheckpoints.length;
+
   return (
     <div className="flex flex-col items-end gap-1.5">
-      {checkpoints.map((checkpoint) => (
+      {visibleCheckpoints.map((checkpoint) => (
         <button
           key={checkpoint.id}
           type="button"
@@ -27,6 +32,11 @@ export function GitCheckpointChips({ checkpoints }: { checkpoints: GitCheckpoint
           </span>
         </button>
       ))}
+      {hiddenCount > 0 ? (
+        <div className="ml-auto w-fit rounded-md border border-border/35 bg-muted/15 px-2 py-1 text-[10px] text-muted-foreground">
+          +{hiddenCount} more checkpoint{hiddenCount === 1 ? "" : "s"}
+        </div>
+      ) : null}
     </div>
   );
 }
