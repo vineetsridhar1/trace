@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronRight } from "lucide-react";
 import {
   getDefaultModel,
   getModelLabel,
+  getModelProviderForModel,
   getModelProviderGroupsForTool,
   getModelsForTool,
 } from "./modelOptions";
@@ -18,6 +19,9 @@ const TOOL_OPTIONS = [
 ] as const;
 
 type ToolOptionValue = (typeof TOOL_OPTIONS)[number]["value"];
+type PickerLayer = "tools" | "providers" | "models";
+
+const LAYER_TRANSITION = { duration: 0.08 };
 
 interface ToolModelPickerProps {
   tool: string;
@@ -49,47 +53,56 @@ export function ToolModelPicker({
   onModelChange,
 }: ToolModelPickerProps) {
   const [open, setOpen] = useState(false);
-  const [layer, setLayer] = useState<"tools" | "models">("tools");
+  const [layer, setLayer] = useState<PickerLayer>("tools");
   const [pickerTool, setPickerTool] = useState<ToolOptionValue>(normalizeTool(tool));
+  const [pickerProvider, setPickerProvider] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const activeModel =
     pickerTool === tool ? (model ?? getDefaultModel(pickerTool)) : getDefaultModel(pickerTool);
   const providerGroups = useMemo(() => getModelProviderGroupsForTool(pickerTool), [pickerTool]);
-  const groupedModelOptions = useMemo(
-    () =>
-      providerGroups.length > 0
-        ? providerGroups
-        : [
-            {
-              value: "models",
-              label: "Models",
-              description: "",
-              models: getModelsForTool(pickerTool),
-            },
-          ],
-    [pickerTool, providerGroups],
-  );
+  const activeProvider =
+    providerGroups.find((group) => group.value === pickerProvider) ??
+    getModelProviderForModel(pickerTool, activeModel) ??
+    providerGroups[0];
+  const modelOptions = activeProvider?.models ?? getModelsForTool(pickerTool);
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
     if (nextOpen) {
+      const nextTool = normalizeTool(tool);
       setLayer("tools");
-      setPickerTool(normalizeTool(tool));
+      setPickerTool(nextTool);
+      setPickerProvider(getModelProviderForModel(nextTool, model)?.value ?? null);
     }
   }
 
   async function handleToolSelect(nextTool: ToolOptionValue) {
     setPickerTool(nextTool);
+    const nextProviderGroups = getModelProviderGroupsForTool(nextTool);
+    const nextProvider =
+      nextTool === tool
+        ? getModelProviderForModel(nextTool, model)?.value
+        : nextProviderGroups[0]?.value;
+    setPickerProvider(nextProvider ?? null);
     setPending(true);
     try {
       if (nextTool !== tool) {
         await onToolChange(nextTool);
       }
-      setLayer("models");
+      setLayer(nextProviderGroups.length > 0 ? "providers" : "models");
     } finally {
       setPending(false);
     }
+  }
+
+  function handleProviderSelect(provider: string) {
+    setPickerProvider(provider);
+    setLayer("models");
+  }
+
+  function handleModelBack() {
+    setLayer(providerGroups.length > 0 ? "providers" : "tools");
   }
 
   async function handleModelSelect(nextModel: string) {
@@ -124,7 +137,7 @@ export function ToolModelPicker({
               initial={{ x: -18, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -18, opacity: 0 }}
-              transition={{ duration: 0.14 }}
+              transition={LAYER_TRANSITION}
               className="space-y-1"
             >
               {TOOL_OPTIONS.map((option) => (
@@ -144,13 +157,13 @@ export function ToolModelPicker({
                 </button>
               ))}
             </motion.div>
-          ) : (
+          ) : layer === "providers" ? (
             <motion.div
-              key="models"
+              key="providers"
               initial={{ x: 18, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 18, opacity: 0 }}
-              transition={{ duration: 0.14 }}
+              transition={LAYER_TRANSITION}
               className="space-y-1"
             >
               <div className="mb-1 flex h-8 items-center gap-1">
@@ -165,32 +178,65 @@ export function ToolModelPicker({
                 <ToolIcon tool={pickerTool} className="size-4" />
                 <span className="truncate text-sm font-medium">{getToolLabel(pickerTool)}</span>
               </div>
+              {providerGroups.map((group) => (
+                <button
+                  key={group.value}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => handleProviderSelect(group.value)}
+                  className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-popover-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+                >
+                  <span className="flex flex-1 flex-col gap-0.5 truncate">
+                    <span className="truncate">{group.label}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {group.description}
+                    </span>
+                  </span>
+                  {activeProvider?.value === group.value ? (
+                    <Check className="size-4 text-muted-foreground" />
+                  ) : null}
+                  <ChevronRight className="size-4 text-muted-foreground" />
+                </button>
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="models"
+              initial={{ x: 18, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 18, opacity: 0 }}
+              transition={LAYER_TRANSITION}
+              className="space-y-1"
+            >
+              <div className="mb-1 flex h-8 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleModelBack}
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                  aria-label={providerGroups.length > 0 ? "Back to providers" : "Back to tools"}
+                >
+                  <ArrowLeft className="size-4" />
+                </button>
+                <ToolIcon tool={pickerTool} className="size-4" />
+                <span className="truncate text-sm font-medium">
+                  {activeProvider?.label ?? getToolLabel(pickerTool)}
+                </span>
+              </div>
               <div className="max-h-72 overflow-y-auto">
-                {groupedModelOptions.map((group) => (
-                  <div key={group.value} className="space-y-1">
-                    {providerGroups.length > 0 ? (
-                      <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
-                        {group.label}
-                      </div>
-                    ) : null}
-                    {group.models.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={pending}
-                        onClick={() => void handleModelSelect(option.value)}
-                        className={cn(
-                          "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50",
-                          activeModel === option.value
-                            ? "text-foreground"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        <span className="flex-1 truncate">{option.label}</span>
-                        {activeModel === option.value ? <Check className="size-4" /> : null}
-                      </button>
-                    ))}
-                  </div>
+                {modelOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void handleModelSelect(option.value)}
+                    className={cn(
+                      "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50",
+                      activeModel === option.value ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    <span className="flex-1 truncate">{option.label}</span>
+                    {activeModel === option.value ? <Check className="size-4" /> : null}
+                  </button>
                 ))}
               </div>
             </motion.div>
