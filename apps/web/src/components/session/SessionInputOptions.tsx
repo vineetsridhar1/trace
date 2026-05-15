@@ -11,18 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import {
-  getDefaultModelForProvider,
-  getModelsForTool,
   getDefaultModel,
-  getModelLabel,
-  getModelProviderForModel,
-  getModelProviderGroupsForTool,
   getReasoningEffortsForTool,
   getDefaultReasoningEffort,
   getReasoningEffortLabel,
   type ReasoningEffortOption,
 } from "./modelOptions";
-import { ClaudeIcon, CodexIcon, PiIcon } from "../ui/tool-icons";
+import { ToolModelPicker } from "./ToolModelPicker";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
@@ -31,23 +26,7 @@ import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/re
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
 
-const TOOL_LABELS: Record<string, string> = {
-  claude_code: "Claude Code",
-  codex: "Codex",
-  pi: "Pi",
-};
-
 const EFFORT_LINE_HEIGHT = 16;
-
-function getToolLabel(tool: string): string {
-  return TOOL_LABELS[tool] ?? tool;
-}
-
-function ToolIcon({ tool, className }: { tool: string; className?: string }) {
-  if (tool === "claude_code") return <ClaudeIcon className={className} />;
-  if (tool === "pi") return <PiIcon className={className} />;
-  return <CodexIcon className={className} />;
-}
 
 function EffortDots({ index, total }: { index: number; total: number }) {
   return (
@@ -158,12 +137,7 @@ export function SessionInputOptions({
   const cloudDisabledReason = repoRemoteKnownMissing(repo) ? CLOUD_REPO_REMOTE_REQUIRED : null;
 
   const currentTool = tool ?? "claude_code";
-  const modelOptions = getModelsForTool(currentTool);
   const currentModel = model ?? getDefaultModel(currentTool);
-  const modelProviderGroups = getModelProviderGroupsForTool(currentTool);
-  const currentModelProvider =
-    getModelProviderForModel(currentTool, currentModel) ?? modelProviderGroups[0];
-  const visibleModelOptions = currentModelProvider?.models ?? modelOptions;
   const reasoningEffortOptions = getReasoningEffortsForTool(currentTool);
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
@@ -244,14 +218,6 @@ export function SessionInputOptions({
       }
     },
     [isOptimistic, sessionId],
-  );
-
-  const handleModelProviderChange = useCallback(
-    async (provider: string | null) => {
-      if (!provider) return;
-      await handleModelChange(getDefaultModelForProvider(currentTool, provider) ?? null);
-    },
-    [currentTool, handleModelChange],
   );
 
   const handleReasoningEffortChange = useCallback(
@@ -433,76 +399,13 @@ export function SessionInputOptions({
           </motion.span>
         </AnimatePresence>
       </button>
-      <Select
-        value={currentTool}
-        onValueChange={handleToolChange}
+      <ToolModelPicker
+        tool={currentTool}
+        model={currentModel}
         disabled={isActive || isOptimistic}
-      >
-        <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-          <SelectValue>
-            <span className="flex items-center gap-1.5">
-              <ToolIcon tool={currentTool} className="size-3.5" />
-              {getToolLabel(currentTool)}
-            </span>
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="claude_code">
-            <span className="flex items-center gap-1.5">
-              <ClaudeIcon className="size-3.5" /> Claude Code
-            </span>
-          </SelectItem>
-          <SelectItem value="codex">
-            <span className="flex items-center gap-1.5">
-              <CodexIcon className="size-3.5" /> Codex
-            </span>
-          </SelectItem>
-          <SelectItem value="pi">
-            <span className="flex items-center gap-1.5">
-              <PiIcon className="size-3.5" /> Pi
-            </span>
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      {modelProviderGroups.length > 0 && currentModelProvider && (
-        <Select
-          value={currentModelProvider.value}
-          onValueChange={handleModelProviderChange}
-          disabled={isActive || isOptimistic}
-        >
-          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-            <SelectValue>{currentModelProvider.label}</SelectValue>
-          </SelectTrigger>
-          <SelectContent className="min-w-48">
-            {modelProviderGroups.map((group) => (
-              <SelectItem key={group.value} value={group.value}>
-                <span className="flex flex-col items-start gap-0.5">
-                  <span>{group.label}</span>
-                  <span className="text-xs text-muted-foreground">{group.description}</span>
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      {visibleModelOptions.length > 0 && (
-        <Select
-          value={currentModel ?? ""}
-          onValueChange={handleModelChange}
-          disabled={isActive || isOptimistic}
-        >
-          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-            <SelectValue>{currentModel ? getModelLabel(currentModel) : ""}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {visibleModelOptions.map((m: { value: string; label: string }) => (
-              <SelectItem key={m.value} value={m.value}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+        onToolChange={handleToolChange}
+        onModelChange={handleModelChange}
+      />
       {reasoningEffortOptions.length > 0 && (
         <EffortCycleButton
           key={currentTool}

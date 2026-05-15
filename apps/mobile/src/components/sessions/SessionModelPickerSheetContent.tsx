@@ -3,11 +3,6 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
-import {
-  getDefaultModelForProvider,
-  getModelProviderForModel,
-  getModelProviderGroupsForTool,
-} from "@trace/shared";
 import { ListRow, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
@@ -137,24 +132,6 @@ export function SessionModelPickerSheetContent({
 
   const displayedModel = pendingModel ?? selectedModel;
   const displayedReasoningEffort = pendingReasoningEffort ?? selectedReasoningEffort;
-  const modelProviderGroups = getModelProviderGroupsForTool(selectedTool);
-  const currentModelProvider =
-    getModelProviderForModel(selectedTool, displayedModel) ?? modelProviderGroups[0];
-  const visibleModelOptions = currentModelProvider?.models ?? modelOptions;
-
-  const handleSelectModelProvider = useCallback(
-    async (provider: string) => {
-      if (!canSelectModel) return;
-      const nextModel = getDefaultModelForProvider(selectedTool, provider);
-      if (!nextModel) return;
-      if (selectedModel === nextModel) return;
-
-      setPendingModel(nextModel);
-      await handleModelChange(nextModel);
-      setPendingModel(null);
-    },
-    [canSelectModel, handleModelChange, selectedModel, selectedTool],
-  );
 
   return (
     <ScrollView
@@ -191,33 +168,8 @@ export function SessionModelPickerSheetContent({
         ))}
       </Section>
 
-      {modelProviderGroups.length > 0 && currentModelProvider ? (
-        <Section title="Provider">
-          {modelProviderGroups.map((option, index) => (
-            <ListRow
-              key={option.value}
-              title={option.label}
-              subtitle={option.description}
-              trailing={
-                currentModelProvider.value === option.value ? (
-                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
-                ) : undefined
-              }
-              separator={index < modelProviderGroups.length - 1}
-              onPress={
-                !canSelectModel || currentModelProvider.value === option.value
-                  ? undefined
-                  : () => void handleSelectModelProvider(option.value)
-              }
-              haptic={currentModelProvider.value === option.value ? "none" : "selection"}
-              style={!canSelectModel ? styles.disabledRow : undefined}
-            />
-          ))}
-        </Section>
-      ) : null}
-
       <Section title="Model">
-        {visibleModelOptions.map((option, index) => (
+        {modelOptions.map((option, index) => (
           <ListRow
             key={option.value}
             title={option.label}
@@ -226,7 +178,7 @@ export function SessionModelPickerSheetContent({
                 <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
-            separator={index < visibleModelOptions.length - 1}
+            separator={index < modelOptions.length - 1}
             onPress={!canSelectModel ? undefined : () => void handleSelectModel(option.value)}
             haptic={displayedModel === option.value ? "none" : "selection"}
             style={!canSelectModel ? styles.disabledRow : undefined}
