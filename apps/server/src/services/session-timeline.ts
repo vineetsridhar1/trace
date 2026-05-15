@@ -84,6 +84,14 @@ function asObject(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function hasNonEmptyStringKey(value: unknown): boolean {
+  return Array.isArray(value) && value.some((key) => typeof key === "string" && key.length > 0);
+}
+
+function hasAttachmentKeys(payload: Record<string, unknown> | null): boolean {
+  return hasNonEmptyStringKey(payload?.attachmentKeys) || hasNonEmptyStringKey(payload?.imageKeys);
+}
+
 function messageContentBlocks(payload: unknown): Record<string, unknown>[] {
   const data = asObject(payload);
   if (data?.type !== "assistant" && data?.type !== "user") return [];
@@ -122,10 +130,16 @@ function hasThinkingBlock(payload: unknown): boolean {
 function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): boolean {
   const payload = asObject(event.payload);
   if (event.eventType === "session_started") {
-    return typeof payload?.prompt === "string" && payload.prompt.trim() !== "";
+    return (
+      (typeof payload?.prompt === "string" && payload.prompt.trim() !== "") ||
+      hasAttachmentKeys(payload)
+    );
   }
   if (event.eventType === "message_sent") {
-    return typeof payload?.text === "string" && payload.text.trim() !== "";
+    return (
+      (typeof payload?.text === "string" && payload.text.trim() !== "") ||
+      hasAttachmentKeys(payload)
+    );
   }
   return false;
 }

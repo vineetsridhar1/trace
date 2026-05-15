@@ -32,6 +32,14 @@ const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
  * in toolResultByUseId and rendered inline inside the matching ToolCallRow) or
  * assistant events whose only text blocks are whitespace.
  */
+function hasNonEmptyStringKey(value: unknown): boolean {
+  return Array.isArray(value) && value.some((key) => typeof key === "string" && key.length > 0);
+}
+
+function hasAttachmentKeys(payload: JsonObject | undefined): boolean {
+  return hasNonEmptyStringKey(payload?.attachmentKeys) || hasNonEmptyStringKey(payload?.imageKeys);
+}
+
 function isEmptySessionOutput(payload: JsonObject | undefined): boolean {
   if (!payload) return true;
   const type = payload.type;
@@ -253,12 +261,11 @@ export function buildSessionNodes(
     if (HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(event.eventType)) {
       continue;
     }
-    if (
-      event.eventType === "session_started" &&
-      !asJsonObject(event.payload)?.prompt &&
-      asJsonObject(event.payload)?.type !== "runtime_move"
-    ) {
-      continue;
+    if (event.eventType === "session_started") {
+      const payload = asJsonObject(event.payload);
+      if (!payload?.prompt && !hasAttachmentKeys(payload) && payload?.type !== "runtime_move") {
+        continue;
+      }
     }
 
     // Subagent child events render nested inside their parent's SubagentRow — never as top-level nodes.

@@ -20,6 +20,12 @@ function asStringArray(value: unknown): string[] | undefined {
   return value.every((v) => typeof v === "string") ? value : undefined;
 }
 
+function imageKeysFromPayload(payload: JsonObject | null | undefined): string[] | undefined {
+  const attachmentKeys = asStringArray(payload?.attachmentKeys);
+  if (attachmentKeys && attachmentKeys.length > 0) return attachmentKeys;
+  return asStringArray(payload?.imageKeys) ?? attachmentKeys;
+}
+
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -193,14 +199,15 @@ export const SessionMessage = memo(function SessionMessage({
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
-    case "session_started":
-      return typeof payload?.prompt === "string" ? (
+    case "session_started": {
+      const imageKeys = imageKeysFromPayload(payload);
+      return typeof payload?.prompt === "string" || (imageKeys && imageKeys.length > 0) ? (
         <UserBubble
-          text={payload.prompt}
+          text={str(payload?.prompt)}
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
+          imageKeys={imageKeys}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : payload?.type === "runtime_move" ? (
@@ -208,6 +215,7 @@ export const SessionMessage = memo(function SessionMessage({
       ) : (
         <SystemBadge text="Session started" />
       );
+    }
 
     case "session_output":
       return payload
@@ -228,7 +236,7 @@ export const SessionMessage = memo(function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
-          imageKeys={asStringArray(payload?.attachmentKeys ?? payload?.imageKeys)}
+          imageKeys={imageKeysFromPayload(payload)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );

@@ -183,6 +183,14 @@ function payloadRecord(event: Event): Record<string, unknown> | null {
   return asRecord(event.payload);
 }
 
+function hasNonEmptyStringKey(value: unknown): boolean {
+  return Array.isArray(value) && value.some((key) => typeof key === "string" && key.length > 0);
+}
+
+function hasAttachmentKeys(payload: Record<string, unknown> | null): boolean {
+  return hasNonEmptyStringKey(payload?.attachmentKeys) || hasNonEmptyStringKey(payload?.imageKeys);
+}
+
 function isCompletedSessionEvent(event: Event): boolean {
   if (event.eventType !== "session_terminated") return false;
   const payload = payloadRecord(event);
@@ -217,11 +225,17 @@ function isRenderableCompactEvent(event: Event | undefined): event is Event & { 
 
   if (event.eventType === "session_started") {
     const payload = payloadRecord(event);
-    return typeof payload?.prompt === "string" && payload.prompt.trim() !== "";
+    return (
+      (typeof payload?.prompt === "string" && payload.prompt.trim() !== "") ||
+      hasAttachmentKeys(payload)
+    );
   }
   if (event.eventType === "message_sent") {
     const payload = payloadRecord(event);
-    return typeof payload?.text === "string" && payload.text.trim() !== "";
+    return (
+      (typeof payload?.text === "string" && payload.text.trim() !== "") ||
+      hasAttachmentKeys(payload)
+    );
   }
   if (isPrLifecycleEvent(event)) return true;
   if (event.eventType !== "session_output") return false;
