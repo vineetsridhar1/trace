@@ -213,6 +213,15 @@ function parseSessionTimelinePage(value: unknown): ParsedSessionTimelinePage {
   };
 }
 
+function appendEventItem(
+  current: SessionTimelineDisplayItem[] | null,
+  eventId: string,
+): SessionTimelineDisplayItem[] {
+  const items = current ?? [];
+  if (items.some((item) => item.kind === "event" && item.id === eventId)) return items;
+  return [...items, { kind: "event" as const, id: eventId }];
+}
+
 export function useSessionEvents(sessionId: string, options?: { skip?: boolean }) {
   const skip = options?.skip === true;
   const [loading, setLoading] = useState(!skip);
@@ -322,7 +331,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         if (isCompletedSessionEvent(event)) {
           void fetchEvents();
         } else if (timelineModeRef.current === "compact") {
-          void fetchEvents();
+          setCompactItems((current) => appendEventItem(current, event.id));
         }
       });
 

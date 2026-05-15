@@ -69,6 +69,14 @@ function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {
   };
 }
 
+function appendEventItem(
+  current: SessionTimelineDisplayItem[],
+  eventId: string,
+): SessionTimelineDisplayItem[] {
+  if (current.some((item) => item.kind === "event" && item.id === eventId)) return current;
+  return [...current, { kind: "event" as const, id: eventId }];
+}
+
 interface UseSessionEventsResult {
   loading: boolean;
   loadingOlder: boolean;
@@ -251,7 +259,7 @@ export function useSessionEvents(
           if (isCompletedSessionEvent(event)) {
             void fetchEvents();
           } else if (timelineModeRef.current === "compact") {
-            void fetchEvents();
+            setTimelineItems((current) => appendEventItem(current, event.id));
           }
         } else {
           eventBufferRef.current.storeLiveEvent(event);
