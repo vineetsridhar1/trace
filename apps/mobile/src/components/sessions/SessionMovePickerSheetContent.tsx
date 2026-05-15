@@ -47,6 +47,9 @@ export function SessionMovePickerSheetContent({
     | string
     | null
     | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
+    | boolean
+    | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
   const connection = useEntityField("sessions", sessionId, "connection") as
     | SessionConnection
@@ -59,8 +62,9 @@ export function SessionMovePickerSheetContent({
 
   const currentRuntimeInstanceId =
     connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
+  const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
   const canMoveSession =
-    sessionStatus !== "merged" && !isOptimistic && (connection?.canMove ?? true);
+    !mergedUnavailable && !isOptimistic && (connection?.canMove ?? true);
   const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
   const cloudEnvironmentAvailable = useCloudAgentEnvironmentAvailable(
     canMoveSession && canUseCloudRuntime,

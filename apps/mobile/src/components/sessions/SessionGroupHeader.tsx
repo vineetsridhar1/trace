@@ -41,14 +41,18 @@ export function SessionGroupHeader({
     | string
     | null
     | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId ?? "", "worktreeDeleted") as
+    | boolean
+    | undefined;
   const sessionConnection = useEntityField("sessions", sessionId ?? "", "connection") as
     | SessionConnection
     | null
     | undefined;
+  const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
   const canMoveSession =
     !!sessionId &&
     !sessionOptimistic &&
-    sessionStatus !== "merged" &&
+    !mergedUnavailable &&
     (sessionConnection?.canMove ?? true);
 
   const [rowWidth, setRowWidth] = useState(0);

@@ -161,7 +161,8 @@ export function SessionInputComposer({
   const isNotStarted = agentStatus === "not_started";
   const currentTool: CodingTool =
     tool === "codex" || tool === "pi" ? (tool as CodingTool) : "claude_code";
-  const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
+  const isTerminal =
+    worktreeDeleted === true || (sessionStatus === "merged" && worktreeDeleted !== false);
   const isDisconnected = connection?.state === "disconnected";
   const canRetryConnection = connection?.canRetry === true;
 
@@ -598,7 +599,7 @@ export function SessionInputComposer({
 
   const placeholder = worktreeDeleted
     ? "Worktree deleted"
-    : sessionStatus === "merged"
+    : isTerminal
       ? "Session merged"
       : isOptimistic
         ? "Creating session…"

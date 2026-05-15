@@ -342,8 +342,10 @@ export function SessionGroupDetailView({
         groupArchivedAt ?? null,
       )
     : "in_progress";
+  const selectedSessionMergedUnavailable =
+    selectedSession?.sessionStatus === "merged" && groupWorktreeDeleted !== false;
   const canMoveSelectedSession =
-    !!selectedSession && !selectedSessionIsOptimistic && selectedSession.sessionStatus !== "merged";
+    !!selectedSession && !selectedSessionIsOptimistic && !selectedSessionMergedUnavailable;
   const linkedCheckoutRepoId =
     groupRepo?.id ?? (selectedSession?.repo as { id: string } | null | undefined)?.id ?? null;
   const linkedCheckoutBranch = groupBranch ?? selectedSession?.branch ?? null;
@@ -374,7 +376,7 @@ export function SessionGroupDetailView({
   const selectedSessionBridgeInteractionAllowed = isBridgeInteractionAllowed(
     selectedSessionBridgeAccess,
   );
-  const moveMergedDisabled = selectedSession?.sessionStatus === "merged";
+  const moveMergedDisabled = selectedSessionMergedUnavailable;
   const moveDisabledReason = moveMergedDisabled
     ? "Cannot move a merged session"
     : !selectedSessionBridgeInteractionAllowed
