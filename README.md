@@ -141,9 +141,38 @@ packages/
 - Run `pnpm codegen` in each app to regenerate types from schema changes
 - The server reads the generated schema at startup
 
+## Cloud Agent Architecture
+
+The Electron desktop app communicates with the server via a dedicated **Instance Relay** system for remote command execution:
+
+### How it works
+
+1. **Instance Registration** — When the Electron app starts, it registers itself with the server via WebSocket (`/instance` endpoint)
+   - Sends: `{ type: 'register', instanceId, serverId, instanceName }`
+   - Server persists the instance to the database as an `electronInstance`
+
+2. **Heartbeat** — Server pings connected instances every 30 seconds; instances reply with `pong`
+   - If no pong within 90 seconds, the instance is considered offline
+
+3. **Command Relay** — The server can send actions to instances:
+   - Sends: `{ id, type: 'action', action, params }`
+   - Instance processes the action and replies: `{ id, type: 'action-result', success, data? }`
+   - Commands timeout after 30 seconds by default
+
+4. **Status Tracking** — Web/desktop clients query `myInstances()` to see which Electron instances are online
+   - The relay tracks connectivity in-memory; the DB is the source of truth for persisted instance metadata
+
+### Key files
+
+- `apps/server/src/ws/instanceSocket.ts` — WebSocket handler for instance registration and messaging
+- `apps/server/src/services/instanceRelay.ts` — In-memory relay that routes commands to connected instances
+- `apps/server/src/services/instanceService.ts` — Database operations for instance metadata (name, password)
+
+The relay allows the web app to trigger actions on any user's Electron instance(s) and receive results, enabling cloud-coordinated agent workflows.
+
 ## Notes
 
 - All code changes should follow the patterns in `CLAUDE.md`
-- The Electron app includes IPC bridge for local session control
+- The Electron app includes an IPC bridge for local session control and a WebSocket relay for cloud commands
 - The server uses JWT tokens for authentication
-- Real-time updates flow through GraphQL subscriptions for web clients and WebSocket for the Electron bridge
+- Real-time updates flow through GraphQL subscriptions for web clients and WebSocket for the Electron relay
