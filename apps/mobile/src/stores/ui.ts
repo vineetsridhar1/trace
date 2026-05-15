@@ -14,13 +14,6 @@ export interface MobileUIState {
   setActiveSessionGroupId: (id: string | null) => void;
 
   /**
-   * Pager position for the active-sessions bottom accessory (§9.2.1). Purely
-   * the accessory's visible index — the session page does not read or drive
-   * this value; targeted navigation still goes through `overlaySessionId`.
-   */
-  activeAccessoryIndex: number;
-  setActiveAccessoryIndex: (i: number) => void;
-  /**
    * Session id currently targeted by session-entry helpers and optimistic
    * temp→real handoff during session creation. Null = no routed session page
    * is currently being tracked by those helpers.
@@ -72,7 +65,6 @@ const initial = {
   activeChannelId: null as string | null,
   activeSessionId: null as string | null,
   activeSessionGroupId: null as string | null,
-  activeAccessoryIndex: 0,
   overlaySessionId: null as string | null,
   activeMenuClose: null as (() => void) | null,
   channelDoneBadges: {} as Record<string, boolean>,
@@ -91,7 +83,6 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setActiveSessionId: (id) => set({ activeSessionId: id }),
   setActiveSessionGroupId: (id) => set({ activeSessionGroupId: id }),
 
-  setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
   setOverlaySessionId: (id) => set({ overlaySessionId: id }),
   setActiveMenuClose: (close) => set({ activeMenuClose: close }),
   markChannelDone: (id) =>
