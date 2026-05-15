@@ -309,6 +309,10 @@ function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStat
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
 }
 
+function getRunningSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
+  return sessionStatus === "merged" ? "merged" : "in_progress";
+}
+
 function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
   return agentStatus === "not_started" ? "not_started" : "done";
 }
@@ -3739,6 +3743,8 @@ export class SessionService {
     const newSessionStatus: SessionStatus =
       hasPendingPlan || hasQuestion
         ? "needs_input"
+        : current.sessionStatus === "merged"
+          ? "merged"
         : current.sessionStatus === "in_review"
           ? "in_review"
           : "in_progress";
@@ -3930,6 +3936,7 @@ export class SessionService {
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
       if (needsProvisioning) {
         assertCloudRepoRemoteAvailable(session.hosting, session.repo);
+        const pendingSessionStatus = getRunningSessionStatus(session.sessionStatus);
         const pendingCommand: PendingSessionCommand = {
           type: "send",
           prompt: text,
@@ -3944,7 +3951,7 @@ export class SessionService {
           pendingCommand,
           {
             agentStatus: "active",
-            sessionStatus: "in_progress",
+            sessionStatus: pendingSessionStatus,
             lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
             ...(markLocalPreparing && {
@@ -3995,7 +4002,7 @@ export class SessionService {
             clientSource: normalizeClientSource(clientSource),
             deliveryStatus: "pending_runtime",
             agentStatus: "active",
-            sessionStatus: "in_progress",
+            sessionStatus: pendingSessionStatus,
             ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
             ...(clientMutationId ? { clientMutationId } : {}),
           },
@@ -4170,11 +4177,12 @@ export class SessionService {
     // Only mark active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
     const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+    const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
         agentStatus: "active",
-        sessionStatus: "in_progress",
+        sessionStatus: resumedSessionStatus,
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
@@ -4212,7 +4220,7 @@ export class SessionService {
       payload: {
         sessionId,
         agentStatus: "active",
-        sessionStatus: "in_progress",
+        sessionStatus: resumedSessionStatus,
         clientSource: normalizeClientSource(clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -6961,6 +6969,7 @@ export class SessionService {
         tool: true,
         model: true,
         reasoningEffort: true,
+        sessionStatus: true,
         workdir: true,
         toolSessionId: true,
         repoId: true,
@@ -7037,11 +7046,12 @@ export class SessionService {
     }
 
     const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+    const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
         agentStatus: "active",
-        sessionStatus: "in_progress",
+        sessionStatus: resumedSessionStatus,
         pendingRun: pendingRunValue(remainingCommands),
         connection: this.mergeConnection(session.connection, {
           state: "connected",

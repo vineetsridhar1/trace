@@ -2252,6 +2252,40 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("keeps non-archived merged sessions merged after a follow-up run completes", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "merged",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce({
+        organizationId: "org-1",
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+
+      await service.complete("session-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { agentStatus: "done", sessionStatus: "merged" },
+        select: { organizationId: true, createdById: true, name: true },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_terminated",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            reason: "bridge_complete",
+            agentStatus: "done",
+            sessionStatus: "merged",
+          }),
+        }),
+      );
+    });
   });
 
   describe("reconcileIdleActiveRuns", () => {
@@ -2545,6 +2579,56 @@ describe("SessionService", () => {
         return arg?.eventType === "session_resumed";
       });
       expect(resumedCalls.length).toBe(1);
+    });
+
+    it("keeps a non-archived merged session merged when sending another message", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "merged",
+        worktreeDeleted: false,
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "follow up after merge",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "active",
+            sessionStatus: "merged",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_resumed",
+          payload: expect.objectContaining({
+            sessionStatus: "merged",
+          }),
+        }),
+      );
     });
 
     it("does not prepend conversation history twice after a tool switch", async () => {
