@@ -35,8 +35,11 @@ export function SessionStatusIndicator({
   size = 10,
 }: SessionStatusIndicatorProps) {
   const theme = useTheme();
-  const color = statusIndicatorColor(theme, status);
   const kind = indicatorKind(status, agentStatus);
+  const color =
+    kind === "loader" && agentStatus === "preparing"
+      ? theme.colors.warning
+      : statusIndicatorColor(theme, status);
 
   if (kind === "x") {
     return (

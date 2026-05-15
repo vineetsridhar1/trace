@@ -6,8 +6,10 @@ import {
   removeOptimisticSessionMessage,
   SEND_SESSION_MESSAGE_MUTATION,
   useAuthStore,
+  useEntityStore,
   wrapPrompt,
   type InteractionMode,
+  type SessionEntity,
 } from "@trace/client-core";
 import { haptic } from "@/lib/haptics";
 import { userFacingError } from "@/lib/requestError";
@@ -106,12 +108,47 @@ export function useComposerSubmit({
           return;
         }
 
+        let rollbackStartupPatch: (() => void) | null = null;
+        const previousSession = useEntityStore.getState().sessions[sessionId];
+        const startsDeferredRuntime =
+          previousSession?.agentStatus === "not_started" &&
+          previousSession.hosting === "cloud" &&
+          !previousSession.workdir;
+        if (startsDeferredRuntime) {
+          const previousConnection =
+            previousSession.connection && typeof previousSession.connection === "object"
+              ? previousSession.connection
+              : {};
+          useEntityStore.getState().patch("sessions", sessionId, {
+            agentStatus: "active",
+            sessionStatus: "in_progress",
+            connection: {
+              ...previousConnection,
+              state: "requested",
+            } as SessionEntity["connection"],
+          });
+          rollbackStartupPatch = () => {
+            useEntityStore.getState().patch("sessions", sessionId, {
+              agentStatus: previousSession.agentStatus,
+              sessionStatus: previousSession.sessionStatus,
+              connection: previousSession.connection,
+            });
+          };
+        }
+
+        const optimisticOptions =
+          attachmentKeys.length > 0 || startsDeferredRuntime
+            ? {
+                ...(attachmentKeys.length > 0
+                  ? { imageKeys: attachmentKeys, imagePreviewUrls: previewUris }
+                  : {}),
+                ...(startsDeferredRuntime ? { deliveryStatus: "pending_runtime" as const } : {}),
+              }
+            : undefined;
         const { eventId, clientMutationId } = optimisticallyInsertSessionMessage(
           sessionId,
           wrapped,
-          attachmentKeys.length > 0
-            ? { imageKeys: attachmentKeys, imagePreviewUrls: previewUris }
-            : undefined,
+          optimisticOptions,
         );
         useDraftsStore
           .getState()
@@ -135,6 +172,7 @@ export function useComposerSubmit({
           reconcileOptimisticSessionMessage(sessionId, eventId, realId);
         } catch (err) {
           removeOptimisticSessionMessage(sessionId, eventId);
+          rollbackStartupPatch?.();
           // Restore failed attachments at the end of the draft, so anything the
           // user added during the in-flight send keeps its original position.
           useDraftsStore

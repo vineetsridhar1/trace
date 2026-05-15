@@ -169,6 +169,41 @@ describe("handleOrgEvent", () => {
     ]);
   });
 
+  it("applies session status fields from message_sent payloads", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "message_sent",
+        scopeId: "session-1",
+        payload: {
+          text: "start",
+          deliveryStatus: "pending_runtime",
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+        },
+      }),
+    );
+
+    const session = useEntityStore.getState().sessions["session-1"];
+    expect(session.agentStatus).toBe("active");
+    expect(session.sessionStatus).toBe("in_progress");
+    expect(session.lastMessageAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
   it("upserts created channels only when the current user is a member", () => {
     useAuthStore.setState({
       user: { id: "user-1" } as never,

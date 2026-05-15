@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { Glass, TraceLoader, Text } from "@/components/design-system";
+import { TraceLoader, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 
 type ConnectionStateSource = {
@@ -43,78 +43,68 @@ export function CloudRuntimeNotice({ connectionState }: { connectionState: strin
     ? connectionState === "timed_out"
       ? "Cloud runtime timed out"
       : "Cloud runtime failed"
-    : connectionState === "provisioning"
-      ? "Provisioning cloud runtime"
+    : connectionState === "requested"
+      ? "Cloud recovery requested"
+      : connectionState === "provisioning"
+        ? "Cloud runtime provisioning"
+        : connectionState === "connecting"
+          ? "Waiting for cloud bridge"
+          : "Starting cloud runtime";
+  const body = failed
+    ? "Trace could not finish starting the cloud runtime."
+    : connectionState === "requested"
+      ? "Trace sent the recovery request and is waiting for the provider to report progress."
       : connectionState === "connecting"
-        ? "Connecting to cloud runtime"
-        : "Booting cloud runtime";
+        ? "The provider accepted the runtime request. Trace is waiting for the bridge to connect."
+        : "Your message is queued while Trace waits for the runtime provider.";
+  const toneColor = failed ? theme.colors.destructive : theme.colors.warning;
 
   return (
-    <Glass
-      preset="input"
-      interactive
+    <View
       style={[
         styles.notice,
         {
-          borderColor: failed ? alpha(theme.colors.destructive, 0.3) : theme.colors.border,
-          padding: theme.spacing.lg,
+          borderColor: alpha(toneColor, 0.3),
+          backgroundColor: alpha(toneColor, 0.05),
+          borderRadius: theme.radius.lg,
+          paddingHorizontal: theme.spacing.md,
+          paddingVertical: 10,
         },
       ]}
     >
       <View style={styles.noticeRow}>
-        <View
-          style={[
-            styles.iconWrap,
-            {
-              backgroundColor: failed
-                ? alpha(theme.colors.destructive, 0.16)
-                : alpha(theme.colors.foreground, 0.08),
-            },
-          ]}
-        >
-          <SymbolView
-            name={failed ? "exclamationmark.triangle" : "cloud"}
-            size={16}
-            tintColor={failed ? theme.colors.destructive : theme.colors.mutedForeground}
-          />
-        </View>
+        <SymbolView
+          name={failed ? "exclamationmark.triangle" : "cloud"}
+          size={16}
+          tintColor={toneColor}
+          style={styles.icon}
+        />
         <View style={styles.noticeCopy}>
           <View style={styles.titleRow}>
-            {failed ? null : <TraceLoader size="small" color="mutedForeground" />}
+            {failed ? null : <TraceLoader size={12} color="warning" />}
             <Text variant="subheadline" color="foreground">
               {label}
             </Text>
           </View>
           <Text variant="footnote" color="mutedForeground" style={styles.noticeBody}>
-            {failed
-              ? "Trace could not finish starting the cloud runtime."
-              : "Your message is queued and will run as soon as the container is ready."}
+            {body}
           </Text>
         </View>
       </View>
-    </Glass>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   notice: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 18,
-    gap: 12,
   },
   noticeRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
     alignItems: "flex-start",
-    width: "90%",
   },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  icon: { marginTop: 2 },
   noticeCopy: {
     flex: 1,
     gap: 4,
