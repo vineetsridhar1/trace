@@ -13,10 +13,6 @@ import { TraceLoader } from "../ui/trace-loader";
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
 
-type SessionVirtualizer = {
-  measureElement: (element: Element) => void;
-};
-
 export type SessionListNode =
   | SessionNode
   | { kind: "collapsed-events"; id: string; collapsed: CollapsedSessionEventsSummary };
@@ -97,16 +93,13 @@ export function SessionMessageList({
     [nodes],
   );
 
-  const handleRowMeasured = useCallback((itemKey: string, height: number) => {
-    sizeCacheRef.current.set(itemKey, height);
-  }, []);
-
   const virtualizer = useVirtualizer({
     count: nodes.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
     overscan: 8,
     getItemKey,
+    useAnimationFrameWithResizeObserver: true,
     measureElement: (element: Element) => {
       const height = element.getBoundingClientRect().height;
       const index = element.getAttribute("data-index");
@@ -349,6 +342,10 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
+  const firstVirtualItem = virtualItems[0];
+  const lastVirtualItem = virtualItems[virtualItems.length - 1];
+  const paddingTop = firstVirtualItem?.start ?? 0;
+  const paddingBottom = lastVirtualItem ? Math.max(0, totalSize - lastVirtualItem.end) : 0;
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
@@ -395,24 +392,18 @@ export function SessionMessageList({
           <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
         )}
 
-        <div
-          style={{
-            height: totalSize,
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {virtualItems.map((virtualRow: { key: React.Key; index: number; start: number }) => {
+        {/* Keep visible rows in normal flow so stale estimates cannot make them overlap. */}
+        <div style={{ minHeight: totalSize, width: "100%" }}>
+          {paddingTop > 0 ? <div aria-hidden="true" style={{ height: paddingTop }} /> : null}
+
+          {virtualItems.map((virtualRow: { key: React.Key; index: number }) => {
             const node = nodes[virtualRow.index];
-            const itemKey = getItemKey(virtualRow.index);
             return (
-              <SessionVirtualRow
+              <div
                 key={virtualRow.key}
-                index={virtualRow.index}
-                itemKey={itemKey}
-                start={virtualRow.start}
-                virtualizer={virtualizer}
-                onMeasured={handleRowMeasured}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                className="pb-3"
               >
                 {node.kind === "collapsed-events" ? (
                   <CollapsedSessionEventsRow
@@ -433,106 +424,13 @@ export function SessionMessageList({
                     onRemovePlanComment={onRemovePlanComment}
                   />
                 )}
-              </SessionVirtualRow>
+              </div>
             );
           })}
+
+          {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: paddingBottom }} /> : null}
         </div>
       </div>
-    </div>
-  );
-}
-
-function SessionVirtualRow({
-  children,
-  index,
-  itemKey,
-  start,
-  virtualizer,
-  onMeasured,
-}: {
-  children: React.ReactNode;
-  index: number;
-  itemKey: string;
-  start: number;
-  virtualizer: SessionVirtualizer;
-  onMeasured: (itemKey: string, height: number) => void;
-}) {
-  const rowRef = useRef<HTMLDivElement | null>(null);
-  const frameRef = useRef<number | null>(null);
-
-  const measure = useCallback(() => {
-    const row = rowRef.current;
-    if (!row) return;
-
-    onMeasured(itemKey, row.getBoundingClientRect().height);
-    virtualizer.measureElement(row);
-  }, [itemKey, onMeasured, virtualizer]);
-
-  const scheduleMeasure = useCallback(() => {
-    if (frameRef.current != null) {
-      window.cancelAnimationFrame(frameRef.current);
-    }
-
-    frameRef.current = window.requestAnimationFrame(() => {
-      frameRef.current = null;
-      measure();
-    });
-  }, [measure]);
-
-  const setRowRef = useCallback(
-    (row: HTMLDivElement | null) => {
-      rowRef.current = row;
-      if (row) {
-        measure();
-      }
-    },
-    [measure],
-  );
-
-  useLayoutEffect(() => {
-    const row = rowRef.current;
-    if (!row) return;
-
-    measure();
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleMeasure);
-    resizeObserver?.observe(row);
-
-    const mutationObserver =
-      typeof MutationObserver === "undefined"
-        ? null
-        : new MutationObserver(() => scheduleMeasure());
-    mutationObserver?.observe(row, {
-      characterData: true,
-      childList: true,
-      subtree: true,
-    });
-
-    return () => {
-      if (frameRef.current != null) {
-        window.cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-      resizeObserver?.disconnect();
-      mutationObserver?.disconnect();
-    };
-  }, [itemKey, measure, scheduleMeasure]);
-
-  return (
-    <div
-      ref={setRowRef}
-      data-index={index}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        transform: `translateY(${start}px)`,
-      }}
-      className="pb-3"
-    >
-      {children}
     </div>
   );
 }
