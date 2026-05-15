@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
   handleSessionEvent,
@@ -7,7 +7,7 @@ import {
   useEntityStore,
   type AuthState,
 } from "@trace/client-core";
-import type { Event, Session } from "@trace/gql";
+import type { Event, Session, SessionTimelineMode } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
@@ -16,16 +16,67 @@ import { PendingFetchedEvents, SessionEventBuffer } from "./session-events-buffe
 import {
   SESSION_EVENTS_QUERY,
   SESSION_EVENTS_SUBSCRIPTION,
+  SESSION_TIMELINE_QUERY,
   SESSION_STATUS_SUBSCRIPTION,
 } from "./session-events-gql";
+import {
+  asCollapsedSummary,
+  asFetchedEvent,
+  asRecord,
+  type SessionTimelineDisplayItem,
+} from "./session-events-timeline";
 
 const PAGE_SIZE = 100;
+const EMPTY_TIMELINE_ITEMS: SessionTimelineDisplayItem[] = [];
+
+function payloadRecord(event: Event): Record<string, unknown> | null {
+  return asRecord(event.payload);
+}
+
+function isCompletedSessionEvent(event: Event): boolean {
+  if (event.eventType !== "session_terminated") return false;
+  const payload = payloadRecord(event);
+  return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
+}
+
+function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {
+  const page = asRecord(value);
+  const rawItems = Array.isArray(page?.items) ? page.items : [];
+  const events: Array<Event & { id: string }> = [];
+  const items: SessionTimelineDisplayItem[] = [];
+
+  for (const rawItem of rawItems) {
+    const item = asRecord(rawItem);
+    if (item?.kind === "event") {
+      const event = asFetchedEvent(item.event);
+      if (!event) continue;
+      events.push(event);
+      items.push({ kind: "event", id: event.id });
+    } else if (item?.kind === "collapsed_events") {
+      const collapsed = asCollapsedSummary(item.collapsed);
+      if (!collapsed) continue;
+      items.push({ kind: "collapsed_events", id: collapsed.id, collapsed });
+    }
+  }
+
+  const timelineMode: SessionTimelineMode = page?.mode === "compact" ? "compact" : "live";
+  return {
+    events,
+    timelineMode,
+    timelineItems: items,
+    hasOlder: timelineMode === "compact" ? false : page?.hasOlder === true,
+    oldestTimestamp: timelineMode === "compact" ? null : (events[0]?.timestamp ?? null),
+  };
+}
 
 interface UseSessionEventsResult {
   loading: boolean;
   loadingOlder: boolean;
   hasOlder: boolean;
   error: string | null;
+  eventIds: string[];
+  timelineMode: SessionTimelineMode;
+  timelineItems: SessionTimelineDisplayItem[];
   fetchEvents: () => Promise<void>;
   fetchOlderEvents: () => Promise<void>;
 }
@@ -55,10 +106,14 @@ export function useSessionEvents(
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timelineMode, setTimelineMode] = useState<SessionTimelineMode>("live");
+  const [timelineItems, setTimelineItems] =
+    useState<SessionTimelineDisplayItem[]>(EMPTY_TIMELINE_ITEMS);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const oldestTimestampRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
+  const timelineModeRef = useRef<SessionTimelineMode>("live");
   const fetchEnabledRef = useRef(fetchEnabled);
   const commitEnabledRef = useRef(commitEnabled);
   const eventBufferRef = useRef(new SessionEventBuffer());
@@ -69,6 +124,9 @@ export function useSessionEvents(
       setHasOlder(pending.hasOlder);
       hasOlderRef.current = pending.hasOlder;
       oldestTimestampRef.current = pending.oldestTimestamp;
+      setTimelineMode(pending.timelineMode);
+      timelineModeRef.current = pending.timelineMode;
+      setTimelineItems(pending.timelineItems);
       setError(null);
     },
     [sessionId],
@@ -110,9 +168,9 @@ export function useSessionEvents(
     eventBufferRef.current.clearError();
     const requestToken = eventBufferRef.current.beginFetch();
     const result = await getClient()
-      .query(SESSION_EVENTS_QUERY, {
+      .query(SESSION_TIMELINE_QUERY, {
         organizationId: activeOrgId,
-        scope: { type: "session", id: sessionId },
+        sessionId,
         limit: PAGE_SIZE,
         before: new Date().toISOString(),
         excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
@@ -137,18 +195,11 @@ export function useSessionEvents(
       return;
     }
 
-    if (result.data?.events) {
-      const events = result.data.events as Array<Event & { id: string }>;
-      const pending = {
-        events,
-        hasOlder: events.length >= PAGE_SIZE,
-        oldestTimestamp: events[0]?.timestamp ?? null,
-      };
-      if (commitEnabledRef.current) {
-        commitFetchedEvents(pending);
-      } else {
-        eventBufferRef.current.storeFetched(requestToken, pending);
-      }
+    const pending = pendingFromTimelinePage(result.data?.sessionTimeline);
+    if (commitEnabledRef.current) {
+      commitFetchedEvents(pending);
+    } else {
+      eventBufferRef.current.storeFetched(requestToken, pending);
     }
     setLoading(false);
   }, [activeOrgId, commitFetchedEvents, fetchEnabled, sessionId]);
@@ -167,6 +218,9 @@ export function useSessionEvents(
       eventBufferRef.current.invalidateFetches();
       setLoading(true);
       setError(null);
+      setTimelineMode("live");
+      timelineModeRef.current = "live";
+      setTimelineItems(EMPTY_TIMELINE_ITEMS);
       return;
     }
     void fetchEvents();
@@ -194,6 +248,15 @@ export function useSessionEvents(
         const event = result.data.sessionEvents as Event & { id: string };
         if (commitEnabledRef.current) {
           commitLiveEvent(event);
+          if (isCompletedSessionEvent(event)) {
+            void fetchEvents();
+          } else if (timelineModeRef.current === "compact") {
+            setTimelineMode("live");
+            timelineModeRef.current = "live";
+            setTimelineItems(EMPTY_TIMELINE_ITEMS);
+            setHasOlder(true);
+            hasOlderRef.current = true;
+          }
         } else {
           eventBufferRef.current.storeLiveEvent(event);
         }
@@ -219,7 +282,7 @@ export function useSessionEvents(
       eventSub.unsubscribe();
       statusSub.unsubscribe();
     };
-  }, [activeOrgId, commitLiveEvent, fetchEnabled, sessionId]);
+  }, [activeOrgId, commitLiveEvent, fetchEnabled, fetchEvents, sessionId]);
 
   // Catch up missed events after a WS reconnect: the server's pubsub has no
   // replay, so anything the agent emitted while we were disconnected is lost
@@ -294,11 +357,19 @@ export function useSessionEvents(
     setLoadingOlder(false);
   }, [activeOrgId, commitEnabled, fetchEnabled, sessionId]);
 
+  const eventIds = useMemo(
+    () => timelineItems.filter((item) => item.kind === "event").map((item) => item.id),
+    [timelineItems],
+  );
+
   return {
     loading: fetchEnabled ? loading : true,
     loadingOlder,
     hasOlder,
     error: fetchEnabled ? error : null,
+    eventIds,
+    timelineMode,
+    timelineItems,
     fetchEvents,
     fetchOlderEvents,
   };

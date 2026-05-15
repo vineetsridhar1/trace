@@ -1,9 +1,12 @@
-import type { Event } from "@trace/gql";
+import type { Event, SessionTimelineMode } from "@trace/gql";
+import type { SessionTimelineDisplayItem } from "./session-events-timeline";
 
 export interface PendingFetchedEvents {
   events: Array<Event & { id: string }>;
   hasOlder: boolean;
   oldestTimestamp: string | null;
+  timelineMode: SessionTimelineMode;
+  timelineItems: SessionTimelineDisplayItem[];
 }
 
 export interface FlushedBufferedSessionEvents {

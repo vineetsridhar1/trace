@@ -2,12 +2,17 @@ import type { SessionNode } from "@trace/client-core";
 import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import { nodeKey } from "@/hooks/useNewActivityTracker";
+import type { CollapsedSessionEventsSummary } from "@/hooks/session-events-timeline";
 import { formatTime } from "./nodes/utils";
+
+export type SessionStreamNode =
+  | SessionNode
+  | { kind: "collapsed-events"; id: string; collapsed: CollapsedSessionEventsSummary };
 
 export interface SessionStreamListItem {
   key: string;
   itemType: string;
-  node: SessionNode;
+  node: SessionStreamNode;
   timestampLabel: string | null;
   isLast: boolean;
 }
@@ -17,7 +22,7 @@ export interface SessionStreamItemCache {
 }
 
 export function buildSessionStreamItems(
-  nodes: SessionNode[],
+  nodes: SessionStreamNode[],
   events: Record<string, Event>,
   previous?: SessionStreamItemCache,
 ): { items: SessionStreamListItem[]; cache: SessionStreamItemCache } {
@@ -48,7 +53,7 @@ export function buildSessionStreamItems(
 }
 
 function describeNode(
-  node: SessionNode,
+  node: SessionStreamNode,
   events: Record<string, Event>,
   isLast: boolean,
 ): {
@@ -60,6 +65,17 @@ function describeNode(
   reuse: boolean;
 } {
   switch (node.kind) {
+    case "collapsed-events":
+      return {
+        identity: `collapsed-events:${node.id}`,
+        key: node.id,
+        itemType: "collapsed-events",
+        timestampLabel: `${formatTime(node.collapsed.startTimestamp)} - ${formatTime(
+          node.collapsed.endTimestamp,
+        )}`,
+        isLast,
+        reuse: true,
+      };
     case "event": {
       const event = events[node.id];
       const payload = asJsonObject(event?.payload);

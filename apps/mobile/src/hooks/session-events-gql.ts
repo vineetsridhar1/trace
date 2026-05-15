@@ -1,10 +1,58 @@
 import { gql } from "@urql/core";
 
+export const SESSION_TIMELINE_QUERY = gql`
+  query MobileSessionTimeline(
+    $organizationId: ID!
+    $sessionId: ID!
+    $limit: Int
+    $before: DateTime
+    $excludePayloadTypes: [String!]
+  ) {
+    sessionTimeline(
+      organizationId: $organizationId
+      sessionId: $sessionId
+      limit: $limit
+      before: $before
+      excludePayloadTypes: $excludePayloadTypes
+    ) {
+      mode
+      hasOlder
+      items {
+        id
+        kind
+        event {
+          id
+          scopeType
+          scopeId
+          eventType
+          payload
+          actor {
+            type
+            id
+            name
+            avatarUrl
+          }
+          parentId
+          timestamp
+          metadata
+        }
+        collapsed {
+          id
+          eventCount
+          startTimestamp
+          endTimestamp
+        }
+      }
+    }
+  }
+`;
+
 export const SESSION_EVENTS_QUERY = gql`
   query MobileSessionEvents(
     $organizationId: ID!
     $scope: ScopeInput
     $limit: Int
+    $after: DateTime
     $before: DateTime
     $excludePayloadTypes: [String!]
   ) {
@@ -12,6 +60,7 @@ export const SESSION_EVENTS_QUERY = gql`
       organizationId: $organizationId
       scope: $scope
       limit: $limit
+      after: $after
       before: $before
       excludePayloadTypes: $excludePayloadTypes
     ) {

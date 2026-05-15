@@ -22,6 +22,8 @@ function makeFetched(ids: string[], oldestTimestamp: string): PendingFetchedEven
     events: ids.map((id, index) => makeEvent(id, `2026-04-22T00:00:0${index}Z`)),
     hasOlder: ids.length > 1,
     oldestTimestamp,
+    timelineMode: "live",
+    timelineItems: ids.map((id) => ({ kind: "event", id })),
   };
 }
 
