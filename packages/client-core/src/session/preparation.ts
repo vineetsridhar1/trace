@@ -1,5 +1,4 @@
-const STARTUP_CONNECTION_STATES = new Set([
-  "pending",
+const ACTIVE_STARTUP_CONNECTION_STATES = new Set([
   "requested",
   "provisioning",
   "booting",
@@ -28,10 +27,11 @@ export function isSessionPreparing(session: SessionPreparationFields | null | un
   if (session.workdir) return false;
 
   const state = connectionState(session.connection);
-  return (
-    STARTUP_CONNECTION_STATES.has(state ?? "") ||
-    Boolean(session.lastUserMessageAt ?? session.lastMessageAt)
-  );
+  const hasMessage = Boolean(session.lastUserMessageAt ?? session.lastMessageAt);
+  if (state === "pending") {
+    return hasMessage;
+  }
+  return ACTIVE_STARTUP_CONNECTION_STATES.has(state ?? "") || hasMessage;
 }
 
 /**
@@ -44,5 +44,5 @@ export function isSessionRuntimeStartingUp(
   connection: SessionPreparationFields["connection"],
 ): boolean {
   const state = connectionState(connection);
-  return state !== null && STARTUP_CONNECTION_STATES.has(state);
+  return state !== null && ACTIVE_STARTUP_CONNECTION_STATES.has(state);
 }
