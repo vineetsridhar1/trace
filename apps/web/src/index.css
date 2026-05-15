@@ -433,18 +433,23 @@
 }
 
 .read-group-body {
-  max-height: 0;
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
   overflow: hidden;
   transition:
-    max-height 0.24s ease,
+    grid-template-rows 0.24s ease,
     opacity 0.24s ease;
 }
 
+.read-group-body > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .read-group-body.open {
-  max-height: none;
+  grid-template-rows: 1fr;
   opacity: 1;
-  overflow: visible;
 }
 
 .read-group-subline {
