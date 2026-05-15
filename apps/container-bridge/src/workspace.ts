@@ -2,7 +2,11 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
-import { assertValidCommitSha } from "@trace/shared";
+import {
+  assertValidCommitSha,
+  generatedTraceWorktreeBranch,
+  shouldRepairRenamedTraceWorktreeBranch,
+} from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -131,10 +135,22 @@ export async function createWorktree({
   if (fs.existsSync(worktreePath)) {
     const currentBranch = await getCurrentBranch(worktreePath);
     if (currentBranch !== branchName) {
-      throw new Error(
-        `Existing workspace ${worktreePath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branchName}. ` +
-          "Switch it back or remove the workspace before retrying.",
+      const canRepairRenamedBranch = shouldRepairRenamedTraceWorktreeBranch({
+        currentBranch,
+        requestedBranch: branchName,
+        persistedBranch: branch,
+        preserveBranchName,
+      });
+      if (!canRepairRenamedBranch) {
+        throw new Error(
+          `Existing workspace ${worktreePath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branchName}. ` +
+            "Switch it back or remove the workspace before retrying.",
+        );
+      }
+      console.warn(
+        `[workspace] repairing renamed Trace worktree ${worktreePath}: ${currentBranch} -> ${branchName}`,
       );
+      await switchWorktreeToBranch(worktreePath, branchName, baseRef);
     }
     await resetWorktreeToRef(worktreePath, baseRef);
     await setUpstreamIfRemote(repoPath, branchName, baseRef);
@@ -177,7 +193,7 @@ function resolveWorktreeBranch(
   startBranch: string | undefined,
   preserveBranchName: boolean | undefined,
 ): string {
-  const generatedBranch = `trace/${slug}`;
+  const generatedBranch = generatedTraceWorktreeBranch(slug);
   if (preserveBranchName && startBranch && startBranch !== generatedBranch) {
     return startBranch;
   }
@@ -190,6 +206,14 @@ async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<vo
   // reprovisioned or a container is reused.
   await execFileAsync("git", ["reset", "--hard", ref], { cwd: worktreePath });
   await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
+}
+
+async function switchWorktreeToBranch(
+  worktreePath: string,
+  branch: string,
+  baseRef: string,
+): Promise<void> {
+  await execFileAsync("git", ["checkout", "-f", "-B", branch, baseRef], { cwd: worktreePath });
 }
 
 async function isUsableWorktree(worktreePath: string): Promise<boolean> {

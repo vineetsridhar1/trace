@@ -176,5 +176,9 @@ export {
   PROVISIONED_RUNTIME_PREFIX,
   isCloudMachineRuntimeId,
 } from "./runtime-ids.js";
+export {
+  generatedTraceWorktreeBranch,
+  shouldRepairRenamedTraceWorktreeBranch,
+} from "./worktree-branch.js";
 
 export const MAX_WORKSPACE_NAME_LENGTH = 80;
