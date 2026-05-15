@@ -58,7 +58,8 @@ describe("model catalog", () => {
       }),
       expect.objectContaining({
         value: "anthropic",
-        label: "Anthropic API",
+        label: "Claude",
+        description: "Uses a Claude subscription or Anthropic API key",
         models: [
           { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
           { value: "anthropic/claude-opus-4-7", label: "Claude Opus 4.7" },
