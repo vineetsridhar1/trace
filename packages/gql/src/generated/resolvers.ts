@@ -262,11 +262,8 @@ export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
   endTimestamp: Scalars["DateTime"]["output"];
-  eventCount: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
-  messageCount: Scalars["Int"]["output"];
   startTimestamp: Scalars["DateTime"]["output"];
-  toolCallCount: Scalars["Int"]["output"];
 };
 
 export type ConnectionsBridge = {
@@ -2459,11 +2456,8 @@ export type CollapsedSessionEventsResolvers<
     ResolversParentTypes["CollapsedSessionEvents"],
 > = ResolversObject<{
   endTimestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
-  eventCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  messageCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   startTimestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
-  toolCallCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 

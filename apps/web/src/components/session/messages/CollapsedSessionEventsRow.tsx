@@ -38,17 +38,6 @@ function asFetchedEvent(value: unknown): (Event & { id: string }) | null {
   return typeof record?.id === "string" ? (record as Event & { id: string }) : null;
 }
 
-function pluralize(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? "" : "s"}`;
-}
-
-function collapsedSummaryLabel(collapsed: CollapsedSessionEventsSummary): string {
-  const parts = [];
-  if (collapsed.toolCallCount > 0) parts.push(pluralize(collapsed.toolCallCount, "tool call"));
-  if (collapsed.messageCount > 0) parts.push(pluralize(collapsed.messageCount, "message"));
-  return parts.length > 0 ? parts.join(", ") : pluralize(collapsed.eventCount, "event");
-}
-
 export function CollapsedSessionEventsRow({
   sessionId,
   collapsed,
@@ -59,7 +48,7 @@ export function CollapsedSessionEventsRow({
   const [error, setError] = useState<string | null>(null);
   const [eventIds, setEventIds] = useState<string[]>([]);
   const [cursor, setCursor] = useState(collapsed.startTimestamp);
-  const [hasMore, setHasMore] = useState(collapsed.eventCount > 0);
+  const [hasMore, setHasMore] = useState(true);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const scopeKey = useEventScopeKey();
   const scopedEvents = useScopedEvents(scopeKey);
@@ -70,8 +59,8 @@ export function CollapsedSessionEventsRow({
     setError(null);
     setEventIds([]);
     setCursor(collapsed.startTimestamp);
-    setHasMore(collapsed.eventCount > 0);
-  }, [collapsed.eventCount, collapsed.id, collapsed.startTimestamp]);
+    setHasMore(true);
+  }, [collapsed.id, collapsed.startTimestamp]);
 
   const fetchNext = useCallback(async () => {
     if (!activeOrgId || loading || !hasMore) return;
@@ -133,7 +122,6 @@ export function CollapsedSessionEventsRow({
     () => buildSessionNodes(eventIds, scopedEvents),
     [eventIds, scopedEvents],
   );
-  const summaryLabel = collapsedSummaryLabel(collapsed);
 
   return (
     <div className="overflow-hidden rounded-md">
@@ -145,7 +133,7 @@ export function CollapsedSessionEventsRow({
           open && "text-foreground",
         )}
         aria-expanded={open}
-        aria-label={`${open ? "Hide" : "Show"} activity: ${summaryLabel}`}
+        aria-label={`${open ? "Hide" : "Show"} thinking`}
         onClick={handleToggle}
       >
         <ChevronRight
@@ -153,12 +141,7 @@ export function CollapsedSessionEventsRow({
           className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-90")}
           strokeWidth={2}
         />
-        <span className="shrink-0 font-medium">Activity</span>
-        <span
-          aria-hidden="true"
-          className="size-1 shrink-0 rounded-full bg-muted-foreground/45 transition-colors group-hover:bg-foreground/55"
-        />
-        <span className="min-w-0 truncate">{summaryLabel}</span>
+        <span className="shrink-0 font-medium">Show thinking</span>
       </button>
 
       <div className={`read-group-body ${open ? "open" : ""}`}>

@@ -8,9 +8,6 @@ const COMPACT_CANDIDATE_OVERFETCH = 4;
 
 export interface CollapsedSessionEventRange {
   id: string;
-  eventCount: number;
-  toolCallCount: number;
-  messageCount: number;
   startTimestamp: Date;
   endTimestamp: Date;
 }
@@ -72,27 +69,6 @@ function hasAssistantTextBlock(payload: unknown): boolean {
   );
 }
 
-function hasRenderedTextBlock(payload: unknown): boolean {
-  return messageContentBlocks(payload).some(
-    (block) => block.type === "text" && typeof block.text === "string" && block.text.trim() !== "",
-  );
-}
-
-function hasRenderableContentBlock(payload: unknown): boolean {
-  return messageContentBlocks(payload).some((block) => {
-    if (block.type === "text") {
-      return typeof block.text === "string" && block.text.trim() !== "";
-    }
-    return block.type === "tool_use" || block.type === "plan" || block.type === "question";
-  });
-}
-
-function countToolUseBlocks(payload: unknown): number {
-  return messageContentBlocks(payload).reduce((count, block) => {
-    return block.type === "tool_use" ? count + 1 : count;
-  }, 0);
-}
-
 function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): boolean {
   const payload = asObject(event.payload);
   if (event.eventType === "session_started") {
@@ -102,60 +78,6 @@ function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): bool
     return typeof payload?.text === "string" && payload.text.trim() !== "";
   }
   return false;
-}
-
-function countHiddenMessages(event: Pick<PrismaEvent, "eventType" | "payload">): number {
-  if (event.eventType === "session_started" || event.eventType === "message_sent") {
-    return hasUserContent(event) ? 1 : 0;
-  }
-  if (event.eventType !== "session_output") return 0;
-  return hasRenderedTextBlock(event.payload) ? 1 : 0;
-}
-
-function countHiddenToolCalls(event: Pick<PrismaEvent, "eventType" | "payload">): number {
-  if (event.eventType !== "session_output") return 0;
-  return countToolUseBlocks(event.payload);
-}
-
-function hasRenderableSessionOutput(payload: unknown): boolean {
-  const data = asObject(payload);
-  if (data?.type === "assistant" || data?.type === "user") {
-    return hasRenderableContentBlock(payload);
-  }
-  return data?.type === "error";
-}
-
-function isRenderableHiddenEvent(
-  event: Pick<PrismaEvent, "eventType" | "payload" | "parentId">,
-): boolean {
-  if (event.parentId) return false;
-
-  if (event.eventType === "session_started" || event.eventType === "message_sent") {
-    return hasUserContent(event);
-  }
-  if (event.eventType === "session_output") {
-    return hasRenderableSessionOutput(event.payload);
-  }
-
-  return false;
-}
-
-function countHiddenEventSummary(
-  event: Pick<PrismaEvent, "eventType" | "payload" | "parentId">,
-): Pick<CollapsedSessionEventRange, "eventCount" | "toolCallCount" | "messageCount"> {
-  if (!isRenderableHiddenEvent(event)) {
-    return {
-      eventCount: 0,
-      toolCallCount: 0,
-      messageCount: 0,
-    };
-  }
-
-  return {
-    eventCount: 1,
-    toolCallCount: countHiddenToolCalls(event),
-    messageCount: countHiddenMessages(event),
-  };
 }
 
 function isUserEvent(event: PrismaEvent): boolean {
@@ -264,84 +186,6 @@ async function fetchCompactCandidates(opts: SessionTimelineQueryOpts, limit: num
   return candidatesDesc.reverse();
 }
 
-async function summarizeHiddenRanges(
-  opts: SessionTimelineQueryOpts,
-  endpoints: PrismaEvent[],
-): Promise<
-  Map<string, Pick<CollapsedSessionEventRange, "eventCount" | "toolCallCount" | "messageCount">>
-> {
-  const summaries = new Map<
-    string,
-    Pick<CollapsedSessionEventRange, "eventCount" | "toolCallCount" | "messageCount">
-  >();
-
-  for (let i = 1; i < endpoints.length; i++) {
-    summaries.set(collapsedRangeId(endpoints[i - 1], endpoints[i]), {
-      eventCount: 0,
-      toolCallCount: 0,
-      messageCount: 0,
-    });
-  }
-
-  if (endpoints.length < 2) return summaries;
-
-  const endpointIds = new Set(endpoints.map((event) => event.id));
-  const hiddenEvents = await prisma.event.findMany({
-    where: {
-      ...hiddenRangeWhere(
-        opts.organizationId,
-        opts.sessionId,
-        endpoints[0].timestamp,
-        endpoints[endpoints.length - 1].timestamp,
-        opts.excludePayloadTypes,
-      ),
-      id: { notIn: [...endpointIds] },
-    },
-    orderBy: { timestamp: "asc" },
-    select: { eventType: true, payload: true, parentId: true, timestamp: true },
-  });
-
-  let gapIndex = 0;
-  for (const event of hiddenEvents) {
-    while (
-      gapIndex < endpoints.length - 1 &&
-      event.timestamp >= endpoints[gapIndex + 1].timestamp
-    ) {
-      gapIndex++;
-    }
-    if (gapIndex >= endpoints.length - 1) break;
-    if (event.timestamp <= endpoints[gapIndex].timestamp) continue;
-
-    const summary = summaries.get(
-      collapsedRangeId(endpoints[gapIndex], endpoints[gapIndex + 1]),
-    );
-    if (!summary) continue;
-
-    const counts = countHiddenEventSummary(event);
-    summary.eventCount += counts.eventCount;
-    summary.toolCallCount += counts.toolCallCount;
-    summary.messageCount += counts.messageCount;
-  }
-
-  return summaries;
-}
-
-function hiddenRangeWhere(
-  organizationId: string,
-  sessionId: string,
-  startTimestamp: Date,
-  endTimestamp: Date,
-  excludePayloadTypes: string[] | undefined,
-): Prisma.EventWhereInput {
-  return {
-    organizationId,
-    scopeType: "session",
-    scopeId: sessionId,
-    timestamp: { gt: startTimestamp, lt: endTimestamp },
-    ...excludeSessionOutputPayloadTypesWhere(excludePayloadTypes),
-  };
-}
-
 export class SessionTimelineService {
   async query(opts: SessionTimelineQueryOpts): Promise<SessionTimelineServicePage> {
     const session = await prisma.session.findUnique({
@@ -403,13 +247,11 @@ export class SessionTimelineService {
     const hasOlder = selectableEvents.length > limit;
     const pageEvents = selectableEvents.slice(Math.max(0, selectableEvents.length - limit));
     const rangeEndpoints = anchor ? [...pageEvents, anchor] : pageEvents;
-    const summaries = await summarizeHiddenRanges(opts, rangeEndpoints);
     const items: SessionTimelineServiceItem[] = [];
     let previous: PrismaEvent | null = null;
 
     const pushCollapsedRange = (rangeStart: PrismaEvent, rangeEnd: PrismaEvent) => {
-      const summary = summaries.get(collapsedRangeId(rangeStart, rangeEnd));
-      if (!summary || summary.eventCount === 0) return;
+      if (sameTimestamp(rangeStart.timestamp, rangeEnd.timestamp)) return;
       const id = collapsedRangeId(rangeStart, rangeEnd);
       items.push({
         id,
@@ -417,7 +259,6 @@ export class SessionTimelineService {
         event: null,
         collapsed: {
           id,
-          ...summary,
           startTimestamp: rangeStart.timestamp,
           endTimestamp: rangeEnd.timestamp,
         },

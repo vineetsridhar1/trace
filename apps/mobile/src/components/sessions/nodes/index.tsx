@@ -73,17 +73,6 @@ interface EventNodeProps {
 const COLLAPSED_PAGE_SIZE = 100;
 const COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES = [...HIDDEN_SESSION_PAYLOAD_TYPES, "result"];
 
-function pluralize(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? "" : "s"}`;
-}
-
-function collapsedSummaryLabel(collapsed: CollapsedSessionEventsSummary): string {
-  const parts = [];
-  if (collapsed.toolCallCount > 0) parts.push(pluralize(collapsed.toolCallCount, "tool call"));
-  if (collapsed.messageCount > 0) parts.push(pluralize(collapsed.messageCount, "message"));
-  return parts.length > 0 ? parts.join(", ") : pluralize(collapsed.eventCount, "event");
-}
-
 function CollapsedEventsNode({
   collapsed,
   context,
@@ -97,7 +86,7 @@ function CollapsedEventsNode({
   const [error, setError] = useState<string | null>(null);
   const [eventIds, setEventIds] = useState<string[]>([]);
   const [cursor, setCursor] = useState(collapsed.startTimestamp);
-  const [hasMore, setHasMore] = useState(collapsed.eventCount > 0);
+  const [hasMore, setHasMore] = useState(true);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const scopeKey = eventScopeKey("session", context.sessionId);
   const scopedEvents = useScopedEvents(scopeKey);
@@ -108,8 +97,8 @@ function CollapsedEventsNode({
     setError(null);
     setEventIds([]);
     setCursor(collapsed.startTimestamp);
-    setHasMore(collapsed.eventCount > 0);
-  }, [collapsed.eventCount, collapsed.id, collapsed.startTimestamp]);
+    setHasMore(true);
+  }, [collapsed.id, collapsed.startTimestamp]);
 
   const fetchNext = useCallback(async () => {
     if (!activeOrgId || loading || !hasMore) return;
@@ -160,7 +149,6 @@ function CollapsedEventsNode({
   }, [activeOrgId, collapsed.endTimestamp, context.sessionId, cursor, hasMore, loading]);
 
   const hidden = useMemo(() => buildSessionNodes(eventIds, scopedEvents), [eventIds, scopedEvents]);
-  const summaryLabel = collapsedSummaryLabel(collapsed);
 
   const toggleOpen = useCallback(() => {
     const nextOpen = !open;
@@ -183,7 +171,7 @@ function CollapsedEventsNode({
     <View style={styles.collapsedWrapper}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${open ? "Hide" : "Show"} activity: ${summaryLabel}`}
+        accessibilityLabel={`${open ? "Hide" : "Show"} thinking`}
         onPress={toggleOpen}
         style={({ pressed }) => [
           styles.collapsedHeader,
@@ -209,23 +197,7 @@ function CollapsedEventsNode({
           color={open ? "foreground" : "mutedForeground"}
           style={styles.collapsedTitle}
         >
-          Activity
-        </Text>
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          style={[
-            styles.collapsedDot,
-            { backgroundColor: open ? theme.colors.foreground : theme.colors.mutedForeground },
-          ]}
-        />
-        <Text
-          variant="caption1"
-          color={open ? "foreground" : "mutedForeground"}
-          numberOfLines={1}
-          style={styles.collapsedSummary}
-        >
-          {summaryLabel}
+          Show thinking
         </Text>
       </Pressable>
 
@@ -366,15 +338,6 @@ const styles = StyleSheet.create({
   },
   collapsedTitle: {
     fontWeight: "600",
-  },
-  collapsedDot: {
-    borderRadius: 2,
-    height: 4,
-    opacity: 0.45,
-    width: 4,
-  },
-  collapsedSummary: {
-    flexShrink: 1,
   },
   collapsedBody: {
     alignSelf: "stretch",

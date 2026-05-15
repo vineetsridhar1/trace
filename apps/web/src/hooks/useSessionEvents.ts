@@ -54,9 +54,6 @@ const SESSION_TIMELINE_QUERY = gql`
         }
         collapsed {
           id
-          eventCount
-          toolCallCount
-          messageCount
           startTimestamp
           endTimestamp
         }
@@ -123,9 +120,6 @@ const SESSION_EVENTS_SUBSCRIPTION = gql`
 
 export interface CollapsedSessionEventsSummary {
   id: string;
-  eventCount: number;
-  toolCallCount: number;
-  messageCount: number;
   startTimestamp: string;
   endTimestamp: string;
 }
@@ -153,9 +147,6 @@ function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummary | nul
   const record = asRecord(value);
   if (
     typeof record?.id !== "string" ||
-    typeof record.eventCount !== "number" ||
-    typeof record.toolCallCount !== "number" ||
-    typeof record.messageCount !== "number" ||
     typeof record.startTimestamp !== "string" ||
     typeof record.endTimestamp !== "string"
   ) {
@@ -164,9 +155,6 @@ function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummary | nul
 
   return {
     id: record.id,
-    eventCount: record.eventCount,
-    toolCallCount: record.toolCallCount,
-    messageCount: record.messageCount,
     startTimestamp: record.startTimestamp,
     endTimestamp: record.endTimestamp,
   };

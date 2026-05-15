@@ -261,11 +261,8 @@ export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
   endTimestamp: Scalars["DateTime"]["output"];
-  eventCount: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
-  messageCount: Scalars["Int"]["output"];
   startTimestamp: Scalars["DateTime"]["output"];
-  toolCallCount: Scalars["Int"]["output"];
 };
 
 export type ConnectionsBridge = {
@@ -2924,9 +2921,6 @@ export type SessionTimelineQuery = {
       collapsed?: {
         __typename?: "CollapsedSessionEvents";
         id: string;
-        eventCount: number;
-        toolCallCount: number;
-        messageCount: number;
         startTimestamp: string;
         endTimestamp: string;
       } | null;
@@ -6528,9 +6522,6 @@ export const SessionTimelineDocument = {
                           kind: "SelectionSet",
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "eventCount" } },
-                            { kind: "Field", name: { kind: "Name", value: "toolCallCount" } },
-                            { kind: "Field", name: { kind: "Name", value: "messageCount" } },
                             { kind: "Field", name: { kind: "Name", value: "startTimestamp" } },
                             { kind: "Field", name: { kind: "Name", value: "endTimestamp" } },
                           ],
