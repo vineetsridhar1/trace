@@ -2,7 +2,7 @@
 import { JsonValue } from "../../json";
 import { TypedDocumentNode as DocumentNode } from "@graphql-typed-document-node/core";
 export type Maybe<T> = T | null;
-export type InputMaybe<T> = Maybe<T>;
+export type InputMaybe<T> = T | null | undefined;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
@@ -1388,6 +1388,7 @@ export type QuerySessionGroupFilesArgs = {
 export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
   channelId: Scalars["ID"]["input"];
+  includeActiveMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
 };
 
@@ -2999,7 +3000,7 @@ export type InboxItemsQuery = {
 export type SidebarSessionGroupsQueryVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
-  status?: InputMaybe<SessionGroupStatus>;
+  includeActiveMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
 }>;
 
 export type SidebarSessionGroupsQuery = {
@@ -6780,8 +6781,8 @@ export const SidebarSessionGroupsDocument = {
         },
         {
           kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "status" } },
-          type: { kind: "NamedType", name: { kind: "Name", value: "SessionGroupStatus" } },
+          variable: { kind: "Variable", name: { kind: "Name", value: "includeActiveMerged" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
         },
       ],
       selectionSet: {
@@ -6803,8 +6804,8 @@ export const SidebarSessionGroupsDocument = {
               },
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "status" },
-                value: { kind: "Variable", name: { kind: "Name", value: "status" } },
+                name: { kind: "Name", value: "includeActiveMerged" },
+                value: { kind: "Variable", name: { kind: "Name", value: "includeActiveMerged" } },
               },
             ],
             selectionSet: {

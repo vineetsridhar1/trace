@@ -90,8 +90,12 @@ const INBOX_ITEMS_QUERY = gql`
 `;
 
 const SIDEBAR_SESSION_GROUPS_QUERY = gql`
-  query SidebarSessionGroups($channelId: ID!, $archived: Boolean, $status: SessionGroupStatus) {
-    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {
+  query SidebarSessionGroups($channelId: ID!, $archived: Boolean, $includeActiveMerged: Boolean) {
+    sessionGroups(
+      channelId: $channelId
+      archived: $archived
+      includeActiveMerged: $includeActiveMerged
+    ) {
       id
       name
       slug
@@ -249,24 +253,22 @@ export function useSidebarData() {
     async (channelIds: string[]) => {
       if (!activeOrgId || channelIds.length === 0) return;
       const results = await Promise.all(
-        channelIds.flatMap((channelId) => [
-          client.query(SIDEBAR_SESSION_GROUPS_QUERY, { channelId, archived: false }).toPromise(),
+        channelIds.map((channelId) =>
           client
-            .query(SIDEBAR_SESSION_GROUPS_QUERY, { channelId, archived: false, status: "merged" })
+            .query(SIDEBAR_SESSION_GROUPS_QUERY, {
+              channelId,
+              archived: false,
+              includeActiveMerged: true,
+            })
             .toPromise(),
-        ]),
+        ),
       );
 
-      const groupsById = new Map<string, SessionGroup & { id: string }>();
-      for (const result of results) {
-        const sessionGroups = result.data?.sessionGroups
+      const groups = results.flatMap((result) =>
+        result.data?.sessionGroups
           ? (result.data.sessionGroups as Array<SessionGroup & { id: string }>)
-          : [];
-        for (const group of sessionGroups) {
-          groupsById.set(group.id, group);
-        }
-      }
-      const groups = [...groupsById.values()];
+          : [],
+      );
       if (groups.length === 0) return;
 
       const entityState = useEntityStore.getState();

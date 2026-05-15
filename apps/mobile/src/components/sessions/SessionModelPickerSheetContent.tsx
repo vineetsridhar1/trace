@@ -72,7 +72,7 @@ export function SessionModelPickerSheetContent({
   const currentTool: CodingTool =
     tool === "codex" || tool === "pi" ? (tool as CodingTool) : "claude_code";
   const isTerminal =
-    worktreeDeleted === true || (sessionStatus === "merged" && worktreeDeleted !== false);
+    (worktreeDeleted === true || sessionStatus === "merged") && worktreeDeleted !== false;
   const isDisconnected = connection?.state === "disconnected";
   const canInteract = !isTerminal && !isDisconnected && agentStatus !== "active" && !isOptimistic;
   const canSelectModel = canInteract;

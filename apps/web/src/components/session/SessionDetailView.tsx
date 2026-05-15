@@ -433,12 +433,10 @@ export function SessionDetailView({
 
   const [showTerminal, setShowTerminal] = useState(false);
 
-  // Auto-close terminal when session enters a terminal state or worktree is deleted
+  // Auto-close terminal when session enters a terminal state — isTerminalStatus already
+  // covers worktree deletion via the third argument.
   useEffect(() => {
-    if (
-      (isTerminalStatus(agentStatus, sessionStatus, worktreeDeleted) || worktreeDeleted) &&
-      showTerminal
-    ) {
+    if (isTerminalStatus(agentStatus, sessionStatus, worktreeDeleted) && showTerminal) {
       setShowTerminal(false);
     }
   }, [agentStatus, sessionStatus, worktreeDeleted, showTerminal]);

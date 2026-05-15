@@ -109,7 +109,7 @@ export function SessionDefaultsSection() {
   };
 
   const handleAutoArchiveChange = async (value: string | null) => {
-    if (!value) return;
+    if (value !== "yes" && value !== "no") return;
     try {
       await saveDefaults({ autoArchiveMergedSessions: value === "yes" });
     } catch (error) {

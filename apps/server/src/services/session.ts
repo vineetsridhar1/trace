@@ -1811,7 +1811,7 @@ export class SessionService {
   async listGroups(
     channelId: string,
     organizationId: string,
-    options?: { archived?: boolean; status?: string },
+    options?: { archived?: boolean; status?: string; includeActiveMerged?: boolean },
   ) {
     const where: Record<string, unknown> = { channelId, organizationId };
 
@@ -1847,8 +1847,12 @@ export class SessionService {
     if (options?.status) {
       filtered = mapped.filter((g: MappedGroup) => g.status === options.status);
     } else if (!shouldIncludeArchived) {
-      // Default main table: exclude merged groups (server-side)
-      filtered = mapped.filter((g: MappedGroup) => g.status !== "merged");
+      // Default main table: exclude merged groups, except merged groups whose worktree
+      // is still retained when the caller opts in via includeActiveMerged.
+      filtered = mapped.filter((g: MappedGroup) => {
+        if (g.status !== "merged") return true;
+        return options?.includeActiveMerged === true && g.worktreeDeleted === false;
+      });
     }
 
     return filtered.sort((a: MappedGroup, b: MappedGroup) => {
@@ -3750,14 +3754,16 @@ export class SessionService {
     });
 
     const newAgentStatus: AgentStatus = "done";
+    // Preserve `merged` over `needs_input`: a question/plan from a follow-up run shouldn't
+    // erase the fact that the PR was already merged.
     const newSessionStatus: SessionStatus =
-      hasPendingPlan || hasQuestion
-        ? "needs_input"
-        : current.sessionStatus === "merged"
-          ? "merged"
-        : current.sessionStatus === "in_review"
-          ? "in_review"
-          : "in_progress";
+      current.sessionStatus === "merged"
+        ? "merged"
+        : hasPendingPlan || hasQuestion
+          ? "needs_input"
+          : current.sessionStatus === "in_review"
+            ? "in_review"
+            : "in_progress";
 
     const session = await prisma.session.update({
       where: { id },
@@ -3782,10 +3788,11 @@ export class SessionService {
       actorId: "system",
     });
 
-    // Create inbox item when complete() newly transitions to needs_input.
-    // Skip if recordOutput() already set needs_input (and created the inbox item).
-    if (newSessionStatus === "needs_input" && current.sessionStatus !== "needs_input") {
-      // Find the event that triggered needs_input to extract question/plan data
+    // Create inbox item when complete() observes a pending question/plan that hasn't been
+    // surfaced yet. Gated on the question/plan flag rather than newSessionStatus so that
+    // merged-but-retained sessions still raise an inbox item.
+    const hasPendingInput = hasPendingPlan || hasQuestion;
+    if (hasPendingInput && current.sessionStatus !== "needs_input") {
       const triggerEvent = recentEvents.find((evt: { payload: Prisma.JsonValue }) => {
         const p = evt.payload as Record<string, unknown>;
         return hasQuestionBlock(p) || hasPlanBlock(p);
@@ -3803,7 +3810,7 @@ export class SessionService {
       }
     }
 
-    if (newSessionStatus !== "needs_input") {
+    if (!hasPendingInput) {
       setImmediate(() => {
         void this.drainNextPendingOrQueuedMessage(id);
       });
@@ -7480,15 +7487,19 @@ export class SessionService {
     });
     if (group?.prUrl && group.prUrl !== prUrl) return;
 
-    const eventSession = await prisma.session.findUnique({
-      where: { id: eventSessionId },
-      select: {
-        createdBy: {
-          select: { autoArchiveMergedSessions: true },
-        },
-      },
+    // Only auto-archive if every distinct session creator in the group has opted in.
+    // A single opt-out preserves the worktree so the dissenting user's preference wins.
+    const groupCreators = await prisma.session.findMany({
+      where: { sessionGroupId },
+      select: { createdBy: { select: { autoArchiveMergedSessions: true } } },
+      distinct: ["createdById"],
     });
-    const shouldAutoArchive = eventSession?.createdBy?.autoArchiveMergedSessions ?? true;
+    const shouldAutoArchive =
+      groupCreators.length > 0 &&
+      groupCreators.every(
+        (entry: { createdBy: { autoArchiveMergedSessions: boolean } }) =>
+          entry.createdBy.autoArchiveMergedSessions,
+      );
 
     // Transition ALL sessions in the group to merged, not just the event session
     const { count } = await prisma.session.updateMany({
