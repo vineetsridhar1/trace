@@ -3,7 +3,11 @@ import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
-import { assertValidCommitSha } from "@trace/shared";
+import {
+  assertValidCommitSha,
+  generatedTraceWorktreeBranch,
+  shouldRepairRenamedTraceWorktreeBranch,
+} from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 import { formatGitError, gitEnv } from "./git-utils.js";
 
@@ -77,6 +81,16 @@ async function resetWorktreeToRef(worktreePath: string, ref: string): Promise<vo
   await execFileAsync("git", ["clean", "-ffdx"], { cwd: worktreePath });
 }
 
+async function switchWorktreeToBranch(
+  worktreePath: string,
+  branch: string,
+  baseRef: string | null,
+): Promise<void> {
+  await execFileAsync("git", ["checkout", "-f", "-B", branch, ...(baseRef ? [baseRef] : [])], {
+    cwd: worktreePath,
+  });
+}
+
 async function isUsableWorktree(worktreePath: string): Promise<boolean> {
   return execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: worktreePath }).then(
     ({ stdout }) => stdout.trim() === "true",
@@ -123,7 +137,7 @@ function resolveWorktreeBranch(
   startBranch: string | undefined,
   preserveBranchName: boolean | undefined,
 ): string {
-  const generatedBranch = `trace/${slug}`;
+  const generatedBranch = generatedTraceWorktreeBranch(slug);
   if (preserveBranchName && startBranch && startBranch !== generatedBranch) {
     return startBranch;
   }
@@ -208,21 +222,34 @@ export async function createWorktree({
   const baseRef =
     resolvedBaseRef === "HEAD" && !(await refExists(repoPath, "HEAD")) ? null : resolvedBaseRef;
 
-  // If the worktree directory already exists, reuse its branch name but reset
-  // Trace-owned contents to the requested remote/checkpoint state. A moved
-  // session may land on a stale local worktree whose branch tracks origin/main
-  // while the durable session branch exists at origin/trace/{slug}.
+  // If the worktree directory already exists, reuse the stable slug path and
+  // reset Trace-owned contents to the requested remote/checkpoint state. When a
+  // session's branch is renamed on another bridge, the old bridge may still have
+  // the slug worktree checked out to trace/{slug}; move that worktree to the
+  // persisted branch instead of failing the handoff.
   if (fs.existsSync(targetPath)) {
     const currentBranch = await getCurrentBranch(targetPath);
     if (currentBranch !== branch) {
-      throw new Error(
-        `Existing session worktree ${targetPath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branch}. ` +
-          "Switch it back or remove the worktree before retrying.",
+      const canRepairRenamedBranch = shouldRepairRenamedTraceWorktreeBranch({
+        currentBranch,
+        requestedBranch: branch,
+        persistedBranch: startBranch,
+        preserveBranchName,
+      });
+      if (!canRepairRenamedBranch) {
+        throw new Error(
+          `Existing session worktree ${targetPath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branch}. ` +
+            "Switch it back or remove the worktree before retrying.",
+        );
+      }
+      console.warn(
+        `[worktree] repairing renamed Trace worktree ${targetPath}: ${currentBranch} -> ${branch}`,
       );
+      await switchWorktreeToBranch(targetPath, branch, baseRef);
     }
     if (baseRef) {
       await resetWorktreeToRef(targetPath, baseRef);
-      await setUpstreamIfRemote(repoPath, currentBranch, baseRef);
+      await setUpstreamIfRemote(repoPath, branch, baseRef);
     }
     return { workdir: targetPath, branch, slug: worktreeSlug };
   }

@@ -153,6 +153,141 @@ describe("createWorktree", () => {
     );
   });
 
+  it("repairs an existing slug worktree when the persisted branch was renamed elsewhere", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(
+            args[2] === "origin/trace/compact-session-timeline" ? null : new Error("missing ref"),
+            "",
+          );
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "trace/otter\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (
+          args[0] === "checkout" ||
+          args[0] === "reset" ||
+          args[0] === "clean" ||
+          args[0] === "branch"
+        ) {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    const result = await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "otter",
+      defaultBranch: "main",
+      startBranch: "trace/compact-session-timeline",
+      preserveBranchName: true,
+    });
+
+    expect(result.branch).toBe("trace/compact-session-timeline");
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      [
+        "checkout",
+        "-f",
+        "-B",
+        "trace/compact-session-timeline",
+        "origin/trace/compact-session-timeline",
+      ],
+      expect.objectContaining({ cwd: expect.stringContaining("/trace/sessions/repo-1/otter") }),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", "origin/trace/compact-session-timeline"],
+      expect.objectContaining({ cwd: expect.stringContaining("/trace/sessions/repo-1/otter") }),
+      expect.any(Function),
+    );
+  });
+
+  it("rejects preserved branch mismatches that are not the generated Trace branch", async () => {
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(
+            args[2] === "origin/trace/compact-session-timeline" ? null : new Error("missing ref"),
+            "",
+          );
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(null, "feature/unrelated\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+
+    await expect(
+      createWorktree({
+        repoPath: "/tmp/repo",
+        repoId: "repo-1",
+        sessionId: "session-1",
+        slug: "otter",
+        defaultBranch: "main",
+        startBranch: "trace/compact-session-timeline",
+        preserveBranchName: true,
+      }),
+    ).rejects.toThrow("Existing session worktree");
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["checkout", expect.any(String), expect.any(String), expect.any(String), expect.any(String)],
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
+
   it("reuses a persisted renamed branch when recreating a missing worktree", async () => {
     existsSyncMock.mockReturnValue(false);
     generateAnimalSlugMock.mockReturnValue("otter");
