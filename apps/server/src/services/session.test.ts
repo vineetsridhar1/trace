@@ -111,6 +111,7 @@ import {
   getDefaultModel,
   getDefaultReasoningEffort,
   isSupportedReasoningEffort,
+  hasQuestionBlock,
   MAX_WORKSPACE_NAME_LENGTH,
 } from "@trace/shared";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
@@ -2291,6 +2292,54 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+
+    it("keeps merged status and still raises an inbox item when the follow-up run asks a question", async () => {
+      const questionPayload = {
+        message: { content: [{ type: "question", questions: [{ question: "Rename?" }] }] },
+      };
+      // Reset queues that earlier tests may have left primed — vi.clearAllMocks only
+      // clears call history, not mockResolvedValueOnce queues.
+      prismaMock.session.findUnique.mockReset();
+      prismaMock.event.findFirst.mockReset();
+      prismaMock.event.findMany.mockReset();
+      prismaMock.session.update.mockReset();
+
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "merged",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([{ payload: questionPayload }]);
+      prismaMock.session.update.mockResolvedValueOnce({
+        organizationId: "org-1",
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+      const hasQuestionBlockMock = vi.mocked(hasQuestionBlock);
+      hasQuestionBlockMock.mockReturnValue(true);
+
+      try {
+        await service.complete("session-1");
+      } finally {
+        hasQuestionBlockMock.mockReturnValue(false);
+      }
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { agentStatus: "done", sessionStatus: "merged" },
+        select: { organizationId: true, createdById: true, name: true },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_terminated",
+          payload: expect.objectContaining({
+            sessionStatus: "merged",
+          }),
+        }),
+      );
+      expect(inboxServiceMock.createItem).toHaveBeenCalled();
     });
   });
 
@@ -6444,6 +6493,9 @@ describe("SessionService", () => {
           ...makeSessionGroup({ prUrl, workdir: null, worktreeDeleted: true }),
           sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
         });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { createdBy: { autoArchiveMergedSessions: true } },
+      ]);
       prismaMock.session.updateMany.mockImplementation(
         async (args?: { data?: { workdir?: string | null } }) => {
           if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
@@ -6534,6 +6586,9 @@ describe("SessionService", () => {
         ...makeSessionGroup({ prUrl, workdir: currentWorkdir, worktreeDeleted: false }),
         sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
       });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { createdBy: { autoArchiveMergedSessions: true } },
+      ]);
       prismaMock.session.updateMany.mockImplementation(
         async (args?: { data?: { workdir?: string | null } }) => {
           if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
@@ -6571,16 +6626,18 @@ describe("SessionService", () => {
       );
     });
 
-    it("keeps the worktree when the session owner disables auto-archive on merge", async () => {
+    it("keeps the worktree when any contributor has disabled auto-archive", async () => {
       const prUrl = "https://github.com/trace/trace/pull/100";
 
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({ prUrl }).mockResolvedValueOnce({
         ...makeSessionGroup({ prUrl, workdir: "/tmp/trace/workspace", worktreeDeleted: false }),
         sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
       });
-      prismaMock.session.findUnique.mockResolvedValueOnce({
-        createdBy: { autoArchiveMergedSessions: false },
-      });
+      // Two distinct contributors — one opted out is enough to retain the worktree.
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { createdBy: { autoArchiveMergedSessions: true } },
+        { createdBy: { autoArchiveMergedSessions: false } },
+      ]);
       prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
       prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
 

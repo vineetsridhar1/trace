@@ -24,12 +24,18 @@ import { assertScopeAccess } from "../services/access.js";
 export const sessionQueries = {
   sessionGroups: (
     _: unknown,
-    args: { channelId: string; archived?: boolean | null; status?: string | null },
+    args: {
+      channelId: string;
+      archived?: boolean | null;
+      status?: string | null;
+      includeActiveMerged?: boolean | null;
+    },
     ctx: Context,
   ) => {
     return sessionService.listGroups(args.channelId, requireOrgContext(ctx), {
       archived: args.archived ?? undefined,
       status: args.status ?? undefined,
+      includeActiveMerged: args.includeActiveMerged ?? undefined,
     });
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
