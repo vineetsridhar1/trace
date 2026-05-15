@@ -6,10 +6,14 @@ import {
   handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
+  useScopedEvents,
   useScopedEventIds,
 } from "@trace/client-core";
 import { client } from "../lib/urql";
-import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
+import {
+  HIDDEN_SESSION_PAYLOAD_TYPES,
+  HIDDEN_SESSION_PAYLOAD_TYPE_SET,
+} from "../lib/session-event-filters";
 
 const PAGE_SIZE = 100;
 const SESSION_TIMELINE_QUERY = gql`
@@ -178,6 +182,42 @@ function isCompletedSessionEvent(event: Event): boolean {
   return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
 }
 
+function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
+  const message = asRecord(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return false;
+
+  return content.some((rawBlock) => {
+    const block = asRecord(rawBlock);
+    if (!block) return false;
+    if (block.type === "text") {
+      return typeof block.text === "string" && block.text.trim() !== "";
+    }
+    return block.type === "tool_use" || block.type === "plan" || block.type === "question";
+  });
+}
+
+function isRenderableCompactEvent(event: Event | undefined): event is Event & { id: string } {
+  if (!event || event.parentId) return false;
+
+  if (event.eventType === "session_started") {
+    const payload = payloadRecord(event);
+    return typeof payload?.prompt === "string" && payload.prompt.trim() !== "";
+  }
+  if (event.eventType === "message_sent") {
+    const payload = payloadRecord(event);
+    return typeof payload?.text === "string" && payload.text.trim() !== "";
+  }
+  if (event.eventType !== "session_output") return false;
+
+  const payload = payloadRecord(event);
+  if (!payload) return false;
+  const type = payload.type;
+  if (typeof type === "string" && HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(type)) return false;
+  if (type === "assistant" || type === "user") return hasRenderableContentBlock(payload);
+  return type === "result" || type === "error";
+}
+
 interface ParsedSessionTimelinePage {
   mode: SessionTimelineMode;
   hasOlder: boolean;
@@ -215,11 +255,20 @@ function parseSessionTimelinePage(value: unknown): ParsedSessionTimelinePage {
 
 function appendEventItem(
   current: SessionTimelineDisplayItem[] | null,
-  eventId: string,
+  event: Event & { id: string },
 ): SessionTimelineDisplayItem[] {
+  if (!isRenderableCompactEvent(event)) return current ?? [];
   const items = current ?? [];
-  if (items.some((item) => item.kind === "event" && item.id === eventId)) return items;
-  return [...items, { kind: "event" as const, id: eventId }];
+  if (items.some((item) => item.kind === "event" && item.id === event.id)) return items;
+  return [...items, { kind: "event" as const, id: event.id }];
+}
+
+function timelineItemEndTimestamp(
+  item: SessionTimelineDisplayItem,
+  events: Record<string, Event>,
+): string | null {
+  if (item.kind === "collapsed_events") return item.collapsed.endTimestamp;
+  return events[item.id]?.timestamp ?? null;
 }
 
 export function useSessionEvents(sessionId: string, options?: { skip?: boolean }) {
@@ -236,6 +285,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
   const hasOlderRef = useRef(true);
   const timelineModeRef = useRef<SessionTimelineMode>("live");
   const scopeKey = eventScopeKey("session", sessionId);
+  const scopedEvents = useScopedEvents(scopeKey);
 
   useEffect(() => {
     setTimelineMode("live");
@@ -331,7 +381,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         if (isCompletedSessionEvent(event)) {
           void fetchEvents();
         } else if (timelineModeRef.current === "compact") {
-          setCompactItems((current) => appendEventItem(current, event.id));
+          setCompactItems((current) => appendEventItem(current, event));
         }
       });
 
@@ -428,16 +478,54 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
   const eventIds = useScopedEventIds(scopeKey);
+  const compactEventIdSet = useMemo(() => {
+    if (!compactItems) return null;
+    const ids = new Set<string>();
+    for (const item of compactItems) {
+      if (item.kind === "event") ids.add(item.id);
+    }
+    return ids;
+  }, [compactItems]);
+  const compactTailTimestamp = useMemo(() => {
+    if (!compactItems || compactItems.length === 0) return null;
+    for (let i = compactItems.length - 1; i >= 0; i--) {
+      const timestamp = timelineItemEndTimestamp(compactItems[i], scopedEvents);
+      if (timestamp) return timestamp;
+    }
+    return null;
+  }, [compactItems, scopedEvents]);
+  const compactLiveTailItems = useMemo<SessionTimelineDisplayItem[]>(() => {
+    if (timelineMode !== "compact" || !compactEventIdSet || !compactTailTimestamp) return [];
+
+    const items: SessionTimelineDisplayItem[] = [];
+    for (const id of eventIds) {
+      if (compactEventIdSet.has(id)) continue;
+      const event = scopedEvents[id];
+      if (!isRenderableCompactEvent(event)) continue;
+      if (event.timestamp <= compactTailTimestamp) continue;
+      items.push({ kind: "event", id });
+    }
+    return items;
+  }, [compactEventIdSet, compactTailTimestamp, eventIds, scopedEvents, timelineMode]);
+  const displayCompactItems = useMemo(
+    () =>
+      compactItems
+        ? compactLiveTailItems.length > 0
+          ? [...compactItems, ...compactLiveTailItems]
+          : compactItems
+        : null,
+    [compactItems, compactLiveTailItems],
+  );
   const compactEventIds = useMemo(
-    () => compactItems?.filter((item) => item.kind === "event").map((item) => item.id) ?? [],
-    [compactItems],
+    () => displayCompactItems?.filter((item) => item.kind === "event").map((item) => item.id) ?? [],
+    [displayCompactItems],
   );
   const timelineItems = useMemo<SessionTimelineDisplayItem[]>(
     () =>
-      timelineMode === "compact" && compactItems
-        ? compactItems
+      timelineMode === "compact" && displayCompactItems
+        ? displayCompactItems
         : eventIds.map((id) => ({ kind: "event" as const, id })),
-    [compactItems, eventIds, timelineMode],
+    [displayCompactItems, eventIds, timelineMode],
   );
 
   return {
