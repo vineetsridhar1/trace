@@ -3,21 +3,24 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
-import { SessionMessage } from "./SessionMessage";
-import { ReadGlobGroup } from "./messages/ReadGlobGroup";
-import { PlanReviewCard } from "./messages/PlanReviewCard";
-import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
-import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
+import { SessionNodeRenderer } from "./SessionNodeRenderer";
+import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
+import type { CollapsedSessionEventsSummary } from "../../hooks/useSessionEvents";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { TraceLoader } from "../ui/trace-loader";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
 
+export type SessionListNode =
+  | SessionNode
+  | { kind: "collapsed-events"; id: string; collapsed: CollapsedSessionEventsSummary };
+
 export interface SessionMessageListProps {
   key?: React.Key;
-  nodes: SessionNode[];
+  sessionId: string;
+  nodes: SessionListNode[];
   gitCheckpoints: GitCheckpoint[];
   initialLoading?: boolean;
   hasOlder?: boolean;
@@ -34,6 +37,7 @@ export interface SessionMessageListProps {
 }
 
 export function SessionMessageList({
+  sessionId,
   nodes,
   gitCheckpoints,
   initialLoading = false,
@@ -82,7 +86,9 @@ export function SessionMessageList({
   const getItemKey = useCallback(
     (index: number) => {
       const node = nodes[index];
-      return node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id;
+      if (node.kind === "readglob-group") return `rg:${node.items[0].id}`;
+      if (node.kind === "collapsed-events") return node.id;
+      return node.id;
     },
     [nodes],
   );
@@ -295,9 +301,7 @@ export function SessionMessageList({
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   useEffect(() => {
     if (!scrollToEventId) return;
-    const targetIndex = nodes.findIndex(
-      (n) => n.kind !== "readglob-group" && n.id === scrollToEventId,
-    );
+    const targetIndex = nodes.findIndex((n) => "id" in n && n.id === scrollToEventId);
     if (targetIndex >= 0) {
       virtualizer.scrollToIndex(targetIndex, { align: "center", behavior: "smooth" });
       setHighlightEventId(scrollToEventId);
@@ -406,43 +410,24 @@ export function SessionMessageList({
                 }}
                 className="pb-3"
               >
-                {node.kind === "event" ? (
-                  <div
-                    data-event-id={node.id}
-                    className={
-                      highlightEventId === node.id
-                        ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500"
-                        : undefined
-                    }
-                  >
-                    <SessionMessage
-                      id={node.id}
-                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                      completedAgentTools={completedAgentTools}
-                      toolResultByUseId={toolResultByUseId}
-                    />
-                  </div>
-                ) : node.kind === "command-execution" ? (
-                  <CommandExecutionRow
-                    command={node.command}
-                    output={node.output}
-                    timestamp={node.timestamp}
-                    exitCode={node.exitCode}
+                {node.kind === "collapsed-events" ? (
+                  <CollapsedSessionEventsRow
+                    sessionId={sessionId}
+                    collapsed={node.collapsed}
+                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
                   />
-                ) : node.kind === "plan-review" ? (
-                  <PlanReviewCard
-                    commentable={node.id === activePlanId}
-                    comments={node.id === activePlanId ? planComments : undefined}
-                    onAddComment={onAddPlanComment}
-                    onRemoveComment={onRemovePlanComment}
-                    planContent={node.planContent}
-                    planFilePath={node.planFilePath}
-                    timestamp={node.timestamp}
-                  />
-                ) : node.kind === "ask-user-question" ? (
-                  <AskUserQuestionInline questions={node.questions} timestamp={node.timestamp} />
                 ) : (
-                  <ReadGlobGroup items={node.items} />
+                  <SessionNodeRenderer
+                    node={node}
+                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                    completedAgentTools={completedAgentTools}
+                    toolResultByUseId={toolResultByUseId}
+                    highlightEventId={highlightEventId}
+                    activePlanId={activePlanId}
+                    planComments={planComments}
+                    onAddPlanComment={onAddPlanComment}
+                    onRemovePlanComment={onRemovePlanComment}
+                  />
                 )}
               </div>
             );

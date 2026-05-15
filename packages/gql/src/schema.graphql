@@ -496,6 +496,36 @@ type Event {
   metadata: JSON
 }
 
+enum SessionTimelineMode {
+  live
+  compact
+}
+
+enum SessionTimelineItemKind {
+  event
+  collapsed_events
+}
+
+type CollapsedSessionEvents {
+  id: ID!
+  eventCount: Int!
+  startTimestamp: DateTime!
+  endTimestamp: DateTime!
+}
+
+type SessionTimelineItem {
+  id: ID!
+  kind: SessionTimelineItemKind!
+  event: Event
+  collapsed: CollapsedSessionEvents
+}
+
+type SessionTimelinePage {
+  mode: SessionTimelineMode!
+  items: [SessionTimelineItem!]!
+  hasOlder: Boolean!
+}
+
 type Message {
   id: ID!
   chatId: ID
@@ -1001,6 +1031,13 @@ type Query {
     limit: Int
     excludePayloadTypes: [String!]
   ): [Event!]!
+  sessionTimeline(
+    organizationId: ID!
+    sessionId: ID!
+    before: DateTime
+    limit: Int
+    excludePayloadTypes: [String!]
+  ): SessionTimelinePage!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!, sessionGroupId: ID): [SessionRuntimeInstance!]!
   myBridgeRuntimes: [BridgeRuntime!]!

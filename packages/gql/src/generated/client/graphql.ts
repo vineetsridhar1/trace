@@ -2,7 +2,7 @@
 import { JsonValue } from "../../json";
 import { TypedDocumentNode as DocumentNode } from "@graphql-typed-document-node/core";
 export type Maybe<T> = T | null;
-export type InputMaybe<T> = T | null | undefined;
+export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
@@ -257,6 +257,14 @@ export type ChatMember = {
 export type ChatType = "dm" | "group";
 
 export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
+
+export type CollapsedSessionEvents = {
+  __typename?: "CollapsedSessionEvents";
+  endTimestamp: Scalars["DateTime"]["output"];
+  eventCount: Scalars["Int"]["output"];
+  id: Scalars["ID"]["output"];
+  startTimestamp: Scalars["DateTime"]["output"];
+};
 
 export type ConnectionsBridge = {
   __typename?: "ConnectionsBridge";
@@ -1203,6 +1211,7 @@ export type Query = {
   sessionGroups: Array<SessionGroup>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
+  sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
@@ -1397,6 +1406,14 @@ export type QuerySessionSlashCommandsArgs = {
 };
 
 export type QuerySessionTerminalsArgs = {
+  sessionId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionTimelineArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };
 
@@ -1611,6 +1628,25 @@ export type SessionSearchResults = {
 };
 
 export type SessionStatus = "in_progress" | "in_review" | "merged" | "needs_input";
+
+export type SessionTimelineItem = {
+  __typename?: "SessionTimelineItem";
+  collapsed?: Maybe<CollapsedSessionEvents>;
+  event?: Maybe<Event>;
+  id: Scalars["ID"]["output"];
+  kind: SessionTimelineItemKind;
+};
+
+export type SessionTimelineItemKind = "collapsed_events" | "event";
+
+export type SessionTimelineMode = "compact" | "live";
+
+export type SessionTimelinePage = {
+  __typename?: "SessionTimelinePage";
+  hasOlder: Scalars["Boolean"]["output"];
+  items: Array<SessionTimelineItem>;
+  mode: SessionTimelineMode;
+};
 
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
@@ -2847,10 +2883,58 @@ export type OrgEventsSubscription = {
   };
 };
 
+export type SessionTimelineQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]> | Scalars["String"]["input"]>;
+}>;
+
+export type SessionTimelineQuery = {
+  __typename?: "Query";
+  sessionTimeline: {
+    __typename?: "SessionTimelinePage";
+    mode: SessionTimelineMode;
+    hasOlder: boolean;
+    items: Array<{
+      __typename?: "SessionTimelineItem";
+      id: string;
+      kind: SessionTimelineItemKind;
+      event?: {
+        __typename?: "Event";
+        id: string;
+        scopeType: ScopeType;
+        scopeId: string;
+        eventType: EventType;
+        payload: JsonValue;
+        parentId?: string | null;
+        timestamp: string;
+        metadata?: JsonValue | null;
+        actor: {
+          __typename?: "Actor";
+          type: ActorType;
+          id: string;
+          name?: string | null;
+          avatarUrl?: string | null;
+        };
+      } | null;
+      collapsed?: {
+        __typename?: "CollapsedSessionEvents";
+        id: string;
+        eventCount: number;
+        startTimestamp: string;
+        endTimestamp: string;
+      } | null;
+    }>;
+  };
+};
+
 export type SessionEventsQueryVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
   scope?: InputMaybe<ScopeInput>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]> | Scalars["String"]["input"]>;
 }>;
@@ -6311,6 +6395,152 @@ export const OrgEventsDocument = {
     },
   ],
 } as unknown as DocumentNode<OrgEventsSubscription, OrgEventsSubscriptionVariables>;
+export const SessionTimelineDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionTimeline" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "before" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "DateTime" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "excludePayloadTypes" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionTimeline" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "before" },
+                value: { kind: "Variable", name: { kind: "Name", value: "before" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "excludePayloadTypes" },
+                value: { kind: "Variable", name: { kind: "Name", value: "excludePayloadTypes" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "mode" } },
+                { kind: "Field", name: { kind: "Name", value: "hasOlder" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "items" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "kind" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "event" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "scopeType" } },
+                            { kind: "Field", name: { kind: "Name", value: "scopeId" } },
+                            { kind: "Field", name: { kind: "Name", value: "eventType" } },
+                            { kind: "Field", name: { kind: "Name", value: "payload" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "actor" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "type" } },
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                                ],
+                              },
+                            },
+                            { kind: "Field", name: { kind: "Name", value: "parentId" } },
+                            { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+                            { kind: "Field", name: { kind: "Name", value: "metadata" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "collapsed" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "eventCount" } },
+                            { kind: "Field", name: { kind: "Name", value: "startTimestamp" } },
+                            { kind: "Field", name: { kind: "Name", value: "endTimestamp" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionTimelineQuery, SessionTimelineQueryVariables>;
 export const SessionEventsDocument = {
   kind: "Document",
   definitions: [
@@ -6336,6 +6566,11 @@ export const SessionEventsDocument = {
           kind: "VariableDefinition",
           variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
           type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "after" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "DateTime" } },
         },
         {
           kind: "VariableDefinition",
@@ -6375,6 +6610,11 @@ export const SessionEventsDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "limit" },
                 value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "after" },
+                value: { kind: "Variable", name: { kind: "Name", value: "after" } },
               },
               {
                 kind: "Argument",

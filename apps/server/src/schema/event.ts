@@ -1,6 +1,7 @@
 import type { Context } from "../context.js";
 import type { ScopeInput, EventType } from "@trace/gql";
 import { eventService } from "../services/event.js";
+import { sessionTimelineService } from "../services/session-timeline.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { assertChannelAccess, assertChatAccess, assertScopeAccess } from "../services/access.js";
@@ -146,6 +147,33 @@ export const eventQueries = {
         return true;
       },
     );
+  },
+
+  sessionTimeline: async (
+    _: unknown,
+    args: {
+      organizationId: string;
+      sessionId: string;
+      before?: Date;
+      limit?: number;
+      excludePayloadTypes?: string[];
+    },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+
+    await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
+
+    return sessionTimelineService.query({
+      organizationId: args.organizationId,
+      sessionId: args.sessionId,
+      before: args.before,
+      limit: args.limit,
+      excludePayloadTypes: args.excludePayloadTypes,
+    });
   },
 };
 

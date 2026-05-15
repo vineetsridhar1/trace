@@ -32,6 +32,29 @@ export interface EventQueryOpts {
   excludePayloadTypes?: string[];
 }
 
+export function excludeSessionOutputPayloadTypesWhere(
+  excludePayloadTypes: string[] | undefined,
+): Prisma.EventWhereInput | undefined {
+  if (!excludePayloadTypes?.length) return undefined;
+
+  // Only exclude session_output events by payload.type discriminator.
+  // Using a bare NOT with JSON path filtering would exclude ALL events
+  // where payload.type is missing (NULL = 'x' -> NULL, NOT NULL -> NULL -> excluded),
+  // silently dropping message_sent, session_started, etc.
+  return {
+    NOT: {
+      AND: [
+        { eventType: "session_output" },
+        {
+          OR: excludePayloadTypes.map((type) => ({
+            payload: { path: ["type"], equals: type },
+          })),
+        },
+      ],
+    },
+  };
+}
+
 /**
  * session_output subtypes that carry metadata relevant to all clients
  * (sidebar status, session names, connection state, checkpoints).
@@ -204,22 +227,7 @@ export class EventService {
     if (opts.scopeId) where.scopeId = opts.scopeId;
     if (opts.types?.length) where.eventType = { in: opts.types };
     if (opts.excludeReplies) where.parentId = null;
-    if (opts.excludePayloadTypes?.length) {
-      // Only exclude session_output events by payload.type discriminator.
-      // Using a bare NOT with JSON path filtering would exclude ALL events
-      // where payload.type is missing (NULL = 'x' → NULL, NOT NULL → NULL → excluded),
-      // silently dropping message_sent, session_started, etc.
-      where.NOT = {
-        AND: [
-          { eventType: "session_output" },
-          {
-            OR: opts.excludePayloadTypes.map((t) => ({
-              payload: { path: ["type"], equals: t },
-            })),
-          },
-        ],
-      };
-    }
+    Object.assign(where, excludeSessionOutputPayloadTypesWhere(opts.excludePayloadTypes));
     const timestampFilter: Record<string, Date> = {};
     if (opts.after) timestampFilter.gt = opts.after;
     if (opts.before) timestampFilter.lt = opts.before;
