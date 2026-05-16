@@ -9,6 +9,8 @@ import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow"
 import type { CollapsedSessionEventsSummary } from "../../hooks/useSessionEvents";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { TraceLoader } from "../ui/trace-loader";
+import { PromptTimeline } from "./PromptTimeline";
+import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
@@ -23,11 +25,13 @@ export interface SessionMessageListProps {
   key?: React.Key;
   sessionId: string;
   nodes: SessionListNode[];
+  promptIndexItems: SessionPromptIndexItem[];
   gitCheckpoints: GitCheckpoint[];
   initialLoading?: boolean;
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
+  onLoadAroundEvent?: (eventId: string) => Promise<boolean>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   scrollToEventId?: string | null;
@@ -41,11 +45,13 @@ export interface SessionMessageListProps {
 export function SessionMessageList({
   sessionId,
   nodes,
+  promptIndexItems,
   gitCheckpoints,
   initialLoading = false,
   hasOlder,
   loadingOlder,
   onLoadOlder,
+  onLoadAroundEvent,
   completedAgentTools,
   toolResultByUseId,
   scrollToEventId,
@@ -67,6 +73,7 @@ export function SessionMessageList({
   const initialBottomAligningRef = useRef(false);
   const initialScrollTimeoutsRef = useRef<number[]>([]);
   const initialScrollFramesRef = useRef<number[]>([]);
+  const pendingTimelineAnchorRef = useRef<string | null>(null);
   const nodeCountRef = useRef(nodes.length);
   nodeCountRef.current = nodes.length;
 
@@ -277,30 +284,73 @@ export function SessionMessageList({
     }
   }, [nodes.length, virtualizer]);
 
-  // Scroll to a specific event when requested (e.g. from checkpoint panel)
+  // Scroll to a specific event when requested (e.g. from checkpoint panel or prompt timeline)
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
+  const [timelineScrollToEventId, setTimelineScrollToEventId] = useState<string | null>(null);
+  const [scrollIntentVersion, setScrollIntentVersion] = useState(0);
+  const requestedScrollToEventId = scrollToEventId ?? timelineScrollToEventId;
+
   useEffect(() => {
-    if (!scrollToEventId) return;
-    const targetIndex = nodes.findIndex((n) => "id" in n && n.id === scrollToEventId);
+    if (!requestedScrollToEventId) return;
+    const targetIndex = nodes.findIndex(
+      (n) => "id" in n && n.id === requestedScrollToEventId,
+    );
     if (targetIndex >= 0) {
-      virtualizer.scrollToIndex(targetIndex, { align: "center", behavior: "smooth" });
-      setHighlightEventId(scrollToEventId);
-      const timer = setTimeout(() => setHighlightEventId(null), 2000);
-      onScrollComplete?.();
-      return () => clearTimeout(timer);
+      const align = requestedScrollToEventId === scrollToEventId ? "center" : "start";
+      virtualizer.scrollToIndex(targetIndex, { align, behavior: "smooth" });
+      if (requestedScrollToEventId === scrollToEventId) {
+        setHighlightEventId(requestedScrollToEventId);
+        onScrollComplete?.();
+        const timer = setTimeout(() => setHighlightEventId(null), 2000);
+        return () => clearTimeout(timer);
+      } else {
+        setHighlightEventId(null);
+        setTimelineScrollToEventId(null);
+        pendingTimelineAnchorRef.current = null;
+      }
+      return;
+    }
+    if (
+      requestedScrollToEventId !== scrollToEventId &&
+      onLoadAroundEvent &&
+      pendingTimelineAnchorRef.current !== requestedScrollToEventId
+    ) {
+      pendingTimelineAnchorRef.current = requestedScrollToEventId;
+      void onLoadAroundEvent(requestedScrollToEventId)
+        .then((found) => {
+          pendingTimelineAnchorRef.current = null;
+          if (!found) {
+            setTimelineScrollToEventId((current) =>
+              current === requestedScrollToEventId ? null : current,
+            );
+          }
+        })
+        .catch(() => {
+          pendingTimelineAnchorRef.current = null;
+          setTimelineScrollToEventId((current) =>
+            current === requestedScrollToEventId ? null : current,
+          );
+        });
+      return;
     }
     // Target not in DOM yet — load older events if available
     if (hasOlder && onLoadOlder && !loadingOlder) {
       loadOlderPreservingScroll();
     } else if (!hasOlder) {
-      onScrollComplete?.();
+      if (requestedScrollToEventId === scrollToEventId) {
+        onScrollComplete?.();
+      } else {
+        setTimelineScrollToEventId(null);
+      }
     }
   }, [
+    requestedScrollToEventId,
     scrollToEventId,
     onScrollComplete,
     nodes,
     hasOlder,
     loadingOlder,
+    onLoadAroundEvent,
     onLoadOlder,
     loadOlderPreservingScroll,
     virtualizer,
@@ -329,7 +379,21 @@ export function SessionMessageList({
     return () => observer.disconnect();
   }, [loadOlderPreservingScroll, onLoadOlder]);
 
+  const handleUserScrollIntent = useCallback(() => {
+    setScrollIntentVersion((version) => version + 1);
+  }, []);
+
   const virtualItems = virtualizer.getVirtualItems();
+  const currentNodeIndex = (() => {
+    if (virtualItems.length === 0) return null;
+
+    const container = scrollContainerRef.current;
+    if (!container) return virtualItems[0].index;
+
+    const viewportAnchor = container.scrollTop + Math.min(container.clientHeight * 0.25, 180);
+    const currentItem = virtualItems.find((item) => item.start + item.size >= viewportAnchor);
+    return currentItem?.index ?? virtualItems[virtualItems.length - 1].index;
+  })();
   const firstVirtualItem = virtualItems[0];
   const lastVirtualItem = virtualItems[virtualItems.length - 1];
   const paddingTop = firstVirtualItem?.start ?? 0;
@@ -364,6 +428,15 @@ export function SessionMessageList({
   return (
     <div className="relative h-full">
       {showEmptyState ? emptyState : null}
+      {!showEmptyState ? (
+        <PromptTimeline
+          nodes={nodes}
+          prompts={promptIndexItems}
+          currentNodeIndex={currentNodeIndex}
+          scrollIntentVersion={scrollIntentVersion}
+          onSelectPrompt={setTimelineScrollToEventId}
+        />
+      ) : null}
 
       {loadingOlder && (
         <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex items-center justify-center">
@@ -374,8 +447,15 @@ export function SessionMessageList({
         </div>
       )}
 
-      <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 [overflow-anchor:none]">
-        <div className="[overflow-anchor:none]" style={{ minHeight: totalSize, width: "100%" }}>
+      <div
+        ref={scrollContainerRef}
+        className="h-full overflow-y-auto px-4 [overflow-anchor:none]"
+        onKeyDown={handleUserScrollIntent}
+        onPointerDown={handleUserScrollIntent}
+        onTouchStart={handleUserScrollIntent}
+        onWheel={handleUserScrollIntent}
+      >
+        <div className="w-full px-7 [overflow-anchor:none]" style={{ minHeight: totalSize }}>
           {/* Sentinel for infinite scroll - triggers loading older messages */}
           <div aria-hidden={paddingTop <= 0} className="relative" style={{ height: paddingTop }}>
             <div ref={sentinelRef} className="h-px w-px" />
