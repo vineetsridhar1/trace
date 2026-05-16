@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@trace/client-core";
-import { ExternalLink } from "lucide-react";
+import { CheckCircle2, CircleAlert, ExternalLink, Hash, MessageSquare } from "lucide-react";
 import { Button } from "../ui/button";
 
 type SlackSettings = {
@@ -60,51 +60,63 @@ export function IntegrationsSection() {
   }
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Slack</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Connect a Slack workspace, link Slack users to Trace users, and bind Slack channels to
-          Trace channels.
-        </p>
-      </div>
-
-      <div className="rounded-md border border-border bg-surface-elevated p-4">
+    <section className="space-y-3">
+      <div className="overflow-hidden rounded-md border border-border bg-surface-elevated">
         {loading && !settings ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <div className="p-4 text-sm text-muted-foreground">Loading...</div>
         ) : !settings?.configured ? (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Not configured</p>
-            <p className="text-sm text-muted-foreground">
-              Slack is disabled until the server has Slack credentials configured.
-            </p>
-            {settings?.missingConfig.length ? (
-              <p className="text-xs text-muted-foreground">
-                Missing: {settings.missingConfig.join(", ")}
+          <div className="flex items-start gap-3 p-4">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background/50">
+              <CircleAlert size={17} className="text-muted-foreground" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground">Slack</h2>
+                <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                  Not configured
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Slack is disabled until the server has Slack credentials configured.
               </p>
-            ) : null}
+              {settings?.missingConfig.length ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Missing: {settings.missingConfig.join(", ")}
+                </p>
+              ) : null}
+            </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {settings.install
-                    ? `Installed in ${settings.install.slackTeamName ?? settings.install.slackTeamId}`
-                    : "Configured, not installed"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {settings.install
-                    ? "Next, add Trace to a Slack channel and bind that channel to Trace."
-                    : "Install Slack for this Trace organization."}
-                </p>
+          <div>
+            <div className="flex items-start justify-between gap-4 p-4">
+              <div className="flex min-w-0 gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background/50">
+                  <MessageSquare size={17} className="text-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-semibold text-foreground">Slack</h2>
+                    {settings.install ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 text-xs text-foreground">
+                        <CheckCircle2 size={12} />
+                        Installed
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                        Ready to install
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {settings.install
+                      ? `Connected to ${settings.install.slackTeamName ?? settings.install.slackTeamId}.`
+                      : "Connect Slack to start Trace sessions from bound Slack channels."}
+                  </p>
+                </div>
               </div>
+
               {!settings.install && installUrl ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={openInstallUrl}
-                >
+                <Button size="sm" onClick={openInstallUrl}>
                   <ExternalLink size={14} />
                   Install
                 </Button>
@@ -112,34 +124,48 @@ export function IntegrationsSection() {
             </div>
 
             {settings.install ? (
-              <div className="rounded-md border border-border bg-background/40 px-3 py-2 text-sm text-muted-foreground">
-                In Slack, invite <span className="font-medium text-foreground">@Trace</span> to a
-                channel, then run <code className="text-foreground">/trace bind</code> in that
-                channel.
+              <div className="border-t border-border px-4 py-3">
+                <p className="text-xs font-medium text-muted-foreground">Next steps</p>
+                <div className="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
+                  <div>
+                    <span className="font-medium text-foreground">1. Invite Trace</span>
+                    <p>Run <code className="text-foreground">/invite @Trace</code> in Slack.</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">2. Bind channel</span>
+                    <p>Run <code className="text-foreground">/trace bind</code> in that channel.</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">3. Start sessions</span>
+                    <p>Mention <code className="text-foreground">@trace</code> with a prompt.</p>
+                  </div>
+                </div>
               </div>
             ) : null}
 
-            {settings.bindings.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Channel bindings
+            <div className="border-t border-border px-4 py-3">
+              {settings.bindings.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Channel bindings</p>
+                  {settings.bindings.map((binding) => (
+                    <div
+                      key={binding.id}
+                      className="flex items-center justify-between gap-3 rounded-md bg-background/40 px-3 py-2 text-sm"
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-2 text-muted-foreground">
+                        <Hash size={14} />
+                        <span className="truncate">{binding.slackChannelId}</span>
+                      </span>
+                      <span className="truncate text-foreground">{binding.traceChannel.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No Slack channels are bound yet.
                 </p>
-                {settings.bindings.map((binding) => (
-                  <div
-                    key={binding.id}
-                    className="flex items-center justify-between rounded-md border border-border bg-background/40 px-3 py-2 text-sm"
-                  >
-                    <span className="text-muted-foreground">{binding.slackChannelId}</span>
-                    <span className="text-foreground">{binding.traceChannel.name}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No Slack channels are bound yet. Use `/trace bind` in Slack after inviting Trace to
-                a channel.
-              </p>
-            )}
+              )}
+            </div>
           </div>
         )}
       </div>
