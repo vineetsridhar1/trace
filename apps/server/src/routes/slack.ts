@@ -1353,8 +1353,8 @@ async function handleAppMention(input: {
       slackTeamId: teamId,
       slackChannelId: channel,
       slackUserId,
-      threadTs,
-      text: "This Slack channel is not bound to a Trace channel yet.",
+      threadTs: event.thread_ts,
+      text: "This Slack channel is not connected to Trace yet. Bind it to a Trace channel before starting sessions here.",
     });
     return;
   }
