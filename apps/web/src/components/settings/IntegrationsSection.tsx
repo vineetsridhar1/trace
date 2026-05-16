@@ -122,11 +122,16 @@ export function IntegrationsSection() {
               ) : null}
             </div>
 
-            {settings.canInstall && installUrl ? (
+            {installUrl ? (
               <div className="space-y-2 rounded-md border border-border bg-background/40 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Install URL
-                </p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Install URL
+                  </p>
+                  {!settings.canInstall ? (
+                    <span className="text-xs text-muted-foreground">Org admin required</span>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2">
                   <code className="min-w-0 flex-1 truncate rounded bg-surface-deep px-2 py-1.5 text-xs text-foreground">
                     {installUrl}
@@ -136,6 +141,12 @@ export function IntegrationsSection() {
                     {copiedInstallUrl ? "Copied" : "Copy"}
                   </Button>
                 </div>
+                {!settings.canInstall ? (
+                  <p className="text-xs text-muted-foreground">
+                    Share this URL with an organization admin to install Slack for this Trace
+                    organization.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
