@@ -67,7 +67,13 @@ export const ChannelItem = memo(function ChannelItem({
 
   return (
     <>
-      <div ref={setNodeRef} style={style} className="relative" {...attributes} {...listeners}>
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="group/channel-item relative"
+        {...attributes}
+        {...listeners}
+      >
         <ContextMenu>
           <ContextMenuTrigger render={<div />}>
             <SidebarMenuItem>
@@ -144,7 +150,7 @@ export const ChannelItem = memo(function ChannelItem({
           <>
             <button
               type="button"
-              className="absolute right-8 top-1/2 z-20 flex h-5 w-9 -translate-y-1/2 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground"
+              className="pointer-events-none absolute right-8 top-1/2 z-20 flex h-5 w-9 -translate-y-1/2 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 opacity-0 transition-[opacity,color] group-hover/channel-item:pointer-events-auto group-hover/channel-item:opacity-100 group-focus-within/channel-item:pointer-events-auto group-focus-within/channel-item:opacity-100 hover:text-foreground"
               title="Toggle mine/all sessions"
               aria-label={`Sidebar sessions: ${sessionScope}`}
               onClick={(event) => {
