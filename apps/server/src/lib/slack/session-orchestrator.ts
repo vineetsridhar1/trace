@@ -119,6 +119,13 @@ export async function startSlackSession(
   }
 
   if (input.settings.hosting === "local") {
+    await sessionService.recordExternalUserMessage({
+      sessionId: session.id,
+      text: input.prompt,
+      actorId: input.actorUserId,
+      organizationId: input.organizationId,
+      clientSource: "slack",
+    });
     await sessionService.run(session.id, input.prompt, undefined, {
       userId: input.actorUserId,
       organizationId: input.organizationId,

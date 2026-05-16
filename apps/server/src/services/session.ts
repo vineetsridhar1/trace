@@ -3528,6 +3528,51 @@ export class SessionService {
     return updated;
   }
 
+  async recordExternalUserMessage(input: {
+    sessionId: string;
+    text: string;
+    actorId: string;
+    organizationId: string;
+    clientSource?: string | null;
+  }) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const session = await tx.session.findFirst({
+        where: { id: input.sessionId, organizationId: input.organizationId },
+        select: { id: true, worktreeDeleted: true },
+      });
+      if (!session) {
+        throw new Error("Session not found");
+      }
+      if (session.worktreeDeleted) {
+        throw new Error("Cannot record message: session worktree has been deleted");
+      }
+
+      await tx.session.update({
+        where: { id: input.sessionId },
+        data: {
+          lastMessageAt: new Date(),
+          lastUserMessageAt: new Date(),
+        },
+      });
+
+      return eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "message_sent",
+          payload: {
+            text: input.text,
+            clientSource: normalizeClientSource(input.clientSource),
+          },
+          actorType: "user",
+          actorId: input.actorId,
+        },
+        tx,
+      );
+    });
+  }
+
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
     return this.terminateWithStatus(id, "stopped", "Session stopped", actorType, actorId);
   }
