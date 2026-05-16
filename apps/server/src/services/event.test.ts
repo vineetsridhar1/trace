@@ -117,6 +117,39 @@ describe("EventService", () => {
     );
   });
 
+  it("keeps channel message events off the org-wide topic", async () => {
+    prismaMock.event.create.mockResolvedValueOnce({
+      id: "event-1",
+      organizationId: "org-1",
+      scopeType: "channel",
+      scopeId: "channel-1",
+      eventType: "message_sent",
+    });
+
+    const service = new EventService();
+    const event = await service.create({
+      organizationId: "org-1",
+      scopeType: "channel",
+      scopeId: "channel-1",
+      eventType: "message_sent",
+      payload: { message: { id: "message-1" } } as any,
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(pubsubMock.publish).toHaveBeenCalledTimes(1);
+    expect(pubsubMock.publish).toHaveBeenCalledWith("channel:channel-1:events", {
+      channelEvents: event,
+    });
+    expect(pubsubMock.publish).not.toHaveBeenCalledWith("org:org-1:events", expect.anything());
+    expect(redisMock.xadd).toHaveBeenCalledWith(
+      "stream:org:org-1:events",
+      "*",
+      "event",
+      JSON.stringify(event),
+    );
+  });
+
   it("queries events in chronological order even when paginating backwards", async () => {
     const older = { id: "older" };
     const newer = { id: "newer" };

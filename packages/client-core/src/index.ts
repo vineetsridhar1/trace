@@ -66,7 +66,7 @@ export type {
   RollbackOptimisticSessionPairParams,
 } from "./mutations/optimistic-session.js";
 
-export { handleOrgEvent, handleSessionEvent } from "./events/handlers.js";
+export { handleOrgEvent, handleSessionEvent, ORG_EVENT_TYPES } from "./events/handlers.js";
 export {
   extractMessagePreview,
   mergeGitCheckpoints,
