@@ -677,7 +677,7 @@ router.get("/bind-channel", async (req: Request, res: Response) => {
   if (state.slackUserId) {
     const account = await resolveSlackAccount(team, state.slackUserId);
     if (!account || account.userId !== userId) {
-      res.status(403).send(renderHtml("Bind Slack channel", "<h1>Link required</h1><p>Link this Slack user to your Trace account before binding the channel.</p>"));
+      res.status(403).send(renderBindRequiresLinkedAccount(team, state.slackUserId));
       return;
     }
   }
@@ -735,7 +735,7 @@ router.post("/bind-channel", express.urlencoded({ extended: false }), async (req
   if (state.slackUserId) {
     const account = await resolveSlackAccount(team, state.slackUserId);
     if (!account || account.userId !== userId) {
-      res.status(403).send(renderHtml("Bind Slack channel", "<h1>Link required</h1><p>Link this Slack user to your Trace account before binding the channel.</p>"));
+      res.status(403).send(renderBindRequiresLinkedAccount(team, state.slackUserId));
       return;
     }
   }
@@ -1029,6 +1029,14 @@ function buildAccountLinkUrl(slackTeamId: string, slackUserId: string): string {
     state,
   });
   return `${base}/slack/link?${params.toString()}`;
+}
+
+function renderBindRequiresLinkedAccount(slackTeamId: string, slackUserId: string): string {
+  const linkUrl = buildAccountLinkUrl(slackTeamId, slackUserId);
+  return renderHtml(
+    "Bind Slack channel",
+    `<h1>Link Slack first</h1><p>Connect this Slack user to your Trace account before binding the channel.</p><p><a class="button" href="${escapeHtml(linkUrl)}">Link Slack account</a></p>`,
+  );
 }
 
 async function postBindPrompt(input: {
