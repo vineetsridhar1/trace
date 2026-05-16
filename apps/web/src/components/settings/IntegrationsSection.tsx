@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@trace/client-core";
+import { Check, Copy, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "../ui/button";
 
 type SlackSettings = {
@@ -20,6 +22,16 @@ export function IntegrationsSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const [settings, setSettings] = useState<SlackSettings | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copiedInstallUrl, setCopiedInstallUrl] = useState(false);
+
+  const installPath = useMemo(
+    () => (activeOrgId ? `/slack/install?org=${encodeURIComponent(activeOrgId)}` : null),
+    [activeOrgId],
+  );
+  const installUrl = useMemo(() => {
+    if (!installPath) return null;
+    return `${window.location.origin}${installPath}`;
+  }, [installPath]);
 
   const fetchSettings = useCallback(async () => {
     if (!activeOrgId) return;
@@ -39,6 +51,18 @@ export function IntegrationsSection() {
   useEffect(() => {
     void fetchSettings();
   }, [fetchSettings]);
+
+  const copyInstallUrl = useCallback(async () => {
+    if (!installUrl) return;
+    try {
+      await navigator.clipboard.writeText(installUrl);
+      setCopiedInstallUrl(true);
+      window.setTimeout(() => setCopiedInstallUrl(false), 2000);
+      toast.success("Slack install URL copied");
+    } catch {
+      toast.error("Failed to copy Slack install URL");
+    }
+  }, [installUrl]);
 
   if (!activeOrgId) {
     return <p className="text-sm text-muted-foreground">Select an organization first.</p>;
@@ -89,13 +113,31 @@ export function IntegrationsSection() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    window.location.href = `/slack/install?org=${encodeURIComponent(activeOrgId)}`;
+                    if (installPath) window.location.href = installPath;
                   }}
                 >
+                  <ExternalLink size={14} />
                   {settings.install ? "Reinstall" : "Install"}
                 </Button>
               ) : null}
             </div>
+
+            {settings.canInstall && installUrl ? (
+              <div className="space-y-2 rounded-md border border-border bg-background/40 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Install URL
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded bg-surface-deep px-2 py-1.5 text-xs text-foreground">
+                    {installUrl}
+                  </code>
+                  <Button variant="outline" size="sm" onClick={() => void copyInstallUrl()}>
+                    {copiedInstallUrl ? <Check size={14} /> : <Copy size={14} />}
+                    {copiedInstallUrl ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {settings.bindings.length > 0 ? (
               <div className="space-y-2">
