@@ -947,6 +947,22 @@ async function resolveSlackChannelBinding(slackTeamId: string, slackChannelId: s
   });
 }
 
+async function canAccessTraceChannel(input: {
+  userId: string;
+  organizationId: string;
+  traceChannelId: string;
+}): Promise<boolean> {
+  const channel = await prisma.channel.findFirst({
+    where: {
+      id: input.traceChannelId,
+      organizationId: input.organizationId,
+      members: { some: { userId: input.userId, leftAt: null } },
+    },
+    select: { id: true },
+  });
+  return !!channel;
+}
+
 async function bindSlackChannel(input: {
   slackTeamId: string;
   slackChannelId: string;
@@ -1366,6 +1382,26 @@ async function handleAppMention(input: {
     });
     return;
   }
+  if (
+    !(await canAccessTraceChannel({
+      userId: traceUserId,
+      organizationId: install.organizationId,
+      traceChannelId: binding.traceChannelId,
+    }))
+  ) {
+    const client = await getSlackClient(teamId);
+    if (client) {
+      await client.chat
+        .postEphemeral({
+          channel,
+          user: slackUserId,
+          thread_ts: threadTs,
+          text: "Your Trace account does not have access to the Trace channel bound to this Slack channel.",
+        })
+        .catch(() => {});
+    }
+    return;
+  }
 
   const rawText = typeof event.text === "string" ? event.text : "";
   const parsed = parseSlackPrompt(stripBotMention(rawText, install.botUserId));
@@ -1472,7 +1508,7 @@ async function handleThreadMessage(input: {
         slackThreadTs: threadTs,
       },
     },
-    select: { sessionId: true, organizationId: true },
+    select: { sessionId: true, organizationId: true, session: { select: { channelId: true } } },
   });
   if (!thread) return;
 
@@ -1503,6 +1539,29 @@ async function handleThreadMessage(input: {
     select: { userId: true },
   });
   if (!membership) return;
+
+  const traceChannelId = thread.session.channelId;
+  if (
+    !traceChannelId ||
+    !(await canAccessTraceChannel({
+      userId: traceUserId,
+      organizationId: thread.organizationId,
+      traceChannelId,
+    }))
+  ) {
+    const client = await getSlackClient(teamId);
+    if (client) {
+      await client.chat
+        .postEphemeral({
+          channel,
+          user: slackUserId,
+          thread_ts: threadTs,
+          text: "Your Trace account does not have access to the Trace channel for this Slack thread.",
+        })
+        .catch(() => {});
+    }
+    return;
+  }
 
   const text = rawText.trim();
   if (!text) return;
@@ -1574,6 +1633,15 @@ async function startSlackSessionFromModal(input: {
   );
   if (!binding || binding.organizationId !== install.organizationId) {
     throw new Error("This Slack channel is not bound to a Trace channel");
+  }
+  if (
+    !(await canAccessTraceChannel({
+      userId: account.userId,
+      organizationId: install.organizationId,
+      traceChannelId: binding.traceChannelId,
+    }))
+  ) {
+    throw new Error("Your Trace account does not have access to the bound Trace channel");
   }
 
   const settings = validateSlackSessionConfig({
