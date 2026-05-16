@@ -95,11 +95,11 @@ export function IntegrationsSection() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {settings.install
-                    ? "Add Trace to Slack channels and bind each one to a Trace channel."
+                    ? "Next, add Trace to a Slack channel and bind that channel to Trace."
                     : "Install Slack for this Trace organization."}
                 </p>
               </div>
-              {installUrl ? (
+              {!settings.install && installUrl ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -110,6 +110,14 @@ export function IntegrationsSection() {
                 </Button>
               ) : null}
             </div>
+
+            {settings.install ? (
+              <div className="rounded-md border border-border bg-background/40 px-3 py-2 text-sm text-muted-foreground">
+                In Slack, invite <span className="font-medium text-foreground">@Trace</span> to a
+                channel, then run <code className="text-foreground">/trace bind</code> in that
+                channel.
+              </div>
+            ) : null}
 
             {settings.bindings.length > 0 ? (
               <div className="space-y-2">
