@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@trace/client-core";
-import { CheckCircle2, CircleAlert, ExternalLink, Hash, MessageSquare } from "lucide-react";
+import { CheckCircle2, CircleAlert, ExternalLink, Hash, MessageSquare, Unplug } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "../ui/button";
 
 type SlackSettings = {
@@ -21,6 +22,7 @@ export function IntegrationsSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const [settings, setSettings] = useState<SlackSettings | null>(null);
   const [loading, setLoading] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const installPath = useMemo(
     () => (activeOrgId ? `/slack/install?org=${encodeURIComponent(activeOrgId)}` : null),
@@ -54,6 +56,29 @@ export function IntegrationsSection() {
     if (!installUrl) return;
     window.open(installUrl, "_blank", "noopener,noreferrer");
   }, [installUrl]);
+
+  const disconnectSlack = useCallback(async () => {
+    if (!activeOrgId || !settings?.install) return;
+    if (!window.confirm("Disconnect Slack from this Trace organization?")) return;
+
+    setDisconnecting(true);
+    try {
+      const response = await fetch(`/slack/install?org=${encodeURIComponent(activeOrgId)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "Failed to disconnect Slack");
+      }
+      toast.success("Slack disconnected");
+      await fetchSettings();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to disconnect Slack");
+    } finally {
+      setDisconnecting(false);
+    }
+  }, [activeOrgId, fetchSettings, settings?.install]);
 
   if (!activeOrgId) {
     return <p className="text-sm text-muted-foreground">Select an organization first.</p>;
@@ -119,6 +144,16 @@ export function IntegrationsSection() {
                 <Button size="sm" onClick={openInstallUrl}>
                   <ExternalLink size={14} />
                   Install
+                </Button>
+              ) : settings.install && settings.canInstall ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={disconnecting}
+                  onClick={() => void disconnectSlack()}
+                >
+                  <Unplug size={14} />
+                  {disconnecting ? "Disconnecting" : "Disconnect"}
                 </Button>
               ) : null}
             </div>

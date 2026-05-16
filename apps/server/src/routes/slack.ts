@@ -810,6 +810,40 @@ router.get("/settings", async (req: Request, res: Response) => {
   });
 });
 
+router.delete("/install", async (req: Request, res: Response) => {
+  const organizationId = typeof req.query.org === "string" ? req.query.org : "";
+  const userId = await readAuthenticatedUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Not signed in" });
+    return;
+  }
+  if (!organizationId) {
+    res.status(400).json({ error: "Missing org" });
+    return;
+  }
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId } },
+    select: { role: true },
+  });
+  if (!membership || membership.role !== "admin") {
+    res.status(403).json({ error: "Org admin required" });
+    return;
+  }
+
+  const installs = await prisma.slackInstall.findMany({
+    where: { organizationId },
+    select: { slackTeamId: true },
+  });
+  const teamIds = installs.map((install) => install.slackTeamId);
+  if (teamIds.length === 0) {
+    res.json({ disconnected: false });
+    return;
+  }
+
+  await disconnectSlackTeams(teamIds, organizationId);
+  res.json({ disconnected: true });
+});
+
 type SlackEventEnvelope = {
   type?: string;
   challenge?: string;
@@ -1703,9 +1737,28 @@ async function handleMessage(input: {
   await handleThreadMessage({ teamId, event });
 }
 
+async function disconnectSlackTeams(teamIds: string[], organizationId?: string): Promise<void> {
+  if (teamIds.length === 0) return;
+  const teamWhere = { slackTeamId: { in: teamIds } };
+  await prisma.$transaction([
+    prisma.slackThreadSession.deleteMany({
+      where: { ...teamWhere, ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.slackChannelBinding.deleteMany({
+      where: { ...teamWhere, ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.slackAccount.deleteMany({ where: teamWhere }),
+    prisma.slackInstall.deleteMany({
+      where: { ...teamWhere, ...(organizationId ? { organizationId } : {}) },
+    }),
+  ]);
+  for (const teamId of teamIds) {
+    invalidateSlackClient(teamId);
+  }
+}
+
 async function handleUninstall(teamId: string): Promise<void> {
-  await prisma.slackInstall.deleteMany({ where: { slackTeamId: teamId } }).catch(() => {});
-  invalidateSlackClient(teamId);
+  await disconnectSlackTeams([teamId]).catch(() => {});
 }
 
 async function dispatchSlackEvent(envelope: SlackEventEnvelope): Promise<void> {
