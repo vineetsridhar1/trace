@@ -185,7 +185,7 @@ export const eventQueries = {
 
 export const eventSubscriptions = {
   orgEvents: {
-    subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    subscribe: (_: unknown, args: { organizationId: string; types?: string[] }, ctx: Context) => {
       const orgId = requireOrgContext(ctx);
       if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");
@@ -218,6 +218,10 @@ export const eventSubscriptions = {
             event.eventType === "chat_member_removed"
           ) {
             membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
+          }
+
+          if (args.types?.length && !args.types.includes(event.eventType)) {
+            return false;
           }
 
           if (event.scopeType === "chat") {
