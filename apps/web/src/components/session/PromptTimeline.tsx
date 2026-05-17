@@ -140,7 +140,7 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={{ opacity: 0, x: 8, scale: 0.98 }}
                     transition={{ duration: 0.16, ease: "easeOut" }}
-                    className="pointer-events-none absolute right-full top-1/2 mr-3 w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-3 text-left shadow-2xl shadow-foreground/15 backdrop-blur-xl"
+                    className="pointer-events-none absolute right-full top-1/2 mr-3 w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-3 text-left backdrop-blur-xl"
                   >
                     <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
