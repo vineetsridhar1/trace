@@ -19,10 +19,12 @@ interface PromptTimelineItem {
   timestamp: string;
   imageCount: number;
   widthPercent: number;
+  nodeIndex: number;
 }
 
 interface PromptTimelineProps {
   nodes: readonly PromptTimelineNode[];
+  currentNodeIndex: number | null;
   onSelectPrompt: (eventId: string) => void;
 }
 
@@ -72,7 +74,8 @@ function buildPromptTimelineItems(
   const items: PromptTimelineItem[] = [];
   const seen = new Set<string>();
 
-  for (const node of nodes) {
+  for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+    const node = nodes[nodeIndex];
     if (node.kind !== "event" || !node.id || seen.has(node.id)) continue;
     const event = events[node.id];
     if (!event) continue;
@@ -88,18 +91,30 @@ function buildPromptTimelineItems(
       timestamp: formatPromptTime(event.timestamp),
       imageCount: prompt.imageCount,
       widthPercent: markerWidth(node.id, items.length),
+      nodeIndex,
     });
   }
 
   return items;
 }
 
-export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
+export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: PromptTimelineProps) {
   const scopeKey = useEventScopeKey();
   const events = useScopedEvents(scopeKey);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const items = useMemo(() => buildPromptTimelineItems(nodes, events), [nodes, events]);
+  const currentPromptId = useMemo(() => {
+    if (items.length === 0 || currentNodeIndex == null) return null;
+
+    let current = items[0];
+    for (const item of items) {
+      if (item.nodeIndex > currentNodeIndex) break;
+      current = item;
+    }
+    return current.id;
+  }, [currentNodeIndex, items]);
+
   if (items.length === 0) return null;
 
   return (
@@ -107,6 +122,7 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
       <div className="relative flex w-14 flex-col items-end gap-0.5 px-1.5 py-2">
         {items.map((item, index) => {
           const active = activeId === item.id;
+          const highlighted = active || currentPromptId === item.id;
           return (
             <div key={item.id} className="relative flex w-full justify-end">
               <button
@@ -123,13 +139,13 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
                   layout
                   initial={false}
                   animate={{
-                    opacity: active ? 1 : 0.28,
+                    opacity: highlighted ? 1 : 0.28,
                     width: active ? "100%" : `${item.widthPercent}%`,
                   }}
                   transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
                   className={cn(
                     "h-0.5 rounded-full bg-white transition-shadow duration-200",
-                    active ? "shadow-lg shadow-white/35" : "shadow-none",
+                    highlighted ? "shadow-lg shadow-white/35" : "shadow-none",
                   )}
                 />
               </button>
