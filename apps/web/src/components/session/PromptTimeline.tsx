@@ -122,13 +122,14 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
                 <motion.span
                   layout
                   initial={false}
-                  animate={{ width: active ? "100%" : `${item.widthPercent}%` }}
+                  animate={{
+                    opacity: active ? 1 : 0.28,
+                    width: active ? "100%" : `${item.widthPercent}%`,
+                  }}
                   transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
                   className={cn(
-                    "h-1.5 rounded-full border transition-colors duration-200",
-                    active
-                      ? "border-white bg-white shadow-lg shadow-white/40"
-                      : "border-white/80 bg-white/85 shadow-md shadow-white/20 hover:bg-white",
+                    "h-1.5 rounded-full border border-white bg-white transition-shadow duration-200",
+                    active ? "shadow-lg shadow-white/35" : "shadow-none",
                   )}
                 />
               </button>
