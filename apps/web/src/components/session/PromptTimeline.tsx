@@ -103,8 +103,8 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute right-3 top-1/2 z-20 hidden max-h-[70vh] -translate-y-1/2 md:block">
-      <div className="relative flex w-24 flex-col items-end gap-2 px-2.5 py-3">
+    <div className="pointer-events-none absolute right-4 top-4 z-20 hidden max-h-[70vh] md:block">
+      <div className="relative flex w-28 flex-col items-end gap-2.5 px-2.5 py-3">
         {items.map((item, index) => {
           const active = activeId === item.id;
           return (
@@ -125,10 +125,10 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
                   animate={{ width: active ? "100%" : `${item.widthPercent}%` }}
                   transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
                   className={cn(
-                    "h-1.5 rounded-full border transition-colors duration-200",
+                    "h-2 rounded-full border transition-colors duration-200",
                     active
-                      ? "border-primary/50 bg-primary shadow-lg shadow-primary/25"
-                      : "border-foreground/10 bg-foreground/35 hover:bg-foreground/55",
+                      ? "border-white bg-white shadow-lg shadow-white/40"
+                      : "border-white/80 bg-white/85 shadow-md shadow-white/20 hover:bg-white",
                   )}
                 />
               </button>
