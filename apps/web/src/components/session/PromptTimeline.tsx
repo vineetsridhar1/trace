@@ -104,7 +104,7 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
 
   return (
     <div className="pointer-events-none absolute right-4 top-4 z-20 hidden max-h-[70vh] md:block">
-      <div className="relative flex w-20 flex-col items-end gap-1.5 px-1.5 py-2">
+      <div className="relative flex w-20 flex-col items-end gap-0.5 px-1.5 py-2">
         {items.map((item, index) => {
           const active = activeId === item.id;
           return (
@@ -117,7 +117,7 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
                 onMouseLeave={() => setActiveId(null)}
                 onFocus={() => setActiveId(item.id)}
                 onBlur={() => setActiveId(null)}
-                className="pointer-events-auto relative flex h-2.5 w-full cursor-pointer items-center justify-end rounded-full outline-none"
+                className="pointer-events-auto relative flex h-2 w-full cursor-pointer items-center justify-end rounded-full outline-none"
               >
                 <motion.span
                   layout
@@ -128,7 +128,7 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
                   }}
                   transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
                   className={cn(
-                    "h-1.5 rounded-full border border-white bg-white transition-shadow duration-200",
+                    "h-0.5 rounded-full bg-white transition-shadow duration-200",
                     active ? "shadow-lg shadow-white/35" : "shadow-none",
                   )}
                 />
