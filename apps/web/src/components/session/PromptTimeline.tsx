@@ -104,9 +104,7 @@ export function PromptTimeline({ nodes, onSelectPrompt }: PromptTimelineProps) {
 
   return (
     <div className="pointer-events-none absolute right-3 top-1/2 z-20 hidden max-h-[70vh] -translate-y-1/2 md:block">
-      <div className="relative flex w-24 flex-col items-end gap-2 rounded-full border border-border/50 bg-background/45 px-2.5 py-3 shadow-lg shadow-foreground/5 backdrop-blur-xl">
-        <div className="pointer-events-none absolute bottom-4 right-4 top-4 w-px rounded-full bg-border/60" />
-
+      <div className="relative flex w-24 flex-col items-end gap-2 px-2.5 py-3">
         {items.map((item, index) => {
           const active = activeId === item.id;
           return (
