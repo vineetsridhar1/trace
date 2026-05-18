@@ -12,6 +12,8 @@ import { TraceLoader } from "../ui/trace-loader";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
+const LIST_VERTICAL_PADDING = 16;
+const BEGINNING_LABEL_HEIGHT = 32;
 
 export type SessionListNode =
   | SessionNode
@@ -91,11 +93,33 @@ export function SessionMessageList({
     [nodes],
   );
 
+  const estimateNodeSize = useCallback(
+    (index: number) => {
+      const cached = sizeCacheRef.current.get(getItemKey(index));
+      if (cached != null) return cached;
+
+      const node = nodes[index];
+      if (!node) return 80;
+      if (node.kind === "command-execution") return 34;
+      if (node.kind === "readglob-group") return 34;
+      if (node.kind === "collapsed-events") return 28;
+      if (node.kind === "ask-user-question") return 120;
+      if (node.kind === "plan-review") return 320;
+      return 88;
+    },
+    [getItemKey, nodes],
+  );
+
+  const topPadding =
+    LIST_VERTICAL_PADDING + (!hasOlder && nodes.length > 0 ? BEGINNING_LABEL_HEIGHT : 0);
+
   const virtualizer = useVirtualizer({
     count: nodes.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
-    overscan: 18,
+    estimateSize: estimateNodeSize,
+    overscan: 24,
+    paddingStart: topPadding,
+    paddingEnd: LIST_VERTICAL_PADDING,
     getItemKey,
     useAnimationFrameWithResizeObserver: true,
     measureElement: (element: Element) => {
@@ -107,6 +131,17 @@ export function SessionMessageList({
       return height;
     },
   });
+
+  useLayoutEffect(() => {
+    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
+      const container = scrollContainerRef.current;
+      return !!container && item.end < container.scrollTop;
+    };
+
+    return () => {
+      virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+    };
+  }, [virtualizer]);
 
   // Track whether the user is near the bottom.
   const handleScroll = useCallback(() => {
@@ -170,36 +205,6 @@ export function SessionMessageList({
   }, [alignToBottomAfterMeasure, clearInitialScrollTimers]);
 
   useEffect(() => clearInitialScrollTimers, [clearInitialScrollTimers]);
-
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || typeof ResizeObserver === "undefined") return;
-
-    let frameId: number | null = null;
-    const observer = new ResizeObserver(() => {
-      if (frameId != null) {
-        window.cancelAnimationFrame(frameId);
-      }
-
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        virtualizer.measure();
-
-        const nodeCount = nodeCountRef.current;
-        if (nodeCount > 0 && (initialBottomAligningRef.current || isNearBottomRef.current)) {
-          virtualizer.scrollToIndex(nodeCount - 1, { align: "end" });
-        }
-      });
-    });
-
-    observer.observe(container);
-    return () => {
-      if (frameId != null) {
-        window.cancelAnimationFrame(frameId);
-      }
-      observer.disconnect();
-    };
-  }, [virtualizer]);
 
   const totalSize = virtualizer.getTotalSize();
 
@@ -371,22 +376,24 @@ export function SessionMessageList({
         </div>
       )}
 
-      <div
-        ref={scrollContainerRef}
-        className="h-full overflow-y-auto px-4 py-4 [overflow-anchor:none]"
-      >
-        {/* Sentinel for infinite scroll - triggers loading older messages */}
-        <div ref={sentinelRef} className="h-px" />
-
-        {!hasOlder && nodes.length > 0 && (
-          <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
-        )}
-
+      <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 [overflow-anchor:none]">
         {/* Absolute positioning keeps scroll height tied only to the virtualizer's total size. */}
         <div
           className="relative [overflow-anchor:none]"
           style={{ height: totalSize, width: "100%" }}
         >
+          {/* Sentinel for infinite scroll - triggers loading older messages */}
+          <div ref={sentinelRef} className="absolute left-0 top-0 h-px w-px" />
+
+          {!hasOlder && nodes.length > 0 && (
+            <div
+              className="absolute left-0 right-0 text-center text-xs text-muted-foreground"
+              style={{ top: LIST_VERTICAL_PADDING, height: BEGINNING_LABEL_HEIGHT }}
+            >
+              Beginning of session
+            </div>
+          )}
+
           {virtualItems.map(
             (virtualRow: { key: React.Key; index: number; start: number }) => {
               const node = nodes[virtualRow.index];
@@ -395,7 +402,7 @@ export function SessionMessageList({
                   key={virtualRow.key}
                   ref={virtualizer.measureElement}
                   data-index={virtualRow.index}
-                  className="absolute left-0 top-0 w-full pb-3"
+                  className="absolute left-0 top-0 w-full pb-3 will-change-transform"
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
                   {node.kind === "collapsed-events" ? (
