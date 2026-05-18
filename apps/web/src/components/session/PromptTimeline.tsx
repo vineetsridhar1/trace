@@ -112,7 +112,8 @@ export function PromptTimeline({
   const activePreviewTop = activePreview
     ? MARKER_LIST_PADDING_TOP_PX + activePreview.index * MARKER_ROW_STEP_PX - markerScrollTop
     : 0;
-  const activePreviewPlacement = activePreview?.index === 0 ? "below" : "center";
+  const activePreviewPlacement =
+    activePreview && activePreview.index < 2 ? "below" : "center";
 
   useEffect(() => {
     setSelectedId(null);
