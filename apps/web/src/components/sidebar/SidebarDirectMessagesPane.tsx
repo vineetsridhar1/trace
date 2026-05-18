@@ -22,7 +22,7 @@ export function SidebarDirectMessagesPane({
         <CreateChatDialog />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <SidebarMenu>
           {chatsLoading
             ? Array.from({ length: 3 }).map((_, index) => (
