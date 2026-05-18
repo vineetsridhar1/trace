@@ -118,7 +118,7 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
   if (items.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute right-4 top-4 z-20 hidden max-h-[70vh] md:block">
+    <div className="pointer-events-none absolute right-2 top-4 z-20 hidden max-h-[70vh] md:block">
       <div className="relative flex w-14 flex-col items-end gap-0.5 px-1.5 py-2">
         {items.map((item, index) => {
           const active = activeId === item.id;
