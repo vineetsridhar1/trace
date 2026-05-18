@@ -122,7 +122,7 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
       <div className="relative flex w-14 flex-col items-end gap-0.5 px-1.5 py-2">
         {items.map((item, index) => {
           const active = activeId === item.id;
-          const highlighted = active || currentPromptId === item.id;
+          const highlighted = active || (!activeId && currentPromptId === item.id);
           return (
             <div key={item.id} className="relative flex w-full justify-end">
               <button
