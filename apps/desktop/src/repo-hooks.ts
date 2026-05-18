@@ -5,6 +5,7 @@ import {
   installTraceGitHooks,
   uninstallTraceGitHooks,
 } from "@trace/shared/git-hooks";
+import { formatGitError } from "./git-utils.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 
 function getRunnerScriptPath(): string {
@@ -21,6 +22,19 @@ export async function installOrRepairRepoHooks(repoPath: string): Promise<TraceG
     runnerScriptPath: getRunnerScriptPath(),
   });
   return installTraceGitHooks(repoPath, runnerPath);
+}
+
+export async function installOrRepairRepoHooksBestEffort(
+  repoPath: string,
+  context: string,
+): Promise<void> {
+  try {
+    await installOrRepairRepoHooks(repoPath);
+  } catch (error) {
+    console.warn(
+      `[repo-hooks] failed to install Trace hooks during ${context} for ${repoPath}: ${formatGitError(error)}`,
+    );
+  }
 }
 
 export async function disableRepoHooks(repoPath: string): Promise<TraceGitHookStatus> {

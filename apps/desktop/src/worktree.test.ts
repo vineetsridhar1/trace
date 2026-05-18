@@ -5,6 +5,7 @@ const mkdirSyncMock = vi.fn();
 const execFileMock = vi.fn();
 const getUsedSlugsMock = vi.fn();
 const generateAnimalSlugMock = vi.fn();
+const installOrRepairRepoHooksBestEffortMock = vi.fn();
 
 vi.mock("fs", () => ({
   default: {
@@ -22,6 +23,10 @@ vi.mock("@trace/shared/animal-names", () => ({
   generateAnimalSlug: generateAnimalSlugMock,
 }));
 
+vi.mock("./repo-hooks.js", () => ({
+  installOrRepairRepoHooksBestEffort: installOrRepairRepoHooksBestEffortMock,
+}));
+
 describe("createWorktree", () => {
   beforeEach(() => {
     existsSyncMock.mockReset();
@@ -29,6 +34,7 @@ describe("createWorktree", () => {
     execFileMock.mockReset();
     getUsedSlugsMock.mockReset();
     generateAnimalSlugMock.mockReset();
+    installOrRepairRepoHooksBestEffortMock.mockReset();
   });
 
   afterEach(() => {
@@ -470,6 +476,62 @@ describe("createWorktree", () => {
       ],
       expect.objectContaining({ cwd: "/tmp/repo" }),
       expect.any(Function),
+    );
+  });
+
+  it("repairs Trace hooks best-effort after creating a worktree when hooks are enabled", async () => {
+    existsSyncMock.mockReturnValue(false);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    installOrRepairRepoHooksBestEffortMock.mockResolvedValue(undefined);
+
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout?: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/main" ? null : new Error("missing ref"));
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args.includes("worktree") && args.includes("add")) {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`));
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    const result = await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "otter",
+      defaultBranch: "main",
+      gitHooksEnabled: true,
+    });
+
+    expect(result.branch).toBe("trace/otter");
+    expect(installOrRepairRepoHooksBestEffortMock).toHaveBeenCalledWith(
+      expect.stringContaining("/trace/sessions/repo-1/otter"),
+      "session worktree creation",
     );
   });
 

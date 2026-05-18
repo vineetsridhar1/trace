@@ -40,6 +40,7 @@ vi.mock("./config.js", () => {
 
 vi.mock("./repo-hooks.js", () => ({
   installOrRepairRepoHooks: vi.fn(async () => undefined),
+  installOrRepairRepoHooksBestEffort: vi.fn(async () => undefined),
 }));
 
 import * as config from "./config.js";
