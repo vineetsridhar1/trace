@@ -8,7 +8,6 @@ import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
 import type { CollapsedSessionEventsSummary } from "../../hooks/useSessionEvents";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
-import { getSessionVirtualPadding } from "./sessionVirtualPadding";
 import { TraceLoader } from "../ui/trace-loader";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
@@ -96,7 +95,7 @@ export function SessionMessageList({
     count: nodes.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
-    overscan: 8,
+    overscan: 18,
     getItemKey,
     useAnimationFrameWithResizeObserver: true,
     measureElement: (element: Element) => {
@@ -332,7 +331,6 @@ export function SessionMessageList({
   }, [loadOlderPreservingScroll, onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
-  const { paddingTop, paddingBottom } = getSessionVirtualPadding(virtualItems, totalSize);
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
@@ -384,43 +382,45 @@ export function SessionMessageList({
           <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
         )}
 
-        {/* Visible rows stay in document flow; virtual padding preserves scroll height. */}
-        <div className="[overflow-anchor:none]" style={{ minHeight: totalSize, width: "100%" }}>
-          {paddingTop > 0 ? <div aria-hidden="true" style={{ height: paddingTop }} /> : null}
-
-          {virtualItems.map((virtualRow: { key: React.Key; index: number }) => {
-            const node = nodes[virtualRow.index];
-            return (
-              <div
-                key={virtualRow.key}
-                ref={virtualizer.measureElement}
-                data-index={virtualRow.index}
-                className="pb-3"
-              >
-                {node.kind === "collapsed-events" ? (
-                  <CollapsedSessionEventsRow
-                    sessionId={sessionId}
-                    collapsed={node.collapsed}
-                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                  />
-                ) : (
-                  <SessionNodeRenderer
-                    node={node}
-                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                    completedAgentTools={completedAgentTools}
-                    toolResultByUseId={toolResultByUseId}
-                    highlightEventId={highlightEventId}
-                    activePlanId={activePlanId}
-                    planComments={planComments}
-                    onAddPlanComment={onAddPlanComment}
-                    onRemovePlanComment={onRemovePlanComment}
-                  />
-                )}
-              </div>
-            );
-          })}
-
-          {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: paddingBottom }} /> : null}
+        {/* Absolute positioning keeps scroll height tied only to the virtualizer's total size. */}
+        <div
+          className="relative [overflow-anchor:none]"
+          style={{ height: totalSize, width: "100%" }}
+        >
+          {virtualItems.map(
+            (virtualRow: { key: React.Key; index: number; start: number }) => {
+              const node = nodes[virtualRow.index];
+              return (
+                <div
+                  key={virtualRow.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className="absolute left-0 top-0 w-full pb-3"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  {node.kind === "collapsed-events" ? (
+                    <CollapsedSessionEventsRow
+                      sessionId={sessionId}
+                      collapsed={node.collapsed}
+                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                    />
+                  ) : (
+                    <SessionNodeRenderer
+                      node={node}
+                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                      completedAgentTools={completedAgentTools}
+                      toolResultByUseId={toolResultByUseId}
+                      highlightEventId={highlightEventId}
+                      activePlanId={activePlanId}
+                      planComments={planComments}
+                      onAddPlanComment={onAddPlanComment}
+                      onRemovePlanComment={onRemovePlanComment}
+                    />
+                  )}
+                </div>
+              );
+            },
+          )}
         </div>
       </div>
     </div>
