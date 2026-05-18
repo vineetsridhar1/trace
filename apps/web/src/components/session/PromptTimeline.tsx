@@ -108,7 +108,7 @@ export function PromptTimeline({
   if (items.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute right-0 top-4 z-20 hidden max-h-[70vh] overflow-y-auto overscroll-contain md:block">
+    <div className="pointer-events-none absolute right-0 top-4 z-20 hidden max-h-[70vh] overflow-y-auto overscroll-contain [scrollbar-width:none] md:block [&::-webkit-scrollbar]:hidden">
       <div className="relative flex w-14 flex-col items-end gap-0.5 px-1.5 py-2">
         {items.map((item, index) => {
           const active = activeId === item.id;
