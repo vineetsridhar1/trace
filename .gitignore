@@ -25,3 +25,5 @@ apps/mobile/app/**/*.js.map
 apps/mobile/app/**/*.d.ts
 apps/mobile/app/**/*.d.ts.map
 package-lock.json
+
+/sessions/
