@@ -102,6 +102,7 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
   const scopeKey = useEventScopeKey();
   const events = useScopedEvents(scopeKey);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const items = useMemo(() => buildPromptTimelineItems(nodes, events), [nodes, events]);
   const currentPromptId = useMemo(() => {
@@ -115,6 +116,8 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
     return current.id;
   }, [currentNodeIndex, items]);
 
+  const selectedPromptId = selectedId && items.some((item) => item.id === selectedId) ? selectedId : null;
+
   if (items.length === 0) return null;
 
   return (
@@ -122,13 +125,19 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
       <div className="relative flex w-14 flex-col items-end gap-0.5 px-1.5 py-2">
         {items.map((item, index) => {
           const active = activeId === item.id;
-          const highlighted = active || (!activeId && currentPromptId === item.id);
+          const highlighted =
+            active ||
+            (!activeId && selectedPromptId === item.id) ||
+            (!activeId && !selectedPromptId && currentPromptId === item.id);
           return (
             <div key={item.id} className="relative flex w-full justify-end">
               <button
                 type="button"
                 aria-label={`Jump to prompt ${index + 1}`}
-                onClick={() => onSelectPrompt(item.id)}
+                onClick={() => {
+                  setSelectedId(item.id);
+                  onSelectPrompt(item.id);
+                }}
                 onMouseEnter={() => setActiveId(item.id)}
                 onMouseLeave={() => setActiveId(null)}
                 onFocus={() => setActiveId(item.id)}
