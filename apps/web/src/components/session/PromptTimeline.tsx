@@ -6,7 +6,7 @@ import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
 
 const MARKER_ROW_STEP_PX = 10;
 const MARKER_LIST_PADDING_TOP_PX = 8;
-const PREVIEW_CARD_EDGE_GUARD_PX = 72;
+const PREVIEW_CARD_TOP_PLACEMENT_PX = 72;
 
 interface PromptTimelineNode {
   kind: string;
@@ -110,6 +110,11 @@ export function PromptTimeline({
         .map((item, index) => ({ item, index }))
         .find((entry) => entry.item.id === activeId) ?? null
     : null;
+  const activePreviewTop = activePreview
+    ? MARKER_LIST_PADDING_TOP_PX + activePreview.index * MARKER_ROW_STEP_PX - markerScrollTop
+    : 0;
+  const activePreviewPlacement =
+    activePreviewTop < PREVIEW_CARD_TOP_PLACEMENT_PX ? "below" : "center";
 
   useEffect(() => {
     setSelectedId(null);
@@ -173,13 +178,12 @@ export function PromptTimeline({
             exit={{ opacity: 0, x: 8, scale: 0.98 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
             style={{
-              top: `clamp(${PREVIEW_CARD_EDGE_GUARD_PX}px, ${
-                MARKER_LIST_PADDING_TOP_PX +
-                activePreview.index * MARKER_ROW_STEP_PX -
-                markerScrollTop
-              }px, calc(70vh - ${PREVIEW_CARD_EDGE_GUARD_PX}px))`,
+              top: activePreviewTop,
             }}
-            className="pointer-events-none absolute right-full mr-3 w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-3 text-left backdrop-blur-xl"
+            className={cn(
+              "pointer-events-none absolute right-full mr-3 w-72 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-3 text-left backdrop-blur-xl",
+              activePreviewPlacement === "below" ? "translate-y-0" : "-translate-y-1/2",
+            )}
           >
             <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
               <span className="truncate">{activePreview.item.actorName}</span>
