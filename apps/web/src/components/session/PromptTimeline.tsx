@@ -1,25 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { ImageIcon } from "lucide-react";
-import { cn } from "../../lib/utils";
 import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
+import { PromptTimelineMarkerList } from "./PromptTimelineMarkerList";
+import { PromptTimelinePreviewCard } from "./PromptTimelinePreviewCard";
+import type { PromptTimelineItem } from "./promptTimelineTypes";
 
 const MARKER_ROW_STEP_PX = 10;
 const MARKER_LIST_PADDING_TOP_PX = 8;
+const TOP_VISIBLE_PREVIEW_PLACEMENT_PX = 24;
 
 interface PromptTimelineNode {
   kind: string;
   id?: string;
-}
-
-interface PromptTimelineItem {
-  id: string;
-  text: string;
-  actorName: string;
-  timestamp: string;
-  imageCount: number;
-  widthPercent: number;
-  nodeIndex: number | null;
 }
 
 interface PromptTimelineProps {
@@ -74,6 +65,21 @@ function buildPromptTimelineItems(
   }));
 }
 
+function currentPromptIdForNode(
+  items: readonly PromptTimelineItem[],
+  currentNodeIndex: number | null,
+): string | null {
+  if (items.length === 0 || currentNodeIndex == null) return null;
+
+  let current: PromptTimelineItem | null = null;
+  for (const item of items) {
+    if (item.nodeIndex == null) continue;
+    if (item.nodeIndex > currentNodeIndex) break;
+    current = item;
+  }
+  return current?.id ?? null;
+}
+
 export function PromptTimeline({
   nodes,
   prompts,
@@ -90,18 +96,10 @@ export function PromptTimeline({
     () => buildPromptTimelineItems(prompts, nodeIndexByEventId),
     [nodeIndexByEventId, prompts],
   );
-  const currentPromptId = useMemo(() => {
-    if (items.length === 0 || currentNodeIndex == null) return null;
-
-    let current: PromptTimelineItem | null = null;
-    for (const item of items) {
-      if (item.nodeIndex == null) continue;
-      if (item.nodeIndex > currentNodeIndex) break;
-      current = item;
-    }
-    return current?.id ?? null;
-  }, [currentNodeIndex, items]);
-
+  const currentPromptId = useMemo(
+    () => currentPromptIdForNode(items, currentNodeIndex),
+    [currentNodeIndex, items],
+  );
   const selectedPromptId =
     selectedId && items.some((item) => item.id === selectedId) ? selectedId : null;
   const activePreview = activeId
@@ -113,7 +111,7 @@ export function PromptTimeline({
     ? MARKER_LIST_PADDING_TOP_PX + activePreview.index * MARKER_ROW_STEP_PX - markerScrollTop
     : 0;
   const activePreviewPlacement =
-    activePreview && activePreview.index < 2 ? "below" : "center";
+    activePreviewTop < TOP_VISIBLE_PREVIEW_PLACEMENT_PX ? "below" : "center";
 
   useEffect(() => {
     setSelectedId(null);
@@ -123,87 +121,23 @@ export function PromptTimeline({
 
   return (
     <div className="pointer-events-none absolute right-0 top-4 z-20 hidden md:block">
-      <div
-        className="max-h-[70vh] overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        onScroll={(event) => setMarkerScrollTop(event.currentTarget.scrollTop)}
-      >
-        <div className="relative flex w-14 flex-col items-end gap-0.5 px-1.5 py-2">
-          {items.map((item, index) => {
-            const active = activeId === item.id;
-            const highlighted =
-              active ||
-              (!activeId && selectedPromptId === item.id) ||
-              (!activeId && !selectedPromptId && currentPromptId === item.id);
-            return (
-              <div key={item.id} className="relative flex w-full justify-end">
-                <button
-                  type="button"
-                  aria-label={`Jump to prompt ${index + 1}`}
-                  onClick={() => {
-                    setSelectedId(item.id);
-                    onSelectPrompt(item.id);
-                  }}
-                  onMouseEnter={() => setActiveId(item.id)}
-                  onMouseLeave={() => setActiveId(null)}
-                  onFocus={() => setActiveId(item.id)}
-                  onBlur={() => setActiveId(null)}
-                  className="pointer-events-auto relative flex h-2 w-full cursor-pointer items-center justify-end rounded-full outline-none"
-                >
-                  <motion.span
-                    layout
-                    initial={false}
-                    animate={{
-                      opacity: highlighted ? 1 : 0.28,
-                      width: active ? "72%" : `${item.widthPercent}%`,
-                    }}
-                    transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
-                    className={cn(
-                      "h-0.5 rounded-full bg-white transition-shadow duration-200",
-                      highlighted ? "shadow-lg shadow-white/35" : "shadow-none",
-                    )}
-                  />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {activePreview ? (
-          <motion.div
-            initial={{ opacity: 0, x: 10, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 8, scale: 0.98 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
-            style={{
-              top: activePreviewTop,
-            }}
-            className={cn(
-              "pointer-events-none absolute right-full mr-3 w-72 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-3 text-left backdrop-blur-xl",
-              activePreviewPlacement === "below" ? "translate-y-0" : "-translate-y-1/2",
-            )}
-          >
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-              <span className="truncate">{activePreview.item.actorName}</span>
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-              <span>{activePreview.item.timestamp}</span>
-            </div>
-            <p className="max-h-24 overflow-hidden text-sm leading-5 text-foreground">
-              {activePreview.item.text}
-            </p>
-            {activePreview.item.imageCount > 0 ? (
-              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <ImageIcon size={12} />
-                <span>
-                  {activePreview.item.imageCount} image
-                  {activePreview.item.imageCount === 1 ? "" : "s"}
-                </span>
-              </div>
-            ) : null}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      <PromptTimelineMarkerList
+        items={items}
+        activeId={activeId}
+        selectedPromptId={selectedPromptId}
+        currentPromptId={currentPromptId}
+        onActiveChange={setActiveId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          onSelectPrompt(id);
+        }}
+        onScroll={setMarkerScrollTop}
+      />
+      <PromptTimelinePreviewCard
+        preview={activePreview}
+        top={activePreviewTop}
+        placement={activePreviewPlacement}
+      />
     </div>
   );
 }

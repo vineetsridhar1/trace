@@ -119,35 +119,24 @@ export function useSessionPromptIndex(sessionId: string, options?: { skip?: bool
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const scopedEvents = useScopedEvents(eventScopeKey("session", sessionId));
   const [fetchedItems, setFetchedItems] = useState<SessionPromptIndexItem[]>([]);
-  const [loading, setLoading] = useState(!skip);
-  const [error, setError] = useState<string | null>(null);
 
   const fetchPromptIndex = useCallback(async () => {
     if (skip || !activeOrgId) return;
 
-    setLoading(true);
-    setError(null);
     const result = await client
       .query(SESSION_PROMPT_INDEX_QUERY, { organizationId: activeOrgId, sessionId })
       .toPromise();
 
     if (result.error) {
-      setError(result.error.message);
-      setLoading(false);
       return;
     }
 
     setFetchedItems(parsePromptIndex(asRecord(result.data)?.sessionPromptIndex));
-    setLoading(false);
   }, [activeOrgId, sessionId, skip]);
 
   useEffect(() => {
     setFetchedItems([]);
-    setError(null);
-    if (skip) {
-      setLoading(false);
-      return;
-    }
+    if (skip) return;
     void fetchPromptIndex();
   }, [fetchPromptIndex, skip]);
 
@@ -165,5 +154,5 @@ export function useSessionPromptIndex(sessionId: string, options?: { skip?: bool
     });
   }, [fetchedItems, scopedEvents]);
 
-  return { items, loading, error, refetch: fetchPromptIndex };
+  return { items };
 }
