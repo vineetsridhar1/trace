@@ -6,6 +6,7 @@ import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
 
 const MARKER_ROW_STEP_PX = 10;
 const MARKER_LIST_PADDING_TOP_PX = 8;
+const PREVIEW_CARD_EDGE_GUARD_PX = 72;
 
 interface PromptTimelineNode {
   kind: string;
@@ -172,10 +173,11 @@ export function PromptTimeline({
             exit={{ opacity: 0, x: 8, scale: 0.98 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
             style={{
-              top:
+              top: `clamp(${PREVIEW_CARD_EDGE_GUARD_PX}px, ${
                 MARKER_LIST_PADDING_TOP_PX +
                 activePreview.index * MARKER_ROW_STEP_PX -
-                markerScrollTop,
+                markerScrollTop
+              }px, calc(70vh - ${PREVIEW_CARD_EDGE_GUARD_PX}px))`,
             }}
             className="pointer-events-none absolute right-full mr-3 w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-3 text-left backdrop-blur-xl"
           >
