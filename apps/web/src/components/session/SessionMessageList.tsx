@@ -8,11 +8,12 @@ import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
 import type { CollapsedSessionEventsSummary } from "../../hooks/useSessionEvents";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
-import { getSessionVirtualPadding } from "./sessionVirtualPadding";
 import { TraceLoader } from "../ui/trace-loader";
 
 // DetailPanel animates flex-basis for 300ms; the final pass runs just after it settles.
 const INITIAL_SCROLL_SETTLE_DELAYS = [0, 80, 180, 360] as const;
+const LIST_VERTICAL_PADDING = 16;
+const BEGINNING_LABEL_HEIGHT = 32;
 
 export type SessionListNode =
   | SessionNode
@@ -62,8 +63,6 @@ export function SessionMessageList({
   const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
   const hasScrolledInitiallyRef = useRef(false);
-  const isScrollingUpRef = useRef(false);
-  const lastScrollTopRef = useRef(0);
   const sizeCacheRef = useRef(new Map<string, number>());
   const initialBottomAligningRef = useRef(false);
   const initialScrollTimeoutsRef = useRef<number[]>([]);
@@ -94,11 +93,33 @@ export function SessionMessageList({
     [nodes],
   );
 
+  const estimateNodeSize = useCallback(
+    (index: number) => {
+      const cached = sizeCacheRef.current.get(getItemKey(index));
+      if (cached != null) return cached;
+
+      const node = nodes[index];
+      if (!node) return 80;
+      if (node.kind === "command-execution") return 34;
+      if (node.kind === "readglob-group") return 34;
+      if (node.kind === "collapsed-events") return 28;
+      if (node.kind === "ask-user-question") return 120;
+      if (node.kind === "plan-review") return 320;
+      return 88;
+    },
+    [getItemKey, nodes],
+  );
+
+  const topPadding =
+    LIST_VERTICAL_PADDING + (!hasOlder && nodes.length > 0 ? BEGINNING_LABEL_HEIGHT : 0);
+
   const virtualizer = useVirtualizer({
     count: nodes.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
-    overscan: 8,
+    estimateSize: estimateNodeSize,
+    overscan: 24,
+    paddingStart: topPadding,
+    paddingEnd: LIST_VERTICAL_PADDING,
     getItemKey,
     useAnimationFrameWithResizeObserver: true,
     measureElement: (element: Element) => {
@@ -111,15 +132,18 @@ export function SessionMessageList({
     },
   });
 
-  // Track whether the user is near the bottom and scroll direction
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
+    const container = scrollContainerRef.current;
+    return !!container && item.end < container.scrollTop;
+  };
+
+  // Track whether the user is near the bottom.
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     isNearBottomRef.current = distanceFromBottom < 100;
-    isScrollingUpRef.current = container.scrollTop < lastScrollTopRef.current;
-    lastScrollTopRef.current = container.scrollTop;
   }, []);
 
   useEffect(() => {
@@ -176,77 +200,31 @@ export function SessionMessageList({
 
   useEffect(() => clearInitialScrollTimers, [clearInitialScrollTimers]);
 
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || typeof ResizeObserver === "undefined") return;
-
-    let frameId: number | null = null;
-    const observer = new ResizeObserver(() => {
-      if (frameId != null) {
-        window.cancelAnimationFrame(frameId);
-      }
-
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        virtualizer.measure();
-
-        const nodeCount = nodeCountRef.current;
-        if (nodeCount > 0 && (initialBottomAligningRef.current || isNearBottomRef.current)) {
-          virtualizer.scrollToIndex(nodeCount - 1, { align: "end" });
-        }
-      });
-    });
-
-    observer.observe(container);
-    return () => {
-      if (frameId != null) {
-        window.cancelAnimationFrame(frameId);
-      }
-      observer.disconnect();
-    };
-  }, [virtualizer]);
-
-  // Correct scroll position when measurements change during upward scroll.
-  // When items above the viewport are measured for the first time, the total
-  // virtual height changes, which shifts content and causes visible jumps.
-  // We detect the height delta and compensate by adjusting scrollTop.
-  const prevTotalSizeRef = useRef(0);
-  const prevNodeCountForCorrectionRef = useRef(nodes.length);
   const totalSize = virtualizer.getTotalSize();
 
-  useLayoutEffect(() => {
+  const captureScrollSnapshot = useCallback(() => {
     const container = scrollContainerRef.current;
-    if (!container || !hasScrolledInitiallyRef.current) return;
-    if (scrollSnapshotRef.current) return;
+    if (!container || scrollSnapshotRef.current) return;
+    scrollSnapshotRef.current = {
+      scrollHeight: container.scrollHeight,
+      scrollTop: container.scrollTop,
+    };
+  }, []);
 
-    const prevTotal = prevTotalSizeRef.current;
-    prevTotalSizeRef.current = totalSize;
+  const loadOlderPreservingScroll = useCallback(() => {
+    if (!onLoadOlder || loadingOlder || hasOlder === false) return;
+    captureScrollSnapshot();
+    onLoadOlder();
+  }, [captureScrollSnapshot, hasOlder, loadingOlder, onLoadOlder]);
 
-    const nodeCountChanged = nodes.length !== prevNodeCountForCorrectionRef.current;
-    prevNodeCountForCorrectionRef.current = nodes.length;
-    if (nodeCountChanged) return;
-
-    if (prevTotal > 0 && isScrollingUpRef.current) {
-      const delta = totalSize - prevTotal;
-      if (delta !== 0) {
-        container.scrollTop += delta;
-      }
-    }
-  }, [nodes.length, totalSize]);
-
-  // Capture scroll position when older messages start loading
+  // Capture scroll position when older messages start loading. The normal path
+  // captures synchronously before setting loadingOlder; this is only a fallback.
   useEffect(() => {
     if (loadingOlder && !wasLoadingOlderRef.current) {
-      const container = scrollContainerRef.current;
-      if (container) {
-        scrollSnapshotRef.current = {
-          scrollHeight: container.scrollHeight,
-          scrollTop: container.scrollTop,
-        };
-      }
+      captureScrollSnapshot();
     }
     wasLoadingOlderRef.current = !!loadingOlder;
-  }, [loadingOlder]);
+  }, [captureScrollSnapshot, loadingOlder]);
 
   // Restore scroll position after older messages are prepended
   useLayoutEffect(() => {
@@ -313,11 +291,20 @@ export function SessionMessageList({
     }
     // Target not in DOM yet — load older events if available
     if (hasOlder && onLoadOlder && !loadingOlder) {
-      onLoadOlder();
+      loadOlderPreservingScroll();
     } else if (!hasOlder) {
       onScrollComplete?.();
     }
-  }, [scrollToEventId, onScrollComplete, nodes, hasOlder, loadingOlder, onLoadOlder, virtualizer]);
+  }, [
+    scrollToEventId,
+    onScrollComplete,
+    nodes,
+    hasOlder,
+    loadingOlder,
+    onLoadOlder,
+    loadOlderPreservingScroll,
+    virtualizer,
+  ]);
 
   // IntersectionObserver on the sentinel to trigger loading older messages.
   // Only activates after the initial scroll-to-bottom completes to avoid
@@ -330,7 +317,7 @@ export function SessionMessageList({
       (entries) => {
         if (!hasScrolledInitiallyRef.current) return;
         if (entries[0].isIntersecting && onLoadOlder) {
-          onLoadOlder();
+          loadOlderPreservingScroll();
         }
       },
       {
@@ -340,10 +327,13 @@ export function SessionMessageList({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [onLoadOlder]);
+  }, [loadOlderPreservingScroll, onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
-  const { paddingTop, paddingBottom } = getSessionVirtualPadding(virtualItems, totalSize);
+  const firstVirtualItem = virtualItems[0];
+  const lastVirtualItem = virtualItems[virtualItems.length - 1];
+  const paddingTop = firstVirtualItem?.start ?? 0;
+  const paddingBottom = lastVirtualItem ? Math.max(0, totalSize - lastVirtualItem.end) : 0;
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
@@ -375,56 +365,64 @@ export function SessionMessageList({
     <div className="relative h-full">
       {showEmptyState ? emptyState : null}
 
-      <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-4">
-        {/* Sentinel for infinite scroll - triggers loading older messages */}
-        <div ref={sentinelRef} className="h-px" />
-
-        {loadingOlder && (
-          <div className="flex items-center justify-center py-3">
+      {loadingOlder && (
+        <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex items-center justify-center">
+          <div className="flex items-center rounded-full border border-border bg-background/90 px-3 py-1.5 shadow-sm backdrop-blur">
             <TraceLoader size={16} showLabel={false} />
             <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
           </div>
-        )}
+        </div>
+      )}
 
-        {!hasOlder && nodes.length > 0 && (
-          <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
-        )}
+      <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 [overflow-anchor:none]">
+        <div className="[overflow-anchor:none]" style={{ minHeight: totalSize, width: "100%" }}>
+          {/* Sentinel for infinite scroll - triggers loading older messages */}
+          <div aria-hidden={paddingTop <= 0} className="relative" style={{ height: paddingTop }}>
+            <div ref={sentinelRef} className="h-px w-px" />
 
-        {/* Visible rows stay in document flow; virtual padding preserves scroll height. */}
-        <div style={{ minHeight: totalSize, width: "100%" }}>
-          {paddingTop > 0 ? <div aria-hidden="true" style={{ height: paddingTop }} /> : null}
-
-          {virtualItems.map((virtualRow: { key: React.Key; index: number }) => {
-            const node = nodes[virtualRow.index];
-            return (
+            {!hasOlder && nodes.length > 0 && (
               <div
-                key={virtualRow.key}
-                ref={virtualizer.measureElement}
-                data-index={virtualRow.index}
-                className="pb-3"
+                className="absolute left-0 right-0 text-center text-xs text-muted-foreground"
+                style={{ top: LIST_VERTICAL_PADDING, height: BEGINNING_LABEL_HEIGHT }}
               >
-                {node.kind === "collapsed-events" ? (
-                  <CollapsedSessionEventsRow
-                    sessionId={sessionId}
-                    collapsed={node.collapsed}
-                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                  />
-                ) : (
-                  <SessionNodeRenderer
-                    node={node}
-                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                    completedAgentTools={completedAgentTools}
-                    toolResultByUseId={toolResultByUseId}
-                    highlightEventId={highlightEventId}
-                    activePlanId={activePlanId}
-                    planComments={planComments}
-                    onAddPlanComment={onAddPlanComment}
-                    onRemovePlanComment={onRemovePlanComment}
-                  />
-                )}
+                Beginning of session
               </div>
-            );
-          })}
+            )}
+          </div>
+
+          {virtualItems.map(
+            (virtualRow: { key: React.Key; index: number }) => {
+              const node = nodes[virtualRow.index];
+              return (
+                <div
+                  key={virtualRow.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className="w-full pb-3"
+                >
+                  {node.kind === "collapsed-events" ? (
+                    <CollapsedSessionEventsRow
+                      sessionId={sessionId}
+                      collapsed={node.collapsed}
+                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                    />
+                  ) : (
+                    <SessionNodeRenderer
+                      node={node}
+                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                      completedAgentTools={completedAgentTools}
+                      toolResultByUseId={toolResultByUseId}
+                      highlightEventId={highlightEventId}
+                      activePlanId={activePlanId}
+                      planComments={planComments}
+                      onAddPlanComment={onAddPlanComment}
+                      onRemovePlanComment={onRemovePlanComment}
+                    />
+                  )}
+                </div>
+              );
+            },
+          )}
 
           {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: paddingBottom }} /> : null}
         </div>

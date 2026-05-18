@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
 import type { AgentToolResult, SessionNode } from "./groupReadGlob";
 import { SessionMessage } from "./SessionMessage";
@@ -19,7 +20,7 @@ export interface SessionNodeRendererProps {
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
 }
 
-export function SessionNodeRenderer({
+export const SessionNodeRenderer = memo(function SessionNodeRenderer({
   node,
   gitCheckpointsByPromptEventId,
   completedAgentTools,
@@ -80,4 +81,4 @@ export function SessionNodeRenderer({
   }
 
   return <ReadGlobGroup items={node.items} />;
-}
+});
