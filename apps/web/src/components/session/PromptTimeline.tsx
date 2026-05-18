@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ImageIcon } from "lucide-react";
 import type { Event } from "@trace/gql";
@@ -25,6 +25,7 @@ interface PromptTimelineItem {
 interface PromptTimelineProps {
   nodes: readonly PromptTimelineNode[];
   currentNodeIndex: number | null;
+  scrollIntentVersion: number;
   onSelectPrompt: (eventId: string) => void;
 }
 
@@ -98,7 +99,12 @@ function buildPromptTimelineItems(
   return items;
 }
 
-export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: PromptTimelineProps) {
+export function PromptTimeline({
+  nodes,
+  currentNodeIndex,
+  scrollIntentVersion,
+  onSelectPrompt,
+}: PromptTimelineProps) {
   const scopeKey = useEventScopeKey();
   const events = useScopedEvents(scopeKey);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -116,7 +122,12 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
     return current.id;
   }, [currentNodeIndex, items]);
 
-  const selectedPromptId = selectedId && items.some((item) => item.id === selectedId) ? selectedId : null;
+  const selectedPromptId =
+    selectedId && items.some((item) => item.id === selectedId) ? selectedId : null;
+
+  useEffect(() => {
+    setSelectedId(null);
+  }, [scrollIntentVersion]);
 
   if (items.length === 0) return null;
 
