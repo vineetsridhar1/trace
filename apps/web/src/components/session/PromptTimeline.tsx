@@ -140,7 +140,7 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
                   initial={false}
                   animate={{
                     opacity: highlighted ? 1 : 0.28,
-                    width: active ? "100%" : `${item.widthPercent}%`,
+                    width: active ? "72%" : `${item.widthPercent}%`,
                   }}
                   transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
                   className={cn(
