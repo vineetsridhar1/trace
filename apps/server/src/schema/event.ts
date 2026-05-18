@@ -419,13 +419,17 @@ export const eventSubscriptions = {
             payload?: unknown;
           };
         }>(topics.sessionEvents(args.sessionId)),
-        async (payload) =>
-          canViewSessionEvent(
+        async (payload) => {
+          if (payload.sessionEvents.eventType === "session_group_visibility_updated") {
+            sessionVisibilityCache.clear();
+          }
+          return canViewSessionEvent(
             payload.sessionEvents,
             args.organizationId,
             ctx.userId,
             sessionVisibilityCache,
-          ),
+          );
+        },
       );
     },
   },

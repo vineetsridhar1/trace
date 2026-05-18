@@ -116,6 +116,7 @@ import { eventService } from "../services/event.js";
 import { ticketService } from "../services/ticket.js";
 import { sessionService } from "../services/session.js";
 import { prisma } from "../lib/db.js";
+import { pubsub } from "../lib/pubsub.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { channelGroupService } from "../services/channelGroup.js";
@@ -316,5 +317,69 @@ describe("GraphQL authz guards", () => {
       where: { id: "group-1", organizationId: "org-1" },
       select: { visibility: true, ownerUserId: true },
     });
+  });
+
+  it("invalidates session event visibility cache when group visibility changes", async () => {
+    const scopedCtx = { ...ctx, userId: "user-2" };
+    const events = [
+      {
+        sessionEvents: {
+          scopeType: "session",
+          scopeId: "session-1",
+          eventType: "session_started",
+          payload: { sessionGroupId: "group-1" },
+        },
+      },
+      {
+        sessionEvents: {
+          scopeType: "session",
+          scopeId: "session-1",
+          eventType: "session_group_visibility_updated",
+          payload: { sessionGroupId: "group-1", ownerUserId: "owner-1", removed: true },
+        },
+      },
+      {
+        sessionEvents: {
+          scopeType: "session",
+          scopeId: "session-1",
+          eventType: "session_output",
+          payload: { sessionGroupId: "group-1" },
+        },
+      },
+    ];
+    const iterator = {
+      async next() {
+        const value = events.shift();
+        return value ? { value, done: false } : { value: undefined, done: true };
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    } as AsyncIterableIterator<(typeof events)[number]>;
+    vi.mocked(pubsub.asyncIterator).mockReturnValueOnce(iterator);
+    vi.mocked(prisma.sessionGroup.findFirst)
+      .mockResolvedValueOnce({ visibility: "public", ownerUserId: "owner-1" })
+      .mockResolvedValueOnce({ visibility: "private", ownerUserId: "owner-1" });
+
+    const filtered = await eventSubscriptions.sessionEvents.subscribe(
+      {},
+      { sessionId: "session-1", organizationId: "org-1" },
+      scopedCtx,
+    );
+
+    await expect(filtered.next()).resolves.toEqual({
+      value: expect.objectContaining({
+        sessionEvents: expect.objectContaining({ eventType: "session_started" }),
+      }),
+      done: false,
+    });
+    await expect(filtered.next()).resolves.toEqual({
+      value: expect.objectContaining({
+        sessionEvents: expect.objectContaining({ eventType: "session_group_visibility_updated" }),
+      }),
+      done: false,
+    });
+    await expect(filtered.next()).resolves.toEqual({ value: undefined, done: true });
+    expect(prisma.sessionGroup.findFirst).toHaveBeenCalledTimes(2);
   });
 });

@@ -182,6 +182,7 @@ export const sessionQueries = {
     if (!ctx.userId) throw new AuthenticationError();
 
     const orgId = requireOrgContext(ctx);
+    await assertScopeAccess("session", args.sessionId, ctx.userId, orgId);
     const session = await prisma.session.findFirst({
       where: { id: args.sessionId, organizationId: orgId },
       select: {

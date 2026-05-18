@@ -4927,6 +4927,102 @@ describe("SessionService", () => {
     });
   });
 
+  describe("updateGroupVisibility", () => {
+    it("updates visibility and records events atomically", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "user-1",
+        channelId: "channel-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessions: [{ id: "session-1" }],
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        hostingMode: "local",
+        ownerUserId: "user-1",
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "private",
+        ownerUserId: "user-1",
+        channelId: "channel-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ id: "group-1", visibility: "private" }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      eventServiceMock.create
+        .mockResolvedValueOnce({ id: "event-visible" })
+        .mockResolvedValueOnce({ id: "event-removed" });
+
+      const result = await service.updateGroupVisibility(
+        "group-1",
+        "org-1",
+        "private",
+        "user",
+        "user-1",
+      );
+
+      expect(result.visibility).toBe("private");
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { visibility: "private" },
+        select: expect.any(Object),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledTimes(2);
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          eventType: "session_group_visibility_updated",
+          deferPublish: true,
+          payload: expect.objectContaining({
+            sessionGroupId: "group-1",
+            visibility: "private",
+            sessionGroup: expect.objectContaining({ id: "group-1", visibility: "private" }),
+          }),
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          eventType: "session_group_visibility_updated",
+          deferPublish: true,
+          payload: expect.objectContaining({
+            sessionGroupId: "group-1",
+            removed: true,
+          }),
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-visible" });
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-removed" });
+    });
+
+    it("rejects visibility updates from non-owners", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "owner-1",
+        channelId: "channel-1",
+        connection: null,
+        sessions: [{ id: "session-1" }],
+      });
+
+      await expect(
+        service.updateGroupVisibility("group-1", "org-1", "private", "user", "user-2"),
+      ).rejects.toThrow("Only the session group owner can change visibility");
+
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe("delete", () => {
     it("removes the session group when the last session is deleted", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());

@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
 
 const BRIDGE_ACCESS_DENIED_ERROR =
@@ -616,10 +617,13 @@ class RuntimeAccessService {
     if (normalizedSessionGroupId) {
       const sessionGroup = await prisma.sessionGroup.findFirst({
         where: { id: normalizedSessionGroupId, organizationId: input.organizationId },
-        select: { id: true },
+        select: { id: true, visibility: true, ownerUserId: true },
       });
       if (!sessionGroup) {
         throw new Error("Session group not found");
+      }
+      if (!canViewSessionGroup(sessionGroup, input.requesterUserId)) {
+        throw new AuthorizationError(BRIDGE_ACCESS_DENIED_ERROR);
       }
     }
 
@@ -791,10 +795,13 @@ class RuntimeAccessService {
       if (sessionGroupId) {
         const sessionGroup = await tx.sessionGroup.findFirst({
           where: { id: sessionGroupId, organizationId: input.organizationId },
-          select: { id: true },
+          select: { id: true, visibility: true, ownerUserId: true },
         });
         if (!sessionGroup) {
           throw new Error("Session group not found");
+        }
+        if (!canViewSessionGroup(sessionGroup, request.requesterUserId)) {
+          throw new AuthorizationError(BRIDGE_ACCESS_DENIED_ERROR);
         }
       }
       const expiresAt =

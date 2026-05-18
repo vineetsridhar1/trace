@@ -360,6 +360,35 @@ describe("runtimeAccessService", () => {
     expect(createCall?.payload.requesterUser).not.toHaveProperty("email");
   });
 
+  it("rejects session-group bridge requests for private groups the requester cannot view", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+      id: "bridge-1",
+      instanceId: "runtime-1",
+      organizationId: "org-1",
+      ownerUserId: "owner-1",
+      label: "Laptop",
+      ownerUser: { id: "owner-1", name: "Owner" },
+    });
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      id: "group-1",
+      visibility: "private",
+      ownerUserId: "owner-1",
+    });
+
+    await expect(
+      runtimeAccessService.requestAccess({
+        requesterUserId: "user-2",
+        organizationId: "org-1",
+        runtimeInstanceId: "runtime-1",
+        scopeType: "session_group",
+        sessionGroupId: "group-1",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+
+    expect(prismaMock.bridgeAccessRequest.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
   it("returns the existing pending when a matching scope is re-requested", async () => {
     prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
@@ -604,6 +633,55 @@ describe("runtimeAccessService", () => {
       },
       expect.anything(),
     );
+  });
+
+  it("rejects approving session-group bridge access when the grantee cannot view the group", async () => {
+    prismaMock.bridgeAccessRequest.findUnique.mockResolvedValueOnce({
+      id: "request-1",
+      bridgeRuntimeId: "bridge-1",
+      ownerUserId: "owner-1",
+      requesterUserId: "user-2",
+      scopeType: "session_group",
+      sessionGroupId: "group-1",
+      requestedCapabilities: ["session"],
+      requestedExpiresAt: null,
+      createdAt: new Date("2026-04-18T12:00:00.000Z"),
+      status: "pending",
+      bridgeRuntime: {
+        id: "bridge-1",
+        instanceId: "runtime-1",
+        label: "Laptop",
+        organizationId: "org-1",
+      },
+      requesterUser: {
+        id: "user-2",
+        name: "Guest",
+        email: "guest@example.com",
+        avatarUrl: null,
+      },
+      ownerUser: { id: "owner-1", name: "Owner" },
+      resolvedByUser: null,
+      sessionGroup: { id: "group-1", name: "Workspace" },
+    });
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      id: "group-1",
+      visibility: "private",
+      ownerUserId: "owner-1",
+    });
+
+    await expect(
+      runtimeAccessService.approveRequest({
+        requestId: "request-1",
+        organizationId: "org-1",
+        ownerUserId: "owner-1",
+        scopeType: "session_group",
+        sessionGroupId: "group-1",
+        expiresAt: null,
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+
+    expect(prismaMock.bridgeAccessGrant.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
   it("requestAccess persists requestedCapabilities and defaults to ['session'] when omitted", async () => {

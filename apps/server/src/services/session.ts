@@ -2141,61 +2141,81 @@ export class SessionService {
       return sessionGroup;
     }
 
-    const updated = await prisma.sessionGroup.update({
-      where: { id: groupId },
-      data: { visibility },
-      select: {
-        id: true,
-        visibility: true,
-        ownerUserId: true,
-        channelId: true,
-        connection: true,
-        sessions: {
-          select: { id: true },
-          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-          take: 1,
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const updated = await tx.sessionGroup.update({
+        where: { id: groupId },
+        data: { visibility },
+        select: {
+          id: true,
+          visibility: true,
+          ownerUserId: true,
+          channelId: true,
+          connection: true,
+          sessions: {
+            select: { id: true },
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+          },
         },
-      },
-    });
-
-    const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
-    if (!sessionGroup) throw new Error("Session group not found");
-
-    await eventService.create({
-      organizationId,
-      scopeType: "session",
-      scopeId: updated.sessions[0]?.id ?? groupId,
-      eventType: "session_group_visibility_updated",
-      payload: {
-        sessionGroupId: groupId,
-        channelId: updated.channelId,
-        visibility,
-        ownerUserId: updated.ownerUserId,
-        sessionGroup,
-      },
-      actorType,
-      actorId,
-    });
-
-    if (current.visibility === "public" && visibility === "private") {
-      await eventService.create({
-        organizationId,
-        scopeType: "session",
-        scopeId: updated.sessions[0]?.id ?? groupId,
-        eventType: "session_group_visibility_updated",
-        payload: {
-          sessionGroupId: groupId,
-          channelId: updated.channelId,
-          visibility,
-          ownerUserId: updated.ownerUserId,
-          removed: true,
-        },
-        actorType,
-        actorId,
       });
+
+      const sessionGroup = await this.loadSessionGroupSnapshot(groupId, tx);
+      if (!sessionGroup) throw new Error("Session group not found");
+      const scopeId = updated.sessions[0]?.id ?? groupId;
+      const events = [
+        await eventService.create(
+          {
+            organizationId,
+            scopeType: "session",
+            scopeId,
+            eventType: "session_group_visibility_updated",
+            payload: {
+              sessionGroupId: groupId,
+              channelId: updated.channelId,
+              visibility,
+              ownerUserId: updated.ownerUserId,
+              sessionGroup,
+            },
+            actorType,
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        ),
+      ];
+
+      if (current.visibility === "public" && visibility === "private") {
+        events.push(
+          await eventService.create(
+            {
+              organizationId,
+              scopeType: "session",
+              scopeId,
+              eventType: "session_group_visibility_updated",
+              payload: {
+                sessionGroupId: groupId,
+                channelId: updated.channelId,
+                visibility,
+                ownerUserId: updated.ownerUserId,
+                removed: true,
+              },
+              actorType,
+              actorId,
+              deferPublish: true,
+            },
+            tx,
+          ),
+        );
+      }
+
+      return { sessionGroup, events };
+    });
+
+    for (const event of result.events) {
+      eventService.publishCreated(event);
     }
 
-    return sessionGroup;
+    return result.sessionGroup;
   }
 
   async list(
