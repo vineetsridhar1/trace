@@ -34,7 +34,7 @@ import { SessionTimelineService } from "./session-timeline.js";
 
 type PrismaMock = {
   session: { findUnique: Mock };
-  event: { findMany: Mock };
+  event: { findFirst: Mock; findMany: Mock };
 };
 
 const prismaMock = prisma as unknown as PrismaMock;
@@ -58,6 +58,7 @@ function event(partial: Partial<PrismaEvent> & { id: string; timestamp: Date }):
 describe("SessionTimelineService", () => {
   beforeEach(() => {
     prismaMock.session.findUnique.mockReset();
+    prismaMock.event.findFirst.mockReset();
     prismaMock.event.findMany.mockReset();
   });
 
@@ -275,6 +276,135 @@ describe("SessionTimelineService", () => {
     expect(page.mode).toBe("live");
     expect(page.items).toHaveLength(1);
     expect(page.items[0].event?.id).toBe("user-1");
+  });
+
+  it("returns lightweight prompt index items for text and image prompts", async () => {
+    const textPrompt = event({
+      id: "prompt-text",
+      eventType: "session_started",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { prompt: "  Implement this feature  " },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const imagePrompt = event({
+      id: "prompt-image",
+      eventType: "message_sent",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { text: "", attachmentKeys: ["uploads/org-1/image.png"] },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    const emptyPrompt = event({
+      id: "prompt-empty",
+      eventType: "message_sent",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { text: "" },
+      timestamp: new Date("2026-05-14T10:02:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.event.findMany.mockResolvedValueOnce([textPrompt, imagePrompt, emptyPrompt]);
+
+    const items = await new SessionTimelineService().queryPromptIndex({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(items).toEqual([
+      {
+        eventId: "prompt-text",
+        timestamp: textPrompt.timestamp,
+        actorType: "user",
+        actorId: "user-1",
+        preview: "Implement this feature",
+        imageCount: 0,
+      },
+      {
+        eventId: "prompt-image",
+        timestamp: imagePrompt.timestamp,
+        actorType: "user",
+        actorId: "user-1",
+        preview: "Image prompt",
+        imageCount: 1,
+      },
+    ]);
+    expect(prismaMock.event.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          scopeType: "session",
+          scopeId: "session-1",
+          parentId: null,
+          eventType: { in: ["session_started", "message_sent"] },
+        }),
+      }),
+    );
+  });
+
+  it("returns an empty prompt index for sessions outside the organization", async () => {
+    prismaMock.session.findUnique.mockResolvedValueOnce({ organizationId: "org-2" });
+
+    const items = await new SessionTimelineService().queryPromptIndex({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(items).toEqual([]);
+    expect(prismaMock.event.findMany).not.toHaveBeenCalled();
+  });
+
+  it("fetches a bounded event window around an anchor event", async () => {
+    const beforeEvent = event({
+      id: "before",
+      timestamp: new Date("2026-05-14T09:59:00.000Z"),
+    });
+    const targetEvent = event({
+      id: "target",
+      eventType: "message_sent",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { text: "Jump here" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const afterEvent = event({
+      id: "after",
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    prismaMock.event.findFirst.mockResolvedValueOnce(targetEvent);
+    prismaMock.event.findMany
+      .mockResolvedValueOnce([beforeEvent])
+      .mockResolvedValueOnce([afterEvent]);
+
+    const events = await new SessionTimelineService().queryEventsAroundEvent({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      eventId: "target",
+      limit: 5,
+      excludePayloadTypes: ["workspace_ready"],
+    });
+
+    expect(events.map((item) => item.id)).toEqual(["before", "target", "after"]);
+    expect(prismaMock.event.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "target",
+          organizationId: "org-1",
+          scopeType: "session",
+          scopeId: "session-1",
+          parentId: null,
+        }),
+      }),
+    );
+    expect(prismaMock.event.findMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.event.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ take: 2 }),
+    );
+    expect(prismaMock.event.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ take: 2 }),
+    );
   });
 
   it("pages compact timelines before an anchor and preserves the boundary collapsed range", async () => {

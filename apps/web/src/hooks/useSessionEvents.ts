@@ -67,6 +67,39 @@ const SESSION_TIMELINE_QUERY = gql`
   }
 `;
 
+const SESSION_EVENTS_AROUND_EVENT_QUERY = gql`
+  query SessionEventsAroundEvent(
+    $organizationId: ID!
+    $sessionId: ID!
+    $eventId: ID!
+    $limit: Int
+    $excludePayloadTypes: [String!]
+  ) {
+    sessionEventsAroundEvent(
+      organizationId: $organizationId
+      sessionId: $sessionId
+      eventId: $eventId
+      limit: $limit
+      excludePayloadTypes: $excludePayloadTypes
+    ) {
+      id
+      scopeType
+      scopeId
+      eventType
+      payload
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
+      parentId
+      timestamp
+      metadata
+    }
+  }
+`;
+
 export const SESSION_EVENTS_QUERY = gql`
   query SessionEvents(
     $organizationId: ID!
@@ -296,6 +329,29 @@ function compareCursor(a: EventCursor, b: EventCursor): number {
   return a.eventId.localeCompare(b.eventId);
 }
 
+function mergeCompactEventItems(
+  current: SessionTimelineDisplayItem[] | null,
+  events: Array<Event & { id: string }>,
+  scopedEvents: Record<string, Event>,
+): SessionTimelineDisplayItem[] {
+  const byId = new Map<string, SessionTimelineDisplayItem>();
+  for (const item of current ?? []) {
+    byId.set(item.id, item);
+  }
+  for (const event of events) {
+    if (isRenderableCompactEvent(event)) {
+      byId.set(event.id, { kind: "event", id: event.id });
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    const aCursor = timelineItemEndCursor(a, scopedEvents);
+    const bCursor = timelineItemEndCursor(b, scopedEvents);
+    if (!aCursor || !bCursor) return a.id.localeCompare(b.id);
+    return compareCursor(aCursor, bCursor);
+  });
+}
+
 export function useSessionEvents(sessionId: string, options?: { skip?: boolean }) {
   const skip = options?.skip === true;
   const [loading, setLoading] = useState(!skip);
@@ -504,6 +560,44 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     setLoadingOlder(false);
   }, [activeOrgId, sessionId, skip]);
 
+  const fetchEventsAroundEvent = useCallback(
+    async (eventId: string) => {
+      if (skip || !activeOrgId) return false;
+
+      const result = await client
+        .query(SESSION_EVENTS_AROUND_EVENT_QUERY, {
+          organizationId: activeOrgId,
+          sessionId,
+          eventId,
+          limit: PAGE_SIZE,
+          excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
+        })
+        .toPromise();
+
+      if (result.error) {
+        setError(result.error.message);
+        return false;
+      }
+
+      const events = Array.isArray(result.data?.sessionEventsAroundEvent)
+        ? (result.data.sessionEventsAroundEvent as Array<Event & { id: string }>)
+        : [];
+      if (events.length === 0) return false;
+
+      upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
+      if (timelineModeRef.current === "compact") {
+        const mergedEvents = { ...scopedEvents };
+        for (const event of events) {
+          mergedEvents[event.id] = event;
+        }
+        setCompactItems((current) => mergeCompactEventItems(current, events, mergedEvents));
+      }
+
+      return events.some((event) => event.id === eventId);
+    },
+    [activeOrgId, scopedEvents, sessionId, skip],
+  );
+
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
   const eventIds = useScopedEventIds(scopeKey);
   const compactEventIdSet = useMemo(() => {
@@ -567,5 +661,6 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     hasOlder,
     error,
     fetchOlderEvents,
+    fetchEventsAroundEvent,
   };
 }

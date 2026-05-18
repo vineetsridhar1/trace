@@ -181,6 +181,51 @@ export const eventQueries = {
       excludePayloadTypes: args.excludePayloadTypes,
     });
   },
+
+  sessionEventsAroundEvent: async (
+    _: unknown,
+    args: {
+      organizationId: string;
+      sessionId: string;
+      eventId: string;
+      limit?: number;
+      excludePayloadTypes?: string[];
+    },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+
+    await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
+
+    return sessionTimelineService.queryEventsAroundEvent({
+      organizationId: args.organizationId,
+      sessionId: args.sessionId,
+      eventId: args.eventId,
+      limit: args.limit,
+      excludePayloadTypes: args.excludePayloadTypes,
+    });
+  },
+
+  sessionPromptIndex: async (
+    _: unknown,
+    args: { organizationId: string; sessionId: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+
+    await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
+
+    return sessionTimelineService.queryPromptIndex({
+      organizationId: args.organizationId,
+      sessionId: args.sessionId,
+    });
+  },
 };
 
 export const eventSubscriptions = {

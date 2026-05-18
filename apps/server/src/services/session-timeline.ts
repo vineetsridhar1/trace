@@ -1,11 +1,12 @@
 import type { Event as PrismaEvent, Prisma } from "@prisma/client";
-import type { SessionTimelineMode } from "@trace/gql";
-import { hasVisibleUserSessionContent } from "@trace/shared";
+import type { ActorType, SessionTimelineMode } from "@trace/gql";
+import { attachmentKeysFromPayload, hasVisibleUserSessionContent } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService, excludeSessionOutputPayloadTypesWhere } from "./event.js";
 
 const DEFAULT_PAGE_SIZE = 100;
 const COMPACT_CANDIDATE_OVERFETCH = 4;
+const PROMPT_INDEX_PREVIEW_CHARS = 500;
 
 export interface CollapsedSessionEventRange {
   id: string;
@@ -40,6 +41,23 @@ export interface SessionTimelineQueryOpts {
   sessionId: string;
   before?: Date;
   beforeEventId?: string;
+  limit?: number;
+  excludePayloadTypes?: string[];
+}
+
+export interface SessionPromptIndexItem {
+  eventId: string;
+  timestamp: Date;
+  actorType: ActorType;
+  actorId: string;
+  preview: string;
+  imageCount: number;
+}
+
+export interface SessionEventsAroundEventOpts {
+  organizationId: string;
+  sessionId: string;
+  eventId: string;
   limit?: number;
   excludePayloadTypes?: string[];
 }
@@ -124,11 +142,36 @@ function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): bool
   return hasVisibleUserSessionContent(event.eventType, event.payload);
 }
 
-function isUserEvent(event: PrismaEvent): boolean {
+function isUserEvent(event: Pick<PrismaEvent, "eventType" | "payload">): boolean {
   return (
     (event.eventType === "session_started" || event.eventType === "message_sent") &&
     hasUserContent(event)
   );
+}
+
+function promptText(event: Pick<PrismaEvent, "eventType" | "payload">): string {
+  const payload = asObject(event.payload);
+  const rawText =
+    event.eventType === "session_started"
+      ? payload?.prompt
+      : event.eventType === "message_sent"
+        ? payload?.text
+        : undefined;
+  return typeof rawText === "string" ? rawText.trim() : "";
+}
+
+function promptIndexPreview(event: Pick<PrismaEvent, "eventType" | "payload">): string | null {
+  if (!isUserEvent(event)) return null;
+  const text = promptText(event);
+  if (text) {
+    return text.length > PROMPT_INDEX_PREVIEW_CHARS
+      ? `${text.slice(0, PROMPT_INDEX_PREVIEW_CHARS).trimEnd()}…`
+      : text;
+  }
+
+  const imageCount = attachmentKeysFromPayload(event.payload).length;
+  if (imageCount === 0) return null;
+  return imageCount === 1 ? "Image prompt" : `${imageCount} image prompt`;
 }
 
 function isAssistantTextEvent(event: PrismaEvent): boolean {
@@ -317,6 +360,95 @@ export class SessionTimelineService {
     }
 
     return this.queryLive(opts);
+  }
+
+  async queryPromptIndex(opts: {
+    organizationId: string;
+    sessionId: string;
+  }): Promise<SessionPromptIndexItem[]> {
+    const session = await prisma.session.findUnique({
+      where: { id: opts.sessionId },
+      select: { organizationId: true },
+    });
+
+    if (!session || session.organizationId !== opts.organizationId) {
+      return [];
+    }
+
+    const events = await prisma.event.findMany({
+      where: {
+        organizationId: opts.organizationId,
+        scopeType: "session",
+        scopeId: opts.sessionId,
+        parentId: null,
+        eventType: { in: ["session_started", "message_sent"] },
+      },
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        eventType: true,
+        payload: true,
+        actorType: true,
+        actorId: true,
+        timestamp: true,
+      },
+    });
+
+    return events.flatMap((event) => {
+      const preview = promptIndexPreview(event);
+      if (!preview) return [];
+
+      return [
+        {
+          eventId: event.id,
+          timestamp: event.timestamp,
+          actorType: event.actorType as ActorType,
+          actorId: event.actorId,
+          preview,
+          imageCount: attachmentKeysFromPayload(event.payload).length,
+        },
+      ];
+    });
+  }
+
+  async queryEventsAroundEvent(opts: SessionEventsAroundEventOpts): Promise<PrismaEvent[]> {
+    const limit = opts.limit ?? DEFAULT_PAGE_SIZE;
+    const sideLimit = Math.max(1, Math.floor((limit - 1) / 2));
+    const target = await prisma.event.findFirst({
+      where: {
+        id: opts.eventId,
+        organizationId: opts.organizationId,
+        scopeType: "session",
+        scopeId: opts.sessionId,
+        parentId: null,
+        ...excludeSessionOutputPayloadTypesWhere(opts.excludePayloadTypes),
+      },
+    });
+
+    if (!target) return [];
+
+    const [before, after] = await Promise.all([
+      eventService.query(opts.organizationId, {
+        scopeType: "session",
+        scopeId: opts.sessionId,
+        before: target.timestamp,
+        beforeEventId: target.id,
+        limit: sideLimit,
+        excludeReplies: true,
+        excludePayloadTypes: opts.excludePayloadTypes,
+      }),
+      eventService.query(opts.organizationId, {
+        scopeType: "session",
+        scopeId: opts.sessionId,
+        after: target.timestamp,
+        afterEventId: target.id,
+        limit: Math.max(1, limit - sideLimit - 1),
+        excludeReplies: true,
+        excludePayloadTypes: opts.excludePayloadTypes,
+      }),
+    ]);
+
+    return [...before, target, ...after].sort(compareEvents);
   }
 
   private async queryLive(opts: SessionTimelineQueryOpts): Promise<SessionTimelineServicePage> {

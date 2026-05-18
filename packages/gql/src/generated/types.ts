@@ -1202,12 +1202,14 @@ export type Query = {
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
+  sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroups: Array<SessionGroup>;
+  sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
@@ -1372,6 +1374,14 @@ export type QuerySessionArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type QuerySessionEventsAroundEventArgs = {
+  eventId: Scalars["ID"]["input"];
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type QuerySessionGroupArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1400,6 +1410,11 @@ export type QuerySessionGroupsArgs = {
   channelId: Scalars["ID"]["input"];
   includeActiveMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
+};
+
+export type QuerySessionPromptIndexArgs = {
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionSlashCommandsArgs = {
@@ -1610,6 +1625,15 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionPromptIndexItem = {
+  __typename?: "SessionPromptIndexItem";
+  actor: Actor;
+  eventId: Scalars["ID"]["output"];
+  imageCount: Scalars["Int"]["output"];
+  preview: Scalars["String"]["output"];
+  timestamp: Scalars["DateTime"]["output"];
+};
 
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";

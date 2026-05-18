@@ -83,6 +83,11 @@ export const resolvers = {
       resolveActor(event, ctx.userLoader),
   },
 
+  SessionPromptIndexItem: {
+    actor: (item: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
+      resolveActor(item, ctx.userLoader),
+  },
+
   Query: {
     ...organizationQueries,
     ...agentEnvironmentQueries,
