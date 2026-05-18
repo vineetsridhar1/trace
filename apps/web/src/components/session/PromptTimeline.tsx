@@ -6,7 +6,6 @@ import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
 
 const MARKER_ROW_STEP_PX = 10;
 const MARKER_LIST_PADDING_TOP_PX = 8;
-const PREVIEW_CARD_TOP_PLACEMENT_PX = 72;
 
 interface PromptTimelineNode {
   kind: string;
@@ -113,8 +112,7 @@ export function PromptTimeline({
   const activePreviewTop = activePreview
     ? MARKER_LIST_PADDING_TOP_PX + activePreview.index * MARKER_ROW_STEP_PX - markerScrollTop
     : 0;
-  const activePreviewPlacement =
-    activePreviewTop < PREVIEW_CARD_TOP_PLACEMENT_PX ? "below" : "center";
+  const activePreviewPlacement = activePreview?.index === 0 ? "below" : "center";
 
   useEffect(() => {
     setSelectedId(null);
