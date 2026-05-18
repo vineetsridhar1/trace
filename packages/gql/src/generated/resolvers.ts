@@ -1205,12 +1205,14 @@ export type Query = {
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
+  sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroups: Array<SessionGroup>;
+  sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
@@ -1375,6 +1377,14 @@ export type QuerySessionArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type QuerySessionEventsAroundEventArgs = {
+  eventId: Scalars["ID"]["input"];
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type QuerySessionGroupArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1403,6 +1413,11 @@ export type QuerySessionGroupsArgs = {
   channelId: Scalars["ID"]["input"];
   includeActiveMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
+};
+
+export type QuerySessionPromptIndexArgs = {
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionSlashCommandsArgs = {
@@ -1613,6 +1628,15 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionPromptIndexItem = {
+  __typename?: "SessionPromptIndexItem";
+  actor: Actor;
+  eventId: Scalars["ID"]["output"];
+  imageCount: Scalars["Int"]["output"];
+  preview: Scalars["String"]["output"];
+  timestamp: Scalars["DateTime"]["output"];
+};
 
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
@@ -2060,6 +2084,7 @@ export type ResolversTypes = ResolversObject<{
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
   SessionGroupStatus: SessionGroupStatus;
+  SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
   SessionStatus: SessionStatus;
@@ -2159,6 +2184,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
+  SessionPromptIndexItem: SessionPromptIndexItem;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
   SessionTimelineItem: SessionTimelineItem;
@@ -3468,6 +3494,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionArgs, "id">
   >;
+  sessionEventsAroundEvent?: Resolver<
+    Array<ResolversTypes["Event"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionEventsAroundEventArgs, "eventId" | "organizationId" | "sessionId">
+  >;
   sessionGroup?: Resolver<
     Maybe<ResolversTypes["SessionGroup"]>,
     ParentType,
@@ -3503,6 +3535,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QuerySessionGroupsArgs, "channelId">
+  >;
+  sessionPromptIndex?: Resolver<
+    Array<ResolversTypes["SessionPromptIndexItem"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionPromptIndexArgs, "organizationId" | "sessionId">
   >;
   sessionSlashCommands?: Resolver<
     Array<ResolversTypes["SlashCommand"]>,
@@ -3682,6 +3720,19 @@ export type SessionGroupResolvers<
   updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   worktreeDeleted?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionPromptIndexItemResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionPromptIndexItem"] =
+    ResolversParentTypes["SessionPromptIndexItem"],
+> = ResolversObject<{
+  actor?: Resolver<ResolversTypes["Actor"], ParentType, ContextType>;
+  eventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  imageCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  preview?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  timestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3965,6 +4016,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
+  SessionPromptIndexItem?: SessionPromptIndexItemResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;
   SessionTimelineItem?: SessionTimelineItemResolvers<ContextType>;

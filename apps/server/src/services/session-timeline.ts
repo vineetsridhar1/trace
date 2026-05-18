@@ -54,6 +54,14 @@ export interface SessionPromptIndexItem {
   imageCount: number;
 }
 
+export interface SessionEventsAroundEventOpts {
+  organizationId: string;
+  sessionId: string;
+  eventId: string;
+  limit?: number;
+  excludePayloadTypes?: string[];
+}
+
 const COMPACT_VISIBLE_EVENT_TYPES = [
   "session_started",
   "message_sent",
@@ -401,6 +409,46 @@ export class SessionTimelineService {
         },
       ];
     });
+  }
+
+  async queryEventsAroundEvent(opts: SessionEventsAroundEventOpts): Promise<PrismaEvent[]> {
+    const limit = opts.limit ?? DEFAULT_PAGE_SIZE;
+    const sideLimit = Math.max(1, Math.floor((limit - 1) / 2));
+    const target = await prisma.event.findFirst({
+      where: {
+        id: opts.eventId,
+        organizationId: opts.organizationId,
+        scopeType: "session",
+        scopeId: opts.sessionId,
+        parentId: null,
+        ...excludeSessionOutputPayloadTypesWhere(opts.excludePayloadTypes),
+      },
+    });
+
+    if (!target) return [];
+
+    const [before, after] = await Promise.all([
+      eventService.query(opts.organizationId, {
+        scopeType: "session",
+        scopeId: opts.sessionId,
+        before: target.timestamp,
+        beforeEventId: target.id,
+        limit: sideLimit,
+        excludeReplies: true,
+        excludePayloadTypes: opts.excludePayloadTypes,
+      }),
+      eventService.query(opts.organizationId, {
+        scopeType: "session",
+        scopeId: opts.sessionId,
+        after: target.timestamp,
+        afterEventId: target.id,
+        limit: Math.max(1, limit - sideLimit - 1),
+        excludeReplies: true,
+        excludePayloadTypes: opts.excludePayloadTypes,
+      }),
+    ]);
+
+    return [...before, target, ...after].sort(compareEvents);
   }
 
   private async queryLive(opts: SessionTimelineQueryOpts): Promise<SessionTimelineServicePage> {

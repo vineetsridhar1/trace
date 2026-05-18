@@ -1204,12 +1204,14 @@ export type Query = {
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
+  sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroups: Array<SessionGroup>;
+  sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
@@ -1374,6 +1376,14 @@ export type QuerySessionArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type QuerySessionEventsAroundEventArgs = {
+  eventId: Scalars["ID"]["input"];
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
+};
+
 export type QuerySessionGroupArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1402,6 +1412,11 @@ export type QuerySessionGroupsArgs = {
   channelId: Scalars["ID"]["input"];
   includeActiveMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   status?: InputMaybe<SessionGroupStatus>;
+};
+
+export type QuerySessionPromptIndexArgs = {
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionSlashCommandsArgs = {
@@ -1612,6 +1627,15 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionPromptIndexItem = {
+  __typename?: "SessionPromptIndexItem";
+  actor: Actor;
+  eventId: Scalars["ID"]["output"];
+  imageCount: Scalars["Int"]["output"];
+  preview: Scalars["String"]["output"];
+  timestamp: Scalars["DateTime"]["output"];
+};
 
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
@@ -2936,6 +2960,36 @@ export type SessionTimelineQuery = {
   };
 };
 
+export type SessionEventsAroundEventQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
+  eventId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]> | Scalars["String"]["input"]>;
+}>;
+
+export type SessionEventsAroundEventQuery = {
+  __typename?: "Query";
+  sessionEventsAroundEvent: Array<{
+    __typename?: "Event";
+    id: string;
+    scopeType: ScopeType;
+    scopeId: string;
+    eventType: EventType;
+    payload: JsonValue;
+    parentId?: string | null;
+    timestamp: string;
+    metadata?: JsonValue | null;
+    actor: {
+      __typename?: "Actor";
+      type: ActorType;
+      id: string;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  }>;
+};
+
 export type SessionEventsQueryVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
   scope?: InputMaybe<ScopeInput>;
@@ -2994,6 +3048,29 @@ export type SessionEventsLiveSubscription = {
       avatarUrl?: string | null;
     };
   };
+};
+
+export type SessionPromptIndexQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
+}>;
+
+export type SessionPromptIndexQuery = {
+  __typename?: "Query";
+  sessionPromptIndex: Array<{
+    __typename?: "SessionPromptIndexItem";
+    eventId: string;
+    timestamp: string;
+    preview: string;
+    imageCount: number;
+    actor: {
+      __typename?: "Actor";
+      type: ActorType;
+      id: string;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  }>;
 };
 
 export type ChannelsQueryVariables = Exact<{
@@ -6560,6 +6637,120 @@ export const SessionTimelineDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionTimelineQuery, SessionTimelineQueryVariables>;
+export const SessionEventsAroundEventDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionEventsAroundEvent" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "eventId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "excludePayloadTypes" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEventsAroundEvent" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "eventId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "eventId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "excludePayloadTypes" },
+                value: { kind: "Variable", name: { kind: "Name", value: "excludePayloadTypes" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeType" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeId" } },
+                { kind: "Field", name: { kind: "Name", value: "eventType" } },
+                { kind: "Field", name: { kind: "Name", value: "payload" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "parentId" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+                { kind: "Field", name: { kind: "Name", value: "metadata" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionEventsAroundEventQuery, SessionEventsAroundEventQueryVariables>;
 export const SessionEventsDocument = {
   kind: "Document",
   definitions: [
@@ -6773,6 +6964,77 @@ export const SessionEventsLiveDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionEventsLiveSubscription, SessionEventsLiveSubscriptionVariables>;
+export const SessionPromptIndexDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionPromptIndex" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionPromptIndex" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "eventId" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "preview" } },
+                { kind: "Field", name: { kind: "Name", value: "imageCount" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionPromptIndexQuery, SessionPromptIndexQueryVariables>;
 export const ChannelsDocument = {
   kind: "Document",
   definitions: [

@@ -189,6 +189,7 @@ export function SessionDetailView({
     hasOlder,
     error,
     fetchOlderEvents,
+    fetchEventsAroundEvent,
   } = useSessionEvents(sessionId, { skip: isOptimistic === true });
   const { items: promptIndexItems } = useSessionPromptIndex(sessionId, {
     skip: isOptimistic === true,
@@ -513,6 +514,7 @@ export function SessionDetailView({
                 hasOlder={hasOlder}
                 loadingOlder={loadingOlder}
                 onLoadOlder={fetchOlderEvents}
+                onLoadAroundEvent={fetchEventsAroundEvent}
                 completedAgentTools={completedAgentTools}
                 toolResultByUseId={toolResultByUseId}
                 scrollToEventId={scrollToEventId}

@@ -1050,6 +1050,13 @@ type Query {
     limit: Int
     excludePayloadTypes: [String!]
   ): SessionTimelinePage!
+  sessionEventsAroundEvent(
+    organizationId: ID!
+    sessionId: ID!
+    eventId: ID!
+    limit: Int
+    excludePayloadTypes: [String!]
+  ): [Event!]!
   sessionPromptIndex(organizationId: ID!, sessionId: ID!): [SessionPromptIndexItem!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!, sessionGroupId: ID): [SessionRuntimeInstance!]!

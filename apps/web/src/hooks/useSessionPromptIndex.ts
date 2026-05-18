@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import type { Actor, Event } from "@trace/gql";
+import type { Actor, Event, SessionPromptIndexItem } from "@trace/gql";
 import { attachmentKeysFromPayload, asJsonObject } from "@trace/shared";
 import { eventScopeKey, useAuthStore, useScopedEvents } from "@trace/client-core";
 import { client } from "../lib/urql";
 
 const PROMPT_INDEX_PREVIEW_CHARS = 500;
+
+export type { SessionPromptIndexItem };
 
 const SESSION_PROMPT_INDEX_QUERY = gql`
   query SessionPromptIndex($organizationId: ID!, $sessionId: ID!) {
@@ -23,14 +25,6 @@ const SESSION_PROMPT_INDEX_QUERY = gql`
     }
   }
 `;
-
-export interface SessionPromptIndexItem {
-  eventId: string;
-  timestamp: string;
-  actor: Actor;
-  preview: string;
-  imageCount: number;
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
