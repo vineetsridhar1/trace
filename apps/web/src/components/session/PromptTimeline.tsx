@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ImageIcon } from "lucide-react";
-import type { Event } from "@trace/gql";
-import { attachmentKeysFromPayload, asJsonObject } from "@trace/shared";
-import { useScopedEvents } from "@trace/client-core";
 import { cn } from "../../lib/utils";
-import { useEventScopeKey } from "./EventScopeContext";
+import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
 
 interface PromptTimelineNode {
   kind: string;
@@ -19,11 +16,12 @@ interface PromptTimelineItem {
   timestamp: string;
   imageCount: number;
   widthPercent: number;
-  nodeIndex: number;
+  nodeIndex: number | null;
 }
 
 interface PromptTimelineProps {
   nodes: readonly PromptTimelineNode[];
+  prompts: readonly SessionPromptIndexItem[];
   currentNodeIndex: number | null;
   scrollIntentVersion: number;
   onSelectPrompt: (eventId: string) => void;
@@ -47,79 +45,57 @@ function formatPromptTime(timestamp: string): string {
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-function promptTextFromEvent(event: Event): { text: string; imageCount: number } | null {
-  const payload = asJsonObject(event.payload);
-  if (!payload) return null;
-
-  const imageCount = attachmentKeysFromPayload(payload).length;
-  const rawText =
-    event.eventType === "session_started"
-      ? payload.prompt
-      : event.eventType === "message_sent"
-        ? payload.text
-        : undefined;
-
-  const text = typeof rawText === "string" ? rawText.trim() : "";
-  if (!text && imageCount === 0) return null;
-
-  return {
-    text: text || (imageCount === 1 ? "Image prompt" : `${imageCount} image prompt`),
-    imageCount,
-  };
+function buildNodeIndexByEventId(nodes: readonly PromptTimelineNode[]): Map<string, number> {
+  const indexByEventId = new Map<string, number>();
+  for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+    const node = nodes[nodeIndex];
+    if (node.kind === "event" && node.id) {
+      indexByEventId.set(node.id, nodeIndex);
+    }
+  }
+  return indexByEventId;
 }
 
 function buildPromptTimelineItems(
-  nodes: readonly PromptTimelineNode[],
-  events: Record<string, Event>,
+  prompts: readonly SessionPromptIndexItem[],
+  nodeIndexByEventId: Map<string, number>,
 ): PromptTimelineItem[] {
-  const items: PromptTimelineItem[] = [];
-  const seen = new Set<string>();
-
-  for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
-    const node = nodes[nodeIndex];
-    if (node.kind !== "event" || !node.id || seen.has(node.id)) continue;
-    const event = events[node.id];
-    if (!event) continue;
-
-    const prompt = promptTextFromEvent(event);
-    if (!prompt) continue;
-
-    seen.add(node.id);
-    items.push({
-      id: node.id,
-      text: prompt.text,
-      actorName: event.actor.name ?? "You",
-      timestamp: formatPromptTime(event.timestamp),
-      imageCount: prompt.imageCount,
-      widthPercent: markerWidth(node.id, items.length),
-      nodeIndex,
-    });
-  }
-
-  return items;
+  return prompts.map((prompt, index) => ({
+    id: prompt.eventId,
+    text: prompt.preview,
+    actorName: prompt.actor.name ?? "You",
+    timestamp: formatPromptTime(prompt.timestamp),
+    imageCount: prompt.imageCount,
+    widthPercent: markerWidth(prompt.eventId, index),
+    nodeIndex: nodeIndexByEventId.get(prompt.eventId) ?? null,
+  }));
 }
 
 export function PromptTimeline({
   nodes,
+  prompts,
   currentNodeIndex,
   scrollIntentVersion,
   onSelectPrompt,
 }: PromptTimelineProps) {
-  const scopeKey = useEventScopeKey();
-  const events = useScopedEvents(scopeKey);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const items = useMemo(() => buildPromptTimelineItems(nodes, events), [nodes, events]);
+  const nodeIndexByEventId = useMemo(() => buildNodeIndexByEventId(nodes), [nodes]);
+  const items = useMemo(
+    () => buildPromptTimelineItems(prompts, nodeIndexByEventId),
+    [nodeIndexByEventId, prompts],
+  );
   const currentPromptId = useMemo(() => {
     if (items.length === 0 || currentNodeIndex == null) return null;
 
-    let current = items[0];
+    let current: PromptTimelineItem | null = null;
     for (const item of items) {
+      if (item.nodeIndex == null) continue;
       if (item.nodeIndex > currentNodeIndex) break;
       current = item;
     }
-    return current.id;
+    return current?.id ?? null;
   }, [currentNodeIndex, items]);
 
   const selectedPromptId =

@@ -3,6 +3,7 @@ import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
+import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
 import {
   useEntityStore,
   useEntityField,
@@ -189,6 +190,9 @@ export function SessionDetailView({
     error,
     fetchOlderEvents,
   } = useSessionEvents(sessionId, { skip: isOptimistic === true });
+  const { items: promptIndexItems } = useSessionPromptIndex(sessionId, {
+    skip: isOptimistic === true,
+  });
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -503,6 +507,7 @@ export function SessionDetailView({
                 key={sessionId}
                 sessionId={sessionId}
                 nodes={listNodes}
+                promptIndexItems={promptIndexItems}
                 gitCheckpoints={gitCheckpoints ?? []}
                 initialLoading={initialEventsLoading}
                 hasOlder={hasOlder}
