@@ -4,6 +4,7 @@ import { channelService } from "../services/channel.js";
 import { assertChannelAccess } from "../services/access.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
+import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { organizationService } from "../services/organization.js";
 
 export const channelQueries = {
@@ -111,7 +112,7 @@ export const channelSubscriptions = {
   channelEvents: {
     subscribe: async (
       _: unknown,
-      args: { channelId: string; organizationId: string },
+      args: { channelId: string; organizationId: string; types?: string[] },
       ctx: Context,
     ) => {
       const orgId = requireOrgContext(ctx);
@@ -119,7 +120,13 @@ export const channelSubscriptions = {
         throw new Error("Not authorized for this organization");
       }
       await assertChannelAccess(args.channelId, ctx.userId);
-      return pubsub.asyncIterator(topics.channelEvents(args.channelId));
+
+      return filterAsyncIterator(
+        pubsub.asyncIterator<{ channelEvents: { eventType: string } }>(
+          topics.channelEvents(args.channelId),
+        ),
+        (payload) => !args.types?.length || args.types.includes(payload.channelEvents.eventType),
+      );
     },
   },
 };

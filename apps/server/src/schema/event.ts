@@ -20,7 +20,8 @@ function canViewSystemEvent(
   if (
     event.eventType !== "bridge_access_requested" &&
     event.eventType !== "bridge_access_request_resolved" &&
-    event.eventType !== "bridge_access_revoked"
+    event.eventType !== "bridge_access_revoked" &&
+    event.eventType !== "bridge_access_updated"
   ) {
     return true;
   }
@@ -49,6 +50,12 @@ function canViewSystemEvent(
     return true;
   }
   if (event.eventType === "bridge_access_revoked" && payload.granteeUserId === userId) {
+    return true;
+  }
+  if (
+    event.eventType === "bridge_access_updated" &&
+    (payload.ownerUserId === userId || payload.granteeUserId === userId)
+  ) {
     return true;
   }
   return false;
@@ -230,7 +237,7 @@ export const eventQueries = {
 
 export const eventSubscriptions = {
   orgEvents: {
-    subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    subscribe: (_: unknown, args: { organizationId: string; types?: string[] }, ctx: Context) => {
       const orgId = requireOrgContext(ctx);
       if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");
@@ -263,6 +270,17 @@ export const eventSubscriptions = {
             event.eventType === "chat_member_removed"
           ) {
             membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
+          }
+
+          if (args.types?.length && !args.types.includes(event.eventType)) {
+            return false;
+          }
+
+          if (
+            event.scopeType === "channel" &&
+            CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
+          ) {
+            return false;
           }
 
           if (event.scopeType === "chat") {

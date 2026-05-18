@@ -5,6 +5,8 @@ vi.mock("../lib/pubsub.js", () => ({
     asyncIterator: vi.fn(() => "iterator"),
   },
   topics: {
+    channelEvents: (id: string) => `channel:${id}:events`,
+    orgEvents: (id: string) => `org:${id}:events`,
     ticketEvents: (id: string) => `ticket:${id}:events`,
     sessionPorts: (id: string) => `session:${id}:ports`,
     sessionStatus: (id: string) => `session:${id}:status`,
@@ -13,6 +15,8 @@ vi.mock("../lib/pubsub.js", () => ({
 }));
 
 vi.mock("../services/access.js", () => ({
+  assertChannelAccess: vi.fn(),
+  assertChatAccess: vi.fn(),
   assertScopeAccess: vi.fn(),
 }));
 
@@ -20,6 +24,32 @@ vi.mock("../services/ticket.js", () => ({
   ticketService: {
     list: vi.fn(),
     get: vi.fn(),
+  },
+}));
+
+vi.mock("../services/channel.js", () => ({
+  channelService: {
+    listChannels: vi.fn(),
+    getChannel: vi.fn(),
+    getChannelMessages: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    join: vi.fn(),
+    leave: vi.fn(),
+    sendMessage: vi.fn(),
+    sendChannelMessage: vi.fn(),
+    editChannelMessage: vi.fn(),
+    deleteChannelMessage: vi.fn(),
+    getMembers: vi.fn(),
+    getMemberCount: vi.fn(),
+    isMember: vi.fn(),
+  },
+}));
+
+vi.mock("../services/organization.js", () => ({
+  organizationService: {
+    getRepoById: vi.fn(),
   },
 }));
 
@@ -86,11 +116,12 @@ vi.mock("../services/aiConversation.js", () => ({
 import { ticketQueries, ticketSubscriptions } from "./ticket.js";
 import { sessionQueries, sessionSubscriptions } from "./session.js";
 import { sessionMutations } from "./session.js";
+import { channelSubscriptions } from "./channel.js";
 import { channelGroupQueries } from "./channelGroup.js";
 import { eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
 import { aiConversationQueries, aiConversationMutations } from "./ai-conversation.js";
-import { assertScopeAccess } from "../services/access.js";
+import { assertChannelAccess, assertScopeAccess } from "../services/access.js";
 import { ticketService } from "../services/ticket.js";
 import { sessionService } from "../services/session.js";
 import { prisma } from "../lib/db.js";
@@ -99,13 +130,38 @@ import { runtimeAccessService } from "../services/runtime-access.js";
 import { channelGroupService } from "../services/channelGroup.js";
 import { inboxService } from "../services/inbox.js";
 import { aiConversationService } from "../services/aiConversation.js";
+import { pubsub } from "../lib/pubsub.js";
 
 const ctx = {
   userId: "user-1",
   organizationId: "org-1",
   role: "admin",
   actorType: "user",
+  channelMembershipLoader: {
+    load: vi.fn().mockResolvedValue(true),
+  },
+  chatMembershipLoader: {
+    load: vi.fn().mockResolvedValue(true),
+  },
 } as any;
+
+function iteratorFrom<T>(items: T[]): AsyncIterableIterator<T> {
+  let index = 0;
+  return {
+    next: vi.fn(async () => {
+      const value = items[index];
+      index += 1;
+      return value === undefined ? { value: undefined, done: true } : { value, done: false };
+    }),
+    return: vi.fn(async () => ({ value: undefined, done: true })),
+    throw: vi.fn(async (error: Error) => {
+      throw error;
+    }),
+    [Symbol.asyncIterator]() {
+      return this;
+    },
+  };
+}
 
 describe("GraphQL authz guards", () => {
   beforeEach(() => {
@@ -265,5 +321,68 @@ describe("GraphQL authz guards", () => {
 
     expect(assertScopeAccess).toHaveBeenNthCalledWith(1, "session", "session-1", "user-1", "org-1");
     expect(assertScopeAccess).toHaveBeenNthCalledWith(2, "session", "session-1", "user-1", "org-1");
+  });
+
+  it("filters org subscriptions by event type and excludes channel message traffic", async () => {
+    vi.mocked(pubsub.asyncIterator).mockReturnValueOnce(
+      iteratorFrom([
+        {
+          orgEvents: {
+            scopeType: "channel",
+            scopeId: "channel-1",
+            eventType: "message_sent",
+            payload: {},
+          },
+        },
+        {
+          orgEvents: {
+            scopeType: "session",
+            scopeId: "session-1",
+            eventType: "message_sent",
+            payload: {},
+          },
+        },
+      ]),
+    );
+
+    const iterator = eventSubscriptions.orgEvents.subscribe(
+      {},
+      { organizationId: "org-1", types: ["message_sent"] },
+      ctx,
+    );
+
+    await expect(iterator.next()).resolves.toEqual({
+      value: {
+        orgEvents: {
+          scopeType: "session",
+          scopeId: "session-1",
+          eventType: "message_sent",
+          payload: {},
+        },
+      },
+      done: false,
+    });
+    expect(ctx.channelMembershipLoader.load).not.toHaveBeenCalled();
+  });
+
+  it("applies channel subscription type filters after access checks", async () => {
+    vi.mocked(pubsub.asyncIterator).mockReturnValueOnce(
+      iteratorFrom([
+        { channelEvents: { eventType: "channel_updated" } },
+        { channelEvents: { eventType: "message_sent" } },
+      ]),
+    );
+
+    const iterator = await channelSubscriptions.channelEvents.subscribe(
+      {},
+      { channelId: "channel-1", organizationId: "org-1", types: ["message_sent"] },
+      ctx,
+    );
+
+    await expect(iterator.next()).resolves.toEqual({
+      value: { channelEvents: { eventType: "message_sent" } },
+      done: false,
+    });
+    expect(assertChannelAccess).toHaveBeenCalledWith("channel-1", "user-1");
   });
 });

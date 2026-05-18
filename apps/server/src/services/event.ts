@@ -80,6 +80,12 @@ const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
   "branch_renamed",
 ]);
 
+const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
+  "message_sent",
+  "message_edited",
+  "message_deleted",
+]);
+
 // Maps scope types to their pubsub topic builders.
 // Keys must match the GraphQL subscription field names (e.g. "channel" → "channelEvents").
 const scopeTopicMap: Record<string, (id: string) => string> = {
@@ -151,6 +157,17 @@ export class EventService {
     // and broadcasting to org topic only triggers per-event membership checks for non-members.
     if (event.scopeType === "chat") {
       // Still append to Redis stream for agent worker
+      this.appendToStream(event.organizationId, event);
+      return event;
+    }
+
+    // Channel message traffic is consumed through channelEvents by the active
+    // channel view. Keeping it off orgEvents prevents every channel member tab
+    // from processing high-volume message events ambiently.
+    if (
+      event.scopeType === "channel" &&
+      CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
+    ) {
       this.appendToStream(event.organizationId, event);
       return event;
     }

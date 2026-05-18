@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
-import { handleOrgEvent, useAuthStore } from "@trace/client-core";
+import { handleOrgEvent, ORG_EVENT_TYPES, useAuthStore } from "@trace/client-core";
 import { client } from "../lib/urql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
-  subscription OrgEvents($organizationId: ID!) {
-    orgEvents(organizationId: $organizationId) {
+  subscription OrgEvents($organizationId: ID!, $types: [String!]) {
+    orgEvents(organizationId: $organizationId, types: $types) {
       id
       scopeType
       scopeId
@@ -32,7 +32,7 @@ export function useOrgEvents() {
     if (!activeOrgId) return;
 
     const subscription = client
-      .subscription(ORG_EVENTS_SUBSCRIPTION, { organizationId: activeOrgId })
+      .subscription(ORG_EVENTS_SUBSCRIPTION, { organizationId: activeOrgId, types: ORG_EVENT_TYPES })
       .subscribe((result: { error?: unknown; data?: Record<string, unknown> }) => {
         if (result.error) {
           console.error("[orgEvents] subscription error:", result.error);
