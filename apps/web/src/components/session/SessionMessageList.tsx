@@ -330,6 +330,10 @@ export function SessionMessageList({
   }, [loadOlderPreservingScroll, onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
+  const firstVirtualItem = virtualItems[0];
+  const lastVirtualItem = virtualItems[virtualItems.length - 1];
+  const paddingTop = firstVirtualItem?.start ?? 0;
+  const paddingBottom = lastVirtualItem ? Math.max(0, totalSize - lastVirtualItem.end) : 0;
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
@@ -371,33 +375,30 @@ export function SessionMessageList({
       )}
 
       <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 [overflow-anchor:none]">
-        {/* Absolute positioning keeps scroll height tied only to the virtualizer's total size. */}
-        <div
-          className="relative [overflow-anchor:none]"
-          style={{ height: totalSize, width: "100%" }}
-        >
+        <div className="[overflow-anchor:none]" style={{ minHeight: totalSize, width: "100%" }}>
           {/* Sentinel for infinite scroll - triggers loading older messages */}
-          <div ref={sentinelRef} className="absolute left-0 top-0 h-px w-px" />
+          <div aria-hidden={paddingTop <= 0} className="relative" style={{ height: paddingTop }}>
+            <div ref={sentinelRef} className="h-px w-px" />
 
-          {!hasOlder && nodes.length > 0 && (
-            <div
-              className="absolute left-0 right-0 text-center text-xs text-muted-foreground"
-              style={{ top: LIST_VERTICAL_PADDING, height: BEGINNING_LABEL_HEIGHT }}
-            >
-              Beginning of session
-            </div>
-          )}
+            {!hasOlder && nodes.length > 0 && (
+              <div
+                className="absolute left-0 right-0 text-center text-xs text-muted-foreground"
+                style={{ top: LIST_VERTICAL_PADDING, height: BEGINNING_LABEL_HEIGHT }}
+              >
+                Beginning of session
+              </div>
+            )}
+          </div>
 
           {virtualItems.map(
-            (virtualRow: { key: React.Key; index: number; start: number }) => {
+            (virtualRow: { key: React.Key; index: number }) => {
               const node = nodes[virtualRow.index];
               return (
                 <div
                   key={virtualRow.key}
                   ref={virtualizer.measureElement}
                   data-index={virtualRow.index}
-                  className="absolute left-0 top-0 w-full pb-3 will-change-transform"
-                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  className="w-full pb-3"
                 >
                   {node.kind === "collapsed-events" ? (
                     <CollapsedSessionEventsRow
@@ -422,6 +423,8 @@ export function SessionMessageList({
               );
             },
           )}
+
+          {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: paddingBottom }} /> : null}
         </div>
       </div>
     </div>
