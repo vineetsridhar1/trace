@@ -132,16 +132,10 @@ export function SessionMessageList({
     },
   });
 
-  useLayoutEffect(() => {
-    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
-      const container = scrollContainerRef.current;
-      return !!container && item.end < container.scrollTop;
-    };
-
-    return () => {
-      virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
-    };
-  }, [virtualizer]);
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
+    const container = scrollContainerRef.current;
+    return !!container && item.end < container.scrollTop;
+  };
 
   // Track whether the user is near the bottom.
   const handleScroll = useCallback(() => {
