@@ -467,6 +467,39 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "session_group_visibility_updated") {
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (sessionGroupId) {
+      if (payload.removed === true) {
+        const sessionIds = batch.getAll("sessions");
+        for (const [sessionId, session] of Object.entries(sessionIds)) {
+          if (session.sessionGroupId === sessionGroupId) {
+            batch.remove("sessions", sessionId);
+          }
+        }
+        batch.remove("sessionGroups", sessionGroupId);
+        if (ui.getActiveSessionGroupId() === sessionGroupId) {
+          ui.setActiveSessionGroupId(null);
+          ui.setActiveSessionId(null);
+        }
+      } else {
+        upsertSessionGroupFromPayload({
+          batch,
+          payload,
+          timestamp: event.timestamp,
+          bumpSort: false,
+        });
+        if (payload.visibility === "public" || payload.visibility === "private") {
+          batch.patch("sessionGroups", sessionGroupId, {
+            visibility: payload.visibility,
+            updatedAt: event.timestamp,
+          } as Partial<SessionGroupEntity>);
+        }
+      }
+    }
+  }
+
   // Route session status events
   if (
     SESSION_STATUS_EVENTS.has(event.eventType) &&

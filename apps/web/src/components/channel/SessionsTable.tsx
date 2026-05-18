@@ -6,7 +6,12 @@ import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog"
 import { motion } from "framer-motion";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
-import { RENAME_SESSION_GROUP_MUTATION } from "@trace/client-core";
+import {
+  RENAME_SESSION_GROUP_MUTATION,
+  UPDATE_SESSION_GROUP_VISIBILITY_MUTATION,
+  useAuthStore,
+  type AuthState,
+} from "@trace/client-core";
 import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
 import { FILTER_STORAGE_KEY_PREFIX, isSessionStatusHeaderRow } from "./sessions-table-types";
@@ -24,6 +29,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const gridApiRef = useRef<GridApi<SessionGridRow> | null>(null);
   const { fadeControls, isCompact } = useCompactTableMode(containerRef);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const [archiveTarget, setArchiveTarget] = useState<{
     id: string;
     name: string;
@@ -101,6 +107,30 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         });
       });
   }, []);
+
+  const handleUpdateVisibility = useCallback(
+    (group: SessionGroupRow, visibility: "public" | "private") => {
+      if (group.visibility === visibility) return;
+      const rollback = applyOptimisticPatch("sessionGroups", group.id, { visibility });
+      void client
+        .mutation(UPDATE_SESSION_GROUP_VISIBILITY_MUTATION, { id: group.id, visibility })
+        .toPromise()
+        .then((result) => {
+          if (!result.error) return;
+          rollback();
+          toast.error("Failed to update workspace visibility", {
+            description: result.error.message,
+          });
+        })
+        .catch((error: unknown) => {
+          rollback();
+          toast.error("Failed to update workspace visibility", {
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        });
+    },
+    [],
+  );
 
   const renameContext = useMemo<SessionGroupRenameContext>(
     () => ({
@@ -180,7 +210,9 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           onArchive={handleArchive}
           onClose={() => setContextMenu(null)}
           onCopyLink={handleCopyLink}
+          currentUserId={currentUserId}
           onRename={handleRename}
+          onUpdateVisibility={handleUpdateVisibility}
         />
       )}
     </div>

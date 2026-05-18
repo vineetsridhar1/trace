@@ -1,4 +1,4 @@
-import { Laptop, TerminalSquare } from "lucide-react";
+import { Laptop, Lock, TerminalSquare } from "lucide-react";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
@@ -44,6 +44,9 @@ export function SessionNameCell({
         >
           <Laptop className="h-3.5 w-3.5 text-emerald-500" />
         </span>
+      )}
+      {row.visibility === "private" && (
+        <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private" />
       )}
       {hasActiveTerminal && (
         <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

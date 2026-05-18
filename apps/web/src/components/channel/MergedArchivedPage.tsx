@@ -29,6 +29,12 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
       id
       name
       status
+      visibility
+      owner {
+        id
+        name
+        avatarUrl
+      }
       prUrl
       worktreeDeleted
       archivedAt

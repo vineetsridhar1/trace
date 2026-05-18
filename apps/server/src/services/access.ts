@@ -1,4 +1,5 @@
 import { prisma } from "../lib/db.js";
+import { Prisma } from "@prisma/client";
 
 async function assertOrgEntityExists(
   model: "channel" | "session" | "ticket" | "project",
@@ -37,6 +38,77 @@ async function assertOrgEntityExists(
   if (!entity) {
     throw new Error("Not authorized for this scope");
   }
+}
+
+export function visibleSessionGroupWhere(userId: string): Prisma.SessionGroupWhereInput {
+  return {
+    OR: [{ visibility: "public" }, { ownerUserId: userId }],
+  };
+}
+
+export function visibleSessionWhere(userId: string): Prisma.SessionWhereInput {
+  return {
+    OR: [
+      { sessionGroupId: null },
+      {
+        sessionGroup: {
+          is: visibleSessionGroupWhere(userId),
+        },
+      },
+    ],
+  };
+}
+
+export function canViewSessionGroup(
+  group: { visibility?: string | null; ownerUserId?: string | null },
+  userId: string,
+): boolean {
+  return group.visibility == null || group.visibility === "public" || group.ownerUserId === userId;
+}
+
+export async function assertSessionGroupAccess(
+  sessionGroupId: string,
+  userId: string,
+  organizationId: string,
+) {
+  const group = await prisma.sessionGroup.findFirst({
+    where: { id: sessionGroupId, organizationId },
+    select: { id: true, visibility: true, ownerUserId: true },
+  });
+
+  if (!group || !canViewSessionGroup(group, userId)) {
+    throw new Error("Not authorized for this session group");
+  }
+
+  return group;
+}
+
+export async function assertSessionAccess(
+  sessionId: string,
+  userId: string,
+  organizationId: string,
+) {
+  const session = await prisma.session.findFirst({
+    where: { id: sessionId, organizationId },
+    select: {
+      id: true,
+      sessionGroup: {
+        select: {
+          visibility: true,
+          ownerUserId: true,
+        },
+      },
+    },
+  });
+
+  if (!session) {
+    throw new Error("Not authorized for this scope");
+  }
+  if (session.sessionGroup && !canViewSessionGroup(session.sessionGroup, userId)) {
+    throw new Error("Not authorized for this scope");
+  }
+
+  return session;
 }
 
 export async function isActiveChatMember(chatId: string, userId: string) {
@@ -98,7 +170,7 @@ export async function assertScopeAccess(
       return;
     case "session":
       if (!organizationId) throw new Error("Organization context required for session access");
-      await assertOrgEntityExists("session", scopeId, organizationId);
+      await assertSessionAccess(scopeId, userId, organizationId);
       return;
     case "ticket":
       if (!organizationId) throw new Error("Organization context required for ticket access");

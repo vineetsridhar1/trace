@@ -32,14 +32,14 @@ export const sessionQueries = {
     },
     ctx: Context,
   ) => {
-    return sessionService.listGroups(args.channelId, requireOrgContext(ctx), {
+    return sessionService.listGroups(args.channelId, requireOrgContext(ctx), ctx.userId, {
       archived: args.archived ?? undefined,
       status: args.status ?? undefined,
       includeActiveMerged: args.includeActiveMerged ?? undefined,
     });
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.getGroup(args.id, requireOrgContext(ctx));
+    return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
   },
   sessions: (
     _: unknown,
@@ -48,10 +48,10 @@ export const sessionQueries = {
   ) => {
     assertOrgAccess(ctx, args.organizationId);
     const filters = args.filters ? { ...args.filters } : undefined;
-    return sessionService.list(args.organizationId, filters);
+    return sessionService.list(args.organizationId, ctx.userId, filters);
   },
   session: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.get(args.id, requireOrgContext(ctx));
+    return sessionService.get(args.id, requireOrgContext(ctx), ctx.userId);
   },
   mySessions: (
     _: unknown,
@@ -76,7 +76,7 @@ export const sessionQueries = {
     ctx: Context,
   ) => {
     const orgId = requireOrgContext(ctx);
-    return sessionService.search(orgId, args.query, args.channelId ?? undefined);
+    return sessionService.search(orgId, ctx.userId, args.query, args.channelId ?? undefined);
   },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -299,6 +299,19 @@ export const sessionMutations = {
       args.id,
       requireOrgContext(ctx),
       args.name,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  updateSessionGroupVisibility: (
+    _: unknown,
+    args: { id: string; visibility: "public" | "private" },
+    ctx: Context,
+  ) => {
+    return sessionService.updateGroupVisibility(
+      args.id,
+      requireOrgContext(ctx),
+      args.visibility,
       ctx.actorType,
       ctx.userId,
     );
@@ -609,6 +622,16 @@ export const sessionTypeResolvers = {
     },
     gitCheckpoints: async (group: { id: string }) => {
       return sessionService.listGitCheckpointsForGroup(group.id);
+    },
+    owner: async (
+      group: { owner?: unknown; ownerUser?: unknown; ownerUserId?: string },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (group.owner) return group.owner;
+      if (group.ownerUser) return group.ownerUser;
+      if (!group.ownerUserId) return null;
+      return ctx.userLoader.load(group.ownerUserId);
     },
   },
   Session: {

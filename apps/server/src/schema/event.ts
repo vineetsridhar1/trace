@@ -4,8 +4,14 @@ import { eventService } from "../services/event.js";
 import { sessionTimelineService } from "../services/session-timeline.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
-import { assertChannelAccess, assertChatAccess, assertScopeAccess } from "../services/access.js";
+import {
+  assertChannelAccess,
+  assertChatAccess,
+  assertScopeAccess,
+  canViewSessionGroup,
+} from "../services/access.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
+import { prisma } from "../lib/db.js";
 
 const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
   "message_sent",
@@ -52,6 +58,75 @@ function canViewSystemEvent(
     return true;
   }
   return false;
+}
+
+function eventPayloadRecord(event: { payload?: unknown }): Record<string, unknown> | null {
+  return event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+    ? (event.payload as Record<string, unknown>)
+    : null;
+}
+
+async function resolveEventSessionGroup(
+  event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown },
+  organizationId: string,
+  cache: Map<string, { visibility: string; ownerUserId: string } | null>,
+) {
+  const payload = eventPayloadRecord(event);
+  const payloadGroup = payload?.sessionGroup;
+  if (payloadGroup && typeof payloadGroup === "object" && !Array.isArray(payloadGroup)) {
+    const group = payloadGroup as { id?: unknown; visibility?: unknown; ownerUserId?: unknown };
+    if (
+      typeof group.id === "string" &&
+      typeof group.visibility === "string" &&
+      typeof group.ownerUserId === "string"
+    ) {
+      return { visibility: group.visibility, ownerUserId: group.ownerUserId };
+    }
+  }
+
+  const payloadGroupId =
+    typeof payload?.sessionGroupId === "string" ? payload.sessionGroupId : null;
+  const cacheKey =
+    payloadGroupId ?? (event.scopeType === "session" ? `session:${event.scopeId}` : null);
+  if (!cacheKey) return null;
+  if (cache.has(cacheKey)) return cache.get(cacheKey) ?? null;
+
+  const group = payloadGroupId
+    ? await prisma.sessionGroup.findFirst({
+        where: { id: payloadGroupId, organizationId },
+        select: { visibility: true, ownerUserId: true },
+      })
+    : await prisma.session
+        .findFirst({
+          where: { id: event.scopeId, organizationId },
+          select: {
+            sessionGroup: {
+              select: { visibility: true, ownerUserId: true },
+            },
+          },
+        })
+        .then((session) => session?.sessionGroup ?? null);
+  cache.set(cacheKey, group);
+  return group;
+}
+
+async function canViewSessionEvent(
+  event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown },
+  organizationId: string,
+  userId: string,
+  cache: Map<string, { visibility: string; ownerUserId: string } | null>,
+): Promise<boolean> {
+  const payload = eventPayloadRecord(event);
+  if (
+    event.eventType === "session_group_visibility_updated" &&
+    payload?.removed === true &&
+    typeof payload.ownerUserId === "string"
+  ) {
+    return payload.ownerUserId !== userId;
+  }
+
+  const group = await resolveEventSessionGroup(event, organizationId, cache);
+  return !group || canViewSessionGroup(group, userId);
 }
 
 export const eventQueries = {
@@ -101,6 +176,10 @@ export const eventQueries = {
     // Batch-check membership instead of per-event N+1 queries
     const chatIds = new Set<string>();
     const channelIds = new Set<string>();
+    const sessionVisibilityCache = new Map<
+      string,
+      { visibility: string; ownerUserId: string } | null
+    >();
     for (const event of events) {
       if (event.scopeType === "chat") {
         chatIds.add(event.scopeId);
@@ -134,23 +213,35 @@ export const eventQueries = {
         : Promise.resolve(new Map<string, boolean>()),
     ]);
 
-    return events.filter(
-      (event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown }) => {
-        if (!canViewSystemEvent(event, ctx.userId)) {
-          return false;
-        }
-        if (event.scopeType === "chat") {
-          return chatMembership.get(event.scopeId) ?? false;
-        }
-        if (
-          event.scopeType === "channel" &&
-          CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
-        ) {
-          return channelMembership.get(event.scopeId) ?? false;
-        }
-        return true;
-      },
-    );
+    type QueriedEvent = {
+      scopeType: string;
+      scopeId: string;
+      eventType: string;
+      payload?: unknown;
+    };
+    const filtered: QueriedEvent[] = [];
+    for (const event of events as QueriedEvent[]) {
+      if (!canViewSystemEvent(event, ctx.userId)) {
+        continue;
+      }
+      if (event.scopeType === "chat") {
+        if (chatMembership.get(event.scopeId) ?? false) filtered.push(event);
+        continue;
+      }
+      if (
+        event.scopeType === "channel" &&
+        CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
+      ) {
+        if (channelMembership.get(event.scopeId) ?? false) filtered.push(event);
+        continue;
+      }
+      if (
+        await canViewSessionEvent(event, args.organizationId, ctx.userId, sessionVisibilityCache)
+      ) {
+        filtered.push(event);
+      }
+    }
+    return filtered;
   },
 
   sessionTimeline: async (
@@ -238,6 +329,10 @@ export const eventSubscriptions = {
 
       // Per-connection membership cache to avoid per-event DB calls
       const membershipCache = new Map<string, boolean>();
+      const sessionVisibilityCache = new Map<
+        string,
+        { visibility: string; ownerUserId: string } | null
+      >();
 
       return filterAsyncIterator(
         pubsub.asyncIterator<{
@@ -260,9 +355,11 @@ export const eventSubscriptions = {
             event.eventType === "channel_member_added" ||
             event.eventType === "channel_member_removed" ||
             event.eventType === "chat_member_added" ||
-            event.eventType === "chat_member_removed"
+            event.eventType === "chat_member_removed" ||
+            event.eventType === "session_group_visibility_updated"
           ) {
             membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
+            sessionVisibilityCache.clear();
           }
 
           if (event.scopeType === "chat") {
@@ -284,7 +381,12 @@ export const eventSubscriptions = {
             membershipCache.set(cacheKey, result);
             return result;
           }
-          return true;
+          return canViewSessionEvent(
+            event,
+            args.organizationId,
+            ctx.userId,
+            sessionVisibilityCache,
+          );
         },
       );
     },
@@ -307,7 +409,27 @@ export const eventSubscriptions = {
     ) => {
       assertOrgAccess(ctx, args.organizationId);
       await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
-      return pubsub.asyncIterator(topics.sessionEvents(args.sessionId));
+      const sessionVisibilityCache = new Map<
+        string,
+        { visibility: string; ownerUserId: string } | null
+      >();
+      return filterAsyncIterator(
+        pubsub.asyncIterator<{
+          sessionEvents: {
+            scopeType: string;
+            scopeId: string;
+            eventType: EventType;
+            payload?: unknown;
+          };
+        }>(topics.sessionEvents(args.sessionId)),
+        async (payload) =>
+          canViewSessionEvent(
+            payload.sessionEvents,
+            args.organizationId,
+            ctx.userId,
+            sessionVisibilityCache,
+          ),
+      );
     },
   },
 };

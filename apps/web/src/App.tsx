@@ -87,14 +87,14 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const activeChannelType = useEntityField("channels", activeChannelId ?? "", "type");
 
-  // Cmd+N / Ctrl+N: create a new session with smart defaults
+  // Cmd+N / Ctrl+N creates a public session; adding Shift creates a private one.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "n") {
         e.preventDefault();
         const channelId = useUIStore.getState().activeChannelId;
         if (!channelId) return;
-        createQuickSession(channelId);
+        createQuickSession(channelId, { visibility: e.shiftKey ? "private" : "public" });
       }
     }
     window.addEventListener("keydown", handleKeyDown);

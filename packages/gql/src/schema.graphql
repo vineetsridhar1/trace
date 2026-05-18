@@ -16,6 +16,11 @@ enum SessionStatus {
   merged
 }
 
+enum SessionGroupVisibility {
+  public
+  private
+}
+
 enum SessionGroupStatus {
   in_progress
   needs_input
@@ -264,6 +269,7 @@ enum EventType {
   session_runtime_deprovision_failed
   session_runtime_disconnected
   session_runtime_reconnected
+  session_group_visibility_updated
 }
 
 # --- Core Types ---
@@ -376,6 +382,8 @@ type SessionGroup {
   name: String!
   slug: String
   status: SessionGroupStatus!
+  visibility: SessionGroupVisibility!
+  owner: User!
   channel: Channel
   repo: Repo
   branch: String
@@ -870,6 +878,7 @@ input StartSessionInput {
   tool: CodingTool
   model: String
   reasoningEffort: String
+  visibility: SessionGroupVisibility
   environmentId: ID
   hosting: HostingMode
   runtimeInstanceId: ID
@@ -1172,6 +1181,7 @@ type Mutation {
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
+  updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!
