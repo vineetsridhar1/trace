@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ImageIcon, MessageSquareText } from "lucide-react";
+import { ImageIcon } from "lucide-react";
 import type { Event } from "@trace/gql";
 import { attachmentKeysFromPayload, asJsonObject } from "@trace/shared";
 import { useScopedEvents } from "@trace/client-core";
@@ -160,9 +160,6 @@ export function PromptTimeline({ nodes, currentNodeIndex, onSelectPrompt }: Prom
                     className="pointer-events-none absolute right-full top-1/2 mr-3 w-72 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-3 text-left backdrop-blur-xl"
                   >
                     <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <MessageSquareText size={13} />
-                      </span>
                       <span className="truncate">{item.actorName}</span>
                       <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                       <span>{item.timestamp}</span>
