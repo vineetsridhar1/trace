@@ -19,7 +19,12 @@ import {
   setBridgeLabel,
   setRepoGitHooksEnabled,
 } from "./config.js";
-import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
+import {
+  disableRepoHooks,
+  getRepoHookStatus,
+  installOrRepairRepoHooks,
+  installOrRepairRepoHooksBestEffort,
+} from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
@@ -197,7 +202,7 @@ ipcMain.handle(
 ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
   const repoConfig = await saveRepoPath(repoId, localPath);
   if (repoConfig.gitHooksEnabled) {
-    await installOrRepairRepoHooks(localPath);
+    await installOrRepairRepoHooksBestEffort(localPath, "repo path save");
   }
   // Notify the server that this bridge now has this repo registered
   bridge.send({ type: "repo_linked", repoId });

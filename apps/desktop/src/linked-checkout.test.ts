@@ -6,6 +6,10 @@ import { promisify } from "util";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LinkedCheckoutConfig } from "./config.js";
 
+const { installOrRepairRepoHooksBestEffortMock } = vi.hoisted(() => ({
+  installOrRepairRepoHooksBestEffortMock: vi.fn(async () => undefined),
+}));
+
 vi.mock("./config.js", () => {
   const state: {
     repos: Record<
@@ -40,6 +44,7 @@ vi.mock("./config.js", () => {
 
 vi.mock("./repo-hooks.js", () => ({
   installOrRepairRepoHooks: vi.fn(async () => undefined),
+  installOrRepairRepoHooksBestEffort: installOrRepairRepoHooksBestEffortMock,
 }));
 
 import * as config from "./config.js";
@@ -47,6 +52,7 @@ import {
   commitLinkedCheckoutChanges,
   getLinkedCheckoutChangedFile,
   getLinkedCheckoutStatus,
+  linkLinkedCheckoutRepo,
   syncLinkedCheckout,
 } from "./linked-checkout.js";
 
@@ -211,6 +217,26 @@ function seedRepo(repoId: string, repoPath: string): void {
 
 beforeEach(() => {
   configMock.__reset();
+  installOrRepairRepoHooksBestEffortMock.mockClear();
+});
+
+describe("linked checkout repo link", () => {
+  it("links the repo through best-effort hook repair when hooks are enabled", async () => {
+    configMock.__state.repos["repo-1"] = {
+      path: "/tmp/previous",
+      gitHooksEnabled: true,
+      linkedCheckout: null,
+    };
+
+    const result = await linkLinkedCheckoutRepo("repo-1", "/tmp/repo");
+
+    expect(result.ok).toBe(true);
+    expect(configMock.__state.repos["repo-1"].path).toBe("/tmp/repo");
+    expect(installOrRepairRepoHooksBestEffortMock).toHaveBeenCalledWith(
+      "/tmp/repo",
+      "linked checkout repo link",
+    );
+  });
 });
 
 describe("linked checkout commit-back", () => {

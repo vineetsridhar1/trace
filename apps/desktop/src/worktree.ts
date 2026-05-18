@@ -8,7 +8,7 @@ import {
   generatedTraceWorktreeBranch,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "@trace/shared";
-import { installOrRepairRepoHooks } from "./repo-hooks.js";
+import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
 import { formatGitError, gitEnv } from "./git-utils.js";
 
 type ExecErrorWithOutput = Error & {
@@ -271,7 +271,7 @@ export async function createWorktree({
   }
 
   if (gitHooksEnabled) {
-    await installOrRepairRepoHooks(targetPath);
+    await installOrRepairRepoHooksBestEffort(targetPath, "session worktree creation");
   }
 
   return { workdir: targetPath, branch, slug: worktreeSlug };
