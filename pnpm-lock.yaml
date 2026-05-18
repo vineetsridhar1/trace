@@ -130,7 +130,7 @@ importers:
         specifier: ^8.5.13
         version: 8.18.1
       electron:
-        specifier: '>=39.8.5'
+        specifier: 41.3.0
         version: 41.3.0
       typescript:
         specifier: ^5.7.0
