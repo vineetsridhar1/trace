@@ -47,7 +47,6 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { isLocalMode } from "../lib/mode.js";
-import { pubsub, topics } from "../lib/pubsub.js";
 import {
   assertSessionGroupAccess,
   canViewSessionGroup,
@@ -1933,21 +1932,16 @@ export class SessionService {
   async listGroups(
     channelId: string,
     organizationId: string,
-    userIdOrOptions?:
-      | string
-      | { archived?: boolean; status?: string; includeActiveMerged?: boolean },
+    userId: string,
     options?: { archived?: boolean; status?: string; includeActiveMerged?: boolean },
   ) {
-    const userId = typeof userIdOrOptions === "string" ? userIdOrOptions : null;
-    const resolvedOptions = typeof userIdOrOptions === "string" ? options : userIdOrOptions;
     const where: Prisma.SessionGroupWhereInput = {
       channelId,
       organizationId,
-      ...(userId ? { AND: [visibleSessionGroupWhere(userId)] } : {}),
+      AND: [visibleSessionGroupWhere(userId)],
     };
 
-    const shouldIncludeArchived =
-      resolvedOptions?.archived === true || resolvedOptions?.status === "archived";
+    const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
     if (shouldIncludeArchived) {
       where.archivedAt = { not: null };
     } else {
@@ -1976,14 +1970,14 @@ export class SessionService {
 
     // Post-query filter for derived status (computed from child sessions)
     let filtered = mapped;
-    if (resolvedOptions?.status) {
-      filtered = mapped.filter((g: MappedGroup) => g.status === resolvedOptions.status);
+    if (options?.status) {
+      filtered = mapped.filter((g: MappedGroup) => g.status === options.status);
     } else if (!shouldIncludeArchived) {
       // Default main table: exclude merged groups, except merged groups whose worktree
       // is still retained when the caller opts in via includeActiveMerged.
       filtered = mapped.filter((g: MappedGroup) => {
         if (g.status !== "merged") return true;
-        return resolvedOptions?.includeActiveMerged === true && g.worktreeDeleted === false;
+        return options?.includeActiveMerged === true && g.worktreeDeleted === false;
       });
     }
 
@@ -2141,25 +2135,28 @@ export class SessionService {
       });
     }
 
-    const updated =
-      current.visibility === visibility
-        ? current
-        : await prisma.sessionGroup.update({
-            where: { id: groupId },
-            data: { visibility },
-            select: {
-              id: true,
-              visibility: true,
-              ownerUserId: true,
-              channelId: true,
-              connection: true,
-              sessions: {
-                select: { id: true },
-                orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-                take: 1,
-              },
-            },
-          });
+    if (current.visibility === visibility) {
+      const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
+      if (!sessionGroup) throw new Error("Session group not found");
+      return sessionGroup;
+    }
+
+    const updated = await prisma.sessionGroup.update({
+      where: { id: groupId },
+      data: { visibility },
+      select: {
+        id: true,
+        visibility: true,
+        ownerUserId: true,
+        channelId: true,
+        connection: true,
+        sessions: {
+          select: { id: true },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+        },
+      },
+    });
 
     const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
     if (!sessionGroup) throw new Error("Session group not found");
@@ -2181,26 +2178,20 @@ export class SessionService {
     });
 
     if (current.visibility === "public" && visibility === "private") {
-      pubsub.publish(topics.orgEvents(organizationId), {
-        orgEvents: {
-          id: randomUUID(),
-          organizationId,
-          scopeType: "session",
-          scopeId: updated.sessions[0]?.id ?? groupId,
-          eventType: "session_group_visibility_updated",
-          actorType,
-          actorId,
-          parentId: null,
-          timestamp: new Date(),
-          metadata: {},
-          payload: {
-            sessionGroupId: groupId,
-            channelId: updated.channelId,
-            visibility,
-            ownerUserId: updated.ownerUserId,
-            removed: true,
-          },
+      await eventService.create({
+        organizationId,
+        scopeType: "session",
+        scopeId: updated.sessions[0]?.id ?? groupId,
+        eventType: "session_group_visibility_updated",
+        payload: {
+          sessionGroupId: groupId,
+          channelId: updated.channelId,
+          visibility,
+          ownerUserId: updated.ownerUserId,
+          removed: true,
         },
+        actorType,
+        actorId,
       });
     }
 
@@ -2209,17 +2200,7 @@ export class SessionService {
 
   async list(
     organizationId: string,
-    userIdOrFilters?:
-      | string
-      | {
-          agentStatus?: AgentStatus | null;
-          tool?: CodingTool | null;
-          repoId?: string | null;
-          channelId?: string | null;
-          includeArchived?: boolean | null;
-          includeMerged?: boolean | null;
-          limit?: number | null;
-        },
+    userId: string,
     filters?: {
       agentStatus?: AgentStatus | null;
       tool?: CodingTool | null;
@@ -2230,23 +2211,21 @@ export class SessionService {
       limit?: number | null;
     },
   ) {
-    const userId = typeof userIdOrFilters === "string" ? userIdOrFilters : null;
-    const resolvedFilters = typeof userIdOrFilters === "string" ? filters : userIdOrFilters;
     const where: Prisma.SessionWhereInput = {
       organizationId,
-      ...(userId ? { AND: [visibleSessionWhere(userId)] } : {}),
+      AND: [visibleSessionWhere(userId)],
     };
-    if (resolvedFilters?.agentStatus) where.agentStatus = resolvedFilters.agentStatus;
-    if (resolvedFilters?.tool) where.tool = resolvedFilters.tool;
-    if (resolvedFilters?.repoId) where.repoId = resolvedFilters.repoId;
-    if (resolvedFilters?.channelId) where.channelId = resolvedFilters.channelId;
-    if (resolvedFilters?.includeMerged === false) where.sessionStatus = { not: "merged" };
-    if (resolvedFilters?.includeArchived === false) {
+    if (filters?.agentStatus) where.agentStatus = filters.agentStatus;
+    if (filters?.tool) where.tool = filters.tool;
+    if (filters?.repoId) where.repoId = filters.repoId;
+    if (filters?.channelId) where.channelId = filters.channelId;
+    if (filters?.includeMerged === false) where.sessionStatus = { not: "merged" };
+    if (filters?.includeArchived === false) {
       where.OR = [{ sessionGroupId: null }, { sessionGroup: { archivedAt: null } }];
     }
     const limit =
-      typeof resolvedFilters?.limit === "number" && Number.isFinite(resolvedFilters.limit)
-        ? Math.max(1, Math.min(Math.trunc(resolvedFilters.limit), 500))
+      typeof filters?.limit === "number" && Number.isFinite(filters.limit)
+        ? Math.max(1, Math.min(Math.trunc(filters.limit), 500))
         : undefined;
     return prisma.session.findMany({
       where,
@@ -2256,16 +2235,12 @@ export class SessionService {
     });
   }
 
-  async get(id: string, organizationId?: string, userId?: string) {
-    if (!organizationId) {
-      return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
-    }
-
+  async get(id: string, organizationId: string, userId: string) {
     return prisma.session.findFirst({
       where: {
         id,
         organizationId,
-        ...(userId ? { AND: [visibleSessionWhere(userId)] } : {}),
+        AND: [visibleSessionWhere(userId)],
       },
       include: SESSION_INCLUDE,
     });
@@ -2306,29 +2281,25 @@ export class SessionService {
 
   async search(
     organizationId: string,
-    userIdOrQuery: string,
-    queryOrChannelId?: string | null,
+    userId: string,
+    query: string,
     channelId?: string | null,
   ) {
-    const hasUserId = arguments.length >= 4;
-    const userId = hasUserId ? userIdOrQuery : null;
-    const query = hasUserId ? (queryOrChannelId ?? "") : userIdOrQuery;
-    const resolvedChannelId = hasUserId ? channelId : queryOrChannelId;
     const trimmed = query.trim().slice(0, 200);
     if (trimmed.length < 2) return { sessions: [], sessionGroups: [] };
 
     const sessionWhere: Prisma.SessionWhereInput = {
       organizationId,
       name: { contains: trimmed, mode: "insensitive" },
-      ...(userId ? { AND: [visibleSessionWhere(userId)] } : {}),
+      AND: [visibleSessionWhere(userId)],
     };
-    if (resolvedChannelId) sessionWhere.channelId = resolvedChannelId;
+    if (channelId) sessionWhere.channelId = channelId;
 
     // Intentionally includes archived groups so users can find past work.
     const groupWhere: Prisma.SessionGroupWhereInput = {
       organizationId,
       AND: [
-        ...(userId ? [visibleSessionGroupWhere(userId)] : []),
+        visibleSessionGroupWhere(userId),
         {
           OR: [
             { name: { contains: trimmed, mode: "insensitive" } },
@@ -2337,7 +2308,7 @@ export class SessionService {
         },
       ],
     };
-    if (resolvedChannelId) groupWhere.channelId = resolvedChannelId;
+    if (channelId) groupWhere.channelId = channelId;
 
     const [sessions, groups] = await Promise.all([
       prisma.session.findMany({

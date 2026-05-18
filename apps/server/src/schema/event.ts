@@ -66,26 +66,23 @@ function eventPayloadRecord(event: { payload?: unknown }): Record<string, unknow
     : null;
 }
 
+function eventPayloadSessionGroupId(payload: Record<string, unknown> | null): string | null {
+  if (typeof payload?.sessionGroupId === "string") return payload.sessionGroupId;
+  const payloadGroup = payload?.sessionGroup;
+  if (!payloadGroup || typeof payloadGroup !== "object" || Array.isArray(payloadGroup)) {
+    return null;
+  }
+  const id = (payloadGroup as { id?: unknown }).id;
+  return typeof id === "string" ? id : null;
+}
+
 async function resolveEventSessionGroup(
   event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown },
   organizationId: string,
   cache: Map<string, { visibility: string; ownerUserId: string } | null>,
 ) {
   const payload = eventPayloadRecord(event);
-  const payloadGroup = payload?.sessionGroup;
-  if (payloadGroup && typeof payloadGroup === "object" && !Array.isArray(payloadGroup)) {
-    const group = payloadGroup as { id?: unknown; visibility?: unknown; ownerUserId?: unknown };
-    if (
-      typeof group.id === "string" &&
-      typeof group.visibility === "string" &&
-      typeof group.ownerUserId === "string"
-    ) {
-      return { visibility: group.visibility, ownerUserId: group.ownerUserId };
-    }
-  }
-
-  const payloadGroupId =
-    typeof payload?.sessionGroupId === "string" ? payload.sessionGroupId : null;
+  const payloadGroupId = eventPayloadSessionGroupId(payload);
   const cacheKey =
     payloadGroupId ?? (event.scopeType === "session" ? `session:${event.scopeId}` : null);
   if (!cacheKey) return null;

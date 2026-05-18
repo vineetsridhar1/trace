@@ -14,6 +14,24 @@ vi.mock("../lib/pubsub.js", () => ({
 
 vi.mock("../services/access.js", () => ({
   assertScopeAccess: vi.fn(),
+  assertChannelAccess: vi.fn(),
+  assertChatAccess: vi.fn(),
+  canViewSessionGroup: vi.fn(
+    (group: { visibility?: string | null; ownerUserId?: string | null }, userId: string) =>
+      group.visibility == null || group.visibility === "public" || group.ownerUserId === userId,
+  ),
+}));
+
+vi.mock("../services/event.js", () => ({
+  eventService: {
+    query: vi.fn(),
+  },
+}));
+
+vi.mock("../services/session-timeline.js", () => ({
+  sessionTimelineService: {
+    query: vi.fn(),
+  },
 }));
 
 vi.mock("../services/ticket.js", () => ({
@@ -45,6 +63,9 @@ vi.mock("../services/session.js", () => ({
 vi.mock("../lib/db.js", () => ({
   prisma: {
     session: {
+      findFirst: vi.fn(),
+    },
+    sessionGroup: {
       findFirst: vi.fn(),
     },
   },
@@ -87,10 +108,11 @@ import { ticketQueries, ticketSubscriptions } from "./ticket.js";
 import { sessionQueries, sessionSubscriptions } from "./session.js";
 import { sessionMutations } from "./session.js";
 import { channelGroupQueries } from "./channelGroup.js";
-import { eventSubscriptions } from "./event.js";
+import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
 import { aiConversationQueries, aiConversationMutations } from "./ai-conversation.js";
 import { assertScopeAccess } from "../services/access.js";
+import { eventService } from "../services/event.js";
 import { ticketService } from "../services/ticket.js";
 import { sessionService } from "../services/session.js";
 import { prisma } from "../lib/db.js";
@@ -265,5 +287,34 @@ describe("GraphQL authz guards", () => {
 
     expect(assertScopeAccess).toHaveBeenNthCalledWith(1, "session", "session-1", "user-1", "org-1");
     expect(assertScopeAccess).toHaveBeenNthCalledWith(2, "session", "session-1", "user-1", "org-1");
+  });
+
+  it("filters historical session events using current group visibility", async () => {
+    vi.mocked(eventService.query).mockResolvedValueOnce([
+      {
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_started",
+        payload: {
+          sessionGroup: {
+            id: "group-1",
+            visibility: "public",
+            ownerUserId: "owner-1",
+          },
+        },
+      },
+    ]);
+    vi.mocked(prisma.sessionGroup.findFirst).mockResolvedValueOnce({
+      visibility: "private",
+      ownerUserId: "owner-1",
+    });
+
+    const result = await eventQueries.events({}, { organizationId: "org-1" }, ctx);
+
+    expect(result).toEqual([]);
+    expect(prisma.sessionGroup.findFirst).toHaveBeenCalledWith({
+      where: { id: "group-1", organizationId: "org-1" },
+      select: { visibility: true, ownerUserId: true },
+    });
   });
 });
