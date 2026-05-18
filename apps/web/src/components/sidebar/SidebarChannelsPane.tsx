@@ -70,7 +70,7 @@ export function SidebarChannelsPane({
 
   return (
     <section className="flex h-full min-w-full max-w-full shrink-0 snap-start snap-always flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <div className="space-y-0.5 pb-1">
           <HomeButton />
           <InboxButton />
