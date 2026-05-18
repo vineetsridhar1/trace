@@ -192,6 +192,20 @@ export const RENAME_SESSION_GROUP_MUTATION = gql`
   }
 `;
 
+export const UPDATE_SESSION_GROUP_VISIBILITY_MUTATION = gql`
+  mutation UpdateSessionGroupVisibility($id: ID!, $visibility: SessionGroupVisibility!) {
+    updateSessionGroupVisibility(id: $id, visibility: $visibility) {
+      id
+      visibility
+      owner {
+        id
+        name
+        avatarUrl
+      }
+    }
+  }
+`;
+
 export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
   query AvailableSessionRuntimes($sessionId: ID!) {
     availableSessionRuntimes(sessionId: $sessionId) {

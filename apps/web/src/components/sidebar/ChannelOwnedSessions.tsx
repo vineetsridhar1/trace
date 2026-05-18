@@ -8,10 +8,13 @@ import {
   GitPullRequest,
   Laptop,
   Link2,
+  Lock,
   Mail,
+  Unlock,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useAuthStore } from "@trace/client-core";
+import { toast } from "sonner";
+import { UPDATE_SESSION_GROUP_VISIBILITY_MUTATION, useAuthStore } from "@trace/client-core";
 import type { AuthState } from "@trace/client-core";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
@@ -21,6 +24,8 @@ import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
 import { createQuickSession } from "../../lib/create-quick-session";
+import { applyOptimisticPatch } from "../../lib/optimistic-entity";
+import { client } from "../../lib/urql";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
@@ -225,9 +230,12 @@ function OwnedSessionGroupItem({
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[record.id]);
   const markChannelDone = useUIStore((s: UIState) => s.markChannelDone);
   const markSessionGroupDone = useUIStore((s: UIState) => s.markSessionGroupDone);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const attached = useAttachedCheckoutForGroup(record.id);
 
   const isActive = activeSessionGroupId === record.id;
+  const isPrivate = record.row.visibility === "private";
+  const isOwner = record.row.owner?.id === currentUserId;
   const activityLabel = formatSidebarActivity(record.sortTimestamp);
   const groupUrl = record.latestSessionId
     ? `${window.location.origin}/c/${channelId}/g/${record.id}/s/${record.latestSessionId}`
@@ -239,6 +247,27 @@ function OwnedSessionGroupItem({
     event.preventDefault();
     openSessionGroup();
   };
+  const handleUpdateVisibility = useCallback((visibility: "public" | "private") => {
+    if (record.row.visibility === visibility) return;
+
+    const rollback = applyOptimisticPatch("sessionGroups", record.id, { visibility });
+    void client
+      .mutation(UPDATE_SESSION_GROUP_VISIBILITY_MUTATION, { id: record.id, visibility })
+      .toPromise()
+      .then((result) => {
+        if (!result.error) return;
+        rollback();
+        toast.error("Failed to update workspace visibility", {
+          description: result.error.message,
+        });
+      })
+      .catch((error: unknown) => {
+        rollback();
+        toast.error("Failed to update workspace visibility", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+      });
+  }, [record.id, record.row.visibility]);
 
   const row = (
     <div
@@ -257,6 +286,15 @@ function OwnedSessionGroupItem({
         <span className={cn("min-w-0 flex-1 truncate", hasDoneBadge && "font-semibold")}>
           {record.name}
         </span>
+        {isPrivate && (
+          <span
+            title="Private workspace"
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/80"
+            aria-label="Private workspace"
+          >
+            <Lock size={11} />
+          </span>
+        )}
         {attached && (
           <span
             title={`Synced to ${attached.bridgeLabel}`}
@@ -322,6 +360,18 @@ function OwnedSessionGroupItem({
             <Archive size={14} className="mr-1.5 text-muted-foreground" />
             Archive workspace
           </ContextMenuItem>
+          {record.row.visibility === "public" && isOwner && (
+            <ContextMenuItem onClick={() => handleUpdateVisibility("private")}>
+              <Lock size={14} className="mr-1.5 text-muted-foreground" />
+              Make private
+            </ContextMenuItem>
+          )}
+          {record.row.visibility === "private" && isOwner && (
+            <ContextMenuItem onClick={() => handleUpdateVisibility("public")}>
+              <Unlock size={14} className="mr-1.5 text-muted-foreground" />
+              Make public
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           {workdir && (
             <ContextMenuItem onClick={() => void navigator.clipboard.writeText(workdir)}>
@@ -366,6 +416,7 @@ function isRowVisibleForScope(
 ): boolean {
   if (scope === "all") return true;
   if (!userId) return false;
+  if (row.owner?.id) return row.owner.id === userId;
   const createdBy = row.createdBySession?.createdBy as CreatedByRef | undefined;
   return createdBy?.id === userId;
 }

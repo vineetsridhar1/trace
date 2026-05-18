@@ -100,6 +100,12 @@ const SIDEBAR_SESSION_GROUPS_QUERY = gql`
       name
       slug
       status
+      visibility
+      owner {
+        id
+        name
+        avatarUrl
+      }
       prUrl
       worktreeDeleted
       archivedAt

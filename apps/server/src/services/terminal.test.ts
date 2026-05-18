@@ -106,6 +106,40 @@ describe("TerminalService", () => {
       );
     });
 
+    it("rejects terminal creation for private sessions owned by another user", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        hosting: "local",
+        createdById: "owner-1",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: {
+          workdir: "/workspace",
+          worktreeDeleted: false,
+          setupStatus: "idle",
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "private",
+          ownerUserId: "owner-1",
+        },
+      });
+
+      await expect(
+        terminalService.create({
+          sessionId: "session-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-2",
+        }),
+      ).rejects.toThrow("Not authorized for this session");
+
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
+      expect(terminalRelayMock.createTerminal).not.toHaveBeenCalled();
+    });
+
     it("creates a terminal for a merged session with a retained worktree", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",

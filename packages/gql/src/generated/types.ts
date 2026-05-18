@@ -408,6 +408,7 @@ export type EventType =
   | "session_deleted"
   | "session_group_archived"
   | "session_group_renamed"
+  | "session_group_visibility_updated"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -639,6 +640,7 @@ export type Mutation = {
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateSessionDefaults: User;
+  updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
 };
 
@@ -1090,6 +1092,11 @@ export type MutationUpdateSessionConfigArgs = {
 
 export type MutationUpdateSessionDefaultsArgs = {
   input: UpdateSessionDefaultsInput;
+};
+
+export type MutationUpdateSessionGroupVisibilityArgs = {
+  id: Scalars["ID"]["input"];
+  visibility: SessionGroupVisibility;
 };
 
 export type MutationUpdateTicketArgs = {
@@ -1605,6 +1612,7 @@ export type SessionGroup = {
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
+  owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
@@ -1613,6 +1621,7 @@ export type SessionGroup = {
   slug?: Maybe<Scalars["String"]["output"]>;
   status: SessionGroupStatus;
   updatedAt: Scalars["DateTime"]["output"];
+  visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
@@ -1625,6 +1634,8 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionGroupVisibility = "private" | "public";
 
 export type SessionPromptIndexItem = {
   __typename?: "SessionPromptIndexItem";
@@ -1717,6 +1728,7 @@ export type StartSessionInput = {
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
   ticketId?: InputMaybe<Scalars["ID"]["input"]>;
   tool?: InputMaybe<CodingTool>;
+  visibility?: InputMaybe<SessionGroupVisibility>;
 };
 
 export type Subscription = {

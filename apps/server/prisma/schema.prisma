@@ -33,6 +33,11 @@ enum SessionStatus {
   merged
 }
 
+enum SessionGroupVisibility {
+  public
+  private
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -212,6 +217,7 @@ enum EventType {
   session_runtime_deprovision_failed
   session_runtime_disconnected
   session_runtime_reconnected
+  session_group_visibility_updated
 }
 
 model Organization {
@@ -307,6 +313,7 @@ model User {
   ownedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestOwner")
   resolvedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestResolver")
   createdSessions   Session[]        @relation("SessionCreator")
+  ownedSessionGroups SessionGroup[]   @relation("SessionGroupOwner")
   createdTickets    Ticket[]         @relation("TicketCreator")
   ticketAssignments TicketAssignee[] @relation("TicketAssignees")
   createdChats      Chat[]           @relation("ChatCreator")
@@ -436,6 +443,9 @@ model SessionGroup {
   name           String
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  ownerUserId    String
+  ownerUser      User         @relation("SessionGroupOwner", fields: [ownerUserId], references: [id])
+  visibility     SessionGroupVisibility @default(public)
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
   repoId         String?
@@ -460,6 +470,7 @@ model SessionGroup {
 
   @@unique([repoId, slug])
   @@index([organizationId, updatedAt])
+  @@index([organizationId, visibility, ownerUserId])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
 }

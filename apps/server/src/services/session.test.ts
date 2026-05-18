@@ -145,6 +145,9 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     status: "in_progress",
     archivedAt: null,
     organizationId: "org-1",
+    ownerUserId: "user-1",
+    ownerUser: { id: "user-1", name: "Test User", avatarUrl: null },
+    visibility: "public",
     channelId: "channel-1",
     repoId: "repo-1",
     slug: "ladybug",
@@ -354,10 +357,15 @@ describe("SessionService", () => {
         makeSessionGroup({ sessions: [olderSession, newerSession] }),
       ]);
 
-      const result = await service.listGroups("channel-1", "org-1");
+      const result = await service.listGroups("channel-1", "org-1", "user-1");
 
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
-        where: { channelId: "channel-1", organizationId: "org-1", archivedAt: null },
+        where: {
+          channelId: "channel-1",
+          organizationId: "org-1",
+          AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
+          archivedAt: null,
+        },
         include: expect.any(Object),
       });
       expect(result[0].sessions.map((session) => session.id)).toEqual([
@@ -382,7 +390,7 @@ describe("SessionService", () => {
         makeSessionGroup({ sessions: [reconnectedSession, repliedSession] }),
       ]);
 
-      const result = await service.listGroups("channel-1", "org-1");
+      const result = await service.listGroups("channel-1", "org-1", "user-1");
 
       expect(result[0].sessions.map((session) => session.id)).toEqual([
         "session-replied",
@@ -408,7 +416,7 @@ describe("SessionService", () => {
         makeSessionGroup({ sessions: [infrastructureOnlySession, conversationSession] }),
       ]);
 
-      const result = await service.listGroups("channel-1", "org-1");
+      const result = await service.listGroups("channel-1", "org-1", "user-1");
 
       expect(result[0].sessions.map((session) => session.id)).toEqual([
         "session-conversation",
@@ -428,7 +436,7 @@ describe("SessionService", () => {
         }),
       ]);
 
-      const result = await service.listGroups("channel-1", "org-1");
+      const result = await service.listGroups("channel-1", "org-1", "user-1");
 
       expect(result.map((group) => group.id)).toEqual(["group-active"]);
     });
@@ -442,12 +450,15 @@ describe("SessionService", () => {
         }),
       ]);
 
-      const result = await service.listGroups("channel-1", "org-1", { archived: true });
+      const result = await service.listGroups("channel-1", "org-1", "user-1", {
+        archived: true,
+      });
 
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
         where: {
           channelId: "channel-1",
           organizationId: "org-1",
+          AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
           archivedAt: { not: null },
         },
         include: expect.any(Object),
@@ -469,6 +480,18 @@ describe("SessionService", () => {
         where: {
           organizationId: "org-1",
           createdById: "user-1",
+          AND: [
+            {
+              OR: [
+                { sessionGroupId: null },
+                {
+                  sessionGroup: {
+                    is: { OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] },
+                  },
+                },
+              ],
+            },
+          ],
           sessionStatus: { not: "merged" },
           OR: [
             { sessionGroupId: null },
@@ -496,6 +519,18 @@ describe("SessionService", () => {
         where: {
           organizationId: "org-1",
           createdById: "user-1",
+          AND: [
+            {
+              OR: [
+                { sessionGroupId: null },
+                {
+                  sessionGroup: {
+                    is: { OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] },
+                  },
+                },
+              ],
+            },
+          ],
           agentStatus: "active",
         },
         orderBy: { updatedAt: "desc" },
@@ -506,7 +541,7 @@ describe("SessionService", () => {
 
   describe("search", () => {
     it("returns empty results when the trimmed query is shorter than 2 chars", async () => {
-      const result = await service.search("org-1", "  a  ");
+      const result = await service.search("org-1", "user-1", "  a  ");
 
       expect(result).toEqual({ sessions: [], sessionGroups: [] });
       expect(prismaMock.session.findMany).not.toHaveBeenCalled();
@@ -524,12 +559,24 @@ describe("SessionService", () => {
       prismaMock.session.findMany.mockResolvedValueOnce([matchingSession]);
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([matchingGroup]);
 
-      const result = await service.search("org-1", "deploy");
+      const result = await service.search("org-1", "user-1", "deploy");
 
       expect(prismaMock.session.findMany).toHaveBeenCalledWith({
         where: {
           organizationId: "org-1",
           name: { contains: "deploy", mode: "insensitive" },
+          AND: [
+            {
+              OR: [
+                { sessionGroupId: null },
+                {
+                  sessionGroup: {
+                    is: { OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] },
+                  },
+                },
+              ],
+            },
+          ],
         },
         orderBy: { updatedAt: "desc" },
         take: 20,
@@ -538,9 +585,14 @@ describe("SessionService", () => {
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
         where: {
           organizationId: "org-1",
-          OR: [
-            { name: { contains: "deploy", mode: "insensitive" } },
-            { slug: { contains: "deploy", mode: "insensitive" } },
+          AND: [
+            { OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] },
+            {
+              OR: [
+                { name: { contains: "deploy", mode: "insensitive" } },
+                { slug: { contains: "deploy", mode: "insensitive" } },
+              ],
+            },
           ],
         },
         orderBy: { updatedAt: "desc" },
@@ -557,7 +609,7 @@ describe("SessionService", () => {
       prismaMock.session.findMany.mockResolvedValueOnce([]);
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
 
-      await service.search("org-1", "deploy", "channel-1");
+      await service.search("org-1", "user-1", "deploy", "channel-1");
 
       expect(prismaMock.session.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -582,7 +634,7 @@ describe("SessionService", () => {
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
 
       const longInput = `  ${"a".repeat(500)}  `;
-      await service.search("org-1", longInput);
+      await service.search("org-1", "user-1", longInput);
 
       const sessionCall = prismaMock.session.findMany.mock.calls[0]?.[0];
       const sessionWhere = sessionCall?.where as { name?: { contains?: string } };
@@ -639,13 +691,15 @@ describe("SessionService", () => {
 
       expect(result).toEqual(session);
       expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           name: "Implement dashboard filters",
           organizationId: "org-1",
+          ownerUserId: "user-1",
+          visibility: "public",
           channelId: "channel-1",
           repoId: "repo-1",
           connection: expect.any(Object),
-        },
+        }),
         select: expect.any(Object),
       });
       expect(prismaMock.session.create).toHaveBeenCalledWith(
@@ -4774,6 +4828,11 @@ describe("SessionService", () => {
     it("renames a workspace and emits session_group_renamed", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
         name: "Old workspace",
         sessions: [{ id: "session-1" }],
       });
@@ -4864,6 +4923,102 @@ describe("SessionService", () => {
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
       expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
       expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateGroupVisibility", () => {
+    it("updates visibility and records events atomically", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "user-1",
+        channelId: "channel-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessions: [{ id: "session-1" }],
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        hostingMode: "local",
+        ownerUserId: "user-1",
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "private",
+        ownerUserId: "user-1",
+        channelId: "channel-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ id: "group-1", visibility: "private" }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      eventServiceMock.create
+        .mockResolvedValueOnce({ id: "event-visible" })
+        .mockResolvedValueOnce({ id: "event-removed" });
+
+      const result = await service.updateGroupVisibility(
+        "group-1",
+        "org-1",
+        "private",
+        "user",
+        "user-1",
+      );
+
+      expect(result.visibility).toBe("private");
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { visibility: "private" },
+        select: expect.any(Object),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledTimes(2);
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          eventType: "session_group_visibility_updated",
+          deferPublish: true,
+          payload: expect.objectContaining({
+            sessionGroupId: "group-1",
+            visibility: "private",
+            sessionGroup: expect.objectContaining({ id: "group-1", visibility: "private" }),
+          }),
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          eventType: "session_group_visibility_updated",
+          deferPublish: true,
+          payload: expect.objectContaining({
+            sessionGroupId: "group-1",
+            removed: true,
+          }),
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-visible" });
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-removed" });
+    });
+
+    it("rejects visibility updates from non-owners", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "owner-1",
+        channelId: "channel-1",
+        connection: null,
+        sessions: [{ id: "session-1" }],
+      });
+
+      await expect(
+        service.updateGroupVisibility("group-1", "org-1", "private", "user", "user-2"),
+      ).rejects.toThrow("Only the session group owner can change visibility");
+
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
   });

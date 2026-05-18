@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Archive, GitPullRequest, Link2, Pencil } from "lucide-react";
+import { Archive, GitPullRequest, Link2, Lock, Pencil, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
 
@@ -16,12 +16,16 @@ export function SessionRowContextMenu({
   onClose,
   onCopyLink,
   onRename,
+  onUpdateVisibility,
+  currentUserId,
 }: {
   menu: SessionRowContextMenuState;
   onArchive: (row: SessionGroupRow) => void;
   onClose: () => void;
   onCopyLink: (row: SessionGroupRow) => void;
   onRename: (row: SessionGroupRow) => void;
+  onUpdateVisibility: (row: SessionGroupRow, visibility: "public" | "private") => void;
+  currentUserId: string | null;
 }) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -41,6 +45,7 @@ export function SessionRowContextMenu({
 
   const itemClass =
     "flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-surface-hover focus:bg-surface-hover";
+  const isOwner = menu.row.owner?.id === currentUserId;
 
   return createPortal(
     <div className="fixed inset-0 z-50" onPointerDown={onClose} onContextMenu={onClose}>
@@ -91,6 +96,34 @@ export function SessionRowContextMenu({
           <Pencil className="size-4 text-muted-foreground" />
           Rename
         </button>
+        {menu.row.visibility === "public" && isOwner && (
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => {
+              onUpdateVisibility(menu.row, "private");
+              onClose();
+            }}
+          >
+            <Lock className="size-4 text-muted-foreground" />
+            Make private
+          </button>
+        )}
+        {menu.row.visibility === "private" && isOwner && (
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => {
+              onUpdateVisibility(menu.row, "public");
+              onClose();
+            }}
+          >
+            <Unlock className="size-4 text-muted-foreground" />
+            Make public
+          </button>
+        )}
         <button
           type="button"
           role="menuitem"

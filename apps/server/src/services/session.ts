@@ -47,6 +47,12 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { isLocalMode } from "../lib/mode.js";
+import {
+  assertSessionGroupAccess,
+  canViewSessionGroup,
+  visibleSessionGroupWhere,
+  visibleSessionWhere,
+} from "./access.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -435,6 +441,9 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
   slug: true,
+  ownerUserId: true,
+  ownerUser: true,
+  visibility: true,
   channelId: true,
   channel: true,
   repoId: true,
@@ -459,6 +468,7 @@ const SESSION_INCLUDE = {
 } as const;
 
 const SESSION_GROUP_INCLUDE = {
+  ownerUser: true,
   channel: true,
   repo: true,
   sessions: {
@@ -474,7 +484,8 @@ type SessionGroupSummary = Prisma.SessionGroupGetPayload<{
   select: typeof SESSION_GROUP_SUMMARY_SELECT;
 }>;
 
-type SessionGroupSnapshot = SessionGroupSummary & {
+type SessionGroupSnapshot = Omit<SessionGroupSummary, "ownerUser"> & {
+  owner: SessionGroupSummary["ownerUser"];
   status: DerivedSessionGroupStatus;
 };
 
@@ -602,11 +613,12 @@ function sortSessionsByRecency<
 
 function buildSessionGroupSnapshot(
   group: SessionGroupSummary,
-  sessions: SessionGroupStatusSource[],
+  sessions: SessionGroupStatusSource[] | undefined,
 ): SessionGroupSnapshot {
   return {
     ...group,
-    status: deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null),
+    owner: group.ownerUser,
+    status: deriveSessionGroupStatus(sessions ?? [], group.prUrl ?? null, group.archivedAt ?? null),
   };
 }
 
@@ -1560,6 +1572,48 @@ export class SessionService {
     }
   }
 
+  private async assertPrivateRuntimeOwner(params: {
+    visibility?: string | null;
+    ownerUserId?: string | null;
+    organizationId: string;
+    hosting?: string | null;
+    runtimeInstanceId?: string | null;
+  }): Promise<void> {
+    if (params.visibility !== "private") return;
+    if (params.hosting === "cloud") {
+      throw new ValidationError("Private sessions can only run on the owner's local bridge");
+    }
+    if (!params.runtimeInstanceId) return;
+    if (!params.ownerUserId) {
+      throw new ValidationError("Private session groups require an owner");
+    }
+
+    const liveRuntime = sessionRouter.getRuntime(params.runtimeInstanceId, params.organizationId);
+    if (liveRuntime) {
+      if (liveRuntime.hostingMode !== "local" || liveRuntime.ownerUserId !== params.ownerUserId) {
+        throw new ValidationError("Private sessions can only run on the owner's local bridge");
+      }
+      return;
+    }
+
+    const persistedRuntime = await prisma.bridgeRuntime.findFirst({
+      where: { instanceId: params.runtimeInstanceId, organizationId: params.organizationId },
+      select: { ownerUserId: true },
+    });
+    if (!persistedRuntime || persistedRuntime.ownerUserId !== params.ownerUserId) {
+      throw new ValidationError("Private sessions can only run on the owner's local bridge");
+    }
+  }
+
+  private assertPrivateGroupOwner(
+    group: { visibility: string; ownerUserId: string },
+    userId: string,
+  ) {
+    if (group.visibility === "private" && group.ownerUserId !== userId) {
+      throw new AuthorizationError("Private session groups can only be used by their owner");
+    }
+  }
+
   private async resolveDefaultAccessibleLocalRuntime(params: {
     userId: string;
     organizationId: string;
@@ -1698,9 +1752,19 @@ export class SessionService {
   ): Promise<{ runtimeId: string; sessionId: string; workdirHint?: string }> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
-      select: { id: true, workdir: true, worktreeDeleted: true, connection: true },
+      select: {
+        id: true,
+        workdir: true,
+        worktreeDeleted: true,
+        connection: true,
+        visibility: true,
+        ownerUserId: true,
+      },
     });
     if (!group) throw new Error("Session group not found");
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
     if (group.worktreeDeleted) {
       throw new Error("Cannot access files: session worktree has been deleted");
     }
@@ -1803,6 +1867,8 @@ export class SessionService {
         id: true,
         repoId: true,
         connection: true,
+        visibility: true,
+        ownerUserId: true,
         sessions: {
           select: {
             id: true,
@@ -1812,6 +1878,9 @@ export class SessionService {
       },
     });
     if (!group) throw new Error("Session group not found");
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
 
     const repoMatchesGroup =
       group.repoId === repoId ||
@@ -1863,9 +1932,14 @@ export class SessionService {
   async listGroups(
     channelId: string,
     organizationId: string,
+    userId: string,
     options?: { archived?: boolean; status?: string; includeActiveMerged?: boolean },
   ) {
-    const where: Record<string, unknown> = { channelId, organizationId };
+    const where: Prisma.SessionGroupWhereInput = {
+      channelId,
+      organizationId,
+      AND: [visibleSessionGroupWhere(userId)],
+    };
 
     const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
     if (shouldIncludeArchived) {
@@ -1916,9 +1990,9 @@ export class SessionService {
     });
   }
 
-  async getGroup(id: string, organizationId: string) {
+  async getGroup(id: string, organizationId: string, userId: string) {
     const group = await prisma.sessionGroup.findFirst({
-      where: { id, organizationId },
+      where: { id, organizationId, AND: [visibleSessionGroupWhere(userId)] },
       include: SESSION_GROUP_INCLUDE,
     });
 
@@ -1940,6 +2014,9 @@ export class SessionService {
     actorType: ActorType = "system",
     actorId: string = "system",
   ) {
+    if (actorId !== "system") {
+      await assertSessionGroupAccess(groupId, actorId, organizationId);
+    }
     const trimmedName = name.trim();
     if (!trimmedName) {
       throw new ValidationError("Workspace name cannot be empty");
@@ -2021,8 +2098,129 @@ export class SessionService {
     });
   }
 
+  async updateGroupVisibility(
+    groupId: string,
+    organizationId: string,
+    visibility: "public" | "private",
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    const current = await prisma.sessionGroup.findFirst({
+      where: { id: groupId, organizationId },
+      select: {
+        id: true,
+        visibility: true,
+        ownerUserId: true,
+        channelId: true,
+        connection: true,
+        sessions: {
+          select: { id: true },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+        },
+      },
+    });
+    if (!current) throw new Error("Session group not found");
+    if (current.ownerUserId !== actorId) {
+      throw new AuthorizationError("Only the session group owner can change visibility");
+    }
+
+    if (visibility === "private") {
+      await this.assertPrivateRuntimeOwner({
+        visibility,
+        ownerUserId: current.ownerUserId,
+        organizationId,
+        hosting: null,
+        runtimeInstanceId: this.getConnectionRuntimeInstanceId(current.connection),
+      });
+    }
+
+    if (current.visibility === visibility) {
+      const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
+      if (!sessionGroup) throw new Error("Session group not found");
+      return sessionGroup;
+    }
+
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const updated = await tx.sessionGroup.update({
+        where: { id: groupId },
+        data: { visibility },
+        select: {
+          id: true,
+          visibility: true,
+          ownerUserId: true,
+          channelId: true,
+          connection: true,
+          sessions: {
+            select: { id: true },
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+          },
+        },
+      });
+
+      const sessionGroup = await this.loadSessionGroupSnapshot(groupId, tx);
+      if (!sessionGroup) throw new Error("Session group not found");
+      const scopeId = updated.sessions[0]?.id ?? groupId;
+      const events = [
+        await eventService.create(
+          {
+            organizationId,
+            scopeType: "session",
+            scopeId,
+            eventType: "session_group_visibility_updated",
+            payload: {
+              sessionGroupId: groupId,
+              channelId: updated.channelId,
+              visibility,
+              ownerUserId: updated.ownerUserId,
+              sessionGroup,
+            },
+            actorType,
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        ),
+      ];
+
+      if (current.visibility === "public" && visibility === "private") {
+        events.push(
+          await eventService.create(
+            {
+              organizationId,
+              scopeType: "session",
+              scopeId,
+              eventType: "session_group_visibility_updated",
+              payload: {
+                sessionGroupId: groupId,
+                channelId: updated.channelId,
+                visibility,
+                ownerUserId: updated.ownerUserId,
+                removed: true,
+              },
+              actorType,
+              actorId,
+              deferPublish: true,
+            },
+            tx,
+          ),
+        );
+      }
+
+      return { sessionGroup, events };
+    });
+
+    for (const event of result.events) {
+      eventService.publishCreated(event);
+    }
+
+    return result.sessionGroup;
+  }
+
   async list(
     organizationId: string,
+    userId: string,
     filters?: {
       agentStatus?: AgentStatus | null;
       tool?: CodingTool | null;
@@ -2033,7 +2231,10 @@ export class SessionService {
       limit?: number | null;
     },
   ) {
-    const where: Prisma.SessionWhereInput = { organizationId };
+    const where: Prisma.SessionWhereInput = {
+      organizationId,
+      AND: [visibleSessionWhere(userId)],
+    };
     if (filters?.agentStatus) where.agentStatus = filters.agentStatus;
     if (filters?.tool) where.tool = filters.tool;
     if (filters?.repoId) where.repoId = filters.repoId;
@@ -2054,13 +2255,13 @@ export class SessionService {
     });
   }
 
-  async get(id: string, organizationId?: string) {
-    if (!organizationId) {
-      return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
-    }
-
+  async get(id: string, organizationId: string, userId: string) {
     return prisma.session.findFirst({
-      where: { id, organizationId },
+      where: {
+        id,
+        organizationId,
+        AND: [visibleSessionWhere(userId)],
+      },
       include: SESSION_INCLUDE,
     });
   }
@@ -2074,7 +2275,11 @@ export class SessionService {
       includeArchived?: boolean;
     },
   ) {
-    const where: Prisma.SessionWhereInput = { organizationId, createdById: userId };
+    const where: Prisma.SessionWhereInput = {
+      organizationId,
+      createdById: userId,
+      AND: [visibleSessionWhere(userId)],
+    };
     if (options?.agentStatus) where.agentStatus = options.agentStatus as AgentStatus;
     if (options?.includeMerged === false) where.sessionStatus = { not: "merged" };
 
@@ -2094,22 +2299,33 @@ export class SessionService {
     });
   }
 
-  async search(organizationId: string, query: string, channelId?: string | null) {
+  async search(
+    organizationId: string,
+    userId: string,
+    query: string,
+    channelId?: string | null,
+  ) {
     const trimmed = query.trim().slice(0, 200);
     if (trimmed.length < 2) return { sessions: [], sessionGroups: [] };
 
     const sessionWhere: Prisma.SessionWhereInput = {
       organizationId,
       name: { contains: trimmed, mode: "insensitive" },
+      AND: [visibleSessionWhere(userId)],
     };
     if (channelId) sessionWhere.channelId = channelId;
 
     // Intentionally includes archived groups so users can find past work.
     const groupWhere: Prisma.SessionGroupWhereInput = {
       organizationId,
-      OR: [
-        { name: { contains: trimmed, mode: "insensitive" } },
-        { slug: { contains: trimmed, mode: "insensitive" } },
+      AND: [
+        visibleSessionGroupWhere(userId),
+        {
+          OR: [
+            { name: { contains: trimmed, mode: "insensitive" } },
+            { slug: { contains: trimmed, mode: "insensitive" } },
+          ],
+        },
       ],
     };
     if (channelId) groupWhere.channelId = channelId;
@@ -2262,9 +2478,19 @@ export class SessionService {
     if (existingGroupId && !existingGroup) {
       throw new Error("Session group not found");
     }
+    if (existingGroup) {
+      this.assertPrivateGroupOwner(existingGroup, input.createdById);
+    }
 
     const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
+    if (resolvedGroup) {
+      this.assertPrivateGroupOwner(resolvedGroup, input.createdById);
+    }
     const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
+    const requestedVisibility = input.visibility ?? "public";
+    const newGroupVisibility = requestedVisibility === "private" ? "private" : "public";
+    const effectiveGroupVisibility = existingGroup?.visibility ?? newGroupVisibility;
+    const effectiveGroupOwnerUserId = existingGroup?.ownerUserId ?? input.createdById;
     const resolvedChannelId =
       input.channelId ?? seedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
     const resolvedChannel = resolvedChannelId
@@ -2636,6 +2862,13 @@ export class SessionService {
         sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
         this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
     }
+    await this.assertPrivateRuntimeOwner({
+      visibility: effectiveGroupVisibility,
+      ownerUserId: effectiveGroupOwnerUserId,
+      organizationId: input.organizationId,
+      hosting,
+      runtimeInstanceId: requestedRuntimeInstanceId,
+    });
 
     const model = input.model
       ? validateModelForTool(tool, input.model)
@@ -2704,6 +2937,8 @@ export class SessionService {
             data: {
               name,
               organizationId: input.organizationId,
+              ownerUserId: input.createdById,
+              visibility: newGroupVisibility,
               channelId: resolvedChannelId,
               repoId: resolvedRepoId ?? undefined,
               branch: resolvedBranch ?? undefined,
@@ -2906,6 +3141,14 @@ export class SessionService {
       where: { id },
       include: SESSION_INCLUDE,
     });
+    if (access) {
+      if (session.organizationId !== access.organizationId) {
+        throw new AuthorizationError("Not authorized for this session");
+      }
+      if (session.sessionGroup && !canViewSessionGroup(session.sessionGroup, access.userId)) {
+        throw new AuthorizationError("Not authorized for this session");
+      }
+    }
     const conn = this.parseConnection(session.connection);
 
     const startMeta =
@@ -3283,6 +3526,9 @@ export class SessionService {
     const group = await prisma.sessionGroup.findUnique({ where: { id: groupId } });
     if (!group) throw new Error("Session group not found");
     if (group.organizationId !== organizationId) throw new Error("Session group not found");
+    if (actorId !== "system") {
+      await assertSessionGroupAccess(groupId, actorId, organizationId);
+    }
 
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId: groupId },
@@ -3402,7 +3648,7 @@ export class SessionService {
         hosting: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { slug: true } },
+        sessionGroup: { select: { slug: true, visibility: true, ownerUserId: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         workdir: true,
@@ -3412,6 +3658,9 @@ export class SessionService {
         repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
       },
     });
+    if (prev.sessionGroup && !canViewSessionGroup(prev.sessionGroup, actorId)) {
+      throw new AuthorizationError("Not authorized for this session");
+    }
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
     const nextTool = config.tool ?? prev.tool;
@@ -3464,8 +3713,22 @@ export class SessionService {
         newHosting = runtime.hostingMode;
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
+        await this.assertPrivateRuntimeOwner({
+          visibility: prev.sessionGroup?.visibility,
+          ownerUserId: prev.sessionGroup?.ownerUserId,
+          organizationId,
+          hosting: newHosting,
+          runtimeInstanceId,
+        });
         sessionRouter.bindSession(sessionId, runtime.key);
       } else if (newHosting === "cloud") {
+        await this.assertPrivateRuntimeOwner({
+          visibility: prev.sessionGroup?.visibility,
+          ownerUserId: prev.sessionGroup?.ownerUserId,
+          organizationId,
+          hosting: newHosting,
+          runtimeInstanceId: null,
+        });
         assertCloudRepoRemoteAvailable(newHosting, prev.repo);
         requestedEnvironment = await agentEnvironmentService.resolveForSessionRequest({
           organizationId,
@@ -3490,6 +3753,13 @@ export class SessionService {
         }
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
+        await this.assertPrivateRuntimeOwner({
+          visibility: prev.sessionGroup?.visibility,
+          ownerUserId: prev.sessionGroup?.ownerUserId,
+          organizationId,
+          hosting: newHosting,
+          runtimeInstanceId,
+        });
         sessionRouter.bindSession(sessionId, runtime.key);
       }
       shouldProvisionPendingRun =
@@ -6030,6 +6300,18 @@ export class SessionService {
       actorType,
       actorId,
     } = params;
+    const currentSessionGroup = (
+      session as {
+        sessionGroup?: { visibility: string; ownerUserId: string } | null;
+      }
+    ).sessionGroup;
+    await this.assertPrivateRuntimeOwner({
+      visibility: currentSessionGroup?.visibility,
+      ownerUserId: currentSessionGroup?.ownerUserId,
+      organizationId: session.organizationId,
+      hosting: targetHosting,
+      runtimeInstanceId: targetRuntimeInstanceId,
+    });
     const sourceRuntimeId =
       this.getConnectionRuntimeInstanceId(session.connection) ??
       sessionRouter.getRuntimeForSession(session.id)?.id ??
@@ -6221,16 +6503,27 @@ export class SessionService {
     if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
       throw new Error("Selected runtime is not available");
     }
-    if (!targetRuntime.supportedTools.includes(session.tool)) {
+    if (
+      Array.isArray(targetRuntime.supportedTools) &&
+      !targetRuntime.supportedTools.includes(session.tool)
+    ) {
       throw new Error("Selected runtime does not support this tool");
     }
     if (
       targetRuntime.hostingMode === "local" &&
       session.repoId &&
-      !(targetRuntime.registeredRepoIds ?? []).includes(session.repoId)
+      Array.isArray(targetRuntime.registeredRepoIds) &&
+      !targetRuntime.registeredRepoIds.includes(session.repoId)
     ) {
       throw new Error("Selected runtime does not have this repo linked");
     }
+    await this.assertPrivateRuntimeOwner({
+      visibility: session.sessionGroup?.visibility,
+      ownerUserId: session.sessionGroup?.ownerUserId,
+      organizationId,
+      hosting: targetRuntime.hostingMode,
+      runtimeInstanceId,
+    });
 
     return this.moveSessionInPlace({
       session,
@@ -6271,6 +6564,13 @@ export class SessionService {
       runtimeInstanceId: this.getConnectionRuntimeInstanceId(session.connection),
       sessionGroupId: session.sessionGroupId,
     });
+    await this.assertPrivateRuntimeOwner({
+      visibility: session.sessionGroup?.visibility,
+      ownerUserId: session.sessionGroup?.ownerUserId,
+      organizationId,
+      hosting: "cloud",
+      runtimeInstanceId: null,
+    });
 
     return this.moveSessionInPlace({
       session,
@@ -6301,6 +6601,15 @@ export class SessionService {
       sessionGroupId,
       runtimeDiagnostics: diagnostics,
     });
+    const scopedGroup = sessionGroupId
+      ? await prisma.sessionGroup.findFirst({
+          where: { id: sessionGroupId, organizationId },
+          select: { visibility: true, ownerUserId: true },
+        })
+      : null;
+    if (scopedGroup && !canViewSessionGroup(scopedGroup, userId)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
 
     const allRuntimes = sessionRouter
       .listRuntimes()
@@ -6308,6 +6617,8 @@ export class SessionService {
         (runtime) =>
           runtime.hostingMode === "local" &&
           runtime.organizationId === organizationId &&
+          (scopedGroup?.visibility !== "private" ||
+            runtime.ownerUserId === scopedGroup.ownerUserId) &&
           runtime.supportedTools.includes(tool),
       );
 
@@ -6365,7 +6676,7 @@ export class SessionService {
 
   async listAvailableRuntimes(sessionId: string, organizationId: string, userId: string) {
     const session = await prisma.session.findFirstOrThrow({
-      where: { id: sessionId, organizationId },
+      where: { id: sessionId, organizationId, AND: [visibleSessionWhere(userId)] },
       select: { tool: true, sessionGroupId: true, repoId: true },
     });
     return this.listRuntimesForTool(
@@ -6394,12 +6705,15 @@ export class SessionService {
     if (sessionGroupId) {
       const scopedGroup = await prisma.sessionGroup.findFirst({
         where: { id: sessionGroupId, organizationId },
-        select: { repoId: true },
+        select: { repoId: true, visibility: true, ownerUserId: true },
       });
       if (!scopedGroup || scopedGroup.repoId !== repoId) {
         throw new AuthorizationError(
           "Bridge access denied: this session group does not own the requested repo",
         );
+      }
+      if (!canViewSessionGroup(scopedGroup, userId)) {
+        throw new AuthorizationError("Not authorized for this session group");
       }
     }
     let runtimeId = runtimeInstanceId;
@@ -7565,6 +7879,9 @@ export class SessionService {
     actorType: ActorType = "system",
     actorId: string = "system",
   ) {
+    if (actorId !== "system") {
+      await assertSessionGroupAccess(groupId, actorId, organizationId);
+    }
     const group = await prisma.sessionGroup.findUnique({
       where: { id: groupId },
       include: {

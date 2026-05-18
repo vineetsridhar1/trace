@@ -47,12 +47,18 @@ function buildRowSignature(row: SessionGroupRow): string {
     (row.createdBySession?.createdBy as
       | { id?: string; name?: string; avatarUrl?: string | null }
       | undefined) ?? null;
+  const owner =
+    (row.owner as { id?: string; name?: string; avatarUrl?: string | null } | undefined) ?? null;
 
   return [
     row.id,
     row.name,
     row.slug ?? "",
     row.status ?? "",
+    row.visibility ?? "",
+    owner?.id ?? "",
+    owner?.name ?? "",
+    owner?.avatarUrl ?? "",
     row.branch ?? "",
     row.prUrl ?? "",
     row.archivedAt ?? "",

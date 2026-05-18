@@ -410,6 +410,7 @@ export type EventType =
   | "session_deleted"
   | "session_group_archived"
   | "session_group_renamed"
+  | "session_group_visibility_updated"
   | "session_output"
   | "session_paused"
   | "session_pr_closed"
@@ -641,6 +642,7 @@ export type Mutation = {
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateSessionDefaults: User;
+  updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
 };
 
@@ -1092,6 +1094,11 @@ export type MutationUpdateSessionConfigArgs = {
 
 export type MutationUpdateSessionDefaultsArgs = {
   input: UpdateSessionDefaultsInput;
+};
+
+export type MutationUpdateSessionGroupVisibilityArgs = {
+  id: Scalars["ID"]["input"];
+  visibility: SessionGroupVisibility;
 };
 
 export type MutationUpdateTicketArgs = {
@@ -1607,6 +1614,7 @@ export type SessionGroup = {
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
+  owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
@@ -1615,6 +1623,7 @@ export type SessionGroup = {
   slug?: Maybe<Scalars["String"]["output"]>;
   status: SessionGroupStatus;
   updatedAt: Scalars["DateTime"]["output"];
+  visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
@@ -1627,6 +1636,8 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionGroupVisibility = "private" | "public";
 
 export type SessionPromptIndexItem = {
   __typename?: "SessionPromptIndexItem";
@@ -1719,6 +1730,7 @@ export type StartSessionInput = {
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
   ticketId?: InputMaybe<Scalars["ID"]["input"]>;
   tool?: InputMaybe<CodingTool>;
+  visibility?: InputMaybe<SessionGroupVisibility>;
 };
 
 export type Subscription = {
@@ -1934,6 +1946,7 @@ export type SessionGroupsQuery = {
     name: string;
     slug?: string | null;
     status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
     prUrl?: string | null;
     worktreeDeleted: boolean;
     archivedAt?: string | null;
@@ -1941,6 +1954,7 @@ export type SessionGroupsQuery = {
     setupError?: string | null;
     createdAt: string;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     channel?: { __typename?: "Channel"; id: string } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -1992,6 +2006,7 @@ export type FilteredSessionGroupsQuery = {
     id: string;
     name: string;
     status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
     prUrl?: string | null;
     worktreeDeleted: boolean;
     archivedAt?: string | null;
@@ -1999,6 +2014,7 @@ export type FilteredSessionGroupsQuery = {
     setupError?: string | null;
     createdAt: string;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     channel?: { __typename?: "Channel"; id: string } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -2270,6 +2286,7 @@ export type SessionGroupDetailQuery = {
     name: string;
     slug?: string | null;
     status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
     archivedAt?: string | null;
     branch?: string | null;
     prUrl?: string | null;
@@ -2279,6 +2296,7 @@ export type SessionGroupDetailQuery = {
     setupError?: string | null;
     createdAt: string;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     gitCheckpoints: Array<{
       __typename?: "GitCheckpoint";
       id: string;
@@ -3371,6 +3389,19 @@ export const SessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
@@ -3525,6 +3556,19 @@ export const FilteredSessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
@@ -4379,6 +4423,19 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "branch" } },
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },

@@ -2,6 +2,7 @@ import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { canViewSessionGroup } from "./access.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { isFullyUnloadedSession } from "./session.js";
 
@@ -47,11 +48,21 @@ class TerminalService {
       organizationId: string;
       sessionGroupId: string | null;
       connection: unknown;
-      sessionGroup?: { connection?: unknown } | null;
+      sessionGroup?: {
+        connection?: unknown;
+        visibility?: string | null;
+        ownerUserId?: string | null;
+      } | null;
     },
     userId: string,
     onMissingRuntime: "throw" | "deny",
   ): Promise<string | null> {
+    if (session.sessionGroup && !canViewSessionGroup(session.sessionGroup, userId)) {
+      if (onMissingRuntime === "throw") {
+        throw new AuthorizationError("Not authorized for this session");
+      }
+      return null;
+    }
     const runtimeInstanceId = this.resolveSessionRuntimeInstanceId(session);
     if (!runtimeInstanceId) {
       if (onMissingRuntime === "throw") {
@@ -162,6 +173,8 @@ class TerminalService {
             worktreeDeleted: true,
             setupStatus: true,
             connection: true,
+            visibility: true,
+            ownerUserId: true,
           },
         },
       },
@@ -217,7 +230,7 @@ class TerminalService {
         organizationId: true,
         sessionGroupId: true,
         connection: true,
-        sessionGroup: { select: { connection: true } },
+        sessionGroup: { select: { connection: true, visibility: true, ownerUserId: true } },
       },
     });
     if (!session) throw new Error("Session not found");
@@ -241,7 +254,7 @@ class TerminalService {
               organizationId: true,
               sessionGroupId: true,
               connection: true,
-              sessionGroup: { select: { connection: true } },
+              sessionGroup: { select: { connection: true, visibility: true, ownerUserId: true } },
             },
           });
     type OwningSession = {
@@ -249,7 +262,11 @@ class TerminalService {
       organizationId: string;
       sessionGroupId: string | null;
       connection: unknown;
-      sessionGroup: { connection: unknown } | null;
+      sessionGroup: {
+        connection: unknown;
+        visibility?: string | null;
+        ownerUserId?: string | null;
+      } | null;
     };
     const owningSessionMap = new Map<string, OwningSession>(
       owningSessions.map((item: OwningSession) => [item.id, item]),
@@ -376,7 +393,7 @@ class TerminalService {
         organizationId: true,
         sessionGroupId: true,
         connection: true,
-        sessionGroup: { select: { connection: true } },
+        sessionGroup: { select: { connection: true, visibility: true, ownerUserId: true } },
       },
     });
     if (!session) throw new Error("Terminal not found");

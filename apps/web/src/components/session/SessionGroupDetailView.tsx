@@ -33,6 +33,12 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       name
       slug
       status
+      visibility
+      owner {
+        id
+        name
+        avatarUrl
+      }
       archivedAt
       branch
       prUrl

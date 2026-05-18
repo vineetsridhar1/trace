@@ -24,7 +24,10 @@ export function getChannelRepoId(channelId: string): string | undefined {
  *
  * Starts the session, then navigates once the service returns the real IDs.
  */
-export async function createQuickSession(channelId: string): Promise<void> {
+export async function createQuickSession(
+  channelId: string,
+  options: { visibility?: "public" | "private" } = {},
+): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
@@ -37,6 +40,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
           deferRuntimeSelection: true,
           channelId,
           repoId: channelRepoId ?? undefined,
+          visibility: options.visibility,
         },
       })
       .toPromise();
