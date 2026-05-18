@@ -62,8 +62,6 @@ export function SessionMessageList({
   const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
   const hasScrolledInitiallyRef = useRef(false);
-  const isScrollingUpRef = useRef(false);
-  const lastScrollTopRef = useRef(0);
   const sizeCacheRef = useRef(new Map<string, number>());
   const initialBottomAligningRef = useRef(false);
   const initialScrollTimeoutsRef = useRef<number[]>([]);
@@ -111,15 +109,13 @@ export function SessionMessageList({
     },
   });
 
-  // Track whether the user is near the bottom and scroll direction
+  // Track whether the user is near the bottom.
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     isNearBottomRef.current = distanceFromBottom < 100;
-    isScrollingUpRef.current = container.scrollTop < lastScrollTopRef.current;
-    lastScrollTopRef.current = container.scrollTop;
   }, []);
 
   useEffect(() => {
@@ -206,47 +202,31 @@ export function SessionMessageList({
     };
   }, [virtualizer]);
 
-  // Correct scroll position when measurements change during upward scroll.
-  // When items above the viewport are measured for the first time, the total
-  // virtual height changes, which shifts content and causes visible jumps.
-  // We detect the height delta and compensate by adjusting scrollTop.
-  const prevTotalSizeRef = useRef(0);
-  const prevNodeCountForCorrectionRef = useRef(nodes.length);
   const totalSize = virtualizer.getTotalSize();
 
-  useLayoutEffect(() => {
+  const captureScrollSnapshot = useCallback(() => {
     const container = scrollContainerRef.current;
-    if (!container || !hasScrolledInitiallyRef.current) return;
-    if (scrollSnapshotRef.current) return;
+    if (!container || scrollSnapshotRef.current) return;
+    scrollSnapshotRef.current = {
+      scrollHeight: container.scrollHeight,
+      scrollTop: container.scrollTop,
+    };
+  }, []);
 
-    const prevTotal = prevTotalSizeRef.current;
-    prevTotalSizeRef.current = totalSize;
+  const loadOlderPreservingScroll = useCallback(() => {
+    if (!onLoadOlder || loadingOlder || hasOlder === false) return;
+    captureScrollSnapshot();
+    onLoadOlder();
+  }, [captureScrollSnapshot, hasOlder, loadingOlder, onLoadOlder]);
 
-    const nodeCountChanged = nodes.length !== prevNodeCountForCorrectionRef.current;
-    prevNodeCountForCorrectionRef.current = nodes.length;
-    if (nodeCountChanged) return;
-
-    if (prevTotal > 0 && isScrollingUpRef.current) {
-      const delta = totalSize - prevTotal;
-      if (delta !== 0) {
-        container.scrollTop += delta;
-      }
-    }
-  }, [nodes.length, totalSize]);
-
-  // Capture scroll position when older messages start loading
+  // Capture scroll position when older messages start loading. The normal path
+  // captures synchronously before setting loadingOlder; this is only a fallback.
   useEffect(() => {
     if (loadingOlder && !wasLoadingOlderRef.current) {
-      const container = scrollContainerRef.current;
-      if (container) {
-        scrollSnapshotRef.current = {
-          scrollHeight: container.scrollHeight,
-          scrollTop: container.scrollTop,
-        };
-      }
+      captureScrollSnapshot();
     }
     wasLoadingOlderRef.current = !!loadingOlder;
-  }, [loadingOlder]);
+  }, [captureScrollSnapshot, loadingOlder]);
 
   // Restore scroll position after older messages are prepended
   useLayoutEffect(() => {
@@ -313,11 +293,20 @@ export function SessionMessageList({
     }
     // Target not in DOM yet — load older events if available
     if (hasOlder && onLoadOlder && !loadingOlder) {
-      onLoadOlder();
+      loadOlderPreservingScroll();
     } else if (!hasOlder) {
       onScrollComplete?.();
     }
-  }, [scrollToEventId, onScrollComplete, nodes, hasOlder, loadingOlder, onLoadOlder, virtualizer]);
+  }, [
+    scrollToEventId,
+    onScrollComplete,
+    nodes,
+    hasOlder,
+    loadingOlder,
+    onLoadOlder,
+    loadOlderPreservingScroll,
+    virtualizer,
+  ]);
 
   // IntersectionObserver on the sentinel to trigger loading older messages.
   // Only activates after the initial scroll-to-bottom completes to avoid
@@ -330,7 +319,7 @@ export function SessionMessageList({
       (entries) => {
         if (!hasScrolledInitiallyRef.current) return;
         if (entries[0].isIntersecting && onLoadOlder) {
-          onLoadOlder();
+          loadOlderPreservingScroll();
         }
       },
       {
@@ -340,7 +329,7 @@ export function SessionMessageList({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [onLoadOlder]);
+  }, [loadOlderPreservingScroll, onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
   const { paddingTop, paddingBottom } = getSessionVirtualPadding(virtualItems, totalSize);
@@ -375,23 +364,28 @@ export function SessionMessageList({
     <div className="relative h-full">
       {showEmptyState ? emptyState : null}
 
-      <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-4">
-        {/* Sentinel for infinite scroll - triggers loading older messages */}
-        <div ref={sentinelRef} className="h-px" />
-
-        {loadingOlder && (
-          <div className="flex items-center justify-center py-3">
+      {loadingOlder && (
+        <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex items-center justify-center">
+          <div className="flex items-center rounded-full border border-border bg-background/90 px-3 py-1.5 shadow-sm backdrop-blur">
             <TraceLoader size={16} showLabel={false} />
             <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
           </div>
-        )}
+        </div>
+      )}
+
+      <div
+        ref={scrollContainerRef}
+        className="h-full overflow-y-auto px-4 py-4 [overflow-anchor:none]"
+      >
+        {/* Sentinel for infinite scroll - triggers loading older messages */}
+        <div ref={sentinelRef} className="h-px" />
 
         {!hasOlder && nodes.length > 0 && (
           <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
         )}
 
         {/* Visible rows stay in document flow; virtual padding preserves scroll height. */}
-        <div style={{ minHeight: totalSize, width: "100%" }}>
+        <div className="[overflow-anchor:none]" style={{ minHeight: totalSize, width: "100%" }}>
           {paddingTop > 0 ? <div aria-hidden="true" style={{ height: paddingTop }} /> : null}
 
           {virtualItems.map((virtualRow: { key: React.Key; index: number }) => {
