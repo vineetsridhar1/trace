@@ -19,7 +19,7 @@ const BEGINNING_LABEL_HEIGHT = 32;
 
 export type SessionListNode =
   | SessionNode
-  | { kind: "collapsed-events"; id: string; collapsed: CollapsedSessionEventsSummary };
+  | { kind: "collapsed-events"; id: string; collapsedRanges: CollapsedSessionEventsSummary[] };
 
 export interface SessionMessageListProps {
   key?: React.Key;
@@ -483,7 +483,7 @@ export function SessionMessageList({
                   {node.kind === "collapsed-events" ? (
                     <CollapsedSessionEventsRow
                       sessionId={sessionId}
-                      collapsed={node.collapsed}
+                      collapsedRanges={node.collapsedRanges}
                       gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
                     />
                   ) : (
