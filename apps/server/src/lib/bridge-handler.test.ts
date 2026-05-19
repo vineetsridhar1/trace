@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   registerRuntime: vi.fn(),
   unregisterRuntime: vi.fn(),
-  recordHeartbeat: vi.fn(),
+  recordHeartbeat: vi.fn(() => true),
   addRegisteredRepo: vi.fn(),
   bindSession: vi.fn(),
   getRuntime: vi.fn(() => undefined),
@@ -112,6 +112,7 @@ describe("bridge handler auth", () => {
     mocks.getRuntimeForSession.mockReturnValue(undefined);
     mocks.getBoundSessionIds.mockReturnValue([]);
     mocks.getHeartbeatReconcileSessionIds.mockReturnValue([]);
+    mocks.recordHeartbeat.mockReturnValue(true);
     mocks.listIdleActiveRunSessionIds.mockResolvedValue([]);
     mocks.sessionFindFirst.mockResolvedValue(null);
   });
@@ -586,6 +587,48 @@ describe("bridge handler auth", () => {
     });
     mocks.getBoundSessionIds.mockReturnValue(["session-1"]);
     mocks.getHeartbeatReconcileSessionIds.mockReturnValue([]);
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      label: "Bridge",
+      hostingMode: "local",
+      supportedTools: ["claude_code"],
+      registeredRepoIds: [],
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
+    ws.emitMessage({
+      type: "runtime_heartbeat",
+      instanceId: "bridge-owned",
+      activeSessionIds: [],
+    });
+
+    expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws);
+    expect(mocks.listIdleActiveRunSessionIds).not.toHaveBeenCalled();
+  });
+
+  it("does not reconcile active runs from a stale websocket heartbeat", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValue({
+      id: "bridge-runtime-1",
+      label: "Bridge",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+    mocks.recordHeartbeat.mockReturnValueOnce(false);
+    mocks.getHeartbeatReconcileSessionIds.mockReturnValue(["session-1"]);
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {

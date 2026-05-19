@@ -436,7 +436,8 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "runtime_heartbeat") {
         if (!registered) return;
-        sessionRouter.recordHeartbeat(runtimeKey, ws);
+        const recorded = sessionRouter.recordHeartbeat(runtimeKey, ws);
+        if (!recorded) return;
         if (Array.isArray(msg.activeSessionIds)) {
           const activeSessionIds = (msg.activeSessionIds as unknown[]).filter(
             (sessionId): sessionId is string => typeof sessionId === "string" && !!sessionId,
