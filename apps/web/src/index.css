@@ -20,7 +20,7 @@
 
 /* ── Trace dark theme ── */
 :root {
-  --background: #171717;
+  --background: #dc2626;
   --foreground: #d4d4d8;
   --card: #262626;
   --card-foreground: #d4d4d8;
@@ -57,9 +57,9 @@
   --sidebar-ring: #3b82f6;
 
   /* Trace semantic tokens */
-  --th-surface: #171717;
-  --th-surface-mid: #111111;
-  --th-surface-deep: #0a0a0a;
+  --th-surface: #dc2626;
+  --th-surface-mid: #b91c1c;
+  --th-surface-deep: #991b1b;
   --th-surface-elevated: #262626;
   --th-surface-hover: #404040;
   --th-primary: #a1a1aa;
