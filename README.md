@@ -22,9 +22,11 @@ Web / Desktop / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime
 
 ```
 apps/
-├── server/        Apollo + Express, service layer, Prisma, WebSocket endpoints
-├── web/           React + Vite + urql + Zustand, Tailwind CSS, shadcn/ui
-└── desktop/       Electron shell + bridge client for local sessions
+├── server/            Apollo + Express, service layer, Prisma, WebSocket endpoints
+├── web/               React + Vite + urql + Zustand, Tailwind CSS, shadcn/ui
+├── mobile/            React Native mobile client
+├── desktop/           Electron shell + bridge client for local sessions
+└── container-bridge/  Bridge runtime for container-backed sessions
 
 packages/
 ├── gql/           GraphQL schema, codegen, generated TypeScript types
