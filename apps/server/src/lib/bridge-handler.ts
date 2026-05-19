@@ -107,6 +107,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
   let pongReceived = true;
   const pingInterval = setInterval(() => {
     if (!pongReceived) {
+      runtimeDebug("bridge websocket ping watchdog terminating stale connection", {
+        runtimeId,
+      });
       clearInterval(pingInterval);
       ws.terminate();
       return;
@@ -438,10 +441,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           const activeSessionIds = (msg.activeSessionIds as unknown[]).filter(
             (sessionId): sessionId is string => typeof sessionId === "string" && !!sessionId,
           );
-          const boundSessionIds = sessionRouter.getBoundSessionIds(runtimeKey);
+          const reconcileSessionIds = sessionRouter.getHeartbeatReconcileSessionIds(runtimeKey);
+          if (reconcileSessionIds.length === 0) return;
           void sessionService
             .listIdleActiveRunSessionIds({
-              sessionIds: boundSessionIds,
+              sessionIds: reconcileSessionIds,
               activeSessionIds,
             })
             .then((sessionIds) => {
@@ -731,10 +735,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     runtimeDebug("bridge websocket error", { runtimeId, error: err.message });
   });
 
-  ws.on("close", () => {
+  ws.on("close", (code: number, reason: Buffer) => {
     clearInterval(pingInterval);
+    const reasonText = reason.toString();
     runtimeDebug("bridge websocket closed, grace period starting", {
       runtimeId,
+      code,
+      reason: reasonText || null,
       graceMs: DISCONNECT_GRACE_MS,
     });
     const closedRuntimeId = bridgeAuth?.kind === "local" ? bridgeAuth.instanceId : runtimeId;

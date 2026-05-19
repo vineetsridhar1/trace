@@ -83,6 +83,13 @@ export interface RuntimeInstance {
   lastHeartbeat: number;
   boundSessions: Set<string>;
   /**
+   * Sessions that received a run/send command on this live runtime connection.
+   * Heartbeat reconciliation only considers these sessions so restored DB
+   * bindings after a bridge reconnect cannot silently complete a run whose
+   * local process state was lost.
+   */
+  commandDeliveredSessions?: Set<string>;
+  /**
    * Cache of linked-checkout status per repo, populated as the bridge responds
    * to status/action requests. Lets queries like `BridgeRuntime.linkedCheckouts`
    * answer without a per-call WebSocket round-trip.
@@ -356,6 +363,10 @@ export class SessionRouter {
     const runtimeKey = runtime.key ?? runtime.id;
     const existing = this.runtimes.get(runtimeKey);
     const boundSessions = existing?.boundSessions ?? new Set<string>();
+    const commandDeliveredSessions =
+      existing && existing.ws === runtime.ws
+        ? (existing.commandDeliveredSessions ?? new Set<string>())
+        : new Set<string>();
     const linkedCheckouts =
       existing?.linkedCheckouts ?? new Map<string, BridgeLinkedCheckoutStatus>();
     if (existing && existing.ws !== runtime.ws) {
@@ -375,6 +386,7 @@ export class SessionRouter {
       registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
       lastHeartbeat: Date.now(),
       boundSessions,
+      commandDeliveredSessions,
       linkedCheckouts,
     });
     runtimeDebug("registered runtime", {
@@ -565,7 +577,10 @@ export class SessionRouter {
     const runtimeId = this.sessionRuntime.get(sessionId);
     if (runtimeId) {
       const runtime = this.runtimes.get(runtimeId);
-      if (runtime) runtime.boundSessions.delete(sessionId);
+      if (runtime) {
+        runtime.boundSessions.delete(sessionId);
+        runtime.commandDeliveredSessions?.delete(sessionId);
+      }
       runtimeDebug("unbound session from runtime", {
         sessionId,
         runtimeId,
@@ -583,6 +598,14 @@ export class SessionRouter {
 
   getBoundSessionIds(runtimeId: string): string[] {
     return [...(this.runtimes.get(runtimeId)?.boundSessions ?? [])];
+  }
+
+  getHeartbeatReconcileSessionIds(runtimeId: string): string[] {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return [];
+    return [...(runtime.commandDeliveredSessions ?? [])].filter((sessionId) =>
+      runtime.boundSessions.has(sessionId),
+    );
   }
 
   getRuntime(runtimeId: string, organizationId?: string | null): RuntimeInstance | undefined {
@@ -652,6 +675,10 @@ export class SessionRouter {
 
     try {
       runtime.ws.send(JSON.stringify(command));
+      if (command.type === "run" || command.type === "send") {
+        runtime.commandDeliveredSessions ??= new Set<string>();
+        runtime.commandDeliveredSessions.add(sessionId);
+      }
       return "delivered";
     } catch {
       return "delivery_failed";
@@ -755,6 +782,7 @@ export class SessionRouter {
       readyState: runtime.ws.readyState,
       lastHeartbeatAgeMs: now - runtime.lastHeartbeat,
       boundSessions: [...runtime.boundSessions],
+      commandDeliveredSessions: [...(runtime.commandDeliveredSessions ?? [])],
     }));
   }
 

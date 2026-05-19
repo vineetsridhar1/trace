@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getRuntime: vi.fn(() => undefined),
   getRuntimeForSession: vi.fn(() => undefined),
   getBoundSessionIds: vi.fn(() => []),
+  getHeartbeatReconcileSessionIds: vi.fn(() => []),
   getLinkedCheckoutStatus: vi.fn(() => Promise.resolve()),
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
   recordOutput: vi.fn(() => Promise.resolve()),
@@ -34,6 +35,7 @@ vi.mock("./session-router.js", () => ({
     getRuntime: mocks.getRuntime,
     getRuntimeForSession: mocks.getRuntimeForSession,
     getBoundSessionIds: mocks.getBoundSessionIds,
+    getHeartbeatReconcileSessionIds: mocks.getHeartbeatReconcileSessionIds,
     getLinkedCheckoutStatus: mocks.getLinkedCheckoutStatus,
   },
 }));
@@ -109,6 +111,7 @@ describe("bridge handler auth", () => {
     vi.clearAllMocks();
     mocks.getRuntimeForSession.mockReturnValue(undefined);
     mocks.getBoundSessionIds.mockReturnValue([]);
+    mocks.getHeartbeatReconcileSessionIds.mockReturnValue([]);
     mocks.listIdleActiveRunSessionIds.mockResolvedValue([]);
     mocks.sessionFindFirst.mockResolvedValue(null);
   });
@@ -537,7 +540,7 @@ describe("bridge handler auth", () => {
       organizationId: "org-1",
       ownerUserId: "user-1",
     });
-    mocks.getBoundSessionIds.mockReturnValue(["session-1", "session-2"]);
+    mocks.getHeartbeatReconcileSessionIds.mockReturnValue(["session-1", "session-2"]);
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
@@ -573,6 +576,48 @@ describe("bridge handler auth", () => {
     });
   });
 
+  it("does not reconcile restored sessions that have not received a command on this connection", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValue({
+      id: "bridge-runtime-1",
+      label: "Bridge",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+    mocks.getBoundSessionIds.mockReturnValue(["session-1"]);
+    mocks.getHeartbeatReconcileSessionIds.mockReturnValue([]);
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      label: "Bridge",
+      hostingMode: "local",
+      supportedTools: ["claude_code"],
+      registeredRepoIds: [],
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
+    ws.emitMessage({
+      type: "runtime_heartbeat",
+      instanceId: "bridge-owned",
+      activeSessionIds: [],
+    });
+
+    expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws);
+    expect(mocks.listIdleActiveRunSessionIds).not.toHaveBeenCalled();
+  });
+
   it("enqueues recovered completions behind prior session output", async () => {
     const ws = createMockWs();
     let releaseOutput: () => void = () => {};
@@ -586,7 +631,7 @@ describe("bridge handler auth", () => {
       organizationId: "org-1",
       ownerUserId: "user-1",
     });
-    mocks.getBoundSessionIds.mockReturnValue(["session-1"]);
+    mocks.getHeartbeatReconcileSessionIds.mockReturnValue(["session-1"]);
     mocks.listIdleActiveRunSessionIds.mockResolvedValue(["session-1"]);
     mocks.recordOutput.mockReturnValueOnce(outputPromise);
 

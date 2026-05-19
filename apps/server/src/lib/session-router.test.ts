@@ -187,6 +187,47 @@ describe("SessionRouter org-scoped runtime keys", () => {
     expect(org1Ws.send).toHaveBeenCalledOnce();
     expect(org2Ws.send).not.toHaveBeenCalled();
   });
+
+  it("only heartbeat-reconciles sessions that received commands on the current websocket", () => {
+    const router = new SessionRouter();
+    const ws1 = makeWs();
+    const runtimeKey = runtimeRouterKey("bridge-1", "org-1");
+
+    router.registerRuntime({
+      key: runtimeKey,
+      id: "bridge-1",
+      label: "Laptop",
+      ws: ws1,
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+    router.bindSession("session-1", runtimeKey);
+
+    expect(router.getHeartbeatReconcileSessionIds(runtimeKey)).toEqual([]);
+
+    expect(
+      router.send(
+        "session-1",
+        { type: "send", sessionId: "session-1", tool: "codex" },
+        { expectedHomeRuntimeId: "bridge-1", organizationId: "org-1" },
+      ),
+    ).toBe("delivered");
+    expect(router.getHeartbeatReconcileSessionIds(runtimeKey)).toEqual(["session-1"]);
+
+    router.registerRuntime({
+      key: runtimeKey,
+      id: "bridge-1",
+      label: "Laptop",
+      ws: makeWs(),
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+
+    expect(router.getBoundSessionIds(runtimeKey)).toContain("session-1");
+    expect(router.getHeartbeatReconcileSessionIds(runtimeKey)).toEqual([]);
+  });
 });
 
 describe("SessionRouter runtime-pinned bridge responses", () => {
