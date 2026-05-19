@@ -107,7 +107,8 @@ describe("createWorktree", () => {
     );
   });
 
-  it("rejects an existing worktree checked out to a different branch", async () => {
+  it("reuses an existing worktree checked out to a different branch", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     existsSyncMock.mockReturnValue(true);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
@@ -150,7 +151,11 @@ describe("createWorktree", () => {
         slug: "otter",
         defaultBranch: "main",
       }),
-    ).rejects.toThrow("Existing session worktree");
+    ).resolves.toEqual({
+      workdir: expect.stringContaining("/trace/sessions/repo-1/otter"),
+      branch: "feature/other",
+      slug: "otter",
+    });
     expect(execFileMock).not.toHaveBeenCalledWith(
       "git",
       ["reset", "--hard", expect.any(String)],
@@ -237,7 +242,8 @@ describe("createWorktree", () => {
     );
   });
 
-  it("rejects preserved branch mismatches that are not the generated Trace branch", async () => {
+  it("reuses preserved branch mismatches and reports the actual checked-out branch", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     existsSyncMock.mockReturnValue(true);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
@@ -285,7 +291,11 @@ describe("createWorktree", () => {
         startBranch: "trace/compact-session-timeline",
         preserveBranchName: true,
       }),
-    ).rejects.toThrow("Existing session worktree");
+    ).resolves.toEqual({
+      workdir: expect.stringContaining("/trace/sessions/repo-1/otter"),
+      branch: "feature/unrelated",
+      slug: "otter",
+    });
     expect(execFileMock).not.toHaveBeenCalledWith(
       "git",
       ["checkout", expect.any(String), expect.any(String), expect.any(String), expect.any(String)],

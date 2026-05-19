@@ -5179,36 +5179,6 @@ export class SessionService {
   }
 
   async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
-    if (branch) {
-      const current = await prisma.session.findUniqueOrThrow({
-        where: { id: sessionId },
-        select: {
-          organizationId: true,
-          sessionGroup: { select: { branch: true, workdir: true } },
-        },
-      });
-      const existingBranch = current.sessionGroup?.branch ?? null;
-      const existingWorkdir = current.sessionGroup?.workdir ?? null;
-      if (existingWorkdir === workdir && existingBranch && existingBranch !== branch) {
-        await eventService.create({
-          organizationId: current.organizationId,
-          scopeType: "session",
-          scopeId: sessionId,
-          eventType: "session_output",
-          payload: {
-            type: "error",
-            message:
-              `Workspace branch mismatch: bridge reported ${branch}, ` +
-              `but this session group is pinned to ${existingBranch}. ` +
-              "Fix the local worktree branch and retry recovery.",
-          },
-          actorType: "system",
-          actorId: "system",
-        });
-        return;
-      }
-    }
-
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
@@ -5245,12 +5215,19 @@ export class SessionService {
       },
     );
     const setupScript = await this.getChannelSetupScript(session.channelId);
+    const previousGroupBranch = session.sessionGroup?.branch ?? null;
+    const shouldClearPrUrl =
+      branch !== undefined &&
+      previousGroupBranch !== null &&
+      previousGroupBranch !== branch &&
+      Boolean(session.sessionGroup?.prUrl);
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
       workdir,
       connection: session.connection as Prisma.InputJsonValue,
       worktreeDeleted: false,
       repoId: session.repoId ?? null,
       ...(branch !== undefined ? { branch } : {}),
+      ...(shouldClearPrUrl ? { prUrl: null } : {}),
       ...(slug !== undefined ? { slug } : {}),
       setupStatus: setupScript ? "running" : "idle",
       setupError: null,
