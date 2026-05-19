@@ -16,6 +16,21 @@ interface SessionComposerToolLogoProps {
 export function SessionComposerToolLogo({ tool, size }: SessionComposerToolLogoProps) {
   const theme = useTheme();
 
+  if (tool === "custom") {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path
+          fill="none"
+          stroke={theme.colors.foreground}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5zM8 9l3 3-3 3m5 0h3"
+        />
+      </Svg>
+    );
+  }
+
   if (tool === "pi") {
     return (
       <Svg width={size} height={size} viewBox="0 0 800 800">

@@ -70,7 +70,7 @@ export function SessionModelPickerSheetContent({
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
 
   const currentTool: CodingTool =
-    tool === "codex" || tool === "pi" ? (tool as CodingTool) : "claude_code";
+    tool === "codex" || tool === "pi" || tool === "custom" ? (tool as CodingTool) : "claude_code";
   const isTerminal =
     (worktreeDeleted === true || sessionStatus === "merged") && worktreeDeleted !== false;
   const isDisconnected = connection?.state === "disconnected";

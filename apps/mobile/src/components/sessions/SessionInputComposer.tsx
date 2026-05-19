@@ -160,7 +160,7 @@ export function SessionInputComposer({
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const currentTool: CodingTool =
-    tool === "codex" || tool === "pi" ? (tool as CodingTool) : "claude_code";
+    tool === "codex" || tool === "pi" || tool === "custom" ? (tool as CodingTool) : "claude_code";
   const isTerminal =
     (worktreeDeleted === true || sessionStatus === "merged") && worktreeDeleted !== false;
   const isDisconnected = connection?.state === "disconnected";

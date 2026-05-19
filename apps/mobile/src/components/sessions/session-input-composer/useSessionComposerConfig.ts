@@ -130,6 +130,7 @@ export function useSessionComposerConfig({
       { value: "claude_code" as const, label: "Claude Code" },
       { value: "codex" as const, label: "Codex" },
       { value: "pi" as const, label: "Pi" },
+      { value: "custom" as const, label: "Custom" },
     ],
     [],
   );
