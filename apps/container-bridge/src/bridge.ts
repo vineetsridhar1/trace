@@ -400,7 +400,9 @@ export class ContainerBridge implements IBridgeClient {
                   slug,
                 });
                 this.pendingWorktrees.set(worktreeKey, worktreePromise);
-                worktreePromise.finally(() => this.pendingWorktrees.delete(worktreeKey));
+                void worktreePromise
+                  .finally(() => this.pendingWorktrees.delete(worktreeKey))
+                  .catch(() => undefined);
               }
               const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await worktreePromise;
               this.sessionWorkdirs.set(sessionId, workdir);

@@ -6245,6 +6245,60 @@ describe("SessionService", () => {
       );
     });
 
+    it("provisions from the source HEAD when moving an unpushed local branch", async () => {
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce({
+        branch: "trace/local-only",
+        headCommitSha: "df9a24bc0b0653723657926b83c69926f08ffe44",
+        upstreamBranch: "origin/main",
+        upstreamCommitSha: "df9a24bc0b0653723657926b83c69926f08ffe44",
+        aheadCount: 0,
+        behindCount: 0,
+        remoteBranch: null,
+        remoteCommitSha: null,
+        remoteAheadCount: 0,
+        remoteBehindCount: 0,
+        hasUncommittedChanges: false,
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          branch: "trace/local-only",
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "cloud",
+          branch: "trace/local-only",
+          sessionGroupId: "group-1",
+        }),
+      );
+
+      await service.moveToCloud("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          hosting: "cloud",
+          branch: "trace/local-only",
+          checkpointSha: "df9a24bc0b0653723657926b83c69926f08ffe44",
+        }),
+      );
+    });
+
     it("rejects moving a merged session with a deleted worktree to cloud", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({ sessionStatus: "merged", worktreeDeleted: true }),
