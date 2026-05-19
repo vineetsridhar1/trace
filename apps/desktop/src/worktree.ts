@@ -222,11 +222,10 @@ export async function createWorktree({
   const baseRef =
     resolvedBaseRef === "HEAD" && !(await refExists(repoPath, "HEAD")) ? null : resolvedBaseRef;
 
-  // If the worktree directory already exists, reuse the stable slug path and
-  // reset Trace-owned contents to the requested remote/checkpoint state. When a
-  // session's branch is renamed on another bridge, the old bridge may still have
-  // the slug worktree checked out to trace/{slug}; move that worktree to the
-  // persisted branch instead of failing the handoff.
+  // If the worktree directory already exists, reuse the stable slug path.
+  // Trace-owned branches can still be reset to the requested remote/checkpoint
+  // state; non-matching user branches are reported back as the actual workspace
+  // branch so the server can reconcile instead of blocking the UI.
   if (fs.existsSync(targetPath)) {
     const currentBranch = await getCurrentBranch(targetPath);
     if (currentBranch !== branch) {
@@ -237,9 +236,18 @@ export async function createWorktree({
         preserveBranchName,
       });
       if (!canRepairRenamedBranch) {
+        if (currentBranch) {
+          console.warn(
+            `[worktree] reconciling existing Trace worktree ${targetPath}: expected ${branch}, found ${currentBranch}`,
+          );
+          if (gitHooksEnabled) {
+            await installOrRepairRepoHooksBestEffort(targetPath, "session worktree reuse");
+          }
+          return { workdir: targetPath, branch: currentBranch, slug: worktreeSlug };
+        }
         throw new Error(
-          `Existing session worktree ${targetPath} is on branch ${currentBranch ?? "detached HEAD"}, expected ${branch}. ` +
-            "Switch it back or remove the worktree before retrying.",
+          `Existing session worktree ${targetPath} is detached, expected ${branch}. ` +
+            "Switch it back to a branch or remove the worktree before retrying.",
         );
       }
       console.warn(

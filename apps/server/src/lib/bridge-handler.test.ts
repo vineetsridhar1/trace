@@ -533,6 +533,72 @@ describe("bridge handler auth", () => {
     expect(mocks.registerRuntime).toHaveBeenCalled();
   });
 
+  it("processes reconnect-flushed session output after local runtime registration", async () => {
+    const ws = createMockWs();
+    let releaseRegistration: () => void = () => {};
+    const registration = new Promise<{
+      id: string;
+      label: string;
+      organizationId: string;
+      ownerUserId: string;
+    }>((resolve) => {
+      releaseRegistration = () => {
+        resolve({
+          id: "bridge-runtime-1",
+          label: "Bridge",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+        });
+      };
+    });
+    mocks.registerLocalRuntimeConnection.mockReturnValueOnce(registration);
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "connected", runtimeInstanceId: "bridge-owned" },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      label: "Bridge",
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    ws.emitMessage({
+      type: "session_output",
+      sessionId: "session-1",
+      data: { type: "assistant", message: "queued during reconnect" },
+    });
+
+    await Promise.resolve();
+    expect(mocks.recordOutput).not.toHaveBeenCalled();
+
+    releaseRegistration();
+
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: "org-1:bridge-owned",
+          id: "bridge-owned",
+          hostingMode: "local",
+        }),
+      );
+      expect(mocks.recordOutput).toHaveBeenCalledWith("session-1", {
+        type: "assistant",
+        message: "queued during reconnect",
+      });
+    });
+  });
+
   it("reconciles active run state from runtime heartbeats", async () => {
     const ws = createMockWs();
     mocks.registerLocalRuntimeConnection.mockResolvedValue({
@@ -785,19 +851,19 @@ describe("bridge handler auth", () => {
       terminalId: "term-1",
       exitCode: 0,
     });
-    await Promise.resolve();
-
-    expect(mocks.relayFromBridge).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "terminal_output", terminalId: "term-1", data: "one" }),
-      "cloud-machine-owned",
-    );
-    expect(mocks.relayFromBridge).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "terminal_output", terminalId: "term-2", data: "two" }),
-      "cloud-machine-owned",
-    );
-    expect(mocks.relayFromBridge).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "terminal_exit", terminalId: "term-1", exitCode: 0 }),
-      "cloud-machine-owned",
-    );
+    await vi.waitFor(() => {
+      expect(mocks.relayFromBridge).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "terminal_output", terminalId: "term-1", data: "one" }),
+        "cloud-machine-owned",
+      );
+      expect(mocks.relayFromBridge).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "terminal_output", terminalId: "term-2", data: "two" }),
+        "cloud-machine-owned",
+      );
+      expect(mocks.relayFromBridge).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "terminal_exit", terminalId: "term-1", exitCode: 0 }),
+        "cloud-machine-owned",
+      );
+    });
   });
 });

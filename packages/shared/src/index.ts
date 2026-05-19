@@ -97,6 +97,7 @@ export {
   downloadImagesToTempFiles,
   cleanupTempImages,
 } from "./bridge.js";
+export { BridgeOutbox, isQueueableBridgeMessage } from "./bridge-outbox.js";
 export type { GitExecFn } from "./bridge.js";
 export type {
   GitSyncStatusCommandOptions,

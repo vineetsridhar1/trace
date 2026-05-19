@@ -107,7 +107,8 @@ describe("createWorktree", () => {
     );
   });
 
-  it("rejects an existing worktree checked out to a different branch", async () => {
+  it("reuses an existing worktree checked out to a different branch", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     existsSyncMock.mockReturnValue(true);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
@@ -132,6 +133,62 @@ describe("createWorktree", () => {
         }
         if (args[0] === "symbolic-ref") {
           callback(null, "feature/other\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+
+    await expect(
+      createWorktree({
+        repoPath: "/tmp/repo",
+        repoId: "repo-1",
+        sessionId: "session-1",
+        slug: "otter",
+        defaultBranch: "main",
+      }),
+    ).resolves.toEqual({
+      workdir: expect.stringContaining("/trace/sessions/repo-1/otter"),
+      branch: "feature/other",
+      slug: "otter",
+    });
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      ["reset", "--hard", expect.any(String)],
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
+
+  it("rejects an existing detached worktree instead of reconciling it", async () => {
+    existsSyncMock.mockReturnValue(true);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/main" ? null : new Error("missing ref"), "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "symbolic-ref") {
+          callback(new Error("detached HEAD"), "");
           return {} as ReturnType<typeof execFileMock>;
         }
 
@@ -237,7 +294,8 @@ describe("createWorktree", () => {
     );
   });
 
-  it("rejects preserved branch mismatches that are not the generated Trace branch", async () => {
+  it("reuses preserved branch mismatches and reports the actual checked-out branch", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     existsSyncMock.mockReturnValue(true);
     generateAnimalSlugMock.mockReturnValue("otter");
     getUsedSlugsMock.mockResolvedValue(new Set());
@@ -285,7 +343,11 @@ describe("createWorktree", () => {
         startBranch: "trace/compact-session-timeline",
         preserveBranchName: true,
       }),
-    ).rejects.toThrow("Existing session worktree");
+    ).resolves.toEqual({
+      workdir: expect.stringContaining("/trace/sessions/repo-1/otter"),
+      branch: "feature/unrelated",
+      slug: "otter",
+    });
     expect(execFileMock).not.toHaveBeenCalledWith(
       "git",
       ["checkout", expect.any(String), expect.any(String), expect.any(String), expect.any(String)],
