@@ -21,7 +21,7 @@ export class FlyMachinesClient {
     idempotencyKey: string | undefined,
   ): Promise<FlyMachine> {
     if (idempotencyKey) {
-      const existing = await this.findMachineByIdempotencyKey(idempotencyKey);
+      const existing = await this.findMachineByIdempotencyKey(request, idempotencyKey);
       if (existing) {
         return existing;
       }
@@ -84,7 +84,10 @@ export class FlyMachinesClient {
     );
   }
 
-  private async findMachineByIdempotencyKey(idempotencyKey: string): Promise<FlyMachine | null> {
+  private async findMachineByIdempotencyKey(
+    request: StartSessionRequest,
+    idempotencyKey: string,
+  ): Promise<FlyMachine | null> {
     const machines = await this.request<FlyMachine[]>(
       `/v1/apps/${this.appName()}/machines?metadata.trace_idempotency_key=${encodeURIComponent(
         idempotencyKey,
@@ -92,7 +95,12 @@ export class FlyMachinesClient {
       { method: "GET" },
     );
 
-    return machines[0] ?? null;
+    return (
+      machines.find(
+        (machine) =>
+          machine.config?.metadata?.trace_runtime_instance_id === request.runtimeInstanceId,
+      ) ?? null
+    );
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
@@ -132,6 +140,7 @@ export function buildMachineEnv(
   return {
     ...passthroughEnv,
     ...request.bootstrapEnv,
+    CODING_TOOL: request.tool,
     TRACE_TOOL: request.tool,
     TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
     ...(request.model ? { TRACE_MODEL: request.model } : {}),

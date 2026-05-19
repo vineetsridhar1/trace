@@ -883,7 +883,9 @@ export class BridgeClient implements IBridgeClient {
             gitHooksEnabled: repoConfig.gitHooksEnabled,
           });
           this.pendingWorktrees.set(worktreeKey, worktreePromise);
-          worktreePromise.finally(() => this.pendingWorktrees.delete(worktreeKey));
+          void worktreePromise
+            .finally(() => this.pendingWorktrees.delete(worktreeKey))
+            .catch(() => undefined);
         }
         worktreePromise
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {

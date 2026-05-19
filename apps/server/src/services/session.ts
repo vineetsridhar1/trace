@@ -6358,7 +6358,10 @@ export class SessionService {
     sessionRouter.unbindSession(session.id);
 
     const bootstrapPrompt = buildMigrationPrompt(sourceInspection.verified);
-    const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
+    const checkpointSha =
+      sourceGitStatus?.headCommitSha && (!sourceGitStatus.branch || !sourceGitStatus.remoteBranch)
+        ? sourceGitStatus.headCommitSha
+        : null;
     const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
     const nextConnection = connJson(

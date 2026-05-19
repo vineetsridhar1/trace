@@ -725,7 +725,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
     const startInit = fetchMock().mock.calls[0]?.[1] as RequestInit;
     const startHeaders = startInit.headers as Record<string, string>;
     const startBody = JSON.parse(startInit.body as string) as Record<string, unknown>;
-    expect(startHeaders["Trace-Idempotency-Key"]).toBe("session:session-1:start");
+    expect(startHeaders["Trace-Idempotency-Key"]).toMatch(
+      /^session:session-1:runtime:runtime_.+:start$/,
+    );
     expect(startBody).toEqual(
       expect.objectContaining({
         sessionId: "session-1",
