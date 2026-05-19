@@ -41,7 +41,12 @@ const projectParentSelections = new Map<
   { path: string; timeout: ReturnType<typeof setTimeout> }
 >();
 const portOffset = Number(process.env.TRACE_PORT || 0);
-const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
+const productionUrl = "https://gettrace.org";
+const defaultServerUrl = app.isPackaged
+  ? productionUrl
+  : `http://localhost:${4000 + portOffset}`;
+const defaultWebUrl = app.isPackaged ? productionUrl : `http://localhost:${3000 + portOffset}`;
+const serverUrl = process.env.TRACE_SERVER_URL ?? defaultServerUrl;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
 const macUpdateRepo = "vineetsridhar1/trace";
@@ -121,7 +126,7 @@ function createWindow() {
     },
   });
 
-  const webUrl = process.env.TRACE_WEB_URL ?? `http://localhost:${3000 + portOffset}`;
+  const webUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
   mainWindow.loadURL(webUrl);
 
   // Open external links in the user's default browser.
