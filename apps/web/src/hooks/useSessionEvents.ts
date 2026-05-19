@@ -7,6 +7,7 @@ import {
   handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
+  useEntityStore,
   useScopedEvents,
   useScopedEventIds,
 } from "@trace/client-core";
@@ -329,6 +330,18 @@ function compareCursor(a: EventCursor, b: EventCursor): number {
   return a.eventId.localeCompare(b.eventId);
 }
 
+function latestTimelineItemCursor(
+  items: SessionTimelineDisplayItem[] | null,
+  scopedEvents: Record<string, Event>,
+): EventCursor | null {
+  if (!items) return null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const cursor = timelineItemEndCursor(items[i], scopedEvents);
+    if (cursor) return cursor;
+  }
+  return null;
+}
+
 function mergeCompactEventItems(
   current: SessionTimelineDisplayItem[] | null,
   events: Array<Event & { id: string }>,
@@ -352,6 +365,24 @@ function mergeCompactEventItems(
   });
 }
 
+export function mergeCompactTailEventItems(
+  current: SessionTimelineDisplayItem[] | null,
+  events: Array<Event & { id: string }>,
+  scopedEvents: Record<string, Event>,
+): SessionTimelineDisplayItem[] {
+  const tailCursor = latestTimelineItemCursor(current, scopedEvents);
+  const tailEvents = tailCursor
+    ? events.filter(
+        (event) => compareCursor({ timestamp: event.timestamp, eventId: event.id }, tailCursor) > 0,
+      )
+    : events;
+  if (tailEvents.length === 0) return current ?? [];
+  return mergeCompactEventItems(current, tailEvents, scopedEvents);
+}
+
+type CompactItemsState = SessionTimelineDisplayItem[] | null;
+type CompactItemsUpdate = CompactItemsState | ((current: CompactItemsState) => CompactItemsState);
+
 export function useSessionEvents(sessionId: string, options?: { skip?: boolean }) {
   const skip = options?.skip === true;
   const [loading, setLoading] = useState(!skip);
@@ -359,22 +390,31 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timelineMode, setTimelineMode] = useState<SessionTimelineMode>("live");
-  const [compactItems, setCompactItems] = useState<SessionTimelineDisplayItem[] | null>(null);
+  const [compactItems, setCompactItems] = useState<CompactItemsState>(null);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const oldestCursorRef = useRef<EventCursor | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
   const timelineModeRef = useRef<SessionTimelineMode>("live");
+  const compactItemsRef = useRef<CompactItemsState>(null);
   const scopeKey = eventScopeKey("session", sessionId);
   const scopedEvents = useScopedEvents(scopeKey);
+
+  const updateCompactItems = useCallback((update: CompactItemsUpdate) => {
+    setCompactItems((current) => {
+      const next = typeof update === "function" ? update(current) : update;
+      compactItemsRef.current = next;
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     setTimelineMode("live");
     timelineModeRef.current = "live";
-    setCompactItems(null);
+    updateCompactItems(null);
     oldestCursorRef.current = null;
     hasOlderRef.current = true;
-  }, [sessionId]);
+  }, [sessionId, updateCompactItems]);
 
   // Fetch the most recent page of events on mount
   const fetchEvents = useCallback(async () => {
@@ -406,14 +446,26 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     if (page.mode === "compact") {
       setTimelineMode("compact");
       timelineModeRef.current = "compact";
-      setCompactItems(page.items);
+      updateCompactItems(page.items);
       setHasOlder(page.hasOlder);
       hasOlderRef.current = page.hasOlder;
       oldestCursorRef.current = eventCursor(page.events[0]);
+    } else if (timelineModeRef.current === "compact" && compactItemsRef.current) {
+      const mergedEvents = { ...(useEntityStore.getState().eventsByScope[scopeKey] ?? {}) };
+      for (const event of page.events) {
+        mergedEvents[event.id] = event;
+      }
+      updateCompactItems((current) =>
+        mergeCompactTailEventItems(current, page.events, mergedEvents),
+      );
+      if (page.hasOlder && !hasOlderRef.current) {
+        setHasOlder(true);
+        hasOlderRef.current = true;
+      }
     } else {
       setTimelineMode("live");
       timelineModeRef.current = "live";
-      setCompactItems(null);
+      updateCompactItems(null);
 
       if (!page.hasOlder) {
         setHasOlder(false);
@@ -427,14 +479,14 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
       }
     }
     setLoading(false);
-  }, [activeOrgId, sessionId, skip]);
+  }, [activeOrgId, scopeKey, sessionId, skip, updateCompactItems]);
 
   useEffect(() => {
     if (skip) {
       setLoading(false);
       setHasOlder(false);
       hasOlderRef.current = false;
-      setCompactItems(null);
+      updateCompactItems(null);
       setTimelineMode("live");
       timelineModeRef.current = "live";
       oldestCursorRef.current = null;
@@ -442,7 +494,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
       return;
     }
     fetchEvents();
-  }, [fetchEvents, skip]);
+  }, [fetchEvents, skip, updateCompactItems]);
 
   // Subscribe to session-scoped events for full payloads.
   // The org-wide subscription trims session_output payloads to metadata only;
@@ -463,12 +515,12 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         if (isCompletedSessionEvent(event)) {
           void fetchEvents();
         } else if (timelineModeRef.current === "compact") {
-          setCompactItems((current) => appendEventItem(current, event));
+          updateCompactItems((current) => appendEventItem(current, event));
         }
       });
 
     return () => subscription.unsubscribe();
-  }, [activeOrgId, fetchEvents, sessionId, skip]);
+  }, [activeOrgId, fetchEvents, sessionId, skip, updateCompactItems]);
 
   // Load an older page of events (called when user scrolls to top)
   const fetchOlderEvents = useCallback(async () => {
@@ -509,14 +561,14 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
       }
 
       if (page.mode === "compact") {
-        setCompactItems((current) => [...page.items, ...(current ?? [])]);
+        updateCompactItems((current) => [...page.items, ...(current ?? [])]);
         setHasOlder(page.hasOlder);
         hasOlderRef.current = page.hasOlder;
         oldestCursorRef.current = eventCursor(page.events[0]);
       } else {
         setTimelineMode("live");
         timelineModeRef.current = "live";
-        setCompactItems(null);
+        updateCompactItems(null);
         setHasOlder(page.hasOlder);
         hasOlderRef.current = page.hasOlder;
         oldestCursorRef.current = eventCursor(page.events[0]);
@@ -558,7 +610,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     }
     loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [activeOrgId, sessionId, skip]);
+  }, [activeOrgId, sessionId, skip, updateCompactItems]);
 
   const fetchEventsAroundEvent = useCallback(
     async (eventId: string) => {
@@ -590,12 +642,12 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         for (const event of events) {
           mergedEvents[event.id] = event;
         }
-        setCompactItems((current) => mergeCompactEventItems(current, events, mergedEvents));
+        updateCompactItems((current) => mergeCompactEventItems(current, events, mergedEvents));
       }
 
       return events.some((event) => event.id === eventId);
     },
-    [activeOrgId, scopedEvents, sessionId, skip],
+    [activeOrgId, scopedEvents, sessionId, skip, updateCompactItems],
   );
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
