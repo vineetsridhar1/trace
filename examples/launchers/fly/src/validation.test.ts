@@ -27,6 +27,15 @@ describe("validateStartSessionRequest", () => {
 
     expect(request.reasoningEffort).toBeNull();
   });
+
+  it("accepts Pi runtimes", () => {
+    const request = validateStartSessionRequest({
+      ...startRequest(),
+      tool: "pi",
+    });
+
+    expect(request.tool).toBe("pi");
+  });
 });
 
 function startRequest(): StartSessionRequest {

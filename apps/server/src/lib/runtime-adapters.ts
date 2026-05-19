@@ -388,8 +388,9 @@ function isRetryableLauncherStatus(status: number | undefined): boolean {
 async function readJsonResponse(response: Response, endpointName: string): Promise<unknown> {
   const text = await response.text();
   if (!response.ok) {
+    const detail = text.trim() ? `: ${text.trim().slice(0, 500)}` : "";
     throw new ProvisionedLauncherError(
-      `Provisioned ${endpointName} request failed with HTTP ${response.status}`,
+      `Provisioned ${endpointName} request failed with HTTP ${response.status}${detail}`,
       response.status,
     );
   }
