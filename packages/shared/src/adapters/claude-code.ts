@@ -43,9 +43,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const permissionFlag =
-      interactionMode === "plan" ? "--permission-mode" : "--dangerously-skip-permissions";
-    const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+    const args = ["-p", "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
     }
@@ -53,13 +51,14 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       args.push("--effort", reasoningEffort);
     }
     if (interactionMode === "plan") {
-      args.push(permissionFlag, "plan");
+      args.push("--permission-mode", "plan");
     } else {
-      args.push(permissionFlag);
+      args.push("--dangerously-skip-permissions");
     }
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
+    args.push("--", prompt);
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("claude", args, {

@@ -7,6 +7,7 @@ import { CodexAdapter } from "../src/adapters/codex.js";
 import { PiAdapter } from "../src/adapters/pi.js";
 
 class FakeChildProcess extends EventEmitter {
+  stdin = new PassThrough();
   stdout = new PassThrough();
   stderr = new PassThrough();
   pid = 12345;
@@ -122,10 +123,10 @@ describe("coding tool adapter process exit fallback", () => {
         "openai/gpt-5.5",
         "--thinking",
         "high",
-        "implement feature",
       ],
-      expect.objectContaining({ cwd: "/tmp" }),
+      expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
     );
+    expect(spawnedChildren[0].stdin.read()?.toString()).toBe("implement feature");
 
     spawnedChildren[0].stdout.write(
       `${JSON.stringify({ type: "session", version: 3, id: "session-456" })}\n`,
@@ -185,6 +186,56 @@ describe("coding tool adapter process exit fallback", () => {
       type: "assistant",
       message: { content: [{ type: "text", text: "done" }] },
     });
+  });
+
+  it("passes prompts so leading hyphens are not parsed as flags", () => {
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    new ClaudeCodeAdapter().run({
+      prompt: "- fix this bug",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "claude",
+      [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--dangerously-skip-permissions",
+        "--",
+        "- fix this bug",
+      ],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+
+    new CodexAdapter().run({
+      prompt: "- fix this bug",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "codex",
+      ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--", "- fix this bug"],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+
+    new PiAdapter().run({
+      prompt: "- fix this bug",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "pi",
+      ["--mode", "json"],
+      expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
+    );
+    expect(spawnedChildren[2].stdin.read()?.toString()).toBe("- fix this bug");
   });
 
   it("marks Pi runs as failed when assistant events report an error stop reason", () => {
