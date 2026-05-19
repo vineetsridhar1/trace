@@ -162,7 +162,9 @@ describe("ProvisionedRuntimeAdapter", () => {
       expect(url).toBe("https://launcher.example/start");
       expect(init.signal).toBeInstanceOf(AbortSignal);
       expect(headers.Authorization).toBe("Bearer launcher-secret");
-      expect(headers["Trace-Idempotency-Key"]).toBe("session:session-1:start");
+      expect(headers["Trace-Idempotency-Key"]).toBe(
+        "session:session-1:runtime:runtime_preallocated_1:start",
+      );
       expect(typeof body.runtimeToken).toBe("string");
       expect(body.runtimeToken).not.toBe("runtime-token");
       expect(body.runtimeTokenScope).toBe("session");
@@ -480,8 +482,8 @@ describe("ProvisionedRuntimeAdapter", () => {
       return headers["Trace-Idempotency-Key"];
     });
     expect(idempotencyKeys).toEqual([
-      "session:session-duplicate:start",
-      "session:session-duplicate:start",
+      "session:session-duplicate:runtime:runtime-duplicate:start",
+      "session:session-duplicate:runtime:runtime-duplicate:start",
       "session:session-duplicate:stop",
       "session:session-duplicate:stop",
     ]);

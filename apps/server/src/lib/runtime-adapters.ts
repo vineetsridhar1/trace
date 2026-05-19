@@ -354,7 +354,14 @@ function startStatus(value: unknown): RuntimeStartResult["status"] {
   return "provisioning";
 }
 
-function idempotencyKey(sessionId: string, action: "start" | "stop"): string {
+function idempotencyKey(
+  sessionId: string,
+  action: "start" | "stop",
+  runtimeInstanceId?: string,
+): string {
+  if (action === "start" && runtimeInstanceId) {
+    return `session:${sessionId}:runtime:${runtimeInstanceId}:${action}`;
+  }
   return `session:${sessionId}:${action}`;
 }
 
@@ -617,7 +624,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       url: config.startUrl,
       auth: config.auth,
       body,
-      idempotencyKey: idempotencyKey(input.sessionId, "start"),
+      idempotencyKey: idempotencyKey(input.sessionId, "start", runtimeInstanceId),
       endpointName: "start",
       timeoutMs: config.startupTimeoutSeconds * 1000,
     });
