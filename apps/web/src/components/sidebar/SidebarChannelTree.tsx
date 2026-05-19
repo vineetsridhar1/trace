@@ -11,6 +11,7 @@ import { SidebarChannelSection } from "./SidebarChannelSection";
 import { Skeleton } from "../ui/skeleton";
 import { SidebarMenu, SidebarMenuItem } from "../ui/sidebar";
 import type { SidebarSessionScope } from "./ChannelOwnedSessions";
+import { SidebarOnboardingEmptyState } from "./SidebarOnboardingEmptyState";
 
 const DELETE_GROUP_MUTATION = gql`
   mutation DeleteChannelGroup($id: ID!) {
@@ -29,6 +30,8 @@ export interface SidebarChannelTreeProps {
   channelsLoading: boolean;
   groupIds: string[];
   onAddChannel: (groupId: string) => void;
+  onBrowseChannels: () => void;
+  onCreateChannel: () => void;
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDragActiveChange?: (active: boolean) => void;
@@ -48,6 +51,8 @@ export function SidebarChannelTree({
   channelsLoading,
   groupIds,
   onAddChannel,
+  onBrowseChannels,
+  onCreateChannel,
   onChannelClick,
   onSessionClick,
   onDragActiveChange,
@@ -160,7 +165,10 @@ export function SidebarChannelTree({
       </DndContext>
 
       {allChannelIds.length === 0 && groupIds.length === 0 && (
-        <p className="px-2 py-4 text-center text-xs text-foreground">No channels yet</p>
+        <SidebarOnboardingEmptyState
+          onBrowseClick={onBrowseChannels}
+          onCreateClick={onCreateChannel}
+        />
       )}
     </>
   );

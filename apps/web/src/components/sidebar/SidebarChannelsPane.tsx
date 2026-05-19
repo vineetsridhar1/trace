@@ -49,6 +49,7 @@ export function SidebarChannelsPane({
 }: SidebarChannelsPaneProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
+  const [browseDialogOpen, setBrowseDialogOpen] = useState(false);
   const [sessionScopes, setSessionScopes] =
     useState<SidebarSessionScopes>(readSidebarSessionScopes);
 
@@ -82,7 +83,7 @@ export function SidebarChannelsPane({
             Projects
           </span>
           <div className="pointer-events-none flex items-center gap-0.5 opacity-0 transition-opacity group-hover/projects-header:pointer-events-auto group-hover/projects-header:opacity-100 group-focus-within/projects-header:pointer-events-auto group-focus-within/projects-header:opacity-100">
-            <BrowseChannelsDialog />
+            <BrowseChannelsDialog open={browseDialogOpen} onOpenChange={setBrowseDialogOpen} />
             <CreateChannelDialog
               open={createDialogOpen}
               onOpenChange={setCreateDialogOpen}
@@ -108,6 +109,11 @@ export function SidebarChannelsPane({
           onToggleSessionScope={toggleSessionScope}
           onAddChannel={(groupId: string) => {
             setCreateForGroupId(groupId);
+            setCreateDialogOpen(true);
+          }}
+          onBrowseChannels={() => setBrowseDialogOpen(true)}
+          onCreateChannel={() => {
+            setCreateForGroupId(null);
             setCreateDialogOpen(true);
           }}
           onChannelClick={onChannelClick}
