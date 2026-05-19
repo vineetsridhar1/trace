@@ -560,7 +560,6 @@ describe("SessionTimelineService", () => {
       "user-2",
       "collapsed:user-2:assistant-2",
       "assistant-2",
-      "collapsed:assistant-2:user-3",
     ]);
     expect(page.items[1].collapsed).toEqual({
       id: "collapsed:user-2:assistant-2",
@@ -569,7 +568,6 @@ describe("SessionTimelineService", () => {
       endEventId: assistant2.id,
       endTimestamp: assistant2.timestamp,
     });
-    expect(page.items[3].collapsed?.endTimestamp).toEqual(user3.timestamp);
   });
 
   it("keeps PR lifecycle events visible in compact timelines", async () => {
@@ -625,6 +623,94 @@ describe("SessionTimelineService", () => {
       "collapsed:user-1:pr-opened",
       "pr-opened",
       "assistant-final",
+    ]);
+  });
+
+  it("emits one thinking range for a turn with visible assistant and lifecycle milestones", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "message_sent",
+      actorType: "user",
+      payload: { text: "create pr" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const assistantText = event({
+      id: "assistant-text",
+      payload: {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "text",
+              text: "The remote-base diff is clean. I'm creating the PR now.",
+            },
+          ],
+        },
+      },
+      timestamp: new Date("2026-05-14T10:02:00.000Z"),
+    });
+    const prEvent = event({
+      id: "pr-opened",
+      eventType: "session_pr_opened",
+      payload: { url: "https://github.com/acme/repo/pull/1" },
+      timestamp: new Date("2026-05-14T10:04:00.000Z"),
+    });
+    const terminated = event({
+      id: "run-ended",
+      eventType: "session_terminated",
+      payload: { agentStatus: "done", sessionStatus: "done" },
+      timestamp: new Date("2026-05-14T10:06:00.000Z"),
+    });
+    const initialTool = event({
+      id: "hidden-tool-1",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-1", name: "Read", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    const prTool = event({
+      id: "hidden-tool-2",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-2", name: "Bash", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:03:00.000Z"),
+    });
+    const finalTool = event({
+      id: "hidden-tool-3",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-3", name: "Bash", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:05:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "done",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      terminated,
+      finalTool,
+      prEvent,
+      prTool,
+      assistantText,
+      initialTool,
+      userEvent,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-1",
+      "collapsed:user-1:assistant-text",
+      "assistant-text",
+      "pr-opened",
     ]);
   });
 
