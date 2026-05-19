@@ -1211,6 +1211,96 @@ describe("SessionService", () => {
       );
     });
 
+    it("allows creating an empty session before the selected runtime supports its explicit tool", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({
+        sessionGroup,
+        tool: "codex",
+        hosting: "local",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-1",
+          runtimeLabel: "Laptop",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+
+      prismaMock.agentEnvironment.findFirst.mockResolvedValue(
+        makeAgentEnvironment({
+          config: {
+            ...makeAgentEnvironment().config,
+            capabilities: { supportedTools: ["claude_code"] },
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-1",
+        id: "runtime-1",
+        label: "Laptop",
+        hostingMode: "local",
+        organizationId: "org-1",
+        registeredRepoIds: [],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      } as unknown as ReturnType<typeof sessionRouterMock.getRuntime>);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "codex",
+        runtimeInstanceId: "runtime-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              runtimeInstanceId: "runtime-1",
+              runtimeLabel: "Laptop",
+            }),
+          }),
+        }),
+      );
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+            hosting: "local",
+          }),
+        }),
+      );
+    });
+
+    it("rejects a prompted start when the selected runtime does not support the explicit tool", async () => {
+      prismaMock.agentEnvironment.findFirst.mockResolvedValue(makeAgentEnvironment());
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-1",
+        id: "runtime-1",
+        label: "Laptop",
+        hostingMode: "local",
+        organizationId: "org-1",
+        registeredRepoIds: [],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      } as unknown as ReturnType<typeof sessionRouterMock.getRuntime>);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "codex",
+          runtimeInstanceId: "runtime-1",
+          prompt: "Start work",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Selected runtime does not support this tool");
+    });
+
     it("rejects a runtime override that conflicts with the selected local environment", async () => {
       prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
         id: "env-1",

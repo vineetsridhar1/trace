@@ -621,6 +621,7 @@ export class AgentEnvironmentService {
     environmentId?: string | null;
     adapterType?: RuntimeAdapterType | null;
     tool: CodingTool;
+    validateTool?: boolean;
     actorType: ActorType;
     actorId: string;
   }): Promise<ResolvedSessionEnvironment | null> {
@@ -657,7 +658,9 @@ export class AgentEnvironmentService {
       await runtimeAdapterRegistry
         .get(environment.adapterType)
         .validateConfig(asConfigRecord(environment.config));
-      assertSupportsTool(environment, params.tool);
+      if (params.validateTool !== false) {
+        assertSupportsTool(environment, params.tool);
+      }
       return environment as ResolvedSessionEnvironment;
     });
   }

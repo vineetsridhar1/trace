@@ -2691,6 +2691,7 @@ export class SessionService {
           adapterType:
             input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
           tool,
+          validateTool: !!input.prompt,
           actorType: input.actorType ?? "user",
           actorId: input.createdById,
         });
@@ -2816,14 +2817,16 @@ export class SessionService {
       }
       if (useRequestedRuntime) {
         if (!runtime.supportedTools.includes(tool)) {
-          if (hasExplicitTool) {
+          if (hasExplicitTool && input.prompt) {
             throw new Error("Selected runtime does not support this tool");
           }
-          const fallbackTool = selectRuntimeSupportedTool(runtime, tool);
-          if (!fallbackTool) {
-            throw new Error("Selected runtime does not support any known coding tool");
+          if (!hasExplicitTool) {
+            const fallbackTool = selectRuntimeSupportedTool(runtime, tool);
+            if (!fallbackTool) {
+              throw new Error("Selected runtime does not support any known coding tool");
+            }
+            tool = fallbackTool;
           }
-          tool = fallbackTool;
         }
         if (
           runtime.hostingMode === "local" &&
