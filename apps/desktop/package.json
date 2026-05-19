@@ -5,7 +5,7 @@
   "productName": "Trace",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "pnpm --filter @trace/shared build && tsc -b && electron-forge start",
+    "dev": "pnpm --filter @trace/shared build && tsc -b && CI=1 electron-forge start",
     "build": "pnpm --filter @trace/shared build && tsc -b",
     "package": "electron-forge package",
     "make": "electron-forge make",
