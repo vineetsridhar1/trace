@@ -5355,6 +5355,78 @@ describe("SessionService", () => {
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
     });
 
+    it("provisions from the source HEAD when moving an unpushed branch to another runtime", async () => {
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce({
+        branch: "trace/local-only",
+        headCommitSha: "df9a24bc0b0653723657926b83c69926f08ffe44",
+        upstreamBranch: "origin/main",
+        upstreamCommitSha: "df9a24bc0b0653723657926b83c69926f08ffe44",
+        aheadCount: 0,
+        behindCount: 0,
+        remoteBranch: null,
+        remoteCommitSha: null,
+        remoteAheadCount: 0,
+        remoteBehindCount: 0,
+        hasUncommittedChanges: false,
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          branch: "trace/local-only",
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "local",
+          branch: "trace/local-only",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Local Dev",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          hosting: "local",
+          branch: "trace/local-only",
+          checkpointSha: "df9a24bc0b0653723657926b83c69926f08ffe44",
+        }),
+      );
+    });
+
     it("rejects moving a merged session with a deleted worktree", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({ sessionStatus: "merged", worktreeDeleted: true }),
