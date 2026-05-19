@@ -82,6 +82,30 @@ async function resolveAvailableWorkspaceSlug(
   return generateAnimalSlug(usedSlugs);
 }
 
+async function refExists(repoPath: string, ref: string): Promise<boolean> {
+  return execFileAsync("git", ["rev-parse", "--verify", ref], { cwd: repoPath }).then(
+    () => true,
+    () => false,
+  );
+}
+
+async function resolveBaseRef(
+  repoPath: string,
+  branch: string | undefined,
+  defaultBranch: string,
+): Promise<string> {
+  const candidate = branch ?? defaultBranch;
+  const remote = `origin/${candidate}`;
+  if (await refExists(repoPath, remote)) return remote;
+  if (await refExists(repoPath, candidate)) return candidate;
+
+  const remoteDefault = `origin/${defaultBranch}`;
+  if (await refExists(repoPath, remoteDefault)) return remoteDefault;
+  if (await refExists(repoPath, defaultBranch)) return defaultBranch;
+
+  return "HEAD";
+}
+
 /**
  * Create a worktree from the repo at /repos/{repoId}.
  * The worktree is keyed by `slug` (an animal name) when provided.
@@ -118,7 +142,7 @@ export async function createWorktree({
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
   const branchName = resolveWorktreeBranch(worktreeSlug, branch, preserveBranchName);
-  const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
+  const baseRef = checkpointSha ?? (await resolveBaseRef(repoPath, branch, defaultBranch));
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
   if (checkpointSha) {
