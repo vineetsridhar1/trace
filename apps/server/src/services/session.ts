@@ -2625,6 +2625,17 @@ export class SessionService {
 
     const requestedRuntimeSelection =
       !!input.environmentId || !!input.hosting || !!input.runtimeInstanceId;
+    const sharedConnectionHasRuntimeSelection =
+      sharedConnection &&
+      typeof sharedConnection === "object" &&
+      ("runtimeInstanceId" in sharedConnection ||
+        "environmentId" in sharedConnection ||
+        "providerRuntimeId" in sharedConnection ||
+        "providerRuntimeUrl" in sharedConnection);
+    const reuseExistingGroupRuntimeSelection =
+      !input.environmentId &&
+      !!existingGroup?.id &&
+      (!!sharedWorkdir || !!sharedRuntimeInstanceId || !!sharedConnectionHasRuntimeSelection);
     const deferRuntimeSelection =
       input.deferRuntimeSelection === true ||
       (!input.restoreCheckpointId &&
@@ -2672,12 +2683,15 @@ export class SessionService {
 
     const requestedEnvironment = deferRuntimeSelection
       ? null
+      : reuseExistingGroupRuntimeSelection
+        ? null
       : await agentEnvironmentService.resolveForSessionRequest({
           organizationId: input.organizationId,
           environmentId: input.environmentId ?? null,
           adapterType:
             input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
           tool,
+          validateTool: !!input.prompt,
           actorType: input.actorType ?? "user",
           actorId: input.createdById,
         });
@@ -2717,7 +2731,7 @@ export class SessionService {
     if (isLocalMode() && hosting === "cloud") {
       hosting = "local";
     }
-    if (hosting === "cloud" && !requestedEnvironment) {
+    if (hosting === "cloud" && !requestedEnvironment && !reuseExistingGroupRuntimeSelection) {
       throw new Error("No enabled cloud agent environment is configured");
     }
     let runtimeLabel: string | undefined;
@@ -2803,14 +2817,16 @@ export class SessionService {
       }
       if (useRequestedRuntime) {
         if (!runtime.supportedTools.includes(tool)) {
-          if (hasExplicitTool) {
+          if (hasExplicitTool && input.prompt) {
             throw new Error("Selected runtime does not support this tool");
           }
-          const fallbackTool = selectRuntimeSupportedTool(runtime, tool);
-          if (!fallbackTool) {
-            throw new Error("Selected runtime does not support any known coding tool");
+          if (!hasExplicitTool) {
+            const fallbackTool = selectRuntimeSupportedTool(runtime, tool);
+            if (!fallbackTool) {
+              throw new Error("Selected runtime does not support any known coding tool");
+            }
+            tool = fallbackTool;
           }
-          tool = fallbackTool;
         }
         if (
           runtime.hostingMode === "local" &&
