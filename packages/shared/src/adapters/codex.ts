@@ -44,21 +44,15 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     const args = this.threadId
-      ? [
-          "exec",
-          "resume",
-          this.threadId,
-          "--json",
-          "--dangerously-bypass-approvals-and-sandbox",
-          prompt,
-        ]
-      : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", prompt];
+      ? ["exec", "resume", this.threadId, "--json", "--dangerously-bypass-approvals-and-sandbox"]
+      : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox"];
     if (model) {
       args.push("--model", model);
     }
     if (reasoningEffort) {
       args.push("--config", `model_reasoning_effort="${reasoningEffort}"`);
     }
+    args.push("--", prompt);
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("codex", args, {

@@ -122,6 +122,7 @@ describe("coding tool adapter process exit fallback", () => {
         "openai/gpt-5.5",
         "--thinking",
         "high",
+        "--",
         "implement feature",
       ],
       expect.objectContaining({ cwd: "/tmp" }),
@@ -185,6 +186,55 @@ describe("coding tool adapter process exit fallback", () => {
       type: "assistant",
       message: { content: [{ type: "text", text: "done" }] },
     });
+  });
+
+  it("passes prompts after an option terminator so leading hyphens are not parsed as flags", () => {
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    new ClaudeCodeAdapter().run({
+      prompt: "- fix this bug",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "claude",
+      [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--dangerously-skip-permissions",
+        "--",
+        "- fix this bug",
+      ],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+
+    new CodexAdapter().run({
+      prompt: "- fix this bug",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "codex",
+      ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--", "- fix this bug"],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
+
+    new PiAdapter().run({
+      prompt: "- fix this bug",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+    expect(spawn).toHaveBeenLastCalledWith(
+      "pi",
+      ["--mode", "json", "--", "- fix this bug"],
+      expect.objectContaining({ cwd: "/tmp" }),
+    );
   });
 
   it("marks Pi runs as failed when assistant events report an error stop reason", () => {

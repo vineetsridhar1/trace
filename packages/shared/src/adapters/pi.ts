@@ -74,7 +74,7 @@ export class PiAdapter implements CodingToolAdapter {
     if (reasoningEffort) {
       args.push("--thinking", reasoningEffort);
     }
-    args.push(prompt);
+    args.push("--", prompt);
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("pi", args, {
