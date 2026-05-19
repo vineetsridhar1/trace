@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
+  getDefaultSessionConfigForTool,
   getModelProviderForModel,
   getModelProviderGroupsForTool,
   getModelsForTool,
@@ -13,6 +14,10 @@ describe("model catalog", () => {
   it("exposes Pi-backed API and subscription models and defaults to API OpenAI", () => {
     expect(getDefaultModel("pi")).toBe("openai/gpt-5.5");
     expect(getDefaultReasoningEffort("pi")).toBe("medium");
+    expect(getDefaultSessionConfigForTool("pi")).toEqual({
+      model: "openai/gpt-5.5",
+      reasoningEffort: "medium",
+    });
     expect(getModelsForTool("pi")).toContainEqual({
       value: "openai/gpt-5.5",
       label: "OpenAI GPT-5.5",

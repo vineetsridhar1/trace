@@ -24,16 +24,14 @@ interface ToolModelPickerProps {
   tool: ToolOptionValue;
   model?: string | null;
   disabled?: boolean;
-  onToolChange: (tool: ToolOptionValue) => Promise<void> | void;
-  onModelChange: (model: string) => Promise<void> | void;
+  onSelectionChange: (selection: { tool: ToolOptionValue; model: string }) => Promise<void> | void;
 }
 
 export function ToolModelPicker({
   tool,
   model,
   disabled,
-  onToolChange,
-  onModelChange,
+  onSelectionChange,
 }: ToolModelPickerProps) {
   const [open, setOpen] = useState(false);
   const [layer, setLayer] = useState<PickerLayer>("tools");
@@ -69,14 +67,6 @@ export function ToolModelPicker({
         : nextProviderGroups[0]?.value;
     setPickerProvider(nextProvider ?? null);
     setLayer(nextProviderGroups.length > 0 ? "providers" : "models");
-    if (nextTool === tool) return;
-
-    setPending(true);
-    try {
-      await onToolChange(nextTool);
-    } finally {
-      setPending(false);
-    }
   }
 
   function handleProviderSelect(provider: string) {
@@ -91,8 +81,8 @@ export function ToolModelPicker({
   async function handleModelSelect(nextModel: string) {
     setPending(true);
     try {
-      if (nextModel !== model) {
-        await onModelChange(nextModel);
+      if (pickerTool !== tool || nextModel !== model) {
+        await onSelectionChange({ tool: pickerTool, model: nextModel });
       }
       setOpen(false);
     } finally {
@@ -117,7 +107,7 @@ export function ToolModelPicker({
           {layer === "tools" ? (
             <ToolLayer
               key="tools"
-              currentTool={tool}
+              currentTool={pickerTool}
               pending={pending}
               onSelect={handleToolSelect}
             />

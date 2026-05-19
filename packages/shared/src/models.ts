@@ -15,6 +15,11 @@ export interface ReasoningEffortOption {
   label: string;
 }
 
+export interface DefaultSessionConfig {
+  model: string | null;
+  reasoningEffort: string | null;
+}
+
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { value: "claude-opus-4-7", label: "Opus 4.7" },
@@ -143,6 +148,13 @@ export function getReasoningEffortsForTool(tool: string): readonly ReasoningEffo
 
 export function getDefaultReasoningEffort(tool: string): string | undefined {
   return DEFAULT_REASONING_EFFORT_BY_TOOL[tool];
+}
+
+export function getDefaultSessionConfigForTool(tool: string): DefaultSessionConfig {
+  return {
+    model: getDefaultModel(tool) ?? null,
+    reasoningEffort: getDefaultReasoningEffort(tool) ?? null,
+  };
 }
 
 export function getModelLabel(model: string): string {

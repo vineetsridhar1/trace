@@ -157,10 +157,16 @@ export type {
   LLMRequestOptions,
   LLMAdapter,
 } from "./adapters/llm.js";
-export type { ModelOption, ModelProviderGroup, ReasoningEffortOption } from "./models.js";
+export type {
+  DefaultSessionConfig,
+  ModelOption,
+  ModelProviderGroup,
+  ReasoningEffortOption,
+} from "./models.js";
 export {
   getModelsForTool,
   getDefaultModel,
+  getDefaultSessionConfigForTool,
   getModelLabel,
   getModelProviderForModel,
   getModelProviderGroupsForTool,

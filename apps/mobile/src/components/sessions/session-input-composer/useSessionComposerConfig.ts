@@ -3,8 +3,8 @@ import type { SFSymbol } from "expo-symbols";
 import { UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import {
-  getDefaultModel,
   getDefaultReasoningEffort,
+  getDefaultSessionConfigForTool,
   getModelLabel,
   getModelsForTool,
   getReasoningEffortLabel,
@@ -40,20 +40,19 @@ export function useSessionComposerConfig({
   const handleToolChange = useCallback(
     async (newTool: CodingTool) => {
       if (tool === newTool) return true;
-      const newDefault = getDefaultModel(newTool) ?? null;
-      const newDefaultReasoningEffort = getDefaultReasoningEffort(newTool) ?? null;
+      const defaults = getDefaultSessionConfigForTool(newTool);
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         tool: newTool,
-        model: newDefault,
-        reasoningEffort: newDefaultReasoningEffort,
+        model: defaults.model,
+        reasoningEffort: defaults.reasoningEffort,
       });
       try {
         const result = await getClient()
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
             sessionId,
             tool: newTool,
-            model: newDefault,
-            reasoningEffort: newDefaultReasoningEffort,
+            model: defaults.model,
+            reasoningEffort: defaults.reasoningEffort,
           })
           .toPromise();
         if (result.error) throw result.error;

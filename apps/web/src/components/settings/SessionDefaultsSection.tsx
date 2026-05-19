@@ -4,8 +4,7 @@ import { UPDATE_SESSION_DEFAULTS_MUTATION, useAuthStore, type AuthState } from "
 import { client } from "../../lib/urql";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import {
-  getDefaultModel,
-  getDefaultReasoningEffort,
+  getDefaultSessionConfigForTool,
   getModelLabel,
   getModelsForTool,
   getReasoningEffortLabel,
@@ -66,10 +65,11 @@ export function SessionDefaultsSection() {
         await saveDefaults({ tool: null });
         return;
       }
+      const defaults = getDefaultSessionConfigForTool(value);
       await saveDefaults({
         tool: value,
-        model: getDefaultModel(value) ?? null,
-        reasoningEffort: getDefaultReasoningEffort(value) ?? null,
+        model: defaults.model,
+        reasoningEffort: defaults.reasoningEffort,
       });
     } catch (error) {
       toast.error("Failed to update session defaults", {

@@ -8,8 +8,7 @@ import {
 } from "@trace/client-core";
 import type { CodingTool, User } from "@trace/gql";
 import {
-  getDefaultModel,
-  getDefaultReasoningEffort,
+  getDefaultSessionConfigForTool,
   getModelLabel,
   getModelsForTool,
   getReasoningEffortLabel,
@@ -135,8 +134,7 @@ export function SessionDefaultsSheetContent() {
             onPress={() =>
               void handleSave({
                 tool: option.value,
-                model: getDefaultModel(option.value) ?? null,
-                reasoningEffort: getDefaultReasoningEffort(option.value) ?? null,
+                ...getDefaultSessionConfigForTool(option.value),
               })
             }
             haptic={selectedTool === option.value ? "none" : "selection"}

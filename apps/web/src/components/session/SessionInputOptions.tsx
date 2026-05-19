@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import {
-  getDefaultModel,
-  getReasoningEffortsForTool,
   getDefaultReasoningEffort,
+  getDefaultModel,
+  getDefaultSessionConfigForTool,
+  getReasoningEffortsForTool,
   getReasoningEffortLabel,
   type ReasoningEffortOption,
 } from "./modelOptions";
@@ -178,39 +179,27 @@ export function SessionInputOptions({
     void fetchAvailableRuntimes();
   }, [fetchAvailableRuntimes]);
 
-  const handleToolChange = useCallback(
-    async (newTool: ToolOptionValue) => {
+  const handleToolModelChange = useCallback(
+    async ({ tool: newTool, model: newModel }: { tool: ToolOptionValue; model: string }) => {
       if (isOptimistic) return;
-      const newDefault = getDefaultModel(newTool);
-      const newDefaultReasoningEffort = getDefaultReasoningEffort(newTool);
-      const rollback = applyOptimisticPatch("sessions", sessionId, {
+      const toolChanged = newTool !== currentTool;
+      const nextReasoningEffort = toolChanged
+        ? getDefaultSessionConfigForTool(newTool).reasoningEffort
+        : undefined;
+      const optimisticPatch = {
         tool: newTool,
-        model: newDefault ?? null,
-        reasoningEffort: newDefaultReasoningEffort ?? null,
-      });
+        model: newModel,
+        ...(toolChanged ? { reasoningEffort: nextReasoningEffort ?? null } : {}),
+      };
+      const rollback = applyOptimisticPatch("sessions", sessionId, optimisticPatch);
       try {
         const result = await client
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
             sessionId,
-            tool: newTool,
+            tool: toolChanged ? newTool : undefined,
+            model: newModel,
+            reasoningEffort: nextReasoningEffort ?? undefined,
           })
-          .toPromise();
-        if (result.error) throw result.error;
-      } catch (error) {
-        rollback();
-        console.error("Failed to update session tool:", error);
-      }
-    },
-    [isOptimistic, sessionId],
-  );
-
-  const handleModelChange = useCallback(
-    async (newModel: string) => {
-      if (isOptimistic) return;
-      const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
-      try {
-        const result = await client
-          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
           .toPromise();
         if (result.error) throw result.error;
       } catch (error) {
@@ -218,7 +207,7 @@ export function SessionInputOptions({
         console.error("Failed to update session model:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [currentTool, isOptimistic, sessionId],
   );
 
   const handleReasoningEffortChange = useCallback(
@@ -404,8 +393,7 @@ export function SessionInputOptions({
         tool={currentTool}
         model={currentModel}
         disabled={isActive || isOptimistic}
-        onToolChange={handleToolChange}
-        onModelChange={handleModelChange}
+        onSelectionChange={handleToolModelChange}
       />
       {reasoningEffortOptions.length > 0 && (
         <EffortCycleButton
