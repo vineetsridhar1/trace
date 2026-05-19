@@ -140,6 +140,7 @@ export function buildMachineEnv(
   return {
     ...passthroughEnv,
     ...request.bootstrapEnv,
+    CODING_TOOL: request.tool,
     TRACE_TOOL: request.tool,
     TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
     ...(request.model ? { TRACE_MODEL: request.model } : {}),

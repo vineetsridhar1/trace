@@ -23,6 +23,7 @@ describe("Fly machine helpers", () => {
       TRACE_RUNTIME_INSTANCE_ID: "runtime-1",
       TRACE_RUNTIME_TOKEN: "runtime-token",
       TRACE_BRIDGE_URL: "wss://trace.example/bridge",
+      CODING_TOOL: "codex",
       TRACE_TOOL: "codex",
       TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
       TRACE_MODEL: "gpt-5",

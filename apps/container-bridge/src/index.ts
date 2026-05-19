@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   const bridgeUrl = requireEnv("TRACE_BRIDGE_URL");
   const bridgeToken = optionalEnv("TRACE_RUNTIME_TOKEN") ?? requireEnv("BRIDGE_TOKEN");
   const machineId = optionalEnv("TRACE_RUNTIME_INSTANCE_ID") ?? requireEnv("CLOUD_MACHINE_ID");
-  const tool = process.env.CODING_TOOL ?? "claude_code";
+  const tool = process.env.CODING_TOOL ?? process.env.TRACE_TOOL ?? "claude_code";
 
   // Set up SSH key before any git operations
   setupSshKey();
