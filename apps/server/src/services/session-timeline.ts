@@ -132,9 +132,6 @@ function hasThinkingBlock(payload: unknown): boolean {
   if (data?.type !== "assistant") return false;
 
   return messageContentBlocks(payload).some((block) => {
-    if (block.type === "text") {
-      return typeof block.text === "string" && block.text.trim() !== "";
-    }
     return (
       block.type === "tool_use" ||
       block.type === "tool_result" ||

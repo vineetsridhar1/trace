@@ -628,6 +628,59 @@ describe("SessionTimelineService", () => {
     ]);
   });
 
+  it("does not create thinking ranges for superseded assistant text chunks", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      payload: { prompt: "Implement this" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const textChunk1 = event({
+      id: "assistant-text-1",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Working on it." }] },
+      },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    const textChunk2 = event({
+      id: "assistant-text-2",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Still working." }] },
+      },
+      timestamp: new Date("2026-05-14T10:02:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      },
+      timestamp: new Date("2026-05-14T10:03:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      finalEvent,
+      textChunk2,
+      textChunk1,
+      userEvent,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual(["user-1", "assistant-final"]);
+  });
+
   it("uses event ids to build collapsed ranges for events sharing a timestamp", async () => {
     const timestamp = new Date("2026-05-14T10:00:00.000Z");
     const userEvent = event({
