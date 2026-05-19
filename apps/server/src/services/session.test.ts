@@ -1754,6 +1754,83 @@ describe("SessionService", () => {
       });
     });
 
+    it("reuses an existing group runtime even when the default environment supports another tool", async () => {
+      const groupConnection = {
+        state: "connected",
+        runtimeInstanceId: "runtime-codex",
+        runtimeLabel: "Codex Laptop",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      const existingGroup = makeSessionGroup({
+        workdir: "/tmp/trace/source",
+        repoId: "repo-1",
+        branch: "feature/source",
+        connection: groupConnection,
+      });
+
+      prismaMock.agentEnvironment.findFirst.mockResolvedValue(
+        makeAgentEnvironment({
+          config: {
+            capabilities: { supportedTools: ["claude_code"] },
+            startUrl: "http://localhost:4010/start",
+            stopUrl: "http://localhost:4010/stop",
+            statusUrl: "http://localhost:4010/status",
+            auth: { type: "bearer", secretId: "secret-1" },
+          },
+        }),
+      );
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "source-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+        branch: "feature/source",
+        hosting: "local",
+        channelId: "channel-1",
+        projects: [],
+        sessionGroup: existingGroup,
+      });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(existingGroup);
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          tool: "codex",
+          hosting: "local",
+          workdir: "/tmp/trace/source",
+          branch: "feature/source",
+          connection: groupConnection,
+        }),
+      );
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "codex",
+        sessionGroupId: "group-1",
+        sourceSessionId: "source-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+            hosting: "local",
+            sessionGroupId: "group-1",
+            connection: groupConnection,
+          }),
+        }),
+      );
+    });
+
     it("inherits repo and branch from the existing group for a clean new chat", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
         makeSessionGroup({
