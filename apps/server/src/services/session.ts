@@ -5218,7 +5218,6 @@ export class SessionService {
     const previousGroupBranch = session.sessionGroup?.branch ?? null;
     const shouldClearPrUrl =
       branch !== undefined &&
-      previousGroupBranch !== null &&
       previousGroupBranch !== branch &&
       Boolean(session.sessionGroup?.prUrl);
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {

@@ -4614,6 +4614,46 @@ describe("SessionService", () => {
       );
     });
 
+    it("clears a stale PR URL when workspace_ready sets a branch from null", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: "/tmp/trace/starling",
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          branch: "mobile-app-rebased",
+          sessionGroup: makeSessionGroup({
+            branch: null,
+            prUrl: "https://github.com/trace/trace/pull/123",
+            workdir: "/tmp/trace/starling",
+          }),
+          workdir: "/tmp/trace/starling",
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ branch: "mobile-app-rebased", workdir: "/tmp/trace/starling" }),
+      );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ branch: "mobile-app-rebased", workdir: "/tmp/trace/starling" }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/starling", "mobile-app-rebased");
+
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            branch: "mobile-app-rebased",
+            prUrl: null,
+          }),
+        }),
+      );
+    });
+
     it("allows a branch change when workspace_ready moves to a new workdir", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,
