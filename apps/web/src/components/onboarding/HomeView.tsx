@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import { useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import { useAuthStore, type AuthState } from "@trace/client-core";
+import { OnboardingEmptyState } from "./OnboardingEmptyState";
 
 export function HomeView() {
   const userName = useAuthStore((s: AuthState) => s.user?.name);
@@ -24,7 +25,14 @@ export function HomeView() {
             </p>
           </div>
 
-          {status.allDone ? <AllDoneCard /> : <OnboardingChecklist status={status} />}
+          {status.allDone ? (
+            <AllDoneCard />
+          ) : (
+            <div className="space-y-6">
+              <OnboardingEmptyState status={status} />
+              <OnboardingChecklist status={status} />
+            </div>
+          )}
         </div>
       </div>
     </div>
