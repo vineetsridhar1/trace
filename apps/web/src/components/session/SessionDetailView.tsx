@@ -364,17 +364,35 @@ export function SessionDetailView({
       }
     }
 
-    return timelineItems.map((item) => {
+    const compactNodes: SessionListNode[] = [];
+    let currentCollapsedGroup:
+      | Extract<SessionListNode, { kind: "collapsed-events" }>
+      | null = null;
+
+    for (const item of timelineItems) {
       if (item.kind === "collapsed_events") {
-        return {
-          kind: "collapsed-events" as const,
-          id: item.id,
-          collapsed: item.collapsed,
-        };
+        if (currentCollapsedGroup) {
+          currentCollapsedGroup.collapsedRanges.push(item.collapsed);
+        } else {
+          currentCollapsedGroup = {
+            kind: "collapsed-events" as const,
+            id: item.id,
+            collapsedRanges: [item.collapsed],
+          };
+          compactNodes.push(currentCollapsedGroup);
+        }
+        continue;
       }
-      return nodesByEventId.get(item.id) ?? { kind: "event", id: item.id };
-    });
-  }, [nodes, timelineItems, timelineMode]);
+
+      compactNodes.push(nodesByEventId.get(item.id) ?? { kind: "event", id: item.id });
+      const eventType = events[item.id]?.eventType;
+      if (eventType === "session_started" || eventType === "message_sent") {
+        currentCollapsedGroup = null;
+      }
+    }
+
+    return compactNodes;
+  }, [events, nodes, timelineItems, timelineMode]);
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);

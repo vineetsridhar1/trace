@@ -560,6 +560,7 @@ describe("SessionTimelineService", () => {
       "user-2",
       "collapsed:user-2:assistant-2",
       "assistant-2",
+      "collapsed:assistant-2:user-3",
     ]);
     expect(page.items[1].collapsed).toEqual({
       id: "collapsed:user-2:assistant-2",
@@ -568,6 +569,7 @@ describe("SessionTimelineService", () => {
       endEventId: assistant2.id,
       endTimestamp: assistant2.timestamp,
     });
+    expect(page.items[3].collapsed?.endTimestamp).toEqual(user3.timestamp);
   });
 
   it("keeps PR lifecycle events visible in compact timelines", async () => {
@@ -626,7 +628,7 @@ describe("SessionTimelineService", () => {
     ]);
   });
 
-  it("emits one thinking range for a turn with visible assistant and lifecycle milestones", async () => {
+  it("preserves thinking ranges for a turn with visible assistant and lifecycle milestones", async () => {
     const userEvent = event({
       id: "user-1",
       eventType: "message_sent",
@@ -710,7 +712,9 @@ describe("SessionTimelineService", () => {
       "user-1",
       "collapsed:user-1:assistant-text",
       "assistant-text",
+      "collapsed:assistant-text:pr-opened",
       "pr-opened",
+      "collapsed:pr-opened:run-ended",
     ]);
   });
 

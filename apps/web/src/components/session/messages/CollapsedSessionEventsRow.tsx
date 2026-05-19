@@ -23,7 +23,7 @@ const COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES = [...HIDDEN_SESSION_PAYLOAD_TYPE
 
 interface CollapsedSessionEventsRowProps {
   sessionId: string;
-  collapsed: CollapsedSessionEventsSummary;
+  collapsedRanges: CollapsedSessionEventsSummary[];
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
 }
 
@@ -40,7 +40,7 @@ function asFetchedEvent(value: unknown): (Event & { id: string }) | null {
 
 export function CollapsedSessionEventsRow({
   sessionId,
-  collapsed,
+  collapsedRanges,
   gitCheckpointsByPromptEventId,
 }: CollapsedSessionEventsRowProps) {
   const [open, setOpen] = useState(false);
@@ -48,52 +48,96 @@ export function CollapsedSessionEventsRow({
   const [error, setError] = useState<string | null>(null);
   const [eventIds, setEventIds] = useState<string[]>([]);
   const [cursor, setCursor] = useState({
-    timestamp: collapsed.startTimestamp,
-    eventId: collapsed.startEventId,
+    rangeIndex: 0,
+    timestamp: collapsedRanges[0]?.startTimestamp ?? "",
+    eventId: collapsedRanges[0]?.startEventId ?? "",
   });
   const [hasMore, setHasMore] = useState(true);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const scopeKey = useEventScopeKey();
   const scopedEvents = useScopedEvents(scopeKey);
+  const rangesKey = collapsedRanges.map((range) => range.id).join("|");
+  const firstRange = collapsedRanges[0];
 
   useEffect(() => {
     setOpen(false);
     setLoading(false);
     setError(null);
     setEventIds([]);
-    setCursor({ timestamp: collapsed.startTimestamp, eventId: collapsed.startEventId });
-    setHasMore(true);
-  }, [collapsed.id, collapsed.startEventId, collapsed.startTimestamp]);
+    setCursor({
+      rangeIndex: 0,
+      timestamp: firstRange?.startTimestamp ?? "",
+      eventId: firstRange?.startEventId ?? "",
+    });
+    setHasMore(collapsedRanges.length > 0);
+  }, [collapsedRanges.length, firstRange?.startEventId, firstRange?.startTimestamp, rangesKey]);
 
   const fetchNext = useCallback(async () => {
-    if (!activeOrgId || loading || !hasMore) return;
+    if (!activeOrgId || loading || !hasMore || collapsedRanges.length === 0) return;
 
     setLoading(true);
     setError(null);
-    const result = await client
-      .query(SESSION_EVENTS_QUERY, {
-        organizationId: activeOrgId,
-        scope: { type: "session", id: sessionId },
-        limit: COLLAPSED_PAGE_SIZE,
-        after: cursor.timestamp,
-        afterEventId: cursor.eventId,
-        before: collapsed.endTimestamp,
-        beforeEventId: collapsed.endEventId,
-        excludePayloadTypes: COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES,
-      })
-      .toPromise();
-
-    if (result.error) {
-      setError(result.error.message);
-      setLoading(false);
-      return;
-    }
-
-    const rawEvents = Array.isArray(result.data?.events) ? result.data.events : [];
     const events: Array<Event & { id: string }> = [];
-    for (const rawEvent of rawEvents) {
-      const event = asFetchedEvent(rawEvent);
-      if (event) events.push(event);
+    let nextCursor = cursor;
+    let nextHasMore = true;
+    let remaining = COLLAPSED_PAGE_SIZE;
+
+    while (remaining > 0) {
+      const range = collapsedRanges[nextCursor.rangeIndex];
+      if (!range) {
+        nextHasMore = false;
+        break;
+      }
+
+      const limit = remaining;
+      const result = await client
+        .query(SESSION_EVENTS_QUERY, {
+          organizationId: activeOrgId,
+          scope: { type: "session", id: sessionId },
+          limit,
+          after: nextCursor.timestamp,
+          afterEventId: nextCursor.eventId,
+          before: range.endTimestamp,
+          beforeEventId: range.endEventId,
+          excludePayloadTypes: COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES,
+        })
+        .toPromise();
+
+      if (result.error) {
+        setError(result.error.message);
+        setLoading(false);
+        return;
+      }
+
+      const rawEvents = Array.isArray(result.data?.events) ? result.data.events : [];
+      const rangeEvents: Array<Event & { id: string }> = [];
+      for (const rawEvent of rawEvents) {
+        const event = asFetchedEvent(rawEvent);
+        if (event) rangeEvents.push(event);
+      }
+      events.push(...rangeEvents);
+      remaining -= rangeEvents.length;
+
+      if (rangeEvents.length === limit) {
+        nextCursor = {
+          rangeIndex: nextCursor.rangeIndex,
+          timestamp: rangeEvents[rangeEvents.length - 1].timestamp,
+          eventId: rangeEvents[rangeEvents.length - 1].id,
+        };
+        break;
+      }
+
+      const nextRangeIndex = nextCursor.rangeIndex + 1;
+      const nextRange = collapsedRanges[nextRangeIndex];
+      if (!nextRange) {
+        nextHasMore = false;
+        break;
+      }
+      nextCursor = {
+        rangeIndex: nextRangeIndex,
+        timestamp: nextRange.startTimestamp,
+        eventId: nextRange.startEventId,
+      };
     }
 
     if (events.length > 0) {
@@ -108,18 +152,14 @@ export function CollapsedSessionEventsRow({
         }
         return next;
       });
-      setCursor({
-        timestamp: events[events.length - 1].timestamp,
-        eventId: events[events.length - 1].id,
-      });
     }
 
-    setHasMore(events.length === COLLAPSED_PAGE_SIZE);
+    setCursor(nextCursor);
+    setHasMore(nextHasMore);
     setLoading(false);
   }, [
     activeOrgId,
-    collapsed.endEventId,
-    collapsed.endTimestamp,
+    collapsedRanges,
     cursor,
     hasMore,
     loading,

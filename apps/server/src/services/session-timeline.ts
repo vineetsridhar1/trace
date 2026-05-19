@@ -327,8 +327,6 @@ function collapsedRangeIdsWithThinking(
 
   const endpointIds = new Set(endpoints.map((event) => event.id));
   let gapIndex = 0;
-  let activeGapStartId: string | null = null;
-  let rangeEmittedInTurn = false;
 
   for (const candidate of candidates) {
     while (
@@ -342,17 +340,7 @@ function collapsedRangeIdsWithThinking(
     if (endpointIds.has(candidate.id)) continue;
     if (!isThinkingCandidate(candidate)) continue;
 
-    const gapStart = endpoints[gapIndex];
-    if (activeGapStartId !== gapStart.id) {
-      activeGapStartId = gapStart.id;
-      if (isUserEvent(gapStart)) {
-        rangeEmittedInTurn = false;
-      }
-    }
-    if (rangeEmittedInTurn) continue;
-
     ranges.add(collapsedRangeId(endpoints[gapIndex], endpoints[gapIndex + 1]));
-    rangeEmittedInTurn = true;
   }
 
   return ranges;
