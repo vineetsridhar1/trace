@@ -217,12 +217,6 @@ function payloadRecord(event: Event): Record<string, unknown> | null {
   return asRecord(event.payload);
 }
 
-function isCompletedSessionEvent(event: Event): boolean {
-  if (event.eventType !== "session_terminated") return false;
-  const payload = payloadRecord(event);
-  return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
-}
-
 function isPrLifecycleEvent(event: Event): boolean {
   return (
     event.eventType === "session_pr_opened" ||
@@ -244,12 +238,6 @@ function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
     }
     return block.type === "tool_use" || block.type === "plan" || block.type === "question";
   });
-}
-
-function isUserMessageEvent(event: Event | undefined): event is Event & { id: string } {
-  return (
-    event?.eventType === "message_sent" && event.parentId == null && event.actor?.type === "user"
-  );
 }
 
 function isRenderableCompactEvent(event: Event | undefined): event is Event & { id: string } {
@@ -371,8 +359,6 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
   const timelineModeRef = useRef<SessionTimelineMode>("live");
-  const observedUserMessageRefreshInitializedRef = useRef(false);
-  const latestObservedUserMessageIdRef = useRef<string | null>(null);
   const scopeKey = eventScopeKey("session", sessionId);
   const scopedEvents = useScopedEvents(scopeKey);
 
@@ -382,8 +368,6 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
     setCompactItems(null);
     oldestCursorRef.current = null;
     hasOlderRef.current = true;
-    observedUserMessageRefreshInitializedRef.current = false;
-    latestObservedUserMessageIdRef.current = null;
   }, [sessionId]);
 
   // Fetch the most recent page of events on mount
@@ -470,7 +454,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         const event = result.data.sessionEvents as Event & { id: string };
         handleSessionEvent(sessionId, event);
 
-        if (isCompletedSessionEvent(event)) {
+        if (event.eventType === "session_terminated") {
           void fetchEvents();
         } else if (timelineModeRef.current === "compact") {
           setCompactItems((current) => appendEventItem(current, event));
@@ -610,33 +594,6 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
   const eventIds = useScopedEventIds(scopeKey);
-  useEffect(() => {
-    if (skip || loading) return;
-
-    let latestUserMessage: (Event & { id: string }) | null = null;
-    for (let i = eventIds.length - 1; i >= 0; i--) {
-      const eventId = eventIds[i];
-      if (!eventId) continue;
-      const event = scopedEvents[eventId];
-      if (isUserMessageEvent(event)) {
-        latestUserMessage = event;
-        break;
-      }
-    }
-
-    if (!observedUserMessageRefreshInitializedRef.current) {
-      latestObservedUserMessageIdRef.current = latestUserMessage?.id ?? null;
-      observedUserMessageRefreshInitializedRef.current = true;
-      return;
-    }
-
-    if (!latestUserMessage || latestUserMessage.id === latestObservedUserMessageIdRef.current) {
-      return;
-    }
-
-    latestObservedUserMessageIdRef.current = latestUserMessage.id;
-    void fetchEvents();
-  }, [eventIds, fetchEvents, loading, scopedEvents, skip]);
 
   const compactEventIdSet = useMemo(() => {
     if (!compactItems) return null;
