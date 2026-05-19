@@ -565,6 +565,117 @@ describe("ChannelService", () => {
     );
   });
 
+  it("allows an active channel member to add another org member", async () => {
+    const joinedAt = new Date("2026-05-19T00:00:00.000Z");
+    prismaMock.channel.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        name: "backend",
+        type: "coding",
+        position: 3,
+        groupId: "group-1",
+        organizationId: "org-1",
+        repoId: "repo-1",
+        baseBranch: "main",
+        repo: { name: "trace" },
+      })
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        members: [{ userId: "user-2", leftAt: null }],
+      });
+    prismaMock.orgMember.findUniqueOrThrow
+      .mockResolvedValueOnce({ userId: "user-2", organizationId: "org-1" })
+      .mockResolvedValueOnce({ userId: "user-1", organizationId: "org-1", role: "member" });
+    prismaMock.channelMember.findUnique
+      .mockResolvedValueOnce({ leftAt: null })
+      .mockResolvedValueOnce(null);
+    prismaMock.channelMember.create.mockResolvedValueOnce({
+      channelId: "channel-1",
+      userId: "user-2",
+      joinedAt,
+      leftAt: null,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      {
+        channelId: "channel-1",
+        userId: "user-2",
+        joinedAt,
+        leftAt: null,
+      },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      {
+        id: "user-2",
+        name: "User Two",
+        avatarUrl: null,
+      },
+    ]);
+
+    const service = new ChannelService();
+    await service.addMember("channel-1", "user-2", "user", "user-1");
+
+    expect(prismaMock.channelMember.create).toHaveBeenCalledWith({
+      data: { channelId: "channel-1", userId: "user-2" },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "channel",
+        scopeId: "channel-1",
+        eventType: "channel_member_added",
+        payload: {
+          userId: "user-2",
+          channel: {
+            id: "channel-1",
+            name: "backend",
+            type: "coding",
+            position: 3,
+            groupId: "group-1",
+            repoId: "repo-1",
+            baseBranch: "main",
+            repo: { id: "repo-1", name: "trace" },
+            members: [
+              {
+                user: { id: "user-2", name: "User Two", avatarUrl: null },
+                joinedAt: joinedAt.toISOString(),
+              },
+            ],
+          },
+        },
+        actorType: "user",
+        actorId: "user-1",
+      },
+      expect.anything(),
+    );
+  });
+
+  it("rejects adding a channel member when the actor is neither admin nor active channel member", async () => {
+    prismaMock.channel.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "backend",
+      type: "coding",
+      position: 3,
+      groupId: "group-1",
+      organizationId: "org-1",
+      repoId: "repo-1",
+      baseBranch: "main",
+      repo: { name: "trace" },
+    });
+    prismaMock.orgMember.findUniqueOrThrow
+      .mockResolvedValueOnce({ userId: "user-2", organizationId: "org-1" })
+      .mockResolvedValueOnce({ userId: "user-1", organizationId: "org-1", role: "member" });
+    prismaMock.channelMember.findUnique.mockResolvedValueOnce(null);
+
+    const service = new ChannelService();
+
+    await expect(service.addMember("channel-1", "user-2", "user", "user-1")).rejects.toThrow(
+      "You do not have permission to add members to this channel",
+    );
+
+    expect(prismaMock.channelMember.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
   it("rejects message-model sends for coding channels", async () => {
     prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({
       id: "channel-1",
