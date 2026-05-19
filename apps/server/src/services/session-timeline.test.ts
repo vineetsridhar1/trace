@@ -248,6 +248,83 @@ describe("SessionTimelineService", () => {
     expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a trailing collapsed range for tool events before manual stop", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "message_sent",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { text: "test" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const assistantText = event({
+      id: "assistant-text",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "I will inspect the repo." }] },
+      },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    const toolUse = event({
+      id: "tool-use",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "tool-1", name: "Read", input: {} }] },
+      },
+      timestamp: new Date("2026-05-14T10:02:00.000Z"),
+    });
+    const toolResult = event({
+      id: "tool-result",
+      payload: {
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "tool-1", content: "README.md" }],
+        },
+      },
+      timestamp: new Date("2026-05-14T10:03:00.000Z"),
+    });
+    const manualStop = event({
+      id: "manual-stop",
+      eventType: "session_terminated",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { reason: "manual_stop" },
+      timestamp: new Date("2026-05-14T10:04:00.000Z"),
+    });
+
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      manualStop,
+      toolResult,
+      toolUse,
+      assistantText,
+      userEvent,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-1",
+      "assistant-text",
+      "collapsed:assistant-text:manual-stop",
+    ]);
+    expect(page.items[2].collapsed).toEqual({
+      id: "collapsed:assistant-text:manual-stop",
+      startEventId: assistantText.id,
+      startTimestamp: assistantText.timestamp,
+      endEventId: manualStop.id,
+      endTimestamp: manualStop.timestamp,
+    });
+  });
+
   it("falls back to live pages when a completed session has no final assistant text", async () => {
     const userEvent = event({
       id: "user-1",

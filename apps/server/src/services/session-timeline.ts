@@ -62,9 +62,10 @@ export interface SessionEventsAroundEventOpts {
   excludePayloadTypes?: string[];
 }
 
-const COMPACT_VISIBLE_EVENT_TYPES = [
+const COMPACT_CANDIDATE_EVENT_TYPES = [
   "session_started",
   "message_sent",
+  "session_terminated",
   "session_pr_opened",
   "session_pr_merged",
   "session_pr_closed",
@@ -134,7 +135,12 @@ function hasThinkingBlock(payload: unknown): boolean {
     if (block.type === "text") {
       return typeof block.text === "string" && block.text.trim() !== "";
     }
-    return block.type === "tool_use" || block.type === "plan" || block.type === "question";
+    return (
+      block.type === "tool_use" ||
+      block.type === "tool_result" ||
+      block.type === "plan" ||
+      block.type === "question"
+    );
   });
 }
 
@@ -256,7 +262,7 @@ function compactCandidateWhere(
     scopeId: sessionId,
     parentId: null,
     OR: [
-      { eventType: { in: [...COMPACT_VISIBLE_EVENT_TYPES] } },
+      { eventType: { in: [...COMPACT_CANDIDATE_EVENT_TYPES] } },
       {
         eventType: "session_output",
         OR: [
@@ -341,6 +347,26 @@ function collapsedRangeIdsWithThinking(
   }
 
   return ranges;
+}
+
+function trailingCollapsedRangeBoundary(
+  candidates: PrismaEvent[],
+  pageEvents: PrismaEvent[],
+): PrismaEvent | null {
+  const lastVisible = pageEvents[pageEvents.length - 1];
+  if (!lastVisible) return null;
+
+  let sawTrailingThinking = false;
+  for (const candidate of candidates) {
+    if (compareEvents(candidate, lastVisible) <= 0) continue;
+    if (isThinkingCandidate(candidate)) {
+      sawTrailingThinking = true;
+      continue;
+    }
+    if (sawTrailingThinking) return candidate;
+  }
+
+  return null;
 }
 
 export class SessionTimelineService {
@@ -495,7 +521,12 @@ export class SessionTimelineService {
     const selectableEvents = anchor ? visibleEvents.slice(0, -1) : visibleEvents;
     const hasOlder = selectableEvents.length > limit;
     const pageEvents = selectableEvents.slice(Math.max(0, selectableEvents.length - limit));
-    const rangeEndpoints = anchor ? [...pageEvents, anchor] : pageEvents;
+    const trailingBoundary = anchor ? null : trailingCollapsedRangeBoundary(candidates, pageEvents);
+    const rangeEndpoints = anchor
+      ? [...pageEvents, anchor]
+      : trailingBoundary
+        ? [...pageEvents, trailingBoundary]
+        : pageEvents;
     const rangesWithThinking = collapsedRangeIdsWithThinking(candidates, rangeEndpoints);
     const items: SessionTimelineServiceItem[] = [];
     let previous: PrismaEvent | null = null;
@@ -528,6 +559,8 @@ export class SessionTimelineService {
 
     if (previous && anchor) {
       pushCollapsedRange(previous, anchor);
+    } else if (previous && trailingBoundary) {
+      pushCollapsedRange(previous, trailingBoundary);
     }
 
     return { mode: "compact", items, hasOlder };
