@@ -835,6 +835,7 @@ describe("SessionService", () => {
         channelId: "channel-1",
       });
 
+      expect(runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds).toHaveBeenCalledTimes(1);
       expect(getDefaultModelMock).toHaveBeenCalledWith("codex");
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({

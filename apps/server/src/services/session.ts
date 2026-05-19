@@ -1620,12 +1620,15 @@ export class SessionService {
     tool?: string;
     repoId?: string | null;
     sessionGroupId?: string | null;
+    accessibleRuntimeIds?: Set<string>;
   }): Promise<RuntimeInstance | undefined> {
-    const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
-      userId: params.userId,
-      organizationId: params.organizationId,
-      sessionGroupId: params.sessionGroupId,
-    });
+    const accessibleRuntimeIds =
+      params.accessibleRuntimeIds ??
+      (await runtimeAccessService.listAccessibleRuntimeInstanceIds({
+        userId: params.userId,
+        organizationId: params.organizationId,
+        sessionGroupId: params.sessionGroupId,
+      }));
 
     for (const runtime of sessionRouter.listRuntimes({ hostingMode: "local" })) {
       if (runtime.organizationId !== params.organizationId) continue;
@@ -2382,34 +2385,35 @@ export class SessionService {
       throw new Error("restoreCheckpointId cannot be combined with sourceSessionId");
     }
 
-    const restoreCheckpoint = input.restoreCheckpointId
-      ? await prisma.gitCheckpoint.findUnique({
-          where: { id: input.restoreCheckpointId },
-          select: {
-            id: true,
-            sessionId: true,
-            sessionGroupId: true,
-            repoId: true,
-            commitSha: true,
-            subject: true,
-          },
-        })
-      : null;
+    const [restoreCheckpoint, userDefaults] = await Promise.all([
+      input.restoreCheckpointId
+        ? prisma.gitCheckpoint.findUnique({
+            where: { id: input.restoreCheckpointId },
+            select: {
+              id: true,
+              sessionId: true,
+              sessionGroupId: true,
+              repoId: true,
+              commitSha: true,
+              subject: true,
+            },
+          })
+        : Promise.resolve(null),
+      input.tool
+        ? Promise.resolve(null)
+        : prisma.user.findUnique({
+            where: { id: input.createdById },
+            select: {
+              defaultSessionTool: true,
+              defaultSessionModel: true,
+              defaultSessionReasoningEffort: true,
+            },
+          }),
+    ]);
 
     if (input.restoreCheckpointId && !restoreCheckpoint) {
       throw new Error("Git checkpoint not found");
     }
-
-    const userDefaults: UserSessionDefaults | null = input.tool
-      ? null
-      : await prisma.user.findUnique({
-          where: { id: input.createdById },
-          select: {
-            defaultSessionTool: true,
-            defaultSessionModel: true,
-            defaultSessionReasoningEffort: true,
-          },
-        });
     const hasExplicitTool = !!input.tool;
     let tool = input.tool ?? userDefaults?.defaultSessionTool ?? FALLBACK_SESSION_TOOL;
 
@@ -2571,12 +2575,12 @@ export class SessionService {
     })();
     const sourceProjectIds =
       sourceSession?.projects.map((project: { projectId: string }) => project.projectId) ?? [];
-    const sourceTicketLinks = sourceSessionId
-      ? await prisma.ticketLink.findMany({
+    const sourceTicketLinksPromise = sourceSessionId
+      ? prisma.ticketLink.findMany({
           where: { entityType: "session", entityId: sourceSessionId },
           select: { ticketId: true },
         })
-      : [];
+      : Promise.resolve([]);
 
     if (input.restoreCheckpointId && !resolvedRepoId) {
       throw new Error("Checkpoint is not associated with a repo");
@@ -2616,6 +2620,32 @@ export class SessionService {
             .trim()
             .slice(0, MAX_SESSION_NAME_LENGTH)
         : `Session ${new Date().toLocaleString()}`;
+
+    const accessibleLocalRuntimeIdsByScope = new Map<string, Promise<Set<string>>>();
+    const resolveDefaultAccessibleLocalRuntime = (params: {
+      userId: string;
+      organizationId: string;
+      tool?: string;
+      repoId?: string | null;
+      sessionGroupId?: string | null;
+    }) => {
+      const scopeKey = params.sessionGroupId ?? "";
+      let accessibleRuntimeIds = accessibleLocalRuntimeIdsByScope.get(scopeKey);
+      if (!accessibleRuntimeIds) {
+        accessibleRuntimeIds = runtimeAccessService.listAccessibleRuntimeInstanceIds({
+          userId: params.userId,
+          organizationId: params.organizationId,
+          sessionGroupId: params.sessionGroupId,
+        });
+        accessibleLocalRuntimeIdsByScope.set(scopeKey, accessibleRuntimeIds);
+      }
+      return accessibleRuntimeIds.then((ids) =>
+        this.resolveDefaultAccessibleLocalRuntime({
+          ...params,
+          accessibleRuntimeIds: ids,
+        }),
+      );
+    };
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
@@ -2659,14 +2689,14 @@ export class SessionService {
         requestedRuntime?.hostingMode === "local"
           ? requestedRuntime
           : deferRuntimeSelection || input.hosting === "local"
-            ? ((await this.resolveDefaultAccessibleLocalRuntime({
+            ? ((await resolveDefaultAccessibleLocalRuntime({
                 userId: input.createdById,
                 organizationId: input.organizationId,
                 tool,
                 repoId: resolvedRepoId ?? null,
                 sessionGroupId: existingGroup?.id ?? null,
               })) ??
-              (await this.resolveDefaultAccessibleLocalRuntime({
+              (await resolveDefaultAccessibleLocalRuntime({
                 userId: input.createdById,
                 organizationId: input.organizationId,
                 repoId: resolvedRepoId ?? null,
@@ -2774,7 +2804,7 @@ export class SessionService {
         runtimeFoundInRouter: !!runtime,
       });
       if (!runtime && shouldUseEnvironmentRuntime && !input.environmentId) {
-        const fallbackRuntime = await this.resolveDefaultAccessibleLocalRuntime({
+        const fallbackRuntime = await resolveDefaultAccessibleLocalRuntime({
           userId: input.createdById,
           organizationId: input.organizationId,
           tool,
@@ -2845,7 +2875,7 @@ export class SessionService {
     }
 
     if (!requestedRuntimeInstanceId && hosting === "local" && !deferRuntimeSelection) {
-      let defaultLocalRuntime = await this.resolveDefaultAccessibleLocalRuntime({
+      let defaultLocalRuntime = await resolveDefaultAccessibleLocalRuntime({
         userId: input.createdById,
         organizationId: input.organizationId,
         tool,
@@ -2853,7 +2883,7 @@ export class SessionService {
         sessionGroupId: existingGroup?.id ?? null,
       });
       if (!defaultLocalRuntime && !hasExplicitTool) {
-        defaultLocalRuntime = await this.resolveDefaultAccessibleLocalRuntime({
+        defaultLocalRuntime = await resolveDefaultAccessibleLocalRuntime({
           userId: input.createdById,
           organizationId: input.organizationId,
           repoId: resolvedRepoId ?? null,
@@ -2926,6 +2956,7 @@ export class SessionService {
     const initialAgentStatus: AgentStatus = "not_started";
     const initialSessionStatus: SessionStatus = "in_progress";
     const initialCheckpointContextId = resolvedRepoId && input.prompt ? randomUUID() : null;
+    const sourceTicketLinks = await sourceTicketLinksPromise;
 
     const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const sessionGroup = existingGroup
