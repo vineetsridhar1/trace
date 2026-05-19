@@ -172,6 +172,7 @@ export default function PairScreen() {
   const router = useRouter();
   const theme = useTheme();
   const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
+  const setActiveOrg = useAuthStore((s: AuthState) => s.setActiveOrg);
   const scanningRef = useRef(false);
   const lastScannedQrRef = useRef<string | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -282,8 +283,13 @@ export default function PairScreen() {
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
         token?: string;
+        organizationId?: string;
       };
-      if (!response.ok || typeof body.token !== "string") {
+      if (
+        !response.ok ||
+        typeof body.token !== "string" ||
+        typeof body.organizationId !== "string"
+      ) {
         throw new Error(body.error ?? "Pairing failed");
       }
 
@@ -292,8 +298,9 @@ export default function PairScreen() {
       } else {
         activateHostedConnection(baseUrl);
       }
-      recreateClient();
       await signInWithToken(body.token);
+      setActiveOrg(body.organizationId);
+      recreateClient();
       void haptic.success();
     } catch (pairError) {
       const message = getPairingErrorMessage(pairError);
