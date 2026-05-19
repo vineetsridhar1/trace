@@ -30,6 +30,7 @@ import {
   isMissingToolSessionError,
   parseGitShowOutput,
   inspectSessionGitSyncStatus,
+  BridgeOutbox,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter, PiAdapter } from "@trace/shared/adapters";
@@ -120,6 +121,7 @@ export class ContainerBridge implements IBridgeClient {
   private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
+  private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -177,6 +179,7 @@ export class ContainerBridge implements IBridgeClient {
         registeredRepoIds,
         activeTerminals: this.terminalManager.getActiveTerminals(),
       });
+      this.flushOutbox();
 
       this.startHeartbeat();
     });
@@ -213,6 +216,7 @@ export class ContainerBridge implements IBridgeClient {
       adapter.abort();
     }
     this.adapters.clear();
+    this.outbox.clear();
     if (this.idleCheckTimer) {
       clearInterval(this.idleCheckTimer);
       this.idleCheckTimer = null;
@@ -223,8 +227,24 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   send(data: BridgeMessage): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
+    if (this.sendNow(data)) return;
+    if (!this.outbox.enqueue(data)) {
+      console.warn(`[container-bridge] dropping bridge message while disconnected: ${data.type}`);
+    }
+  }
+
+  private sendNow(data: BridgeMessage): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify(data));
+    return true;
+  }
+
+  private flushOutbox(): void {
+    const flushed = this.outbox.flush((message) => this.sendNow(message));
+    if (flushed > 0) {
+      console.log(
+        `[container-bridge] flushed ${flushed} queued bridge messages (${this.outbox.size} remaining)`,
+      );
     }
   }
 

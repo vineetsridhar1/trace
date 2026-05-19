@@ -31,6 +31,7 @@ import {
   isMissingToolSessionError,
   parseGitShowOutput,
   inspectSessionGitSyncStatus,
+  BridgeOutbox,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";
@@ -173,6 +174,7 @@ export class BridgeClient implements IBridgeClient {
   private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
+  private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
   private autoSyncManager: LinkedCheckoutAutoSyncManager;
   private getSessionCookieHeader: (url: string) => Promise<string | null>;
@@ -273,6 +275,7 @@ export class BridgeClient implements IBridgeClient {
       runtimeDebug("desktop bridge websocket open", { instanceId: this.instanceId });
       this.setStatus("connected");
       this.sendRuntimeHello();
+      this.flushOutbox();
       this.startHeartbeat();
       this.startHookQueueDrain();
       this.autoSyncManager.start();
@@ -319,8 +322,26 @@ export class BridgeClient implements IBridgeClient {
   }
 
   send(data: BridgeMessage) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
+    if (this.sendNow(data)) return;
+    if (!this.outbox.enqueue(data)) {
+      console.warn(`[bridge] dropping bridge message while disconnected: ${data.type}`);
+    }
+  }
+
+  private sendNow(data: BridgeMessage): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify(data));
+    return true;
+  }
+
+  private flushOutbox() {
+    const flushed = this.outbox.flush((message) => this.sendNow(message));
+    if (flushed > 0) {
+      runtimeDebug("desktop bridge flushed outbound queue", {
+        instanceId: this.instanceId,
+        flushed,
+        remaining: this.outbox.size,
+      });
     }
   }
 
@@ -335,6 +356,7 @@ export class BridgeClient implements IBridgeClient {
       adapter.abort();
     }
     this.adapters.clear();
+    this.outbox.clear();
     this.ws?.close();
     this.ws = null;
     this.setStatus("disconnected");
