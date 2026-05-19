@@ -49,6 +49,31 @@ check in from your phone.
 
 <br/>
 
+## How work flows through Trace
+
+Trace treats product activity as a shared event stream. People, agents, and
+runtime bridges all ask the service layer to perform actions; the service layer
+validates the request, updates durable state, appends events, and broadcasts
+those events back to every subscribed surface.
+
+```text
+User or agent action
+        |
+        v
+Service layer validation and authorization
+        |
+        v
+Durable state update + append-only event
+        |
+        v
+Web, desktop, mobile, and runtime subscribers
+```
+
+This keeps the product model simple: clients do not invent local truth, agents
+do not bypass product rules, and every participant sees the same session history.
+
+<br/>
+
 <div align="center">
 <table>
   <tr>
