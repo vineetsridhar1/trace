@@ -184,12 +184,14 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     });
   }
 
-  ws.on("message", (raw: Buffer | string) => {
+  let messageChain: Promise<void> | null = null;
+
+  async function handleMessage(raw: Buffer | string) {
     try {
       const msg = JSON.parse(raw.toString());
 
       if (msg.type === "runtime_hello") {
-        void (async () => {
+        try {
           const oldId = runtimeId;
           const newId = (msg.instanceId as string) ?? runtimeId;
           const hostingMode = (msg.hostingMode as "cloud" | "local") ?? "local";
@@ -423,14 +425,14 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               });
             }
           }
-        })().catch((err) => {
+        } catch (err) {
           console.error("[bridge] error handling runtime_hello:", err);
           if (err instanceof AuthorizationError) {
             ws.close(1008, err.message);
             return;
           }
           ws.close(1011, "runtime_hello failed");
-        });
+        }
         return;
       }
 
@@ -730,6 +732,18 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     } catch (err) {
       console.error("[bridge] error handling message:", err);
     }
+  }
+
+  ws.on("message", (raw: Buffer | string) => {
+    const next = messageChain
+      ? messageChain.catch(() => {}).then(() => handleMessage(raw))
+      : handleMessage(raw);
+    messageChain = next;
+    void next.finally(() => {
+      if (messageChain === next) {
+        messageChain = null;
+      }
+    });
   });
 
   ws.on("error", (err: Error) => {
