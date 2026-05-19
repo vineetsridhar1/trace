@@ -330,6 +330,18 @@ function compareCursor(a: EventCursor, b: EventCursor): number {
   return a.eventId.localeCompare(b.eventId);
 }
 
+function latestTimelineItemCursor(
+  items: SessionTimelineDisplayItem[] | null,
+  scopedEvents: Record<string, Event>,
+): EventCursor | null {
+  if (!items) return null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const cursor = timelineItemEndCursor(items[i], scopedEvents);
+    if (cursor) return cursor;
+  }
+  return null;
+}
+
 function mergeCompactEventItems(
   current: SessionTimelineDisplayItem[] | null,
   events: Array<Event & { id: string }>,
@@ -351,6 +363,21 @@ function mergeCompactEventItems(
     if (!aCursor || !bCursor) return a.id.localeCompare(b.id);
     return compareCursor(aCursor, bCursor);
   });
+}
+
+export function mergeCompactTailEventItems(
+  current: SessionTimelineDisplayItem[] | null,
+  events: Array<Event & { id: string }>,
+  scopedEvents: Record<string, Event>,
+): SessionTimelineDisplayItem[] {
+  const tailCursor = latestTimelineItemCursor(current, scopedEvents);
+  const tailEvents = tailCursor
+    ? events.filter(
+        (event) => compareCursor({ timestamp: event.timestamp, eventId: event.id }, tailCursor) > 0,
+      )
+    : events;
+  if (tailEvents.length === 0) return current ?? [];
+  return mergeCompactEventItems(current, tailEvents, scopedEvents);
 }
 
 type CompactItemsState = SessionTimelineDisplayItem[] | null;
@@ -429,7 +456,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         mergedEvents[event.id] = event;
       }
       updateCompactItems((current) =>
-        current ? mergeCompactEventItems(current, page.events, mergedEvents) : current,
+        mergeCompactTailEventItems(current, page.events, mergedEvents),
       );
       if (page.hasOlder && !hasOlderRef.current) {
         setHasOlder(true);
