@@ -202,6 +202,8 @@ OS application-support directory for the current checkout.
 
 > Requirements: Node.js 22+, pnpm 10+.
 
+Tip: Use `pnpm dev:web` or `pnpm dev:server` if you only want to run one app.
+
 <br/>
 
 ## Manual setup
