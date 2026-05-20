@@ -2651,7 +2651,11 @@ export class SessionService {
       );
     }
 
-    if (!hasExplicitTool) {
+    // Tool selection can be expensive when it involves probing accessible local runtimes.
+    // Avoid doing that work for "blank" sessions (e.g. Cmd+N) where provisioning is
+    // deferred and the tool can be reconciled later when a runtime is actually selected.
+    const shouldResolveRuntimeSupportedTool = !hasExplicitTool && !!input.prompt;
+    if (shouldResolveRuntimeSupportedTool) {
       const requestedRuntime = input.runtimeInstanceId
         ? sessionRouter.getRuntime(input.runtimeInstanceId, input.organizationId)
         : undefined;

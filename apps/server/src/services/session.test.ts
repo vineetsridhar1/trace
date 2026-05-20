@@ -790,11 +790,11 @@ describe("SessionService", () => {
       );
     });
 
-    it("falls back from an unsupported default tool to an accessible local runtime tool", async () => {
+    it("does not probe local runtimes for tool fallback when creating a blank session", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({
         sessionGroup,
-        tool: "codex",
+        tool: "pi",
         hosting: "local",
         model: "claude-sonnet-4-20250514",
       });
@@ -810,22 +810,6 @@ describe("SessionService", () => {
         type: "coding",
         repoId: "repo-1",
       });
-      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValue(
-        new Set(["runtime-1"]),
-      );
-      sessionRouterMock.listRuntimes.mockReturnValue([
-        {
-          key: "runtime-1",
-          id: "runtime-1",
-          label: "Laptop",
-          hostingMode: "local",
-          organizationId: "org-1",
-          registeredRepoIds: ["repo-1"],
-          supportedTools: ["codex"],
-          boundSessions: new Set<string>(),
-          ws: { readyState: 1, OPEN: 1 },
-        },
-      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
       prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
       prismaMock.session.create.mockResolvedValueOnce(session);
 
@@ -835,11 +819,12 @@ describe("SessionService", () => {
         channelId: "channel-1",
       });
 
-      expect(getDefaultModelMock).toHaveBeenCalledWith("codex");
+      expect(runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds).not.toHaveBeenCalled();
+      expect(getDefaultModelMock).toHaveBeenCalledWith("pi");
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            tool: "codex",
+            tool: "pi",
           }),
         }),
       );
