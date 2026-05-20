@@ -40,6 +40,8 @@ check in from your phone.
 
 **Run many coding sessions without losing track of any of them.**
 
+Trace keeps the work visible while the agent keeps moving.
+
 |        | Flow            | Example                                                                 |
 | ------ | --------------- | ----------------------------------------------------------------------- |
 | **01** | Connect a repo  | Register a local checkout or a hosted repository.                       |
