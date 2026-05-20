@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="#quickstart"><strong>Quickstart</strong></a> &middot;
+  <a href="docs/running-trace.md"><strong>Running Trace</strong></a> &middot;
   <a href="#architecture"><strong>Architecture</strong></a> &middot;
   <a href="#development"><strong>Development</strong></a> &middot;
   <a href="https://github.com/vineetsridhar1/trace"><strong>GitHub</strong></a> &middot;

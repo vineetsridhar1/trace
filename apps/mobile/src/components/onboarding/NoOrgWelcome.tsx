@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import * as Clipboard from "expo-clipboard";
-import { StyleSheet, View } from "react-native";
+import { Linking, StyleSheet, View } from "react-native";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
 import { handleMobileSignOut } from "@/lib/auth";
 import { useTheme } from "@/theme";
 import { getConnectionMode } from "@/lib/connection-target";
 import { CreateOrganizationForm } from "@/components/settings/CreateOrganizationForm";
+
+const RUNNING_TRACE_DOC_URL =
+  "https://github.com/vineetsridhar1/trace/blob/main/docs/running-trace.md";
 
 export function NoOrgWelcome() {
   const theme = useTheme();
@@ -19,7 +22,7 @@ export function NoOrgWelcome() {
   const isPairedLocal = getConnectionMode() === "paired_local";
   const welcomeMessage = isPairedLocal
     ? "Create an organization to start your local workspace, or ask an admin to invite you and share the email below."
-    : "Trace is invite-only right now. Ask an admin to add you to an organization and share the email below.";
+    : "Trace Cloud is invite-only right now. You can wait for an invite, run Trace locally, or self-host it with the setup guide.";
 
   useEffect(() => {
     return () => {
@@ -71,7 +74,41 @@ export function NoOrgWelcome() {
           <View style={styles.createBlock}>
             <CreateOrganizationForm />
           </View>
-        ) : null}
+        ) : (
+          <View
+            style={[
+              styles.guideBlock,
+              {
+                backgroundColor: theme.colors.surfaceDeep,
+                borderColor: theme.colors.border,
+                borderRadius: theme.radius.lg,
+              },
+            ]}
+          >
+            <Text variant="subheadline" color="foreground">
+              Ways forward
+            </Text>
+            <Text variant="footnote" color="mutedForeground" style={styles.guideItem}>
+              Ask a Trace admin to invite the email below.
+            </Text>
+            <Text variant="footnote" color="mutedForeground" style={styles.guideItem}>
+              Run the full local workspace with pnpm dev:local.
+            </Text>
+            <Text variant="footnote" color="mutedForeground" style={styles.guideItem}>
+              Deploy Trace on your own server with Docker Compose.
+            </Text>
+            <View style={styles.guideAction}>
+              <Button
+                title="Open setup guide"
+                onPress={() => {
+                  void Linking.openURL(RUNNING_TRACE_DOC_URL);
+                }}
+                variant="secondary"
+                size="sm"
+              />
+            </View>
+          </View>
+        )}
 
         <View style={styles.emailBlock}>
           <Text variant="caption1" color="dimForeground" style={styles.emailLabel}>
@@ -143,6 +180,17 @@ const styles = StyleSheet.create({
   },
   createBlock: {
     marginTop: 24,
+  },
+  guideBlock: {
+    marginTop: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+  },
+  guideItem: {
+    marginTop: 8,
+  },
+  guideAction: {
+    marginTop: 14,
   },
   emailLabel: {
     letterSpacing: 0.8,

@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, LogOut, RefreshCw, Check } from "lucide-react";
+import { BookOpen, Check, Copy, ExternalLink, LogOut, RefreshCw } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
+import { Button, buttonVariants } from "../ui/button";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { CreateOrganizationDialog } from "../sidebar/CreateOrganizationDialog";
 import { TraceLoader } from "../ui/trace-loader";
+
+const RUNNING_TRACE_DOC_URL =
+  "https://github.com/vineetsridhar1/trace/blob/main/docs/running-trace.md";
 
 export function NoOrgWelcome() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -16,7 +20,7 @@ export function NoOrgWelcome() {
   const email = user?.email ?? "";
   const welcomeMessage = isLocalMode
     ? "Create an organization to start your local workspace, or ask an admin to invite you and share the email below."
-    : "Trace is invite-only right now. Ask an admin to add you to an organization and share the email below.";
+    : "Trace Cloud is invite-only right now. You can wait for an invite, run Trace locally, or self-host it with the setup guide.";
 
   useEffect(() => {
     return () => {
@@ -44,12 +48,35 @@ export function NoOrgWelcome() {
 
   return (
     <div className="flex h-dvh items-center justify-center bg-surface-deep px-4">
-      <div className="w-full max-w-lg rounded-lg border border-border bg-surface-elevated p-8 shadow-sm">
+      <div className="w-full max-w-xl rounded-lg border border-border bg-surface-elevated p-8 shadow-sm">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-foreground">
           T
         </div>
         <h1 className="mt-5 text-2xl font-semibold text-foreground">Welcome to Trace</h1>
         <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">{welcomeMessage}</p>
+
+        {!isLocalMode ? (
+          <div className="mt-6 rounded-lg border border-border bg-surface-deep p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <BookOpen size={15} />
+              Ways forward
+            </div>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground">
+              <li>Ask a Trace admin to invite the email below.</li>
+              <li>Run the full local workspace with `pnpm dev:local`.</li>
+              <li>Deploy Trace on your own server with Docker Compose.</li>
+            </ul>
+            <a
+              href={RUNNING_TRACE_DOC_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4 gap-2")}
+            >
+              Open setup guide
+              <ExternalLink size={13} />
+            </a>
+          </div>
+        ) : null}
 
         <div className="mt-6">
           <label className="text-xs font-medium uppercase text-muted-foreground">Your email</label>
