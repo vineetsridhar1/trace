@@ -6,9 +6,14 @@ Thanks for helping improve Trace.
 
 1. Install Node.js 22+ and pnpm 10+.
 2. Run `pnpm install`.
-3. Copy `.env.example` to `apps/server/.env` and fill in local values.
-4. Run `pnpm db:migrate`, `pnpm db:generate`, and `pnpm gql:codegen`.
-5. Start development with `pnpm dev`.
+3. Start the local workspace with `pnpm dev:local`.
+
+Use the manual setup path when you want to run against your own PostgreSQL
+database or GitHub OAuth app:
+
+1. Copy `.env.example` to `apps/server/.env` and fill in local values.
+2. Run `pnpm db:migrate`, `pnpm db:generate`, and `pnpm gql:codegen`.
+3. Start development with `pnpm dev`.
 
 ## Pull Requests
 
