@@ -5,6 +5,7 @@ import { useEntityStore } from "./entity.js";
 
 const ACTIVE_ORG_KEY = "trace_active_org";
 export const LOCAL_LOGIN_NAME_KEY = "trace_local_login_name";
+let fetchMeRequestId = 0;
 
 export interface OrgMembership {
   organizationId: string;
@@ -59,7 +60,14 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   },
 
   fetchMe: async () => {
+    const requestId = ++fetchMeRequestId;
     const platform = getPlatform();
+    const setIfCurrent = (partial: Partial<AuthState>) => {
+      if (requestId === fetchMeRequestId) {
+        set(partial);
+      }
+    };
+
     try {
       let token: string | null = null;
       if (platform.authMode === "bearer") {
@@ -68,7 +76,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         token = useAuthStore.getState().token;
         if (!token) {
           token = await platform.secureStorage.getToken();
-          if (token) set({ token });
+          if (token) setIfCurrent({ token });
         }
       }
 
@@ -82,7 +90,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         headers,
       });
       if (!res.ok) {
-        set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
+        setIfCurrent({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
         return;
       }
       const data = (await res.json()) as { user: Record<string, unknown> };
@@ -99,30 +107,33 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         ? storedOrgId
         : (orgMemberships[0]?.organizationId ?? null);
 
-      if (activeOrgId) {
+      if (activeOrgId && requestId === fetchMeRequestId) {
         await platform.storage.setItem(ACTIVE_ORG_KEY, activeOrgId);
       }
 
-      set({ user, activeOrgId, orgMemberships, loading: false });
+      setIfCurrent({ user, activeOrgId, orgMemberships, loading: false });
 
       // Hydrate entity store
-      const { upsert } = useEntityStore.getState();
-      upsert("users", user.id, user);
-      for (const membership of orgMemberships) {
-        if (membership.organization) {
-          upsert(
-            "organizations",
-            membership.organization.id,
-            membership.organization as Organization,
-          );
+      if (requestId === fetchMeRequestId) {
+        const { upsert } = useEntityStore.getState();
+        upsert("users", user.id, user);
+        for (const membership of orgMemberships) {
+          if (membership.organization) {
+            upsert(
+              "organizations",
+              membership.organization.id,
+              membership.organization as Organization,
+            );
+          }
         }
       }
     } catch {
-      set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
+      setIfCurrent({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
     }
   },
 
   logout: async (options?: LogoutOptions) => {
+    fetchMeRequestId += 1;
     const platform = getPlatform();
     const headers: Record<string, string> = {};
     if (platform.authMode === "bearer") {
