@@ -33,6 +33,9 @@ Trace is a self-hosted workspace for running, monitoring, and collaborating on
 AI coding sessions. It gives every session a durable home: status, files,
 terminal output, branch state, checkpoints, runtime access, and history.
 
+Under the hood, everything is recorded as immutable events so humans and agents
+share the same source of truth.
+
 Instead of keeping AI coding work scattered across terminal tabs and local
 folders, Trace makes each session visible to the team. Start a session on a repo,
 watch it work, inspect the files it touched, hand it off, resume it later, or
