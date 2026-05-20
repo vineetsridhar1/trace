@@ -190,6 +190,7 @@ pnpm dev:local
 
 `pnpm dev:local` starts a local Trace workspace:
 
+- Builds the shared workspace package for first-run installs.
 - Creates or reuses a local Prisma Postgres dev server.
 - Syncs the Prisma schema and seeds baseline data.
 - Generates the Prisma client.

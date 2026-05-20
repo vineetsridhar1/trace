@@ -19,6 +19,10 @@ pnpm dev:local
 desktop bridge. It uses local auth, so you do not need a GitHub OAuth app or a
 Trace Cloud invite.
 
+On first run, `pnpm dev:local` also builds the shared workspace package before
+starting the apps. If you run the apps manually instead, run `pnpm build:shared`
+once after installing dependencies.
+
 Requirements:
 
 - Node.js 22 or newer.
