@@ -214,7 +214,11 @@ GitHub OAuth app.
 
 ```bash
 pnpm install
+pnpm build:shared
 ```
+
+`pnpm build:shared` is only needed for the manual `pnpm dev` path on a fresh
+checkout. `pnpm dev:local` runs it automatically.
 
 ### 2. Configure the server
 
