@@ -461,6 +461,9 @@ model SessionGroup {
   organization   Organization @relation(fields: [organizationId], references: [id])
   ownerUserId    String
   ownerUser      User         @relation("SessionGroupOwner", fields: [ownerUserId], references: [id])
+  forkedFromSessionGroupId String?
+  forkedFromSessionGroup   SessionGroup?  @relation("SessionGroupForks", fields: [forkedFromSessionGroupId], references: [id])
+  forkedSessionGroups      SessionGroup[] @relation("SessionGroupForks")
   visibility     SessionGroupVisibility @default(public)
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
@@ -489,6 +492,7 @@ model SessionGroup {
   @@unique([repoId, slug])
   @@index([organizationId, updatedAt])
   @@index([organizationId, visibility, ownerUserId])
+  @@index([forkedFromSessionGroupId])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
 }

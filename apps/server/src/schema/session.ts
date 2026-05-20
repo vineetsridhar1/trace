@@ -268,6 +268,17 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
+  forkSession: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.forkSession({
+      sessionId: args.sessionId,
+      organizationId: orgId,
+      createdById: ctx.userId,
+      actorType: ctx.actorType,
+      clientSource: ctx.clientSource,
+    });
+  },
   runSession: (
     _: unknown,
     args: { id: string; prompt?: string | null; interactionMode?: string | null },
@@ -633,6 +644,15 @@ export const sessionTypeResolvers = {
       if (group.ownerUser) return group.ownerUser;
       if (!group.ownerUserId) return null;
       return ctx.userLoader.load(group.ownerUserId);
+    },
+    forkedFromSessionGroup: async (
+      group: { forkedFromSessionGroup?: unknown; forkedFromSessionGroupId?: string | null },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (group.forkedFromSessionGroup) return group.forkedFromSessionGroup;
+      if (!group.forkedFromSessionGroupId) return null;
+      return ctx.sessionGroupLoader.load(group.forkedFromSessionGroupId);
     },
   },
   Session: {

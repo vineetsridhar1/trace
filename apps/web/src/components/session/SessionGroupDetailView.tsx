@@ -12,6 +12,7 @@ import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-cor
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
+import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
@@ -33,6 +34,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       id
       name
       slug
+      forkedFromSessionGroupId
       status
       visibility
       owner {
@@ -201,6 +203,10 @@ export function SessionGroupDetailView({
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
+  const [forkDialogOpen, setForkDialogOpen] = useState(false);
+  const handleOpenForkDialog = useCallback(() => {
+    setForkDialogOpen(true);
+  }, []);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const renameTerminal = useTerminalStore(
     (s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal,
@@ -521,80 +527,90 @@ export function SessionGroupDetailView({
           <UploadedAttachmentOpenContext.Provider value={handleUploadedAttachmentClick}>
             <div className="flex h-full flex-col overflow-hidden">
               <GroupHeader
-            groupName={groupName as string | undefined}
-            sessionGroupId={sessionGroupId}
-            repoId={linkedCheckoutRepoId}
-            groupBranch={linkedCheckoutBranch}
-            linkedCheckoutRuntimeLabel={groupRuntimeLabel}
-            linkedCheckoutRuntimeInstanceId={groupRuntimeInstanceId}
-            canManageLinkedCheckout={linkedCheckoutAllowed}
-            canInteract={bridgeInteractionAllowed}
-            selectedSessionStatus={selectedSessionStatus}
-            selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
-            canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
-            moveDisabledReason={moveDisabledReason}
-            groupPrUrl={groupPrUrl}
-            panelMode={panelMode}
-            isFullscreen={isFullscreen}
-            showSidebar={showSidebar}
-            onToggleFullscreen={toggleFullscreen}
-            onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
-          />
-
-          <GroupTabStrip
-            sessionTabs={sessionTabs}
-            terminals={terminals}
-            groupSessions={groupSessions}
-            selectedSessionId={selectedSession?.id ?? null}
-            activeTerminalId={activeTerminalId}
-            openFiles={openFiles}
-            activeFilePath={activeFilePath}
-            onSelectSession={handleSelectSession}
-            onCloseSession={handleCloseSession}
-            canCloseSessions={sessionTabs.length > 1}
-            onSelectTerminal={handleSelectTerminal}
-            onCloseTerminal={handleCloseTerminal}
-            onRenameTerminal={renameTerminal}
-            onSelectFile={handleSelectFile}
-            onCloseFile={handleCloseFile}
-            onNewChat={handleNewChat}
-            onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
-            canNewChat={
-              !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
-            }
-            canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
-          />
-
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-              <SessionGroupContentArea
+                groupName={groupName as string | undefined}
                 sessionGroupId={sessionGroupId}
-                activeFilePath={activeFilePath}
-                openFiles={openFiles}
-                activeTerminalId={activeTerminal?.id ?? null}
-                selectedSession={selectedSession}
-                defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                scrollToEventId={scrollToEventId}
-                onScrollComplete={handleScrollComplete}
+                repoId={linkedCheckoutRepoId}
+                groupBranch={linkedCheckoutBranch}
+                linkedCheckoutRuntimeLabel={groupRuntimeLabel}
+                linkedCheckoutRuntimeInstanceId={groupRuntimeInstanceId}
+                canManageLinkedCheckout={linkedCheckoutAllowed}
+                canInteract={bridgeInteractionAllowed}
+                selectedSessionStatus={selectedSessionStatus}
+                selectedSessionId={
+                  selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)
+                }
+                canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
+                moveDisabledReason={moveDisabledReason}
+                onForkSession={handleOpenForkDialog}
+                canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                groupPrUrl={groupPrUrl}
+                panelMode={panelMode}
+                isFullscreen={isFullscreen}
+                showSidebar={showSidebar}
+                onToggleFullscreen={toggleFullscreen}
+                onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
               />
-            </div>
-            {showSidebar && !selectedSessionIsOptimistic && (
-              <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
-                <SidebarPanel
-                  sessionGroupId={sessionGroupId}
-                  activeSessionId={selectedSession?.id ?? null}
-                  activeTab={sidebarTab}
-                  onTabChange={handleSidebarTabChange}
-                  onFileClick={handleFileClick}
-                  onDiffFileClick={handleDiffFileClick}
-                  highlightCheckpointId={highlightCheckpointId}
-                  onCheckpointClick={handleCheckpointClick}
-                  bridgeAccess={bridgeAccess}
-                  onBridgeAccessRequested={refreshBridgeAccess}
-                />
+
+              <GroupTabStrip
+                sessionTabs={sessionTabs}
+                terminals={terminals}
+                groupSessions={groupSessions}
+                selectedSessionId={selectedSession?.id ?? null}
+                activeTerminalId={activeTerminalId}
+                openFiles={openFiles}
+                activeFilePath={activeFilePath}
+                onSelectSession={handleSelectSession}
+                onCloseSession={handleCloseSession}
+                canCloseSessions={sessionTabs.length > 1}
+                onSelectTerminal={handleSelectTerminal}
+                onCloseTerminal={handleCloseTerminal}
+                onRenameTerminal={renameTerminal}
+                onSelectFile={handleSelectFile}
+                onCloseFile={handleCloseFile}
+                onNewChat={handleNewChat}
+                onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
+                canNewChat={
+                  !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
+                }
+                canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
+              />
+
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+                  <SessionGroupContentArea
+                    sessionGroupId={sessionGroupId}
+                    activeFilePath={activeFilePath}
+                    openFiles={openFiles}
+                    activeTerminalId={activeTerminal?.id ?? null}
+                    selectedSession={selectedSession}
+                    defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                    scrollToEventId={scrollToEventId}
+                    onScrollComplete={handleScrollComplete}
+                  />
+                </div>
+                {showSidebar && !selectedSessionIsOptimistic && (
+                  <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
+                    <SidebarPanel
+                      sessionGroupId={sessionGroupId}
+                      activeSessionId={selectedSession?.id ?? null}
+                      activeTab={sidebarTab}
+                      onTabChange={handleSidebarTabChange}
+                      onFileClick={handleFileClick}
+                      onDiffFileClick={handleDiffFileClick}
+                      highlightCheckpointId={highlightCheckpointId}
+                      onCheckpointClick={handleCheckpointClick}
+                      bridgeAccess={bridgeAccess}
+                      onBridgeAccessRequested={refreshBridgeAccess}
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+              <ForkSessionDialog
+                sessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
+                sessionName={selectedSession?.name ?? "this session"}
+                open={forkDialogOpen}
+                onOpenChange={setForkDialogOpen}
+              />
             </div>
           </UploadedAttachmentOpenContext.Provider>
         </AttachmentOpenContext.Provider>

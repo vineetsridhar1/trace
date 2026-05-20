@@ -595,6 +595,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkSession: Session;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -813,6 +814,10 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars["String"]["input"];
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationForkSessionArgs = {
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -1624,6 +1629,8 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  forkedFromSessionGroup?: Maybe<SessionGroup>;
+  forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];

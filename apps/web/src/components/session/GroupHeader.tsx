@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Circle,
+  GitFork,
   GitPullRequest,
   PanelRight,
   History,
@@ -30,6 +31,8 @@ interface GroupHeaderProps {
   selectedSessionId: string | null;
   canMoveSession: boolean;
   moveDisabledReason?: string;
+  onForkSession: () => void;
+  canForkSession: boolean;
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
   isFullscreen: boolean;
@@ -51,6 +54,8 @@ export function GroupHeader({
   selectedSessionId,
   canMoveSession,
   moveDisabledReason,
+  onForkSession,
+  canForkSession,
   groupPrUrl,
   panelMode,
   isFullscreen,
@@ -134,6 +139,15 @@ export function GroupHeader({
         disabled={!canMoveSession}
         disabledReason={moveDisabledReason}
       />
+
+      <button
+        onClick={onForkSession}
+        disabled={!canForkSession}
+        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        title="Fork session"
+      >
+        <GitFork size={14} />
+      </button>
 
       <button
         onClick={onToggleSidebar}

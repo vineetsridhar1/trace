@@ -64,6 +64,12 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   createdById: string;
   actorType?: ActorType;
   clientSource?: string | null;
+  forceNewGroup?: boolean;
+  forkedFromSessionGroupId?: string | null;
+  checkpointSha?: string | null;
+  provisionWithoutPrompt?: boolean;
+  name?: string | null;
+  allowVisibleSourceSession?: boolean;
 };
 
 type SessionStartMetadata = {
@@ -511,6 +517,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   archivedAt: true,
   setupStatus: true,
   setupError: true,
+  forkedFromSessionGroupId: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -675,6 +682,22 @@ function buildSessionGroupSnapshot(
     owner: group.ownerUser,
     status: deriveSessionGroupStatus(sessions ?? [], group.prUrl ?? null, group.archivedAt ?? null),
   };
+}
+
+function rewriteForkPayloadReferences(
+  value: unknown,
+  replacements: ReadonlyMap<string, string>,
+): unknown {
+  if (typeof value === "string") return replacements.get(value) ?? value;
+  if (Array.isArray(value)) {
+    return value.map((item) => rewriteForkPayloadReferences(item, replacements));
+  }
+  if (!value || typeof value !== "object") return value;
+  const rewritten: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    rewritten[key] = rewriteForkPayloadReferences(child, replacements);
+  }
+  return rewritten;
 }
 
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
@@ -2608,9 +2631,11 @@ export class SessionService {
       throw new Error("sourceSessionId must belong to the requested sessionGroupId");
     }
 
-    const existingGroupId = input.restoreCheckpointId
+    const existingGroupId = input.forceNewGroup
       ? null
-      : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
+      : input.restoreCheckpointId
+        ? null
+        : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
@@ -2626,7 +2651,11 @@ export class SessionService {
     }
 
     const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
-    if (resolvedGroup) {
+    if (resolvedGroup && input.allowVisibleSourceSession) {
+      if (!canViewSessionGroup(resolvedGroup, input.createdById)) {
+        throw new AuthorizationError("Not authorized for this session group");
+      }
+    } else if (resolvedGroup) {
       this.assertPrivateGroupOwner(resolvedGroup, input.createdById);
     }
     const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
@@ -2693,8 +2722,10 @@ export class SessionService {
       sourceSession?.branch ??
       resolvedChannel?.baseBranch ??
       undefined;
-    const sharedWorkdir = input.restoreCheckpointId ? null : (resolvedGroup?.workdir ?? null);
-    const sharedConnection = input.restoreCheckpointId ? null : (resolvedGroup?.connection ?? null);
+    const sharedWorkdir =
+      input.restoreCheckpointId || input.forceNewGroup ? null : (resolvedGroup?.workdir ?? null);
+    const sharedConnection =
+      input.restoreCheckpointId || input.forceNewGroup ? null : (resolvedGroup?.connection ?? null);
     const sharedRuntimeInstanceId =
       sharedConnection &&
       typeof sharedConnection === "object" &&
@@ -2752,13 +2783,15 @@ export class SessionService {
       });
     }
 
-    const name = input.prompt
-      ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
-      : restoreCheckpoint
-        ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
-            .trim()
-            .slice(0, MAX_SESSION_NAME_LENGTH)
-        : `Session ${new Date().toLocaleString()}`;
+    const name = input.name
+      ? input.name.slice(0, MAX_SESSION_NAME_LENGTH)
+      : input.prompt
+        ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
+        : restoreCheckpoint
+          ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
+              .trim()
+              .slice(0, MAX_SESSION_NAME_LENGTH)
+          : `Session ${new Date().toLocaleString()}`;
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
@@ -3100,6 +3133,7 @@ export class SessionService {
               organizationId: input.organizationId,
               ownerUserId: input.createdById,
               visibility: newGroupVisibility,
+              forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
               channelId: resolvedChannelId,
               repoId: resolvedRepoId ?? undefined,
               branch: resolvedBranch ?? undefined,
@@ -3211,7 +3245,7 @@ export class SessionService {
     // until the user sends their first message.
     if (
       needsRuntimeProvisioning &&
-      input.prompt &&
+      (input.prompt || input.provisionWithoutPrompt) &&
       selectedRuntimeAccessAllowed &&
       !deferRuntimeSelection &&
       input.deferInitialRun !== true
@@ -3227,7 +3261,7 @@ export class SessionService {
         reasoningEffort: session.reasoningEffort,
         repo: session.repo,
         branch: resolvedBranch,
-        checkpointSha: restoreCheckpoint?.commitSha,
+        checkpointSha: input.checkpointSha ?? restoreCheckpoint?.commitSha,
         createdById: input.createdById,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
@@ -3237,6 +3271,168 @@ export class SessionService {
     }
 
     return session;
+  }
+
+  async forkSession(input: {
+    sessionId: string;
+    organizationId: string;
+    createdById: string;
+    actorType?: ActorType;
+    clientSource?: string | null;
+  }) {
+    const sourceSession = await prisma.session.findFirst({
+      where: {
+        id: input.sessionId,
+        organizationId: input.organizationId,
+      },
+      include: SESSION_INCLUDE,
+    });
+
+    if (!sourceSession) {
+      throw new Error("Source session not found");
+    }
+    if (!sourceSession.sessionGroupId || !sourceSession.sessionGroup) {
+      throw new Error("Source session does not belong to a session group");
+    }
+    if (!canViewSessionGroup(sourceSession.sessionGroup, input.createdById)) {
+      throw new AuthorizationError("Not authorized for this session");
+    }
+
+    const latestCheckpoint =
+      (await prisma.gitCheckpoint.findFirst({
+        where: {
+          sessionId: sourceSession.id,
+          sessionGroupId: sourceSession.sessionGroupId,
+        },
+        orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+        select: { commitSha: true },
+      })) ??
+      (await prisma.gitCheckpoint.findFirst({
+        where: {
+          sessionGroupId: sourceSession.sessionGroupId,
+        },
+        orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+        select: { commitSha: true },
+      }));
+
+    const forkedSession = await this.start({
+      tool: sourceSession.tool,
+      model: sourceSession.model,
+      reasoningEffort: sourceSession.reasoningEffort,
+      hosting: sourceSession.hosting,
+      repoId: sourceSession.repoId,
+      branch: sourceSession.sessionGroup.branch ?? sourceSession.branch ?? undefined,
+      channelId: sourceSession.channelId ?? sourceSession.sessionGroup.channelId ?? undefined,
+      sourceSessionId: sourceSession.id,
+      organizationId: input.organizationId,
+      createdById: input.createdById,
+      actorType: input.actorType,
+      clientSource: input.clientSource,
+      visibility: sourceSession.sessionGroup.visibility,
+      forceNewGroup: true,
+      allowVisibleSourceSession: true,
+      forkedFromSessionGroupId: sourceSession.sessionGroupId,
+      checkpointSha: latestCheckpoint?.commitSha ?? null,
+      provisionWithoutPrompt: true,
+      name: sourceSession.name,
+    });
+
+    if (!forkedSession.sessionGroupId) {
+      throw new Error("Forked session was not assigned to a session group");
+    }
+
+    await this.copyForkedSessionHistory({
+      sourceSessionId: sourceSession.id,
+      sourceSessionGroupId: sourceSession.sessionGroupId,
+      targetSessionId: forkedSession.id,
+      targetSessionGroupId: forkedSession.sessionGroupId,
+      organizationId: input.organizationId,
+      actorId: input.createdById,
+      actorType: input.actorType ?? "user",
+    });
+
+    return prisma.session.findUniqueOrThrow({
+      where: { id: forkedSession.id },
+      include: SESSION_INCLUDE,
+    });
+  }
+
+  private async copyForkedSessionHistory(input: {
+    sourceSessionId: string;
+    sourceSessionGroupId: string;
+    targetSessionId: string;
+    targetSessionGroupId: string;
+    organizationId: string;
+    actorId: string;
+    actorType: ActorType;
+  }): Promise<void> {
+    const sourceEvents = await prisma.event.findMany({
+      where: {
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sourceSessionId,
+      },
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+    });
+    if (sourceEvents.length === 0) return;
+
+    const targetStartEvent = await prisma.event.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.targetSessionId,
+        eventType: "session_started",
+      },
+      orderBy: { timestamp: "asc" },
+    });
+
+    const replacements = new Map<string, string>([
+      [input.sourceSessionId, input.targetSessionId],
+      [input.sourceSessionGroupId, input.targetSessionGroupId],
+    ]);
+    const copiedEventIds = new Map<string, string>();
+    const sourceStartEvent = sourceEvents.find((event) => event.eventType === "session_started");
+    if (sourceStartEvent && targetStartEvent) {
+      copiedEventIds.set(sourceStartEvent.id, targetStartEvent.id);
+      await prisma.event.update({
+        where: { id: targetStartEvent.id },
+        data: {
+          metadata: {
+            ...((targetStartEvent.metadata && typeof targetStartEvent.metadata === "object"
+              ? targetStartEvent.metadata
+              : {}) as Record<string, unknown>),
+            forkedFromSessionId: input.sourceSessionId,
+            forkedFromSessionGroupId: input.sourceSessionGroupId,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    for (const sourceEvent of sourceEvents) {
+      if (sourceEvent.eventType === "session_started") continue;
+      const copied = await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.targetSessionId,
+        eventType: sourceEvent.eventType,
+        payload: rewriteForkPayloadReferences(
+          sourceEvent.payload,
+          replacements,
+        ) as Prisma.InputJsonValue,
+        metadata: {
+          ...((sourceEvent.metadata && typeof sourceEvent.metadata === "object"
+            ? sourceEvent.metadata
+            : {}) as Record<string, unknown>),
+          forkedFromSessionId: input.sourceSessionId,
+          forkedFromSessionGroupId: input.sourceSessionGroupId,
+          forkedFromEventId: sourceEvent.id,
+        } as Prisma.InputJsonValue,
+        parentId: sourceEvent.parentId ? copiedEventIds.get(sourceEvent.parentId) : undefined,
+        actorType: sourceEvent.actorType,
+        actorId: sourceEvent.actorId,
+      });
+      copiedEventIds.set(sourceEvent.id, copied.id);
+    }
   }
 
   async resumePendingBridgeAccessSessions(input: BridgeAccessApprovedHandlerInput): Promise<void> {
