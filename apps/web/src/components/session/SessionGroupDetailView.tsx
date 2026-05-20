@@ -157,6 +157,9 @@ export function SessionGroupDetailView({
     sessionGroupId,
     "worktreeDeleted",
   ) as boolean | undefined;
+  const groupIsOptimistic = useEntityField("sessionGroups", sessionGroupId, "_optimistic") as
+    | boolean
+    | undefined;
 
   const activeSessionGroupId = useUIStore(
     (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
@@ -225,10 +228,13 @@ export function SessionGroupDetailView({
 
   // Fetch full group detail and merge into store
   useEffect(() => {
+    if (groupIsOptimistic) return;
+    let aborted = false;
     client
       .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId })
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
+        if (aborted) return;
         if (!result.data?.sessionGroup) return;
         const fetchedGroup = result.data.sessionGroup as SessionGroupEntity & {
           sessions?: unknown[];
@@ -252,8 +258,14 @@ export function SessionGroupDetailView({
             })) as Array<SessionEntity & { id: string }>,
           );
         }
+      })
+      .catch(() => {
+        // The org-wide event stream will hydrate the group when it exists.
       });
-  }, [sessionGroupId, upsert, upsertMany]);
+    return () => {
+      aborted = true;
+    };
+  }, [groupIsOptimistic, sessionGroupId, upsert, upsertMany]);
 
   // Auto-select the most recent session if none is selected
   useEffect(() => {
