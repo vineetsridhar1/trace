@@ -57,13 +57,16 @@ import {
   removeQueuedCheckpointFile,
   writeCheckpointContext,
 } from "./hook-runtime.js";
+import {
+  collectTrackedPrWorkspaces,
+  type TrackedSessionWorkspace,
+} from "./pr-tracking.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
 const LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS = 15_000;
 const LOCAL_PR_POLL_INTERVAL_MS = 60_000;
 const LOCAL_PR_POLL_TIMEOUT_MS = 15_000;
-const HAS_GITHUB_CLI = hasExecutable("gh");
 const execFileAsync = promisify(execFile);
 
 export type GithubCliStatus = {
@@ -76,20 +79,6 @@ function hasExecutable(command: string): boolean {
   try {
     execFileSync(command, ["--version"], { stdio: "ignore", timeout: 2_000 });
     return true;
-  } catch {
-    return false;
-  }
-}
-
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase();
-  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
-}
-
-function shouldEnableLocalPrPolling(serverUrl: string): boolean {
-  try {
-    const parsed = new URL(serverUrl);
-    return isLoopbackHostname(parsed.hostname);
   } catch {
     return false;
   }
@@ -144,11 +133,6 @@ type ExecFileError = Error & {
   stdout?: string;
 };
 
-type TrackedSessionWorkspace = {
-  sessionId: string;
-  workdir: string;
-};
-
 async function maybeReadGitRef(repoPath: string, args: string[]): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", args, {
@@ -184,7 +168,7 @@ function isNoPullRequestError(message: string): boolean {
 }
 
 export async function getGithubCliStatus(): Promise<GithubCliStatus> {
-  if (!HAS_GITHUB_CLI) {
+  if (!hasExecutable("gh")) {
     return {
       installed: false,
       authenticated: false,
@@ -220,7 +204,7 @@ async function inspectLocalPrStatus(workdir: string): Promise<{
   pr: BridgePrObservation | null;
 }> {
   const branch = await maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]);
-  if (!branch || !HAS_GITHUB_CLI) {
+  if (!branch || !hasExecutable("gh")) {
     return { branch, pr: null };
   }
 
@@ -269,6 +253,7 @@ async function inspectLocalPrStatus(workdir: string): Promise<{
     },
   };
 }
+
 function isPendingInputOutput(output: ToolOutput): boolean {
   return (
     output.type === "assistant" &&
@@ -298,7 +283,7 @@ type BridgeAuthContext = {
 export class BridgeClient implements IBridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
-  private readonly localPrPollingEnabled: boolean;
+  private localPrPollingEnabled = false;
   private adapters = new Map<string, CodingToolAdapter>();
   private sessionTools = new Map<string, string>();
   private reportedToolSessionIds = new Map<string, string>();
@@ -347,7 +332,6 @@ export class BridgeClient implements IBridgeClient {
 
   constructor(serverUrl: string, getSessionCookieHeader: (url: string) => Promise<string | null>) {
     this.serverUrl = serverUrl;
-    this.localPrPollingEnabled = shouldEnableLocalPrPolling(serverUrl);
     this.getSessionCookieHeader = getSessionCookieHeader;
     this.instanceId = getOrCreateInstanceId();
     this.terminalManager = new TerminalManager({
@@ -606,8 +590,13 @@ export class BridgeClient implements IBridgeClient {
     const payload = (await response.json()) as {
       token?: unknown;
       expiresAt?: unknown;
+      localMode?: unknown;
     };
-    if (typeof payload.token !== "string" || typeof payload.expiresAt !== "string") {
+    if (
+      typeof payload.token !== "string" ||
+      typeof payload.expiresAt !== "string" ||
+      typeof payload.localMode !== "boolean"
+    ) {
       throw new Error("Invalid bridge auth token response");
     }
 
@@ -620,6 +609,7 @@ export class BridgeClient implements IBridgeClient {
       token: payload.token,
       expiresAt,
     };
+    this.localPrPollingEnabled = payload.localMode;
     return payload.token;
   }
 
@@ -757,24 +747,13 @@ export class BridgeClient implements IBridgeClient {
   }
 
   private getTrackedPrWorkspaces(): TrackedSessionWorkspace[] {
-    const workspaces = new Map<string, TrackedSessionWorkspace>();
-
-    for (const [sessionId, workdir] of this.sessionWorkdirs.entries()) {
-      const sessionGroupId = this.sessionGroupIds.get(sessionId) ?? null;
-      const workspaceKey = sessionGroupId ? `group:${sessionGroupId}` : `workdir:${workdir}`;
-
-      if (!workspaces.has(workspaceKey)) {
-        workspaces.set(workspaceKey, { sessionId, workdir });
-      }
-    }
-
-    return [...workspaces.values()];
+    return collectTrackedPrWorkspaces(this.sessionWorkdirs, this.sessionGroupIds);
   }
 
   private async pollLocalPrStatuses() {
     if (
       !this.localPrPollingEnabled ||
-      !HAS_GITHUB_CLI ||
+      !hasExecutable("gh") ||
       this.isPollingLocalPrs ||
       this.ws?.readyState !== WebSocket.OPEN
     ) {
@@ -785,30 +764,34 @@ export class BridgeClient implements IBridgeClient {
 
     try {
       await Promise.all(
-        this.getTrackedPrWorkspaces().map(async ({ sessionId, workdir }) => {
+        this.getTrackedPrWorkspaces().map(async ({ sessionIds, workdir }) => {
           const observedAt = new Date().toISOString();
 
           try {
             const { branch, pr } = await inspectLocalPrStatus(workdir);
-            this.send({
-              type: "session_pr_status",
-              sessionId,
-              branch,
-              observedAt,
-              pr,
-            });
+            for (const sessionId of sessionIds) {
+              this.send({
+                type: "session_pr_status",
+                sessionId,
+                branch,
+                observedAt,
+                pr,
+              });
+            }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.warn(`[bridge] failed to inspect local PR status for ${workdir}: ${message}`);
             const branch = await maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]);
-            this.send({
-              type: "session_pr_status",
-              sessionId,
-              branch,
-              observedAt,
-              pr: null,
-              error: message,
-            });
+            for (const sessionId of sessionIds) {
+              this.send({
+                type: "session_pr_status",
+                sessionId,
+                branch,
+                observedAt,
+                pr: null,
+                error: message,
+              });
+            }
           }
         }),
       );

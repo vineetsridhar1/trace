@@ -207,6 +207,31 @@ describe("local login", () => {
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
+  it("marks bridge auth responses as local mode in local workspaces", async () => {
+    prismaMock.orgMember.findUnique
+      .mockResolvedValueOnce({ organizationId: "org-1" })
+      .mockResolvedValueOnce({ userId: "user-1" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/bridge-token?instanceId=bridge-1`, {
+      headers: {
+        Cookie: `trace_token=${token}`,
+        "X-Organization-Id": "org-1",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string; expiresAt: string; localMode: boolean };
+    expect(body.localMode).toBe(true);
+    expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-1",
+      instanceId: "bridge-1",
+      tokenType: "bridge_auth",
+    });
+    expect(Date.parse(body.expiresAt)).not.toBeNaN();
+  });
+
   it("cleans up the legacy bootstrap channel shape for existing local workspaces", async () => {
     prismaMock.channel.deleteMany.mockResolvedValueOnce({ count: 1 });
 
@@ -558,7 +583,7 @@ describe("bridge auth tokens", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { token: string; expiresAt: string };
+    const body = (await res.json()) as { token: string; expiresAt: string; localMode: boolean };
     expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({
       userId: "user-1",
       organizationId: "org-1",
@@ -566,6 +591,7 @@ describe("bridge auth tokens", () => {
       tokenType: "bridge_auth",
     });
     expect(Date.parse(body.expiresAt)).not.toBeNaN();
+    expect(body.localMode).toBe(false);
   });
 
   it("mints bridge auth from a mobile token for any requested member organization", async () => {
@@ -588,13 +614,14 @@ describe("bridge auth tokens", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { token: string; expiresAt: string };
+    const body = (await res.json()) as { token: string; expiresAt: string; localMode: boolean };
     expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({
       userId: "user-1",
       organizationId: "org-2",
       instanceId: "bridge-1",
       tokenType: "bridge_auth",
     });
+    expect(body.localMode).toBe(false);
   });
 
   it("reads auth/me from the browser session cookie without echoing the token", async () => {
