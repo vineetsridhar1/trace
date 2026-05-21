@@ -145,19 +145,27 @@ export function SessionInput({
 
   const addAttachments = useCallback(
     (files: File[]) => {
-      if (isSendingRef.current) return;
-      setDraftImages(sessionId, (prev) => {
-        const remaining = MAX_ATTACHMENTS - prev.length;
-        if (remaining <= 0) return prev;
-        const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
-          id: generateUUID(),
-          file,
-          previewUrl: URL.createObjectURL(file),
-          s3Key: null,
-          uploading: false,
-        }));
-        return [...prev, ...newAttachments];
-      });
+      if (isSendingRef.current || files.length === 0) return false;
+
+      const currentImages = useDraftsStore.getState().drafts[sessionId]?.images ?? EMPTY_ATTACHMENTS;
+      const remaining = MAX_ATTACHMENTS - currentImages.length;
+      if (remaining <= 0) {
+        toast.error(`You can attach up to ${MAX_ATTACHMENTS} files`);
+        return false;
+      }
+
+      const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
+        id: generateUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        s3Key: null,
+        uploading: false,
+      }));
+      if (files.length > remaining) {
+        toast.error(`Only ${remaining} more attachment${remaining === 1 ? "" : "s"} allowed`);
+      }
+      setDraftImages(sessionId, [...currentImages, ...newAttachments]);
+      return newAttachments.length > 0;
     },
     [sessionId, setDraftImages],
   );

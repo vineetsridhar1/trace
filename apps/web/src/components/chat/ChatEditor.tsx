@@ -21,6 +21,15 @@ if (!Quill.imports["modules/mention"]) {
 }
 
 const EDITOR_FORMATS = ["mention"];
+const LARGE_PASTE_CHARACTER_THRESHOLD = 12_000;
+
+function createPastedTextFile(text: string): File {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return new File([text], `pasted-text-${timestamp}.txt`, {
+    type: "text/plain",
+    lastModified: Date.now(),
+  });
+}
 
 export interface MentionableUser {
   id: string;
@@ -60,7 +69,7 @@ interface ChatEditorProps {
   onSlashCommandSelect?: (cmd: SlashCommandItem) => void;
   onShiftTab?: () => void;
   onChange?: (text: string, html: string) => void;
-  onImagePaste?: (files: File[]) => void;
+  onImagePaste?: (files: File[]) => void | boolean;
   hasAttachments?: boolean;
 }
 
@@ -113,11 +122,21 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const root = editor?.root;
     if (!root) return;
     const handler = (e: ClipboardEvent) => {
+      if (!onImagePasteRef.current) return;
+
       const files = Array.from(e.clipboardData?.files ?? []);
-      if (files.length > 0 && onImagePasteRef.current) {
+      if (files.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
         onImagePasteRef.current(files);
+        return;
+      }
+
+      const pastedText = e.clipboardData?.getData("text/plain") ?? "";
+      if (pastedText.length > LARGE_PASTE_CHARACTER_THRESHOLD) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onImagePasteRef.current([createPastedTextFile(pastedText)]);
       }
     };
     root.addEventListener("paste", handler, { capture: true });
