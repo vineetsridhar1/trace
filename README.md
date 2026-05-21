@@ -9,6 +9,8 @@
   progress from web, desktop, and mobile.
 </p>
 
+<!-- Test change — do not merge -->
+
 <p align="center">
   <a href="#quickstart"><strong>Quickstart</strong></a> &middot;
   <a href="#architecture"><strong>Architecture</strong></a> &middot;
