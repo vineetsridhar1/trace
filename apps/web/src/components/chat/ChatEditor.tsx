@@ -21,7 +21,7 @@ if (!Quill.imports["modules/mention"]) {
 }
 
 const EDITOR_FORMATS = ["mention"];
-const LARGE_PASTE_CHARACTER_THRESHOLD = 12_000;
+const LARGE_PASTE_CHARACTER_THRESHOLD = 3_000;
 
 function createPastedTextFile(text: string): File {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
