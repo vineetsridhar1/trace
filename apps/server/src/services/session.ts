@@ -5592,7 +5592,7 @@ export class SessionService {
     for (const session of sessions) {
       sessionRouter.bindSession(session.id, runtime.key);
 
-      if (session.workdir) {
+      if (runtime.hostingMode === "local" && session.workdir) {
         sessionRouter.sendToRuntime(
           runtime.id,
           {

@@ -4603,6 +4603,43 @@ describe("SessionService", () => {
         "org-1",
       );
     });
+
+    it("does not rehydrate tracked workdirs into cloud runtimes", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-cloud",
+        id: "runtime-cloud",
+        label: "Cloud Runtime",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        supportedTools: ["codex"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          agentStatus: "active",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-cloud",
+            runtimeLabel: "Cloud Runtime",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          organizationId: "org-1",
+          workdir: "/home/coder",
+          readOnlyWorkspace: false,
+          sessionGroupId: "group-1",
+        },
+      ]);
+
+      await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
+
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-cloud");
+      expect(sessionRouterMock.sendToRuntime).not.toHaveBeenCalled();
+    });
   });
 
   describe("workspaceReady", () => {
