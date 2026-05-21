@@ -77,6 +77,8 @@ export type {
   BridgeLinkedCheckoutErrorCode,
   BridgeSessionGitSyncStatus,
   BridgeSessionGitSyncStatusResult,
+  BridgePrObservation,
+  BridgeSessionPrStatus,
   BridgeLinkedCheckoutActionResultPayload,
   BridgeLinkedCheckoutStatusResult,
   BridgeLinkedCheckoutChangedFileResult,

@@ -5572,7 +5572,15 @@ export class SessionService {
         sessionStatus: { not: "merged" },
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
-      select: { id: true, agentStatus: true, connection: true },
+      select: {
+        id: true,
+        agentStatus: true,
+        connection: true,
+        organizationId: true,
+        workdir: true,
+        readOnlyWorkspace: true,
+        sessionGroupId: true,
+      },
     });
 
     runtimeDebug("restoreSessionsForRuntime loaded sessions", {
@@ -5583,6 +5591,20 @@ export class SessionService {
 
     for (const session of sessions) {
       sessionRouter.bindSession(session.id, runtime.key);
+
+      if (runtime.hostingMode === "local" && session.workdir) {
+        sessionRouter.sendToRuntime(
+          runtime.id,
+          {
+            type: "track_session",
+            sessionId: session.id,
+            workdir: session.workdir,
+            readOnly: session.readOnlyWorkspace,
+            sessionGroupId: session.sessionGroupId,
+          },
+          session.organizationId,
+        );
+      }
 
       // Only emit connection_restored for sessions that were disconnected
       // and are not already done — done sessions don't need event churn
@@ -7809,8 +7831,21 @@ export class SessionService {
     eventSessionId: string;
     prUrl: string;
     organizationId: string;
+    actorId?: string;
   }) {
-    const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
+    const {
+      sessionGroupId,
+      eventSessionId,
+      prUrl,
+      organizationId,
+      actorId = "github-webhook",
+    } = params;
+
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { prUrl: true },
+    });
+    if (group?.prUrl === prUrl) return;
 
     // Transition all non-merged, non-needs-input sessions in the group to in_review.
     await prisma.session.updateMany({
@@ -7831,8 +7866,131 @@ export class SessionService {
       eventType: "session_pr_opened",
       payload: { sessionId: eventSessionId, prUrl, sessionStatus: "in_review", sessionGroup },
       actorType: "system",
-      actorId: "github-webhook",
+      actorId,
     });
+  }
+
+  async syncPrObservation(params: {
+    sessionId: string;
+    runtimeInstanceId: string;
+    organizationId: string;
+    ownerUserId: string;
+    branch: string | null;
+    observedAt: string;
+    pr: { url: string; state: "OPEN" | "CLOSED" | "MERGED"; merged: boolean } | null;
+    error?: string | null;
+    actorId?: string;
+  }) {
+    const {
+      sessionId,
+      runtimeInstanceId,
+      organizationId,
+      ownerUserId,
+      branch,
+      observedAt,
+      pr,
+      error,
+      actorId = "github-bridge-poll",
+    } = params;
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        hosting: true,
+        organizationId: true,
+        connection: true,
+        sessionGroupId: true,
+        sessionGroup: {
+          select: {
+            id: true,
+            branch: true,
+            connection: true,
+            prUrl: true,
+            sessions: {
+              select: { id: true },
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    if (
+      !session ||
+      session.hosting !== "local" ||
+      session.organizationId !== organizationId ||
+      !session.sessionGroupId ||
+      !session.sessionGroup
+    ) {
+      return;
+    }
+
+    const boundRuntimeId =
+      this.getConnectionRuntimeInstanceId(session.connection) ??
+      this.getConnectionRuntimeInstanceId(session.sessionGroup.connection);
+    if (!boundRuntimeId || boundRuntimeId !== runtimeInstanceId) {
+      return;
+    }
+
+    const runtime = sessionRouter.getRuntime(runtimeInstanceId);
+    if (runtime?.ownerUserId && runtime.ownerUserId !== ownerUserId) {
+      return;
+    }
+
+    const branchMismatch =
+      branch &&
+      session.sessionGroup.branch &&
+      branch !== session.sessionGroup.branch
+        ? `Observed branch ${branch} does not match tracked branch ${session.sessionGroup.branch}`
+        : null;
+    const eventSessionId = session.sessionGroup.sessions?.[0]?.id ?? session.id;
+
+    await prisma.sessionGroup.update({
+      where: { id: session.sessionGroupId },
+      data: {
+        prSyncObservedAt: new Date(observedAt),
+        prSyncError: error ?? branchMismatch,
+      },
+    });
+
+    if (error || branchMismatch || !pr) return;
+
+    if (pr.state === "OPEN") {
+      await this.markPrOpened({
+        sessionGroupId: session.sessionGroupId,
+        eventSessionId,
+        prUrl: pr.url,
+        organizationId: session.organizationId,
+        actorId,
+      });
+      return;
+    }
+
+    if (!session.sessionGroup.prUrl || session.sessionGroup.prUrl !== pr.url) {
+      return;
+    }
+
+    if (pr.state === "CLOSED" && !pr.merged) {
+      await this.markPrClosed({
+        sessionGroupId: session.sessionGroupId,
+        eventSessionId,
+        prUrl: pr.url,
+        organizationId: session.organizationId,
+        actorId,
+      });
+      return;
+    }
+
+    if (pr.state === "MERGED" || pr.merged) {
+      await this.markPrMerged({
+        sessionGroupId: session.sessionGroupId,
+        eventSessionId,
+        prUrl: pr.url,
+        organizationId: session.organizationId,
+        actorId,
+      });
+    }
   }
 
   /** Clear prUrl on the active session group when its current PR is closed without merging. */
@@ -7841,8 +7999,15 @@ export class SessionService {
     eventSessionId: string;
     prUrl: string;
     organizationId: string;
+    actorId?: string;
   }) {
-    const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
+    const {
+      sessionGroupId,
+      eventSessionId,
+      prUrl,
+      organizationId,
+      actorId = "github-webhook",
+    } = params;
 
     const group = await prisma.sessionGroup.findUnique({
       where: { id: sessionGroupId },
@@ -7863,7 +8028,7 @@ export class SessionService {
       eventType: "session_pr_closed",
       payload: { sessionId: eventSessionId, sessionGroup },
       actorType: "system",
-      actorId: "github-webhook",
+      actorId,
     });
   }
 
@@ -7954,8 +8119,15 @@ export class SessionService {
     eventSessionId: string;
     prUrl: string;
     organizationId: string;
+    actorId?: string;
   }) {
-    const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
+    const {
+      sessionGroupId,
+      eventSessionId,
+      prUrl,
+      organizationId,
+      actorId = "github-webhook",
+    } = params;
 
     const group = await prisma.sessionGroup.findUnique({
       where: { id: sessionGroupId },
@@ -8008,7 +8180,7 @@ export class SessionService {
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
-      actorId: "github-webhook",
+      actorId,
     });
   }
 }

@@ -770,6 +770,7 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   res.json({
     token: bridgeToken.token,
     expiresAt: bridgeToken.expiresAt.toISOString(),
+    localMode: isLocalMode(),
   });
 });
 

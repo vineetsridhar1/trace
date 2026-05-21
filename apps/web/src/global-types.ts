@@ -43,6 +43,12 @@ declare global {
     status: DesktopBridgeConnectionStatus;
   };
 
+  type DesktopGithubCliStatus = {
+    installed: boolean;
+    authenticated: boolean;
+    error: string | null;
+  };
+
   type DesktopLinkedCheckoutStatus = {
     repoId: string;
     repoPath: string | null;
@@ -143,6 +149,7 @@ declare global {
     saveRepoPath: (repoId: string, localPath: string) => Promise<DesktopRepoConfig>;
     getRepoPath: (repoId: string) => Promise<string | null>;
     getRepoConfig: (repoId: string) => Promise<DesktopRepoConfig | null>;
+    getGithubCliStatus: () => Promise<DesktopGithubCliStatus>;
     setRepoGitHooksEnabled: (
       repoId: string,
       enabled: boolean,

@@ -229,7 +229,6 @@ async function main() {
         });
       });
   }, 30_000);
-
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");

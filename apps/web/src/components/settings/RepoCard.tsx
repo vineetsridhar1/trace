@@ -133,27 +133,39 @@ export function RepoCard({
             )}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <p
-              className={`text-xs ${webhookActive ? "text-emerald-500" : "text-muted-foreground"}`}
-            >
-              {webhookActive ? "GitHub webhook connected" : "GitHub webhook not connected"}
-            </p>
-            <DisabledTooltip message={webhookDisabledReason}>
-              <Button
-                variant={webhookActive ? "ghost" : "outline"}
-                size="sm"
-                onClick={toggleWebhook}
-                disabled={webhookPending || !!webhookDisabledReason}
-              >
-                {webhookPending
-                  ? webhookActive
-                    ? "Disconnecting..."
-                    : "Connecting..."
-                  : webhookActive
-                    ? "Disconnect Webhook"
-                    : "Connect Webhook"}
-              </Button>
-            </DisabledTooltip>
+            {isElectron ? (
+              <>
+                <DisabledTooltip message="Local sessions do not support GitHub webhooks.">
+                  <Button variant="outline" size="sm" disabled>
+                    Connect Webhook
+                  </Button>
+                </DisabledTooltip>
+              </>
+            ) : (
+              <>
+                <p
+                  className={`text-xs ${webhookActive ? "text-emerald-500" : "text-muted-foreground"}`}
+                >
+                  {webhookActive ? "GitHub webhook connected" : "GitHub webhook not connected"}
+                </p>
+                <DisabledTooltip message={webhookDisabledReason}>
+                  <Button
+                    variant={webhookActive ? "ghost" : "outline"}
+                    size="sm"
+                    onClick={toggleWebhook}
+                    disabled={webhookPending || !!webhookDisabledReason}
+                  >
+                    {webhookPending
+                      ? webhookActive
+                        ? "Disconnecting..."
+                        : "Connecting..."
+                      : webhookActive
+                        ? "Disconnect Webhook"
+                        : "Connect Webhook"}
+                  </Button>
+                </DisabledTooltip>
+              </>
+            )}
           </div>
           {webhookError && <p className="mt-2 text-xs text-destructive">{webhookError}</p>}
 

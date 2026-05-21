@@ -549,6 +549,53 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "session_pr_status" && msg.sessionId) {
+        if (bridgeAuth?.kind !== "local") {
+          runtimeDebug("ignoring session_pr_status from non-local bridge", {
+            runtimeId,
+            sessionId: msg.sessionId,
+            authKind: bridgeAuth?.kind ?? "unknown",
+          });
+          return;
+        }
+
+        const pr =
+          msg.pr &&
+          typeof msg.pr === "object" &&
+          typeof (msg.pr as Record<string, unknown>).url === "string" &&
+          typeof (msg.pr as Record<string, unknown>).merged === "boolean" &&
+          (((msg.pr as Record<string, unknown>).state as string) === "OPEN" ||
+            ((msg.pr as Record<string, unknown>).state as string) === "CLOSED" ||
+            ((msg.pr as Record<string, unknown>).state as string) === "MERGED")
+            ? {
+                url: (msg.pr as Record<string, unknown>).url as string,
+                state: (msg.pr as Record<string, unknown>).state as "OPEN" | "CLOSED" | "MERGED",
+                merged: (msg.pr as Record<string, unknown>).merged as boolean,
+              }
+            : null;
+        const branch = typeof msg.branch === "string" ? msg.branch : null;
+        const observedAt =
+          typeof msg.observedAt === "string" && !Number.isNaN(Date.parse(msg.observedAt))
+            ? msg.observedAt
+            : new Date().toISOString();
+        const error = typeof msg.error === "string" && msg.error.trim() ? msg.error : null;
+
+        enqueueEvent(msg.sessionId, async () => {
+          await sessionService.syncPrObservation({
+            sessionId: msg.sessionId as string,
+            runtimeInstanceId: runtimeId,
+            organizationId: bridgeAuth.organizationId,
+            ownerUserId: bridgeAuth.userId,
+            branch,
+            observedAt,
+            pr,
+            error,
+            actorId: "github-bridge-poll",
+          });
+        });
+        return;
+      }
+
       if (
         msg.type === "branches_result" &&
         typeof msg.requestId === "string" &&
