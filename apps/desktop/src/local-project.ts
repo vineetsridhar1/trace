@@ -59,6 +59,21 @@ export async function createLocalProjectOnDisk(
     await deps.execFile(["init"], projectPath);
     await deps.execFile(["symbolic-ref", "HEAD", "refs/heads/main"], projectPath);
   }
+  await deps.execFile(
+    [
+      "-c",
+      "user.name=Trace",
+      "-c",
+      "user.email=trace@localhost",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "Initial commit",
+    ],
+    projectPath,
+  );
 
   return {
     name,
