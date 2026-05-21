@@ -18,10 +18,29 @@ function buildClient(): GqlClient {
 }
 
 export let client = buildClient();
+let clientRevision = 0;
+const clientRevisionListeners = new Set<() => void>();
+
+export function getClientRevision(): number {
+  return clientRevision;
+}
+
+export function subscribeClientRevision(listener: () => void): () => void {
+  clientRevisionListeners.add(listener);
+  return () => clientRevisionListeners.delete(listener);
+}
+
+function notifyClientRevisionListeners(): void {
+  for (const listener of clientRevisionListeners) {
+    listener();
+  }
+}
 
 export function recreateClient(): GqlClient {
   const previous = client;
   client = buildClient();
+  clientRevision += 1;
+  notifyClientRevisionListeners();
   void previous.dispose().catch((err: unknown) => {
     console.warn("[urql] previous client dispose failed", err);
   });

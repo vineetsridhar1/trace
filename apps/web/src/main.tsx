@@ -1,10 +1,10 @@
 import "./lib/platform-web";
 import "./lib/event-bindings";
 import "./notifications/handlers";
-import React from "react";
+import React, { useSyncExternalStore } from "react";
 import ReactDOM from "react-dom/client";
 import { Provider } from "urql";
-import { client } from "./lib/urql";
+import { client, getClientRevision, subscribeClientRevision } from "./lib/urql";
 import { App } from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./index.css";
@@ -17,12 +17,24 @@ window.addEventListener("vite:preloadError", () => {
   }
 });
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+function Root() {
+  const clientRevision = useSyncExternalStore(
+    subscribeClientRevision,
+    getClientRevision,
+    getClientRevision,
+  );
+
+  return (
     <AppErrorBoundary>
-      <Provider value={client}>
-        <App />
+      <Provider key={clientRevision} value={client}>
+        <App key={clientRevision} />
       </Provider>
     </AppErrorBoundary>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <Root />
   </React.StrictMode>,
 );
