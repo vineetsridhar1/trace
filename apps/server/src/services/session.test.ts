@@ -5415,6 +5415,123 @@ describe("SessionService", () => {
     });
   });
 
+  describe("cleanupIdleCloudSessionGroups", () => {
+    beforeEach(() => {
+      prismaMock.sessionGroup.findMany.mockReset();
+      prismaMock.session.findUnique.mockReset();
+      prismaMock.sessionGroup.findUnique.mockReset();
+      prismaMock.session.updateMany.mockReset();
+    });
+
+    it("unloads idle cloud session groups", async () => {
+      const connection = {
+        state: "connected",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:31:00.000Z"),
+            },
+          ],
+        },
+      ]);
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          sessionGroupId: "group-1",
+          organizationId: "org-1",
+          workdir: null,
+          connection,
+        }),
+      );
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({
+          workdir: "/workspace/group-1",
+          repoId: "repo-1",
+          connection,
+        })
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            id: "group-1",
+            workdir: null,
+            worktreeDeleted: true,
+            sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+          }),
+        );
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: ["group-1"] });
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1", agentStatus: "active" },
+        data: { agentStatus: "stopped" },
+      });
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          organizationId: "org-1",
+          workdir: "/workspace/group-1",
+          repoId: "repo-1",
+          connection,
+        }),
+        expect.objectContaining({ reason: "idle_session_group_cleanup" }),
+      );
+    });
+
+    it("keeps recently active cloud session groups running", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: { runtimeInstanceId: "runtime-1" },
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "active",
+              sessionStatus: "in_progress",
+              lastMessageAt: new Date("2026-05-12T11:40:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:41:00.000Z"),
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+  });
+
   describe("archiveGroup", () => {
     it("deletes groups with no sessions instead of archiving them", async () => {
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(

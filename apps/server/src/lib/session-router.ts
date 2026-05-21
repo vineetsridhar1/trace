@@ -244,7 +244,7 @@ function shouldSkipProvisionedStopForPolicy(
 ): boolean {
   if (adapter.type !== "provisioned") return false;
   if (deprovisionPolicy(environment) !== "manual") return false;
-  return reason !== "deprovision_reconciliation";
+  return reason !== "deprovision_reconciliation" && reason !== "idle_session_group_cleanup";
 }
 
 /**

@@ -269,6 +269,22 @@ type GroupWorkspaceStatePatch = {
   setupError?: string | null;
 };
 
+type IdleCloudSessionGroupCandidate = {
+  id: string;
+  organizationId: string;
+  updatedAt: Date;
+  workdir: string | null;
+  connection: Prisma.JsonValue | null;
+  sessions: {
+    id: string;
+    hosting: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    lastMessageAt: Date | null;
+    updatedAt: Date;
+  }[];
+};
+
 function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
   return {
     state: "connected",
@@ -7803,13 +7819,115 @@ export class SessionService {
     });
   }
 
+  async cleanupIdleCloudSessionGroups(options: {
+    idleAfterMs: number;
+    now?: number;
+    batchSize?: number;
+  }): Promise<{ scanned: number; cleaned: string[] }> {
+    const idleAfterMs = Math.max(1, Math.floor(options.idleAfterMs));
+    const now = options.now ?? Date.now();
+    const cutoff = new Date(now - idleAfterMs);
+    const batchSize = Math.max(1, Math.min(options.batchSize ?? 25, 100));
+
+    const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
+      where: {
+        archivedAt: null,
+        worktreeDeleted: false,
+        sessions: { some: { hosting: "cloud" } },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        updatedAt: true,
+        workdir: true,
+        connection: true,
+        sessions: {
+          select: {
+            id: true,
+            hosting: true,
+            agentStatus: true,
+            sessionStatus: true,
+            lastMessageAt: true,
+            updatedAt: true,
+          },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        },
+      },
+      orderBy: { updatedAt: "asc" },
+      take: batchSize,
+    });
+
+    const cleaned: string[] = [];
+    for (const group of groups) {
+      const latestActivity = group.sessions.reduce<Date>(
+        (latest, session) => {
+          const sessionActivity = session.lastMessageAt ?? session.updatedAt;
+          return sessionActivity > latest ? sessionActivity : latest;
+        },
+        group.updatedAt,
+      );
+      if (latestActivity > cutoff) continue;
+
+      const cloudSession = group.sessions.find((session) => session.hosting === "cloud");
+      if (!cloudSession) continue;
+
+      const groupConnection = this.parseConnection(group.connection);
+      const hasRuntimeBinding =
+        !!group.workdir ||
+        !!groupConnection.runtimeInstanceId ||
+        !!groupConnection.providerRuntimeId ||
+        typeof groupConnection.cloudMachineId === "string";
+      if (!hasRuntimeBinding) continue;
+
+      const activeSessions = group.sessions.filter((session) => session.agentStatus === "active");
+      const unloaded = await this.fullyUnloadSession(
+        cloudSession.id,
+        true,
+        "idle_session_group_cleanup",
+      );
+      if (!unloaded) continue;
+
+      cleaned.push(group.id);
+      await prisma.session.updateMany({
+        where: { sessionGroupId: group.id, agentStatus: "active" },
+        data: { agentStatus: "stopped" },
+      });
+      if (activeSessions.length === 0) continue;
+
+      const sessionGroup = await this.loadSessionGroupSnapshot(group.id);
+      for (const session of activeSessions) {
+        await eventService.create({
+          organizationId: group.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "session_terminated",
+          payload: {
+            sessionId: session.id,
+            reason: "idle_session_group_cleanup",
+            agentStatus: "stopped",
+            sessionStatus: session.sessionStatus,
+            ...(sessionGroup ? { sessionGroup } : {}),
+          },
+          actorType: "system",
+          actorId: "system",
+        });
+      }
+    }
+
+    return { scanned: groups.length, cleaned };
+  }
+
   /**
    * Fully unload a session's runtime resources.
    * When `isGroupUnload` is true, destroys all group terminals and the shared runtime.
    * When false (single session), only destroys that session's terminals and checks
    * whether siblings are still active before touching group resources.
    */
-  private async fullyUnloadSession(sessionId: string, isGroupUnload = false): Promise<boolean> {
+  private async fullyUnloadSession(
+    sessionId: string,
+    isGroupUnload = false,
+    reason = "session_unloaded",
+  ): Promise<boolean> {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
@@ -7823,7 +7941,7 @@ export class SessionService {
     });
     if (!session) return false;
 
-    const destroyOptions = this.destroyRuntimeOptions(sessionId, "session_unloaded");
+    const destroyOptions = this.destroyRuntimeOptions(sessionId, reason);
     await this.resetReconcileState(sessionId);
 
     if (isGroupUnload && session.sessionGroupId) {

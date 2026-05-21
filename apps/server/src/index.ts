@@ -44,6 +44,19 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 10 * 60 * 1000;
+const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
+
+function readDurationEnv(name: string, fallbackMs: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallbackMs;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(`[config] ignoring invalid ${name}=${raw}; using ${fallbackMs}`);
+    return fallbackMs;
+  }
+  return Math.floor(parsed);
+}
 
 function requestHasSessionCookie(req: Pick<express.Request, "headers">): boolean {
   return hasSessionCookie(req.headers);
@@ -229,6 +242,46 @@ async function main() {
         });
       });
   }, 30_000);
+
+  const cloudIdleCleanupAfterMs = readDurationEnv(
+    "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS",
+    DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS,
+  );
+  const cloudIdleCleanupIntervalMs = readDurationEnv(
+    "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS",
+    DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS,
+  );
+  const cloudIdleCleanup =
+    cloudIdleCleanupAfterMs > 0 && cloudIdleCleanupIntervalMs > 0
+      ? setInterval(() => {
+          const startedAt = Date.now();
+          void sessionService
+            .cleanupIdleCloudSessionGroups({ idleAfterMs: cloudIdleCleanupAfterMs })
+            .then((result) => {
+              if (result.cleaned.length > 0) {
+                console.log(
+                  `[cloud-idle-cleanup] cleaned ${result.cleaned.length} idle session groups`,
+                );
+              }
+              logAgentEnvironmentTelemetry("cloud_idle_cleanup.iteration", {
+                scannedCount: result.scanned,
+                cleanedCount: result.cleaned.length,
+                idleAfterMs: cloudIdleCleanupAfterMs,
+                durationMs: Date.now() - startedAt,
+              });
+            })
+            .catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn(`[cloud-idle-cleanup] iteration failed: ${message}`);
+              logAgentEnvironmentTelemetry("cloud_idle_cleanup.iteration_failed", {
+                idleAfterMs: cloudIdleCleanupAfterMs,
+                durationMs: Date.now() - startedAt,
+                error: message,
+              });
+            });
+        }, cloudIdleCleanupIntervalMs)
+      : null;
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
@@ -331,6 +384,7 @@ async function main() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
+              if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();
