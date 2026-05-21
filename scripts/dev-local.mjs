@@ -522,6 +522,9 @@ async function main() {
   assertNodeVersion();
   await initializeLocalModeEnv();
 
+  log("building shared package");
+  await runCommand("build:shared", ["build:shared"], sharedEnv);
+
   log("starting local Prisma dev server");
   const databaseUrl = await ensurePrismaDev();
   const serverEnv = await migrateAndSeed(databaseUrl);

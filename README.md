@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="#quickstart"><strong>Quickstart</strong></a> &middot;
+  <a href="docs/running-trace.md"><strong>Running Trace</strong></a> &middot;
   <a href="#architecture"><strong>Architecture</strong></a> &middot;
   <a href="#development"><strong>Development</strong></a> &middot;
   <a href="https://github.com/vineetsridhar1/trace"><strong>GitHub</strong></a> &middot;
@@ -189,6 +190,7 @@ pnpm dev:local
 
 `pnpm dev:local` starts a local Trace workspace:
 
+- Builds the shared workspace package for first-run installs.
 - Creates or reuses a local Prisma Postgres dev server.
 - Syncs the Prisma schema and seeds baseline data.
 - Generates the Prisma client.
@@ -212,7 +214,11 @@ GitHub OAuth app.
 
 ```bash
 pnpm install
+pnpm build:shared
 ```
+
+`pnpm build:shared` is only needed for the manual `pnpm dev` path on a fresh
+checkout. `pnpm dev:local` runs it automatically.
 
 ### 2. Configure the server
 
