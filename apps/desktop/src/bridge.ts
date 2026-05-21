@@ -81,6 +81,20 @@ function hasExecutable(command: string): boolean {
   }
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function shouldEnableLocalPrPolling(serverUrl: string): boolean {
+  try {
+    const parsed = new URL(serverUrl);
+    return isLoopbackHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function inspectGitCheckpoint(
   cwd: string,
   trigger: GitCheckpointTrigger,
@@ -284,6 +298,7 @@ type BridgeAuthContext = {
 export class BridgeClient implements IBridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
+  private readonly localPrPollingEnabled: boolean;
   private adapters = new Map<string, CodingToolAdapter>();
   private sessionTools = new Map<string, string>();
   private reportedToolSessionIds = new Map<string, string>();
@@ -332,6 +347,7 @@ export class BridgeClient implements IBridgeClient {
 
   constructor(serverUrl: string, getSessionCookieHeader: (url: string) => Promise<string | null>) {
     this.serverUrl = serverUrl;
+    this.localPrPollingEnabled = shouldEnableLocalPrPolling(serverUrl);
     this.getSessionCookieHeader = getSessionCookieHeader;
     this.instanceId = getOrCreateInstanceId();
     this.terminalManager = new TerminalManager({
@@ -756,7 +772,12 @@ export class BridgeClient implements IBridgeClient {
   }
 
   private async pollLocalPrStatuses() {
-    if (!HAS_GITHUB_CLI || this.isPollingLocalPrs || this.ws?.readyState !== WebSocket.OPEN) {
+    if (
+      !this.localPrPollingEnabled ||
+      !HAS_GITHUB_CLI ||
+      this.isPollingLocalPrs ||
+      this.ws?.readyState !== WebSocket.OPEN
+    ) {
       return;
     }
 
