@@ -6,7 +6,7 @@ from laptop to cloud, mobile, team sharing, tool changes, and repo sync.
 
 ## Scene Outline
 
-### 1. Scattered State
+### Scattered State
 
 Voiceover:
 
@@ -17,10 +17,10 @@ models, devices, the cloud, and your team."
 Visual:
 
 Scattered agent tabs, terminals, branch labels, phone notifications, and
-teammates asking for status. Use images and UI fragments, not explanatory words.
-The elements hover up and down slowly, creating a feeling of disconnected state.
+teammates asking status. Use images, not words. The elements hover up and down
+slowly.
 
-### 2. Trace Intro
+### Trace Intro
 
 Voiceover:
 
@@ -29,11 +29,10 @@ Voiceover:
 Visual:
 
 All scattered state collapses into one clean Trace dashboard. Use the actual
-Trace dashboard layout in `~/programming/tracev2` as inspiration; screenshots
-can be supplied later if needed. Once the pieces coalesce, zoom into the
-dashboard until it fills the frame.
+dashboard layout in `~/programming/tracev2` for inspiration; screenshots can be
+shared later if needed. Then zoom into the dashboard fullscreen.
 
-### 3. Laptop Reveal
+### Laptop Reveal
 
 Voiceover:
 
@@ -41,11 +40,10 @@ Voiceover:
 
 Visual:
 
-As the camera zooms back out, reveal that the Trace dashboard is on a laptop
-screen. The view shifts into a side angle. A stick figure is working on the
-laptop.
+As the camera zooms out, reveal that the Trace dashboard is on a laptop screen.
+A stick figure is working on the laptop from a side angle view.
 
-### 4. Cloud Move
+### Cloud Move
 
 Voiceover:
 
@@ -53,11 +51,9 @@ Voiceover:
 
 Visual:
 
-A glowing stream rises from the laptop into a hovering cloud icon. The stream
-should feel like the active session is moving, not like data is being copied
-away.
+A glowing stream rises from the laptop into a hovering cloud icon.
 
-### 5. Mobile Continuity
+### Mobile Continuity
 
 Voiceover:
 
@@ -66,12 +62,12 @@ and respond to the agent from the mobile app."
 
 Visual:
 
-The stick figure closes the laptop and starts walking from left to right. They
-pull out a phone and continue walking. A city skyline silhouette sits in the
-background. The cloud icon follows above their head or above the phone the
-entire time, making it clear the session is still active.
+The stick figure closes the laptop and starts walking from left to right. The
+stick figure pulls out a phone and continues walking. A city skyline silhouette
+is in the background. The whole time, the cloud icon follows the stick figure
+above their head or phone.
 
-### 6. Private To Shared
+### Private To Shared
 
 Voiceover:
 
@@ -81,30 +77,47 @@ review, hand off, or resume without losing the thread."
 Visual:
 
 The stick figure puts the phone away and reaches a group of other stick figures
-representing the team. The cloud icon grows into one larger shared cloud above
-the group.
+representing the team. The cloud icon grows into one big cloud above their head.
 
-### 10. Tool Change
+### Tool Change
 
 Voiceover:
 
-"And when the tool changes, the session keeps its context."
+"And when the tool changes, the session keeps its context. Switch from Claude
+Code to Codex, or change models mid-session, without starting over. No
+copy-paste handoff. No lost context."
 
 Visual:
 
-Zoom into the shared cloud icon until the frame becomes a solid color. Then show
-a Trace session screen. This should set up the next beat where the tool or model
-changes while the session context remains intact.
+Zoom into the cloud icon until the full screen is a solid color.
 
-## Remaining Beats To Define
+### Sync Back
 
-The next scenes should continue the same continuity story:
+Voiceover:
 
-- Show switching from Claude Code to Codex, or changing models mid-session,
-  without starting over.
-- Show "No copy-paste handoff. No lost context." by contrasting a brief
-  old-world blank chat/copy-paste visual with the continuous Trace session.
-- Show syncing the completed work back to the main worktree for testing, review,
-  and shipping.
-- End with "Same lifecycle. Same context. Same team surface." and the final Trace
-  title card.
+"When the work is ready, sync it back to your main worktree for testing, review,
+and shipping."
+
+Visual:
+
+Blank for now.
+
+### Thesis Card
+
+Voiceover:
+
+"Same lifecycle. Same context. Same team surface."
+
+Visual:
+
+Laptop icon, cloud icon, cellphone icon, team icon.
+
+### End Card
+
+Voiceover:
+
+"Trace. The control plane for AI coding teams. Full demo coming soon."
+
+Visual:
+
+Trace logo plus "Full demo coming soon" text.
