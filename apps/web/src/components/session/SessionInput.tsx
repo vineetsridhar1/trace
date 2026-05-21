@@ -31,6 +31,7 @@ import {
 import {
   ChatEditor,
   type ChatEditorHandle,
+  type ChatEditorPasteFilesOptions,
   type ChatEditorSubmitOptions,
 } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
@@ -144,28 +145,43 @@ export function SessionInput({
   }, []);
 
   const addAttachments = useCallback(
-    (files: File[]) => {
+    (files: File[], options?: ChatEditorPasteFilesOptions) => {
       if (isSendingRef.current || files.length === 0) return false;
 
-      const currentImages = useDraftsStore.getState().drafts[sessionId]?.images ?? EMPTY_ATTACHMENTS;
-      const remaining = MAX_ATTACHMENTS - currentImages.length;
-      if (remaining <= 0) {
-        toast.error(`You can attach up to ${MAX_ATTACHMENTS} files`);
-        return false;
+      let added = false;
+      let rejectedForLimit = false;
+      let remainingSlots = 0;
+
+      setDraftImages(sessionId, (prev) => {
+        const remaining = MAX_ATTACHMENTS - prev.length;
+        remainingSlots = remaining;
+        if (remaining <= 0) {
+          rejectedForLimit = true;
+          return prev;
+        }
+
+        const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
+          id: generateUUID(),
+          file,
+          previewUrl: URL.createObjectURL(file),
+          s3Key: null,
+          uploading: false,
+        }));
+        added = newAttachments.length > 0;
+        return [...prev, ...newAttachments];
+      });
+
+      if (!options?.fallbackToEditor) {
+        if (rejectedForLimit) {
+          toast.error(`You can attach up to ${MAX_ATTACHMENTS} files`);
+        } else if (files.length > remainingSlots) {
+          toast.error(
+            `Only ${remainingSlots} more attachment${remainingSlots === 1 ? "" : "s"} allowed`,
+          );
+        }
       }
 
-      const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
-        id: generateUUID(),
-        file,
-        previewUrl: URL.createObjectURL(file),
-        s3Key: null,
-        uploading: false,
-      }));
-      if (files.length > remaining) {
-        toast.error(`Only ${remaining} more attachment${remaining === 1 ? "" : "s"} allowed`);
-      }
-      setDraftImages(sessionId, [...currentImages, ...newAttachments]);
-      return newAttachments.length > 0;
+      return added;
     },
     [sessionId, setDraftImages],
   );
@@ -486,7 +502,7 @@ export function SessionInput({
               disabled={!canSend || isSending}
               slashCommands={slashCommands.commands}
               onShiftTab={cycleMode}
-              onImagePaste={addAttachments}
+              onPasteFiles={addAttachments}
               hasAttachments={images.length > 0}
               onChange={(text: string, html: string) => {
                 setHasContent(text.trim().length > 0);

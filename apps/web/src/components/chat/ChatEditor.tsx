@@ -21,6 +21,7 @@ if (!Quill.imports["modules/mention"]) {
 }
 
 const EDITOR_FORMATS = ["mention"];
+// Keep large pastes out of the editor DOM by attaching them as text files instead.
 const LARGE_PASTE_CHARACTER_THRESHOLD = 3_000;
 
 function createPastedTextFile(text: string): File {
@@ -58,6 +59,10 @@ export interface ChatEditorSubmitOptions {
   ctrlKey?: boolean;
 }
 
+export interface ChatEditorPasteFilesOptions {
+  fallbackToEditor?: boolean;
+}
+
 interface ChatEditorProps {
   onSubmit: (html: string, text: string, options?: ChatEditorSubmitOptions) => void | Promise<void>;
   placeholder?: string;
@@ -69,7 +74,7 @@ interface ChatEditorProps {
   onSlashCommandSelect?: (cmd: SlashCommandItem) => void;
   onShiftTab?: () => void;
   onChange?: (text: string, html: string) => void;
-  onImagePaste?: (files: File[]) => void | boolean;
+  onPasteFiles?: (files: File[], options?: ChatEditorPasteFilesOptions) => boolean;
   hasAttachments?: boolean;
 }
 
@@ -85,7 +90,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     onSlashCommandSelect,
     onShiftTab,
     onChange,
-    onImagePaste,
+    onPasteFiles,
     hasAttachments = false,
   }: ChatEditorProps,
   ref: React.ForwardedRef<ChatEditorHandle>,
@@ -98,7 +103,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   const onSlashCommandSelectRef = useRef(onSlashCommandSelect);
   const onShiftTabRef = useRef(onShiftTab);
   const onChangeRef = useRef(onChange);
-  const onImagePasteRef = useRef(onImagePaste);
+  const onPasteFilesRef = useRef(onPasteFiles);
   const hasAttachmentsRef = useRef(hasAttachments);
 
   membersRef.current = mentionableUsers;
@@ -107,7 +112,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   onSlashCommandSelectRef.current = onSlashCommandSelect;
   onShiftTabRef.current = onShiftTab;
   onChangeRef.current = onChange;
-  onImagePasteRef.current = onImagePaste;
+  onPasteFilesRef.current = onPasteFiles;
   hasAttachmentsRef.current = hasAttachments;
 
   useEffect(() => {
@@ -122,21 +127,25 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const root = editor?.root;
     if (!root) return;
     const handler = (e: ClipboardEvent) => {
-      if (!onImagePasteRef.current) return;
+      if (!onPasteFilesRef.current) return;
 
       const files = Array.from(e.clipboardData?.files ?? []);
       if (files.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        onImagePasteRef.current(files);
+        onPasteFilesRef.current(files);
         return;
       }
 
       const pastedText = e.clipboardData?.getData("text/plain") ?? "";
       if (pastedText.length > LARGE_PASTE_CHARACTER_THRESHOLD) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        onImagePasteRef.current([createPastedTextFile(pastedText)]);
+        const handled = onPasteFilesRef.current([createPastedTextFile(pastedText)], {
+          fallbackToEditor: true,
+        });
+        if (handled) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
       }
     };
     root.addEventListener("paste", handler, { capture: true });
