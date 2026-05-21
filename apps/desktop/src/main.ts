@@ -11,7 +11,11 @@ import {
 import path from "path";
 import crypto from "crypto";
 import { setTimeout } from "node:timers";
-import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
+import {
+  BridgeClient,
+  getGithubCliStatus,
+  type BridgeConnectionStatus,
+} from "./bridge.js";
 import {
   getRepoConfig,
   getRepoPath,
@@ -243,6 +247,10 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
   const repoConfig = getRepoConfig(repoId);
   if (!repoConfig) return null;
   return installOrRepairRepoHooks(repoConfig.path);
+});
+
+ipcMain.handle("get-github-cli-status", async () => {
+  return getGithubCliStatus();
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());

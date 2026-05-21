@@ -66,6 +66,12 @@ const LOCAL_PR_POLL_TIMEOUT_MS = 15_000;
 const HAS_GITHUB_CLI = hasExecutable("gh");
 const execFileAsync = promisify(execFile);
 
+export type GithubCliStatus = {
+  installed: boolean;
+  authenticated: boolean;
+  error: string | null;
+};
+
 function hasExecutable(command: string): boolean {
   try {
     execFileSync(command, ["--version"], { stdio: "ignore", timeout: 2_000 });
@@ -161,6 +167,38 @@ function isNoPullRequestError(message: string): boolean {
     normalized.includes("no pull requests found for branch") ||
     normalized.includes("no pull requests found for this branch")
   );
+}
+
+export async function getGithubCliStatus(): Promise<GithubCliStatus> {
+  if (!HAS_GITHUB_CLI) {
+    return {
+      installed: false,
+      authenticated: false,
+      error: "GitHub CLI (gh) is not installed.",
+    };
+  }
+
+  try {
+    await execFileAsync("gh", ["auth", "status", "--hostname", "github.com"], {
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: "1",
+      },
+      maxBuffer: 1024 * 1024,
+      timeout: 5_000,
+    });
+    return {
+      installed: true,
+      authenticated: true,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      installed: true,
+      authenticated: false,
+      error: extractExecErrorMessage(error),
+    };
+  }
 }
 
 async function inspectLocalPrStatus(workdir: string): Promise<{
