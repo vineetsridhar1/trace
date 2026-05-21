@@ -10,7 +10,6 @@ interface RepoDesktopSectionProps {
 
 export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSectionProps) {
   const [desktopRepoConfig, setDesktopRepoConfig] = useState<DesktopRepoConfig | null>(null);
-  const [githubCliStatus, setGithubCliStatus] = useState<DesktopGithubCliStatus | null>(null);
   const [gitHookStatus, setGitHookStatus] = useState<DesktopRepoGitHookStatus | null>(null);
   const [gitHookPending, setGitHookPending] = useState(false);
   const [gitHookError, setGitHookError] = useState<string | null>(null);
@@ -19,12 +18,8 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
   const refreshDesktopState = async () => {
     if (!window.trace?.getRepoConfig) return;
 
-    const [repoConfig, cliStatus] = await Promise.all([
-      window.trace.getRepoConfig(repoId),
-      window.trace.getGithubCliStatus?.() ?? Promise.resolve(null),
-    ]);
+    const repoConfig = await window.trace.getRepoConfig(repoId);
     setDesktopRepoConfig(repoConfig);
-    setGithubCliStatus(cliStatus);
 
     if (!repoConfig) {
       setGitHookStatus(null);
@@ -111,25 +106,6 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
     gitHooksEnabled &&
     !!gitHookStatus &&
     (gitHookStatus.state === "error" || gitHookStatus.state === "not_installed");
-  const githubCliTone = !githubCliStatus
-    ? "text-muted-foreground border-border/70 bg-surface-elevated/60"
-    : !githubCliStatus.installed || !githubCliStatus.authenticated
-      ? "text-amber-300 border-amber-500/30 bg-amber-500/10"
-      : "text-emerald-300 border-emerald-500/30 bg-emerald-500/10";
-  const githubCliLabel = !githubCliStatus
-    ? "Checking GitHub CLI status..."
-    : !githubCliStatus.installed
-      ? "GitHub CLI not installed"
-      : !githubCliStatus.authenticated
-        ? "GitHub CLI not logged in"
-        : "GitHub CLI connected";
-  const githubCliDetail = !githubCliStatus
-    ? null
-    : !githubCliStatus.installed
-      ? "Install gh to enable local PR status polling."
-      : !githubCliStatus.authenticated
-        ? "Run gh auth login on this computer to enable local PR status polling."
-        : "Local sessions poll PR status through the desktop app using gh.";
 
   return (
     <div className="mt-3 rounded-md border border-border/70 bg-surface-elevated/40 p-3">
@@ -153,15 +129,6 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
             <FolderOpen size={12} />
             {linking ? "Linking..." : "Link Local Path"}
           </Button>
-        )}
-      </div>
-
-      <div className={`mt-3 rounded-md border px-3 py-2 ${githubCliTone}`}>
-        <p className="text-xs font-medium">GitHub CLI</p>
-        <p className="mt-1 text-xs">{githubCliLabel}</p>
-        {githubCliDetail && <p className="mt-1 text-xs opacity-90">{githubCliDetail}</p>}
-        {githubCliStatus?.error && !githubCliStatus.authenticated && (
-          <p className="mt-2 break-words font-mono text-[11px] opacity-80">{githubCliStatus.error}</p>
         )}
       </div>
 

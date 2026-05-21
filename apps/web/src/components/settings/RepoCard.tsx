@@ -136,14 +136,11 @@ export function RepoCard({
             {isElectron ? (
               <>
                 <p className="text-xs text-muted-foreground">GitHub webhooks unavailable in local mode</p>
-                <DisabledTooltip message="Local sessions do not support GitHub webhooks. Trace polls PR status through the desktop app using gh.">
+                <DisabledTooltip message="Local sessions do not support GitHub webhooks.">
                   <Button variant="outline" size="sm" disabled>
                     Connect Webhook
                   </Button>
                 </DisabledTooltip>
-                <p className="basis-full text-xs text-muted-foreground">
-                  Local sessions poll PR status through the desktop app using <span className="font-mono">gh</span>.
-                </p>
               </>
             ) : (
               <>
