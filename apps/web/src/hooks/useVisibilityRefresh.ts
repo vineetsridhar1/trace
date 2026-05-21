@@ -3,6 +3,7 @@ import { useConnectionStore } from "../stores/connection";
 import { useUIStore } from "../stores/ui";
 
 const HIDDEN_THRESHOLD_MS = 5_000;
+const SLEEP_RELOAD_HIDDEN_THRESHOLD_MS = 30 * 60 * 1_000;
 const DISCONNECTED_RELOAD_DELAY_MS = 2_000;
 const RELOAD_COOLDOWN_MS = 30_000;
 const LAST_WAKE_RELOAD_KEY = "trace:last-wake-reload-at";
@@ -43,9 +44,14 @@ export function useVisibilityRefresh() {
       if (document.hidden) {
         clearReloadTimer();
         hiddenAt.current = Date.now();
-      } else if (hiddenAt.current && Date.now() - hiddenAt.current > HIDDEN_THRESHOLD_MS) {
-        triggerRefresh();
-        scheduleDisconnectedReload();
+      } else if (hiddenAt.current) {
+        const hiddenDuration = Date.now() - hiddenAt.current;
+        if (hiddenDuration > HIDDEN_THRESHOLD_MS) {
+          triggerRefresh();
+        }
+        if (hiddenDuration > SLEEP_RELOAD_HIDDEN_THRESHOLD_MS) {
+          scheduleDisconnectedReload();
+        }
         hiddenAt.current = null;
       }
     }
