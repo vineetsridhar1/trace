@@ -135,7 +135,6 @@ export function RepoCard({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {isElectron ? (
               <>
-                <p className="text-xs text-muted-foreground">GitHub webhooks unavailable in local mode</p>
                 <DisabledTooltip message="Local sessions do not support GitHub webhooks.">
                   <Button variant="outline" size="sm" disabled>
                     Connect Webhook

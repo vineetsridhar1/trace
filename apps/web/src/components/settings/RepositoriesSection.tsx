@@ -21,7 +21,7 @@ const REPOS_QUERY = gql`
   }
 `;
 
-const isElectron = typeof window.trace?.getGithubCliStatus === "function";
+const isElectron = typeof window.trace?.getRepoConfig === "function";
 
 export function RepositoriesSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
@@ -45,6 +45,14 @@ export function RepositoriesSection() {
 
   useEffect(() => {
     if (!isElectron) return;
+    if (typeof window.trace?.getGithubCliStatus !== "function") {
+      setGithubCliStatus({
+        installed: false,
+        authenticated: false,
+        error: "Restart the desktop app to load GitHub CLI status checks.",
+      });
+      return;
+    }
     window.trace
       .getGithubCliStatus()
       .then((status) => {
