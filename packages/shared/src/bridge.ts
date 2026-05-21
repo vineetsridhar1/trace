@@ -211,6 +211,7 @@ export interface BridgeTrackSessionCommand {
   sessionId: string;
   workdir: string;
   readOnly?: boolean;
+  sessionGroupId?: string | null;
 }
 
 // --- Terminal commands (Server → Bridge) ---

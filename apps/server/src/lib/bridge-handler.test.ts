@@ -38,8 +38,6 @@ vi.mock("./session-router.js", () => ({
     getBoundSessionIds: mocks.getBoundSessionIds,
     getHeartbeatReconcileSessionIds: mocks.getHeartbeatReconcileSessionIds,
     getLinkedCheckoutStatus: mocks.getLinkedCheckoutStatus,
-    recordHeartbeat: vi.fn(),
-    addRegisteredRepo: vi.fn(),
     resolveLinkedCheckoutStatusRequest: vi.fn(),
     resolveLinkedCheckoutActionRequest: vi.fn(),
     resolveSessionGitSyncStatusRequest: vi.fn(),

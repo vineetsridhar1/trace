@@ -4584,6 +4584,7 @@ describe("SessionService", () => {
           organizationId: "org-1",
           workdir: "/tmp/trace/worktrees/session-1",
           readOnlyWorkspace: true,
+          sessionGroupId: "group-1",
         },
       ]);
 
@@ -4597,6 +4598,7 @@ describe("SessionService", () => {
           sessionId: "session-1",
           workdir: "/tmp/trace/worktrees/session-1",
           readOnly: true,
+          sessionGroupId: "group-1",
         },
         "org-1",
       );
@@ -7289,6 +7291,7 @@ describe("SessionService", () => {
           branch: "trace/branch",
           connection: null,
           prUrl: null,
+          sessions: [{ id: "session-2" }],
         },
       });
       const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValue(undefined);
@@ -7313,7 +7316,7 @@ describe("SessionService", () => {
 
       expect(markPrOpenedSpy).toHaveBeenCalledWith({
         sessionGroupId: "group-1",
-        eventSessionId: "session-1",
+        eventSessionId: "session-2",
         prUrl: "https://github.com/trace/trace/pull/100",
         organizationId: "org-1",
         actorId: "github-bridge-poll",
@@ -7342,6 +7345,7 @@ describe("SessionService", () => {
             branch: "trace/branch",
             connection: null,
             prUrl: "https://github.com/trace/trace/pull/100",
+            sessions: [{ id: "session-2" }],
           },
         })
         .mockResolvedValueOnce({
@@ -7355,6 +7359,7 @@ describe("SessionService", () => {
             branch: "trace/branch",
             connection: null,
             prUrl: "https://github.com/trace/trace/pull/100",
+            sessions: [{ id: "session-2" }],
           },
         });
       const markPrClosedSpy = vi.spyOn(service, "markPrClosed").mockResolvedValue(undefined);
@@ -7394,14 +7399,14 @@ describe("SessionService", () => {
 
       expect(markPrClosedSpy).toHaveBeenCalledWith({
         sessionGroupId: "group-1",
-        eventSessionId: "session-1",
+        eventSessionId: "session-2",
         prUrl: "https://github.com/trace/trace/pull/100",
         organizationId: "org-1",
         actorId: "github-bridge-poll",
       });
       expect(markPrMergedSpy).toHaveBeenCalledWith({
         sessionGroupId: "group-1",
-        eventSessionId: "session-1",
+        eventSessionId: "session-2",
         prUrl: "https://github.com/trace/trace/pull/100",
         organizationId: "org-1",
         actorId: "github-bridge-poll",
@@ -7420,6 +7425,7 @@ describe("SessionService", () => {
           branch: "trace/branch",
           connection: null,
           prUrl: null,
+          sessions: [{ id: "session-2" }],
         },
       });
       const markPrOpenedSpy = vi.spyOn(service, "markPrOpened").mockResolvedValue(undefined);
@@ -7454,6 +7460,7 @@ describe("SessionService", () => {
           branch: "trace/expected",
           connection: null,
           prUrl: null,
+          sessions: [{ id: "session-2" }],
         },
       });
       sessionRouterMock.getRuntime.mockReturnValue({

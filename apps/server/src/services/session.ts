@@ -5579,6 +5579,7 @@ export class SessionService {
         organizationId: true,
         workdir: true,
         readOnlyWorkspace: true,
+        sessionGroupId: true,
       },
     });
 
@@ -5599,6 +5600,7 @@ export class SessionService {
             sessionId: session.id,
             workdir: session.workdir,
             readOnly: session.readOnlyWorkspace,
+            sessionGroupId: session.sessionGroupId,
           },
           session.organizationId,
         );
@@ -7904,6 +7906,11 @@ export class SessionService {
             branch: true,
             connection: true,
             prUrl: true,
+            sessions: {
+              select: { id: true },
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+              take: 1,
+            },
           },
         },
       },
@@ -7937,6 +7944,7 @@ export class SessionService {
       branch !== session.sessionGroup.branch
         ? `Observed branch ${branch} does not match tracked branch ${session.sessionGroup.branch}`
         : null;
+    const eventSessionId = session.sessionGroup.sessions?.[0]?.id ?? session.id;
 
     await prisma.sessionGroup.update({
       where: { id: session.sessionGroupId },
@@ -7951,7 +7959,7 @@ export class SessionService {
     if (pr.state === "OPEN") {
       await this.markPrOpened({
         sessionGroupId: session.sessionGroupId,
-        eventSessionId: session.id,
+        eventSessionId,
         prUrl: pr.url,
         organizationId: session.organizationId,
         actorId,
@@ -7966,7 +7974,7 @@ export class SessionService {
     if (pr.state === "CLOSED" && !pr.merged) {
       await this.markPrClosed({
         sessionGroupId: session.sessionGroupId,
-        eventSessionId: session.id,
+        eventSessionId,
         prUrl: pr.url,
         organizationId: session.organizationId,
         actorId,
@@ -7977,7 +7985,7 @@ export class SessionService {
     if (pr.state === "MERGED" || pr.merged) {
       await this.markPrMerged({
         sessionGroupId: session.sessionGroupId,
-        eventSessionId: session.id,
+        eventSessionId,
         prUrl: pr.url,
         organizationId: session.organizationId,
         actorId,

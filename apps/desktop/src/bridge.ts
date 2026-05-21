@@ -63,6 +63,7 @@ const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
 const LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS = 15_000;
 const LOCAL_PR_POLL_INTERVAL_MS = 60_000;
 const LOCAL_PR_POLL_TIMEOUT_MS = 15_000;
+const HAS_GITHUB_CLI = hasExecutable("gh");
 const execFileAsync = promisify(execFile);
 
 function hasExecutable(command: string): boolean {
@@ -118,6 +119,16 @@ async function buildLinkedCheckoutFailureResult(repoId: string, error: unknown) 
   };
 }
 
+type ExecFileError = Error & {
+  stderr?: string;
+  stdout?: string;
+};
+
+type TrackedSessionWorkspace = {
+  sessionId: string;
+  workdir: string;
+};
+
 async function maybeReadGitRef(repoPath: string, args: string[]): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", args, {
@@ -131,105 +142,78 @@ async function maybeReadGitRef(repoPath: string, args: string[]): Promise<string
   }
 }
 
-function parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | null {
-  const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/i);
-  if (!match) return null;
-  return { owner: match[1], repo: match[2] };
+function extractExecErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const execError = error as ExecFileError;
+    return (
+      execError.stderr?.trim() ||
+      execError.stdout?.trim() ||
+      execError.message.trim() ||
+      String(error)
+    );
+  }
+  return String(error);
+}
+
+function isNoPullRequestError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("no pull requests found for branch") ||
+    normalized.includes("no pull requests found for this branch")
+  );
 }
 
 async function inspectLocalPrStatus(workdir: string): Promise<{
   branch: string | null;
   pr: BridgePrObservation | null;
 }> {
-  const [branch, remoteUrl] = await Promise.all([
-    maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]),
-    maybeReadGitRef(workdir, ["remote", "get-url", "origin"]),
-  ]);
-  if (!branch || !remoteUrl) {
+  const branch = await maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]);
+  if (!branch || !HAS_GITHUB_CLI) {
     return { branch, pr: null };
   }
 
-  const parsedRepo = parseGitHubRepo(remoteUrl);
-  if (!parsedRepo) {
-    return { branch, pr: null };
-  }
-
-  const query = `
-query($owner: String!, $name: String!, $head: String!) {
-  repository(owner: $owner, name: $name) {
-    pullRequests(
-      headRefName: $head,
-      states: [OPEN, MERGED, CLOSED],
-      first: 1,
-      orderBy: { field: UPDATED_AT, direction: DESC }
-    ) {
-      nodes {
-        url
-        state
-        merged
-      }
-    }
-  }
-}
-`;
-
-  const { stdout } = await execFileAsync(
-    "gh",
-    [
-      "api",
-      "graphql",
-      "-f",
-      `query=${query}`,
-      "-F",
-      `owner=${parsedRepo.owner}`,
-      "-F",
-      `name=${parsedRepo.repo}`,
-      "-F",
-      `head=${branch}`,
-    ],
-    {
-      cwd: workdir,
-      env: {
-        ...process.env,
-        GH_PROMPT_DISABLED: "1",
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync(
+      "gh",
+      ["pr", "view", "--json", "url,state"],
+      {
+        cwd: workdir,
+        env: {
+          ...process.env,
+          GH_PROMPT_DISABLED: "1",
+        },
+        maxBuffer: 1024 * 1024,
+        timeout: LOCAL_PR_POLL_TIMEOUT_MS,
       },
-      maxBuffer: 1024 * 1024,
-      timeout: LOCAL_PR_POLL_TIMEOUT_MS,
-    },
-  );
+    ));
+  } catch (error) {
+    const message = extractExecErrorMessage(error);
+    if (isNoPullRequestError(message)) {
+      return { branch, pr: null };
+    }
+    throw new Error(message);
+  }
 
   const parsed = JSON.parse(stdout) as {
-    data?: {
-      repository?: {
-        pullRequests?: {
-          nodes?: Array<{
-            url?: unknown;
-            state?: unknown;
-            merged?: unknown;
-          }>;
-        };
-      } | null;
-    } | null;
+    url?: unknown;
+    state?: unknown;
   };
 
-  const node = parsed.data?.repository?.pullRequests?.nodes?.[0];
-  if (!node) {
+  if (!parsed || typeof parsed.url !== "string") {
     return { branch, pr: null };
   }
-  if (
-    typeof node.url !== "string" ||
-    (node.state !== "OPEN" && node.state !== "CLOSED" && node.state !== "MERGED") ||
-    typeof node.merged !== "boolean"
-  ) {
+
+  if (parsed.state !== "OPEN" && parsed.state !== "CLOSED" && parsed.state !== "MERGED") {
     return { branch, pr: null };
   }
 
   return {
     branch,
     pr: {
-      url: node.url,
-      state: node.state,
-      merged: node.merged,
+      url: parsed.url,
+      state: parsed.state,
+      merged: parsed.state === "MERGED",
     },
   };
 }
@@ -279,6 +263,7 @@ export class BridgeClient implements IBridgeClient {
   private connectAttempt = 0;
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
+  private sessionGroupIds = new Map<string, string | null>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<
     string,
@@ -717,8 +702,23 @@ export class BridgeClient implements IBridgeClient {
     this.isPollingLocalPrs = false;
   }
 
+  private getTrackedPrWorkspaces(): TrackedSessionWorkspace[] {
+    const workspaces = new Map<string, TrackedSessionWorkspace>();
+
+    for (const [sessionId, workdir] of this.sessionWorkdirs.entries()) {
+      const sessionGroupId = this.sessionGroupIds.get(sessionId) ?? null;
+      const workspaceKey = sessionGroupId ? `group:${sessionGroupId}` : `workdir:${workdir}`;
+
+      if (!workspaces.has(workspaceKey)) {
+        workspaces.set(workspaceKey, { sessionId, workdir });
+      }
+    }
+
+    return [...workspaces.values()];
+  }
+
   private async pollLocalPrStatuses() {
-    if (this.isPollingLocalPrs || this.ws?.readyState !== WebSocket.OPEN) {
+    if (!HAS_GITHUB_CLI || this.isPollingLocalPrs || this.ws?.readyState !== WebSocket.OPEN) {
       return;
     }
 
@@ -726,7 +726,7 @@ export class BridgeClient implements IBridgeClient {
 
     try {
       await Promise.all(
-        Array.from(this.sessionWorkdirs.entries(), async ([sessionId, workdir]) => {
+        this.getTrackedPrWorkspaces().map(async ({ sessionId, workdir }) => {
           const observedAt = new Date().toISOString();
 
           try {
@@ -1064,6 +1064,7 @@ export class BridgeClient implements IBridgeClient {
         if (readOnly) {
           // Read-only mode: skip worktree, use the user's actual repo checkout
           this.sessionWorkdirs.set(sessionId, repoPath);
+          this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
           this.readOnlySessions.add(sessionId);
           this.send({ type: "workspace_ready", sessionId, workdir: repoPath });
           void this.pollLocalPrStatuses();
@@ -1094,6 +1095,7 @@ export class BridgeClient implements IBridgeClient {
         worktreePromise
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
+            this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
             this.send({
               type: "workspace_ready",
               sessionId,
@@ -1176,6 +1178,7 @@ export class BridgeClient implements IBridgeClient {
         })
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
+            this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
             this.readOnlySessions.delete(sessionId);
             this.send({
               type: "workspace_ready",
@@ -1227,6 +1230,7 @@ export class BridgeClient implements IBridgeClient {
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
+        this.sessionGroupIds.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
@@ -1243,6 +1247,7 @@ export class BridgeClient implements IBridgeClient {
       }
       case "track_session": {
         this.sessionWorkdirs.set(cmd.sessionId, cmd.workdir);
+        this.sessionGroupIds.set(cmd.sessionId, cmd.sessionGroupId ?? null);
         if (cmd.readOnly) {
           this.readOnlySessions.add(cmd.sessionId);
         } else {
