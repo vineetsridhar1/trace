@@ -1509,6 +1509,45 @@ export class SessionService {
     return { reconciled, abandoned };
   }
 
+  async killInactiveCloudSessions(options?: {
+    now?: number;
+    inactivityMs?: number;
+    limit?: number;
+  }): Promise<{ killed: string[] }> {
+    const now = options?.now ?? Date.now();
+    const inactivityMs = options?.inactivityMs ?? 10 * 60 * 1000;
+    const limit = options?.limit ?? 50;
+    const cutoff = new Date(now - inactivityMs);
+
+    const candidates = await prisma.session.findMany({
+      where: {
+        hosting: "cloud",
+        agentStatus: { in: ["active", "not_started"] },
+        OR: [
+          { lastMessageAt: { lt: cutoff } },
+          { lastMessageAt: null, createdAt: { lt: cutoff } },
+        ],
+      },
+      orderBy: { updatedAt: "asc" },
+      select: { id: true },
+      take: limit,
+    });
+
+    const killed: string[] = [];
+    for (const candidate of candidates) {
+      try {
+        await this.terminate(candidate.id, "system", "system");
+        killed.push(candidate.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[session-service] kill inactive cloud session failed for ${candidate.id}: ${message}`,
+        );
+      }
+    }
+    return { killed };
+  }
+
   private async bumpReconcileAttempts(sessionId: string, nextValue: number): Promise<boolean> {
     const result = await this.updateConnectionConditional(sessionId, (conn) => {
       // Only bump while the runtime is still in a deprovision-pending state.

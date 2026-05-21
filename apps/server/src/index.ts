@@ -229,6 +229,26 @@ async function main() {
         });
       });
   }, 30_000);
+
+  const inactivityKiller = setInterval(() => {
+    const startedAt = Date.now();
+    void sessionService
+      .killInactiveCloudSessions()
+      .then((result) => {
+        logAgentEnvironmentTelemetry("inactivity.killer_iteration", {
+          killedCount: result.killed.length,
+          durationMs: Date.now() - startedAt,
+        });
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[inactivity-killer] iteration failed: ${message}`);
+        logAgentEnvironmentTelemetry("inactivity.killer_iteration_failed", {
+          durationMs: Date.now() - startedAt,
+          error: message,
+        });
+      });
+  }, 60_000);
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
@@ -331,6 +351,7 @@ async function main() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
+              clearInterval(inactivityKiller);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();
