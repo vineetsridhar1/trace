@@ -36,6 +36,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../ui/context-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export type SidebarSessionScope = "mine" | "all";
 
@@ -287,13 +288,19 @@ function OwnedSessionGroupItem({
           {record.name}
         </span>
         {isPrivate && (
-          <span
-            title="Private workspace"
-            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/80"
-            aria-label="Private workspace"
-          >
-            <Lock size={11} />
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/80"
+                  aria-label="Private workspace"
+                />
+              }
+            >
+              <Lock size={11} />
+            </TooltipTrigger>
+            <TooltipContent>This session is private and only visible by you</TooltipContent>
+          </Tooltip>
         )}
         {attached && (
           <span
