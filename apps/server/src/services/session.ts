@@ -6831,11 +6831,11 @@ export class SessionService {
       sessions.find((session) => session.repoId === repoId && session.workdir) ??
       sessions.find((session) => session.repoId === repoId) ??
       null;
-    const sourceWorkdir = group?.workdir ?? sourceSession?.workdir ?? null;
+    const sourceWorkdir = sourceSession?.workdir ?? group?.workdir ?? null;
     const sourceRuntimeId =
-      this.getConnectionRuntimeInstanceId(group?.connection) ??
       this.getConnectionRuntimeInstanceId(sourceSession?.connection) ??
       (sourceSession ? sessionRouter.getRuntimeForSession(sourceSession.id)?.id : null) ??
+      this.getConnectionRuntimeInstanceId(group?.connection) ??
       null;
 
     if (!sourceSession || !sourceWorkdir || !sourceRuntimeId) return canonicalBranch;

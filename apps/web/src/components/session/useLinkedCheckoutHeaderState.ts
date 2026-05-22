@@ -179,7 +179,9 @@ export function useLinkedCheckoutHeaderState({
   const requiresRepoLink = canShowControls && !repoLinked;
   const pending = syncPending || linking;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
-  const summaryBranch = isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
+  const summaryBranch = isAttachedToThisGroup
+    ? (status?.targetBranch ?? groupBranch)
+    : status?.targetBranch;
   const runtimeDisplayLabel = effectiveRuntimeLabel?.trim() || "this bridge";
   const sessionRuntimeLabel = runtimeLabel?.trim() || null;
   const targetIsSessionRuntime =
@@ -269,8 +271,9 @@ export function useLinkedCheckoutHeaderState({
       }
 
       setSyncConflictError(null);
+      const syncedBranch = result.status.targetBranch ?? groupBranch;
       toast.success("Main worktree synced", {
-        description: `Now following ${groupBranch} on ${runtimeDisplayLabel}.`,
+        description: `Now following ${syncedBranch} on ${runtimeDisplayLabel}.`,
       });
     } catch (error) {
       toast.error("Failed to sync main worktree", {
@@ -298,21 +301,22 @@ export function useLinkedCheckoutHeaderState({
       }
 
       setSyncConflictError(null);
+      const syncedBranch = result.status.targetBranch ?? groupBranch;
       if (strategy === "DISCARD") {
         toast.success("Main worktree synced", {
-          description: `Discarded local changes and now following ${groupBranch} on ${runtimeDisplayLabel}.`,
+          description: `Discarded local changes and now following ${syncedBranch} on ${runtimeDisplayLabel}.`,
         });
       } else if (strategy === "COMMIT") {
         toast.success("Main worktree synced", {
-          description: `Committed local changes, pushed to origin when configured, then synced ${runtimeDisplayLabel} to ${groupBranch}.`,
+          description: `Committed local changes, pushed to origin when configured, then synced ${runtimeDisplayLabel} to ${syncedBranch}.`,
         });
       } else if (strategy === "STASH") {
         toast.success("Main worktree synced", {
-          description: `Stashed local changes and now following ${groupBranch} on ${runtimeDisplayLabel}.`,
+          description: `Stashed local changes and now following ${syncedBranch} on ${runtimeDisplayLabel}.`,
         });
       } else {
         toast.success("Main worktree synced", {
-          description: `Rebased local changes on top of ${groupBranch} on ${runtimeDisplayLabel}.`,
+          description: `Rebased local changes on top of ${syncedBranch} on ${runtimeDisplayLabel}.`,
         });
       }
     } catch (error) {
