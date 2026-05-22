@@ -5453,29 +5453,90 @@ describe("SessionService", () => {
           ],
         },
       ]);
-      prismaMock.session.findUnique.mockResolvedValueOnce(
-        makeSession({
-          id: "session-1",
-          sessionGroupId: "group-1",
-          organizationId: "org-1",
-          workdir: null,
-          connection,
-        }),
-      );
+      const disconnectOnDeprovisionConnection = {
+        ...connection,
+        disconnectOnDeprovision: true,
+        disconnectReason: "idle_session_group_cleanup",
+        version: 1,
+      };
+      const disconnectedConnection = {
+        ...disconnectOnDeprovisionConnection,
+        state: "disconnected",
+        stoppedAt: expect.any(String),
+        deprovisionedAt: expect.any(String),
+        disconnectedAt: expect.any(String),
+        lastError: "idle_session_group_cleanup",
+        autoRetryable: false,
+        disconnectOnDeprovision: false,
+        version: 2,
+      };
+      prismaMock.session.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 });
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            workdir: null,
+            connection,
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            workdir: null,
+            connection: disconnectOnDeprovisionConnection,
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            agentStatus: "done",
+            sessionStatus: "in_progress",
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            connection: disconnectOnDeprovisionConnection,
+          }),
+        );
       prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            id: "group-1",
+            workdir: "/workspace/group-1",
+            worktreeDeleted: false,
+            sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+          }),
+        )
         .mockResolvedValueOnce({
           workdir: "/workspace/group-1",
           repoId: "repo-1",
-          connection,
+          connection: disconnectOnDeprovisionConnection,
         })
         .mockResolvedValueOnce(
           makeSessionGroup({
             id: "group-1",
-            workdir: null,
-            worktreeDeleted: true,
+            workdir: "/workspace/group-1",
+            worktreeDeleted: false,
             sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
           }),
         );
+      sessionRouterMock.destroyRuntime.mockImplementationOnce(
+        async (_sessionId, _session, options) => {
+          await options?.onLifecycle?.("session_runtime_stopped", {
+            providerRuntimeId: "provider-runtime-1",
+          });
+        },
+      );
 
       const result = await service.cleanupIdleCloudSessionGroups({
         idleAfterMs: 10 * 60 * 1000,
@@ -5503,8 +5564,13 @@ describe("SessionService", () => {
         }),
       );
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
-        where: { sessionGroupId: "group-1", agentStatus: "active" },
-        data: { agentStatus: "stopped" },
+        where: { id: "session-1", connection: { path: ["version"], equals: 0 } },
+        data: {
+          connection: expect.objectContaining({
+            disconnectOnDeprovision: true,
+            disconnectReason: "idle_session_group_cleanup",
+          }),
+        },
       });
       expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
       expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
@@ -5513,9 +5579,29 @@ describe("SessionService", () => {
           organizationId: "org-1",
           workdir: "/workspace/group-1",
           repoId: "repo-1",
-          connection,
+          connection: disconnectOnDeprovisionConnection,
         }),
         expect.objectContaining({ reason: "idle_session_group_cleanup" }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { id: "session-1", connection: { path: ["version"], equals: 1 } },
+        data: { connection: expect.objectContaining(disconnectedConnection) },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_runtime_stopped",
+          payload: expect.objectContaining({
+            connection: expect.objectContaining({
+              state: "disconnected",
+              lastError: "idle_session_group_cleanup",
+              canRetry: true,
+              canMove: true,
+            }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "session_terminated" }),
       );
     });
 
