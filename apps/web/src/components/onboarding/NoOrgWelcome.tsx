@@ -159,9 +159,6 @@ export function NoOrgWelcome() {
             </button>
           </div>
           <div className="truncate text-sm font-medium text-foreground">{accountLabel}</div>
-          {name && email ? (
-            <div className="mt-1 truncate text-xs text-muted-foreground">{email}</div>
-          ) : null}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
