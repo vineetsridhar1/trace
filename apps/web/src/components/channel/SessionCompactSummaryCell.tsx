@@ -1,7 +1,8 @@
-import { Laptop, Lock, TerminalSquare } from "lucide-react";
+import { Laptop, TerminalSquare } from "lucide-react";
 import { timeAgo } from "../../lib/utils";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
+import { PrivateSessionLock } from "../session/PrivateSessionLock";
 import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { getSessionBranch, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
@@ -50,7 +51,10 @@ export function SessionCompactSummaryCell({
           </span>
         )}
         {row.visibility === "private" && (
-          <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Private" />
+          <PrivateSessionLock
+            className="h-3.5 w-3.5 text-muted-foreground"
+            iconClassName="h-3.5 w-3.5"
+          />
         )}
         {hasActiveTerminal && (
           <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

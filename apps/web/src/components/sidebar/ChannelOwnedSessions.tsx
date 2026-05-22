@@ -29,6 +29,7 @@ import { client } from "../../lib/urql";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
+import { PrivateSessionLock } from "../session/PrivateSessionLock";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -36,7 +37,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../ui/context-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export type SidebarSessionScope = "mine" | "all";
 
@@ -288,19 +288,10 @@ function OwnedSessionGroupItem({
           {record.name}
         </span>
         {isPrivate && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span
-                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/80"
-                  aria-label="Private workspace"
-                />
-              }
-            >
-              <Lock size={11} />
-            </TooltipTrigger>
-            <TooltipContent>This session is private and only visible by you</TooltipContent>
-          </Tooltip>
+          <PrivateSessionLock
+            className="h-4 w-4 rounded-sm text-muted-foreground/80"
+            size={11}
+          />
         )}
         {attached && (
           <span
