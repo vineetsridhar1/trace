@@ -7227,6 +7227,109 @@ describe("SessionService", () => {
       );
     });
 
+    it("refreshes the session group branch from the source worktree before syncing", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          repoId: "repo-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-cloud",
+          },
+          sessions: [
+            {
+              id: "session-ox",
+              repoId: "repo-1",
+              hosting: "cloud",
+              createdById: "user-1",
+              connection: { state: "connected", runtimeInstanceId: "runtime-cloud" },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          branch: "main",
+          workdir: "/workspaces/ox",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-cloud",
+          },
+          sessions: [
+            {
+              id: "session-ox",
+              repoId: "repo-1",
+              branch: "main",
+              workdir: "/workspaces/ox",
+              connection: { state: "connected", runtimeInstanceId: "runtime-cloud" },
+            },
+          ],
+        });
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-local",
+          id: "runtime-local",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({
+          branch: "trace/ox",
+          headCommitSha: "61a969a",
+          upstreamBranch: "origin/trace/ox",
+          upstreamCommitSha: "61a969a",
+          remoteBranch: "origin/trace/ox",
+          remoteCommitSha: "61a969a",
+        }),
+      );
+      sessionRouterMock.syncLinkedCheckout.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        errorCode: null,
+        status: {
+          repoId: "repo-1",
+          repoPath: "/tmp/trace",
+          isAttached: true,
+          attachedSessionGroupId: "group-1",
+          targetBranch: "trace/ox",
+          autoSyncEnabled: true,
+          currentBranch: null,
+          currentCommitSha: "61a969a",
+          lastSyncedCommitSha: "61a969a",
+          lastSyncError: null,
+          restoreBranch: "main",
+          restoreCommitSha: "abc123",
+          hasUncommittedChanges: false,
+          changedFiles: [],
+        },
+      });
+
+      await service.syncLinkedCheckout("group-1", "repo-1", "main", "org-1", "user-1");
+
+      expect(sessionRouterMock.inspectSessionGitSyncStatus).toHaveBeenCalledWith(
+        "runtime-cloud",
+        {
+          sessionId: "session-ox",
+          workdirHint: "/workspaces/ox",
+        },
+      );
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "group-1" },
+          data: expect.objectContaining({ branch: "trace/ox" }),
+        }),
+      );
+      expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
+        "runtime-local",
+        expect.objectContaining({
+          branch: "trace/ox",
+        }),
+      );
+    });
+
     it("routes commit-back actions through the session group's canonical runtime", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({

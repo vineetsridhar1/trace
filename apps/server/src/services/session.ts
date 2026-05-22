@@ -6801,6 +6801,65 @@ export class SessionService {
     return sessionRouter.getLinkedCheckoutChangedFile(runtimeId, repoId, filePath);
   }
 
+  private async resolveLinkedCheckoutSyncBranch(
+    sessionGroupId: string,
+    repoId: string,
+    organizationId: string,
+    fallbackBranch: string,
+  ): Promise<string> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        branch: true,
+        workdir: true,
+        connection: true,
+        sessions: {
+          orderBy: { updatedAt: "desc" },
+          select: {
+            id: true,
+            repoId: true,
+            branch: true,
+            workdir: true,
+            connection: true,
+          },
+        },
+      },
+    });
+    const canonicalBranch = group?.branch?.trim() || fallbackBranch;
+    const sessions = group?.sessions ?? [];
+    const sourceSession =
+      sessions.find((session) => session.repoId === repoId && session.workdir) ??
+      sessions.find((session) => session.repoId === repoId) ??
+      null;
+    const sourceWorkdir = group?.workdir ?? sourceSession?.workdir ?? null;
+    const sourceRuntimeId =
+      this.getConnectionRuntimeInstanceId(group?.connection) ??
+      this.getConnectionRuntimeInstanceId(sourceSession?.connection) ??
+      (sourceSession ? sessionRouter.getRuntimeForSession(sourceSession.id)?.id : null) ??
+      null;
+
+    if (!sourceSession || !sourceWorkdir || !sourceRuntimeId) return canonicalBranch;
+    if (!sessionRouter.isRuntimeAvailable(sourceRuntimeId, organizationId)) return canonicalBranch;
+
+    try {
+      const status = await sessionRouter.inspectSessionGitSyncStatus(sourceRuntimeId, {
+        sessionId: sourceSession.id,
+        workdirHint: sourceWorkdir,
+      });
+      const observedBranch = status.branch?.trim();
+      if (!observedBranch || observedBranch === canonicalBranch) return canonicalBranch;
+
+      await this.syncGroupWorkspaceState(sessionGroupId, { branch: observedBranch });
+      return observedBranch;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[session-service] unable to refresh linked checkout branch for ${sessionGroupId}: ${message}`,
+      );
+      return canonicalBranch;
+    }
+  }
+
   async linkLinkedCheckoutRepo(
     sessionGroupId: string,
     repoId: string,
@@ -6842,11 +6901,12 @@ export class SessionService {
       userId,
       { runtimeInstanceId: options?.runtimeInstanceId, requireRegisteredRepo: true },
     );
-    const group = await prisma.sessionGroup.findFirst({
-      where: { id: sessionGroupId, organizationId },
-      select: { branch: true },
-    });
-    const canonicalBranch = group?.branch?.trim() || branch;
+    const canonicalBranch = await this.resolveLinkedCheckoutSyncBranch(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      branch,
+    );
 
     return sessionRouter.syncLinkedCheckout(runtimeId, {
       repoId,
