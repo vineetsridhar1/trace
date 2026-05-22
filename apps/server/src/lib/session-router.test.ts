@@ -1279,6 +1279,47 @@ describe("SessionRouter runtime adapter dispatch", () => {
         reason: "idle_session_group_cleanup",
       }),
     );
+
+    provisionedStop.mockClear();
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({
+      id: "env-manual",
+      name: "Shared Launcher",
+      adapterType: "provisioned",
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { type: "bearer", secretId: "secret-1" },
+        startupTimeoutSeconds: 120,
+        deprovisionPolicy: "manual",
+      },
+    });
+
+    await router.destroyRuntime(
+      "session-1",
+      {
+        hosting: "cloud",
+        organizationId: "org-1",
+        connection: {
+          adapterType: "provisioned",
+          environmentId: "env-manual",
+          providerRuntimeId: "provider-1",
+        },
+      },
+      {
+        reason: "session_moved_to_local",
+        skipBridgeDelete: true,
+        skipUnbind: true,
+      },
+    );
+
+    expect(provisionedStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        reason: "session_moved_to_local",
+      }),
+    );
   });
 
   it("emits stopping/stopped lifecycle events for a successful provisioned destroy", async () => {

@@ -6468,6 +6468,28 @@ export class SessionService {
       throw new Error("No enabled cloud agent environment is configured");
     }
     assertCloudRepoRemoteAvailable(targetHosting, session.repo);
+    let sourceCloudRuntimeSession =
+      session.hosting === "cloud" && targetHosting === "local"
+        ? await this.withGroupRuntimeState(session)
+        : null;
+    if (sourceCloudRuntimeSession) {
+      const runtimeConnection = this.parseConnection(sourceCloudRuntimeSession.connection);
+      const sessionConnection = this.parseConnection(session.connection);
+      const runtimeHasBinding =
+        !!runtimeConnection.runtimeInstanceId ||
+        !!runtimeConnection.providerRuntimeId ||
+        typeof runtimeConnection.cloudMachineId === "string";
+      const sessionHasBinding =
+        !!sessionConnection.runtimeInstanceId ||
+        !!sessionConnection.providerRuntimeId ||
+        typeof sessionConnection.cloudMachineId === "string";
+      if (!runtimeHasBinding && sessionHasBinding) {
+        sourceCloudRuntimeSession = {
+          ...sourceCloudRuntimeSession,
+          connection: session.connection,
+        };
+      }
+    }
 
     const sourceInspection = await this.inspectSessionMoveSource({
       sessionId: session.id,
@@ -6607,7 +6629,35 @@ export class SessionService {
       }
     }
 
+    if (sourceCloudRuntimeSession) {
+      await this.destroyMovedSourceCloudRuntime(movedSession.id, sourceCloudRuntimeSession);
+    }
+
     return movedSession;
+  }
+
+  private async destroyMovedSourceCloudRuntime(
+    sessionId: string,
+    sourceRuntimeSession: {
+      hosting: string;
+      organizationId?: string;
+      workdir?: string | null;
+      repoId?: string | null;
+      connection?: unknown;
+    },
+  ): Promise<void> {
+    try {
+      await sessionRouter.destroyRuntime(sessionId, sourceRuntimeSession, {
+        reason: "session_moved_to_local",
+        skipBridgeDelete: true,
+        skipUnbind: true,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[session-service] failed to destroy source cloud runtime after move for ${sessionId}: ${message}`,
+      );
+    }
   }
 
   async moveToRuntime(

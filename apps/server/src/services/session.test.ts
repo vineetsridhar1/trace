@@ -5942,6 +5942,20 @@ describe("SessionService", () => {
         "cloud",
         "terminate",
       );
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          hosting: "cloud",
+          connection: expect.objectContaining({
+            runtimeInstanceId: "runtime-source",
+          }),
+        }),
+        expect.objectContaining({
+          reason: "session_moved_to_local",
+          skipBridgeDelete: true,
+          skipUnbind: true,
+        }),
+      );
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
     });
 
