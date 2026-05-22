@@ -4,11 +4,8 @@ import {
   Check,
   Copy,
   ExternalLink,
-  Laptop,
   LogOut,
   RefreshCw,
-  Server,
-  UserPlus,
 } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { cn } from "../../lib/utils";
@@ -87,10 +84,7 @@ export function NoOrgWelcome() {
           <div className="mt-6">
             <div className="text-xs font-medium uppercase text-muted-foreground">Ways forward</div>
             <div className="mt-3 divide-y divide-border rounded-lg border border-border">
-              <div className="flex gap-3 p-3.5">
-                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
-                  <UserPlus size={15} />
-                </div>
+              <div className="p-3.5">
                 <div>
                   <div className="text-sm font-medium text-foreground">Get invited</div>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
@@ -98,10 +92,7 @@ export function NoOrgWelcome() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-3 p-3.5">
-                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
-                  <Laptop size={15} />
-                </div>
+              <div className="p-3.5">
                 <div>
                   <div className="text-sm font-medium text-foreground">Run locally</div>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
@@ -113,10 +104,7 @@ export function NoOrgWelcome() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-3 p-3.5">
-                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
-                  <Server size={15} />
-                </div>
+              <div className="p-3.5">
                 <div>
                   <div className="text-sm font-medium text-foreground">Self-host</div>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
