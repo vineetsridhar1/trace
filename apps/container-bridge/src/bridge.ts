@@ -588,7 +588,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "session_git_sync_status": {
-        const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+        const workdir = cmd.workdirHint ?? this.sessionWorkdirs.get(cmd.sessionId);
         if (!workdir) {
           this.send({
             type: "session_git_sync_status_result",
