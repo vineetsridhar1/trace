@@ -7,18 +7,19 @@ const wsBase = API_URL
   ? API_URL.replace(/^https?:/, wsProtocol)
   : `${wsProtocol}//${window.location.host}`;
 
-function buildClient(): GqlClient {
+function buildClient(revision: number): GqlClient {
   return createGqlClient({
     httpUrl: `${API_URL}/graphql`,
     wsUrl: `${wsBase}/ws`,
     onConnectionChange: (connected) => {
+      if (revision !== clientRevision) return;
       useConnectionStore.getState().setConnected(connected);
     },
   });
 }
 
-export let client = buildClient();
 let clientRevision = 0;
+export let client = buildClient(clientRevision);
 const clientRevisionListeners = new Set<() => void>();
 
 export function getClientRevision(): number {
@@ -38,8 +39,10 @@ function notifyClientRevisionListeners(): void {
 
 export function recreateClient(): GqlClient {
   const previous = client;
-  client = buildClient();
-  clientRevision += 1;
+  const nextRevision = clientRevision + 1;
+  client = buildClient(nextRevision);
+  clientRevision = nextRevision;
+  useConnectionStore.getState().setConnected(false);
   notifyClientRevisionListeners();
   void previous.dispose().catch((err: unknown) => {
     console.warn("[urql] previous client dispose failed", err);
