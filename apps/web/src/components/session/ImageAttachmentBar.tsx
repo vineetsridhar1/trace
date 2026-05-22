@@ -14,9 +14,11 @@ export interface FileAttachment {
 export function ImageAttachmentBar({
   attachments,
   onRemove,
+  onOpenAttachment,
 }: {
   attachments: FileAttachment[];
   onRemove: (id: string) => void;
+  onOpenAttachment?: (attachment: FileAttachment) => void;
 }) {
   const [lightboxImage, setLightboxImage] = useState<FileAttachment | null>(null);
 
@@ -37,7 +39,12 @@ export function ImageAttachmentBar({
                   onClick={() => setLightboxImage(attachment)}
                 />
               ) : (
-                <div className="flex h-16 w-44 items-center gap-2 rounded-md border border-border bg-surface-deep px-2 text-left">
+                <button
+                  type="button"
+                  onClick={() => onOpenAttachment?.(attachment)}
+                  className="flex h-16 w-44 cursor-pointer items-center gap-2 rounded-md border border-border bg-surface-deep px-2 text-left transition-colors hover:bg-surface-elevated"
+                  title="Open attachment"
+                >
                   <FileText size={18} className="shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
                     <div className="truncate text-xs font-medium text-foreground">
@@ -47,7 +54,7 @@ export function ImageAttachmentBar({
                       {formatFileSize(attachment.file.size)}
                     </div>
                   </div>
-                </div>
+                </button>
               )}
               {attachment.uploading && (
                 <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/40">

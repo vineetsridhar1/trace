@@ -1,6 +1,10 @@
 import { useCallback, useState } from "react";
 import { useUIStore } from "../../stores/ui";
 import type { OpenFileTab } from "./GroupTabStrip";
+import type {
+  DraftAttachmentOpenRequest,
+  UploadedAttachmentOpenRequest,
+} from "./AttachmentOpenContext";
 
 export function useFileActions() {
   const setActiveTerminalId = useUIStore(
@@ -15,6 +19,49 @@ export function useFileActions() {
         if (prev.some((f: OpenFileTab) => f.filePath === filePath)) return prev;
         const fileName = filePath.split("/").pop() ?? filePath;
         return [...prev, { filePath, fileName }];
+      });
+      setActiveFilePath(filePath);
+      setActiveTerminalId(null);
+    },
+    [setActiveTerminalId],
+  );
+
+  const handleDraftAttachmentClick = useCallback(
+    ({ sessionId, attachmentId, fileName }: DraftAttachmentOpenRequest) => {
+      const filePath = `attachment:${sessionId}:${attachmentId}`;
+      setOpenFiles((prev: OpenFileTab[]) => {
+        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) return prev;
+        return [
+          ...prev,
+          {
+            filePath,
+            fileName: fileName || "Attachment",
+            isDraftAttachment: true,
+            attachmentSessionId: sessionId,
+            attachmentId,
+          },
+        ];
+      });
+      setActiveFilePath(filePath);
+      setActiveTerminalId(null);
+    },
+    [setActiveTerminalId],
+  );
+
+  const handleUploadedAttachmentClick = useCallback(
+    ({ attachmentKey, label }: UploadedAttachmentOpenRequest) => {
+      const filePath = `uploaded-attachment:${attachmentKey}`;
+      setOpenFiles((prev: OpenFileTab[]) => {
+        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) return prev;
+        return [
+          ...prev,
+          {
+            filePath,
+            fileName: label || "Attachment",
+            isUploadedAttachment: true,
+            attachmentKey,
+          },
+        ];
       });
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
@@ -54,6 +101,8 @@ export function useFileActions() {
     activeFilePath,
     setActiveFilePath,
     handleFileClick,
+    handleDraftAttachmentClick,
+    handleUploadedAttachmentClick,
     handleDiffFileClick,
     handleSelectFile,
     handleCloseFile,

@@ -9,6 +9,12 @@ const MonacoFileViewer = lazy(() =>
 const MonacoDiffViewer = lazy(() =>
   import("./MonacoDiffViewer").then((m) => ({ default: m.MonacoDiffViewer })),
 );
+const DraftAttachmentEditor = lazy(() =>
+  import("./DraftAttachmentEditor").then((m) => ({ default: m.DraftAttachmentEditor })),
+);
+const UploadedAttachmentViewer = lazy(() =>
+  import("./UploadedAttachmentViewer").then((m) => ({ default: m.UploadedAttachmentViewer })),
+);
 
 interface SessionGroupContentAreaProps {
   sessionGroupId: string;
@@ -31,6 +37,40 @@ export function SessionGroupContentArea({
   scrollToEventId,
   onScrollComplete,
 }: SessionGroupContentAreaProps) {
+  const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
+
+  if (activeFile?.isUploadedAttachment && activeFile.attachmentKey) {
+    return (
+      <div className="h-full">
+        <Suspense
+          fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
+        >
+          <UploadedAttachmentViewer
+            key={activeFile.filePath}
+            attachmentKey={activeFile.attachmentKey}
+            label={activeFile.fileName}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (activeFile?.isDraftAttachment && activeFile.attachmentSessionId && activeFile.attachmentId) {
+    return (
+      <div className="h-full">
+        <Suspense
+          fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
+        >
+          <DraftAttachmentEditor
+            key={activeFile.filePath}
+            sessionId={activeFile.attachmentSessionId}
+            attachmentId={activeFile.attachmentId}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
   if (activeFilePath?.startsWith("diff:")) {
     return (
       <div className="h-full">
@@ -41,7 +81,7 @@ export function SessionGroupContentArea({
             key={activeFilePath}
             sessionGroupId={sessionGroupId}
             filePath={activeFilePath.slice(5)}
-            status={openFiles.find((f) => f.filePath === activeFilePath)?.diffStatus ?? "M"}
+            status={activeFile?.diffStatus ?? "M"}
             defaultBranch={defaultBranch}
           />
         </Suspense>

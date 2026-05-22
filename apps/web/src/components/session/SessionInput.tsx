@@ -31,6 +31,7 @@ import {
 import {
   ChatEditor,
   type ChatEditorHandle,
+  type ChatEditorPasteFilesOptions,
   type ChatEditorSubmitOptions,
 } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
@@ -42,6 +43,7 @@ import { generateUUID } from "@trace/client-core";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { useTerminalStore } from "../../stores/terminal";
+import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
@@ -87,6 +89,7 @@ export function SessionInput({
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const images = useDraftsStore((s) => s.drafts[sessionId]?.images ?? EMPTY_ATTACHMENTS);
+  const openAttachment = useAttachmentOpen();
   const setDraftImages = useDraftsStore((s) => s.setDraftImages);
   const setDraftText = useDraftsStore((s) => s.setDraftText);
   const [initialDraftHtml] = useState(
@@ -144,11 +147,21 @@ export function SessionInput({
   }, []);
 
   const addAttachments = useCallback(
-    (files: File[]) => {
-      if (isSendingRef.current) return;
+    (files: File[], options?: ChatEditorPasteFilesOptions) => {
+      if (isSendingRef.current || files.length === 0) return false;
+
+      let added = false;
+      let rejectedForLimit = false;
+      let remainingSlots = 0;
+
       setDraftImages(sessionId, (prev) => {
         const remaining = MAX_ATTACHMENTS - prev.length;
-        if (remaining <= 0) return prev;
+        remainingSlots = remaining;
+        if (remaining <= 0) {
+          rejectedForLimit = true;
+          return prev;
+        }
+
         const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
           id: generateUUID(),
           file,
@@ -156,8 +169,21 @@ export function SessionInput({
           s3Key: null,
           uploading: false,
         }));
+        added = newAttachments.length > 0;
         return [...prev, ...newAttachments];
       });
+
+      if (!options?.fallbackToEditor) {
+        if (rejectedForLimit) {
+          toast.error(`You can attach up to ${MAX_ATTACHMENTS} files`);
+        } else if (files.length > remainingSlots) {
+          toast.error(
+            `Only ${remainingSlots} more attachment${remainingSlots === 1 ? "" : "s"} allowed`,
+          );
+        }
+      }
+
+      return added;
     },
     [sessionId, setDraftImages],
   );
@@ -168,6 +194,17 @@ export function SessionInput({
       event.currentTarget.value = "";
     },
     [addAttachments],
+  );
+
+  const handleOpenAttachment = useCallback(
+    (attachment: FileAttachment) => {
+      openAttachment?.({
+        sessionId,
+        attachmentId: attachment.id,
+        fileName: attachment.file.name || "Attachment",
+      });
+    },
+    [openAttachment, sessionId],
   );
 
   const handleRemoveImage = useCallback(
@@ -431,7 +468,11 @@ export function SessionInput({
           <span>Preparing workspace…</span>
         </div>
       )}
-      <ImageAttachmentBar attachments={images} onRemove={handleRemoveImage} />
+      <ImageAttachmentBar
+        attachments={images}
+        onRemove={handleRemoveImage}
+        onOpenAttachment={handleOpenAttachment}
+      />
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>
@@ -478,7 +519,7 @@ export function SessionInput({
               disabled={!canSend || isSending}
               slashCommands={slashCommands.commands}
               onShiftTab={cycleMode}
-              onImagePaste={addAttachments}
+              onPasteFiles={addAttachments}
               hasAttachments={images.length > 0}
               onChange={(text: string, html: string) => {
                 setHasContent(text.trim().length > 0);
