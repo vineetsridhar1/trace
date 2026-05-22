@@ -44,7 +44,7 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 10 * 60 * 1000;
+const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
 
