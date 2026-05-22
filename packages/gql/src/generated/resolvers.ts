@@ -34,6 +34,11 @@ export type Actor = {
 
 export type ActorType = "agent" | "system" | "user";
 
+export type AddChannelMemberInput = {
+  channelId: Scalars["ID"]["input"];
+  userId: Scalars["ID"]["input"];
+};
+
 export type AddChatMemberInput = {
   chatId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
@@ -200,6 +205,7 @@ export type Channel = {
   members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars["String"]["output"];
+  owner?: Maybe<User>;
   position: Scalars["Int"]["output"];
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -207,6 +213,7 @@ export type Channel = {
   setupScript?: Maybe<Scalars["String"]["output"]>;
   type: ChannelType;
   viewerIsMember: Scalars["Boolean"]["output"];
+  visibility: ChannelVisibility;
 };
 
 export type ChannelMessagesArgs = {
@@ -230,6 +237,8 @@ export type ChannelMember = {
 };
 
 export type ChannelType = "coding" | "text";
+
+export type ChannelVisibility = "private" | "public";
 
 export type Chat = {
   __typename?: "Chat";
@@ -314,6 +323,7 @@ export type CreateChannelInput = {
   projectIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   type?: InputMaybe<ChannelType>;
+  visibility?: InputMaybe<ChannelVisibility>;
 };
 
 export type CreateChatInput = {
@@ -553,6 +563,7 @@ export type MoveChannelInput = {
 
 export type Mutation = {
   __typename?: "Mutation";
+  addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
@@ -645,6 +656,10 @@ export type Mutation = {
   updateSessionDefaults: User;
   updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
+};
+
+export type MutationAddChannelMemberArgs = {
+  input: AddChannelMemberInput;
 };
 
 export type MutationAddChatMemberArgs = {
@@ -2012,6 +2027,7 @@ export type DirectiveResolverFn<TResult = {}, TParent = {}, TContext = {}, TArgs
 export type ResolversTypes = ResolversObject<{
   Actor: ResolverTypeWrapper<Actor>;
   ActorType: ActorType;
+  AddChannelMemberInput: AddChannelMemberInput;
   AddChatMemberInput: AddChatMemberInput;
   AgentEnvironment: ResolverTypeWrapper<AgentEnvironment>;
   AgentEnvironmentAdapterType: AgentEnvironmentAdapterType;
@@ -2036,6 +2052,7 @@ export type ResolversTypes = ResolversObject<{
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
   ChannelMember: ResolverTypeWrapper<ChannelMember>;
   ChannelType: ChannelType;
+  ChannelVisibility: ChannelVisibility;
   Chat: ResolverTypeWrapper<Chat>;
   ChatMember: ResolverTypeWrapper<ChatMember>;
   ChatType: ChatType;
@@ -2136,6 +2153,7 @@ export type ResolversTypes = ResolversObject<{
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = ResolversObject<{
   Actor: Actor;
+  AddChannelMemberInput: AddChannelMemberInput;
   AddChatMemberInput: AddChatMemberInput;
   AgentEnvironment: AgentEnvironment;
   AgentEnvironmentTestResult: AgentEnvironmentTestResult;
@@ -2434,6 +2452,7 @@ export type ChannelResolvers<
     Partial<ChannelMessagesArgs>
   >;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  owner?: Resolver<Maybe<ResolversTypes["User"]>, ParentType, ContextType>;
   position?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes["Project"]>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
@@ -2441,6 +2460,7 @@ export type ChannelResolvers<
   setupScript?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes["ChannelType"], ParentType, ContextType>;
   viewerIsMember?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  visibility?: Resolver<ResolversTypes["ChannelVisibility"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2682,6 +2702,12 @@ export type MutationResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Mutation"] = ResolversParentTypes["Mutation"],
 > = ResolversObject<{
+  addChannelMember?: Resolver<
+    ResolversTypes["Channel"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationAddChannelMemberArgs, "input">
+  >;
   addChatMember?: Resolver<
     ResolversTypes["Chat"],
     ParentType,

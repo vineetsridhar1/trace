@@ -1,5 +1,5 @@
 import type { Context } from "../context.js";
-import type { CreateChannelInput, UpdateChannelInput } from "@trace/gql";
+import type { AddChannelMemberInput, CreateChannelInput, UpdateChannelInput } from "@trace/gql";
 import { channelService } from "../services/channel.js";
 import { assertChannelAccess } from "../services/access.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -59,6 +59,14 @@ export const channelMutations = {
   },
   joinChannel: (_: unknown, args: { channelId: string }, ctx: Context) => {
     return channelService.join(args.channelId, ctx.actorType, ctx.userId);
+  },
+  addChannelMember: (_: unknown, args: { input: AddChannelMemberInput }, ctx: Context) => {
+    return channelService.addMember(
+      args.input.channelId,
+      args.input.userId,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   leaveChannel: (_: unknown, args: { channelId: string }, ctx: Context) => {
     return channelService.leave(args.channelId, ctx.actorType, ctx.userId);
@@ -145,6 +153,13 @@ export const channelTypeResolvers = {
       }
       if (!channel.repoId) return null;
       return organizationService.getRepoById(channel.repoId);
+    },
+    owner: (channel: { owner?: unknown; ownerId?: string | null }) => {
+      if ("owner" in channel) {
+        return channel.owner ?? null;
+      }
+      if (!channel.ownerId) return null;
+      return organizationService.getUserProfile(channel.ownerId);
     },
   },
 };

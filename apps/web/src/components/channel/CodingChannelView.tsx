@@ -12,6 +12,7 @@ import { MergedArchivedPage } from "./MergedArchivedPage";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
+import { AddChannelMemberDialog } from "./AddChannelMemberDialog";
 
 const SESSION_GROUPS_QUERY = gql`
   query SessionGroups($channelId: ID!, $archived: Boolean) {
@@ -84,6 +85,7 @@ const SESSION_GROUPS_QUERY = gql`
 
 export function CodingChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
+  const viewerIsMember = useEntityField("channels", channelId, "viewerIsMember");
   const baseBranch = useEntityField("channels", channelId, "baseBranch") as
     | string
     | null
@@ -138,6 +140,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           </span>
         )}
         <ConnectionStatus />
+        {viewerIsMember && <AddChannelMemberDialog channelId={channelId} />}
         <Button
           variant="ghost"
           size="icon"

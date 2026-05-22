@@ -8,11 +8,13 @@ import { ChannelWelcome } from "./ChannelWelcome";
 import { ChannelComposer } from "./ChannelComposer";
 import { ThreadPanel } from "../chat/ThreadPanel";
 import { ConnectionStatus } from "../ConnectionStatus";
+import { AddChannelMemberDialog } from "./AddChannelMemberDialog";
 
 const THREAD_WIDTH_KEY = "trace_channel_thread_width";
 
 export function TextChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
+  const viewerIsMember = useEntityField("channels", channelId, "viewerIsMember");
   const activeThreadId = useUIStore((s: UIState) => s.activeThreadId);
   const { messageIds, loading, hasOlder, fetchOlderMessages } = useChannelMessages(channelId);
   const isMobile = useIsMobile();
@@ -25,6 +27,7 @@ export function TextChannelView({ channelId }: { channelId: string }) {
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
         <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         <ConnectionStatus />
+        {viewerIsMember && <AddChannelMemberDialog channelId={channelId} />}
       </div>
 
       {/* Messages + Thread */}

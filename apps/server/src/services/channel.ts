@@ -13,26 +13,46 @@ import {
 import { normalizeMembers } from "./member-utils.js";
 import { createChannelInTransaction } from "./channel-create.js";
 
+function channelVisibilityWhere(userId: string) {
+  return {
+    OR: [
+      { visibility: "public" },
+      { ownerId: userId },
+      { members: { some: { userId, leftAt: null } } },
+    ],
+  };
+}
+
+function channelAccessWhere(userId: string) {
+  return {
+    OR: [{ ownerId: userId }, { members: { some: { userId, leftAt: null } } }],
+  };
+}
+
 export class ChannelService {
   async listChannels(
     organizationId: string,
     userId: string,
     options?: { projectId?: string; memberOnly?: boolean },
   ) {
-    const where: Record<string, unknown> = { organizationId };
+    const where: Record<string, unknown> = { organizationId, ...channelVisibilityWhere(userId) };
 
     if (options?.projectId) {
       where.projects = { some: { projectId: options.projectId } };
     }
 
     if (options?.memberOnly) {
-      where.members = { some: { userId, leftAt: null } };
+      where.OR = [
+        { members: { some: { userId, leftAt: null } } },
+        { visibility: "private", ownerId: userId },
+      ];
     }
 
     return prisma.channel.findMany({
       where,
       include: {
         repo: true,
+        owner: { select: { id: true, email: true, name: true, avatarUrl: true } },
         members: {
           where: { userId, leftAt: null },
           select: { userId: true },
@@ -48,7 +68,7 @@ export class ChannelService {
 
   async getChannel(channelId: string, userId: string) {
     await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, members: { some: { userId, leftAt: null } } },
+      where: { id: channelId, ...channelAccessWhere(userId) },
       select: { id: true },
     });
 
@@ -56,6 +76,7 @@ export class ChannelService {
       where: { id: channelId },
       include: {
         repo: true,
+        owner: { select: { id: true, email: true, name: true, avatarUrl: true } },
         members: {
           where: { userId, leftAt: null },
           select: { userId: true },
@@ -118,6 +139,7 @@ export class ChannelService {
         type: channelType,
         actorType,
         actorId,
+        visibility: input.visibility ?? "public",
         position: input.position ?? null,
         groupId: input.groupId ?? null,
         repo: input.repoId && repoName ? { id: input.repoId, name: repoName } : null,
@@ -204,6 +226,8 @@ export class ChannelService {
               id: updated.id,
               name: updated.name,
               type: updated.type,
+              visibility: updated.visibility,
+              ownerId: updated.ownerId,
               position: updated.position,
               groupId: updated.groupId,
               repoId: updated.repoId,
@@ -235,6 +259,8 @@ export class ChannelService {
           position: true,
           groupId: true,
           organizationId: true,
+          visibility: true,
+          ownerId: true,
           repoId: true,
           baseBranch: true,
           repo: { select: { name: true } },
@@ -250,6 +276,10 @@ export class ChannelService {
       const existingMembership = await tx.channelMember.findUnique({
         where: { channelId_userId: { channelId, userId: actorId } },
       });
+
+      if (channel.visibility === "private" && channel.ownerId !== actorId) {
+        throw new AuthorizationError("You must be added to join this private channel");
+      }
 
       if (existingMembership?.leftAt === null) return;
 
@@ -276,6 +306,95 @@ export class ChannelService {
               id: channel.id,
               name: channel.name,
               type: channel.type,
+              visibility: channel.visibility,
+              ownerId: channel.ownerId,
+              position: channel.position,
+              groupId: channel.groupId,
+              repoId: channel.repoId,
+              baseBranch: channel.baseBranch,
+              ...(channel.repoId && channel.repo
+                ? { repo: { id: channel.repoId, name: channel.repo.name } }
+                : {}),
+              members: normalizedMembers,
+            },
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+    });
+
+    return prisma.channel.findUniqueOrThrow({
+      where: { id: channelId },
+      include: { members: { where: { leftAt: null } } },
+    });
+  }
+
+  async addMember(channelId: string, userId: string, actorType: ActorType, actorId: string) {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const channel = await tx.channel.findUniqueOrThrow({
+        where: { id: channelId },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          visibility: true,
+          ownerId: true,
+          position: true,
+          groupId: true,
+          organizationId: true,
+          repoId: true,
+          baseBranch: true,
+          repo: { select: { name: true } },
+        },
+      });
+
+      const actorMembership = await tx.channelMember.findFirst({
+        where: { channelId, userId: actorId, leftAt: null },
+        select: { channelId: true },
+      });
+      if (!actorMembership) {
+        throw new AuthorizationError("You are not a member of this channel");
+      }
+
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: { userId, organizationId: channel.organizationId },
+        },
+      });
+
+      const existingMembership = await tx.channelMember.findUnique({
+        where: { channelId_userId: { channelId, userId } },
+      });
+
+      if (existingMembership?.leftAt === null) return;
+
+      if (existingMembership) {
+        await tx.channelMember.update({
+          where: { channelId_userId: { channelId, userId } },
+          data: { leftAt: null, joinedAt: new Date() },
+        });
+      } else {
+        await tx.channelMember.create({ data: { channelId, userId } });
+      }
+
+      const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channelId });
+
+      await eventService.create(
+        {
+          organizationId: channel.organizationId,
+          scopeType: "channel",
+          scopeId: channelId,
+          eventType: "channel_member_added",
+          payload: {
+            userId,
+            channel: {
+              id: channel.id,
+              name: channel.name,
+              type: channel.type,
+              visibility: channel.visibility,
+              ownerId: channel.ownerId,
               position: channel.position,
               groupId: channel.groupId,
               repoId: channel.repoId,
@@ -310,6 +429,8 @@ export class ChannelService {
           position: true,
           groupId: true,
           organizationId: true,
+          visibility: true,
+          ownerId: true,
           repoId: true,
           baseBranch: true,
           repo: { select: { name: true } },
@@ -343,6 +464,8 @@ export class ChannelService {
               id: channel.id,
               name: channel.name,
               type: channel.type,
+              visibility: channel.visibility,
+              ownerId: channel.ownerId,
               position: channel.position,
               groupId: channel.groupId,
               repoId: channel.repoId,
