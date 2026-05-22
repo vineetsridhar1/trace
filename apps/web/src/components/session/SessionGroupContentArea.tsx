@@ -12,6 +12,9 @@ const MonacoDiffViewer = lazy(() =>
 const DraftAttachmentEditor = lazy(() =>
   import("./DraftAttachmentEditor").then((m) => ({ default: m.DraftAttachmentEditor })),
 );
+const UploadedAttachmentViewer = lazy(() =>
+  import("./UploadedAttachmentViewer").then((m) => ({ default: m.UploadedAttachmentViewer })),
+);
 
 interface SessionGroupContentAreaProps {
   sessionGroupId: string;
@@ -35,6 +38,22 @@ export function SessionGroupContentArea({
   onScrollComplete,
 }: SessionGroupContentAreaProps) {
   const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
+
+  if (activeFile?.isUploadedAttachment && activeFile.attachmentKey) {
+    return (
+      <div className="h-full">
+        <Suspense
+          fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
+        >
+          <UploadedAttachmentViewer
+            key={activeFile.filePath}
+            attachmentKey={activeFile.attachmentKey}
+            label={activeFile.fileName}
+          />
+        </Suspense>
+      </div>
+    );
+  }
 
   if (activeFile?.isDraftAttachment && activeFile.attachmentSessionId && activeFile.attachmentId) {
     return (

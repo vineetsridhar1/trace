@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
 import { useUIStore } from "../../stores/ui";
 import type { OpenFileTab } from "./GroupTabStrip";
-import type { DraftAttachmentOpenRequest } from "./AttachmentOpenContext";
+import type {
+  DraftAttachmentOpenRequest,
+  UploadedAttachmentOpenRequest,
+} from "./AttachmentOpenContext";
 
 export function useFileActions() {
   const setActiveTerminalId = useUIStore(
@@ -45,6 +48,27 @@ export function useFileActions() {
     [setActiveTerminalId],
   );
 
+  const handleUploadedAttachmentClick = useCallback(
+    ({ attachmentKey, label }: UploadedAttachmentOpenRequest) => {
+      const filePath = `uploaded-attachment:${attachmentKey}`;
+      setOpenFiles((prev: OpenFileTab[]) => {
+        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) return prev;
+        return [
+          ...prev,
+          {
+            filePath,
+            fileName: label || "Attachment",
+            isUploadedAttachment: true,
+            attachmentKey,
+          },
+        ];
+      });
+      setActiveFilePath(filePath);
+      setActiveTerminalId(null);
+    },
+    [setActiveTerminalId],
+  );
+
   const handleDiffFileClick = useCallback(
     (filePath: string, status: string) => {
       const diffKey = `diff:${filePath}`;
@@ -78,6 +102,7 @@ export function useFileActions() {
     setActiveFilePath,
     handleFileClick,
     handleDraftAttachmentClick,
+    handleUploadedAttachmentClick,
     handleDiffFileClick,
     handleSelectFile,
     handleCloseFile,

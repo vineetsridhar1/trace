@@ -14,7 +14,7 @@ import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
-import { AttachmentOpenContext } from "./AttachmentOpenContext";
+import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
@@ -220,6 +220,7 @@ export function SessionGroupDetailView({
     setActiveFilePath,
     handleFileClick,
     handleDraftAttachmentClick,
+    handleUploadedAttachmentClick,
     handleDiffFileClick,
     handleSelectFile,
     handleCloseFile,
@@ -517,8 +518,9 @@ export function SessionGroupDetailView({
     <CheckpointOpenContext.Provider value={handleOpenCheckpointPanel}>
       <FileOpenContext.Provider value={handleFileClick}>
         <AttachmentOpenContext.Provider value={handleDraftAttachmentClick}>
-          <div className="flex h-full flex-col overflow-hidden">
-          <GroupHeader
+          <UploadedAttachmentOpenContext.Provider value={handleUploadedAttachmentClick}>
+            <div className="flex h-full flex-col overflow-hidden">
+              <GroupHeader
             groupName={groupName as string | undefined}
             sessionGroupId={sessionGroupId}
             repoId={linkedCheckoutRepoId}
@@ -593,7 +595,8 @@ export function SessionGroupDetailView({
               </div>
             )}
           </div>
-          </div>
+            </div>
+          </UploadedAttachmentOpenContext.Provider>
         </AttachmentOpenContext.Provider>
       </FileOpenContext.Provider>
     </CheckpointOpenContext.Provider>

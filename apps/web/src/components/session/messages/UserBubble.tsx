@@ -4,6 +4,7 @@ import { formatTime } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
 import { useAuthStore } from "@trace/client-core";
 import { Markdown } from "../../ui/Markdown";
+import { useUploadedAttachmentOpen } from "../AttachmentOpenContext";
 import { ImageLightbox } from "../ImageLightbox";
 import { getAuthHeaders } from "@trace/client-core";
 import {
@@ -24,8 +25,14 @@ function AttachmentChip({ imageKey, label }: { imageKey: string; label: string }
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const isImage = isImageKey(imageKey);
+  const isText = isTextKey(imageKey);
+  const openUploadedAttachment = useUploadedAttachmentOpen();
 
   const handleClick = async () => {
+    if (isText && openUploadedAttachment) {
+      openUploadedAttachment({ attachmentKey: imageKey, label });
+      return;
+    }
     if (!isImage) {
       setDownloadDialogOpen(true);
       return;
@@ -180,4 +187,8 @@ function attachmentLabel(key: string): string {
 
 function isImageKey(key: string): boolean {
   return /\.(png|jpe?g|gif|webp)$/i.test(key);
+}
+
+function isTextKey(key: string): boolean {
+  return /\.txt$/i.test(key);
 }
