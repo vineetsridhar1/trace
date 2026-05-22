@@ -7,6 +7,7 @@ import { isLocalMode } from "../lib/mode.js";
 import { pushNotificationService } from "./pushNotificationService.js";
 
 export interface CreateEventInput {
+  id?: string;
   organizationId: string;
   scopeType: ScopeType;
   scopeId: string;
@@ -115,6 +116,7 @@ export class EventService {
 
     const event = await db.event.create({
       data: {
+        id: input.id,
         organizationId: input.organizationId,
         scopeType: input.scopeType,
         scopeId: input.scopeId,

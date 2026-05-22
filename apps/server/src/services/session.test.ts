@@ -2144,6 +2144,24 @@ describe("SessionService", () => {
           sessionId: "source-session",
           sessionGroupId: "source-group",
           commitSha: "checkpoint-sha",
+          promptEventId: "source-message",
+        }),
+      );
+      prismaMock.gitCheckpoint.findMany.mockResolvedValueOnce([
+        makeGitCheckpoint({
+          id: "source-checkpoint",
+          sessionId: "source-session",
+          sessionGroupId: "source-group",
+          commitSha: "checkpoint-sha",
+          promptEventId: "source-message",
+        }),
+      ]);
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          id: "forked-checkpoint",
+          sessionId: "forked-session",
+          sessionGroupId: "forked-group",
+          promptEventId: "forked-message",
         }),
       );
       prismaMock.session.findUnique.mockResolvedValueOnce({
@@ -2166,47 +2184,51 @@ describe("SessionService", () => {
       });
       prismaMock.sessionGroup.create.mockResolvedValueOnce(forkedGroup);
       prismaMock.session.create.mockResolvedValueOnce(forkedSession);
-      prismaMock.event.findMany.mockResolvedValueOnce([
-        {
-          id: "source-start",
-          scopeType: "session",
-          scopeId: "source-session",
-          eventType: "session_started",
-          payload: { session: { id: "source-session" }, sessionGroup: { id: "source-group" } },
-          actorType: "user",
-          actorId: "other-user",
-          parentId: null,
-          metadata: null,
-          organizationId: "org-1",
-          timestamp: new Date("2024-01-01T00:00:00.000Z"),
-        },
-        {
-          id: "source-message",
-          scopeType: "session",
-          scopeId: "source-session",
-          eventType: "message_sent",
-          payload: { text: "hello", sessionId: "source-session", groupId: "source-group" },
-          actorType: "user",
-          actorId: "other-user",
-          parentId: "source-start",
-          metadata: null,
-          organizationId: "org-1",
-          timestamp: new Date("2024-01-01T00:00:01.000Z"),
-        },
-      ]);
-      prismaMock.event.findFirst.mockResolvedValueOnce({
-        id: "forked-start",
-        scopeType: "session",
-        scopeId: "forked-session",
-        eventType: "session_started",
-        payload: {},
-        actorType: "user",
-        actorId: "user-1",
-        parentId: null,
-        metadata: null,
-        organizationId: "org-1",
-        timestamp: new Date("2024-01-01T00:00:02.000Z"),
-      });
+      prismaMock.event.findMany
+        .mockResolvedValueOnce([
+          {
+            id: "source-start",
+            scopeType: "session",
+            scopeId: "source-session",
+            eventType: "session_started",
+            payload: { session: { id: "source-session" }, sessionGroup: { id: "source-group" } },
+            actorType: "user",
+            actorId: "other-user",
+            parentId: null,
+            metadata: null,
+            organizationId: "org-1",
+            timestamp: new Date("2024-01-01T00:00:00.000Z"),
+          },
+          {
+            id: "source-message",
+            scopeType: "session",
+            scopeId: "source-session",
+            eventType: "message_sent",
+            payload: {
+              text: "hello",
+              sessionId: "source-session",
+              groupId: "source-group",
+              checkpoint: { id: "source-checkpoint", promptEventId: "source-message" },
+            },
+            actorType: "user",
+            actorId: "other-user",
+            parentId: "source-start",
+            metadata: null,
+            organizationId: "org-1",
+            timestamp: new Date("2024-01-01T00:00:01.000Z"),
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: "forked-message",
+            payload: {
+              text: "hello",
+              sessionId: "forked-session",
+              groupId: "forked-group",
+              checkpoint: { id: "source-checkpoint", promptEventId: "source-message" },
+            },
+          },
+        ]);
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(forkedSession);
       eventServiceMock.create
         .mockResolvedValueOnce({ id: "forked-start" })
@@ -2261,6 +2283,31 @@ describe("SessionService", () => {
           metadata: expect.objectContaining({
             forkedFromEventId: "source-message",
           }),
+          deferPublish: true,
+        }),
+        expect.anything(),
+      );
+      expect(prismaMock.gitCheckpoint.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sessionId: "forked-session",
+          sessionGroupId: "forked-group",
+          promptEventId: expect.any(String),
+          commitSha: "checkpoint-sha",
+        }),
+      });
+      expect(prismaMock.event.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "forked-message" },
+          data: {
+            payload: expect.objectContaining({
+              sessionId: "forked-session",
+              groupId: "forked-group",
+              checkpoint: {
+                id: "forked-checkpoint",
+                promptEventId: expect.any(String),
+              },
+            }),
+          },
         }),
       );
     });

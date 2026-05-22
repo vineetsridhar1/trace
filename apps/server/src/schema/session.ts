@@ -19,7 +19,7 @@ import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
-import { assertScopeAccess } from "../services/access.js";
+import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -650,9 +650,21 @@ export const sessionTypeResolvers = {
       _args: unknown,
       ctx: Context,
     ) => {
-      if (group.forkedFromSessionGroup) return group.forkedFromSessionGroup;
+      if (!ctx.userId) return null;
+      if (group.forkedFromSessionGroup) {
+        const sourceGroup = group.forkedFromSessionGroup as {
+          ownerUserId?: string | null;
+          visibility?: "public" | "private" | null;
+        };
+        return canViewSessionGroup(sourceGroup, ctx.userId) ? group.forkedFromSessionGroup : null;
+      }
       if (!group.forkedFromSessionGroupId) return null;
-      return ctx.sessionGroupLoader.load(group.forkedFromSessionGroupId);
+      const sourceGroup = (await ctx.sessionGroupLoader.load(group.forkedFromSessionGroupId)) as {
+        ownerUserId?: string | null;
+        visibility?: "public" | "private" | null;
+      } | null;
+      if (!sourceGroup || !canViewSessionGroup(sourceGroup, ctx.userId)) return null;
+      return sourceGroup;
     },
   },
   Session: {
