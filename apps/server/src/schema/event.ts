@@ -8,7 +8,9 @@ import {
   assertChannelAccess,
   assertChatAccess,
   assertScopeAccess,
+  canViewChannel,
   canViewSessionGroup,
+  visibleChannelWhere,
 } from "../services/access.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import { prisma } from "../lib/db.js";
@@ -126,6 +128,91 @@ async function canViewSessionEvent(
   return !group || canViewSessionGroup(group, userId);
 }
 
+function eventPayloadChannelIds(payload: Record<string, unknown> | null): string[] {
+  const ids = new Set<string>();
+  const addChannel = (value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    const id = (value as { id?: unknown }).id;
+    if (typeof id === "string") ids.add(id);
+  };
+
+  addChannel(payload?.channel);
+  if (typeof payload?.channelId === "string") ids.add(payload.channelId);
+  const channels = payload?.channels;
+  if (Array.isArray(channels)) {
+    for (const channel of channels) addChannel(channel);
+  }
+  const ungroupedChannels = payload?.ungroupedChannels;
+  if (Array.isArray(ungroupedChannels)) {
+    for (const channel of ungroupedChannels) addChannel(channel);
+  }
+
+  return [...ids];
+}
+
+function eventPayloadChannelSnapshot(payload: Record<string, unknown> | null) {
+  const channel = payload?.channel;
+  return channel && typeof channel === "object" && !Array.isArray(channel)
+    ? (channel as {
+        visibility?: string | null;
+        ownerId?: string | null;
+        members?: Array<{ user?: { id?: string } }>;
+      })
+    : null;
+}
+
+async function canViewChannelEvent(
+  event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown },
+  userId: string,
+  cache: Map<string, boolean>,
+): Promise<boolean> {
+  const payload = eventPayloadRecord(event);
+  if (
+    (event.eventType === "channel_member_added" || event.eventType === "channel_member_removed") &&
+    payload?.userId === userId
+  ) {
+    return true;
+  }
+
+  const channelIds =
+    event.scopeType === "channel" ? [event.scopeId] : eventPayloadChannelIds(payload);
+  if (channelIds.length === 0) return true;
+
+  const channelSnapshot = eventPayloadChannelSnapshot(payload);
+  if (
+    channelSnapshot &&
+    typeof channelSnapshot.visibility === "string" &&
+    canViewChannel(
+      {
+        visibility: channelSnapshot.visibility,
+        ownerId: channelSnapshot.ownerId,
+        members: channelSnapshot.members?.flatMap((member) =>
+          member.user?.id ? [{ userId: member.user.id }] : [],
+        ),
+      },
+      userId,
+    )
+  ) {
+    return true;
+  }
+
+  for (const channelId of channelIds) {
+    const cached = cache.get(channelId);
+    if (cached !== undefined) {
+      if (!cached) return false;
+      continue;
+    }
+    const channel = await prisma.channel.findFirst({
+      where: { id: channelId, ...visibleChannelWhere(userId) },
+      select: { id: true },
+    });
+    const visible = channel !== null;
+    cache.set(channelId, visible);
+    if (!visible) return false;
+  }
+  return true;
+}
+
 export const eventQueries = {
   events: async (
     _: unknown,
@@ -177,6 +264,7 @@ export const eventQueries = {
       string,
       { visibility: string; ownerUserId: string } | null
     >();
+    const channelVisibilityCache = new Map<string, boolean>();
     for (const event of events) {
       if (event.scopeType === "chat") {
         chatIds.add(event.scopeId);
@@ -230,6 +318,15 @@ export const eventQueries = {
         CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
       ) {
         if (channelMembership.get(event.scopeId) ?? false) filtered.push(event);
+        continue;
+      }
+      if (
+        event.scopeType === "channel" ||
+        eventPayloadChannelIds(eventPayloadRecord(event)).length
+      ) {
+        if (await canViewChannelEvent(event, ctx.userId, channelVisibilityCache)) {
+          filtered.push(event);
+        }
         continue;
       }
       if (
@@ -330,6 +427,7 @@ export const eventSubscriptions = {
         string,
         { visibility: string; ownerUserId: string } | null
       >();
+      const channelVisibilityCache = new Map<string, boolean>();
 
       return filterAsyncIterator(
         pubsub.asyncIterator<{
@@ -357,6 +455,7 @@ export const eventSubscriptions = {
           ) {
             membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
             sessionVisibilityCache.clear();
+            channelVisibilityCache.clear();
           }
 
           if (event.scopeType === "chat") {
@@ -377,6 +476,12 @@ export const eventSubscriptions = {
             const result = await ctx.channelMembershipLoader.load(event.scopeId);
             membershipCache.set(cacheKey, result);
             return result;
+          }
+          if (
+            event.scopeType === "channel" ||
+            eventPayloadChannelIds(eventPayloadRecord(event)).length
+          ) {
+            return canViewChannelEvent(event, ctx.userId, channelVisibilityCache);
           }
           return canViewSessionEvent(
             event,

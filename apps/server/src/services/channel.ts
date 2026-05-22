@@ -12,22 +12,7 @@ import {
 } from "./message-utils.js";
 import { normalizeMembers } from "./member-utils.js";
 import { createChannelInTransaction } from "./channel-create.js";
-
-function channelVisibilityWhere(userId: string) {
-  return {
-    OR: [
-      { visibility: "public" },
-      { ownerId: userId },
-      { members: { some: { userId, leftAt: null } } },
-    ],
-  };
-}
-
-function channelAccessWhere(userId: string) {
-  return {
-    OR: [{ ownerId: userId }, { members: { some: { userId, leftAt: null } } }],
-  };
-}
+import { visibleChannelWhere } from "./access.js";
 
 export class ChannelService {
   async listChannels(
@@ -35,7 +20,7 @@ export class ChannelService {
     userId: string,
     options?: { projectId?: string; memberOnly?: boolean },
   ) {
-    const where: Record<string, unknown> = { organizationId, ...channelVisibilityWhere(userId) };
+    const where: Record<string, unknown> = { organizationId, ...visibleChannelWhere(userId) };
 
     if (options?.projectId) {
       where.projects = { some: { projectId: options.projectId } };
@@ -68,7 +53,7 @@ export class ChannelService {
 
   async getChannel(channelId: string, userId: string) {
     await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, ...channelAccessWhere(userId) },
+      where: { id: channelId, ...visibleChannelWhere(userId) },
       select: { id: true },
     });
 
@@ -175,8 +160,8 @@ export class ChannelService {
     actorId: string,
   ) {
     const channel = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const existing = await tx.channel.findUniqueOrThrow({
-        where: { id: channelId },
+      const existing = await tx.channel.findFirstOrThrow({
+        where: { id: channelId, ...visibleChannelWhere(actorId) },
         select: { organizationId: true },
       });
 
@@ -813,13 +798,16 @@ export class ChannelService {
       throw new AuthorizationError("Agents cannot delete channels directly");
     }
 
-    const channel = await prisma.channel.findUniqueOrThrow({
-      where: { id },
+    const channel = await prisma.channel.findFirstOrThrow({
+      where: { id, ...visibleChannelWhere(actorId) },
       select: {
         id: true,
         name: true,
         organizationId: true,
         groupId: true,
+        visibility: true,
+        ownerId: true,
+        members: { where: { leftAt: null }, select: { userId: true } },
       },
     });
 
@@ -855,6 +843,12 @@ export class ChannelService {
             channelId: id,
             name: channel.name,
             groupId: channel.groupId,
+            channel: {
+              id,
+              visibility: channel.visibility,
+              ownerId: channel.ownerId,
+              members: channel.members.map((member) => ({ user: { id: member.userId } })),
+            },
           },
           actorType,
           actorId,

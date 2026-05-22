@@ -129,6 +129,45 @@ export async function isActiveChannelMember(channelId: string, userId: string) {
   return member !== null;
 }
 
+export function visibleChannelWhere(userId: string): Prisma.ChannelWhereInput {
+  return {
+    OR: [
+      { visibility: "public" },
+      { ownerId: userId },
+      { members: { some: { userId, leftAt: null } } },
+    ],
+  };
+}
+
+export function canViewChannel(
+  channel: {
+    visibility?: string | null;
+    ownerId?: string | null;
+    members?: Array<{ userId: string }>;
+  },
+  userId: string,
+): boolean {
+  return (
+    channel.visibility == null ||
+    channel.visibility === "public" ||
+    channel.ownerId === userId ||
+    !!channel.members?.some((member) => member.userId === userId)
+  );
+}
+
+export async function assertChannelVisible(channelId: string, userId: string) {
+  const channel = await prisma.channel.findFirst({
+    where: { id: channelId, ...visibleChannelWhere(userId) },
+    select: { id: true },
+  });
+
+  if (!channel) {
+    throw new Error("Not authorized for this channel");
+  }
+
+  return channel;
+}
+
 export async function assertChatAccess(chatId: string, userId: string) {
   const chat = await prisma.chat.findFirst({
     where: {

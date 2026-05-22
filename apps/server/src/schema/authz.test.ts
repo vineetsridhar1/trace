@@ -9,6 +9,7 @@ vi.mock("../lib/pubsub.js", () => ({
     sessionPorts: (id: string) => `session:${id}:ports`,
     sessionStatus: (id: string) => `session:${id}:status`,
     sessionEvents: (id: string) => `session:${id}:events`,
+    orgEvents: (id: string) => `org:${id}:events`,
   },
 }));
 
@@ -16,6 +17,27 @@ vi.mock("../services/access.js", () => ({
   assertScopeAccess: vi.fn(),
   assertChannelAccess: vi.fn(),
   assertChatAccess: vi.fn(),
+  visibleChannelWhere: vi.fn((userId: string) => ({
+    OR: [
+      { visibility: "public" },
+      { ownerId: userId },
+      { members: { some: { userId, leftAt: null } } },
+    ],
+  })),
+  canViewChannel: vi.fn(
+    (
+      channel: {
+        visibility?: string | null;
+        ownerId?: string | null;
+        members?: Array<{ userId: string }>;
+      },
+      userId: string,
+    ) =>
+      channel.visibility == null ||
+      channel.visibility === "public" ||
+      channel.ownerId === userId ||
+      !!channel.members?.some((member) => member.userId === userId),
+  ),
   canViewSessionGroup: vi.fn(
     (group: { visibility?: string | null; ownerUserId?: string | null }, userId: string) =>
       group.visibility == null || group.visibility === "public" || group.ownerUserId === userId,
@@ -66,6 +88,9 @@ vi.mock("../lib/db.js", () => ({
       findFirst: vi.fn(),
     },
     sessionGroup: {
+      findFirst: vi.fn(),
+    },
+    channel: {
       findFirst: vi.fn(),
     },
   },
@@ -319,6 +344,68 @@ describe("GraphQL authz guards", () => {
     });
   });
 
+  it("filters historical private channel events using current channel visibility", async () => {
+    vi.mocked(eventService.query).mockResolvedValueOnce([
+      {
+        scopeType: "channel",
+        scopeId: "channel-1",
+        eventType: "channel_created",
+        payload: {
+          channel: {
+            id: "channel-1",
+            visibility: "private",
+            ownerId: "owner-1",
+            members: [{ user: { id: "owner-1" } }],
+          },
+        },
+      },
+    ]);
+    vi.mocked(prisma.channel.findFirst).mockResolvedValueOnce(null);
+
+    const result = await eventQueries.events({}, { organizationId: "org-1" }, ctx);
+
+    expect(result).toEqual([]);
+    expect(prisma.channel.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        OR: [
+          { visibility: "public" },
+          { ownerId: "user-1" },
+          { members: { some: { userId: "user-1", leftAt: null } } },
+        ],
+      },
+      select: { id: true },
+    });
+  });
+
+  it("allows invited users to receive their private channel membership event", async () => {
+    vi.mocked(eventService.query).mockResolvedValueOnce([
+      {
+        scopeType: "channel",
+        scopeId: "channel-1",
+        eventType: "channel_member_added",
+        payload: {
+          userId: "user-1",
+          channel: {
+            id: "channel-1",
+            visibility: "private",
+            ownerId: "owner-1",
+            members: [{ user: { id: "owner-1" } }, { user: { id: "user-1" } }],
+          },
+        },
+      },
+    ]);
+
+    const result = await eventQueries.events({}, { organizationId: "org-1" }, ctx);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        eventType: "channel_member_added",
+      }),
+    ]);
+    expect(prisma.channel.findFirst).not.toHaveBeenCalled();
+  });
+
   it("invalidates session event visibility cache when group visibility changes", async () => {
     const scopedCtx = { ...ctx, userId: "user-2" };
     const events = [
@@ -381,5 +468,40 @@ describe("GraphQL authz guards", () => {
     });
     await expect(filtered.next()).resolves.toEqual({ value: undefined, done: true });
     expect(prisma.sessionGroup.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it("filters org event subscriptions for hidden private channel events", async () => {
+    const events = [
+      {
+        orgEvents: {
+          scopeType: "channel",
+          scopeId: "channel-1",
+          eventType: "channel_created" as const,
+          payload: {
+            channel: {
+              id: "channel-1",
+              visibility: "private",
+              ownerId: "owner-1",
+              members: [{ user: { id: "owner-1" } }],
+            },
+          },
+        },
+      },
+    ];
+    const iterator = {
+      async next() {
+        const value = events.shift();
+        return value ? { value, done: false } : { value: undefined, done: true };
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    } as AsyncIterableIterator<(typeof events)[number]>;
+    vi.mocked(pubsub.asyncIterator).mockReturnValueOnce(iterator);
+    vi.mocked(prisma.channel.findFirst).mockResolvedValueOnce(null);
+
+    const filtered = eventSubscriptions.orgEvents.subscribe({}, { organizationId: "org-1" }, ctx);
+
+    await expect(filtered.next()).resolves.toEqual({ value: undefined, done: true });
   });
 });

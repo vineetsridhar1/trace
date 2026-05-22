@@ -394,6 +394,28 @@ describe("ChannelService", () => {
     );
   });
 
+  it("requires channel visibility before updating a channel", async () => {
+    prismaMock.channel.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new ChannelService();
+    await expect(
+      service.update("channel-1", { name: "new-name" }, "user", "user-1"),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        OR: [
+          { visibility: "public" },
+          { ownerId: "user-1" },
+          { members: { some: { userId: "user-1", leftAt: null } } },
+        ],
+      },
+      select: { organizationId: true },
+    });
+    expect(prismaMock.channel.update).not.toHaveBeenCalled();
+  });
+
   it("includes repo metadata in the join event payload", async () => {
     const joinedAt = new Date("2026-03-22T00:00:00.000Z");
     prismaMock.channel.findUniqueOrThrow

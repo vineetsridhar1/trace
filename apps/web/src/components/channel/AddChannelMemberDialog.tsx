@@ -45,6 +45,7 @@ export function AddChannelMemberDialog({ channelId }: { channelId: string }) {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [channelMemberIds, setChannelMemberIds] = useState<Set<string>>(() => new Set());
   const [addingUserId, setAddingUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -77,13 +78,20 @@ export function AddChannelMemberDialog({ channelId }: { channelId: string }) {
 
   async function handleAdd(targetUserId: string) {
     setAddingUserId(targetUserId);
+    setError(null);
     try {
-      await client
+      const result = await client
         .mutation(ADD_CHANNEL_MEMBER_MUTATION, {
           input: { channelId, userId: targetUserId },
         })
         .toPromise();
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
       await fetchMembers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add member");
     } finally {
       setAddingUserId(null);
     }
@@ -108,6 +116,7 @@ export function AddChannelMemberDialog({ channelId }: { channelId: string }) {
           <DialogTitle>Add Member</DialogTitle>
         </DialogHeader>
         <div className="max-h-60 space-y-1 overflow-y-auto py-4">
+          {error && <p className="px-2 pb-2 text-xs text-destructive">{error}</p>}
           {availableMembers.map((member) => (
             <button
               key={member.id}
