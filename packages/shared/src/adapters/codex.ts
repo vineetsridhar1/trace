@@ -4,6 +4,13 @@ import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
+function isCodexReconnectNotice(message: string): boolean {
+  return (
+    message.startsWith("Reconnecting... ") &&
+    message.includes("stream disconnected before completion:")
+  );
+}
+
 /**
  * Adapter for running OpenAI Codex CLI sessions.
  * Spawns `codex exec --json` for non-interactive, JSONL-streamed output.
@@ -159,12 +166,14 @@ export class CodexAdapter implements CodingToolAdapter {
       return;
     }
 
-    // Codex surfaces fatal run errors (e.g. usage limits, auth failures) as
-    // top-level `error` and `turn.failed` events with no `item`. Emit these
-    // as ErrorEvents so the UI renders the message instead of a bare "Run ended".
+    // Codex surfaces both fatal run errors (e.g. usage limits, auth failures)
+    // and non-fatal stream reconnect notices as top-level `error` events.
     if (eventType === "error") {
       const message = typeof data.message === "string" ? data.message : "Codex error";
       onOutput({ type: "error", message });
+      if (isCodexReconnectNotice(message)) {
+        return;
+      }
       this.sawErrorEvent = true;
       this.lastErrorMessage = message;
       return;

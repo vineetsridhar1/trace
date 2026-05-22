@@ -55,6 +55,67 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("does not fail Codex runs for reconnect notices that later complete", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+    const reconnectMessage =
+      "Reconnecting... 5/5 (stream disconnected before completion: websocket closed by server before response.completed)";
+
+    adapter.run({
+      prompt: "continue after reconnect",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "error", message: reconnectMessage })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "item.completed",
+        item: { type: "agent_message", text: "done" },
+      })}\n`,
+    );
+    spawnedChildren[0].emit("exit", 0);
+    vi.advanceTimersByTime(1_000);
+
+    expect(onOutput).toHaveBeenCalledWith({ type: "error", message: reconnectMessage });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "done" }] },
+    });
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails Codex runs for real top-level error events", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "use unavailable model",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "error", message: "Model is not available" })}\n`,
+    );
+    spawnedChildren[0].emit("exit", 0);
+    vi.advanceTimersByTime(1_000);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "error",
+      message: "Model is not available",
+    });
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "error" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
   it("completes a Claude Code run when the process exits but stdout never closes", () => {
     const adapter = new ClaudeCodeAdapter();
     const onOutput = vi.fn();
