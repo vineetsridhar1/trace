@@ -35,6 +35,8 @@ const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
 const JWT_SECRET = resolveJwtSecret();
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
+const GITHUB_OAUTH_STATE_KEY_PREFIX = "auth:github-oauth:";
+const GITHUB_OAUTH_STATE_TTL_SECONDS = 600;
 const RATE_LIMIT_KEY_PREFIX = "auth:rate";
 const localRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -42,6 +44,10 @@ type GitHubDeviceAuth = {
   deviceCode: string;
   expiresAt: number;
   intervalSeconds: number;
+};
+type GitHubOAuthState = {
+  redirectUri: string;
+  returnTo: string;
 };
 type GitHubAccessTokenResponse = { access_token?: string; error?: string; scope?: string };
 type GitHubUserResponse = {
@@ -75,6 +81,11 @@ const githubDevicePollRecordRateLimit: RateLimitConfig = {
 const mobilePairRateLimit: RateLimitConfig = {
   keyPrefix: "mobile-pair",
   max: 30,
+  windowSeconds: 60,
+};
+const githubOAuthStartRateLimit: RateLimitConfig = {
+  keyPrefix: "github-oauth-start",
+  max: 20,
   windowSeconds: 60,
 };
 
@@ -673,6 +684,134 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
   await deleteGitHubDeviceAuth(deviceAuthId);
 
   res.json({ status: "success" });
+});
+
+function githubOAuthStateKey(stateId: string): string {
+  return `${GITHUB_OAUTH_STATE_KEY_PREFIX}${stateId}`;
+}
+
+async function saveGitHubOAuthState(stateId: string, state: GitHubOAuthState): Promise<void> {
+  await redis.set(
+    githubOAuthStateKey(stateId),
+    JSON.stringify(state),
+    "EX",
+    GITHUB_OAUTH_STATE_TTL_SECONDS,
+  );
+}
+
+async function readAndDeleteGitHubOAuthState(stateId: string): Promise<GitHubOAuthState | null> {
+  const key = githubOAuthStateKey(stateId);
+  const value = await redis.get(key);
+  if (!value) return null;
+  await redis.del(key);
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof (parsed as Record<string, unknown>).redirectUri !== "string" ||
+      typeof (parsed as Record<string, unknown>).returnTo !== "string"
+    ) {
+      return null;
+    }
+    return parsed as GitHubOAuthState;
+  } catch {
+    return null;
+  }
+}
+
+function getRequestBaseUrl(req: Request): string {
+  const publicUrl = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
+  if (publicUrl) return publicUrl.replace(/\/$/, "");
+  return `${req.protocol}://${req.get("host")}`;
+}
+
+// Standard OAuth flow for web browsers
+router.get("/auth/github", async (req: Request, res: Response) => {
+  if (isLocalMode()) {
+    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
+  }
+  if (await consumeRateLimit(req, res, githubOAuthStartRateLimit)) {
+    return;
+  }
+
+  const baseUrl = getRequestBaseUrl(req);
+  const redirectUri = `${baseUrl}/auth/github/callback`;
+  const returnTo = `${baseUrl}/`;
+  const stateId = randomUUID();
+
+  await saveGitHubOAuthState(stateId, { redirectUri, returnTo });
+
+  const params = new URLSearchParams({
+    client_id: GITHUB_CLIENT_ID,
+    redirect_uri: redirectUri,
+    scope: "",
+    state: stateId,
+  });
+
+  res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
+});
+
+router.get("/auth/github/callback", async (req: Request, res: Response) => {
+  if (isLocalMode()) {
+    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
+  }
+
+  const code = typeof req.query.code === "string" ? req.query.code : null;
+  const stateId = typeof req.query.state === "string" ? req.query.state : null;
+  const oauthError = typeof req.query.error === "string" ? req.query.error : null;
+
+  if (!stateId) {
+    return res.status(400).send("Missing state parameter");
+  }
+
+  const state = await readAndDeleteGitHubOAuthState(stateId);
+  if (!state) {
+    return res.status(400).send("Invalid or expired OAuth state. Please try signing in again.");
+  }
+
+  if (oauthError || !code) {
+    const msg = oauthError === "access_denied" ? "GitHub sign-in was cancelled." : "GitHub sign-in failed.";
+    return res.redirect(`${state.returnTo}?auth_error=${encodeURIComponent(msg)}`);
+  }
+
+  const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      client_id: GITHUB_CLIENT_ID,
+      client_secret: process.env.GITHUB_CLIENT_SECRET ?? "",
+      code,
+      redirect_uri: state.redirectUri,
+    }),
+  });
+  const payload = (await tokenResponse.json()) as GitHubAccessTokenResponse;
+
+  if (!payload.access_token) {
+    return res.redirect(`${state.returnTo}?auth_error=${encodeURIComponent(payload.error ?? "GitHub sign-in failed.")}`);
+  }
+
+  if (payload.scope && payload.scope.trim().length > 0) {
+    const revoked = await revokeGitHubOAuthGrant(payload.access_token);
+    const msg = revoked
+      ? "Removed old GitHub permissions for Trace. Please sign in again."
+      : `GitHub still has old permissions for Trace. Revoke Trace at ${githubOAuthGrantUrl()}, then try again.`;
+    return res.redirect(`${state.returnTo}?auth_error=${encodeURIComponent(msg)}`);
+  }
+
+  let user: Awaited<ReturnType<typeof upsertUserFromGitHubAccessToken>>;
+  try {
+    user = await upsertUserFromGitHubAccessToken(payload.access_token);
+  } catch {
+    return res.redirect(`${state.returnTo}?auth_error=${encodeURIComponent("Could not verify GitHub identity. Please try again.")}`);
+  }
+
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+  setSessionCookie(res, token);
+  res.redirect(state.returnTo);
 });
 
 // Get current user with org memberships

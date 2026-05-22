@@ -5,6 +5,10 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { isLocalMode } from "../../lib/runtime-mode";
 
+const isElectron =
+  typeof window !== "undefined" &&
+  typeof (window as Window & { trace?: unknown }).trace !== "undefined";
+
 type GitHubDeviceLogin = {
   deviceAuthId: string;
   userCode: string;
@@ -23,14 +27,18 @@ export function LoginPage() {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("auth_error");
+  });
   const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
   const [deviceLogin, setDeviceLogin] = useState<GitHubDeviceLogin | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<"idle" | "pending" | "success">("idle");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (isLocalMode || !deviceLogin) return;
+    if (isLocalMode || !deviceLogin || !isElectron) return;
 
     const activeDeviceLogin = deviceLogin;
     let canceled = false;
@@ -141,6 +149,11 @@ export function LoginPage() {
   async function handleLocalLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await loginWithLocalName(name);
+  }
+
+  function startGithubOAuthLogin() {
+    const apiUrl = import.meta.env.VITE_API_URL ?? "";
+    window.location.href = `${apiUrl}/auth/github`;
   }
 
   async function startGithubDeviceLogin() {
@@ -291,7 +304,7 @@ export function LoginPage() {
         ) : (
           <div className="w-full rounded-xl border border-border bg-background p-5 shadow-sm">
             <Button
-              onClick={startGithubDeviceLogin}
+              onClick={isElectron ? startGithubDeviceLogin : startGithubOAuthLogin}
               size="lg"
               className="w-full gap-2"
               disabled={submitting}
