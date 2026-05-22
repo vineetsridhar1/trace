@@ -29,6 +29,7 @@ import {
   GIT_DIFF_TREE_ARGS,
   isMissingToolSessionError,
   parseGitShowOutput,
+  inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
 } from "@trace/shared";
@@ -587,6 +588,40 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
+      case "session_current_branch": {
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+        if (!workdir) {
+          this.send({
+            type: "session_current_branch_result",
+            requestId: cmd.requestId,
+            error: "Session workdir is unavailable",
+          });
+          break;
+        }
+        void inspectSessionCurrentBranch((args, options) =>
+          execFileAsync("git", args, {
+            cwd: workdir,
+            maxBuffer: options?.maxBuffer,
+            timeout: options?.timeoutMs,
+          }).then(({ stdout }) => String(stdout)),
+        )
+          .then((branch) => {
+            this.send({
+              type: "session_current_branch_result",
+              requestId: cmd.requestId,
+              branch,
+            });
+          })
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            this.send({
+              type: "session_current_branch_result",
+              requestId: cmd.requestId,
+              error: message,
+            });
+          });
+        break;
+      }
       case "session_git_sync_status": {
         const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
         if (!workdir) {

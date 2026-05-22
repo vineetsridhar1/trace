@@ -206,6 +206,13 @@ export interface BridgeSessionGitSyncStatusCommand {
   workdirHint?: string;
 }
 
+export interface BridgeSessionCurrentBranchCommand {
+  type: "session_current_branch";
+  requestId: string;
+  sessionId: string;
+  workdirHint?: string;
+}
+
 export interface BridgeTrackSessionCommand {
   type: "track_session";
   sessionId: string;
@@ -267,6 +274,7 @@ export type BridgeCommand =
   | BridgeRestoreLinkedCheckoutCommand
   | BridgeSetLinkedCheckoutAutoSyncCommand
   | BridgeSessionGitSyncStatusCommand
+  | BridgeSessionCurrentBranchCommand
   | BridgeTrackSessionCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
@@ -438,6 +446,13 @@ export interface BridgeSessionGitSyncStatusResult {
   error?: string;
 }
 
+export interface BridgeSessionCurrentBranchResult {
+  type: "session_current_branch_result";
+  requestId: string;
+  branch?: string | null;
+  error?: string;
+}
+
 export interface BridgePrObservation {
   url: string;
   state: "OPEN" | "CLOSED" | "MERGED";
@@ -556,6 +571,7 @@ export type BridgeMessage =
   | BridgeLinkedCheckoutChangedFileResult
   | BridgeLinkedCheckoutActionResult
   | BridgeSessionGitSyncStatusResult
+  | BridgeSessionCurrentBranchResult
   | BridgeSessionPrStatus
   | BridgeBranchesResult
   | BridgeWorkspaceSlugsResult
