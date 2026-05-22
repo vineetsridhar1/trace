@@ -29,6 +29,7 @@ import { client } from "../../lib/urql";
 import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
+import { PrivateSessionLock } from "../session/PrivateSessionLock";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -287,13 +288,10 @@ function OwnedSessionGroupItem({
           {record.name}
         </span>
         {isPrivate && (
-          <span
-            title="Private workspace"
-            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/80"
-            aria-label="Private workspace"
-          >
-            <Lock size={11} />
-          </span>
+          <PrivateSessionLock
+            className="h-4 w-4 rounded-sm text-muted-foreground/80"
+            size={11}
+          />
         )}
         {attached && (
           <span

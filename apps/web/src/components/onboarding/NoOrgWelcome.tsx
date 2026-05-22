@@ -4,11 +4,8 @@ import {
   Check,
   Copy,
   ExternalLink,
-  Laptop,
   LogOut,
   RefreshCw,
-  Server,
-  UserPlus,
 } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { cn } from "../../lib/utils";
@@ -28,6 +25,8 @@ export function NoOrgWelcome() {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const email = user?.email ?? "";
+  const name = user?.name?.trim() ?? "";
+  const accountLabel = name || email || "No account details available";
   const welcomeMessage = isLocalMode
     ? "Create an organization to start your local workspace, or ask an admin to invite you and share the email below."
     : "You are signed in, but this account is not part of a Trace organization yet.";
@@ -85,10 +84,7 @@ export function NoOrgWelcome() {
           <div className="mt-6">
             <div className="text-xs font-medium uppercase text-muted-foreground">Ways forward</div>
             <div className="mt-3 divide-y divide-border rounded-lg border border-border">
-              <div className="flex gap-3 p-3.5">
-                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
-                  <UserPlus size={15} />
-                </div>
+              <div className="p-3.5">
                 <div>
                   <div className="text-sm font-medium text-foreground">Get invited</div>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
@@ -96,10 +92,7 @@ export function NoOrgWelcome() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-3 p-3.5">
-                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
-                  <Laptop size={15} />
-                </div>
+              <div className="p-3.5">
                 <div>
                   <div className="text-sm font-medium text-foreground">Run locally</div>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
@@ -111,10 +104,7 @@ export function NoOrgWelcome() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-3 p-3.5">
-                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
-                  <Server size={15} />
-                </div>
+              <div className="p-3.5">
                 <div>
                   <div className="text-sm font-medium text-foreground">Self-host</div>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
@@ -144,7 +134,7 @@ export function NoOrgWelcome() {
         <div className="mt-6 rounded-lg border border-border bg-surface-deep p-3.5">
           <div className="mb-2 flex items-center justify-between gap-3">
             <label className="text-xs font-medium uppercase text-muted-foreground">
-              Your email
+              Your account
             </label>
             <button
               type="button"
@@ -156,9 +146,7 @@ export function NoOrgWelcome() {
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
-          <div className="truncate text-sm font-medium text-foreground">
-            {email || "No email available"}
-          </div>
+          <div className="truncate text-sm font-medium text-foreground">{accountLabel}</div>
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
