@@ -286,7 +286,8 @@ async function getLocalModeOrgMembership(userId: string): Promise<{
 
 export function getRequestToken(req: Pick<Request, "headers" | "cookies">): string | undefined {
   const authHeader = req.headers.authorization;
-  return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : req.cookies?.trace_token;
+  if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
+  return req.cookies?.trace_token ?? parseCookieToken(req.headers.cookie);
 }
 
 export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {

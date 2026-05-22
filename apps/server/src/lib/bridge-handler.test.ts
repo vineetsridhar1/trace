@@ -887,6 +887,12 @@ describe("bridge handler auth", () => {
 
   it("forwards local session_pr_status observations to the session service", async () => {
     const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
+      id: "bridge-runtime-1",
+      label: "Home runtime",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
@@ -896,6 +902,18 @@ describe("bridge handler auth", () => {
         instanceId: "runtime-home",
       },
     });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime-home",
+      label: "Home runtime",
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
     ws.emitMessage({
       type: "session_pr_status",
       sessionId: "session-1",
@@ -907,23 +925,23 @@ describe("bridge handler auth", () => {
         merged: false,
       },
     });
-    await Promise.resolve();
-    await Promise.resolve();
 
-    expect(mocks.syncPrObservation).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      runtimeInstanceId: expect.any(String),
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-      branch: "trace/branch",
-      observedAt: "2026-05-01T00:00:00.000Z",
-      pr: {
-        url: "https://github.com/trace/trace/pull/100",
-        state: "OPEN",
-        merged: false,
-      },
-      error: null,
-      actorId: "github-bridge-poll",
+    await vi.waitFor(() => {
+      expect(mocks.syncPrObservation).toHaveBeenCalledWith({
+        sessionId: "session-1",
+        runtimeInstanceId: "runtime-home",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        branch: "trace/branch",
+        observedAt: "2026-05-01T00:00:00.000Z",
+        pr: {
+          url: "https://github.com/trace/trace/pull/100",
+          state: "OPEN",
+          merged: false,
+        },
+        error: null,
+        actorId: "github-bridge-poll",
+      });
     });
   });
 
