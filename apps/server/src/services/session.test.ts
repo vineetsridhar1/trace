@@ -3046,7 +3046,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("appends the slug-preserving branch naming instruction for repo sessions", async () => {
+    it("appends the default-branch-only naming instruction for repo sessions", async () => {
       const session = makeSession({
         agentStatus: "done",
         sessionStatus: "in_progress",
@@ -3070,6 +3070,15 @@ describe("SessionService", () => {
         "session-1",
         expect.objectContaining({
           prompt: expect.stringContaining("trace/<slug>/<descriptive-name>"),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.stringContaining(
+            "If the branch is already descriptive or differs from trace/<slug>, do not rename it.",
+          ),
         }),
         expect.any(Object),
       );
