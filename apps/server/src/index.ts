@@ -26,7 +26,7 @@ import { sessionService } from "./services/session.js";
 import { createLegacyCloudMachineCompatibilityService } from "./lib/cloud-machine-compatibility.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
-import { connectRedis, disconnectRedis } from "./lib/redis.js";
+import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
 import { isLocalMode } from "./lib/mode.js";
@@ -44,6 +44,49 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 10 * 60 * 1000;
+const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
+const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
+
+function readDurationEnv(name: string, fallbackMs: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallbackMs;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(`[config] ignoring invalid ${name}=${raw}; using ${fallbackMs}`);
+    return fallbackMs;
+  }
+  return Math.floor(parsed);
+}
+
+async function withRedisJobLock<T>(options: {
+  enabled: boolean;
+  key: string;
+  ttlMs: number;
+  run: () => Promise<T>;
+}): Promise<T | null> {
+  if (!options.enabled) return options.run();
+
+  const token = `${process.pid}:${Date.now()}:${Math.random()}`;
+  const acquired = await redis.set(options.key, token, "PX", options.ttlMs, "NX");
+  if (acquired !== "OK") return null;
+
+  try {
+    return await options.run();
+  } finally {
+    await redis
+      .eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        1,
+        options.key,
+        token,
+      )
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[redis-lock] failed to release ${options.key}: ${message}`);
+      });
+  }
+}
 
 function requestHasSessionCookie(req: Pick<express.Request, "headers">): boolean {
   return hasSessionCookie(req.headers);
@@ -229,6 +272,73 @@ async function main() {
         });
       });
   }, 30_000);
+
+  const cloudIdleCleanupAfterMs = readDurationEnv(
+    "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS",
+    DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS,
+  );
+  const cloudIdleCleanupIntervalMs = readDurationEnv(
+    "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS",
+    DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS,
+  );
+  const cloudIdleCleanupLockTtlMs = Math.max(cloudIdleCleanupIntervalMs * 2, 5 * 60 * 1000);
+  let cloudIdleCleanupRunning = false;
+  const cloudIdleCleanup =
+    cloudIdleCleanupAfterMs > 0 && cloudIdleCleanupIntervalMs > 0
+      ? setInterval(() => {
+          if (cloudIdleCleanupRunning) {
+            logAgentEnvironmentTelemetry("cloud_idle_cleanup.iteration_skipped", {
+              reason: "in_process_overlap",
+              idleAfterMs: cloudIdleCleanupAfterMs,
+            });
+            return;
+          }
+
+          cloudIdleCleanupRunning = true;
+          const startedAt = Date.now();
+          void withRedisJobLock({
+            enabled: !localMode,
+            key: CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY,
+            ttlMs: cloudIdleCleanupLockTtlMs,
+            run: () =>
+              sessionService.cleanupIdleCloudSessionGroups({ idleAfterMs: cloudIdleCleanupAfterMs }),
+          })
+            .then((result) => {
+              if (!result) {
+                logAgentEnvironmentTelemetry("cloud_idle_cleanup.iteration_skipped", {
+                  reason: "distributed_lock_held",
+                  idleAfterMs: cloudIdleCleanupAfterMs,
+                  durationMs: Date.now() - startedAt,
+                });
+                return;
+              }
+              if (result.cleaned.length > 0) {
+                console.log(
+                  `[cloud-idle-cleanup] cleaned ${result.cleaned.length} idle session groups`,
+                );
+              }
+              logAgentEnvironmentTelemetry("cloud_idle_cleanup.iteration", {
+                scannedCount: result.scanned,
+                cleanedCount: result.cleaned.length,
+                idleAfterMs: cloudIdleCleanupAfterMs,
+                durationMs: Date.now() - startedAt,
+              });
+            })
+            .catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn(`[cloud-idle-cleanup] iteration failed: ${message}`);
+              logAgentEnvironmentTelemetry("cloud_idle_cleanup.iteration_failed", {
+                idleAfterMs: cloudIdleCleanupAfterMs,
+                durationMs: Date.now() - startedAt,
+                error: message,
+              });
+            })
+            .finally(() => {
+              cloudIdleCleanupRunning = false;
+            });
+        }, cloudIdleCleanupIntervalMs)
+      : null;
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
@@ -331,6 +441,7 @@ async function main() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
+              if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();

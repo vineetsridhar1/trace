@@ -244,7 +244,11 @@ function shouldSkipProvisionedStopForPolicy(
 ): boolean {
   if (adapter.type !== "provisioned") return false;
   if (deprovisionPolicy(environment) !== "manual") return false;
-  return reason !== "deprovision_reconciliation";
+  return (
+    reason !== "deprovision_reconciliation" &&
+    reason !== "idle_session_group_cleanup" &&
+    reason !== "session_moved_to_local"
+  );
 }
 
 /**
@@ -1868,6 +1872,8 @@ export class SessionRouter {
         update?: RuntimeLifecycleUpdate,
       ) => Promise<void> | void;
       maxStopAttempts?: number;
+      skipBridgeDelete?: boolean;
+      skipUnbind?: boolean;
     },
   ): Promise<void> {
     const adapterType =
@@ -1881,20 +1887,24 @@ export class SessionRouter {
     const lifecycleSnapshot = lifecycleSnapshotFromConnection(connection);
     const skipProviderStop = shouldSkipProvisionedStopForPolicy(adapter, environment, reason);
 
-    const deliveryResult = this.send(sessionId, {
-      type: "delete",
-      sessionId,
-      workdir: session.workdir,
-      repoId: session.repoId,
-    });
-    if (deliveryResult !== "delivered" && adapter.type === "local") {
-      console.warn(
-        `[local-adapter] bridge did not receive delete for ${sessionId}: ${deliveryResult}`,
-      );
+    if (options?.skipBridgeDelete !== true) {
+      const deliveryResult = this.send(sessionId, {
+        type: "delete",
+        sessionId,
+        workdir: session.workdir,
+        repoId: session.repoId,
+      });
+      if (deliveryResult !== "delivered" && adapter.type === "local") {
+        console.warn(
+          `[local-adapter] bridge did not receive delete for ${sessionId}: ${deliveryResult}`,
+        );
+      }
     }
 
     if (skipProviderStop) {
-      this.unbindSession(sessionId);
+      if (options?.skipUnbind !== true) {
+        this.unbindSession(sessionId);
+      }
       runtimeDebug("skipped provisioned runtime stop due to manual deprovision policy", {
         sessionId,
         reason,
@@ -1944,7 +1954,9 @@ export class SessionRouter {
         error: message,
       });
     } finally {
-      this.unbindSession(sessionId);
+      if (options?.skipUnbind !== true) {
+        this.unbindSession(sessionId);
+      }
     }
   }
 

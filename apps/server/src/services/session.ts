@@ -185,6 +185,8 @@ export type SessionConnectionData = {
   deprovisionedAt?: string;
   deprovisionFailedAt?: string;
   deprovisionAttempts?: number;
+  disconnectOnDeprovision?: boolean;
+  disconnectReason?: string;
   /**
    * Total times the background reconciler has picked this session up. Capped
    * at `MAX_RECONCILE_ATTEMPTS`; once reached the runtime is marked abandoned
@@ -267,6 +269,23 @@ type GroupWorkspaceStatePatch = {
   slug?: string | null;
   setupStatus?: "idle" | "running" | "completed" | "failed";
   setupError?: string | null;
+};
+
+type IdleCloudSessionGroupCandidate = {
+  id: string;
+  organizationId: string;
+  updatedAt: Date;
+  workdir: string | null;
+  connection: Prisma.JsonValue | null;
+  sessions: {
+    id: string;
+    hosting: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    lastMessageAt: Date | null;
+    updatedAt: Date;
+    connection?: Prisma.JsonValue | null;
+  }[];
 };
 
 function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
@@ -1286,6 +1305,23 @@ export class SessionService {
           autoRetryable: false,
         };
       case "session_runtime_stopped":
+        if (adapterType === "provisioned" && conn.disconnectOnDeprovision === true) {
+          return {
+            ...runtimePatch,
+            state: "disconnected",
+            stoppedAt: now,
+            deprovisionedAt: now,
+            disconnectedAt: now,
+            lastError:
+              typeof conn.disconnectReason === "string"
+                ? conn.disconnectReason
+                : "runtime_disconnected",
+            canRetry: true,
+            canMove: true,
+            autoRetryable: false,
+            disconnectOnDeprovision: false,
+          };
+        }
         return {
           ...runtimePatch,
           state: this.lifecycleConnectionState(eventType, adapterType),
@@ -6432,6 +6468,28 @@ export class SessionService {
       throw new Error("No enabled cloud agent environment is configured");
     }
     assertCloudRepoRemoteAvailable(targetHosting, session.repo);
+    let sourceCloudRuntimeSession =
+      session.hosting === "cloud" && targetHosting === "local"
+        ? await this.withGroupRuntimeState(session)
+        : null;
+    if (sourceCloudRuntimeSession) {
+      const runtimeConnection = this.parseConnection(sourceCloudRuntimeSession.connection);
+      const sessionConnection = this.parseConnection(session.connection);
+      const runtimeHasBinding =
+        !!runtimeConnection.runtimeInstanceId ||
+        !!runtimeConnection.providerRuntimeId ||
+        typeof runtimeConnection.cloudMachineId === "string";
+      const sessionHasBinding =
+        !!sessionConnection.runtimeInstanceId ||
+        !!sessionConnection.providerRuntimeId ||
+        typeof sessionConnection.cloudMachineId === "string";
+      if (!runtimeHasBinding && sessionHasBinding) {
+        sourceCloudRuntimeSession = {
+          ...sourceCloudRuntimeSession,
+          connection: session.connection,
+        };
+      }
+    }
 
     const sourceInspection = await this.inspectSessionMoveSource({
       sessionId: session.id,
@@ -6571,7 +6629,35 @@ export class SessionService {
       }
     }
 
+    if (sourceCloudRuntimeSession) {
+      await this.destroyMovedSourceCloudRuntime(movedSession.id, sourceCloudRuntimeSession);
+    }
+
     return movedSession;
+  }
+
+  private async destroyMovedSourceCloudRuntime(
+    sessionId: string,
+    sourceRuntimeSession: {
+      hosting: string;
+      organizationId?: string;
+      workdir?: string | null;
+      repoId?: string | null;
+      connection?: unknown;
+    },
+  ): Promise<void> {
+    try {
+      await sessionRouter.destroyRuntime(sessionId, sourceRuntimeSession, {
+        reason: "session_moved_to_local",
+        skipBridgeDelete: true,
+        skipUnbind: true,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[session-service] failed to destroy source cloud runtime after move for ${sessionId}: ${message}`,
+      );
+    }
   }
 
   async moveToRuntime(
@@ -7803,13 +7889,155 @@ export class SessionService {
     });
   }
 
+  async cleanupIdleCloudSessionGroups(options: {
+    idleAfterMs: number;
+    now?: number;
+    batchSize?: number;
+  }): Promise<{ scanned: number; cleaned: string[] }> {
+    const idleAfterMs = Math.max(1, Math.floor(options.idleAfterMs));
+    const now = options.now ?? Date.now();
+    const cutoff = new Date(now - idleAfterMs);
+    const batchSize = Math.max(1, Math.min(options.batchSize ?? 25, 100));
+
+    const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
+      where: {
+        archivedAt: null,
+        updatedAt: { lte: cutoff },
+        worktreeDeleted: false,
+        sessions: {
+          some: { hosting: "cloud" },
+          none: {
+            OR: [
+              { agentStatus: "active" },
+              { lastMessageAt: { gt: cutoff } },
+              { lastMessageAt: null, updatedAt: { gt: cutoff } },
+            ],
+          },
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        updatedAt: true,
+        workdir: true,
+        connection: true,
+        sessions: {
+          select: {
+            id: true,
+            hosting: true,
+            agentStatus: true,
+            sessionStatus: true,
+            lastMessageAt: true,
+            updatedAt: true,
+            connection: true,
+          },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        },
+      },
+      orderBy: { updatedAt: "asc" },
+      take: batchSize,
+    });
+
+    const cleaned: string[] = [];
+    for (const group of groups) {
+      const latestActivity = group.sessions.reduce<Date>(
+        (latest, session) => {
+          const sessionActivity = session.lastMessageAt ?? session.updatedAt;
+          return sessionActivity > latest ? sessionActivity : latest;
+        },
+        group.updatedAt,
+      );
+      if (latestActivity > cutoff) continue;
+
+      const groupConnection = this.parseConnection(group.connection);
+      const groupHasRuntimeBinding =
+        !!group.workdir ||
+        !!groupConnection.runtimeInstanceId ||
+        !!groupConnection.providerRuntimeId ||
+        typeof groupConnection.cloudMachineId === "string";
+      const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
+      if (cloudSessions.some((session) => session.agentStatus === "active")) continue;
+      const cloudSession =
+        cloudSessions.find((session) => {
+          const sessionConnection = this.parseConnection(session.connection);
+          return (
+            !!sessionConnection.runtimeInstanceId ||
+            !!sessionConnection.providerRuntimeId ||
+            typeof sessionConnection.cloudMachineId === "string"
+          );
+        }) ?? cloudSessions[0];
+      if (!cloudSession) continue;
+      if (!groupHasRuntimeBinding) {
+        const sessionConnection = this.parseConnection(cloudSession.connection);
+        const sessionHasRuntimeBinding =
+          !!sessionConnection.runtimeInstanceId ||
+          !!sessionConnection.providerRuntimeId ||
+          typeof sessionConnection.cloudMachineId === "string";
+        if (!sessionHasRuntimeBinding) continue;
+      }
+
+      const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(group, cloudSession);
+      if (!cleanedRuntime) continue;
+
+      cleaned.push(group.id);
+    }
+
+    return { scanned: groups.length, cleaned };
+  }
+
+  private async deprovisionIdleCloudSessionGroupRuntime(
+    group: IdleCloudSessionGroupCandidate,
+    cloudSession: IdleCloudSessionGroupCandidate["sessions"][number],
+  ): Promise<boolean> {
+    const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => ({
+      ...conn,
+      disconnectOnDeprovision: true,
+      disconnectReason: "idle_session_group_cleanup",
+    }));
+    if (!disconnectFlagged) return false;
+
+    const session = await prisma.session.findUnique({
+      where: { id: cloudSession.id },
+      select: {
+        organizationId: true,
+        hosting: true,
+        workdir: true,
+        repoId: true,
+        connection: true,
+        sessionGroupId: true,
+      },
+    });
+    if (!session) return false;
+
+    const runtimeSession = await this.withGroupRuntimeState(session);
+    terminalRelay.destroyAllForSessionGroup(group.id);
+    try {
+      await sessionRouter.destroyRuntime(
+        cloudSession.id,
+        runtimeSession,
+        this.destroyRuntimeOptions(cloudSession.id, "idle_session_group_cleanup"),
+      );
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[session-service] failed to deprovision idle cloud runtime for group ${group.id}: ${message}`,
+      );
+      return false;
+    }
+  }
+
   /**
    * Fully unload a session's runtime resources.
    * When `isGroupUnload` is true, destroys all group terminals and the shared runtime.
    * When false (single session), only destroys that session's terminals and checks
    * whether siblings are still active before touching group resources.
    */
-  private async fullyUnloadSession(sessionId: string, isGroupUnload = false): Promise<boolean> {
+  private async fullyUnloadSession(
+    sessionId: string,
+    isGroupUnload = false,
+    reason = "session_unloaded",
+  ): Promise<boolean> {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
@@ -7823,7 +8051,7 @@ export class SessionService {
     });
     if (!session) return false;
 
-    const destroyOptions = this.destroyRuntimeOptions(sessionId, "session_unloaded");
+    const destroyOptions = this.destroyRuntimeOptions(sessionId, reason);
     await this.resetReconcileState(sessionId);
 
     if (isGroupUnload && session.sessionGroupId) {
