@@ -28,6 +28,8 @@ export function NoOrgWelcome() {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const email = user?.email ?? "";
+  const name = user?.name?.trim() ?? "";
+  const accountLabel = name || email || "No account details available";
   const welcomeMessage = isLocalMode
     ? "Create an organization to start your local workspace, or ask an admin to invite you and share the email below."
     : "You are signed in, but this account is not part of a Trace organization yet.";
@@ -144,7 +146,7 @@ export function NoOrgWelcome() {
         <div className="mt-6 rounded-lg border border-border bg-surface-deep p-3.5">
           <div className="mb-2 flex items-center justify-between gap-3">
             <label className="text-xs font-medium uppercase text-muted-foreground">
-              Your email
+              Your account
             </label>
             <button
               type="button"
@@ -156,9 +158,10 @@ export function NoOrgWelcome() {
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
-          <div className="truncate text-sm font-medium text-foreground">
-            {email || "No email available"}
-          </div>
+          <div className="truncate text-sm font-medium text-foreground">{accountLabel}</div>
+          {name && email ? (
+            <div className="mt-1 truncate text-xs text-muted-foreground">{email}</div>
+          ) : null}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
