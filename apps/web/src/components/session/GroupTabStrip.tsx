@@ -33,6 +33,9 @@ export interface OpenFileTab {
   fileName: string;
   isDiff?: boolean;
   diffStatus?: string;
+  isDraftAttachment?: boolean;
+  attachmentSessionId?: string;
+  attachmentId?: string;
 }
 
 interface GroupTabStripProps {

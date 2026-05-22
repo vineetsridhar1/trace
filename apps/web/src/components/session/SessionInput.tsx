@@ -43,6 +43,7 @@ import { generateUUID } from "@trace/client-core";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { useTerminalStore } from "../../stores/terminal";
+import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
@@ -88,6 +89,7 @@ export function SessionInput({
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const images = useDraftsStore((s) => s.drafts[sessionId]?.images ?? EMPTY_ATTACHMENTS);
+  const openAttachment = useAttachmentOpen();
   const setDraftImages = useDraftsStore((s) => s.setDraftImages);
   const setDraftText = useDraftsStore((s) => s.setDraftText);
   const [initialDraftHtml] = useState(
@@ -192,6 +194,17 @@ export function SessionInput({
       event.currentTarget.value = "";
     },
     [addAttachments],
+  );
+
+  const handleOpenAttachment = useCallback(
+    (attachment: FileAttachment) => {
+      openAttachment?.({
+        sessionId,
+        attachmentId: attachment.id,
+        fileName: attachment.file.name || "Attachment",
+      });
+    },
+    [openAttachment, sessionId],
   );
 
   const handleRemoveImage = useCallback(
@@ -455,7 +468,11 @@ export function SessionInput({
           <span>Preparing workspace…</span>
         </div>
       )}
-      <ImageAttachmentBar attachments={images} onRemove={handleRemoveImage} />
+      <ImageAttachmentBar
+        attachments={images}
+        onRemove={handleRemoveImage}
+        onOpenAttachment={handleOpenAttachment}
+      />
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>

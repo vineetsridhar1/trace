@@ -42,21 +42,6 @@ describe("createLocalProjectOnDisk", () => {
 
     expect(fs.existsSync(path.join(root, "demo"))).toBe(true);
     expect(execFile).toHaveBeenCalledWith(["init", "-b", "main"], path.join(root, "demo"));
-    expect(execFile).toHaveBeenCalledWith(
-      [
-        "-c",
-        "user.name=Trace",
-        "-c",
-        "user.email=trace@localhost",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "--allow-empty",
-        "-m",
-        "Initial commit",
-      ],
-      path.join(root, "demo"),
-    );
   });
 
   it("uses the fallback branch setup when git init -b is unavailable", async () => {
@@ -73,22 +58,6 @@ describe("createLocalProjectOnDisk", () => {
     expect(execFile).toHaveBeenNthCalledWith(
       3,
       ["symbolic-ref", "HEAD", "refs/heads/main"],
-      path.join(root, "demo"),
-    );
-    expect(execFile).toHaveBeenNthCalledWith(
-      4,
-      [
-        "-c",
-        "user.name=Trace",
-        "-c",
-        "user.email=trace@localhost",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "--allow-empty",
-        "-m",
-        "Initial commit",
-      ],
       path.join(root, "demo"),
     );
   });
