@@ -6842,10 +6842,16 @@ export class SessionService {
       userId,
       { runtimeInstanceId: options?.runtimeInstanceId, requireRegisteredRepo: true },
     );
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { branch: true },
+    });
+    const canonicalBranch = group?.branch?.trim() || branch;
+
     return sessionRouter.syncLinkedCheckout(runtimeId, {
       repoId,
       sessionGroupId,
-      branch,
+      branch: canonicalBranch,
       commitSha: options?.commitSha,
       autoSyncEnabled: options?.autoSyncEnabled,
       conflictStrategy: options?.conflictStrategy,

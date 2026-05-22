@@ -7104,15 +7104,17 @@ describe("SessionService", () => {
 
     it("routes linked-checkout sync through the explicitly selected local runtime", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
-        id: "group-1",
-        repoId: "repo-1",
-        connection: {
-          state: "connected",
-          runtimeInstanceId: "runtime-a",
-        },
-        sessions: [],
-      });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          repoId: "repo-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+          },
+          sessions: [],
+        })
+        .mockResolvedValueOnce({ branch: "trace/raccoon" });
       sessionRouterMock.listRuntimes.mockReturnValue([
         {
           key: "org-1:runtime-a",
@@ -7165,6 +7167,62 @@ describe("SessionService", () => {
           repoId: "repo-1",
           sessionGroupId: "group-1",
           branch: "trace/raccoon",
+        }),
+      );
+    });
+
+    it("uses the session group's canonical branch when the client sends a stale branch", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          repoId: "repo-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-home",
+          },
+          sessions: [],
+        })
+        .mockResolvedValueOnce({ branch: "trace/ox" });
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-home",
+          id: "runtime-home",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      sessionRouterMock.syncLinkedCheckout.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        errorCode: null,
+        status: {
+          repoId: "repo-1",
+          repoPath: "/tmp/trace",
+          isAttached: true,
+          attachedSessionGroupId: "group-1",
+          targetBranch: "trace/ox",
+          autoSyncEnabled: true,
+          currentBranch: null,
+          currentCommitSha: "61a969a",
+          lastSyncedCommitSha: "61a969a",
+          lastSyncError: null,
+          restoreBranch: "main",
+          restoreCommitSha: "abc123",
+          hasUncommittedChanges: false,
+          changedFiles: [],
+        },
+      });
+
+      await service.syncLinkedCheckout("group-1", "repo-1", "main", "org-1", "user-1");
+
+      expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
+        "runtime-home",
+        expect.objectContaining({
+          branch: "trace/ox",
         }),
       );
     });
@@ -7231,23 +7289,25 @@ describe("SessionService", () => {
 
     it("passes sync conflict resolution options through to the runtime", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
-        id: "group-1",
-        repoId: "repo-1",
-        connection: {
-          state: "connected",
-          runtimeInstanceId: "runtime-home",
-        },
-        sessions: [
-          {
-            id: "session-home",
-            repoId: "repo-1",
-            hosting: "local",
-            createdById: "user-1",
-            connection: { state: "connected", runtimeInstanceId: "runtime-home" },
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          repoId: "repo-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-home",
           },
-        ],
-      });
+          sessions: [
+            {
+              id: "session-home",
+              repoId: "repo-1",
+              hosting: "local",
+              createdById: "user-1",
+              connection: { state: "connected", runtimeInstanceId: "runtime-home" },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ branch: "trace/raccoon" });
       sessionRouterMock.listRuntimes.mockReturnValue([
         {
           key: "runtime-home",
