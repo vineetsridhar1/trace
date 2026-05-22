@@ -12,6 +12,18 @@ export type GitSyncStatusRunner = (
 
 const DEFAULT_MAX_BUFFER = 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 10_000;
+const CURRENT_BRANCH_TIMEOUT_MS = 5_000;
+
+export async function inspectSessionCurrentBranch(
+  runGit: GitSyncStatusRunner,
+): Promise<string | null> {
+  const stdout = await runGit(["branch", "--show-current"], {
+    maxBuffer: DEFAULT_MAX_BUFFER,
+    timeoutMs: CURRENT_BRANCH_TIMEOUT_MS,
+  });
+  const branch = stdout.trim();
+  return branch.length > 0 ? branch : null;
+}
 
 async function maybeReadGitRef(
   runGit: GitSyncStatusRunner,

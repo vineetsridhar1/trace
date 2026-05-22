@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   type GitSyncStatusCommandOptions,
 } from "../src/session-git-sync-status.js";
@@ -101,5 +102,29 @@ describe("inspectSessionGitSyncStatus", () => {
     expect(calls.length).toBeGreaterThan(0);
     expect(calls.every((call) => call.options?.maxBuffer === 1024 * 1024)).toBe(true);
     expect(calls.every((call) => call.options?.timeoutMs === 10_000)).toBe(true);
+  });
+});
+
+describe("inspectSessionCurrentBranch", () => {
+  it("reads the current branch with a lightweight git command", async () => {
+    const { runGit, calls } = createRunner({
+      "branch --show-current": "trace/current\n",
+    });
+
+    await expect(inspectSessionCurrentBranch(runGit)).resolves.toBe("trace/current");
+    expect(calls).toEqual([
+      {
+        args: ["branch", "--show-current"],
+        options: { maxBuffer: 1024 * 1024, timeoutMs: 5_000 },
+      },
+    ]);
+  });
+
+  it("returns null for detached HEAD", async () => {
+    const { runGit } = createRunner({
+      "branch --show-current": "\n",
+    });
+
+    await expect(inspectSessionCurrentBranch(runGit)).resolves.toBeNull();
   });
 });

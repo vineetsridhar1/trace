@@ -41,6 +41,7 @@ vi.mock("./session-router.js", () => ({
     resolveLinkedCheckoutStatusRequest: vi.fn(),
     resolveLinkedCheckoutActionRequest: vi.fn(),
     resolveSessionGitSyncStatusRequest: vi.fn(),
+    resolveSessionCurrentBranchRequest: vi.fn(),
     resolveBranchRequest: vi.fn(),
     resolveFileRequest: vi.fn(),
     resolveFileContentRequest: vi.fn(),

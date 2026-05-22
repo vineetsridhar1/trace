@@ -56,6 +56,7 @@ vi.mock("../lib/session-router.js", () => ({
     commitLinkedCheckoutChanges: vi.fn().mockResolvedValue(null),
     restoreLinkedCheckout: vi.fn().mockResolvedValue(null),
     setLinkedCheckoutAutoSync: vi.fn().mockResolvedValue(null),
+    inspectSessionCurrentBranch: vi.fn().mockResolvedValue(null),
     inspectSessionGitSyncStatus: vi.fn().mockResolvedValue({
       branch: "trace/test",
       headCommitSha: "abc123",
@@ -296,6 +297,7 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
+    sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
     sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
@@ -6844,6 +6846,8 @@ describe("SessionService", () => {
       sessionRouterMock.listRuntimes.mockReturnValue([]);
       sessionRouterMock.getLinkedCheckoutStatus.mockReset();
       sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue(null);
+      sessionRouterMock.inspectSessionCurrentBranch.mockReset();
+      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
     });
 
     it("uses the session group's canonical runtime instead of the first local session runtime", async () => {
@@ -7165,6 +7169,110 @@ describe("SessionService", () => {
           repoId: "repo-1",
           sessionGroupId: "group-1",
           branch: "trace/raccoon",
+        }),
+      );
+    });
+
+    it("refreshes a stale tracked branch from the bridge before syncing", async () => {
+      const workdir = "/tmp/trace/worktrees/raccoon";
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        branch: "trace/old-raccoon",
+        workdir,
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-home",
+        },
+        visibility: "public",
+        ownerUserId: "user-1",
+        sessions: [
+          {
+            id: "session-home",
+            repoId: "repo-1",
+            branch: "trace/old-raccoon",
+            workdir,
+          },
+        ],
+      });
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-home",
+          id: "runtime-home",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce("trace/new-raccoon");
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ branch: "trace/new-raccoon" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ branch: "trace/new-raccoon" }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      sessionRouterMock.syncLinkedCheckout.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        errorCode: null,
+        status: {
+          repoId: "repo-1",
+          repoPath: "/tmp/trace",
+          isAttached: true,
+          attachedSessionGroupId: "group-1",
+          targetBranch: "trace/new-raccoon",
+          autoSyncEnabled: true,
+          currentBranch: null,
+          currentCommitSha: "def456",
+          lastSyncedCommitSha: "def456",
+          lastSyncError: null,
+          restoreBranch: "main",
+          restoreCommitSha: "abc123",
+          hasUncommittedChanges: false,
+          changedFiles: [],
+        },
+      });
+
+      await service.syncLinkedCheckout(
+        "group-1",
+        "repo-1",
+        "trace/old-raccoon",
+        "org-1",
+        "user-1",
+      );
+
+      expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
+        "runtime-home",
+        { sessionId: "session-home", workdirHint: workdir },
+        5000,
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1" },
+        data: { branch: "trace/new-raccoon" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          scopeId: "session-home",
+          payload: expect.objectContaining({
+            type: "branch_renamed",
+            branch: "trace/new-raccoon",
+          }),
+        }),
+      );
+      expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
+        "runtime-home",
+        expect.objectContaining({
+          branch: "trace/new-raccoon",
         }),
       );
     });

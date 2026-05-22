@@ -85,6 +85,7 @@ type UserSessionDefaults = {
 };
 
 const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
+const LINKED_CHECKOUT_BRANCH_REFRESH_TIMEOUT_MS = 5_000;
 const FALLBACK_SESSION_TOOL: CodingTool = "claude_code";
 const LOCAL_TOOL_FALLBACK_ORDER: readonly CodingTool[] = [
   FALLBACK_SESSION_TOOL,
@@ -238,6 +239,22 @@ type PendingSessionCommand =
 type PendingSessionCommandQueue = {
   type: "queue";
   commands: PendingSessionCommand[];
+};
+
+type LinkedCheckoutRuntimeGroup = {
+  id: string;
+  repoId: string | null;
+  branch: string | null;
+  workdir: string | null;
+  connection: unknown;
+  visibility: string | null;
+  ownerUserId: string | null;
+  sessions: Array<{
+    id: string;
+    repoId: string | null;
+    branch?: string | null;
+    workdir?: string | null;
+  }>;
 };
 
 type GroupWorkspaceStatePatch = {
@@ -1854,18 +1871,20 @@ export class SessionService {
       : null;
   }
 
-  private async resolveLinkedCheckoutRuntime(
+  private async resolveLinkedCheckoutRuntimeContext(
     sessionGroupId: string,
     repoId: string,
     organizationId: string,
     userId: string,
     options: { runtimeInstanceId?: string; requireRegisteredRepo?: boolean } = {},
-  ): Promise<string> {
+  ): Promise<{ runtimeId: string; group: LinkedCheckoutRuntimeGroup }> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
       select: {
         id: true,
         repoId: true,
+        branch: true,
+        workdir: true,
         connection: true,
         visibility: true,
         ownerUserId: true,
@@ -1873,6 +1892,8 @@ export class SessionService {
           select: {
             id: true,
             repoId: true,
+            branch: true,
+            workdir: true,
           },
         },
       },
@@ -1918,7 +1939,71 @@ export class SessionService {
       );
     }
 
-    return runtime.key;
+    return { runtimeId: runtime.key, group };
+  }
+
+  private async resolveLinkedCheckoutRuntime(
+    sessionGroupId: string,
+    repoId: string,
+    organizationId: string,
+    userId: string,
+    options: { runtimeInstanceId?: string; requireRegisteredRepo?: boolean } = {},
+  ): Promise<string> {
+    const { runtimeId } = await this.resolveLinkedCheckoutRuntimeContext(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+      options,
+    );
+    return runtimeId;
+  }
+
+  private async refreshLinkedCheckoutBranchFromBridge(params: {
+    runtimeId: string;
+    repoId: string;
+    group: LinkedCheckoutRuntimeGroup;
+  }): Promise<string | null> {
+    const sessionsForRepo = params.group.sessions.filter(
+      (session) => params.group.repoId === params.repoId || session.repoId === params.repoId,
+    );
+    const candidateSessions = sessionsForRepo.length > 0 ? sessionsForRepo : params.group.sessions;
+    const session =
+      candidateSessions.find(
+        (candidate) => candidate.workdir && candidate.workdir === params.group.workdir,
+      ) ??
+      candidateSessions.find((candidate) => candidate.workdir) ??
+      candidateSessions[0] ??
+      null;
+    const workdirHint = session?.workdir ?? params.group.workdir ?? undefined;
+
+    if (!session) return null;
+
+    let branch: string | null;
+    try {
+      branch = await sessionRouter.inspectSessionCurrentBranch(
+        params.runtimeId,
+        { sessionId: session.id, workdirHint },
+        LINKED_CHECKOUT_BRANCH_REFRESH_TIMEOUT_MS,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[session-service] failed to refresh branch before linked checkout sync for ${params.group.id}: ${message}`,
+      );
+      return null;
+    }
+
+    const currentBranch = branch?.trim();
+    if (!currentBranch) return null;
+
+    const trackedGroupBranch = params.group.branch ?? null;
+    const trackedSessionBranch = session.branch ?? trackedGroupBranch;
+    if (currentBranch !== trackedGroupBranch || currentBranch !== trackedSessionBranch) {
+      await this.updateBranch(session.id, currentBranch);
+    }
+
+    return currentBranch;
   }
 
   private async assertRepoExists(repoId: string, organizationId: string): Promise<void> {
@@ -6835,17 +6920,22 @@ export class SessionService {
     },
   ) {
     await this.assertRepoExists(repoId, organizationId);
-    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+    const { runtimeId, group } = await this.resolveLinkedCheckoutRuntimeContext(
       sessionGroupId,
       repoId,
       organizationId,
       userId,
       { runtimeInstanceId: options?.runtimeInstanceId, requireRegisteredRepo: true },
     );
+    const refreshedBranch = await this.refreshLinkedCheckoutBranchFromBridge({
+      runtimeId,
+      repoId,
+      group,
+    });
     return sessionRouter.syncLinkedCheckout(runtimeId, {
       repoId,
       sessionGroupId,
-      branch,
+      branch: refreshedBranch ?? branch,
       commitSha: options?.commitSha,
       autoSyncEnabled: options?.autoSyncEnabled,
       conflictStrategy: options?.conflictStrategy,

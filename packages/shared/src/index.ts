@@ -64,6 +64,7 @@ export type {
   BridgeLinkedCheckoutStatusCommand,
   BridgeLinkedCheckoutChangedFileCommand,
   BridgeSessionGitSyncStatusCommand,
+  BridgeSessionCurrentBranchCommand,
   BridgeLinkLinkedCheckoutRepoCommand,
   BridgeSyncLinkedCheckoutCommand,
   BridgeCommitLinkedCheckoutCommand,
@@ -77,6 +78,7 @@ export type {
   BridgeLinkedCheckoutErrorCode,
   BridgeSessionGitSyncStatus,
   BridgeSessionGitSyncStatusResult,
+  BridgeSessionCurrentBranchResult,
   BridgePrObservation,
   BridgeSessionPrStatus,
   BridgeLinkedCheckoutActionResultPayload,
@@ -105,7 +107,10 @@ export type {
   GitSyncStatusCommandOptions,
   GitSyncStatusRunner,
 } from "./session-git-sync-status.js";
-export { inspectSessionGitSyncStatus } from "./session-git-sync-status.js";
+export {
+  inspectSessionCurrentBranch,
+  inspectSessionGitSyncStatus,
+} from "./session-git-sync-status.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
 export type {

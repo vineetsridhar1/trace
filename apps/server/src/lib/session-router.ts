@@ -14,6 +14,7 @@ import type {
   BridgeBranchDiffFile,
   BridgeListSkillsCommand,
   BridgeSkillInfo,
+  BridgeSessionCurrentBranchCommand,
   BridgeLinkedCheckoutChangedFilePreview,
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
@@ -56,6 +57,7 @@ export type SessionCommand =
   | BridgeListSkillsCommand
   | BridgeListWorkspaceSlugsCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
+  | BridgeSessionCurrentBranchCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -341,6 +343,15 @@ export class SessionRouter {
     {
       runtimeId: string;
       resolve: (status: BridgeSessionGitSyncStatus) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  /** Pending session current-branch requests: requestId → resolve/reject */
+  private pendingSessionCurrentBranchRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (branch: string | null) => void;
       reject: (err: Error) => void;
     }
   >();
@@ -1510,6 +1521,62 @@ export class SessionRouter {
     this.pendingLinkedCheckoutActionRequests.delete(requestId);
     if (result.status) this.cacheLinkedCheckoutStatus(pending.runtimeId, result.status);
     pending.resolve(result);
+  }
+
+  inspectSessionCurrentBranch(
+    runtimeId: string,
+    input: {
+      sessionId: string;
+      workdirHint?: string | null;
+    },
+    timeoutMs = 5_000,
+  ): Promise<string | null> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "session_current_branch",
+      requestId,
+      sessionId: input.sessionId,
+      workdirHint: input.workdirHint ?? undefined,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<string | null>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingSessionCurrentBranchRequests.delete(requestId);
+        reject(new Error("Session current branch request timed out"));
+      }, timeoutMs);
+
+      this.pendingSessionCurrentBranchRequests.set(requestId, {
+        runtimeId,
+        resolve: (branch) => {
+          clearTimeout(timer);
+          resolve(branch);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveSessionCurrentBranchRequest(
+    requestId: string,
+    branch?: string | null,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingSessionCurrentBranchRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingSessionCurrentBranchRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(branch ?? null);
+    }
   }
 
   inspectSessionGitSyncStatus(
