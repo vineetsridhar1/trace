@@ -5483,6 +5483,25 @@ describe("SessionService", () => {
       });
 
       expect(result).toEqual({ scanned: 1, cleaned: ["group-1"] });
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            updatedAt: { lte: new Date("2026-05-12T11:35:00.000Z") },
+            sessions: expect.objectContaining({
+              some: { hosting: "cloud" },
+              none: {
+                OR: [
+                  { lastMessageAt: { gt: new Date("2026-05-12T11:35:00.000Z") } },
+                  {
+                    lastMessageAt: null,
+                    updatedAt: { gt: new Date("2026-05-12T11:35:00.000Z") },
+                  },
+                ],
+              },
+            }),
+          }),
+        }),
+      );
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
         where: { sessionGroupId: "group-1", agentStatus: "active" },
         data: { agentStatus: "stopped" },

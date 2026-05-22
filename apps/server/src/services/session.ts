@@ -7832,8 +7832,17 @@ export class SessionService {
     const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
       where: {
         archivedAt: null,
+        updatedAt: { lte: cutoff },
         worktreeDeleted: false,
-        sessions: { some: { hosting: "cloud" } },
+        sessions: {
+          some: { hosting: "cloud" },
+          none: {
+            OR: [
+              { lastMessageAt: { gt: cutoff } },
+              { lastMessageAt: null, updatedAt: { gt: cutoff } },
+            ],
+          },
+        },
       },
       select: {
         id: true,
