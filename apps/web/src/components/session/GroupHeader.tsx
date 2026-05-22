@@ -67,6 +67,7 @@ export function GroupHeader({
     runtimeLabel: linkedCheckoutRuntimeLabel,
     runtimeInstanceId: linkedCheckoutRuntimeInstanceId,
     sessionGroupId,
+    sourceSessionId: selectedSessionId,
     enabled: canManageLinkedCheckout,
   });
 

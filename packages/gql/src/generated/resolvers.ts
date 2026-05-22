@@ -1005,6 +1005,7 @@ export type MutationSyncLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+  sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationTerminateSessionArgs = {

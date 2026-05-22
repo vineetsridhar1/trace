@@ -235,6 +235,7 @@ export async function syncLinkedCheckout(
         repoId: request.repoId,
         branch: request.branch,
         runtimeInstanceId: request.runtimeInstanceId,
+        sourceSessionId: request.sourceSessionId,
         commitSha: request.commitSha,
         autoSyncEnabled: request.autoSyncEnabled,
         conflictStrategy: request.conflictStrategy,

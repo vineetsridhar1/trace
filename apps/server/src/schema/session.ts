@@ -446,6 +446,7 @@ export const sessionMutations = {
       repoId: string;
       branch: string;
       runtimeInstanceId?: string | null;
+      sourceSessionId?: string | null;
       commitSha?: string | null;
       autoSyncEnabled?: boolean | null;
       conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | "STASH" | null;
@@ -463,6 +464,7 @@ export const sessionMutations = {
       ctx.userId,
       {
         runtimeInstanceId: args.runtimeInstanceId ?? undefined,
+        sourceSessionId: args.sourceSessionId ?? undefined,
         commitSha: args.commitSha ?? undefined,
         autoSyncEnabled: args.autoSyncEnabled ?? undefined,
         conflictStrategy:

@@ -89,6 +89,7 @@ declare global {
     repoId: string;
     sessionGroupId: string;
     branch: string;
+    sourceSessionId?: string | null;
     commitSha?: string | null;
     autoSyncEnabled?: boolean;
     conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | "STASH" | null;

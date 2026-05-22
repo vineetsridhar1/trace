@@ -15,6 +15,7 @@ interface UseLinkedCheckoutHeaderStateProps {
   runtimeLabel: string | null | undefined;
   runtimeInstanceId: string | null | undefined;
   sessionGroupId: string;
+  sourceSessionId: string | null | undefined;
   enabled: boolean;
 }
 
@@ -69,6 +70,7 @@ export function useLinkedCheckoutHeaderState({
   runtimeLabel,
   runtimeInstanceId,
   sessionGroupId,
+  sourceSessionId,
   enabled,
 }: UseLinkedCheckoutHeaderStateProps): LinkedCheckoutHeaderState {
   const bridges = useBridgesStore((s: BridgesState) => s.bridges);
@@ -199,6 +201,7 @@ export function useLinkedCheckoutHeaderState({
       repoId,
       sessionGroupId,
       runtimeInstanceId: effectiveRuntimeInstanceId,
+      sourceSessionId: sourceSessionId ?? undefined,
       branch: groupBranch,
       autoSyncEnabled: true,
       conflictStrategy: options?.conflictStrategy,

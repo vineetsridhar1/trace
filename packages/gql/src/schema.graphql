@@ -1247,6 +1247,7 @@ type Mutation {
     repoId: ID!
     branch: String!
     runtimeInstanceId: ID
+    sourceSessionId: ID
     commitSha: String
     autoSyncEnabled: Boolean
     conflictStrategy: LinkedCheckoutSyncConflictStrategy

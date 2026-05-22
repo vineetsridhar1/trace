@@ -7235,12 +7235,19 @@ describe("SessionService", () => {
           repoId: "repo-1",
           connection: {
             state: "connected",
-            runtimeInstanceId: "runtime-cloud",
+          runtimeInstanceId: "runtime-cloud",
+        },
+        sessions: [
+          {
+            id: "session-stale",
+            repoId: "repo-1",
+            hosting: "cloud",
+            createdById: "user-1",
+            connection: { state: "connected", runtimeInstanceId: "runtime-stale" },
           },
-          sessions: [
-            {
-              id: "session-ox",
-              repoId: "repo-1",
+          {
+            id: "session-ox",
+            repoId: "repo-1",
               hosting: "cloud",
               createdById: "user-1",
               connection: { state: "connected", runtimeInstanceId: "runtime-cloud" },
@@ -7255,6 +7262,13 @@ describe("SessionService", () => {
             runtimeInstanceId: "runtime-cloud",
           },
           sessions: [
+            {
+              id: "session-stale",
+              repoId: "repo-1",
+              branch: "main",
+              workdir: "/workspaces/stale",
+              connection: { state: "connected", runtimeInstanceId: "runtime-stale" },
+            },
             {
               id: "session-ox",
               repoId: "repo-1",
@@ -7307,7 +7321,9 @@ describe("SessionService", () => {
         },
       });
 
-      await service.syncLinkedCheckout("group-1", "repo-1", "main", "org-1", "user-1");
+      await service.syncLinkedCheckout("group-1", "repo-1", "main", "org-1", "user-1", {
+        sourceSessionId: "session-ox",
+      });
 
       expect(sessionRouterMock.inspectSessionGitSyncStatus).toHaveBeenCalledWith(
         "runtime-cloud",

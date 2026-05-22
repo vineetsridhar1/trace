@@ -6806,6 +6806,7 @@ export class SessionService {
     repoId: string,
     organizationId: string,
     fallbackBranch: string,
+    sourceSessionId?: string | null,
   ): Promise<string> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
@@ -6828,6 +6829,10 @@ export class SessionService {
     const canonicalBranch = group?.branch?.trim() || fallbackBranch;
     const sessions = group?.sessions ?? [];
     const sourceSession =
+      (sourceSessionId
+        ? (sessions.find((session) => session.id === sourceSessionId && session.repoId === repoId) ??
+          null)
+        : null) ??
       sessions.find((session) => session.repoId === repoId && session.workdir) ??
       sessions.find((session) => session.repoId === repoId) ??
       null;
@@ -6887,6 +6892,7 @@ export class SessionService {
     userId: string,
     options?: {
       runtimeInstanceId?: string;
+      sourceSessionId?: string | null;
       commitSha?: string | null;
       autoSyncEnabled?: boolean;
       conflictStrategy?: "discard" | "commit" | "rebase" | "stash";
@@ -6906,6 +6912,7 @@ export class SessionService {
       repoId,
       organizationId,
       branch,
+      options?.sourceSessionId,
     );
 
     return sessionRouter.syncLinkedCheckout(runtimeId, {

@@ -1004,6 +1004,7 @@ export type MutationSyncLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+  sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationTerminateSessionArgs = {
@@ -3198,6 +3199,7 @@ export type SidebarSessionGroupsQuery = {
     name: string;
     slug?: string | null;
     status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
     prUrl?: string | null;
     worktreeDeleted: boolean;
     archivedAt?: string | null;
@@ -3207,6 +3209,7 @@ export type SidebarSessionGroupsQuery = {
     workdir?: string | null;
     createdAt: string;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     channel?: { __typename?: "Channel"; id: string } | null;
     repo?: { __typename?: "Repo"; id: string; name: string } | null;
     connection?: {
@@ -7413,6 +7416,19 @@ export const SidebarSessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },

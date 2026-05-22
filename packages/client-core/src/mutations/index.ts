@@ -778,6 +778,7 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
     $repoId: ID!
     $branch: String!
     $runtimeInstanceId: ID
+    $sourceSessionId: ID
     $commitSha: String
     $autoSyncEnabled: Boolean
     $conflictStrategy: LinkedCheckoutSyncConflictStrategy
@@ -788,6 +789,7 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
       repoId: $repoId
       branch: $branch
       runtimeInstanceId: $runtimeInstanceId
+      sourceSessionId: $sourceSessionId
       commitSha: $commitSha
       autoSyncEnabled: $autoSyncEnabled
       conflictStrategy: $conflictStrategy
