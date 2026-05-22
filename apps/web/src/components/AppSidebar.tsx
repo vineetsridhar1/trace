@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
-import { selectChannelOrStartSession } from "../lib/channel-click-navigation";
+import { selectChannel } from "../lib/channel-click-navigation";
 import { features } from "../lib/features";
 import { navigateToSessionGroup, useUIStore, type UIState } from "../stores/ui";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
@@ -31,7 +31,7 @@ export function AppSidebar() {
 
   const handleChannelClick = useCallback(
     (id: string) => {
-      selectChannelOrStartSession(id);
+      selectChannel(id);
       closeSidebar();
     },
     [closeSidebar],

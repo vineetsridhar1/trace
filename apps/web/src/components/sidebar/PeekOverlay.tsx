@@ -2,7 +2,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSidebarData } from "../../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
-import { selectChannelOrStartSession } from "../../lib/channel-click-navigation";
+import { selectChannel } from "../../lib/channel-click-navigation";
 import { features } from "../../lib/features";
 import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { SidebarChannelsPane } from "./SidebarChannelsPane";
@@ -61,7 +61,7 @@ export function PeekOverlay({
 
   const handleChannelClick = useCallback(
     (id: string) => {
-      selectChannelOrStartSession(id);
+      selectChannel(id);
       onMouseLeave();
     },
     [onMouseLeave],
