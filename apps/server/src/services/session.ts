@@ -7908,6 +7908,7 @@ export class SessionService {
           some: { hosting: "cloud" },
           none: {
             OR: [
+              { agentStatus: "active" },
               { lastMessageAt: { gt: cutoff } },
               { lastMessageAt: null, updatedAt: { gt: cutoff } },
             ],
@@ -7948,16 +7949,32 @@ export class SessionService {
       );
       if (latestActivity > cutoff) continue;
 
-      const cloudSession = group.sessions.find((session) => session.hosting === "cloud");
-      if (!cloudSession) continue;
-
       const groupConnection = this.parseConnection(group.connection);
-      const hasRuntimeBinding =
+      const groupHasRuntimeBinding =
         !!group.workdir ||
         !!groupConnection.runtimeInstanceId ||
         !!groupConnection.providerRuntimeId ||
         typeof groupConnection.cloudMachineId === "string";
-      if (!hasRuntimeBinding) continue;
+      const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
+      if (cloudSessions.some((session) => session.agentStatus === "active")) continue;
+      const cloudSession =
+        cloudSessions.find((session) => {
+          const sessionConnection = this.parseConnection(session.connection);
+          return (
+            !!sessionConnection.runtimeInstanceId ||
+            !!sessionConnection.providerRuntimeId ||
+            typeof sessionConnection.cloudMachineId === "string"
+          );
+        }) ?? cloudSessions[0];
+      if (!cloudSession) continue;
+      if (!groupHasRuntimeBinding) {
+        const sessionConnection = this.parseConnection(cloudSession.connection);
+        const sessionHasRuntimeBinding =
+          !!sessionConnection.runtimeInstanceId ||
+          !!sessionConnection.providerRuntimeId ||
+          typeof sessionConnection.cloudMachineId === "string";
+        if (!sessionHasRuntimeBinding) continue;
+      }
 
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(group, cloudSession);
       if (!cleanedRuntime) continue;
