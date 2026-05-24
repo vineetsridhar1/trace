@@ -51,7 +51,7 @@ const redisMock = redis as ReturnType<typeof import("../../test/helpers.js").cre
 const redisStore = new Map<string, string>();
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   redisStore.clear();
   redisMock.set.mockImplementation(async (key: string, value: string) => {
     redisStore.set(key, value);
@@ -695,6 +695,7 @@ describe("mobile pairing in local mode", () => {
   });
 
   it("creates a one-time pairing token for an authenticated local-mode session", async () => {
+    prismaMock.organization.findFirst.mockResolvedValue({ id: "org-1" });
     prismaMock.orgMember.findUnique.mockResolvedValue({ organizationId: "org-1" });
 
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
