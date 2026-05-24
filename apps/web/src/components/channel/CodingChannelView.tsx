@@ -2,7 +2,7 @@ import { useEffect, useCallback, useState } from "react";
 import { GitBranch, Archive } from "lucide-react";
 import { gql } from "@urql/core";
 import type { SessionGroup } from "@trace/gql";
-import { useEntityStore, useEntityField, type EntityState } from "@trace/client-core";
+import { useAuthStore, useEntityStore, useEntityField, type EntityState } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
@@ -86,6 +86,15 @@ const SESSION_GROUPS_QUERY = gql`
 export function CodingChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
   const viewerIsMember = useEntityField("channels", channelId, "viewerIsMember");
+  const channelMembers = useEntityField("channels", channelId, "members") as
+    | Array<{ user?: { id?: string }; userId?: string }>
+    | undefined;
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const canAddChannelMembers =
+    !!viewerIsMember ||
+    !!channelMembers?.some(
+      (member) => member.user?.id === currentUserId || member.userId === currentUserId,
+    );
   const baseBranch = useEntityField("channels", channelId, "baseBranch") as
     | string
     | null
@@ -140,7 +149,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           </span>
         )}
         <ConnectionStatus />
-        {viewerIsMember && <AddChannelMemberDialog channelId={channelId} />}
+        {canAddChannelMembers && <AddChannelMemberDialog channelId={channelId} />}
         <Button
           variant="ghost"
           size="icon"
