@@ -14,9 +14,9 @@ import { TypedDocumentNode as DocumentNode } from "@graphql-typed-document-node/
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
-  "\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n        }\n      }\n    }\n  }\n": typeof types.ChannelMembersDocument;
-  "\n  mutation AddChannelMember($input: AddChannelMemberInput!) {\n    addChannelMember(input: $input) {\n      id\n    }\n  }\n": typeof types.AddChannelMemberDocument;
   "\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n": typeof types.SendChannelMessageDocument;
+  "\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n          name\n          email\n          avatarUrl\n        }\n      }\n    }\n  }\n": typeof types.ChannelMembersDocument;
+  "\n  mutation AddChannelMember($input: AddChannelMemberInput!) {\n    addChannelMember(input: $input) {\n      id\n    }\n  }\n": typeof types.AddChannelMemberDocument;
   "\n  query SessionGroups($channelId: ID!, $archived: Boolean) {\n    sessionGroups(channelId: $channelId, archived: $archived) {\n      id\n      name\n      slug\n      status\n      visibility\n      owner {\n        id\n        name\n        avatarUrl\n      }\n      prUrl\n      worktreeDeleted\n      archivedAt\n      setupStatus\n      setupError\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n      sessions {\n        id\n        name\n        agentStatus\n        sessionStatus\n        tool\n        model\n        reasoningEffort\n        hosting\n        branch\n        workdir\n        prUrl\n        worktreeDeleted\n        sessionGroupId\n        lastUserMessageAt\n        lastMessageAt\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n          autoRetryable\n        }\n        createdBy {\n          id\n          name\n          avatarUrl\n        }\n        repo {\n          id\n          name\n          remoteUrl\n        }\n        channel {\n          id\n        }\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": typeof types.SessionGroupsDocument;
   "\n  query FilteredSessionGroups($channelId: ID!, $archived: Boolean, $status: SessionGroupStatus) {\n    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {\n      id\n      name\n      status\n      visibility\n      owner {\n        id\n        name\n        avatarUrl\n      }\n      prUrl\n      worktreeDeleted\n      archivedAt\n      setupStatus\n      setupError\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n      sessions {\n        id\n        name\n        agentStatus\n        sessionStatus\n        tool\n        model\n        reasoningEffort\n        hosting\n        branch\n        workdir\n        prUrl\n        worktreeDeleted\n        sessionGroupId\n        lastUserMessageAt\n        lastMessageAt\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n          autoRetryable\n        }\n        createdBy {\n          id\n          name\n          avatarUrl\n        }\n        repo {\n          id\n          name\n          remoteUrl\n        }\n        channel {\n          id\n        }\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": typeof types.FilteredSessionGroupsDocument;
   "\n  mutation AddChatMember($input: AddChatMemberInput!) {\n    addChatMember(input: $input) {\n      id\n    }\n  }\n": typeof types.AddChatMemberDocument;
@@ -80,12 +80,12 @@ type Documents = {
   "\n  query OnboardingSessions($organizationId: ID!) {\n    sessions(organizationId: $organizationId) {\n      id\n    }\n  }\n": typeof types.OnboardingSessionsDocument;
 };
 const documents: Documents = {
-  "\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n        }\n      }\n    }\n  }\n":
+  "\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n":
+    types.SendChannelMessageDocument,
+  "\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n          name\n          email\n          avatarUrl\n        }\n      }\n    }\n  }\n":
     types.ChannelMembersDocument,
   "\n  mutation AddChannelMember($input: AddChannelMemberInput!) {\n    addChannelMember(input: $input) {\n      id\n    }\n  }\n":
     types.AddChannelMemberDocument,
-  "\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n":
-    types.SendChannelMessageDocument,
   "\n  query SessionGroups($channelId: ID!, $archived: Boolean) {\n    sessionGroups(channelId: $channelId, archived: $archived) {\n      id\n      name\n      slug\n      status\n      visibility\n      owner {\n        id\n        name\n        avatarUrl\n      }\n      prUrl\n      worktreeDeleted\n      archivedAt\n      setupStatus\n      setupError\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n      sessions {\n        id\n        name\n        agentStatus\n        sessionStatus\n        tool\n        model\n        reasoningEffort\n        hosting\n        branch\n        workdir\n        prUrl\n        worktreeDeleted\n        sessionGroupId\n        lastUserMessageAt\n        lastMessageAt\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n          autoRetryable\n        }\n        createdBy {\n          id\n          name\n          avatarUrl\n        }\n        repo {\n          id\n          name\n          remoteUrl\n        }\n        channel {\n          id\n        }\n        createdAt\n        updatedAt\n      }\n    }\n  }\n":
     types.SessionGroupsDocument,
   "\n  query FilteredSessionGroups($channelId: ID!, $archived: Boolean, $status: SessionGroupStatus) {\n    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {\n      id\n      name\n      status\n      visibility\n      owner {\n        id\n        name\n        avatarUrl\n      }\n      prUrl\n      worktreeDeleted\n      archivedAt\n      setupStatus\n      setupError\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n      sessions {\n        id\n        name\n        agentStatus\n        sessionStatus\n        tool\n        model\n        reasoningEffort\n        hosting\n        branch\n        workdir\n        prUrl\n        worktreeDeleted\n        sessionGroupId\n        lastUserMessageAt\n        lastMessageAt\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n          autoRetryable\n        }\n        createdBy {\n          id\n          name\n          avatarUrl\n        }\n        repo {\n          id\n          name\n          remoteUrl\n        }\n        channel {\n          id\n        }\n        createdAt\n        updatedAt\n      }\n    }\n  }\n":
@@ -228,20 +228,20 @@ export function graphql(source: string): unknown;
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n        }\n      }\n    }\n  }\n",
-): (typeof documents)["\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n        }\n      }\n    }\n  }\n"];
+  source: "\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n          name\n          email\n          avatarUrl\n        }\n      }\n    }\n  }\n",
+): (typeof documents)["\n  query ChannelMembers($id: ID!) {\n    channel(id: $id) {\n      id\n      members {\n        user {\n          id\n          name\n          email\n          avatarUrl\n        }\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
   source: "\n  mutation AddChannelMember($input: AddChannelMemberInput!) {\n    addChannelMember(input: $input) {\n      id\n    }\n  }\n",
 ): (typeof documents)["\n  mutation AddChannelMember($input: AddChannelMemberInput!) {\n    addChannelMember(input: $input) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(
-  source: "\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

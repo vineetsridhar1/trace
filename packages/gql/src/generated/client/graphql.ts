@@ -1937,6 +1937,17 @@ export type User = {
 
 export type UserRole = "admin" | "member" | "observer";
 
+export type SendChannelMessageMutationVariables = Exact<{
+  channelId: Scalars["ID"]["input"];
+  html?: InputMaybe<Scalars["String"]["input"]>;
+  parentId?: InputMaybe<Scalars["ID"]["input"]>;
+}>;
+
+export type SendChannelMessageMutation = {
+  __typename?: "Mutation";
+  sendChannelMessage: { __typename?: "Message"; id: string };
+};
+
 export type ChannelMembersQueryVariables = Exact<{
   id: Scalars["ID"]["input"];
 }>;
@@ -1946,7 +1957,16 @@ export type ChannelMembersQuery = {
   channel?: {
     __typename?: "Channel";
     id: string;
-    members: Array<{ __typename?: "ChannelMember"; user: { __typename?: "User"; id: string } }>;
+    members: Array<{
+      __typename?: "ChannelMember";
+      user: {
+        __typename?: "User";
+        id: string;
+        name: string;
+        email: string;
+        avatarUrl?: string | null;
+      };
+    }>;
   } | null;
 };
 
@@ -1957,17 +1977,6 @@ export type AddChannelMemberMutationVariables = Exact<{
 export type AddChannelMemberMutation = {
   __typename?: "Mutation";
   addChannelMember: { __typename?: "Channel"; id: string };
-};
-
-export type SendChannelMessageMutationVariables = Exact<{
-  channelId: Scalars["ID"]["input"];
-  html?: InputMaybe<Scalars["String"]["input"]>;
-  parentId?: InputMaybe<Scalars["ID"]["input"]>;
-}>;
-
-export type SendChannelMessageMutation = {
-  __typename?: "Mutation";
-  sendChannelMessage: { __typename?: "Message"; id: string };
 };
 
 export type SessionGroupsQueryVariables = Exact<{
@@ -3324,105 +3333,6 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
-export const ChannelMembersDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "ChannelMembers" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "channel" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "members" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "user" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ChannelMembersQuery, ChannelMembersQueryVariables>;
-export const AddChannelMemberDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "AddChannelMember" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "AddChannelMemberInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "addChannelMember" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AddChannelMemberMutation, AddChannelMemberMutationVariables>;
 export const SendChannelMessageDocument = {
   kind: "Document",
   definitions: [
@@ -3483,6 +3393,110 @@ export const SendChannelMessageDocument = {
     },
   ],
 } as unknown as DocumentNode<SendChannelMessageMutation, SendChannelMessageMutationVariables>;
+export const ChannelMembersDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ChannelMembers" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "members" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "user" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ChannelMembersQuery, ChannelMembersQueryVariables>;
+export const AddChannelMemberDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "AddChannelMember" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "AddChannelMemberInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "addChannelMember" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AddChannelMemberMutation, AddChannelMemberMutationVariables>;
 export const SessionGroupsDocument = {
   kind: "Document",
   definitions: [

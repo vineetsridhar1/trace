@@ -12,7 +12,7 @@ import { MergedArchivedPage } from "./MergedArchivedPage";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
-import { AddChannelMemberDialog } from "./AddChannelMemberDialog";
+import { ChannelMembersDialog } from "./ChannelMembersDialog";
 
 const SESSION_GROUPS_QUERY = gql`
   query SessionGroups($channelId: ID!, $archived: Boolean) {
@@ -149,7 +149,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           </span>
         )}
         <ConnectionStatus />
-        {canAddChannelMembers && <AddChannelMemberDialog channelId={channelId} />}
+        {canAddChannelMembers && <ChannelMembersDialog channelId={channelId} />}
         <Button
           variant="ghost"
           size="icon"
