@@ -597,7 +597,7 @@ describe("createWorktree", () => {
     );
   });
 
-  it("replaces a pre-assigned slug when the bridge already has it in use", async () => {
+  it("keeps a pre-assigned slug authoritative when the bridge reports it in use", async () => {
     existsSyncMock.mockReturnValue(false);
     generateAnimalSlugMock.mockReturnValue("mink");
     getUsedSlugsMock.mockResolvedValue(new Set(["otter"]));
@@ -619,7 +619,9 @@ describe("createWorktree", () => {
         }
         if (args[0] === "rev-parse" && args[1] === "--verify") {
           const ref = args[2];
-          callback(ref === "origin/main" ? null : new Error("missing ref"));
+          callback(
+            ref === "origin/main" || ref === "trace/otter" ? null : new Error("missing ref"),
+          );
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args.includes("worktree") && args.includes("add")) {
@@ -645,9 +647,72 @@ describe("createWorktree", () => {
       defaultBranch: "main",
     });
 
+    expect(result.slug).toBe("otter");
+    expect(result.branch).toBe("trace/otter");
+    expect(generateAnimalSlugMock).not.toHaveBeenCalled();
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      [
+        "worktree",
+        "add",
+        expect.stringContaining("/trace/sessions/repo-1/otter"),
+        "trace/otter",
+      ],
+      expect.objectContaining({ cwd: "/tmp/repo" }),
+      expect.any(Function),
+    );
+  });
+
+  it("generates a different slug for new worktrees when a candidate is already used", async () => {
+    existsSyncMock.mockReturnValue(false);
+    const usedSlugs = new Set(["otter"]);
+    getUsedSlugsMock.mockResolvedValue(usedSlugs);
+    generateAnimalSlugMock.mockReturnValue("mink");
+
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout?: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/main" ? null : new Error("missing ref"));
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args.includes("worktree") && args.includes("add")) {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`));
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    const result = await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      defaultBranch: "main",
+    });
+
+    expect(generateAnimalSlugMock).toHaveBeenCalledWith(usedSlugs);
     expect(result.slug).toBe("mink");
     expect(result.branch).toBe("trace/mink");
-    expect(generateAnimalSlugMock).toHaveBeenCalledWith(new Set(["otter"]));
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       [

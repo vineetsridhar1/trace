@@ -149,14 +149,8 @@ async function resolveAvailableWorktreeSlug(
   repoPath: string,
   requestedSlug: string | undefined,
 ): Promise<string> {
+  if (requestedSlug) return requestedSlug;
   const usedSlugs = await getUsedSlugs(sessionsDir, repoPath);
-  if (!requestedSlug) return generateAnimalSlug(usedSlugs);
-
-  const requestedPath = path.join(sessionsDir, requestedSlug);
-  if (!usedSlugs.has(requestedSlug) || fs.existsSync(requestedPath)) {
-    return requestedSlug;
-  }
-
   return generateAnimalSlug(usedSlugs);
 }
 
