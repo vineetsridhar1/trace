@@ -819,7 +819,7 @@ export type MutationEditChatMessageArgs = {
 };
 
 export type MutationForkSessionArgs = {
-  sessionId: Scalars["ID"]["input"];
+  eventId: Scalars["ID"]["input"];
 };
 
 export type MutationJoinChannelArgs = {

@@ -5,12 +5,14 @@ import { Markdown } from "../../ui/Markdown";
 
 export function AssistantText({
   text,
+  eventId,
   onForkSession,
   canForkSession = false,
 }: {
   key?: React.Key;
   text: string;
-  onForkSession?: () => void;
+  eventId: string;
+  onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -40,7 +42,7 @@ export function AssistantText({
         </button>
         <button
           type="button"
-          onClick={onForkSession}
+          onClick={() => onForkSession?.(eventId)}
           disabled={!canForkSession || !onForkSession}
           className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           title="Fork session"

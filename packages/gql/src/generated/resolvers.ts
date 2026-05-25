@@ -820,7 +820,7 @@ export type MutationEditChatMessageArgs = {
 };
 
 export type MutationForkSessionArgs = {
-  sessionId: Scalars["ID"]["input"];
+  eventId: Scalars["ID"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -2926,7 +2926,7 @@ export type MutationResolvers<
     ResolversTypes["Session"],
     ParentType,
     ContextType,
-    RequireFields<MutationForkSessionArgs, "sessionId">
+    RequireFields<MutationForkSessionArgs, "eventId">
   >;
   joinChannel?: Resolver<
     ResolversTypes["Channel"],

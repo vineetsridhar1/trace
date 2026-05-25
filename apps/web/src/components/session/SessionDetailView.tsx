@@ -180,7 +180,7 @@ export function SessionDetailView({
   hideHeader?: boolean;
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
-  onForkSession?: () => void;
+  onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;

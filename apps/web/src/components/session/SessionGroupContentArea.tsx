@@ -25,7 +25,7 @@ interface SessionGroupContentAreaProps {
   defaultBranch: string;
   scrollToEventId: string | null;
   onScrollComplete: () => void;
-  onForkSession: () => void;
+  onForkSession: (eventId: string) => void;
   canForkSession: boolean;
 }
 

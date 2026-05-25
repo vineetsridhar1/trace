@@ -18,7 +18,7 @@ export interface SessionNodeRendererProps {
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
-  onForkSession?: () => void;
+  onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
 }
 

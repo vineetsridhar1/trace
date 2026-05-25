@@ -10,8 +10,8 @@ export const START_SESSION_MUTATION = gql`
 `;
 
 export const FORK_SESSION_MUTATION = gql`
-  mutation ForkSession($sessionId: ID!) {
-    forkSession(sessionId: $sessionId) {
+  mutation ForkSession($eventId: ID!) {
+    forkSession(eventId: $eventId) {
       id
       sessionGroupId
     }

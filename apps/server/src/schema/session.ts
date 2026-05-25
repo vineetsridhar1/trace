@@ -268,11 +268,11 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
-  forkSession: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+  forkSession: (_: unknown, args: { eventId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     if (!ctx.userId) throw new AuthenticationError();
     return sessionService.forkSession({
-      sessionId: args.sessionId,
+      eventId: args.eventId,
       organizationId: orgId,
       createdById: ctx.userId,
       actorType: ctx.actorType,

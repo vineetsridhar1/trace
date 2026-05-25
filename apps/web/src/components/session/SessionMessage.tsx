@@ -59,7 +59,8 @@ function renderAssistantContent(
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
-  onForkSession: (() => void) | undefined,
+  sourceEventId: string,
+  onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
 ) {
   const message = asJsonObject(payload.message);
@@ -77,6 +78,7 @@ function renderAssistantContent(
         <AssistantText
           key={i}
           text={block.text}
+          eventId={sourceEventId}
           onForkSession={onForkSession}
           canForkSession={canForkSession}
         />,
@@ -129,7 +131,8 @@ function renderSessionOutput(
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
-  onForkSession: (() => void) | undefined,
+  sourceEventId: string,
+  onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
 ) {
   const type = payload.type;
@@ -143,6 +146,7 @@ function renderSessionOutput(
       completedAgentTools,
       toolResultByUseId,
       gitCheckpointsByPromptEventId,
+      sourceEventId,
       onForkSession,
       canForkSession,
     );
@@ -195,7 +199,7 @@ export const SessionMessage = memo(function SessionMessage({
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
-  onForkSession?: () => void;
+  onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
 }) {
   const scopeKey = useEventScopeKey();
@@ -237,6 +241,7 @@ export const SessionMessage = memo(function SessionMessage({
             completedAgentTools,
             toolResultByUseId,
             gitCheckpointsByPromptEventId,
+            id,
             onForkSession,
             canForkSession,
           )

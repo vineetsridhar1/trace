@@ -204,7 +204,9 @@ export function SessionGroupDetailView({
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
-  const handleOpenForkDialog = useCallback(() => {
+  const [forkEventId, setForkEventId] = useState<string | null>(null);
+  const handleOpenForkDialog = useCallback((eventId: string) => {
+    setForkEventId(eventId);
     setForkDialogOpen(true);
   }, []);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
@@ -606,7 +608,7 @@ export function SessionGroupDetailView({
                 )}
               </div>
               <ForkSessionDialog
-                sessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
+                eventId={selectedSessionIsOptimistic ? null : forkEventId}
                 sessionName={selectedSession?.name ?? "this session"}
                 open={forkDialogOpen}
                 onOpenChange={setForkDialogOpen}

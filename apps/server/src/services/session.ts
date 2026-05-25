@@ -563,6 +563,8 @@ type SessionWithInclude = Prisma.SessionGetPayload<{
   include: typeof SESSION_INCLUDE;
 }>;
 
+type ForkSourceEvent = Prisma.EventGetPayload<Prisma.EventDefaultArgs>;
+
 type StartSessionAfterCreateInput = {
   tx: Prisma.TransactionClient;
   session: SessionWithInclude;
@@ -3295,15 +3297,27 @@ export class SessionService {
   }
 
   async forkSession(input: {
-    sessionId: string;
+    eventId: string;
     organizationId: string;
     createdById: string;
     actorType?: ActorType;
     clientSource?: string | null;
   }) {
+    const sourceForkEvent = await prisma.event.findFirst({
+      where: {
+        id: input.eventId,
+        organizationId: input.organizationId,
+        scopeType: "session",
+      },
+    });
+
+    if (!sourceForkEvent) {
+      throw new Error("Source event not found");
+    }
+
     const sourceSession = await prisma.session.findFirst({
       where: {
-        id: input.sessionId,
+        id: sourceForkEvent.scopeId,
         organizationId: input.organizationId,
       },
       include: SESSION_INCLUDE,
@@ -3320,27 +3334,41 @@ export class SessionService {
       throw new AuthorizationError("Not authorized for this session");
     }
 
-    const latestCheckpoint =
-      (await prisma.gitCheckpoint.findFirst({
-        where: {
-          sessionId: sourceSession.id,
-          sessionGroupId: sourceSessionGroupId,
-        },
-        orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-        select: { commitSha: true },
-      })) ??
-      (await prisma.gitCheckpoint.findFirst({
-        where: {
-          sessionGroupId: sourceSessionGroupId,
-        },
-        orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-        select: { commitSha: true },
-      }));
+    const sourceEvents = await prisma.event.findMany({
+      where: {
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: sourceSession.id,
+        OR: [
+          { timestamp: { lt: sourceForkEvent.timestamp } },
+          {
+            timestamp: sourceForkEvent.timestamp,
+            id: { lte: sourceForkEvent.id },
+          },
+        ],
+      },
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+    });
+    const sourceEventIds = sourceEvents.map((event) => event.id);
 
-    const sourceCheckpoint =
+    const latestCheckpoint = await prisma.gitCheckpoint.findFirst({
+      where: {
+        sessionGroupId: sourceSessionGroupId,
+        promptEventId: {
+          in: sourceEventIds,
+        },
+      },
+      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+      select: { commitSha: true },
+    });
+
+    const sourceCheckpoints =
       (await prisma.gitCheckpoint.findMany({
         where: {
           sessionGroupId: sourceSessionGroupId,
+          promptEventId: {
+            in: sourceEventIds,
+          },
         },
         orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
       })) ?? [];
@@ -3377,7 +3405,9 @@ export class SessionService {
             targetSessionGroupId: session.sessionGroupId,
             organizationId: input.organizationId,
             startEventId,
-            sourceCheckpoints: sourceCheckpoint,
+            sourceForkEventId: sourceForkEvent.id,
+            sourceEvents,
+            sourceCheckpoints,
           },
           tx,
         );
@@ -3398,6 +3428,8 @@ export class SessionService {
       targetSessionGroupId: string;
       organizationId: string;
       startEventId: string;
+      sourceForkEventId: string;
+      sourceEvents: ForkSourceEvent[];
       sourceCheckpoints: Array<{
         id: string;
         sessionId: string;
@@ -3415,14 +3447,7 @@ export class SessionService {
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const sourceEvents = await tx.event.findMany({
-      where: {
-        organizationId: input.organizationId,
-        scopeType: "session",
-        scopeId: input.sourceSessionId,
-      },
-      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
-    });
+    const sourceEvents = input.sourceEvents;
 
     const replacements = new Map<string, string>([
       [input.sourceSessionId, input.targetSessionId],
@@ -3439,6 +3464,7 @@ export class SessionService {
           metadata: {
             forkedFromSessionId: input.sourceSessionId,
             forkedFromSessionGroupId: input.sourceSessionGroupId,
+            forkedFromEventId: input.sourceForkEventId,
           } as Prisma.InputJsonValue,
         },
       });

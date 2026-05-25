@@ -14,12 +14,12 @@ import {
 import { Button } from "../ui/button";
 
 export function ForkSessionDialog({
-  sessionId,
+  eventId,
   sessionName,
   open,
   onOpenChange,
 }: {
-  sessionId: string | null;
+  eventId: string | null;
   sessionName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,12 +33,12 @@ export function ForkSessionDialog({
   };
 
   const handleFork = async () => {
-    if (!sessionId) return;
+    if (!eventId) return;
     setForking(true);
     setError(null);
     try {
       const result = await client
-        .mutation(FORK_SESSION_MUTATION, { sessionId })
+        .mutation(FORK_SESSION_MUTATION, { eventId })
         .toPromise();
       if (result.error) {
         setError(result.error.message);
@@ -64,8 +64,8 @@ export function ForkSessionDialog({
         <DialogHeader>
           <DialogTitle>Fork session</DialogTitle>
           <DialogDescription>
-            Create a new group from <strong>{sessionName}</strong> with copied history and a new
-            worktree branch.
+            Create a new group from <strong>{sessionName}</strong> with history copied through this
+            point and a new worktree branch.
           </DialogDescription>
         </DialogHeader>
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -73,7 +73,7 @@ export function ForkSessionDialog({
           <DialogClose render={<Button variant="outline" disabled={forking} />}>
             Cancel
           </DialogClose>
-          <Button disabled={forking || !sessionId} onClick={handleFork}>
+          <Button disabled={forking || !eventId} onClick={handleFork}>
             {forking ? "Forking..." : "Fork"}
           </Button>
         </DialogFooter>
