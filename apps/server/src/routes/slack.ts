@@ -1981,6 +1981,24 @@ async function recommendedSettingsForDraft(draftId: string, slackUserId: string)
   const account = await resolveSlackAccount(draft.slackTeamId, draft.slackUserId);
   if (!account) throw new Error("Link your Trace account before starting a session");
   const defaults = await getTraceDefaults(account.userId);
+  const localRuntimes = await listAccessibleLocalRuntimeOptions({
+    organizationId: draft.organizationId,
+    userId: account.userId,
+    tool: defaults.tool,
+  });
+  if (slackSessionHosting() === "local") {
+    if (localRuntimes.length === 1) {
+      return {
+        tool: defaults.tool,
+        model: defaults.model,
+        reasoningEffort: defaults.reasoningEffort,
+        hosting: "local",
+        runtimeInstanceId: localRuntimes[0]!.id,
+      };
+    }
+    throw new Error("Choose Configure to select a local bridge.");
+  }
+
   const cloudEnvironments = await listCloudEnvironmentOptions(draft.organizationId);
   if (cloudEnvironments.length > 0) {
     return {
@@ -1992,11 +2010,6 @@ async function recommendedSettingsForDraft(draftId: string, slackUserId: string)
     };
   }
 
-  const localRuntimes = await listAccessibleLocalRuntimeOptions({
-    organizationId: draft.organizationId,
-    userId: account.userId,
-    tool: defaults.tool,
-  });
   if (localRuntimes.length === 1) {
     return {
       tool: defaults.tool,
