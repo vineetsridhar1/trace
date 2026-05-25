@@ -257,8 +257,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
       "/tmp/repo-repo-1",
       "trace/rhino",
-      null,
-      { preferRemoteOnDivergence: true },
     );
     expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "b".repeat(40));
     expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
@@ -304,8 +302,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
       "/tmp/repo-repo-1",
       "main",
-      null,
-      { preferRemoteOnDivergence: true },
     );
   });
 
