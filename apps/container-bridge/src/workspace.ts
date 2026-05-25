@@ -71,14 +71,8 @@ async function resolveAvailableWorkspaceSlug(
   repoPath: string,
   requestedSlug: string | undefined,
 ): Promise<string> {
+  if (requestedSlug) return requestedSlug;
   const usedSlugs = await getUsedSlugs(WORKSPACES_DIR, repoPath);
-  if (!requestedSlug) return generateAnimalSlug(usedSlugs);
-
-  const requestedPath = `${WORKSPACES_DIR}/${requestedSlug}`;
-  if (!usedSlugs.has(requestedSlug) || fs.existsSync(requestedPath)) {
-    return requestedSlug;
-  }
-
   return generateAnimalSlug(usedSlugs);
 }
 
