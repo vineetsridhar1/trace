@@ -319,6 +319,77 @@ describe("ChannelService", () => {
     expect(prismaMock.channelMember.create).not.toHaveBeenCalled();
   });
 
+  it("lets private channel owners rejoin after leaving", async () => {
+    const leftAt = new Date("2026-04-01T00:00:00.000Z");
+    const joinedAt = new Date("2026-04-02T00:00:00.000Z");
+    prismaMock.channel.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        name: "private-room",
+        type: "text",
+        visibility: "private",
+        ownerId: "user-1",
+        position: 0,
+        groupId: null,
+        organizationId: "org-1",
+        repoId: null,
+        baseBranch: null,
+        repo: null,
+      })
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        members: [{ userId: "user-1", leftAt: null }],
+      });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.channelMember.findUnique.mockResolvedValueOnce({
+      channelId: "channel-1",
+      userId: "user-1",
+      leftAt,
+    });
+    prismaMock.channelMember.update.mockResolvedValueOnce({
+      channelId: "channel-1",
+      userId: "user-1",
+      joinedAt,
+      leftAt: null,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      {
+        channelId: "channel-1",
+        userId: "user-1",
+        joinedAt,
+        leftAt: null,
+      },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+    ]);
+
+    const service = new ChannelService();
+    await service.join("channel-1", "user", "user-1");
+
+    expect(prismaMock.channelMember.update).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "channel-1", userId: "user-1" } },
+      data: { leftAt: null, joinedAt: expect.any(Date) },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "channel_member_added",
+        payload: expect.objectContaining({
+          userId: "user-1",
+          channel: expect.objectContaining({
+            id: "channel-1",
+            visibility: "private",
+            ownerId: "user-1",
+          }),
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
   it("lets active channel members add another org member", async () => {
     const joinedAt = new Date("2026-04-02T00:00:00.000Z");
     prismaMock.channel.findUniqueOrThrow
