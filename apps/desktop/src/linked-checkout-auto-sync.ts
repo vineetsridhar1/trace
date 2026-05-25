@@ -233,7 +233,9 @@ export class LinkedCheckoutAutoSyncManager {
       let targetSha: string;
       try {
         await fetchTargetBranchIfAvailable(repoPath, targetBranch);
-        targetSha = await resolveTargetCommitSha(repoPath, targetBranch);
+        targetSha = await resolveTargetCommitSha(repoPath, targetBranch, null, {
+          preferRemoteOnDivergence: true,
+        });
       } catch (error) {
         this.logTick("failed resolving target sha", {
           repoId,

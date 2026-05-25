@@ -633,6 +633,7 @@ export async function resolveTargetCommitSha(
   repoPath: string,
   branch: string,
   commitSha?: string | null,
+  options: { preferRemoteOnDivergence?: boolean } = {},
 ): Promise<string> {
   if (commitSha) {
     assertValidCommitSha(commitSha);
@@ -648,6 +649,7 @@ export async function resolveTargetCommitSha(
     if (localSha === remoteSha) return localSha;
     if (await isAncestorCommit(repoPath, localSha, remoteSha)) return remoteSha;
     if (await isAncestorCommit(repoPath, remoteSha, localSha)) return localSha;
+    if (options.preferRemoteOnDivergence) return remoteSha;
     throw new Error(`Local and remote refs diverged for branch: ${branch}`);
   }
 
@@ -1103,7 +1105,9 @@ export function syncLinkedCheckout(
       const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
       await fetchOriginIfAvailable(repoPath);
       await fetchTargetBranchIfAvailable(repoPath, input.branch);
-      let targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
+      let targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha, {
+        preferRemoteOnDivergence: true,
+      });
       let rebaseAttachmentPrimed = false;
 
       if (await requiresSyncConflictResolution(repoPath, targetCommitSha)) {
