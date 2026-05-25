@@ -1032,7 +1032,7 @@ model SlackSessionDraft {
   prompt         String
   fileRefs       Json     @default("[]")
   createdAt      DateTime @default(now())
-  expiresAt      DateTime
+  expiresAt      DateTime?
 
   @@index([slackTeamId, slackChannelId, slackThreadTs])
   @@index([expiresAt])
