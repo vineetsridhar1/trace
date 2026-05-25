@@ -59,6 +59,8 @@ function renderAssistantContent(
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
+  onForkSession: (() => void) | undefined,
+  canForkSession: boolean,
 ) {
   const message = asJsonObject(payload.message);
   const contentBlocks = message?.content;
@@ -71,7 +73,15 @@ function renderAssistantContent(
 
     if (block.type === "text" && typeof block.text === "string") {
       if (!block.text.trim()) continue;
-      elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
+      elements.push(
+        <AssistantText
+          key={i}
+          text={block.text}
+          timestamp={ts}
+          onForkSession={onForkSession}
+          canForkSession={canForkSession}
+        />,
+      );
     } else if (block.type === "tool_use") {
       const name = str(block.name, "Tool");
       const toolUseId = typeof block.id === "string" ? block.id : undefined;
@@ -120,6 +130,8 @@ function renderSessionOutput(
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
+  onForkSession: (() => void) | undefined,
+  canForkSession: boolean,
 ) {
   const type = payload.type;
   if (typeof type !== "string") return null;
@@ -132,6 +144,8 @@ function renderSessionOutput(
       completedAgentTools,
       toolResultByUseId,
       gitCheckpointsByPromptEventId,
+      onForkSession,
+      canForkSession,
     );
   }
 
@@ -175,11 +189,15 @@ export const SessionMessage = memo(function SessionMessage({
   gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
+  onForkSession,
+  canForkSession = false,
 }: {
   id: string;
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
+  onForkSession?: () => void;
+  canForkSession?: boolean;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -220,6 +238,8 @@ export const SessionMessage = memo(function SessionMessage({
             completedAgentTools,
             toolResultByUseId,
             gitCheckpointsByPromptEventId,
+            onForkSession,
+            canForkSession,
           )
         : null;
 

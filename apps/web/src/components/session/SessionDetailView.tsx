@@ -171,6 +171,8 @@ export function SessionDetailView({
   hideHeader,
   scrollToEventId,
   onScrollComplete,
+  onForkSession,
+  canForkSession = false,
 }: {
   key?: React.Key;
   sessionId: string;
@@ -178,6 +180,8 @@ export function SessionDetailView({
   hideHeader?: boolean;
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
+  onForkSession?: () => void;
+  canForkSession?: boolean;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const {
@@ -365,9 +369,7 @@ export function SessionDetailView({
     }
 
     const compactNodes: SessionListNode[] = [];
-    let currentCollapsedGroup:
-      | Extract<SessionListNode, { kind: "collapsed-events" }>
-      | null = null;
+    let currentCollapsedGroup: Extract<SessionListNode, { kind: "collapsed-events" }> | null = null;
 
     for (const item of timelineItems) {
       if (item.kind === "collapsed_events") {
@@ -541,6 +543,8 @@ export function SessionDetailView({
                 planComments={planComments}
                 onAddPlanComment={handleAddPlanComment}
                 onRemovePlanComment={handleRemovePlanComment}
+                onForkSession={onForkSession}
+                canForkSession={canForkSession}
               />
             )}
             {initialEventsLoading && (

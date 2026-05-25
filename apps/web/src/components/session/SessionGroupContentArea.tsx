@@ -25,6 +25,8 @@ interface SessionGroupContentAreaProps {
   defaultBranch: string;
   scrollToEventId: string | null;
   onScrollComplete: () => void;
+  onForkSession: () => void;
+  canForkSession: boolean;
 }
 
 export function SessionGroupContentArea({
@@ -36,6 +38,8 @@ export function SessionGroupContentArea({
   defaultBranch,
   scrollToEventId,
   onScrollComplete,
+  onForkSession,
+  canForkSession,
 }: SessionGroupContentAreaProps) {
   const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
 
@@ -121,6 +125,8 @@ export function SessionGroupContentArea({
         hideHeader
         scrollToEventId={scrollToEventId}
         onScrollComplete={onScrollComplete}
+        onForkSession={onForkSession}
+        canForkSession={canForkSession}
       />
     );
   }

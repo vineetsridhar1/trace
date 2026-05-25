@@ -40,6 +40,8 @@ export interface SessionMessageListProps {
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
+  onForkSession?: () => void;
+  canForkSession?: boolean;
 }
 
 export function SessionMessageList({
@@ -60,6 +62,8 @@ export function SessionMessageList({
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
+  onForkSession,
+  canForkSession = false,
 }: SessionMessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -292,9 +296,7 @@ export function SessionMessageList({
 
   useEffect(() => {
     if (!requestedScrollToEventId) return;
-    const targetIndex = nodes.findIndex(
-      (n) => "id" in n && n.id === requestedScrollToEventId,
-    );
+    const targetIndex = nodes.findIndex((n) => "id" in n && n.id === requestedScrollToEventId);
     if (targetIndex >= 0) {
       const align = requestedScrollToEventId === scrollToEventId ? "center" : "start";
       virtualizer.scrollToIndex(targetIndex, { align, behavior: "smooth" });
@@ -470,39 +472,39 @@ export function SessionMessageList({
             )}
           </div>
 
-          {virtualItems.map(
-            (virtualRow: { key: React.Key; index: number }) => {
-              const node = nodes[virtualRow.index];
-              return (
-                <div
-                  key={virtualRow.key}
-                  ref={virtualizer.measureElement}
-                  data-index={virtualRow.index}
-                  className="w-full pb-3"
-                >
-                  {node.kind === "collapsed-events" ? (
-                    <CollapsedSessionEventsRow
-                      sessionId={sessionId}
-                      collapsedRanges={node.collapsedRanges}
-                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                    />
-                  ) : (
-                    <SessionNodeRenderer
-                      node={node}
-                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                      completedAgentTools={completedAgentTools}
-                      toolResultByUseId={toolResultByUseId}
-                      highlightEventId={highlightEventId}
-                      activePlanId={activePlanId}
-                      planComments={planComments}
-                      onAddPlanComment={onAddPlanComment}
-                      onRemovePlanComment={onRemovePlanComment}
-                    />
-                  )}
-                </div>
-              );
-            },
-          )}
+          {virtualItems.map((virtualRow: { key: React.Key; index: number }) => {
+            const node = nodes[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                className="w-full pb-3"
+              >
+                {node.kind === "collapsed-events" ? (
+                  <CollapsedSessionEventsRow
+                    sessionId={sessionId}
+                    collapsedRanges={node.collapsedRanges}
+                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                  />
+                ) : (
+                  <SessionNodeRenderer
+                    node={node}
+                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                    completedAgentTools={completedAgentTools}
+                    toolResultByUseId={toolResultByUseId}
+                    highlightEventId={highlightEventId}
+                    activePlanId={activePlanId}
+                    planComments={planComments}
+                    onAddPlanComment={onAddPlanComment}
+                    onRemovePlanComment={onRemovePlanComment}
+                    onForkSession={onForkSession}
+                    canForkSession={canForkSession}
+                  />
+                )}
+              </div>
+            );
+          })}
 
           {paddingBottom > 0 ? <div aria-hidden="true" style={{ height: paddingBottom }} /> : null}
         </div>

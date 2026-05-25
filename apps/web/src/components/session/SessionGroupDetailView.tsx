@@ -541,8 +541,6 @@ export function SessionGroupDetailView({
                 }
                 canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
                 moveDisabledReason={moveDisabledReason}
-                onForkSession={handleOpenForkDialog}
-                canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                 groupPrUrl={groupPrUrl}
                 panelMode={panelMode}
                 isFullscreen={isFullscreen}
@@ -586,6 +584,8 @@ export function SessionGroupDetailView({
                     defaultBranch={groupRepo?.defaultBranch ?? "main"}
                     scrollToEventId={scrollToEventId}
                     onScrollComplete={handleScrollComplete}
+                    onForkSession={handleOpenForkDialog}
+                    canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                   />
                 </div>
                 {showSidebar && !selectedSessionIsOptimistic && (
