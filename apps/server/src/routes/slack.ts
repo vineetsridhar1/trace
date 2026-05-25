@@ -1169,10 +1169,8 @@ async function postStartDraftPrompt(input: {
   const client = await getSlackClient(input.slackTeamId);
   if (!client) return;
 
-  const trimmedPrompt = input.prompt.trim();
   const summary = selectedFilesSummary(input.fileRefs, input.warnings);
-  const promptText = trimmedPrompt ? `*Prompt:*\n>${trimmedPrompt}` : "*Prompt:* _(none)_";
-  const fileText = summary ? `\n\n${summary}` : "";
+  const detailText = summary ? `\n\n${summary}` : "";
   await client.chat
     .postMessage({
       channel: input.slackChannelId,
@@ -1183,7 +1181,7 @@ async function postStartDraftPrompt(input: {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*Start Trace session*\n\n${promptText}${fileText}`,
+            text: `*Start Trace session*${detailText}`,
           },
         },
         {
