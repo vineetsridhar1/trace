@@ -645,10 +645,8 @@ export async function resolveTargetCommitSha(
   const remoteSha = await resolveRefCommitSha(repoPath, `origin/${branch}`);
 
   if (localSha && remoteSha) {
-    if (localSha === remoteSha) return localSha;
-    if (await isAncestorCommit(repoPath, localSha, remoteSha)) return remoteSha;
     if (await isAncestorCommit(repoPath, remoteSha, localSha)) return localSha;
-    throw new Error(`Local and remote refs diverged for branch: ${branch}`);
+    return remoteSha;
   }
 
   if (localSha) return localSha;

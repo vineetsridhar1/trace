@@ -128,6 +128,49 @@ async function createRepoFixtureWithStaleOrigin(): Promise<{
   return { repoPath, latestSha };
 }
 
+async function createRepoFixtureWithDivergedTargetBranch(): Promise<{
+  repoPath: string;
+  latestRemoteSha: string;
+  localBranchSha: string;
+}> {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-diverged-"));
+  const sourcePath = path.join(rootDir, "source");
+  const originPath = path.join(rootDir, "origin.git");
+  const repoPath = path.join(rootDir, "repo");
+
+  fs.mkdirSync(sourcePath, { recursive: true });
+  await git(sourcePath, ["init", "-b", "main"]);
+  await git(sourcePath, ["config", "user.name", "Trace Test"]);
+  await git(sourcePath, ["config", "user.email", "trace@example.com"]);
+
+  fs.writeFileSync(path.join(sourcePath, "app.txt"), "base\n");
+  await git(sourcePath, ["add", "app.txt"]);
+  await git(sourcePath, ["commit", "-m", "initial commit"]);
+  await git(sourcePath, ["branch", "trace/raccoon"]);
+
+  await git(rootDir, ["clone", "--bare", sourcePath, originPath]);
+  await git(rootDir, ["clone", originPath, repoPath]);
+  await git(repoPath, ["config", "user.name", "Trace Test"]);
+  await git(repoPath, ["config", "user.email", "trace@example.com"]);
+  await git(sourcePath, ["remote", "add", "origin", originPath]);
+
+  await git(repoPath, ["checkout", "-b", "trace/raccoon", "origin/trace/raccoon"]);
+  fs.writeFileSync(path.join(repoPath, "app.txt"), "local branch only\n");
+  await git(repoPath, ["add", "app.txt"]);
+  await git(repoPath, ["commit", "-m", "advance local branch"]);
+  const localBranchSha = await git(repoPath, ["rev-parse", "HEAD"]);
+  await git(repoPath, ["checkout", "main"]);
+
+  await git(sourcePath, ["checkout", "trace/raccoon"]);
+  fs.writeFileSync(path.join(sourcePath, "app.txt"), "remote branch only\n");
+  await git(sourcePath, ["add", "app.txt"]);
+  await git(sourcePath, ["commit", "-m", "advance remote branch"]);
+  const latestRemoteSha = await git(sourcePath, ["rev-parse", "HEAD"]);
+  await git(sourcePath, ["push", "origin", "trace/raccoon"]);
+
+  return { repoPath, latestRemoteSha, localBranchSha };
+}
+
 async function createRepoFixtureWithOrigin(): Promise<{
   repoPath: string;
   worktreePath: string;
@@ -396,6 +439,24 @@ describe("linked checkout commit-back", () => {
     expect(result.status.currentCommitSha).toBe(latestSha);
     expect(result.status.lastSyncedCommitSha).toBe(latestSha);
     expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(latestSha);
+  }, 15_000);
+
+  it("syncs to the fetched remote branch when a stale local branch diverged", async () => {
+    const { repoPath, latestRemoteSha, localBranchSha } =
+      await createRepoFixtureWithDivergedTargetBranch();
+    seedRepo("repo-1", repoPath);
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status.currentCommitSha).toBe(latestRemoteSha);
+    expect(result.status.lastSyncedCommitSha).toBe(latestRemoteSha);
+    expect(await git(repoPath, ["rev-parse", "trace/raccoon"])).toBe(localBranchSha);
+    expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(latestRemoteSha);
   }, 15_000);
 
   it("fetches the target branch when the local origin refspec is narrow", async () => {
