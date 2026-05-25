@@ -1174,9 +1174,8 @@ async function postStartDraftPrompt(input: {
   const promptText = trimmedPrompt ? `*Prompt:*\n>${trimmedPrompt}` : "*Prompt:* _(none)_";
   const fileText = summary ? `\n\n${summary}` : "";
   await client.chat
-    .postEphemeral({
+    .postMessage({
       channel: input.slackChannelId,
-      user: input.slackUserId,
       ...(input.slackThreadTs ? { thread_ts: input.slackThreadTs } : {}),
       text: "Start Trace session",
       blocks: [
@@ -2746,7 +2745,13 @@ router.post(
     if (payload.type === "block_actions" && actionId === "trace_cancel_draft") {
       res.status(200).json({});
       const draftId = payload.actions?.[0]?.value;
-      if (draftId) void deleteSlackSessionDraft(draftId);
+      const slackUserId = payload.user?.id;
+      if (draftId && slackUserId) {
+        void loadSlackSessionDraft(draftId, slackUserId).then((draft) => {
+          if (draft) return deleteSlackSessionDraft(draft.id);
+          return undefined;
+        });
+      }
       return;
     }
 
