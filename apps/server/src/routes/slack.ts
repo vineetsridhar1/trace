@@ -1886,6 +1886,14 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   });
   const requesterLabel = requester?.name || requester?.email || "A Trace user";
   const traceLink = await buildTraceSessionLink(thread.sessionId);
+  console.log("[slack] sending session access request to owner", {
+    slackTeamId: value.slackTeamId,
+    sessionId: thread.sessionId,
+    ownerUserId: thread.session.createdById,
+    ownerSlackUserId: ownerAccount.slackUserId,
+    requesterUserId: requesterAccount.userId,
+    requesterSlackUserId: value.requesterSlackUserId,
+  });
   const dm = await client.conversations.open({ users: ownerAccount.slackUserId }).catch((err: unknown) => {
     console.warn("[slack] failed to open session owner DM:", errorMessage(err));
     return null;
@@ -1925,6 +1933,12 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
         },
       ],
     });
+    console.log("[slack] sent session access request DM", {
+      slackTeamId: value.slackTeamId,
+      sessionId: thread.sessionId,
+      ownerSlackUserId: ownerAccount.slackUserId,
+      dmChannel,
+    });
   } catch (err) {
     console.warn("[slack] failed to DM session access request:", errorMessage(err));
     await postSessionAccessRequestFeedback({
@@ -1936,7 +1950,7 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
 
   await postSessionAccessRequestFeedback({
     ...value,
-    text: "Access request sent to the Trace session owner.",
+    text: `Access request sent to <@${ownerAccount.slackUserId}>.`,
   });
 }
 
