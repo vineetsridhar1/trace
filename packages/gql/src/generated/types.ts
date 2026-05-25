@@ -31,6 +31,11 @@ export type Actor = {
 
 export type ActorType = "agent" | "system" | "user";
 
+export type AddChannelMemberInput = {
+  channelId: Scalars["ID"]["input"];
+  userId: Scalars["ID"]["input"];
+};
+
 export type AddChatMemberInput = {
   chatId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
@@ -197,6 +202,7 @@ export type Channel = {
   members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars["String"]["output"];
+  owner?: Maybe<User>;
   position: Scalars["Int"]["output"];
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -204,6 +210,7 @@ export type Channel = {
   setupScript?: Maybe<Scalars["String"]["output"]>;
   type: ChannelType;
   viewerIsMember: Scalars["Boolean"]["output"];
+  visibility: ChannelVisibility;
 };
 
 export type ChannelMessagesArgs = {
@@ -227,6 +234,8 @@ export type ChannelMember = {
 };
 
 export type ChannelType = "coding" | "text";
+
+export type ChannelVisibility = "private" | "public";
 
 export type Chat = {
   __typename?: "Chat";
@@ -311,6 +320,7 @@ export type CreateChannelInput = {
   projectIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   type?: InputMaybe<ChannelType>;
+  visibility?: InputMaybe<ChannelVisibility>;
 };
 
 export type CreateChatInput = {
@@ -550,6 +560,7 @@ export type MoveChannelInput = {
 
 export type Mutation = {
   __typename?: "Mutation";
+  addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
@@ -642,6 +653,10 @@ export type Mutation = {
   updateSessionDefaults: User;
   updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
+};
+
+export type MutationAddChannelMemberArgs = {
+  input: AddChannelMemberInput;
 };
 
 export type MutationAddChatMemberArgs = {

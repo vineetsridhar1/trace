@@ -12,7 +12,7 @@ import { assertOrgAccess } from "../lib/require-org.js";
 export const channelGroupQueries = {
   channelGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     assertOrgAccess(ctx, args.organizationId);
-    return channelGroupService.list(args.organizationId);
+    return channelGroupService.list(args.organizationId, ctx.userId);
   },
 };
 

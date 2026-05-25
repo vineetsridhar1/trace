@@ -3,13 +3,19 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
+import { visibleChannelWhere } from "./access.js";
 
 export class ChannelGroupService {
-  async list(organizationId: string) {
+  async list(organizationId: string, userId: string) {
     return prisma.channelGroup.findMany({
       where: { organizationId },
       orderBy: { position: "asc" },
-      include: { channels: { orderBy: { position: "asc" } } },
+      include: {
+        channels: {
+          where: visibleChannelWhere(userId),
+          orderBy: { position: "asc" },
+        },
+      },
     });
   }
 
@@ -128,6 +134,13 @@ export class ChannelGroupService {
       const group = await tx.channelGroup.findUniqueOrThrow({ where: { id } });
       await assertActorOrgAccess(tx, group.organizationId, actorType, actorId);
 
+      const hiddenChannelCount = await tx.channel.count({
+        where: { groupId: id, NOT: visibleChannelWhere(actorId) },
+      });
+      if (hiddenChannelCount > 0) {
+        throw new Error("Not authorized for this channel group");
+      }
+
       // Find channels in this group before ungrouping
       const affectedChannels = await tx.channel.findMany({
         where: { groupId: id },
@@ -178,7 +191,7 @@ export class ChannelGroupService {
   ) {
     const [channel] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await tx.channel.findFirstOrThrow({
-        where: { id: input.channelId },
+        where: { id: input.channelId, ...visibleChannelWhere(actorId) },
         select: { organizationId: true },
       });
       await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
@@ -208,6 +221,8 @@ export class ChannelGroupService {
               id: channel.id,
               name: channel.name,
               type: channel.type,
+              visibility: channel.visibility,
+              ownerId: channel.ownerId,
               position: channel.position,
               groupId: channel.groupId,
               baseBranch: channel.baseBranch,
@@ -279,7 +294,7 @@ export class ChannelGroupService {
   ) {
     const channels = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const scopedChannels = await tx.channel.findMany({
-        where: { id: { in: channelIds } },
+        where: { id: { in: channelIds }, ...visibleChannelWhere(actorId) },
         select: { id: true, organizationId: true },
       });
       if (scopedChannels.length !== channelIds.length) {

@@ -33,6 +33,11 @@ export type Actor = {
 
 export type ActorType = "agent" | "system" | "user";
 
+export type AddChannelMemberInput = {
+  channelId: Scalars["ID"]["input"];
+  userId: Scalars["ID"]["input"];
+};
+
 export type AddChatMemberInput = {
   chatId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
@@ -199,6 +204,7 @@ export type Channel = {
   members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars["String"]["output"];
+  owner?: Maybe<User>;
   position: Scalars["Int"]["output"];
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -206,6 +212,7 @@ export type Channel = {
   setupScript?: Maybe<Scalars["String"]["output"]>;
   type: ChannelType;
   viewerIsMember: Scalars["Boolean"]["output"];
+  visibility: ChannelVisibility;
 };
 
 export type ChannelMessagesArgs = {
@@ -229,6 +236,8 @@ export type ChannelMember = {
 };
 
 export type ChannelType = "coding" | "text";
+
+export type ChannelVisibility = "private" | "public";
 
 export type Chat = {
   __typename?: "Chat";
@@ -313,6 +322,7 @@ export type CreateChannelInput = {
   projectIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
   type?: InputMaybe<ChannelType>;
+  visibility?: InputMaybe<ChannelVisibility>;
 };
 
 export type CreateChatInput = {
@@ -552,6 +562,7 @@ export type MoveChannelInput = {
 
 export type Mutation = {
   __typename?: "Mutation";
+  addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
@@ -644,6 +655,10 @@ export type Mutation = {
   updateSessionDefaults: User;
   updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
+};
+
+export type MutationAddChannelMemberArgs = {
+  input: AddChannelMemberInput;
 };
 
 export type MutationAddChatMemberArgs = {
@@ -1933,6 +1948,37 @@ export type SendChannelMessageMutation = {
   sendChannelMessage: { __typename?: "Message"; id: string };
 };
 
+export type ChannelMembersQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type ChannelMembersQuery = {
+  __typename?: "Query";
+  channel?: {
+    __typename?: "Channel";
+    id: string;
+    members: Array<{
+      __typename?: "ChannelMember";
+      user: {
+        __typename?: "User";
+        id: string;
+        name: string;
+        email: string;
+        avatarUrl?: string | null;
+      };
+    }>;
+  } | null;
+};
+
+export type AddChannelMemberMutationVariables = Exact<{
+  input: AddChannelMemberInput;
+}>;
+
+export type AddChannelMemberMutation = {
+  __typename?: "Mutation";
+  addChannelMember: { __typename?: "Channel"; id: string };
+};
+
 export type SessionGroupsQueryVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   archived?: InputMaybe<Scalars["Boolean"]["input"]>;
@@ -2653,6 +2699,7 @@ export type AllChannelsQuery = {
     id: string;
     name: string;
     type: ChannelType;
+    visibility: ChannelVisibility;
     memberCount: number;
     viewerIsMember: boolean;
   }>;
@@ -3103,11 +3150,13 @@ export type ChannelsQuery = {
     id: string;
     name: string;
     type: ChannelType;
+    visibility: ChannelVisibility;
     position: number;
     groupId?: string | null;
     baseBranch?: string | null;
     setupScript?: string | null;
     runScripts?: JsonValue | null;
+    viewerIsMember: boolean;
     repo?: { __typename?: "Repo"; id: string; name: string } | null;
   }>;
 };
@@ -3198,6 +3247,7 @@ export type SidebarSessionGroupsQuery = {
     name: string;
     slug?: string | null;
     status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
     prUrl?: string | null;
     worktreeDeleted: boolean;
     archivedAt?: string | null;
@@ -3207,6 +3257,7 @@ export type SidebarSessionGroupsQuery = {
     workdir?: string | null;
     createdAt: string;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     channel?: { __typename?: "Channel"; id: string } | null;
     repo?: { __typename?: "Repo"; id: string; name: string } | null;
     connection?: {
@@ -3342,6 +3393,110 @@ export const SendChannelMessageDocument = {
     },
   ],
 } as unknown as DocumentNode<SendChannelMessageMutation, SendChannelMessageMutationVariables>;
+export const ChannelMembersDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ChannelMembers" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "members" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "user" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ChannelMembersQuery, ChannelMembersQueryVariables>;
+export const AddChannelMemberDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "AddChannelMember" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "AddChannelMemberInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "addChannelMember" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AddChannelMemberMutation, AddChannelMemberMutationVariables>;
 export const SessionGroupsDocument = {
   kind: "Document",
   definitions: [
@@ -5582,6 +5737,7 @@ export const AllChannelsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "type" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 { kind: "Field", name: { kind: "Name", value: "memberCount" } },
                 { kind: "Field", name: { kind: "Name", value: "viewerIsMember" } },
               ],
@@ -7138,11 +7294,13 @@ export const ChannelsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "type" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 { kind: "Field", name: { kind: "Name", value: "position" } },
                 { kind: "Field", name: { kind: "Name", value: "groupId" } },
                 { kind: "Field", name: { kind: "Name", value: "baseBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "setupScript" } },
                 { kind: "Field", name: { kind: "Name", value: "runScripts" } },
+                { kind: "Field", name: { kind: "Name", value: "viewerIsMember" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "repo" },
@@ -7413,6 +7571,19 @@ export const SidebarSessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },

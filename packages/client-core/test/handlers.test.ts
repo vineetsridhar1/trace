@@ -218,6 +218,45 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().channels["channel-2"]).toBeUndefined();
   });
 
+  it("removes private owner channels from the sidebar store when the owner leaves", () => {
+    useAuthStore.setState({
+      user: { id: "user-1" } as never,
+    });
+    useEntityStore.setState({
+      channels: {
+        "channel-1": {
+          id: "channel-1",
+          name: "private-room",
+          visibility: "private",
+          ownerId: "user-1",
+          viewerIsMember: true,
+        } as never,
+      },
+    });
+    const harness = installBindings({ activeChannelId: "channel-1" });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "channel_member_removed",
+        scopeType: "channel",
+        scopeId: "channel-1",
+        payload: {
+          userId: "user-1",
+          channel: {
+            id: "channel-1",
+            name: "private-room",
+            visibility: "private",
+            ownerId: "user-1",
+            members: [],
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().channels["channel-1"]).toBeUndefined();
+    expect(harness.setActiveChannelId).toHaveBeenCalledWith(null);
+  });
+
   it("upserts a new session and its session group on session_started", () => {
     const event = makeEvent({
       eventType: "session_started",

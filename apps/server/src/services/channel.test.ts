@@ -47,9 +47,17 @@ describe("ChannelService", () => {
     await service.listChannels("org-1", "user-1");
 
     expect(prismaMock.channel.findMany).toHaveBeenCalledWith({
-      where: { organizationId: "org-1" },
+      where: {
+        organizationId: "org-1",
+        OR: [
+          { visibility: "public" },
+          { ownerId: "user-1" },
+          { members: { some: { userId: "user-1", leftAt: null } } },
+        ],
+      },
       include: {
         repo: true,
+        owner: { select: { id: true, email: true, name: true, avatarUrl: true } },
         members: {
           where: { userId: "user-1", leftAt: null },
           select: { userId: true },
@@ -73,8 +81,23 @@ describe("ChannelService", () => {
       expect.objectContaining({
         where: {
           organizationId: "org-1",
-          members: { some: { userId: "user-1", leftAt: null } },
+          OR: [{ members: { some: { userId: "user-1", leftAt: null } } }],
         },
+      }),
+    );
+  });
+
+  it("excludes private channel owners from member-only lists after leaving", async () => {
+    prismaMock.channel.findMany.mockResolvedValueOnce([]);
+
+    const service = new ChannelService();
+    await service.listChannels("org-1", "user-1", { memberOnly: true });
+
+    expect(prismaMock.channel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [{ members: { some: { userId: "user-1", leftAt: null } } }],
+        }),
       }),
     );
   });
@@ -150,6 +173,8 @@ describe("ChannelService", () => {
       id: "channel-1",
       name: "general",
       type: "text",
+      visibility: "public",
+      ownerId: "user-1",
       position: 0,
       organizationId: "org-1",
       groupId: null,
@@ -209,6 +234,256 @@ describe("ChannelService", () => {
     );
   });
 
+  it("creates private channels with only the owner as the initial member", async () => {
+    const createdAt = new Date("2026-04-02T00:00:00.000Z");
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.channel.create.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "private-room",
+      type: "text",
+      visibility: "private",
+      ownerId: "user-1",
+      position: 0,
+      organizationId: "org-1",
+      groupId: null,
+      repoId: null,
+      baseBranch: null,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      { channelId: "channel-1", userId: "user-1", joinedAt: createdAt, leftAt: null },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+    ]);
+
+    const service = new ChannelService();
+    await service.create(
+      {
+        organizationId: "org-1",
+        name: "private-room",
+        type: "text",
+        visibility: "private",
+        position: 0,
+      } as any,
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.channel.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        visibility: "private",
+        ownerId: "user-1",
+      }),
+    });
+    expect(prismaMock.channelMember.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.orgMember.findUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId_organizationId: {
+            userId: TRACE_AI_USER_ID,
+            organizationId: "org-1",
+          },
+        },
+      }),
+    );
+  });
+
+  it("rejects self-join for private channels unless the actor owns the channel", async () => {
+    prismaMock.channel.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      name: "private-room",
+      type: "text",
+      visibility: "private",
+      ownerId: "user-1",
+      position: 0,
+      groupId: null,
+      organizationId: "org-1",
+      repoId: null,
+      baseBranch: null,
+      repo: null,
+    });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-2",
+      organizationId: "org-1",
+    });
+    prismaMock.channelMember.findUnique.mockResolvedValueOnce(null);
+
+    const service = new ChannelService();
+    await expect(service.join("channel-1", "user", "user-2")).rejects.toThrow(
+      "You must be added to join this private channel",
+    );
+
+    expect(prismaMock.channelMember.create).not.toHaveBeenCalled();
+  });
+
+  it("lets private channel owners rejoin after leaving", async () => {
+    const leftAt = new Date("2026-04-01T00:00:00.000Z");
+    const joinedAt = new Date("2026-04-02T00:00:00.000Z");
+    prismaMock.channel.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        name: "private-room",
+        type: "text",
+        visibility: "private",
+        ownerId: "user-1",
+        position: 0,
+        groupId: null,
+        organizationId: "org-1",
+        repoId: null,
+        baseBranch: null,
+        repo: null,
+      })
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        members: [{ userId: "user-1", leftAt: null }],
+      });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.channelMember.findUnique.mockResolvedValueOnce({
+      channelId: "channel-1",
+      userId: "user-1",
+      leftAt,
+    });
+    prismaMock.channelMember.update.mockResolvedValueOnce({
+      channelId: "channel-1",
+      userId: "user-1",
+      joinedAt,
+      leftAt: null,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      {
+        channelId: "channel-1",
+        userId: "user-1",
+        joinedAt,
+        leftAt: null,
+      },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+    ]);
+
+    const service = new ChannelService();
+    await service.join("channel-1", "user", "user-1");
+
+    expect(prismaMock.channelMember.update).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "channel-1", userId: "user-1" } },
+      data: { leftAt: null, joinedAt: expect.any(Date) },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "channel_member_added",
+        payload: expect.objectContaining({
+          userId: "user-1",
+          channel: expect.objectContaining({
+            id: "channel-1",
+            visibility: "private",
+            ownerId: "user-1",
+          }),
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("lets active channel members add another org member", async () => {
+    const joinedAt = new Date("2026-04-02T00:00:00.000Z");
+    prismaMock.channel.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        name: "private-room",
+        type: "text",
+        visibility: "private",
+        ownerId: "user-1",
+        position: 0,
+        groupId: null,
+        organizationId: "org-1",
+        repoId: null,
+        baseBranch: null,
+        repo: null,
+      })
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        members: [{ userId: "user-1", leftAt: null }],
+      });
+    prismaMock.channelMember.findFirst.mockResolvedValueOnce({ channelId: "channel-1" });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-2",
+      organizationId: "org-1",
+    });
+    prismaMock.channelMember.findUnique.mockResolvedValueOnce(null);
+    prismaMock.channelMember.create.mockResolvedValueOnce({
+      channelId: "channel-1",
+      userId: "user-2",
+      joinedAt,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      {
+        channelId: "channel-1",
+        userId: "user-1",
+        joinedAt,
+        leftAt: null,
+      },
+      {
+        channelId: "channel-1",
+        userId: "user-2",
+        joinedAt,
+        leftAt: null,
+      },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "User One", avatarUrl: null },
+      { id: "user-2", name: "User Two", avatarUrl: null },
+    ]);
+
+    const service = new ChannelService();
+    await service.addMember("channel-1", "user-2", "user", "user-1");
+
+    expect(prismaMock.channelMember.create).toHaveBeenCalledWith({
+      data: { channelId: "channel-1", userId: "user-2" },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "channel_member_added",
+        payload: expect.objectContaining({
+          userId: "user-2",
+          channel: expect.objectContaining({
+            id: "channel-1",
+            visibility: "private",
+            ownerId: "user-1",
+          }),
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("requires channel visibility before updating a channel", async () => {
+    prismaMock.channel.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new ChannelService();
+    await expect(
+      service.update("channel-1", { name: "new-name" }, "user", "user-1"),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        OR: [
+          { visibility: "public" },
+          { ownerId: "user-1" },
+          { members: { some: { userId: "user-1", leftAt: null } } },
+        ],
+      },
+      select: { organizationId: true },
+    });
+    expect(prismaMock.channel.update).not.toHaveBeenCalled();
+  });
+
   it("includes repo metadata in the join event payload", async () => {
     const joinedAt = new Date("2026-03-22T00:00:00.000Z");
     prismaMock.channel.findUniqueOrThrow
@@ -216,6 +491,8 @@ describe("ChannelService", () => {
         id: "channel-1",
         name: "backend",
         type: "coding",
+        visibility: "public",
+        ownerId: "user-1",
         position: 3,
         groupId: "group-1",
         organizationId: "org-1",
@@ -267,6 +544,8 @@ describe("ChannelService", () => {
             id: "channel-1",
             name: "backend",
             type: "coding",
+            visibility: "public",
+            ownerId: "user-1",
             position: 3,
             groupId: "group-1",
             repoId: "repo-1",

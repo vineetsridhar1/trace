@@ -87,6 +87,21 @@ function channelPayloadHasMember(channel: JsonObject, userId: string | null | un
   });
 }
 
+function channelPayloadIsOwnedBy(channel: JsonObject, userId: string | null | undefined): boolean {
+  return !!userId && channel.ownerId === userId;
+}
+
+function channelPayloadForViewer(channel: JsonObject, userId: string | null | undefined): Channel {
+  const viewerIsMember = channelPayloadHasMember(channel, userId);
+  return {
+    ...channel,
+    viewerIsMember,
+    memberCount: Array.isArray(channel.members)
+      ? channel.members.length
+      : ((channel.memberCount as number | undefined) ?? 0),
+  } as unknown as Channel;
+}
+
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
   if (explicit) return explicit;
@@ -254,9 +269,10 @@ export function handleOrgEvent(event: Event): void {
     if (
       channel &&
       typeof channel.id === "string" &&
-      channelPayloadHasMember(channel, currentUserId)
+      (channelPayloadHasMember(channel, currentUserId) ||
+        channelPayloadIsOwnedBy(channel, currentUserId))
     ) {
-      batch.upsert("channels", channel.id, channel as unknown as Channel);
+      batch.upsert("channels", channel.id, channelPayloadForViewer(channel, currentUserId));
     }
   }
 
@@ -289,7 +305,7 @@ export function handleOrgEvent(event: Event): void {
       channel &&
       typeof channel.id === "string"
     ) {
-      batch.upsert("channels", channel.id, channel as unknown as Channel);
+      batch.upsert("channels", channel.id, channelPayloadForViewer(channel, currentUserId));
     } else if (event.eventType === "channel_member_removed" && userId === currentUserId) {
       batch.remove("channels", event.scopeId);
       if (ui.getActiveChannelId() === event.scopeId) {

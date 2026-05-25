@@ -18,6 +18,11 @@ enum ChannelType {
   coding
 }
 
+enum ChannelVisibility {
+  public
+  private
+}
+
 enum AgentStatus {
   not_started
   active
@@ -317,6 +322,7 @@ model User {
   createdTickets    Ticket[]         @relation("TicketCreator")
   ticketAssignments TicketAssignee[] @relation("TicketAssignees")
   createdChats      Chat[]           @relation("ChatCreator")
+  ownedChannels     Channel[]        @relation("ChannelOwner")
   chatMemberships      ChatMember[]
   channelMemberships   ChannelMember[]
   participants         Participant[]
@@ -392,9 +398,12 @@ model Channel {
   id             String       @id @default(uuid())
   name           String
   type           ChannelType  @default(coding)
+  visibility     ChannelVisibility @default(public)
   position       Int          @default(0)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  ownerId        String?
+  owner          User?        @relation("ChannelOwner", fields: [ownerId], references: [id])
   groupId        String?
   group          ChannelGroup? @relation(fields: [groupId], references: [id])
   repoId         String?
@@ -414,6 +423,7 @@ model Channel {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId, position])
+  @@index([ownerId])
 }
 
 model ChannelProject {

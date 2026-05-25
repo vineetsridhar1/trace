@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
-import type { ChannelType, CodingTool, SessionRuntimeInstance } from "@trace/gql";
+import type {
+  ChannelType,
+  ChannelVisibility,
+  CodingTool,
+  SessionRuntimeInstance,
+} from "@trace/gql";
 import { gql } from "@urql/core";
 import { BranchCombobox } from "../channel/BranchCombobox";
 import { Button } from "../ui/button";
@@ -78,6 +83,7 @@ export function CreateChannelDialog({
   const [mode, setMode] = useState<CreateMode>("choose");
   const [name, setName] = useState("");
   const [channelType, setChannelType] = useState<ChannelType>("coding");
+  const [visibility, setVisibility] = useState<ChannelVisibility>("public");
   const [repoId, setRepoId] = useState<string | undefined>(undefined);
   const [baseBranch, setBaseBranch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -93,6 +99,7 @@ export function CreateChannelDialog({
     setMode(defaultGroupId ? "channel" : "choose");
     setName("");
     setChannelType("coding");
+    setVisibility("public");
     setRepoId(undefined);
     setBaseBranch("");
     setError(null);
@@ -146,6 +153,7 @@ export function CreateChannelDialog({
             organizationId: activeOrgId,
             name: name.trim(),
             type: channelType,
+            visibility,
             repoId,
             baseBranch: baseBranch || undefined,
             groupId: defaultGroupId ?? null,
@@ -158,6 +166,7 @@ export function CreateChannelDialog({
       const newChannelId = result.data?.createChannel?.id as string | undefined;
       setName("");
       setChannelType("coding");
+      setVisibility("public");
       setRepoId(undefined);
       setBaseBranch("");
       setOpen(false);
@@ -307,6 +316,23 @@ export function CreateChannelDialog({
                   </div>
                 </div>
               )}
+              <div>
+                <label className="mb-1.5 block text-sm text-muted-foreground">Visibility</label>
+                <Select
+                  value={visibility}
+                  onValueChange={(value: ChannelVisibility | null) => {
+                    if (value) setVisibility(value);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Public</SelectItem>
+                    <SelectItem value="private">Private</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {channelType === "coding" && (
                 <div>
                   <label className="mb-1.5 block text-sm text-muted-foreground">Repository</label>

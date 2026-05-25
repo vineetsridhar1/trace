@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import { Search, Code, MessageSquare, LogIn, LogOut } from "lucide-react";
-import type { ChannelType } from "@trace/gql";
+import { Search, Code, MessageSquare, LogIn, LogOut, Lock } from "lucide-react";
+import type { ChannelType, ChannelVisibility } from "@trace/gql";
 import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
@@ -21,6 +21,7 @@ const ALL_CHANNELS_QUERY = gql`
       id
       name
       type
+      visibility
       memberCount
       viewerIsMember
     }
@@ -47,6 +48,7 @@ interface BrowseChannel {
   id: string;
   name: string;
   type: ChannelType;
+  visibility: ChannelVisibility;
   memberCount: number;
   viewerIsMember: boolean;
 }
@@ -170,6 +172,12 @@ export function BrowseChannelsDialog({
                         {ch.memberCount} {ch.memberCount === 1 ? "member" : "members"}
                         {" · "}
                         {ch.type === "text" ? "Text" : "Coding"}
+                        {ch.visibility === "private" && (
+                          <>
+                            {" · "}
+                            <Lock size={11} className="inline align-[-1px]" /> Private
+                          </>
+                        )}
                       </p>
                     </div>
                     {ch.viewerIsMember ? (

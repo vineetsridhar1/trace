@@ -1,4 +1,4 @@
-import type { ActorType, ChannelType } from "@trace/gql";
+import type { ActorType, ChannelType, ChannelVisibility } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { normalizeMembers } from "./member-utils.js";
@@ -7,6 +7,7 @@ export type CreateChannelInTransactionInput = {
   organizationId: string;
   name: string;
   type: ChannelType;
+  visibility?: ChannelVisibility | null;
   actorType: ActorType;
   actorId: string;
   position?: number | null;
@@ -49,8 +50,10 @@ export async function createChannelInTransaction(
     data: {
       name: input.name,
       type: input.type,
+      visibility: input.visibility ?? "public",
       position,
       organizationId: input.organizationId,
+      ownerId: input.actorType === "user" ? input.actorId : null,
       groupId: input.groupId ?? null,
       repoId: input.repo?.id ?? null,
       baseBranch: input.baseBranch ?? null,
@@ -64,7 +67,7 @@ export async function createChannelInTransaction(
     await tx.channelMember.create({ data: { channelId: channel.id, userId: input.actorId } });
   }
 
-  if (input.actorId !== TRACE_AI_USER_ID) {
+  if ((input.visibility ?? "public") === "public" && input.actorId !== TRACE_AI_USER_ID) {
     const aiOrgMember = await tx.orgMember.findUnique({
       where: {
         userId_organizationId: {
@@ -86,6 +89,8 @@ export async function createChannelInTransaction(
     id: channel.id,
     name: channel.name,
     type: channel.type,
+    visibility: channel.visibility,
+    ownerId: channel.ownerId,
     position: channel.position,
     groupId: channel.groupId,
     repoId: channel.repoId,

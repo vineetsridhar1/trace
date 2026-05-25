@@ -15,11 +15,13 @@ const CHANNELS_QUERY = gql`
       id
       name
       type
+      visibility
       position
       groupId
       baseBranch
       setupScript
       runScripts
+      viewerIsMember
       repo {
         id
         name

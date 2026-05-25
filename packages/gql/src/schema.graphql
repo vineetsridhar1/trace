@@ -131,6 +131,11 @@ enum ChannelType {
   coding
 }
 
+enum ChannelVisibility {
+  public
+  private
+}
+
 enum ChatType {
   dm
   group
@@ -351,6 +356,8 @@ type Channel {
   id: ID!
   name: String!
   type: ChannelType!
+  visibility: ChannelVisibility!
+  owner: User
   position: Int!
   groupId: ID
   baseBranch: String
@@ -832,6 +839,7 @@ input CreateChannelInput {
   organizationId: ID!
   name: String!
   type: ChannelType
+  visibility: ChannelVisibility
   repoId: ID
   baseBranch: String
   projectIds: [ID!]
@@ -962,6 +970,11 @@ input CreateChatInput {
 
 input AddChatMemberInput {
   chatId: ID!
+  userId: ID!
+}
+
+input AddChannelMemberInput {
+  channelId: ID!
   userId: ID!
 }
 
@@ -1165,6 +1178,7 @@ type Mutation {
   deleteOrgSecret(orgId: ID!, id: ID!): Boolean!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
+  addChannelMember(input: AddChannelMemberInput!): Channel!
   deleteChannel(id: ID!): Boolean!
   leaveChannel(channelId: ID!): Channel!
   createChannelGroup(input: CreateChannelGroupInput!): ChannelGroup!
