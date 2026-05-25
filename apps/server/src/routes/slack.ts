@@ -1099,6 +1099,60 @@ function buildAccountLinkUrl(slackTeamId: string, slackUserId: string): string {
   return `${base}/slack/link?${params.toString()}`;
 }
 
+async function postDirectMessageLinkPrompt(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackUserId: string;
+}): Promise<void> {
+  const client = await getSlackClient(input.slackTeamId);
+  if (!client) return;
+  const linkUrl = buildAccountLinkUrl(input.slackTeamId, input.slackUserId);
+  await client.chat
+    .postMessage({
+      channel: input.slackChannelId,
+      text: `Link your Trace account to use Trace from Slack: ${linkUrl}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "Link your Trace account to use Trace from Slack.",
+          },
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "Link account" },
+              url: linkUrl,
+              style: "primary",
+            },
+          ],
+        },
+      ],
+    })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to post DM link prompt:", errorMessage(err));
+    });
+}
+
+async function postDirectMessageUsage(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+}): Promise<void> {
+  const client = await getSlackClient(input.slackTeamId);
+  if (!client) return;
+  await client.chat
+    .postMessage({
+      channel: input.slackChannelId,
+      text: "You're linked. Add Trace to a Slack channel, bind that channel to Trace, then mention `@trace <prompt>` there. You can also use `/trace start` in a bound channel.",
+    })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to post DM usage prompt:", errorMessage(err));
+    });
+}
+
 async function createSlackSessionDraft(input: {
   slackTeamId: string;
   slackChannelId: string;
@@ -2624,6 +2678,31 @@ async function handleBotMessageCandidate(_input: {
   // allowing arbitrary bots to start sessions.
 }
 
+async function handleDirectMessage(input: {
+  teamId: string;
+  event: SlackEventBody;
+}): Promise<void> {
+  const slackUserId = input.event.user;
+  const channel = input.event.channel;
+  if (!slackUserId || !channel) return;
+  if (input.event.subtype && input.event.subtype !== "file_share") return;
+
+  const account = await resolveSlackAccount(input.teamId, slackUserId);
+  if (!account) {
+    await postDirectMessageLinkPrompt({
+      slackTeamId: input.teamId,
+      slackChannelId: channel,
+      slackUserId,
+    });
+    return;
+  }
+
+  await postDirectMessageUsage({
+    slackTeamId: input.teamId,
+    slackChannelId: channel,
+  });
+}
+
 async function handleMessage(input: {
   teamId: string;
   event: SlackEventBody;
@@ -2640,6 +2719,11 @@ async function handleMessage(input: {
   });
   if (install && isTraceMentionMessage(event, install.botUserId)) {
     await handleAppMention({ teamId, event });
+    return;
+  }
+
+  if (event.channel_type === "im") {
+    await handleDirectMessage({ teamId, event });
     return;
   }
 
