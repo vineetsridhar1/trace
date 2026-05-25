@@ -1050,3 +1050,12 @@ model SlackThreadSession {
 
   @@unique([slackTeamId, slackChannelId, slackThreadTs])
 }
+
+model SlackProcessedEvent {
+  id           String   @id @default(uuid())
+  slackTeamId  String?
+  slackEventId String   @unique
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}

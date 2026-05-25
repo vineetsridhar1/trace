@@ -67,6 +67,28 @@ async function recordSlackThreadSession(input: {
 export async function startSlackSession(
   input: StartSlackSessionInput,
 ): Promise<StartSlackSessionResult> {
+  const client = await getSlackClient(input.slackTeamId);
+  let slackThreadTs = input.slackThreadTs;
+  let topLevelMessageTs: string | null = null;
+
+  if (!slackThreadTs) {
+    if (!client) throw new Error("Slack bot token not found");
+    const message = await client.chat
+      .postMessage({
+        channel: input.slackChannelId,
+        text: "Starting Trace session…",
+      })
+      .catch((err: unknown) => {
+        console.warn("[slack] failed to create start thread:", (err as Error).message);
+        return null;
+      });
+    if (typeof message?.ts !== "string" || !message.ts) {
+      throw new Error("Could not create Slack thread for Trace session");
+    }
+    slackThreadTs = message.ts;
+    topLevelMessageTs = message.ts;
+  }
+
   const session = await sessionService.start({
     tool: input.settings.tool ?? undefined,
     model: input.settings.model ?? undefined,
@@ -84,45 +106,39 @@ export async function startSlackSession(
     clientSource: "slack",
   });
 
-  const client = await getSlackClient(input.slackTeamId);
   const traceLink = await buildTraceSessionLink(session.id);
   const text = startMessage(session.id, traceLink);
-  let slackThreadTs = input.slackThreadTs ?? `${Date.now() / 1000}`;
 
-  if (input.slackThreadTs) {
-    await recordSlackThreadSession({
-      slackTeamId: input.slackTeamId,
-      slackChannelId: input.slackChannelId,
-      slackThreadTs,
-      sessionId: session.id,
-      organizationId: input.organizationId,
-    });
-  }
+  await recordSlackThreadSession({
+    slackTeamId: input.slackTeamId,
+    slackChannelId: input.slackChannelId,
+    slackThreadTs,
+    sessionId: session.id,
+    organizationId: input.organizationId,
+  });
 
   if (client) {
-    const message = await client.chat
-      .postMessage({
-        channel: input.slackChannelId,
-        ...(input.slackThreadTs ? { thread_ts: input.slackThreadTs } : {}),
-        text,
-      })
-      .catch((err: unknown) => {
-        console.warn("[slack] failed to post start message:", (err as Error).message);
-        return null;
-      });
-    if (!input.slackThreadTs && typeof message?.ts === "string" && message.ts) {
-      slackThreadTs = message.ts;
+    if (topLevelMessageTs) {
+      await client.chat
+        .update({
+          channel: input.slackChannelId,
+          ts: topLevelMessageTs,
+          text,
+        })
+        .catch((err: unknown) => {
+          console.warn("[slack] failed to update start message:", (err as Error).message);
+        });
+    } else {
+      await client.chat
+        .postMessage({
+          channel: input.slackChannelId,
+          thread_ts: slackThreadTs,
+          text,
+        })
+        .catch((err: unknown) => {
+          console.warn("[slack] failed to post start message:", (err as Error).message);
+        });
     }
-  }
-
-  if (!input.slackThreadTs) {
-    await recordSlackThreadSession({
-      slackTeamId: input.slackTeamId,
-      slackChannelId: input.slackChannelId,
-      slackThreadTs,
-      sessionId: session.id,
-      organizationId: input.organizationId,
-    });
   }
 
   if (input.prompt.trim() || input.imageKeys?.length) {

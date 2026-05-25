@@ -726,6 +726,7 @@ type SlackEventEnvelope = {
   type?: string;
   challenge?: string;
   team_id?: string;
+  event_id?: string;
   event?: SlackEventBody;
 };
 
@@ -2618,6 +2619,30 @@ async function handleUninstall(teamId: string): Promise<void> {
   await disconnectSlackTeams([teamId]).catch(() => {});
 }
 
+async function claimSlackEventDelivery(envelope: SlackEventEnvelope): Promise<boolean> {
+  const eventId = envelope.event_id;
+  if (!eventId) return true;
+
+  await prisma.slackProcessedEvent.deleteMany({
+    where: { createdAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+  });
+
+  try {
+    await prisma.slackProcessedEvent.create({
+      data: {
+        slackEventId: eventId,
+        slackTeamId: envelope.team_id ?? null,
+      },
+    });
+    return true;
+  } catch (err: unknown) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return false;
+    }
+    throw err;
+  }
+}
+
 async function dispatchSlackEvent(envelope: SlackEventEnvelope): Promise<void> {
   const teamId = envelope.team_id;
   const event = envelope.event;
@@ -2993,8 +3018,22 @@ router.post(
       return;
     }
 
+    const claimed = await claimSlackEventDelivery(envelope).catch((err: unknown) => {
+      console.error("[slack] event idempotency check failed:", errorMessage(err));
+      return null;
+    });
+    if (claimed === null) {
+      res.status(500).json({ error: "Could not process Slack event" });
+      return;
+    }
+    if (!claimed) {
+      res.status(200).json({ ok: true, duplicate: true });
+      return;
+    }
+
     console.info("[slack] event received", {
       teamId: envelope.team_id,
+      eventId: envelope.event_id,
       eventType: envelope.event?.type,
       channel: envelope.event?.channel,
       user: envelope.event?.user,
