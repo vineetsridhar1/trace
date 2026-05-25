@@ -58,6 +58,8 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
   sessionGroupId?: string | null;
   sourceSessionId?: string | null;
+  imageKeys?: string[] | null;
+  deferInitialRun?: boolean | null;
   organizationId: string;
   createdById: string;
   actorType?: ActorType;
@@ -226,6 +228,7 @@ type PendingSessionCommand =
       interactionMode?: string | null;
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
     }
   | {
@@ -312,6 +315,22 @@ function pendingRunValue(
     type: "queue",
     commands,
   } satisfies PendingSessionCommandQueue as unknown as Prisma.InputJsonValue;
+}
+
+function validateUploadKeysForOrganization(
+  imageKeys: string[] | null | undefined,
+  organizationId: string,
+): void {
+  if (!imageKeys?.length) return;
+  for (const key of imageKeys) {
+    if (typeof key !== "string" || !key.startsWith("uploads/") || key.includes("..")) {
+      throw new Error("Invalid upload key");
+    }
+    const orgSegment = key.split("/")[1];
+    if (orgSegment !== organizationId) {
+      throw new Error("Attachment key does not belong to this organization");
+    }
+  }
 }
 
 /**
@@ -2497,6 +2516,8 @@ export class SessionService {
   }
 
   async start(input: StartSessionServiceInput) {
+    validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
+
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
     }
@@ -3026,6 +3047,7 @@ export class SessionService {
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
     const queueInitialRunUntilBridgeAccess =
+      input.deferInitialRun !== true &&
       needsRuntimeProvisioning &&
       !!input.prompt &&
       (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
@@ -3048,6 +3070,7 @@ export class SessionService {
     const initialAgentStatus: AgentStatus = "not_started";
     const initialSessionStatus: SessionStatus = "in_progress";
     const initialCheckpointContextId = resolvedRepoId && input.prompt ? randomUUID() : null;
+    const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
     const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const sessionGroup = existingGroup
@@ -3112,11 +3135,12 @@ export class SessionService {
                   interactionMode: input.interactionMode ?? null,
                   clientSource: normalizeClientSource(input.clientSource),
                   checkpointContext: null,
+                  ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
                 },
               ])
             : undefined,
-          lastUserMessageAt: input.prompt ? new Date() : undefined,
-          lastMessageAt: input.prompt ? new Date() : undefined,
+          lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
+          lastMessageAt: hasInitialUserContent ? new Date() : undefined,
           worktreeDeleted: sessionGroup.worktreeDeleted,
           readOnlyWorkspace,
           ...(projectIds.length > 0 && {
@@ -3157,6 +3181,9 @@ export class SessionService {
             sourceSessionId: input.sourceSessionId ?? null,
             restoreCheckpointId: restoreCheckpoint?.id ?? null,
             restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
+            ...(input.imageKeys?.length
+              ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+              : {}),
           } as Prisma.InputJsonValue,
           metadata: initialCheckpointContextId
             ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
@@ -3186,7 +3213,8 @@ export class SessionService {
       needsRuntimeProvisioning &&
       input.prompt &&
       selectedRuntimeAccessAllowed &&
-      !deferRuntimeSelection
+      !deferRuntimeSelection &&
+      input.deferInitialRun !== true
     ) {
       this.provisionRuntime({
         sessionId: session.id,
@@ -3274,11 +3302,13 @@ export class SessionService {
     prompt?: string | null,
     interactionMode?: string,
     access?: { userId: string; organizationId: string; clientSource?: string | null },
+    imageKeys?: string[] | null,
   ) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
       include: SESSION_INCLUDE,
     });
+    validateUploadKeysForOrganization(imageKeys, session.organizationId);
     if (access) {
       if (session.organizationId !== access.organizationId) {
         throw new AuthorizationError("Not authorized for this session");
@@ -3329,6 +3359,7 @@ export class SessionService {
           repoId: session.repoId,
           startMeta,
         }),
+        ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(id, session, pendingCommand);
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
@@ -3347,6 +3378,7 @@ export class SessionService {
           repoId: session.repoId,
           startMeta,
         }),
+        ...(imageKeys?.length ? { imageKeys } : {}),
       };
       const commands = this.parsePendingCommands(session.pendingRun);
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
@@ -3465,6 +3497,9 @@ export class SessionService {
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
+      imageUrls: imageKeys?.length
+        ? await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)))
+        : undefined,
     };
 
     const deliveryResult = sessionRouter.send(id, command, {
@@ -3479,6 +3514,7 @@ export class SessionService {
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
         checkpointContext,
+        ...(imageKeys?.length ? { imageKeys } : {}),
       });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
@@ -3526,6 +3562,57 @@ export class SessionService {
     });
 
     return updated;
+  }
+
+  async recordExternalUserMessage(input: {
+    sessionId: string;
+    text: string;
+    imageKeys?: string[] | null;
+    actorId: string;
+    organizationId: string;
+    clientSource?: string | null;
+  }) {
+    validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
+
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const session = await tx.session.findFirst({
+        where: { id: input.sessionId, organizationId: input.organizationId },
+        select: { id: true, worktreeDeleted: true },
+      });
+      if (!session) {
+        throw new Error("Session not found");
+      }
+      if (session.worktreeDeleted) {
+        throw new Error("Cannot record message: session worktree has been deleted");
+      }
+
+      await tx.session.update({
+        where: { id: input.sessionId },
+        data: {
+          lastMessageAt: new Date(),
+          lastUserMessageAt: new Date(),
+        },
+      });
+
+      return eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "message_sent",
+          payload: {
+            text: input.text,
+            clientSource: normalizeClientSource(input.clientSource),
+            ...(input.imageKeys?.length
+              ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+              : {}),
+          },
+          actorType: "user",
+          actorId: input.actorId,
+        },
+        tx,
+      );
+    });
   }
 
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
@@ -4404,14 +4491,6 @@ export class SessionService {
     clientMutationId?: string;
     clientSource?: string | null;
   }) {
-    if (imageKeys?.length) {
-      for (const key of imageKeys) {
-        if (typeof key !== "string" || !key.startsWith("uploads/") || key.includes("..")) {
-          throw new Error("Invalid upload key");
-        }
-      }
-    }
-
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
       select: {
@@ -4438,6 +4517,7 @@ export class SessionService {
         branch: true,
       },
     });
+    validateUploadKeysForOrganization(imageKeys, session.organizationId);
     const conn = this.parseConnection(session.connection);
     const allowToolFallback =
       actorType === "user" &&
@@ -4501,18 +4581,6 @@ export class SessionService {
         actorType,
         actorId,
       });
-    }
-
-    // Upload keys are scoped to an organization (`uploads/{orgId}/...`).
-    // Reject keys whose org segment doesn't match the session's org so a
-    // multi-org user can't smuggle another org's file into this session.
-    if (imageKeys?.length) {
-      for (const key of imageKeys) {
-        const orgSegment = key.split("/")[1];
-        if (orgSegment !== session.organizationId) {
-          throw new Error("Attachment key does not belong to this organization");
-        }
-      }
     }
 
     if (session.worktreeDeleted) {
@@ -7543,6 +7611,7 @@ export class SessionService {
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
@@ -7701,7 +7770,7 @@ export class SessionService {
 
     // Generate presigned GET URLs for any attached files in the pending command
     let imageUrls: string[] | undefined;
-    if (pending.type === "send" && pending.imageKeys?.length) {
+    if (pending.imageKeys?.length) {
       imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));
     }
 

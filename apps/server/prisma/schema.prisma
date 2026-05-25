@@ -248,6 +248,8 @@ model Organization {
   orgSecrets    OrgSecret[]
   cloudMachines CloudMachine[]
   aiConversations  AiConversation[]
+  slackInstalls SlackInstall[]
+  slackChannelBindings SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -332,6 +334,9 @@ model User {
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
   queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
+  slackInstalls     SlackInstall[]   @relation("SlackInstallInstaller")
+  slackAccounts     SlackAccount[]
+  slackChannelBindings SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -418,6 +423,7 @@ model Channel {
   tickets  Ticket[]
   members  ChannelMember[]
   messages Message[]
+  slackBindings SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -521,6 +527,7 @@ model Session {
 
   projects        SessionProject[]
   queuedMessages  QueuedMessage[]
+  slackThread     SlackThreadSession?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -962,4 +969,93 @@ model AiTurn {
 
   @@index([branchId, createdAt])
   @@index([parentTurnId])
+}
+
+model SlackInstall {
+  id                String       @id @default(uuid())
+  slackTeamId       String       @unique
+  slackTeamName     String?
+  botUserId         String
+  encryptedBotToken String
+  iv                String
+  installedById     String
+  installedBy       User         @relation("SlackInstallInstaller", fields: [installedById], references: [id])
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model SlackAccount {
+  id                       String      @id @default(uuid())
+  slackUserId              String
+  slackTeamId              String
+  userId                   String
+  user                     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredTool            CodingTool?
+  preferredModel           String?
+  preferredReasoningEffort String?
+  createdAt                DateTime    @default(now())
+
+  @@unique([slackUserId, slackTeamId])
+  @@index([userId])
+}
+
+model SlackChannelBinding {
+  id              String   @id @default(uuid())
+  slackTeamId     String
+  slackChannelId  String
+  traceChannelId  String
+  organizationId  String
+  boundById       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  traceChannel Channel      @relation(fields: [traceChannelId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  boundBy      User         @relation(fields: [boundById], references: [id], onDelete: Cascade)
+
+  @@unique([slackTeamId, slackChannelId])
+  @@index([traceChannelId])
+  @@index([organizationId])
+}
+
+model SlackSessionDraft {
+  id             String   @id @default(cuid())
+  slackTeamId    String
+  slackChannelId String
+  slackThreadTs  String
+  slackUserId    String
+  organizationId String
+  traceChannelId String?
+  prompt         String
+  fileRefs       Json     @default("[]")
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime?
+
+  @@index([slackTeamId, slackChannelId, slackThreadTs])
+  @@index([expiresAt])
+}
+
+model SlackThreadSession {
+  id             String   @id @default(uuid())
+  slackTeamId    String
+  slackChannelId String
+  slackThreadTs  String
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  @@unique([slackTeamId, slackChannelId, slackThreadTs])
+}
+
+model SlackProcessedEvent {
+  id           String   @id @default(uuid())
+  slackTeamId  String?
+  slackEventId String   @unique
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
 }

@@ -32,6 +32,17 @@ export class S3StorageAdapter implements StorageAdapter {
     return { method: "POST" as const, url: target.url, fields: target.fields };
   }
 
+  async putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+  }
+
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,

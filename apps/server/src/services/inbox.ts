@@ -112,6 +112,35 @@ export class InboxService {
     return updated;
   }
 
+  async resolve(id: string, actorId: string, organizationId: string, resolution = "resolved") {
+    const item = await prisma.inboxItem.findFirstOrThrow({
+      where: { id, userId: actorId, organizationId },
+    });
+    const existingPayload = (item.payload ?? {}) as Record<string, unknown>;
+    const newPayload = { ...existingPayload, resolution };
+
+    const updated = await prisma.inboxItem.update({
+      where: { id },
+      data: {
+        status: "resolved",
+        resolvedAt: new Date(),
+        payload: newPayload as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await eventService.create({
+      organizationId: updated.organizationId,
+      scopeType: "system",
+      scopeId: updated.organizationId,
+      eventType: "inbox_item_resolved",
+      payload: { inboxItem: updated } as unknown as Prisma.InputJsonValue,
+      actorType: "user",
+      actorId,
+    });
+
+    return updated;
+  }
+
   async listForUser(orgId: string, userId: string, status?: InboxItemStatus) {
     const items = await prisma.inboxItem.findMany({
       where: {

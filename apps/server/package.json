@@ -24,6 +24,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1014.0",
     "@graphql-tools/schema": "^10.0.14",
     "@prisma/client": "^6.19.2",
+    "@slack/web-api": "^7.10.0",
     "@trace/gql": "workspace:*",
     "@trace/shared": "workspace:*",
     "@types/cors": "^2.8.19",

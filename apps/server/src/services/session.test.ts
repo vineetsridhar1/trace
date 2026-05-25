@@ -728,6 +728,54 @@ describe("SessionService", () => {
       );
     });
 
+    it("records an initial prompt without provisioning when initial run is deferred", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({ sessionGroup });
+      const imageKeys = ["uploads/org-1/slack-image.png"];
+
+      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(makeAgentEnvironment());
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+        prompt: "Investigate this screenshot",
+        imageKeys,
+        deferInitialRun: true,
+      } as unknown as StartSessionServiceInput);
+
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: undefined,
+            lastUserMessageAt: expect.any(Date),
+            lastMessageAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            prompt: "Investigate this screenshot",
+            imageKeys,
+            attachmentKeys: imageKeys,
+          }),
+        }),
+        expect.anything(),
+      );
+    });
+
     it("stores the default reasoning effort when none is provided", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup });
