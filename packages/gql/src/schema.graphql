@@ -1245,6 +1245,8 @@ type Mutation {
     capabilities: [BridgeAccessCapability!]
   ): BridgeAccessGrant!
   denyBridgeAccessRequest(requestId: ID!): BridgeAccessRequest!
+  approveSlackSessionAccessRequest(inboxItemId: ID!): InboxItem!
+  denySlackSessionAccessRequest(inboxItemId: ID!): InboxItem!
   revokeBridgeAccessGrant(grantId: ID!): BridgeAccessGrant!
   updateBridgeAccessGrant(
     grantId: ID!

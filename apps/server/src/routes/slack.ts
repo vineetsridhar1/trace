@@ -23,13 +23,17 @@ import {
   signSlackLinkState,
   verifySlackLinkState,
 } from "../lib/slack/user-resolver.js";
-import { buildTraceSessionLink, slackEventBridge } from "../lib/slack/event-bridge.js";
+import { slackEventBridge } from "../lib/slack/event-bridge.js";
 import {
   startSlackSession,
   type SlackSessionSettings,
 } from "../lib/slack/session-orchestrator.js";
 import { sessionService } from "../services/session.js";
-import { channelService } from "../services/channel.js";
+import {
+  decodeSlackSessionAccessRequestValue,
+  encodeSlackSessionAccessRequestValue,
+  slackSessionAccessService,
+} from "../services/slack-session-access.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const INSTALL_STATE_TTL_SECONDS = 10 * 60;
@@ -901,13 +905,6 @@ type AdvancedStartMetadata = {
   slackUserId: string;
 };
 
-type SessionAccessRequestValue = {
-  slackTeamId: string;
-  slackChannelId: string;
-  slackThreadTs: string;
-  requesterSlackUserId: string;
-};
-
 function stripBotMention(text: string, botUserId: string): string {
   return text.replace(new RegExp(`<@${botUserId}>`, "g"), "").trim();
 }
@@ -1099,33 +1096,6 @@ function renderBindRequiresLinkedAccount(slackTeamId: string, slackUserId: strin
   );
 }
 
-function encodeSessionAccessRequestValue(value: SessionAccessRequestValue): string {
-  return JSON.stringify(value);
-}
-
-function decodeSessionAccessRequestValue(value: string | undefined): SessionAccessRequestValue | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as Partial<SessionAccessRequestValue>;
-    if (
-      typeof parsed.slackTeamId !== "string" ||
-      typeof parsed.slackChannelId !== "string" ||
-      typeof parsed.slackThreadTs !== "string" ||
-      typeof parsed.requesterSlackUserId !== "string"
-    ) {
-      return null;
-    }
-    return {
-      slackTeamId: parsed.slackTeamId,
-      slackChannelId: parsed.slackChannelId,
-      slackThreadTs: parsed.slackThreadTs,
-      requesterSlackUserId: parsed.requesterSlackUserId,
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function postBindPrompt(input: {
   slackTeamId: string;
   slackChannelId: string;
@@ -1182,7 +1152,7 @@ async function postSessionAccessRequestPrompt(input: {
 }): Promise<void> {
   const client = await getSlackClient(input.slackTeamId);
   if (!client) return;
-  const value = encodeSessionAccessRequestValue({
+  const value = encodeSlackSessionAccessRequestValue({
     slackTeamId: input.slackTeamId,
     slackChannelId: input.slackChannelId,
     slackThreadTs: input.slackThreadTs,
@@ -1795,7 +1765,7 @@ async function startSlackSessionFromModal(input: {
 
 async function handleSessionAccessRequestAction(payload: SlackInteractionPayload): Promise<void> {
   const action = payload.actions?.[0];
-  const value = decodeSessionAccessRequestValue(action?.value);
+  const value = decodeSlackSessionAccessRequestValue(action?.value);
   const actingSlackUserId = payload.user?.id;
   if (!value || actingSlackUserId !== value.requesterSlackUserId) {
     console.warn("[slack] ignored invalid session access request action", {
@@ -1816,8 +1786,8 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     requesterSlackUserId: value.requesterSlackUserId,
   });
 
-  const requesterAccount = await resolveSlackAccount(value.slackTeamId, value.requesterSlackUserId);
-  if (!requesterAccount) {
+  const result = await slackSessionAccessService.createRequest(value);
+  if (result.status === "requester_unlinked") {
     await postLinkPrompt({
       slackTeamId: value.slackTeamId,
       slackUserId: value.requesterSlackUserId,
@@ -1827,22 +1797,7 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     return;
   }
 
-  const thread = await prisma.slackThreadSession.findUnique({
-    where: {
-      slackTeamId_slackChannelId_slackThreadTs: {
-        slackTeamId: value.slackTeamId,
-        slackChannelId: value.slackChannelId,
-        slackThreadTs: value.slackThreadTs,
-      },
-    },
-    select: {
-      sessionId: true,
-      organizationId: true,
-      session: { select: { channelId: true, createdById: true, name: true } },
-    },
-  });
-  const traceChannelId = thread?.session.channelId;
-  if (!thread || !traceChannelId) {
+  if (result.status === "thread_missing") {
     await postSessionAccessRequestFeedback({
       ...value,
       text: "This Slack thread is no longer connected to a Trace session.",
@@ -1850,29 +1805,15 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     return;
   }
 
-  if (
-    await canAccessTraceChannel({
-      userId: requesterAccount.userId,
-      organizationId: thread.organizationId,
-      traceChannelId,
-    })
-  ) {
-    await client.chat
-      .postEphemeral({
-        channel: value.slackChannelId,
-        user: value.requesterSlackUserId,
-        thread_ts: value.slackThreadTs,
-        text: "You already have access to this Trace session.",
-      })
-      .catch(() => {});
+  if (result.status === "already_has_access") {
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "You already have access to this Trace session.",
+    });
     return;
   }
 
-  const ownerAccount = await prisma.slackAccount.findFirst({
-    where: { slackTeamId: value.slackTeamId, userId: thread.session.createdById },
-    select: { slackUserId: true },
-  });
-  if (!ownerAccount) {
+  if (result.status === "owner_unlinked") {
     await postSessionAccessRequestFeedback({
       ...value,
       text: "Could not notify the Trace session owner in Slack. Ask them to link their Slack account first.",
@@ -1880,21 +1821,13 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     return;
   }
 
-  const requester = await prisma.user.findUnique({
-    where: { id: requesterAccount.userId },
-    select: { name: true, email: true },
-  });
-  const requesterLabel = requester?.name || requester?.email || "A Trace user";
-  const traceLink = await buildTraceSessionLink(thread.sessionId);
   console.log("[slack] sending session access request to owner", {
-    slackTeamId: value.slackTeamId,
-    sessionId: thread.sessionId,
-    ownerUserId: thread.session.createdById,
-    ownerSlackUserId: ownerAccount.slackUserId,
-    requesterUserId: requesterAccount.userId,
+    slackTeamId: result.value.slackTeamId,
+    inboxItemId: result.inboxItemId,
+    ownerSlackUserId: result.ownerSlackUserId,
     requesterSlackUserId: value.requesterSlackUserId,
   });
-  const dm = await client.conversations.open({ users: ownerAccount.slackUserId }).catch((err: unknown) => {
+  const dm = await client.conversations.open({ users: result.ownerSlackUserId }).catch((err: unknown) => {
     console.warn("[slack] failed to open session owner DM:", errorMessage(err));
     return null;
   });
@@ -1910,13 +1843,13 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   try {
     await client.chat.postMessage({
       channel: dmChannel,
-      text: `${requesterLabel} requested access to a Trace session from Slack.`,
+      text: `${result.requesterLabel} requested access to a Trace session from Slack.`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*${requesterLabel}* requested access to a Trace session from Slack.${traceLink ? `\n<${traceLink}|Open in Trace>` : ""}`,
+            text: `*${result.requesterLabel}* requested access to a Trace session from Slack.${result.traceLink ? `\n<${result.traceLink}|Open in Trace>` : ""}`,
           },
         },
         {
@@ -1927,7 +1860,7 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
               text: { type: "plain_text", text: "Approve" },
               style: "primary",
               action_id: "trace_session_access_approve",
-              value: encodeSessionAccessRequestValue(value),
+              value: encodeSlackSessionAccessRequestValue(result.value),
             },
           ],
         },
@@ -1935,8 +1868,8 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     });
     console.log("[slack] sent session access request DM", {
       slackTeamId: value.slackTeamId,
-      sessionId: thread.sessionId,
-      ownerSlackUserId: ownerAccount.slackUserId,
+      inboxItemId: result.inboxItemId,
+      ownerSlackUserId: result.ownerSlackUserId,
       dmChannel,
     });
   } catch (err) {
@@ -1950,49 +1883,19 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
 
   await postSessionAccessRequestFeedback({
     ...value,
-    text: `Access request sent to <@${ownerAccount.slackUserId}>.`,
+    text: `Access request sent to <@${result.ownerSlackUserId}> and Trace Inbox.`,
   });
 }
 
 async function handleSessionAccessApproveAction(payload: SlackInteractionPayload): Promise<void> {
   const action = payload.actions?.[0];
-  const value = decodeSessionAccessRequestValue(action?.value);
+  const value = decodeSlackSessionAccessRequestValue(action?.value);
   const ownerSlackUserId = payload.user?.id;
   if (!value || !ownerSlackUserId) return;
 
   const ownerAccount = await resolveSlackAccount(value.slackTeamId, ownerSlackUserId);
-  const requesterAccount = await resolveSlackAccount(value.slackTeamId, value.requesterSlackUserId);
-  if (!ownerAccount || !requesterAccount) return;
-
-  const thread = await prisma.slackThreadSession.findUnique({
-    where: {
-      slackTeamId_slackChannelId_slackThreadTs: {
-        slackTeamId: value.slackTeamId,
-        slackChannelId: value.slackChannelId,
-        slackThreadTs: value.slackThreadTs,
-      },
-    },
-    select: {
-      sessionId: true,
-      organizationId: true,
-      session: { select: { channelId: true, createdById: true } },
-    },
-  });
-  const traceChannelId = thread?.session.channelId;
-  if (!thread || !traceChannelId || thread.session.createdById !== ownerAccount.userId) return;
-
-  await channelService.addMember(traceChannelId, requesterAccount.userId, "user", ownerAccount.userId);
-
-  const client = await getSlackClient(value.slackTeamId);
-  if (!client) return;
-  await client.chat
-    .postEphemeral({
-      channel: value.slackChannelId,
-      user: value.requesterSlackUserId,
-      thread_ts: value.slackThreadTs,
-      text: "Access approved. You can reply in this Slack thread now.",
-    })
-    .catch(() => {});
+  if (!ownerAccount || !value.inboxItemId) return;
+  await slackSessionAccessService.approveInboxRequest(value.inboxItemId, ownerAccount.userId);
 }
 
 function isBotMessageCandidate(event: SlackEventBody): boolean {

@@ -1,5 +1,5 @@
 import { useState, useCallback, memo } from "react";
-import { MessageCircleQuestion, Map, Check } from "lucide-react";
+import { MessageCircleQuestion, Map, Check, ShieldCheck } from "lucide-react";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -7,6 +7,8 @@ import {
   RUN_SESSION_MUTATION,
   DISMISS_SESSION_MUTATION,
   DISMISS_INBOX_ITEM_MUTATION,
+  APPROVE_SLACK_SESSION_ACCESS_REQUEST_MUTATION,
+  DENY_SLACK_SESSION_ACCESS_REQUEST_MUTATION,
   TERMINATE_SESSION_MUTATION,
 } from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
@@ -80,6 +82,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
   const [sending, setSending] = useState(false);
 
   const isQuestion = itemType === "question";
+  const isSlackSessionAccessRequest = payload?.kind === "slack_session_access_request";
   const isResolved = status === "resolved" || status === "dismissed" || status === "expired";
   const planContent = (payload?.planContent as string) ?? "";
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
@@ -89,6 +92,14 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     if (!sourceId || !sessionGroupId) return;
     navigateToSession(sessionChannel?.id ?? null, sessionGroupId, sourceId);
   }, [sourceId, sessionChannel?.id, sessionGroupId]);
+
+  const handleNavigateSlackAccess = useCallback(() => {
+    const sessionId = payload?.sessionId as string | undefined;
+    const groupId = payload?.sessionGroupId as string | undefined;
+    const channelId = payload?.traceChannelId as string | undefined;
+    if (!sessionId || !groupId) return;
+    navigateToSession(channelId ?? null, groupId, sessionId);
+  }, [payload]);
 
   const handleApproveNewSession = useCallback(async () => {
     if (sending || !sourceId || !sessionGroupId) return;
@@ -179,6 +190,30 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     }
   }, [sending, id, sourceId]);
 
+  const handleApproveSlackAccess = useCallback(async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await client
+        .mutation(APPROVE_SLACK_SESSION_ACCESS_REQUEST_MUTATION, { inboxItemId: id })
+        .toPromise();
+    } finally {
+      setSending(false);
+    }
+  }, [sending, id]);
+
+  const handleDenySlackAccess = useCallback(async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await client
+        .mutation(DENY_SLACK_SESSION_ACCESS_REQUEST_MUTATION, { inboxItemId: id })
+        .toPromise();
+    } finally {
+      setSending(false);
+    }
+  }, [sending, id]);
+
   const handleSendMessage = useCallback(
     async (text: string, interactionMode?: string) => {
       if (!text.trim() || sending || !sourceId) return;
@@ -199,6 +234,56 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
   );
 
   if (!title) return null;
+
+  if (isSlackSessionAccessRequest && !isResolved) {
+    const requesterName =
+      (payload?.requesterName as string | undefined)?.trim() ||
+      (payload?.requesterEmail as string | undefined)?.trim() ||
+      "A teammate";
+    const sessionName = (payload?.sessionName as string | undefined)?.trim() || "a Trace session";
+
+    return (
+      <div className="border-b border-border last:border-b-0">
+        <div
+          className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-surface-elevated"
+          onClick={handleNavigateSlackAccess}
+        >
+          <div className="mt-0.5 shrink-0 text-muted-foreground">
+            <ShieldCheck size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-medium text-foreground">Slack access request</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {createdAt ? timeAgo(createdAt) : ""}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {requesterName} requested access to {sessionName}.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 px-4 pb-3">
+          <button
+            type="button"
+            disabled={sending}
+            onClick={handleApproveSlackAccess}
+            className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={sending}
+            onClick={handleDenySlackAccess}
+            className="rounded border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground disabled:opacity-50"
+          >
+            Deny
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Resolved / Dismissed / Expired state ──
   if (isResolved) {
