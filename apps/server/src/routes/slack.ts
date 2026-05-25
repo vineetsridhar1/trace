@@ -883,6 +883,7 @@ type SlackInteractionPayload = {
   user?: { id?: string };
   team?: { id?: string };
   channel?: { id?: string };
+  response_url?: string;
   trigger_id?: string;
   actions?: Array<{ action_id?: string; value?: string }>;
   view?: {
@@ -1215,6 +1216,27 @@ async function postSessionAccessRequestPrompt(input: {
       ],
     })
     .catch(() => {});
+}
+
+async function postSessionAccessRequestFeedback(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  requesterSlackUserId: string;
+  text: string;
+}): Promise<void> {
+  const client = await getSlackClient(input.slackTeamId);
+  if (!client) return;
+  await client.chat
+    .postEphemeral({
+      channel: input.slackChannelId,
+      user: input.requesterSlackUserId,
+      thread_ts: input.slackThreadTs,
+      text: input.text,
+    })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to post session access feedback:", errorMessage(err));
+    });
 }
 
 function resolveEffectiveSlackSettings(input: {
@@ -1775,10 +1797,24 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   const action = payload.actions?.[0];
   const value = decodeSessionAccessRequestValue(action?.value);
   const actingSlackUserId = payload.user?.id;
-  if (!value || actingSlackUserId !== value.requesterSlackUserId) return;
+  if (!value || actingSlackUserId !== value.requesterSlackUserId) {
+    console.warn("[slack] ignored invalid session access request action", {
+      actionUserId: actingSlackUserId,
+      requesterSlackUserId: value?.requesterSlackUserId,
+      hasValue: !!value,
+    });
+    return;
+  }
 
   const client = await getSlackClient(value.slackTeamId);
   if (!client) return;
+
+  console.log("[slack] session access request clicked", {
+    slackTeamId: value.slackTeamId,
+    slackChannelId: value.slackChannelId,
+    slackThreadTs: value.slackThreadTs,
+    requesterSlackUserId: value.requesterSlackUserId,
+  });
 
   const requesterAccount = await resolveSlackAccount(value.slackTeamId, value.requesterSlackUserId);
   if (!requesterAccount) {
@@ -1806,7 +1842,13 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     },
   });
   const traceChannelId = thread?.session.channelId;
-  if (!thread || !traceChannelId) return;
+  if (!thread || !traceChannelId) {
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "This Slack thread is no longer connected to a Trace session.",
+    });
+    return;
+  }
 
   if (
     await canAccessTraceChannel({
@@ -1831,14 +1873,10 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     select: { slackUserId: true },
   });
   if (!ownerAccount) {
-    await client.chat
-      .postEphemeral({
-        channel: value.slackChannelId,
-        user: value.requesterSlackUserId,
-        thread_ts: value.slackThreadTs,
-        text: "Could not notify the Trace session owner in Slack.",
-      })
-      .catch(() => {});
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "Could not notify the Trace session owner in Slack. Ask them to link their Slack account first.",
+    });
     return;
   }
 
@@ -1848,12 +1886,21 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   });
   const requesterLabel = requester?.name || requester?.email || "A Trace user";
   const traceLink = await buildTraceSessionLink(thread.sessionId);
-  const dm = await client.conversations.open({ users: ownerAccount.slackUserId }).catch(() => null);
+  const dm = await client.conversations.open({ users: ownerAccount.slackUserId }).catch((err: unknown) => {
+    console.warn("[slack] failed to open session owner DM:", errorMessage(err));
+    return null;
+  });
   const dmChannel = dm?.channel?.id;
-  if (!dmChannel) return;
+  if (!dmChannel) {
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "Could not open a Slack DM with the Trace session owner.",
+    });
+    return;
+  }
 
-  await client.chat
-    .postMessage({
+  try {
+    await client.chat.postMessage({
       channel: dmChannel,
       text: `${requesterLabel} requested access to a Trace session from Slack.`,
       blocks: [
@@ -1877,17 +1924,20 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
           ],
         },
       ],
-    })
-    .catch(() => {});
+    });
+  } catch (err) {
+    console.warn("[slack] failed to DM session access request:", errorMessage(err));
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "Could not send the access request to the Trace session owner in Slack.",
+    });
+    return;
+  }
 
-  await client.chat
-    .postEphemeral({
-      channel: value.slackChannelId,
-      user: value.requesterSlackUserId,
-      thread_ts: value.slackThreadTs,
-      text: "Access request sent to the Trace session owner.",
-    })
-    .catch(() => {});
+  await postSessionAccessRequestFeedback({
+    ...value,
+    text: "Access request sent to the Trace session owner.",
+  });
 }
 
 async function handleSessionAccessApproveAction(payload: SlackInteractionPayload): Promise<void> {
@@ -2144,6 +2194,12 @@ router.post(
 
     const actionId = payload.actions?.[0]?.action_id;
     if (payload.type === "block_actions" && actionId === "trace_session_access_request") {
+      console.log("[slack] interaction received", {
+        type: payload.type,
+        actionId,
+        teamId: payload.team?.id,
+        userId: payload.user?.id,
+      });
       res.status(200).json({});
       void handleSessionAccessRequestAction(payload).catch((err: unknown) => {
         console.warn("[slack] failed to request session access:", errorMessage(err));
@@ -2151,6 +2207,12 @@ router.post(
       return;
     }
     if (payload.type === "block_actions" && actionId === "trace_session_access_approve") {
+      console.log("[slack] interaction received", {
+        type: payload.type,
+        actionId,
+        teamId: payload.team?.id,
+        userId: payload.user?.id,
+      });
       res.status(200).json({});
       void handleSessionAccessApproveAction(payload).catch((err: unknown) => {
         console.warn("[slack] failed to approve session access:", errorMessage(err));
