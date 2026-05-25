@@ -18,16 +18,12 @@ window.addEventListener("vite:preloadError", () => {
 });
 
 function Root() {
-  const clientRevision = useSyncExternalStore(
-    subscribeClientRevision,
-    getClientRevision,
-    getClientRevision,
-  );
+  useSyncExternalStore(subscribeClientRevision, getClientRevision, getClientRevision);
 
   return (
     <AppErrorBoundary>
-      <Provider key={clientRevision} value={client}>
-        <App key={clientRevision} />
+      <Provider value={client}>
+        <App />
       </Provider>
     </AppErrorBoundary>
   );

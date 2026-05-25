@@ -16,16 +16,15 @@ function createStorage(initial: Record<string, string> = {}): Pick<Storage, "get
 
 describe("visibility refresh policy", () => {
   it("does nothing for quick visibility changes", () => {
-    expect(getResumeAction(1_000, false)).toBe("none");
+    expect(getResumeAction(1_000)).toBe("none");
   });
 
   it("soft-refreshes after routine backgrounding without restarting the client", () => {
-    expect(getResumeAction(5 * 60 * 1_000, false)).toBe("refresh");
+    expect(getResumeAction(5 * 60 * 1_000)).toBe("refresh");
   });
 
-  it("restarts only after a long sleep-like gap while disconnected", () => {
-    expect(getResumeAction(SLEEP_RESUME_THRESHOLD_MS + 1, false)).toBe("refresh-and-restart");
-    expect(getResumeAction(SLEEP_RESUME_THRESHOLD_MS + 1, true)).toBe("refresh");
+  it("restarts after a long sleep-like gap even if connection state is stale", () => {
+    expect(getResumeAction(SLEEP_RESUME_THRESHOLD_MS + 1)).toBe("refresh-and-restart");
   });
 
   it("enforces the wake restart cooldown", () => {

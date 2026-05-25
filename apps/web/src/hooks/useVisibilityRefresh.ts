@@ -1,13 +1,12 @@
 import { useEffect, useRef } from "react";
 import { recreateClient } from "../lib/urql";
-import { useConnectionStore } from "../stores/connection";
 import { useUIStore } from "../stores/ui";
 import {
   canRestartAfterWake,
-  DISCONNECTED_RESTART_DELAY_MS,
   getResumeAction,
   LAST_WAKE_RESTART_KEY,
   RESUME_CHECK_INTERVAL_MS,
+  WAKE_RESTART_DELAY_MS,
 } from "./visibilityRefreshPolicy";
 
 export function useVisibilityRefresh() {
@@ -23,12 +22,12 @@ export function useVisibilityRefresh() {
       restartTimer.current = null;
     }
 
-    function scheduleDisconnectedRestart() {
-      if (restartTimer.current || useConnectionStore.getState().connected) return;
+    function scheduleWakeRestart() {
+      if (restartTimer.current) return;
 
       restartTimer.current = setTimeout(() => {
         restartTimer.current = null;
-        if (document.hidden || useConnectionStore.getState().connected) return;
+        if (document.hidden) return;
 
         const now = Date.now();
         if (!canRestartAfterWake(now, sessionStorage)) return;
@@ -36,14 +35,14 @@ export function useVisibilityRefresh() {
         sessionStorage.setItem(LAST_WAKE_RESTART_KEY, String(now));
         recreateClient();
         triggerRefresh();
-      }, DISCONNECTED_RESTART_DELAY_MS);
+      }, WAKE_RESTART_DELAY_MS);
     }
 
     function handleSleepResume(duration: number) {
-      const action = getResumeAction(duration, useConnectionStore.getState().connected);
+      const action = getResumeAction(duration);
       if (action === "none") return;
       triggerRefresh();
-      if (action === "refresh-and-restart") scheduleDisconnectedRestart();
+      if (action === "refresh-and-restart") scheduleWakeRestart();
     }
 
     function checkResumeClock() {
