@@ -1009,9 +1009,6 @@ async function resolveSlackAccount(slackTeamId: string, slackUserId: string) {
     where: { slackUserId_slackTeamId: { slackUserId, slackTeamId } },
     select: {
       userId: true,
-      preferredTool: true,
-      preferredModel: true,
-      preferredReasoningEffort: true,
     },
   });
 }
@@ -1395,6 +1392,26 @@ async function postDraftActionFeedback(input: {
     .catch((err: unknown) => {
       console.warn("[slack] failed to post draft action feedback:", errorMessage(err));
     });
+}
+
+async function postDraftUnavailableOrOwnerFeedback(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackUserId: string;
+  draftId: string;
+  unavailableText?: string;
+}): Promise<void> {
+  const draft = await loadSlackSessionDraft(input.draftId);
+  const text =
+    draft && draft.slackUserId !== input.slackUserId
+      ? "Only the person who created this Trace start prompt can use this button."
+      : input.unavailableText ?? "This Trace start prompt is no longer available. Mention `@trace` again.";
+  await postDraftActionFeedback({
+    slackTeamId: input.slackTeamId,
+    slackChannelId: input.slackChannelId,
+    slackUserId: input.slackUserId,
+    text,
+  });
 }
 
 function readSignedRawBody(req: Request, res: Response): string | null {
@@ -2328,13 +2345,6 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   const client = await getSlackClient(value.slackTeamId);
   if (!client) return;
 
-  console.log("[slack] bridge access request clicked", {
-    slackTeamId: value.slackTeamId,
-    slackChannelId: value.slackChannelId,
-    slackThreadTs: value.slackThreadTs,
-    requesterSlackUserId: value.requesterSlackUserId,
-  });
-
   const requesterAccount = await resolveSlackAccount(value.slackTeamId, value.requesterSlackUserId);
   if (!requesterAccount) {
     await postLinkPrompt({
@@ -2455,12 +2465,6 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   const requesterLabel = requester?.name?.trim() || requester?.email?.trim() || "A Trace user";
   const traceLink = await buildTraceSessionLink(thread.sessionId);
 
-  console.log("[slack] sending bridge access request to owner", {
-    slackTeamId: value.slackTeamId,
-    requestId: request.id,
-    ownerSlackUserId: ownerAccount.slackUserId,
-    requesterSlackUserId: value.requesterSlackUserId,
-  });
   const dm = await client.conversations.open({ users: ownerAccount.slackUserId }).catch((err: unknown) => {
     console.warn("[slack] failed to open bridge owner DM:", errorMessage(err));
     return null;
@@ -2499,12 +2503,6 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
           ],
         },
       ],
-    });
-    console.log("[slack] sent bridge access request DM", {
-      slackTeamId: value.slackTeamId,
-      requestId: request.id,
-      ownerSlackUserId: ownerAccount.slackUserId,
-      dmChannel,
     });
   } catch (err) {
     console.warn("[slack] failed to DM bridge access request:", errorMessage(err));
@@ -2786,14 +2784,25 @@ router.post(
             }),
           )
           .catch(async (err: unknown) => {
-            const draft = await loadSlackSessionDraft(draftId, slackUserId);
+            const draft = await loadSlackSessionDraft(draftId);
             if (!draft) {
               if (payload.team?.id && payload.channel?.id) {
-                await postDraftActionFeedback({
+                await postDraftUnavailableOrOwnerFeedback({
                   slackTeamId: payload.team.id,
                   slackChannelId: payload.channel.id,
                   slackUserId,
-                  text: "This Trace start prompt is no longer available. Mention `@trace` again.",
+                  draftId,
+                });
+              }
+              return;
+            }
+            if (draft.slackUserId !== slackUserId) {
+              if (payload.team?.id && payload.channel?.id) {
+                await postDraftUnavailableOrOwnerFeedback({
+                  slackTeamId: payload.team.id,
+                  slackChannelId: payload.channel.id,
+                  slackUserId,
+                  draftId,
                 });
               }
               return;
@@ -2822,11 +2831,11 @@ router.post(
           draftId,
         }).then((opened) => {
           if (opened) return undefined;
-          return postDraftActionFeedback({
+          return postDraftUnavailableOrOwnerFeedback({
             slackTeamId: payload.team!.id!,
             slackChannelId: payload.channel!.id!,
             slackUserId: payload.user!.id!,
-            text: "This Trace start prompt is no longer available. Mention `@trace` again.",
+            draftId,
           });
         });
       }
@@ -2841,11 +2850,12 @@ router.post(
         void loadSlackSessionDraft(draftId, slackUserId).then((draft) => {
           if (draft) return deleteSlackSessionDraft(draft.id);
           if (payload.team?.id && payload.channel?.id) {
-            return postDraftActionFeedback({
+            return postDraftUnavailableOrOwnerFeedback({
               slackTeamId: payload.team.id,
               slackChannelId: payload.channel.id,
               slackUserId,
-              text: "This Trace start prompt is no longer available.",
+              draftId,
+              unavailableText: "This Trace start prompt is no longer available.",
             });
           }
           return undefined;
@@ -2855,12 +2865,6 @@ router.post(
     }
 
     if (payload.type === "block_actions" && actionId === "trace_bridge_access_request") {
-      console.log("[slack] interaction received", {
-        type: payload.type,
-        actionId,
-        teamId: payload.team?.id,
-        userId: payload.user?.id,
-      });
       res.status(200).json({});
       void handleSessionAccessRequestAction(payload).catch((err: unknown) => {
         console.warn("[slack] failed to request bridge access:", errorMessage(err));
@@ -2868,12 +2872,6 @@ router.post(
       return;
     }
     if (payload.type === "block_actions" && actionId === "trace_bridge_access_approve") {
-      console.log("[slack] interaction received", {
-        type: payload.type,
-        actionId,
-        teamId: payload.team?.id,
-        userId: payload.user?.id,
-      });
       res.status(200).json({});
       void handleSessionAccessApproveAction(payload).catch((err: unknown) => {
         console.warn("[slack] failed to approve bridge access:", errorMessage(err));
