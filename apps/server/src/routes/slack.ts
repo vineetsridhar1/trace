@@ -1148,13 +1148,13 @@ async function postStartDraftPrompt(input: {
   fileRefs: SlackStoredFileRef[];
   warnings: string[];
   settingsSummary?: string | null;
-}): Promise<void> {
+}): Promise<boolean> {
   const client = await getSlackClient(input.slackTeamId);
-  if (!client) return;
+  if (!client) return false;
 
   const summary = selectedFilesSummary(input.fileRefs, input.warnings);
   const detailText = [input.settingsSummary, summary].filter(Boolean).join("\n\n");
-  await client.chat
+  return client.chat
     .postMessage({
       channel: input.slackChannelId,
       ...(input.slackThreadTs ? { thread_ts: input.slackThreadTs } : {}),
@@ -1193,8 +1193,10 @@ async function postStartDraftPrompt(input: {
         },
       ],
     })
+    .then(() => true)
     .catch((err: unknown) => {
       console.warn("[slack] failed to post session draft prompt:", errorMessage(err));
+      return false;
     });
 }
 
@@ -1392,6 +1394,27 @@ async function postDraftActionFeedback(input: {
     })
     .catch((err: unknown) => {
       console.warn("[slack] failed to post draft action feedback:", errorMessage(err));
+    });
+}
+
+async function postMentionFeedback(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackUserId: string;
+  threadTs: string;
+  text: string;
+}): Promise<void> {
+  const client = await getSlackClient(input.slackTeamId);
+  if (!client) return;
+  await client.chat
+    .postEphemeral({
+      channel: input.slackChannelId,
+      user: input.slackUserId,
+      thread_ts: input.threadTs,
+      text: input.text,
+    })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to post mention feedback:", errorMessage(err));
     });
 }
 
@@ -1857,7 +1880,14 @@ async function handleAppMention(input: {
     select: { id: true },
   });
   if (existingThread) {
-    console.info("[slack] ignoring duplicate app_mention for existing thread", { teamId, channel, threadTs });
+    console.info("[slack] app_mention for existing Trace thread", { teamId, channel, threadTs });
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: "This Slack thread is already connected to a Trace session. Reply in the thread without mentioning `@trace` to send a message.",
+    });
     return;
   }
 
@@ -1868,7 +1898,7 @@ async function handleAppMention(input: {
       slackTeamId: teamId,
       slackUserId,
       slackChannelId: channel,
-      threadTs: event.thread_ts,
+      threadTs,
     });
     return;
   }
@@ -1879,17 +1909,13 @@ async function handleAppMention(input: {
     select: { userId: true },
   });
   if (!membership) {
-    const client = await getSlackClient(teamId);
-    if (client) {
-      await client.chat
-        .postEphemeral({
-          channel,
-          user: slackUserId,
-          thread_ts: threadTs,
-          text: "Your Trace account isn't in this workspace's org.",
-        })
-        .catch(() => {});
-    }
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: "Your Slack account is linked, but your Trace account is not in the connected Trace org. Ask a Trace org admin to invite you, then try again.",
+    });
     return;
   }
 
@@ -1899,7 +1925,7 @@ async function handleAppMention(input: {
       slackTeamId: teamId,
       slackChannelId: channel,
       slackUserId,
-      threadTs: event.thread_ts,
+      threadTs,
       text: "This Slack channel is not connected to Trace yet. Bind it to a Trace channel before starting sessions here.",
     });
     return;
@@ -1914,6 +1940,26 @@ async function handleAppMention(input: {
     organizationId: install.organizationId,
     files: event.files,
   });
+  if (!prompt && files.refs.length === 0) {
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: "Tell Trace what to do after the mention, like `@trace fix the failing test`. You can also use `/trace start` for advanced setup.",
+    });
+    if (files.warnings.length > 0) {
+      await postMentionFeedback({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackUserId,
+        threadTs,
+        text: files.warnings.join(" "),
+      });
+    }
+    return;
+  }
+
   const draftId = await createSlackSessionDraft({
     slackTeamId: teamId,
     slackChannelId: channel,
@@ -1925,7 +1971,7 @@ async function handleAppMention(input: {
     fileRefs: files.refs,
   });
   const settingsSummary = await recommendedSettingsSummaryForDraft(draftId, slackUserId);
-  await postStartDraftPrompt({
+  const posted = await postStartDraftPrompt({
     slackTeamId: teamId,
     slackChannelId: channel,
     slackThreadTs: threadTs,
@@ -1936,6 +1982,15 @@ async function handleAppMention(input: {
     warnings: files.warnings,
     settingsSummary,
   });
+  if (!posted) {
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: "Trace received your mention, but could not post the start prompt. Try again in a moment or use `/trace start`.",
+    });
+  }
 }
 
 async function startSlackSessionFromDraft(input: {
