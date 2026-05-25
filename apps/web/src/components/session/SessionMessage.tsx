@@ -77,7 +77,6 @@ function renderAssistantContent(
         <AssistantText
           key={i}
           text={block.text}
-          timestamp={ts}
           onForkSession={onForkSession}
           canForkSession={canForkSession}
         />,

@@ -2,17 +2,14 @@ import { useCallback, useState } from "react";
 import { Check, Copy, GitFork } from "lucide-react";
 import { toast } from "sonner";
 import { Markdown } from "../../ui/Markdown";
-import { formatTime } from "./utils";
 
 export function AssistantText({
   text,
-  timestamp,
   onForkSession,
   canForkSession = false,
 }: {
   key?: React.Key;
   text: string;
-  timestamp: string;
   onForkSession?: () => void;
   canForkSession?: boolean;
 }) {
@@ -51,7 +48,6 @@ export function AssistantText({
         >
           <GitFork size={14} />
         </button>
-        <span className="text-xs text-muted-foreground/80">{formatTime(timestamp)}</span>
       </div>
     </div>
   );
