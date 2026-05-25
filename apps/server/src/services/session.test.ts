@@ -2208,7 +2208,13 @@ describe("SessionService", () => {
             scopeType: "session",
             scopeId: "source-session",
             eventType: "session_started",
-            payload: { session: { id: "source-session" }, sessionGroup: { id: "source-group" } },
+            payload: {
+              session: { id: "source-session" },
+              sessionGroup: { id: "source-group" },
+              prompt: "Initial source prompt",
+              attachmentKeys: ["image-key"],
+              imageKeys: ["image-key"],
+            },
             actorType: "user",
             actorId: "other-user",
             parentId: null,
@@ -2305,13 +2311,23 @@ describe("SessionService", () => {
       });
       expect(prismaMock.event.update).toHaveBeenCalledWith({
         where: { id: "forked-start" },
-        data: {
+        data: expect.objectContaining({
+          payload: expect.objectContaining({
+            session: expect.objectContaining({ id: "forked-session" }),
+            sessionGroup: expect.objectContaining({ id: "forked-group" }),
+            prompt: "Initial source prompt",
+            attachmentKeys: ["image-key"],
+            imageKeys: ["image-key"],
+            sourceSessionId: "source-session",
+          }),
           metadata: expect.objectContaining({
             forkedFromSessionId: "source-session",
             forkedFromSessionGroupId: "source-group",
             forkedFromEventId: "source-message",
           }),
-        },
+          actorType: "user",
+          actorId: "other-user",
+        }),
       });
       expect(eventServiceMock.create).toHaveBeenLastCalledWith(
         expect.objectContaining({
