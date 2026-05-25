@@ -10,6 +10,7 @@ import {
 } from "electron";
 import path from "path";
 import crypto from "crypto";
+import { readFileSync } from "node:fs";
 import { setTimeout } from "node:timers";
 import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
@@ -40,16 +41,31 @@ const projectParentSelections = new Map<
   string,
   { path: string; timeout: ReturnType<typeof setTimeout> }
 >();
+type BuildConfig = {
+  productionUrl?: string;
+  macUpdateRepo?: string;
+};
+
+function loadBuildConfig(): BuildConfig {
+  try {
+    const raw = readFileSync(path.join(__dirname, "build-config.json"), "utf-8");
+    return JSON.parse(raw) as BuildConfig;
+  } catch {
+    return {};
+  }
+}
+
+const buildConfig = loadBuildConfig();
 const portOffset = Number(process.env.TRACE_PORT || 0);
-const productionUrl = "https://gettrace.org";
-const defaultServerUrl = app.isPackaged
-  ? productionUrl
-  : `http://localhost:${4000 + portOffset}`;
-const defaultWebUrl = app.isPackaged ? productionUrl : `http://localhost:${3000 + portOffset}`;
+const localServerUrl = `http://localhost:${4000 + portOffset}`;
+const localWebUrl = `http://localhost:${3000 + portOffset}`;
+const defaultServerUrl =
+  app.isPackaged && buildConfig.productionUrl ? buildConfig.productionUrl : localServerUrl;
+const defaultWebUrl =
+  app.isPackaged && buildConfig.productionUrl ? buildConfig.productionUrl : localWebUrl;
 const serverUrl = process.env.TRACE_SERVER_URL ?? defaultServerUrl;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
-const macUpdateRepo = "vineetsridhar1/trace";
 
 app.setName(appName);
 
@@ -162,11 +178,12 @@ function createWindow() {
 
 function configureMacAutoUpdates() {
   if (!app.isPackaged || process.platform !== "darwin") return;
+  if (!buildConfig.macUpdateRepo) return;
 
   updateElectronApp({
     updateSource: {
       type: UpdateSourceType.ElectronPublicUpdateService,
-      repo: macUpdateRepo,
+      repo: buildConfig.macUpdateRepo,
     },
     updateInterval: "30 minutes",
     onNotifyUser: makeUserNotifier({

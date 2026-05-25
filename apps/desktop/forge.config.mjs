@@ -1,5 +1,19 @@
 const signingIdentity = process.env.TRACE_MACOS_SIGN_IDENTITY;
 const skipSigning = process.env.TRACE_MACOS_SKIP_SIGN === "1";
+const updateRepo = process.env.TRACE_DESKTOP_UPDATE_REPO;
+
+function parseRepoSlug(slug) {
+  if (!slug) return null;
+  const [owner, name] = slug.split("/");
+  if (!owner || !name) {
+    throw new Error(
+      `TRACE_DESKTOP_UPDATE_REPO must be in "owner/name" form, got "${slug}"`,
+    );
+  }
+  return { owner, name };
+}
+
+const repository = parseRepoSlug(updateRepo);
 
 function notarizeConfigFromEnv() {
   if (process.env.TRACE_MACOS_NOTARY_KEYCHAIN_PROFILE) {
@@ -58,19 +72,18 @@ export default {
       platforms: ["darwin"],
     },
   ],
-  publishers: [
-    {
-      name: "@electron-forge/publisher-github",
-      config: {
-        repository: {
-          owner: "vineetsridhar1",
-          name: "trace",
+  publishers: repository
+    ? [
+        {
+          name: "@electron-forge/publisher-github",
+          config: {
+            repository,
+            draft: false,
+            prerelease: false,
+          },
         },
-        draft: false,
-        prerelease: false,
-      },
-    },
-  ],
+      ]
+    : [],
   plugins: [
     {
       name: "@electron-forge/plugin-auto-unpack-natives",
