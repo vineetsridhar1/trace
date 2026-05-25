@@ -77,32 +77,72 @@ export async function postLinkPrompt(input: {
   if (!client) return;
 
   const linkUrl = buildLinkUrl(input.slackTeamId, input.slackUserId);
+  const blocks = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "Link your Trace account to use `@trace` from Slack.",
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Link account" },
+          url: linkUrl,
+          style: "primary",
+        },
+      ],
+    },
+  ];
+
+  const dm = await client.conversations
+    .open({ users: input.slackUserId })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to open link prompt DM:", (err as Error).message);
+      return null;
+    });
+  const dmChannel = dm?.channel?.id;
+  if (dmChannel) {
+    const postedDm = await client.chat
+      .postMessage({
+        channel: dmChannel,
+        text: `Link your Trace account to use @trace from Slack: ${linkUrl}`,
+        blocks,
+      })
+      .then(() => true)
+      .catch((err: unknown) => {
+        console.warn("[slack] failed to post link prompt DM:", (err as Error).message);
+        return false;
+      });
+
+    if (postedDm) {
+      console.info("[slack] posted account link prompt DM", {
+        teamId: input.slackTeamId,
+        slackUserId: input.slackUserId,
+        channel: dmChannel,
+      });
+      await client.chat
+        .postEphemeral({
+          channel: input.slackChannelId,
+          user: input.slackUserId,
+          thread_ts: input.threadTs,
+          text: "I sent you a DM to link your Trace account.",
+        })
+        .catch(() => {});
+      return;
+    }
+  }
+
   await client.chat
     .postEphemeral({
       channel: input.slackChannelId,
       user: input.slackUserId,
       thread_ts: input.threadTs,
       text: `Link your Trace account to use @trace here: ${linkUrl}`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: "Link your Trace account to use `@trace` here.",
-          },
-        },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: { type: "plain_text", text: "Link account" },
-              url: linkUrl,
-              style: "primary",
-            },
-          ],
-        },
-      ],
+      blocks,
     })
     .then(() => {
       console.info("[slack] posted account link prompt", {
