@@ -567,7 +567,6 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
-  approveSlackSessionAccessRequest: InboxItem;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
@@ -594,7 +593,6 @@ export type Mutation = {
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
-  denySlackSessionAccessRequest: InboxItem;
   destroyTerminal: Scalars["Boolean"]["output"];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
@@ -680,10 +678,6 @@ export type MutationApproveBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
   scopeType?: InputMaybe<BridgeAccessScopeType>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
-};
-
-export type MutationApproveSlackSessionAccessRequestArgs = {
-  inboxItemId: Scalars["ID"]["input"];
 };
 
 export type MutationArchiveSessionGroupArgs = {
@@ -800,10 +794,6 @@ export type MutationDeleteSessionGroupArgs = {
 
 export type MutationDenyBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
-};
-
-export type MutationDenySlackSessionAccessRequestArgs = {
-  inboxItemId: Scalars["ID"]["input"];
 };
 
 export type MutationDestroyTerminalArgs = {
@@ -2736,12 +2726,6 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationApproveBridgeAccessRequestArgs, "requestId">
   >;
-  approveSlackSessionAccessRequest?: Resolver<
-    ResolversTypes["InboxItem"],
-    ParentType,
-    ContextType,
-    RequireFields<MutationApproveSlackSessionAccessRequestArgs, "inboxItemId">
-  >;
   archiveSessionGroup?: Resolver<
     Maybe<ResolversTypes["SessionGroup"]>,
     ParentType,
@@ -2900,12 +2884,6 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationDenyBridgeAccessRequestArgs, "requestId">
-  >;
-  denySlackSessionAccessRequest?: Resolver<
-    ResolversTypes["InboxItem"],
-    ParentType,
-    ContextType,
-    RequireFields<MutationDenySlackSessionAccessRequestArgs, "inboxItemId">
   >;
   destroyTerminal?: Resolver<
     ResolversTypes["Boolean"],

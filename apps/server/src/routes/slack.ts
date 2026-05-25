@@ -1,11 +1,13 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import express from "express";
 import jwt from "jsonwebtoken";
-import type { CodingTool } from "@prisma/client";
+import { randomUUID } from "crypto";
+import { Prisma, type CodingTool } from "@prisma/client";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelsForTool,
+  getReasoningEffortLabel,
   getReasoningEffortsForTool,
   isSupportedModel,
   isSupportedReasoningEffort,
@@ -16,35 +18,37 @@ import { resolveJwtSecret } from "../lib/jwt-secret.js";
 import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
 import { verifySlackSignature } from "../lib/slack/signature.js";
 import { getMissingSlackConfig, isSlackConfigured, slackSessionHosting } from "../lib/slack/config.js";
-import { getSlackClient, invalidateSlackClient } from "../lib/slack/client.js";
+import { getSlackBotToken, getSlackClient, invalidateSlackClient } from "../lib/slack/client.js";
 import {
   postLinkPrompt,
   resolveTraceUser,
   signSlackLinkState,
   verifySlackLinkState,
 } from "../lib/slack/user-resolver.js";
-import { slackEventBridge } from "../lib/slack/event-bridge.js";
+import { buildTraceSessionLink, slackEventBridge } from "../lib/slack/event-bridge.js";
 import {
   startSlackSession,
   type SlackSessionSettings,
 } from "../lib/slack/session-orchestrator.js";
 import { sessionService } from "../services/session.js";
-import {
-  decodeSlackSessionAccessRequestValue,
-  encodeSlackSessionAccessRequestValue,
-  slackSessionAccessService,
-} from "../services/slack-session-access.js";
+import { runtimeAccessService } from "../services/runtime-access.js";
+import { storage } from "../lib/storage/index.js";
+import { sessionRouter } from "../lib/session-router.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const INSTALL_STATE_TTL_SECONDS = 10 * 60;
 const BIND_STATE_TTL_SECONDS = 10 * 60;
 const RECENT_MENTION_TTL_MS = 30 * 1000;
+const SLACK_DRAFT_TTL_MS = 15 * 60 * 1000;
+const SLACK_MAX_FILE_COUNT = 4;
+const SLACK_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const recentMentionKeys = new Map<string, number>();
 const SLACK_SCOPES = [
   "app_mentions:read",
   "chat:write",
   "chat:write.public",
   "commands",
+  "files:read",
   "im:write",
   "users:read",
   "channels:read",
@@ -57,6 +61,12 @@ const REASONING_ALIASES = new Map([
   ["think", "high"],
   ["thinking", "high"],
   ["max", "max"],
+]);
+const SUPPORTED_SLACK_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
 ]);
 
 type InstallStatePayload = {
@@ -203,10 +213,6 @@ function formSelect(
   return `<label style="display:block;text-align:left;margin:12px 0;color:#c7c7d1">${escapeHtml(label)}<select name="${escapeHtml(name)}" style="display:block;width:100%;margin-top:6px;background:#0b0b0e;color:#e6e6ea;border:1px solid #2a2a31;border-radius:8px;padding:10px">${renderedOptions}</select></label>`;
 }
 
-function safeScriptJson(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, "\\u003c");
-}
-
 function defaultToolOptions(): { value: string; label: string }[] {
   return [
     { value: "claude_code", label: "Claude Code" },
@@ -223,49 +229,6 @@ function reasoningOptionsFor(tool: CodingTool): { value: string; label: string }
     value: option.value,
     label: option.label,
   }));
-}
-
-function preferenceOptionsScript(): string {
-  const modelsByTool = Object.fromEntries(
-    defaultToolOptions().map((tool) => [tool.value, modelOptionsFor(tool.value as CodingTool)]),
-  );
-  const reasoningByTool = Object.fromEntries(
-    defaultToolOptions().map((tool) => [tool.value, reasoningOptionsFor(tool.value as CodingTool)]),
-  );
-  const defaultModels = Object.fromEntries(
-    defaultToolOptions().map((tool) => [tool.value, getDefaultModel(tool.value) ?? ""]),
-  );
-  const defaultReasoning = Object.fromEntries(
-    defaultToolOptions().map((tool) => [tool.value, getDefaultReasoningEffort(tool.value) ?? ""]),
-  );
-
-  return `<script>
-(() => {
-  const modelsByTool = ${safeScriptJson(modelsByTool)};
-  const reasoningByTool = ${safeScriptJson(reasoningByTool)};
-  const defaultModels = ${safeScriptJson(defaultModels)};
-  const defaultReasoning = ${safeScriptJson(defaultReasoning)};
-  const tool = document.querySelector('select[name="tool"]');
-  const model = document.querySelector('select[name="model"]');
-  const reasoning = document.querySelector('select[name="reasoningEffort"]');
-  const replaceOptions = (select, options, selectedValue) => {
-    if (!select) return;
-    select.innerHTML = "";
-    for (const option of options || []) {
-      const el = document.createElement("option");
-      el.value = option.value;
-      el.textContent = option.label;
-      if (option.value === selectedValue) el.selected = true;
-      select.appendChild(el);
-    }
-  };
-  tool?.addEventListener("change", () => {
-    const selectedTool = tool.value;
-    replaceOptions(model, modelsByTool[selectedTool], defaultModels[selectedTool]);
-    replaceOptions(reasoning, reasoningByTool[selectedTool], defaultReasoning[selectedTool]);
-  });
-})();
-</script>`;
 }
 
 function validateSlackSessionConfig(input: {
@@ -455,19 +418,11 @@ router.get("/link", async (req: Request, res: Response) => {
     select: { slackTeamName: true },
   });
   const teamName = install?.slackTeamName ?? team;
-  const existing = await prisma.slackAccount.findUnique({
-    where: { slackUserId_slackTeamId: { slackUserId: user, slackTeamId: team } },
-    select: { preferredTool: true, preferredModel: true, preferredReasoningEffort: true },
-  });
-  const selectedTool = existing?.preferredTool ?? "claude_code";
-  const selectedModel = existing?.preferredModel ?? getDefaultModel(selectedTool) ?? "";
-  const selectedReasoning =
-    existing?.preferredReasoningEffort ?? getDefaultReasoningEffort(selectedTool) ?? "";
 
   res.status(200).send(
     renderHtml(
       "Link Slack",
-      `<h1>Link Slack account</h1><p>Link your Trace account to <b>${escapeHtml(teamName)}</b> and choose Slack defaults.</p><form method="POST" action="/slack/link/complete"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("tool", "Default tool", selectedTool, defaultToolOptions())}${formSelect("model", "Default model", selectedModel, modelOptionsFor(selectedTool))}${formSelect("reasoningEffort", "Default thinking", selectedReasoning, reasoningOptionsFor(selectedTool))}<button type="submit">Save and link</button></form>${preferenceOptionsScript()}`,
+      `<h1>Link Slack account</h1><p>Link your Trace account to <b>${escapeHtml(teamName)}</b>. Session settings are chosen when you start a session from Slack.</p><form method="POST" action="/slack/link/complete"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}"><button type="submit">Link account</button></form>`,
     ),
   );
 });
@@ -485,10 +440,6 @@ router.post(
     const team = typeof body?.team === "string" ? body.team : "";
     const user = typeof body?.user === "string" ? body.user : "";
     const stateRaw = typeof body?.state === "string" ? body.state : "";
-    const tool = normalizeTool(typeof body?.tool === "string" ? body.tool : null) ?? "claude_code";
-    const model = typeof body?.model === "string" ? body.model : null;
-    const reasoningEffort =
-      typeof body?.reasoningEffort === "string" ? body.reasoningEffort : null;
 
     const state = verifySlackLinkState(stateRaw);
     if (!state || state.slackTeamId !== team || state.slackUserId !== user) {
@@ -502,29 +453,15 @@ router.post(
       return;
     }
 
-    let preferences: { tool: CodingTool; model: string | null; reasoningEffort: string | null };
-    try {
-      preferences = validateSlackSessionConfig({ tool, model, reasoningEffort });
-    } catch (err: unknown) {
-      res.status(400).send(renderHtml("Link Slack", `<h1>Invalid defaults</h1><p>${escapeHtml(errorMessage(err))}</p>`));
-      return;
-    }
-
     await prisma.slackAccount.upsert({
       where: { slackUserId_slackTeamId: { slackUserId: user, slackTeamId: team } },
       create: {
         slackUserId: user,
         slackTeamId: team,
         userId,
-        preferredTool: preferences.tool,
-        preferredModel: preferences.model,
-        preferredReasoningEffort: preferences.reasoningEffort,
       },
       update: {
         userId,
-        preferredTool: preferences.tool,
-        preferredModel: preferences.model,
-        preferredReasoningEffort: preferences.reasoningEffort,
       },
     });
 
@@ -533,7 +470,7 @@ router.post(
       void client.chat
         .postMessage({
           channel: user,
-          text: "Linked. Your defaults are set. You can now mention `@trace` to start a session.",
+          text: "Linked. You can now mention `@trace` to start a session.",
         })
         .catch((err: unknown) => {
           console.warn("[slack] post-link DM failed:", (err as Error).message);
@@ -543,7 +480,7 @@ router.post(
     res.status(200).send(
       renderHtml(
         "Link Slack",
-        "<h1>Linked</h1><p>Your Trace account is now linked to Slack and your defaults are set. You can close this tab.</p>",
+        "<h1>Linked</h1><p>Your Trace account is now linked to Slack. You can close this tab.</p>",
       ),
     );
   },
@@ -555,36 +492,10 @@ router.get("/preferences", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = typeof req.query.team === "string" ? req.query.team : "";
-  const user = typeof req.query.user === "string" ? req.query.user : "";
-  const stateRaw = typeof req.query.state === "string" ? req.query.state : "";
-  const state = verifySlackLinkState(stateRaw);
-  if (!state || state.slackTeamId !== team || state.slackUserId !== user) {
-    res.status(400).send(renderHtml("Slack preferences", "<h1>Invalid link</h1><p>This preferences link is invalid or expired.</p>"));
-    return;
-  }
-
-  const userId = await readAuthenticatedUserId(req);
-  if (!userId) {
-    const webUrl = process.env.TRACE_WEB_URL?.replace(/\/$/, "") ?? "/";
-    res.status(401).send(renderHtml("Slack preferences", `<h1>Sign in to Trace</h1><p>Sign in, then return to this page.</p><p><a class="button" href="${escapeHtml(webUrl)}">Open Trace</a></p>`));
-    return;
-  }
-
-  const account = await prisma.slackAccount.findUnique({
-    where: { slackUserId_slackTeamId: { slackUserId: user, slackTeamId: team } },
-    select: { userId: true, preferredTool: true, preferredModel: true, preferredReasoningEffort: true },
-  });
-  if (!account || account.userId !== userId) {
-    res.status(403).send(renderHtml("Slack preferences", "<h1>Not linked</h1><p>This Slack user is not linked to your Trace account.</p>"));
-    return;
-  }
-
-  const selectedTool = account.preferredTool ?? "claude_code";
   res.status(200).send(
     renderHtml(
-      "Slack preferences",
-      `<h1>Slack defaults</h1><p>These defaults are used when you mention <code>@trace</code> without inline overrides.</p><form method="POST" action="/slack/preferences"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("tool", "Default tool", selectedTool, defaultToolOptions())}${formSelect("model", "Default model", account.preferredModel ?? getDefaultModel(selectedTool) ?? "", modelOptionsFor(selectedTool))}${formSelect("reasoningEffort", "Default thinking", account.preferredReasoningEffort ?? getDefaultReasoningEffort(selectedTool) ?? "", reasoningOptionsFor(selectedTool))}<button type="submit">Save preferences</button></form>${preferenceOptionsScript()}`,
+      "Slack settings",
+      "<h1>No Slack defaults</h1><p>Choose tool, model, thinking, and hosting when you start each Trace session from Slack.</p>",
     ),
   );
 });
@@ -595,49 +506,12 @@ router.post("/preferences", express.urlencoded({ extended: false }), async (req:
     return;
   }
 
-  const body = req.body as Record<string, unknown>;
-  const team = typeof body.team === "string" ? body.team : "";
-  const user = typeof body.user === "string" ? body.user : "";
-  const stateRaw = typeof body.state === "string" ? body.state : "";
-  const state = verifySlackLinkState(stateRaw);
-  if (!state || state.slackTeamId !== team || state.slackUserId !== user) {
-    res.status(400).send(renderHtml("Slack preferences", "<h1>Invalid link</h1><p>This preferences link is invalid or expired.</p>"));
-    return;
-  }
-
-  const userId = await readAuthenticatedUserId(req);
-  if (!userId) {
-    res.status(401).send(renderHtml("Slack preferences", "<h1>Sign in</h1><p>Sign in to Trace and try again.</p>"));
-    return;
-  }
-
-  const tool = normalizeTool(typeof body.tool === "string" ? body.tool : null) ?? "claude_code";
-  let preferences: { tool: CodingTool; model: string | null; reasoningEffort: string | null };
-  try {
-    preferences = validateSlackSessionConfig({
-      tool,
-      model: typeof body.model === "string" ? body.model : null,
-      reasoningEffort: typeof body.reasoningEffort === "string" ? body.reasoningEffort : null,
-    });
-  } catch (err: unknown) {
-    res.status(400).send(renderHtml("Slack preferences", `<h1>Invalid preferences</h1><p>${escapeHtml(errorMessage(err))}</p>`));
-    return;
-  }
-
-  const updated = await prisma.slackAccount.updateMany({
-    where: { slackUserId: user, slackTeamId: team, userId },
-    data: {
-      preferredTool: preferences.tool,
-      preferredModel: preferences.model,
-      preferredReasoningEffort: preferences.reasoningEffort,
-    },
-  });
-  if (updated.count === 0) {
-    res.status(403).send(renderHtml("Slack preferences", "<h1>Not linked</h1><p>This Slack user is not linked to your Trace account.</p>"));
-    return;
-  }
-
-  res.status(200).send(renderHtml("Slack preferences", "<h1>Saved</h1><p>Your Slack defaults are updated.</p>"));
+  res.status(410).send(
+    renderHtml(
+      "Slack settings",
+      "<h1>No Slack defaults</h1><p>Slack session settings are chosen when each session starts.</p>",
+    ),
+  );
 });
 
 router.get("/bind-channel", async (req: Request, res: Response) => {
@@ -874,6 +748,31 @@ type SlackEventBody = {
   files?: unknown[];
 };
 
+type SlackEventFile = {
+  id?: string;
+  name?: string;
+  title?: string;
+  mimetype?: string;
+  filetype?: string;
+  size?: number;
+  url_private?: string;
+  url_private_download?: string;
+};
+
+type SlackStoredFileRef = {
+  key: string;
+  kind: "image";
+  mimeType: string;
+  name: string;
+  size: number;
+  slackFileId: string | null;
+};
+
+type SlackFileIngestionResult = {
+  refs: SlackStoredFileRef[];
+  warnings: string[];
+};
+
 type SlackCommandBody = {
   team_id?: string;
   channel_id?: string;
@@ -903,6 +802,18 @@ type AdvancedStartMetadata = {
   slackTeamId: string;
   slackChannelId: string;
   slackUserId: string;
+  draftId?: string;
+};
+
+type SlackBridgeAccessRequestValue = {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  requesterSlackUserId: string;
+};
+
+type SlackBridgeAccessApproveValue = SlackBridgeAccessRequestValue & {
+  requestId: string;
 };
 
 function stripBotMention(text: string, botUserId: string): string {
@@ -911,6 +822,136 @@ function stripBotMention(text: string, botUserId: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
+}
+
+function normalizeContentType(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase().split(";")[0]?.trim();
+  return normalized || null;
+}
+
+function sanitizeSlackFilename(value: string | undefined): string {
+  const fallback = "slack-image";
+  const trimmed = value?.trim() || fallback;
+  const sanitized = trimmed.replace(/[^a-zA-Z0-9._-]/g, "") || fallback;
+  return sanitized.slice(0, 100);
+}
+
+function asSlackFiles(files: unknown[] | undefined): SlackEventFile[] {
+  if (!Array.isArray(files)) return [];
+  return files.filter((file): file is SlackEventFile => {
+    return !!file && typeof file === "object" && !Array.isArray(file);
+  });
+}
+
+function parseSlackFileRefs(value: unknown): SlackStoredFileRef[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is SlackStoredFileRef => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+    const ref = entry as Record<string, unknown>;
+    return (
+      ref.kind === "image" &&
+      typeof ref.key === "string" &&
+      typeof ref.mimeType === "string" &&
+      typeof ref.name === "string" &&
+      typeof ref.size === "number"
+    );
+  });
+}
+
+function imageKeysFromFileRefs(refs: SlackStoredFileRef[]): string[] {
+  return refs.filter((ref) => ref.kind === "image").map((ref) => ref.key);
+}
+
+function fallbackPromptForImages(imageKeys: string[]): string {
+  return imageKeys.length > 0 ? "Please analyze the attached image." : "";
+}
+
+function selectedFilesSummary(refs: SlackStoredFileRef[], warnings: string[]): string {
+  const parts: string[] = [];
+  if (refs.length === 1) parts.push("1 image attached");
+  if (refs.length > 1) parts.push(`${refs.length} images attached`);
+  if (warnings.length > 0) parts.push(warnings.join(" "));
+  return parts.join(" ");
+}
+
+async function uploadSlackFile(input: {
+  slackTeamId: string;
+  organizationId: string;
+  file: SlackEventFile;
+  contentType: string;
+}): Promise<SlackStoredFileRef> {
+  const token = await getSlackBotToken(input.slackTeamId);
+  if (!token) throw new Error("Slack install token not found");
+
+  const url = input.file.url_private_download ?? input.file.url_private;
+  if (!url) throw new Error("Slack file download URL is missing");
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Slack file download failed with HTTP ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const body = Buffer.from(arrayBuffer);
+  if (body.length > SLACK_MAX_FILE_BYTES) {
+    throw new Error("Slack file is too large");
+  }
+
+  const filename = sanitizeSlackFilename(input.file.name ?? input.file.title);
+  const key = `uploads/${input.organizationId}/${randomUUID()}-${filename}`;
+  await storage.putObject(key, body, input.contentType);
+  return {
+    key,
+    kind: "image",
+    mimeType: input.contentType,
+    name: filename,
+    size: body.length,
+    slackFileId: input.file.id ?? null,
+  };
+}
+
+async function ingestSlackFiles(input: {
+  slackTeamId: string;
+  organizationId: string;
+  files: unknown[] | undefined;
+}): Promise<SlackFileIngestionResult> {
+  const files = asSlackFiles(input.files);
+  if (files.length === 0) return { refs: [], warnings: [] };
+
+  const warnings: string[] = [];
+  const refs: SlackStoredFileRef[] = [];
+  for (const file of files.slice(0, SLACK_MAX_FILE_COUNT)) {
+    const contentType = normalizeContentType(file.mimetype);
+    if (!contentType || !SUPPORTED_SLACK_IMAGE_MIME_TYPES.has(contentType)) {
+      warnings.push(`Unsupported file skipped: ${file.name ?? file.title ?? file.id ?? "file"}.`);
+      continue;
+    }
+    if (typeof file.size === "number" && file.size > SLACK_MAX_FILE_BYTES) {
+      warnings.push(`File too large skipped: ${file.name ?? file.title ?? file.id ?? "file"}.`);
+      continue;
+    }
+    try {
+      refs.push(
+        await uploadSlackFile({
+          slackTeamId: input.slackTeamId,
+          organizationId: input.organizationId,
+          file,
+          contentType,
+        }),
+      );
+    } catch (err: unknown) {
+      warnings.push(`Could not read ${file.name ?? file.title ?? file.id ?? "a Slack file"}.`);
+      console.warn("[slack] failed to ingest Slack file:", errorMessage(err));
+    }
+  }
+
+  if (files.length > SLACK_MAX_FILE_COUNT) {
+    warnings.push(`Only the first ${SLACK_MAX_FILE_COUNT} files were considered.`);
+  }
+  return { refs, warnings };
 }
 
 type ParsedSlackPrompt = {
@@ -988,22 +1029,6 @@ async function resolveSlackChannelBinding(slackTeamId: string, slackChannelId: s
   });
 }
 
-async function canAccessTraceChannel(input: {
-  userId: string;
-  organizationId: string;
-  traceChannelId: string;
-}): Promise<boolean> {
-  const channel = await prisma.channel.findFirst({
-    where: {
-      id: input.traceChannelId,
-      organizationId: input.organizationId,
-      members: { some: { userId: input.userId, leftAt: null } },
-    },
-    select: { id: true },
-  });
-  return !!channel;
-}
-
 async function bindSlackChannel(input: {
   slackTeamId: string;
   slackChannelId: string;
@@ -1066,17 +1091,6 @@ function buildBindUrl(slackTeamId: string, slackChannelId: string, slackUserId?:
   return `${base}/slack/bind-channel?${params.toString()}`;
 }
 
-function buildPreferencesUrl(slackTeamId: string, slackUserId: string): string {
-  const base = process.env.TRACE_WEB_URL?.replace(/\/$/, "") ?? "";
-  const state = signSlackLinkState({ slackTeamId, slackUserId });
-  const params = new URLSearchParams({
-    team: slackTeamId,
-    user: slackUserId,
-    state,
-  });
-  return `${base}/slack/preferences?${params.toString()}`;
-}
-
 function buildAccountLinkUrl(slackTeamId: string, slackUserId: string): string {
   const base = process.env.TRACE_WEB_URL?.replace(/\/$/, "") ?? "";
   const state = signSlackLinkState({ slackTeamId, slackUserId });
@@ -1086,6 +1100,177 @@ function buildAccountLinkUrl(slackTeamId: string, slackUserId: string): string {
     state,
   });
   return `${base}/slack/link?${params.toString()}`;
+}
+
+async function cleanupExpiredSlackDrafts(): Promise<void> {
+  await prisma.slackSessionDraft
+    .deleteMany({ where: { expiresAt: { lte: new Date() } } })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to cleanup expired drafts:", errorMessage(err));
+    });
+}
+
+async function createSlackSessionDraft(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  slackUserId: string;
+  organizationId: string;
+  traceChannelId: string | null;
+  prompt: string;
+  fileRefs: SlackStoredFileRef[];
+}): Promise<string> {
+  await cleanupExpiredSlackDrafts();
+  const draft = await prisma.slackSessionDraft.create({
+    data: {
+      slackTeamId: input.slackTeamId,
+      slackChannelId: input.slackChannelId,
+      slackThreadTs: input.slackThreadTs,
+      slackUserId: input.slackUserId,
+      organizationId: input.organizationId,
+      traceChannelId: input.traceChannelId,
+      prompt: input.prompt,
+      fileRefs: input.fileRefs as unknown as Prisma.InputJsonValue,
+      expiresAt: new Date(Date.now() + SLACK_DRAFT_TTL_MS),
+    },
+    select: { id: true },
+  });
+  return draft.id;
+}
+
+async function loadSlackSessionDraft(draftId: string, slackUserId?: string | null) {
+  await cleanupExpiredSlackDrafts();
+  const draft = await prisma.slackSessionDraft.findUnique({
+    where: { id: draftId },
+  });
+  if (!draft) return null;
+  if (draft.expiresAt.getTime() <= Date.now()) {
+    await prisma.slackSessionDraft.delete({ where: { id: draft.id } }).catch(() => {});
+    return null;
+  }
+  if (slackUserId && draft.slackUserId !== slackUserId) return null;
+  return draft;
+}
+
+async function deleteSlackSessionDraft(draftId: string): Promise<void> {
+  await prisma.slackSessionDraft.delete({ where: { id: draftId } }).catch(() => {});
+}
+
+async function postStartDraftPrompt(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  slackUserId: string;
+  draftId: string;
+  prompt: string;
+  fileRefs: SlackStoredFileRef[];
+  warnings: string[];
+}): Promise<void> {
+  const client = await getSlackClient(input.slackTeamId);
+  if (!client) return;
+
+  const trimmedPrompt = input.prompt.trim();
+  const summary = selectedFilesSummary(input.fileRefs, input.warnings);
+  const promptText = trimmedPrompt ? `*Prompt:*\n>${trimmedPrompt}` : "*Prompt:* _(none)_";
+  const fileText = summary ? `\n\n${summary}` : "";
+  await client.chat
+    .postEphemeral({
+      channel: input.slackChannelId,
+      user: input.slackUserId,
+      ...(input.slackThreadTs ? { thread_ts: input.slackThreadTs } : {}),
+      text: "Start Trace session",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Start Trace session*\n\n${promptText}${fileText}`,
+          },
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "Start" },
+              style: "primary",
+              action_id: "trace_start_draft",
+              value: input.draftId,
+            },
+            {
+              type: "button",
+              text: { type: "plain_text", text: "Configure" },
+              action_id: "trace_configure_draft",
+              value: input.draftId,
+            },
+            {
+              type: "button",
+              text: { type: "plain_text", text: "Cancel" },
+              action_id: "trace_cancel_draft",
+              value: input.draftId,
+            },
+          ],
+        },
+      ],
+    })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to post session draft prompt:", errorMessage(err));
+    });
+}
+
+function encodeSlackBridgeAccessRequestValue(value: SlackBridgeAccessRequestValue): string {
+  return JSON.stringify(value);
+}
+
+function encodeSlackBridgeAccessApproveValue(value: SlackBridgeAccessApproveValue): string {
+  return JSON.stringify(value);
+}
+
+function decodeSlackBridgeAccessRequestValue(
+  value: string | undefined,
+): SlackBridgeAccessRequestValue | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<SlackBridgeAccessRequestValue>;
+    if (
+      typeof parsed.slackTeamId !== "string" ||
+      typeof parsed.slackChannelId !== "string" ||
+      typeof parsed.slackThreadTs !== "string" ||
+      typeof parsed.requesterSlackUserId !== "string"
+    ) {
+      return null;
+    }
+    return {
+      slackTeamId: parsed.slackTeamId,
+      slackChannelId: parsed.slackChannelId,
+      slackThreadTs: parsed.slackThreadTs,
+      requesterSlackUserId: parsed.requesterSlackUserId,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function decodeSlackBridgeAccessApproveValue(
+  value: string | undefined,
+): SlackBridgeAccessApproveValue | null {
+  const request = decodeSlackBridgeAccessRequestValue(value);
+  if (!request || !value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<SlackBridgeAccessApproveValue>;
+    if (typeof parsed.requestId !== "string") return null;
+    return { ...request, requestId: parsed.requestId };
+  } catch {
+    return null;
+  }
+}
+
+function connectionRuntimeInstanceId(connection: unknown): string | null {
+  if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
+  const runtimeInstanceId = (connection as Record<string, unknown>).runtimeInstanceId;
+  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+    ? runtimeInstanceId
+    : null;
 }
 
 function renderBindRequiresLinkedAccount(slackTeamId: string, slackUserId: string): string {
@@ -1149,27 +1334,29 @@ async function postSessionAccessRequestPrompt(input: {
   slackChannelId: string;
   slackThreadTs: string;
   requesterSlackUserId: string;
+  runtimeLabel: string | null;
 }): Promise<void> {
   const client = await getSlackClient(input.slackTeamId);
   if (!client) return;
-  const value = encodeSlackSessionAccessRequestValue({
+  const value = encodeSlackBridgeAccessRequestValue({
     slackTeamId: input.slackTeamId,
     slackChannelId: input.slackChannelId,
     slackThreadTs: input.slackThreadTs,
     requesterSlackUserId: input.requesterSlackUserId,
   });
+  const runtime = input.runtimeLabel ? ` on ${input.runtimeLabel}` : "";
   await client.chat
     .postEphemeral({
       channel: input.slackChannelId,
       user: input.requesterSlackUserId,
       thread_ts: input.slackThreadTs,
-      text: "You do not have access to the Trace session for this Slack thread.",
+      text: "This session is running on a local bridge. Request bridge access to reply from Slack.",
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "You do not have access to the Trace session for this Slack thread. Request access from the session owner.",
+            text: `This session is running${runtime}. Request bridge access to reply from Slack.`,
           },
         },
         {
@@ -1177,8 +1364,8 @@ async function postSessionAccessRequestPrompt(input: {
           elements: [
             {
               type: "button",
-              text: { type: "plain_text", text: "Request access" },
-              action_id: "trace_session_access_request",
+              text: { type: "plain_text", text: "Request bridge access" },
+              action_id: "trace_bridge_access_request",
               value,
             },
           ],
@@ -1207,24 +1394,6 @@ async function postSessionAccessRequestFeedback(input: {
     .catch((err: unknown) => {
       console.warn("[slack] failed to post session access feedback:", errorMessage(err));
     });
-}
-
-function resolveEffectiveSlackSettings(input: {
-  account: Awaited<ReturnType<typeof resolveSlackAccount>>;
-  parsed: ParsedSlackPrompt;
-}): SlackSessionSettings {
-  const tool = input.parsed.tool ?? input.account?.preferredTool ?? "claude_code";
-  const model = input.parsed.model ?? input.account?.preferredModel ?? getDefaultModel(tool) ?? null;
-  const reasoningEffort =
-    input.parsed.reasoningEffort ??
-    input.account?.preferredReasoningEffort ??
-    getDefaultReasoningEffort(tool) ??
-    null;
-  const validated = validateSlackSessionConfig({ tool, model, reasoningEffort });
-  return {
-    ...validated,
-    hosting: input.parsed.hosting ?? slackSessionHosting(),
-  };
 }
 
 function readSignedRawBody(req: Request, res: Response): string | null {
@@ -1269,27 +1438,191 @@ function slackSelectOptions(options: readonly { value: string; label: string }[]
   }));
 }
 
+function allModelOptions(): { value: string; label: string }[] {
+  const options = new Map<string, string>();
+  for (const tool of defaultToolOptions()) {
+    for (const model of modelOptionsFor(tool.value as CodingTool)) {
+      options.set(model.value, `${tool.label}: ${model.label}`);
+    }
+  }
+  return Array.from(options, ([value, label]) => ({ value, label }));
+}
+
+function allReasoningOptions(): { value: string; label: string }[] {
+  const options = new Map<string, string>();
+  for (const tool of defaultToolOptions()) {
+    for (const effort of reasoningOptionsFor(tool.value as CodingTool)) {
+      options.set(effort.value, getReasoningEffortLabel(effort.value));
+    }
+  }
+  return Array.from(options, ([value, label]) => ({ value, label }));
+}
+
+async function getTraceDefaults(userId: string): Promise<{
+  tool: CodingTool;
+  model: string;
+  reasoningEffort: string;
+}> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      defaultSessionTool: true,
+      defaultSessionModel: true,
+      defaultSessionReasoningEffort: true,
+    },
+  });
+  const tool = user?.defaultSessionTool ?? "claude_code";
+  return {
+    tool,
+    model:
+      resolveStoredModelForToolForSlack(tool, user?.defaultSessionModel) ??
+      getDefaultModel(tool) ??
+      "",
+    reasoningEffort:
+      resolveStoredReasoningForToolForSlack(tool, user?.defaultSessionReasoningEffort) ??
+      getDefaultReasoningEffort(tool) ??
+      "",
+  };
+}
+
+function resolveStoredModelForToolForSlack(tool: CodingTool, model?: string | null): string | null {
+  return model && isSupportedModel(tool, model) ? model : null;
+}
+
+function resolveStoredReasoningForToolForSlack(
+  tool: CodingTool,
+  reasoningEffort?: string | null,
+): string | null {
+  return reasoningEffort && isSupportedReasoningEffort(tool, reasoningEffort)
+    ? reasoningEffort
+    : null;
+}
+
+async function listVisibleTraceChannels(input: {
+  organizationId: string;
+  userId: string;
+}): Promise<Array<{ id: string; name: string; type: string }>> {
+  return prisma.channel.findMany({
+    where: {
+      organizationId: input.organizationId,
+      OR: [
+        { visibility: "public" },
+        { ownerId: input.userId },
+        { members: { some: { userId: input.userId, leftAt: null } } },
+      ],
+    },
+    select: { id: true, name: true, type: true },
+    orderBy: [{ position: "asc" }, { name: "asc" }],
+    take: 100,
+  });
+}
+
+async function listCloudEnvironmentOptions(organizationId: string) {
+  return prisma.agentEnvironment.findMany({
+    where: { organizationId, adapterType: "provisioned", enabled: true },
+    select: { id: true, name: true, isDefault: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    take: 99,
+  });
+}
+
+async function listAccessibleLocalRuntimeOptions(input: {
+  organizationId: string;
+  userId: string;
+  tool?: CodingTool | null;
+}) {
+  const accessibleIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
+    userId: input.userId,
+    organizationId: input.organizationId,
+  });
+  return sessionRouter
+    .listRuntimes({ hostingMode: "local" })
+    .filter((runtime) => runtime.organizationId === input.organizationId)
+    .filter((runtime) => accessibleIds.has(runtime.id))
+    .filter((runtime) => !input.tool || runtime.supportedTools.includes(input.tool))
+    .map((runtime) => ({ id: runtime.id, label: runtime.label }));
+}
+
 async function openAdvancedStartModal(input: {
   slackTeamId: string;
   slackChannelId: string;
   slackUserId: string;
   triggerId: string;
+  draftId?: string;
 }): Promise<boolean> {
   const client = await getSlackClient(input.slackTeamId);
   if (!client) return false;
   const account = await resolveSlackAccount(input.slackTeamId, input.slackUserId);
   if (!account) return false;
+  const install = await prisma.slackInstall.findUnique({
+    where: { slackTeamId: input.slackTeamId },
+    select: { organizationId: true },
+  });
+  if (!install) return false;
   const binding = await resolveSlackChannelBinding(input.slackTeamId, input.slackChannelId);
   if (!binding) return false;
-  const selectedTool = account.preferredTool ?? "claude_code";
-  const selectedModel = account.preferredModel ?? getDefaultModel(selectedTool) ?? "";
-  const selectedReasoning =
-    account.preferredReasoningEffort ?? getDefaultReasoningEffort(selectedTool) ?? "";
+  const draft = input.draftId
+    ? await loadSlackSessionDraft(input.draftId, input.slackUserId)
+    : null;
+  if (input.draftId && !draft) return false;
+  const defaults = await getTraceDefaults(account.userId);
+  const selectedTool = defaults.tool;
+  const selectedModel = defaults.model;
+  const selectedReasoning = defaults.reasoningEffort;
+  const fileRefs = parseSlackFileRefs(draft?.fileRefs ?? []);
+  const cloudEnvironments = await listCloudEnvironmentOptions(install.organizationId);
+  const localRuntimes = await listAccessibleLocalRuntimeOptions({
+    organizationId: install.organizationId,
+    userId: account.userId,
+    tool: selectedTool,
+  });
+  const channels = await listVisibleTraceChannels({
+    organizationId: install.organizationId,
+    userId: account.userId,
+  });
+  if (!channels.some((channel) => channel.id === binding.traceChannelId)) {
+    const boundChannel = await prisma.channel.findFirst({
+      where: { id: binding.traceChannelId, organizationId: install.organizationId },
+      select: { id: true, name: true, type: true },
+    });
+    if (boundChannel) channels.unshift(boundChannel);
+  }
+  if (channels.length === 0) return false;
   const metadata: AdvancedStartMetadata = {
     slackTeamId: input.slackTeamId,
     slackChannelId: input.slackChannelId,
     slackUserId: input.slackUserId,
+    ...(input.draftId ? { draftId: input.draftId } : {}),
   };
+  const channelOptions = channels.map((channel) => ({
+    value: channel.id,
+    label: `${channel.name} (${channel.type})`,
+  }));
+  const cloudOptions = [
+    { value: "default", label: "Default cloud environment" },
+    ...cloudEnvironments.map((environment) => ({
+      value: environment.id,
+      label: environment.isDefault ? `${environment.name} (default)` : environment.name,
+    })),
+  ];
+  const runtimeOptions = [
+    { value: "auto", label: "Auto-select local bridge" },
+    ...localRuntimes.map((runtime) => ({ value: runtime.id, label: runtime.label })),
+  ];
+  const modelOptions = allModelOptions();
+  const reasoningOptions = allReasoningOptions();
+  const initialModel =
+    modelOptions.find((option) => option.value === selectedModel) ?? modelOptions[0];
+  const initialReasoning =
+    reasoningOptions.find((option) => option.value === selectedReasoning) ?? reasoningOptions[0];
+  const initialChannel =
+    channelOptions.find((option) => option.value === (draft?.traceChannelId ?? binding.traceChannelId)) ??
+    channelOptions[0]!;
+  const initialPrompt = draft?.prompt ?? "";
+  const attachmentText =
+    fileRefs.length > 0
+      ? `Attached images: ${fileRefs.map((ref) => ref.name).join(", ")}`.slice(0, 2900)
+      : "No images attached.";
 
   await client.views
     .open({
@@ -1306,7 +1639,27 @@ async function openAdvancedStartModal(input: {
             type: "input",
             block_id: "prompt",
             label: { type: "plain_text", text: "Prompt" },
-            element: { type: "plain_text_input", action_id: "value", multiline: true },
+            optional: fileRefs.length > 0,
+            element: {
+              type: "plain_text_input",
+              action_id: "value",
+              multiline: true,
+              ...(initialPrompt ? { initial_value: initialPrompt } : {}),
+            },
+          },
+          {
+            type: "input",
+            block_id: "channel",
+            label: { type: "plain_text", text: "Trace channel" },
+            element: {
+              type: "static_select",
+              action_id: "value",
+              initial_option: {
+                text: { type: "plain_text", text: initialChannel.label.slice(0, 75) },
+                value: initialChannel.value,
+              },
+              options: slackSelectOptions(channelOptions),
+            },
           },
           {
             type: "input",
@@ -1332,16 +1685,15 @@ async function openAdvancedStartModal(input: {
             element: {
               type: "static_select",
               action_id: "value",
-              initial_option: {
-                text: {
-                  type: "plain_text",
-                  text:
-                    modelOptionsFor(selectedTool).find((option) => option.value === selectedModel)
-                      ?.label ?? selectedModel,
-                },
-                value: selectedModel,
-              },
-              options: slackSelectOptions(modelOptionsFor(selectedTool)),
+              ...(initialModel
+                ? {
+                    initial_option: {
+                      text: { type: "plain_text", text: initialModel.label.slice(0, 75) },
+                      value: initialModel.value,
+                    },
+                  }
+                : {}),
+              options: slackSelectOptions(modelOptions),
             },
           },
           {
@@ -1351,17 +1703,15 @@ async function openAdvancedStartModal(input: {
             element: {
               type: "static_select",
               action_id: "value",
-              initial_option: {
-                text: {
-                  type: "plain_text",
-                  text:
-                    reasoningOptionsFor(selectedTool).find(
-                      (option) => option.value === selectedReasoning,
-                    )?.label ?? selectedReasoning,
-                },
-                value: selectedReasoning,
-              },
-              options: slackSelectOptions(reasoningOptionsFor(selectedTool)),
+              ...(initialReasoning
+                ? {
+                    initial_option: {
+                      text: { type: "plain_text", text: initialReasoning.label.slice(0, 75) },
+                      value: initialReasoning.value,
+                    },
+                  }
+                : {}),
+              options: slackSelectOptions(reasoningOptions),
             },
           },
           {
@@ -1380,6 +1730,40 @@ async function openAdvancedStartModal(input: {
                 { value: "local", label: "Local" },
               ]),
             },
+          },
+          {
+            type: "input",
+            block_id: "environment",
+            label: { type: "plain_text", text: "Cloud environment" },
+            optional: true,
+            element: {
+              type: "static_select",
+              action_id: "value",
+              initial_option: {
+                text: { type: "plain_text", text: cloudOptions[0]!.label },
+                value: cloudOptions[0]!.value,
+              },
+              options: slackSelectOptions(cloudOptions),
+            },
+          },
+          {
+            type: "input",
+            block_id: "runtime",
+            label: { type: "plain_text", text: "Local bridge" },
+            optional: true,
+            element: {
+              type: "static_select",
+              action_id: "value",
+              initial_option: {
+                text: { type: "plain_text", text: runtimeOptions[0]!.label },
+                value: runtimeOptions[0]!.value,
+              },
+              options: slackSelectOptions(runtimeOptions),
+            },
+          },
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: attachmentText },
           },
         ],
       },
@@ -1488,110 +1872,145 @@ async function handleAppMention(input: {
     });
     return;
   }
-  if (
-    !(await canAccessTraceChannel({
-      userId: traceUserId,
-      organizationId: install.organizationId,
-      traceChannelId: binding.traceChannelId,
-    }))
-  ) {
-    const client = await getSlackClient(teamId);
-    if (client) {
-      await client.chat
-        .postEphemeral({
-          channel,
-          user: slackUserId,
-          thread_ts: threadTs,
-          text: "Your Trace account does not have access to the Trace channel bound to this Slack channel.",
-        })
-        .catch(() => {});
-    }
-    return;
-  }
 
   const rawText = typeof event.text === "string" ? event.text : "";
   const parsed = parseSlackPrompt(stripBotMention(rawText, install.botUserId));
   const prompt = parsed.prompt;
-  if (!prompt) {
-    const client = await getSlackClient(teamId);
-    if (client) {
-      await client.chat
-        .postEphemeral({
-          channel,
-          user: slackUserId,
-          thread_ts: threadTs,
-          text: "Mention `@trace` with a prompt, or use `/trace start` for advanced options.",
-          blocks: [
-            {
-              type: "section",
-              text: {
-                type: "mrkdwn",
-                text: "Mention `@trace` with a prompt, or use `/trace start` for advanced options.",
-              },
-            },
-            {
-              type: "actions",
-              elements: [
-                {
-                  type: "button",
-                  text: { type: "plain_text", text: "Preferences" },
-                  url: buildPreferencesUrl(teamId, slackUserId),
-                  action_id: "slack_preferences_open",
-                },
-              ],
-            },
-          ],
-        })
-        .catch(() => {});
-    }
-    return;
-  }
 
-  let settings: ReturnType<typeof resolveEffectiveSlackSettings>;
-  try {
-    settings = resolveEffectiveSlackSettings({ account, parsed });
-  } catch (err: unknown) {
-    const client = await getSlackClient(teamId);
-    if (client) {
-      await client.chat
-        .postEphemeral({
-          channel,
-          user: slackUserId,
-          thread_ts: threadTs,
-          text: errorMessage(err),
-        })
-        .catch(() => {});
-    }
-    return;
-  }
+  const files = await ingestSlackFiles({
+    slackTeamId: teamId,
+    organizationId: install.organizationId,
+    files: event.files,
+  });
+  const draftId = await createSlackSessionDraft({
+    slackTeamId: teamId,
+    slackChannelId: channel,
+    slackThreadTs: threadTs,
+    slackUserId,
+    organizationId: install.organizationId,
+    traceChannelId: binding.traceChannelId,
+    prompt,
+    fileRefs: files.refs,
+  });
+  await postStartDraftPrompt({
+    slackTeamId: teamId,
+    slackChannelId: channel,
+    slackThreadTs: event.thread_ts ?? "",
+    slackUserId,
+    draftId,
+    prompt,
+    fileRefs: files.refs,
+    warnings: files.warnings,
+  });
+}
+
+async function startSlackSessionFromDraft(input: {
+  draftId: string;
+  slackUserId: string;
+  settings: SlackSessionSettings;
+  traceChannelId?: string | null;
+  promptOverride?: string | null;
+}): Promise<void> {
+  const draft = await loadSlackSessionDraft(input.draftId, input.slackUserId);
+  if (!draft) throw new Error("This Slack session draft expired. Mention `@trace` again.");
+
+  const account = await resolveSlackAccount(draft.slackTeamId, draft.slackUserId);
+  if (!account) throw new Error("Link your Trace account before starting a session");
+
+  const membership = await prisma.orgMember.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: account.userId,
+        organizationId: draft.organizationId,
+      },
+    },
+    select: { userId: true },
+  });
+  if (!membership) throw new Error("Your Trace account is not in this workspace's org");
+
+  const traceChannelId = input.traceChannelId ?? draft.traceChannelId;
+  if (!traceChannelId) throw new Error("This Slack channel is not bound to a Trace channel");
+  const channel = await prisma.channel.findFirst({
+    where: { id: traceChannelId, organizationId: draft.organizationId },
+    select: { id: true },
+  });
+  if (!channel) throw new Error("Trace channel not found");
+
+  const fileRefs = parseSlackFileRefs(draft.fileRefs);
+  const imageKeys = imageKeysFromFileRefs(fileRefs);
+  const prompt = (input.promptOverride ?? draft.prompt).trim() || fallbackPromptForImages(imageKeys);
   try {
     await startSlackSession({
-      slackTeamId: teamId,
-      slackChannelId: channel,
-      slackThreadTs: threadTs,
-      organizationId: install.organizationId,
-      traceChannelId: binding.traceChannelId,
-      actorUserId: traceUserId,
+      slackTeamId: draft.slackTeamId,
+      slackChannelId: draft.slackChannelId,
+      slackThreadTs: draft.slackThreadTs,
+      organizationId: draft.organizationId,
+      traceChannelId,
+      actorUserId: account.userId,
       prompt,
-      settings,
+      imageKeys,
+      settings: input.settings,
       source: "mention",
     });
+    await deleteSlackSessionDraft(draft.id);
   } catch (err: unknown) {
     const message = errorMessage(err);
-    console.warn("[slack] failed to start session", { teamId, slackUserId, channel, threadTs, error: message });
-    const client = await getSlackClient(teamId);
+    console.warn("[slack] failed to start session", {
+      slackTeamId: draft.slackTeamId,
+      slackUserId: draft.slackUserId,
+      channel: draft.slackChannelId,
+      threadTs: draft.slackThreadTs,
+      error: message,
+    });
+    const client = await getSlackClient(draft.slackTeamId);
     if (client) {
       await client.chat
         .postEphemeral({
-          channel,
-          user: slackUserId,
-          thread_ts: threadTs,
+          channel: draft.slackChannelId,
+          user: draft.slackUserId,
+          thread_ts: draft.slackThreadTs,
           text: `Could not start a Trace session: ${message}`,
         })
         .catch(() => {});
     }
     return;
   }
+}
+
+async function recommendedSettingsForDraft(draftId: string, slackUserId: string): Promise<SlackSessionSettings> {
+  const draft = await loadSlackSessionDraft(draftId, slackUserId);
+  if (!draft) throw new Error("This Slack session draft expired. Mention `@trace` again.");
+
+  const account = await resolveSlackAccount(draft.slackTeamId, draft.slackUserId);
+  if (!account) throw new Error("Link your Trace account before starting a session");
+  const defaults = await getTraceDefaults(account.userId);
+  const cloudEnvironments = await listCloudEnvironmentOptions(draft.organizationId);
+  if (cloudEnvironments.length > 0) {
+    return {
+      tool: null,
+      model: null,
+      reasoningEffort: null,
+      hosting: "cloud",
+      environmentId: cloudEnvironments[0]?.id ?? null,
+    };
+  }
+
+  const localRuntimes = await listAccessibleLocalRuntimeOptions({
+    organizationId: draft.organizationId,
+    userId: account.userId,
+    tool: defaults.tool,
+  });
+  if (localRuntimes.length === 1) {
+    return {
+      tool: defaults.tool,
+      model: defaults.model,
+      reasoningEffort: defaults.reasoningEffort,
+      hosting: "local",
+      runtimeInstanceId: localRuntimes[0]!.id,
+    };
+  }
+
+  throw new Error("Choose Configure to select cloud or a local bridge.");
 }
 
 async function handleThreadMessage(input: {
@@ -1604,7 +2023,7 @@ async function handleThreadMessage(input: {
   const threadTs = event.thread_ts;
   if (!slackUserId || !channel || !threadTs) return;
   if (event.bot_id) return;
-  if (event.subtype) return;
+  if (event.subtype && event.subtype !== "file_share") return;
 
   const thread = await prisma.slackThreadSession.findUnique({
     where: {
@@ -1614,7 +2033,18 @@ async function handleThreadMessage(input: {
         slackThreadTs: threadTs,
       },
     },
-    select: { sessionId: true, organizationId: true, session: { select: { channelId: true } } },
+    select: {
+      sessionId: true,
+      organizationId: true,
+      session: {
+        select: {
+          hosting: true,
+          sessionGroupId: true,
+          connection: true,
+          sessionGroup: { select: { connection: true } },
+        },
+      },
+    },
   });
   if (!thread) return;
 
@@ -1646,26 +2076,48 @@ async function handleThreadMessage(input: {
   });
   if (!membership) return;
 
-  const traceChannelId = thread.session.channelId;
-  if (
-    !traceChannelId ||
-    !(await canAccessTraceChannel({
+  const text = rawText.trim();
+  const runtimeInstanceId =
+    connectionRuntimeInstanceId(thread.session.connection) ??
+    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection);
+  if (thread.session.hosting === "local" && runtimeInstanceId) {
+    const access = await runtimeAccessService.getAccessState({
       userId: traceUserId,
       organizationId: thread.organizationId,
-      traceChannelId,
-    }))
-  ) {
-    await postSessionAccessRequestPrompt({
-      slackTeamId: teamId,
-      slackChannelId: channel,
-      slackThreadTs: threadTs,
-      requesterSlackUserId: slackUserId,
+      runtimeInstanceId,
+      sessionGroupId: thread.session.sessionGroupId,
+      capability: "session",
     });
-    return;
+    if (!access.allowed) {
+      await postSessionAccessRequestPrompt({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackThreadTs: threadTs,
+        requesterSlackUserId: slackUserId,
+        runtimeLabel: access.label,
+      });
+      return;
+    }
   }
 
-  const text = rawText.trim();
-  if (!text) return;
+  const files = await ingestSlackFiles({
+    slackTeamId: teamId,
+    organizationId: thread.organizationId,
+    files: event.files,
+  });
+  const imageKeys = imageKeysFromFileRefs(files.refs);
+  if (!text && imageKeys.length === 0) {
+    if (files.warnings.length > 0) {
+      await postSessionAccessRequestFeedback({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackThreadTs: threadTs,
+        requesterSlackUserId: slackUserId,
+        text: files.warnings.join(" "),
+      });
+    }
+    return;
+  }
 
   slackEventBridge.attach(thread.sessionId, {
     slackTeamId: teamId,
@@ -1675,11 +2127,21 @@ async function handleThreadMessage(input: {
 
   await sessionService.sendMessage({
     sessionId: thread.sessionId,
-    text,
+    text: text || fallbackPromptForImages(imageKeys),
+    imageKeys,
     actorType: "user",
     actorId: traceUserId,
     clientSource: "slack",
   });
+  if (files.warnings.length > 0) {
+    await postSessionAccessRequestFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackThreadTs: threadTs,
+      requesterSlackUserId: slackUserId,
+      text: files.warnings.join(" "),
+    });
+  }
 }
 
 async function handleBotJoinedChannel(input: { teamId: string; event: SlackEventBody }): Promise<void> {
@@ -1707,10 +2169,13 @@ async function handleBotJoinedChannel(input: { teamId: string; event: SlackEvent
 async function startSlackSessionFromModal(input: {
   metadata: AdvancedStartMetadata;
   prompt: string;
+  traceChannelId: string;
   tool: CodingTool;
   model: string | null;
   reasoningEffort: string | null;
   hosting: "cloud" | "local";
+  environmentId?: string | null;
+  runtimeInstanceId?: string | null;
 }): Promise<void> {
   const { metadata } = input;
   const account = await resolveSlackAccount(metadata.slackTeamId, metadata.slackUserId);
@@ -1728,47 +2193,53 @@ async function startSlackSessionFromModal(input: {
   });
   if (!membership) throw new Error("Your Trace account is not in this workspace's org");
 
-  const binding = await resolveSlackChannelBinding(
-    metadata.slackTeamId,
-    metadata.slackChannelId,
-  );
-  if (!binding || binding.organizationId !== install.organizationId) {
-    throw new Error("This Slack channel is not bound to a Trace channel");
-  }
-  if (
-    !(await canAccessTraceChannel({
-      userId: account.userId,
-      organizationId: install.organizationId,
-      traceChannelId: binding.traceChannelId,
-    }))
-  ) {
-    throw new Error("Your Trace account does not have access to the bound Trace channel");
-  }
+  const channel = await prisma.channel.findFirst({
+    where: { id: input.traceChannelId, organizationId: install.organizationId },
+    select: { id: true },
+  });
+  if (!channel) throw new Error("Trace channel not found");
 
   const settings = validateSlackSessionConfig({
     tool: input.tool,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
   });
+  const draft = metadata.draftId
+    ? await loadSlackSessionDraft(metadata.draftId, metadata.slackUserId)
+    : null;
+  if (metadata.draftId && !draft) {
+    throw new Error("This Slack session draft expired. Mention `@trace` again.");
+  }
+  const fileRefs = parseSlackFileRefs(draft?.fileRefs ?? []);
+  const imageKeys = imageKeysFromFileRefs(fileRefs);
+  const prompt = input.prompt.trim() || fallbackPromptForImages(imageKeys);
 
   await startSlackSession({
     slackTeamId: metadata.slackTeamId,
     slackChannelId: metadata.slackChannelId,
+    slackThreadTs: draft?.slackThreadTs,
     organizationId: install.organizationId,
-    traceChannelId: binding.traceChannelId,
+    traceChannelId: input.traceChannelId,
     actorUserId: account.userId,
-    prompt: input.prompt,
-    settings: { ...settings, hosting: input.hosting },
+    prompt,
+    imageKeys,
+    settings: {
+      ...settings,
+      hosting: input.hosting,
+      environmentId: input.environmentId,
+      runtimeInstanceId: input.runtimeInstanceId,
+    },
     source: "modal",
   });
+  if (metadata.draftId) await deleteSlackSessionDraft(metadata.draftId);
 }
 
 async function handleSessionAccessRequestAction(payload: SlackInteractionPayload): Promise<void> {
   const action = payload.actions?.[0];
-  const value = decodeSlackSessionAccessRequestValue(action?.value);
+  const value = decodeSlackBridgeAccessRequestValue(action?.value);
   const actingSlackUserId = payload.user?.id;
   if (!value || actingSlackUserId !== value.requesterSlackUserId) {
-    console.warn("[slack] ignored invalid session access request action", {
+    console.warn("[slack] ignored invalid bridge access request action", {
       actionUserId: actingSlackUserId,
       requesterSlackUserId: value?.requesterSlackUserId,
       hasValue: !!value,
@@ -1779,15 +2250,15 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   const client = await getSlackClient(value.slackTeamId);
   if (!client) return;
 
-  console.log("[slack] session access request clicked", {
+  console.log("[slack] bridge access request clicked", {
     slackTeamId: value.slackTeamId,
     slackChannelId: value.slackChannelId,
     slackThreadTs: value.slackThreadTs,
     requesterSlackUserId: value.requesterSlackUserId,
   });
 
-  const result = await slackSessionAccessService.createRequest(value);
-  if (result.status === "requester_unlinked") {
+  const requesterAccount = await resolveSlackAccount(value.slackTeamId, value.requesterSlackUserId);
+  if (!requesterAccount) {
     await postLinkPrompt({
       slackTeamId: value.slackTeamId,
       slackUserId: value.requesterSlackUserId,
@@ -1797,7 +2268,29 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     return;
   }
 
-  if (result.status === "thread_missing") {
+  const thread = await prisma.slackThreadSession.findUnique({
+    where: {
+      slackTeamId_slackChannelId_slackThreadTs: {
+        slackTeamId: value.slackTeamId,
+        slackChannelId: value.slackChannelId,
+        slackThreadTs: value.slackThreadTs,
+      },
+    },
+    select: {
+      sessionId: true,
+      organizationId: true,
+      session: {
+        select: {
+          hosting: true,
+          sessionGroupId: true,
+          name: true,
+          connection: true,
+          sessionGroup: { select: { connection: true } },
+        },
+      },
+    },
+  });
+  if (!thread) {
     await postSessionAccessRequestFeedback({
       ...value,
       text: "This Slack thread is no longer connected to a Trace session.",
@@ -1805,37 +2298,100 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
     return;
   }
 
-  if (result.status === "already_has_access") {
+  const membership = await prisma.orgMember.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: requesterAccount.userId,
+        organizationId: thread.organizationId,
+      },
+    },
+    select: { userId: true },
+  });
+  if (!membership) {
     await postSessionAccessRequestFeedback({
       ...value,
-      text: "You already have access to this Trace session.",
+      text: "Your Trace account is not in this workspace's org.",
     });
     return;
   }
 
-  if (result.status === "owner_unlinked") {
+  if (thread.session.hosting !== "local") {
     await postSessionAccessRequestFeedback({
       ...value,
-      text: "Could not notify the Trace session owner in Slack. Ask them to link their Slack account first.",
+      text: "This Trace session is no longer running on a local bridge. Try replying again.",
     });
     return;
   }
 
-  console.log("[slack] sending session access request to owner", {
-    slackTeamId: result.value.slackTeamId,
-    inboxItemId: result.inboxItemId,
-    ownerSlackUserId: result.ownerSlackUserId,
+  const runtimeInstanceId =
+    connectionRuntimeInstanceId(thread.session.connection) ??
+    connectionRuntimeInstanceId(thread.session.sessionGroup?.connection);
+  if (!runtimeInstanceId || !thread.session.sessionGroupId) {
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "This local session is not bound to a bridge yet. Try again after the owner starts it.",
+    });
+    return;
+  }
+
+  const access = await runtimeAccessService.getAccessState({
+    userId: requesterAccount.userId,
+    organizationId: thread.organizationId,
+    runtimeInstanceId,
+    sessionGroupId: thread.session.sessionGroupId,
+    capability: "session",
+  });
+  if (access.allowed) {
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "Bridge access is already granted. You can reply in this Slack thread now.",
+    });
+    return;
+  }
+
+  const request = await runtimeAccessService.requestAccess({
+    requesterUserId: requesterAccount.userId,
+    organizationId: thread.organizationId,
+    runtimeInstanceId,
+    scopeType: "session_group",
+    sessionGroupId: thread.session.sessionGroupId,
+    requestedCapabilities: ["session"],
+  });
+
+  const ownerAccount = await prisma.slackAccount.findFirst({
+    where: { slackTeamId: value.slackTeamId, userId: request.ownerUserId },
+    select: { slackUserId: true },
+  });
+  if (!ownerAccount) {
+    await postSessionAccessRequestFeedback({
+      ...value,
+      text: "Bridge access request sent in Trace. The bridge owner has not linked Slack, so no Slack DM was sent.",
+    });
+    return;
+  }
+
+  const requester = await prisma.user.findUnique({
+    where: { id: requesterAccount.userId },
+    select: { name: true, email: true },
+  });
+  const requesterLabel = requester?.name?.trim() || requester?.email?.trim() || "A Trace user";
+  const traceLink = await buildTraceSessionLink(thread.sessionId);
+
+  console.log("[slack] sending bridge access request to owner", {
+    slackTeamId: value.slackTeamId,
+    requestId: request.id,
+    ownerSlackUserId: ownerAccount.slackUserId,
     requesterSlackUserId: value.requesterSlackUserId,
   });
-  const dm = await client.conversations.open({ users: result.ownerSlackUserId }).catch((err: unknown) => {
-    console.warn("[slack] failed to open session owner DM:", errorMessage(err));
+  const dm = await client.conversations.open({ users: ownerAccount.slackUserId }).catch((err: unknown) => {
+    console.warn("[slack] failed to open bridge owner DM:", errorMessage(err));
     return null;
   });
   const dmChannel = dm?.channel?.id;
   if (!dmChannel) {
     await postSessionAccessRequestFeedback({
       ...value,
-      text: "Could not open a Slack DM with the Trace session owner.",
+      text: "Bridge access request sent in Trace, but I could not open a Slack DM with the bridge owner.",
     });
     return;
   }
@@ -1843,13 +2399,13 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   try {
     await client.chat.postMessage({
       channel: dmChannel,
-      text: `${result.requesterLabel} requested access to a Trace session from Slack.`,
+      text: `${requesterLabel} requested bridge access from Slack.`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*${result.requesterLabel}* requested access to a Trace session from Slack.${result.traceLink ? `\n<${result.traceLink}|Open in Trace>` : ""}`,
+            text: `*${requesterLabel}* requested access to reply from Slack using your local bridge.${traceLink ? `\n<${traceLink}|Open in Trace>` : ""}`,
           },
         },
         {
@@ -1859,43 +2415,63 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
               type: "button",
               text: { type: "plain_text", text: "Approve" },
               style: "primary",
-              action_id: "trace_session_access_approve",
-              value: encodeSlackSessionAccessRequestValue(result.value),
+              action_id: "trace_bridge_access_approve",
+              value: encodeSlackBridgeAccessApproveValue({ ...value, requestId: request.id }),
             },
           ],
         },
       ],
     });
-    console.log("[slack] sent session access request DM", {
+    console.log("[slack] sent bridge access request DM", {
       slackTeamId: value.slackTeamId,
-      inboxItemId: result.inboxItemId,
-      ownerSlackUserId: result.ownerSlackUserId,
+      requestId: request.id,
+      ownerSlackUserId: ownerAccount.slackUserId,
       dmChannel,
     });
   } catch (err) {
-    console.warn("[slack] failed to DM session access request:", errorMessage(err));
+    console.warn("[slack] failed to DM bridge access request:", errorMessage(err));
     await postSessionAccessRequestFeedback({
       ...value,
-      text: "Could not send the access request to the Trace session owner in Slack.",
+      text: "Bridge access request sent in Trace, but I could not send the Slack DM.",
     });
     return;
   }
 
   await postSessionAccessRequestFeedback({
     ...value,
-    text: `Access request sent to <@${result.ownerSlackUserId}> and Trace Inbox.`,
+    text: `Bridge access request sent to <@${ownerAccount.slackUserId}>.`,
   });
 }
 
 async function handleSessionAccessApproveAction(payload: SlackInteractionPayload): Promise<void> {
   const action = payload.actions?.[0];
-  const value = decodeSlackSessionAccessRequestValue(action?.value);
+  const value = decodeSlackBridgeAccessApproveValue(action?.value);
   const ownerSlackUserId = payload.user?.id;
   if (!value || !ownerSlackUserId) return;
 
   const ownerAccount = await resolveSlackAccount(value.slackTeamId, ownerSlackUserId);
-  if (!ownerAccount || !value.inboxItemId) return;
-  await slackSessionAccessService.approveInboxRequest(value.inboxItemId, ownerAccount.userId);
+  if (!ownerAccount) return;
+  const request = await prisma.bridgeAccessRequest.findUnique({
+    where: { id: value.requestId },
+    include: { bridgeRuntime: true },
+  });
+  if (!request || request.ownerUserId !== ownerAccount.userId) return;
+
+  await runtimeAccessService.approveRequest({
+    requestId: request.id,
+    organizationId: request.bridgeRuntime.organizationId,
+    ownerUserId: ownerAccount.userId,
+    scopeType: "session_group",
+    sessionGroupId: request.sessionGroupId,
+    capabilities: ["session"],
+  });
+  await postSessionAccessRequestFeedback({
+    slackTeamId: value.slackTeamId,
+    slackChannelId: value.slackChannelId,
+    slackThreadTs: value.slackThreadTs,
+    requesterSlackUserId: value.requesterSlackUserId,
+    text: "Bridge access approved. You can reply in this Slack thread now.",
+  });
 }
 
 function isBotMessageCandidate(event: SlackEventBody): boolean {
@@ -1935,7 +2511,7 @@ async function handleMessage(input: {
     return;
   }
 
-  if (event.subtype) return;
+  if (event.subtype && event.subtype !== "file_share") return;
   await handleThreadMessage({ teamId, event });
 }
 
@@ -1943,6 +2519,9 @@ async function disconnectSlackTeams(teamIds: string[], organizationId?: string):
   if (teamIds.length === 0) return;
   const teamWhere = { slackTeamId: { in: teamIds } };
   await prisma.$transaction([
+    prisma.slackSessionDraft.deleteMany({
+      where: { ...teamWhere, ...(organizationId ? { organizationId } : {}) },
+    }),
     prisma.slackThreadSession.deleteMany({
       where: { ...teamWhere, ...(organizationId ? { organizationId } : {}) },
     }),
@@ -2068,10 +2647,15 @@ router.post(
     if (subcommand === "prefs" || subcommand === "preferences" || subcommand === "setup") {
       res.status(200).json({
         response_type: "ephemeral",
-        text: "Set your Trace Slack defaults.",
+        text: "Slack no longer has separate defaults. Use `/trace start` or `@trace <prompt>` and Configure to choose session settings.",
         blocks: [
-          { type: "section", text: { type: "mrkdwn", text: "Set your Trace Slack account defaults." } },
-          { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Preferences" }, url: buildPreferencesUrl(teamId, userId), action_id: "preferences" }] },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "Slack no longer has separate defaults. Use `/trace start` or `@trace <prompt>` and Configure to choose tool, model, thinking, and hosting.",
+            },
+          },
         ],
       });
       return;
@@ -2079,7 +2663,7 @@ router.post(
 
     res.status(200).json({
       response_type: "ephemeral",
-      text: "Use `@trace <prompt>`, `@trace --model opus --think high <prompt>`, `/trace bind`, `/trace prefs`, or `/trace start`.",
+      text: "Use `@trace <prompt>`, `/trace bind`, or `/trace start`.",
     });
   },
 );
@@ -2110,7 +2694,57 @@ router.post(
     }
 
     const actionId = payload.actions?.[0]?.action_id;
-    if (payload.type === "block_actions" && actionId === "trace_session_access_request") {
+    if (payload.type === "block_actions" && actionId === "trace_start_draft") {
+      res.status(200).json({});
+      const draftId = payload.actions?.[0]?.value;
+      const slackUserId = payload.user?.id;
+      if (draftId && slackUserId) {
+        void recommendedSettingsForDraft(draftId, slackUserId)
+          .then((settings) =>
+            startSlackSessionFromDraft({
+              draftId,
+              slackUserId,
+              settings,
+            }),
+          )
+          .catch(async (err: unknown) => {
+            const draft = await loadSlackSessionDraft(draftId, slackUserId);
+            if (!draft) return;
+            await postSessionAccessRequestFeedback({
+              slackTeamId: draft.slackTeamId,
+              slackChannelId: draft.slackChannelId,
+              slackThreadTs: draft.slackThreadTs,
+              requesterSlackUserId: draft.slackUserId,
+              text: `Could not start with recommended settings: ${errorMessage(err)}`,
+            });
+          });
+      }
+      return;
+    }
+
+    if (payload.type === "block_actions" && actionId === "trace_configure_draft") {
+      res.status(200).json({});
+      const draftId = payload.actions?.[0]?.value;
+      if (draftId && payload.team?.id && payload.channel?.id && payload.user?.id && payload.trigger_id) {
+        void openAdvancedStartModal({
+          slackTeamId: payload.team.id,
+          slackChannelId: payload.channel.id,
+          slackUserId: payload.user.id,
+          triggerId: payload.trigger_id,
+          draftId,
+        });
+      }
+      return;
+    }
+
+    if (payload.type === "block_actions" && actionId === "trace_cancel_draft") {
+      res.status(200).json({});
+      const draftId = payload.actions?.[0]?.value;
+      if (draftId) void deleteSlackSessionDraft(draftId);
+      return;
+    }
+
+    if (payload.type === "block_actions" && actionId === "trace_bridge_access_request") {
       console.log("[slack] interaction received", {
         type: payload.type,
         actionId,
@@ -2119,11 +2753,11 @@ router.post(
       });
       res.status(200).json({});
       void handleSessionAccessRequestAction(payload).catch((err: unknown) => {
-        console.warn("[slack] failed to request session access:", errorMessage(err));
+        console.warn("[slack] failed to request bridge access:", errorMessage(err));
       });
       return;
     }
-    if (payload.type === "block_actions" && actionId === "trace_session_access_approve") {
+    if (payload.type === "block_actions" && actionId === "trace_bridge_access_approve") {
       console.log("[slack] interaction received", {
         type: payload.type,
         actionId,
@@ -2132,21 +2766,13 @@ router.post(
       });
       res.status(200).json({});
       void handleSessionAccessApproveAction(payload).catch((err: unknown) => {
-        console.warn("[slack] failed to approve session access:", errorMessage(err));
+        console.warn("[slack] failed to approve bridge access:", errorMessage(err));
       });
       return;
     }
 
     if (payload.type === "view_submission" && payload.view?.callback_id === "trace_advanced_start") {
       const prompt = getViewValue(payload, "prompt", "value")?.trim() ?? "";
-      if (!prompt) {
-        res.status(200).json({
-          response_action: "errors",
-          errors: { prompt: "Enter a prompt." },
-        });
-        return;
-      }
-
       let metadata: AdvancedStartMetadata;
       try {
         metadata = JSON.parse(payload.view.private_metadata ?? "{}") as AdvancedStartMetadata;
@@ -2157,14 +2783,42 @@ router.post(
       const tool = normalizeTool(getViewValue(payload, "tool", "value")) ?? "claude_code";
       const hostingValue = getViewValue(payload, "hosting", "value");
       const hosting = hostingValue === "local" ? "local" : "cloud";
+      const draft = metadata.draftId
+        ? await loadSlackSessionDraft(metadata.draftId, metadata.slackUserId)
+        : null;
+      const hasImages = imageKeysFromFileRefs(parseSlackFileRefs(draft?.fileRefs ?? [])).length > 0;
+      if (!prompt && !hasImages) {
+        res.status(200).json({
+          response_action: "errors",
+          errors: { prompt: "Enter a prompt." },
+        });
+        return;
+      }
+      const traceChannelId = getViewValue(payload, "channel", "value");
+      if (!traceChannelId) {
+        res.status(200).json({
+          response_action: "errors",
+          errors: { channel: "Choose a Trace channel." },
+        });
+        return;
+      }
+      const environmentValue = getViewValue(payload, "environment", "value");
+      const runtimeValue = getViewValue(payload, "runtime", "value");
       res.status(200).json({});
       void startSlackSessionFromModal({
         metadata,
         prompt,
+        traceChannelId,
         tool,
         model: getViewValue(payload, "model", "value"),
         reasoningEffort: getViewValue(payload, "reasoning", "value"),
         hosting,
+        environmentId:
+          hosting === "cloud" && environmentValue && environmentValue !== "default"
+            ? environmentValue
+            : null,
+        runtimeInstanceId:
+          hosting === "local" && runtimeValue && runtimeValue !== "auto" ? runtimeValue : null,
       }).catch(async (err: unknown) => {
         const client = await getSlackClient(metadata.slackTeamId);
         if (!client) return;

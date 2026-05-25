@@ -7,10 +7,12 @@ import { buildTraceSessionLink, slackEventBridge } from "./event-bridge.js";
 export type SlackSessionSource = "mention" | "slash" | "modal" | "bot_alert";
 
 export type SlackSessionSettings = {
-  tool: CodingTool;
+  tool?: CodingTool | null;
   model: string | null;
   reasoningEffort: string | null;
   hosting: "cloud" | "local";
+  environmentId?: string | null;
+  runtimeInstanceId?: string | null;
 };
 
 export type StartSlackSessionInput = {
@@ -21,6 +23,7 @@ export type StartSlackSessionInput = {
   traceChannelId: string;
   actorUserId: string;
   prompt: string;
+  imageKeys?: string[];
   settings: SlackSessionSettings;
   source: SlackSessionSource;
 };
@@ -65,14 +68,18 @@ export async function startSlackSession(
   input: StartSlackSessionInput,
 ): Promise<StartSlackSessionResult> {
   const session = await sessionService.start({
-    tool: input.settings.tool,
+    tool: input.settings.tool ?? undefined,
     model: input.settings.model ?? undefined,
     reasoningEffort: input.settings.reasoningEffort ?? undefined,
+    environmentId: input.settings.environmentId ?? undefined,
+    runtimeInstanceId: input.settings.runtimeInstanceId ?? undefined,
     organizationId: input.organizationId,
     createdById: input.actorUserId,
     channelId: input.traceChannelId,
     hosting: input.settings.hosting,
-    prompt: input.settings.hosting === "local" ? undefined : input.prompt,
+    prompt: input.prompt,
+    imageKeys: input.imageKeys,
+    deferInitialRun: true,
     actorType: "user",
     clientSource: "slack",
   });
@@ -118,19 +125,18 @@ export async function startSlackSession(
     });
   }
 
-  if (input.settings.hosting === "local") {
-    await sessionService.recordExternalUserMessage({
-      sessionId: session.id,
-      text: input.prompt,
-      actorId: input.actorUserId,
-      organizationId: input.organizationId,
-      clientSource: "slack",
-    });
-    await sessionService.run(session.id, input.prompt, undefined, {
-      userId: input.actorUserId,
-      organizationId: input.organizationId,
-      clientSource: "slack",
-    });
+  if (input.prompt.trim() || input.imageKeys?.length) {
+    await sessionService.run(
+      session.id,
+      input.prompt,
+      undefined,
+      {
+        userId: input.actorUserId,
+        organizationId: input.organizationId,
+        clientSource: "slack",
+      },
+      input.imageKeys,
+    );
   }
 
   return { sessionId: session.id, slackThreadTs };

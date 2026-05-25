@@ -1021,6 +1021,23 @@ model SlackChannelBinding {
   @@index([organizationId])
 }
 
+model SlackSessionDraft {
+  id             String   @id @default(cuid())
+  slackTeamId    String
+  slackChannelId String
+  slackThreadTs  String
+  slackUserId    String
+  organizationId String
+  traceChannelId String?
+  prompt         String
+  fileRefs       Json     @default("[]")
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@index([slackTeamId, slackChannelId, slackThreadTs])
+  @@index([expiresAt])
+}
+
 model SlackThreadSession {
   id             String   @id @default(uuid())
   slackTeamId    String

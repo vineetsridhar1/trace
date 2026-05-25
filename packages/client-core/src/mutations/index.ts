@@ -257,28 +257,6 @@ export const DISMISS_INBOX_ITEM_MUTATION = gql`
   }
 `;
 
-export const APPROVE_SLACK_SESSION_ACCESS_REQUEST_MUTATION = gql`
-  mutation ApproveSlackSessionAccessRequest($inboxItemId: ID!) {
-    approveSlackSessionAccessRequest(inboxItemId: $inboxItemId) {
-      id
-      status
-      resolvedAt
-      payload
-    }
-  }
-`;
-
-export const DENY_SLACK_SESSION_ACCESS_REQUEST_MUTATION = gql`
-  mutation DenySlackSessionAccessRequest($inboxItemId: ID!) {
-    denySlackSessionAccessRequest(inboxItemId: $inboxItemId) {
-      id
-      status
-      resolvedAt
-      payload
-    }
-  }
-`;
-
 export const REGISTER_PUSH_TOKEN_MUTATION = gql`
   mutation RegisterPushToken($token: String!, $platform: PushPlatform!) {
     registerPushToken(token: $token, platform: $platform)

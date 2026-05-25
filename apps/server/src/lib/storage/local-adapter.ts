@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs";
+import fsp from "fs/promises";
 import jwt from "jsonwebtoken";
 import type { StorageAdapter } from "./types.js";
 
@@ -43,6 +44,12 @@ export class LocalStorageAdapter implements StorageAdapter {
       expiresIn: "5m",
     });
     return { method: "PUT" as const, url: `${this.publicUrl}/uploads/local/put/${token}` };
+  }
+
+  async putObject(key: string, body: Buffer): Promise<void> {
+    const filePath = this.resolvePath(key);
+    await fsp.mkdir(path.dirname(filePath), { recursive: true });
+    await fsp.writeFile(filePath, body);
   }
 
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
