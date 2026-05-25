@@ -147,7 +147,7 @@ export function ChannelMembersDialog({ channelId }: { channelId: string }) {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 pr-10">
             <DialogTitle>Members</DialogTitle>
             <Button
               type="button"
