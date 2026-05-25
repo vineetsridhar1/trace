@@ -1,3 +1,7 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 const signingIdentity = process.env.TRACE_MACOS_SIGN_IDENTITY;
 const skipSigning = process.env.TRACE_MACOS_SKIP_SIGN === "1";
 const updateRepo = process.env.TRACE_DESKTOP_UPDATE_REPO;
@@ -49,7 +53,7 @@ function notarizeConfigFromEnv() {
 const packagerConfig = {
   appBundleId: "org.gettrace.desktop",
   asar: true,
-  icon: "assets/icon",
+  icon: path.join(configDir, "assets", "icon"),
 };
 
 if (!skipSigning) {
