@@ -1895,7 +1895,7 @@ async function handleAppMention(input: {
   await postStartDraftPrompt({
     slackTeamId: teamId,
     slackChannelId: channel,
-    slackThreadTs: event.thread_ts ?? "",
+    slackThreadTs: threadTs,
     slackUserId,
     draftId,
     prompt,
@@ -2213,6 +2213,12 @@ async function startSlackSessionFromModal(input: {
   const fileRefs = parseSlackFileRefs(draft?.fileRefs ?? []);
   const imageKeys = imageKeysFromFileRefs(fileRefs);
   const prompt = input.prompt.trim() || fallbackPromptForImages(imageKeys);
+
+  await sessionService.updateDefaults(account.userId, {
+    tool: settings.tool,
+    model: settings.model,
+    reasoningEffort: settings.reasoningEffort,
+  });
 
   await startSlackSession({
     slackTeamId: metadata.slackTeamId,
