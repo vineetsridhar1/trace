@@ -652,7 +652,9 @@ export class BridgeClient implements IBridgeClient {
     // using our stable instanceId, so we don't need to report session lists.
     const config = readConfig();
     const label = this.getLabel();
-    const supportedTools = ["claude_code", "codex", "custom"];
+    const supportedTools = ["custom"];
+    if (hasExecutable("claude")) supportedTools.push("claude_code");
+    if (hasExecutable("codex")) supportedTools.push("codex");
     if (hasExecutable("pi")) supportedTools.push("pi");
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
