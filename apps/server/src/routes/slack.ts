@@ -1343,26 +1343,14 @@ async function postBindPrompt(input: {
     },
   ];
 
-  if (input.slackUserId) {
-    await client.chat
-      .postEphemeral({
-        channel: input.slackChannelId,
-        user: input.slackUserId,
-        thread_ts: input.threadTs,
-        text,
-        blocks,
-      })
-      .catch((err: unknown) => console.warn("[slack] failed to post bind prompt:", errorMessage(err)));
-    return;
-  }
-
   await client.chat
     .postMessage({
       channel: input.slackChannelId,
+      ...(input.threadTs ? { thread_ts: input.threadTs } : {}),
       text,
       blocks,
     })
-    .catch((err: unknown) => console.warn("[slack] failed to post bind setup message:", errorMessage(err)));
+    .catch((err: unknown) => console.warn("[slack] failed to post bind prompt:", errorMessage(err)));
 }
 
 async function postSessionAccessRequestPrompt(input: {
