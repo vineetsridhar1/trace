@@ -306,14 +306,6 @@ export function handleOrgEvent(event: Event): void {
       typeof channel.id === "string"
     ) {
       batch.upsert("channels", channel.id, channelPayloadForViewer(channel, currentUserId));
-    } else if (
-      event.eventType === "channel_member_removed" &&
-      userId === currentUserId &&
-      channel &&
-      typeof channel.id === "string" &&
-      channelPayloadIsOwnedBy(channel, currentUserId)
-    ) {
-      batch.upsert("channels", channel.id, channelPayloadForViewer(channel, currentUserId));
     } else if (event.eventType === "channel_member_removed" && userId === currentUserId) {
       batch.remove("channels", event.scopeId);
       if (ui.getActiveChannelId() === event.scopeId) {

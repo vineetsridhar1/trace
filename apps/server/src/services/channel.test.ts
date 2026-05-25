@@ -81,16 +81,13 @@ describe("ChannelService", () => {
       expect.objectContaining({
         where: {
           organizationId: "org-1",
-          OR: [
-            { members: { some: { userId: "user-1", leftAt: null } } },
-            { visibility: "private", ownerId: "user-1" },
-          ],
+          OR: [{ members: { some: { userId: "user-1", leftAt: null } } }],
         },
       }),
     );
   });
 
-  it("allows private channel owners to see their channel after leaving", async () => {
+  it("excludes private channel owners from member-only lists after leaving", async () => {
     prismaMock.channel.findMany.mockResolvedValueOnce([]);
 
     const service = new ChannelService();
@@ -99,7 +96,7 @@ describe("ChannelService", () => {
     expect(prismaMock.channel.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: expect.arrayContaining([{ visibility: "private", ownerId: "user-1" }]),
+          OR: [{ members: { some: { userId: "user-1", leftAt: null } } }],
         }),
       }),
     );

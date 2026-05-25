@@ -27,10 +27,7 @@ export class ChannelService {
     }
 
     if (options?.memberOnly) {
-      where.OR = [
-        { members: { some: { userId, leftAt: null } } },
-        { visibility: "private", ownerId: userId },
-      ];
+      where.OR = [{ members: { some: { userId, leftAt: null } } }];
     }
 
     return prisma.channel.findMany({
