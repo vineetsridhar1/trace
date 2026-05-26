@@ -22,6 +22,7 @@ describe("TicketService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.count.mockResolvedValue(1);
   });
 
   it("creates tickets with defaults, relationships, and events", async () => {
