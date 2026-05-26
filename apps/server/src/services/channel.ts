@@ -492,6 +492,7 @@ export class ChannelService {
     text,
     html,
     parentId,
+    organizationId,
     actorType,
     actorId,
   }: {
@@ -499,6 +500,7 @@ export class ChannelService {
     text?: string;
     html?: string;
     parentId?: string;
+    organizationId: string;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -509,7 +511,7 @@ export class ChannelService {
       actorType === "agent" ? {} : { members: { some: { userId: actorId, leftAt: null } } };
 
     const channel = await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, ...memberFilter },
+      where: { id: channelId, organizationId, ...memberFilter },
       select: { id: true, organizationId: true, type: true },
     });
 
@@ -877,6 +879,7 @@ export class ChannelService {
     channelId: string,
     text: string,
     parentId: string | null,
+    organizationId: string,
     actorType: ActorType,
     actorId: string,
   ) {
@@ -885,7 +888,7 @@ export class ChannelService {
       actorType === "agent" ? {} : { members: { some: { userId: actorId, leftAt: null } } };
 
     const channel = await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, type: "coding", ...memberFilter },
+      where: { id: channelId, organizationId, type: "coding", ...memberFilter },
       select: { organizationId: true },
     });
 

@@ -828,6 +828,15 @@ describe("TerminalService", () => {
         24,
         "/home/user/projects/my-repo",
       );
+      expect(prismaMock.channel.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: "channel-1",
+          organizationId: "org-1",
+          type: "coding",
+          members: { some: { userId: "user-1", leftAt: null } },
+        },
+        select: { id: true, repoId: true },
+      });
     });
 
     it("throws when channel is not found or user is not a member", async () => {

@@ -681,6 +681,7 @@ describe("ChannelService", () => {
       service.sendChannelMessage({
         channelId: "channel-1",
         html: "<p>hello</p>",
+        organizationId: "org-1",
         actorType: "user",
         actorId: "user-1",
       }),
@@ -736,11 +737,12 @@ describe("ChannelService", () => {
     prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
 
     const service = new ChannelService();
-    await service.sendMessage("channel-1", "hello", null, "user", "user-1");
+    await service.sendMessage("channel-1", "hello", null, "org-1", "user", "user-1");
 
     expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
       where: {
         id: "channel-1",
+        organizationId: "org-1",
         type: "coding",
         members: { some: { userId: "user-1", leftAt: null } },
       },
@@ -755,6 +757,42 @@ describe("ChannelService", () => {
       actorType: "user",
       actorId: "user-1",
       parentId: undefined,
+    });
+  });
+
+  it("scopes agent channel message sends to the active organization", async () => {
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+      type: "text",
+    });
+    prismaMock.message.create.mockResolvedValueOnce({
+      id: "message-1",
+      channelId: "channel-1",
+      actorType: "agent",
+      actorId: TRACE_AI_USER_ID,
+      text: "hello",
+      html: null,
+      mentions: null,
+      parentMessageId: null,
+      createdAt: new Date("2026-03-22T00:00:00.000Z"),
+    });
+
+    const service = new ChannelService();
+    await service.sendChannelMessage({
+      channelId: "channel-1",
+      text: "hello",
+      organizationId: "org-1",
+      actorType: "agent",
+      actorId: TRACE_AI_USER_ID,
+    });
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        organizationId: "org-1",
+      },
+      select: { id: true, organizationId: true, type: true },
     });
   });
 

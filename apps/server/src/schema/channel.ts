@@ -80,6 +80,7 @@ export const channelMutations = {
       args.channelId,
       args.text,
       args.parentId ?? null,
+      requireOrgContext(ctx),
       ctx.actorType,
       ctx.userId,
     );
@@ -94,6 +95,7 @@ export const channelMutations = {
       text: args.text ?? undefined,
       html: args.html ?? undefined,
       parentId: args.parentId ?? undefined,
+      organizationId: requireOrgContext(ctx),
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
