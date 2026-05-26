@@ -1,21 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  Copy,
-  ExternalLink,
-  LogOut,
-  RefreshCw,
-} from "lucide-react";
+import { Check, Copy, LogOut, RefreshCw } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { cn } from "../../lib/utils";
-import { Button, buttonVariants } from "../ui/button";
-import { isLocalMode } from "../../lib/runtime-mode";
+import { Button } from "../ui/button";
 import { CreateOrganizationDialog } from "../sidebar/CreateOrganizationDialog";
 import { TraceLoader } from "../ui/trace-loader";
-
-const RUNNING_TRACE_DOC_URL =
-  "https://github.com/vineetsridhar1/trace/blob/main/docs/running-trace.md";
 
 export function NoOrgWelcome() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -27,9 +15,6 @@ export function NoOrgWelcome() {
   const email = user?.email ?? "";
   const name = user?.name?.trim() ?? "";
   const accountLabel = name || email || "No account details available";
-  const welcomeMessage = isLocalMode
-    ? "Create an organization to start your local workspace, or ask an admin to invite you and share the email below."
-    : "You are signed in, but this account is not part of a Trace organization yet.";
 
   useEffect(() => {
     return () => {
@@ -66,7 +51,7 @@ export function NoOrgWelcome() {
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-foreground">Trace</div>
               <div className="truncate text-xs text-muted-foreground">
-                {isLocalMode ? "Local workspace" : "Invite-only beta"}
+                Start a workspace
               </div>
             </div>
           </div>
@@ -76,60 +61,12 @@ export function NoOrgWelcome() {
         </div>
 
         <h1 className="mt-7 text-[1.7rem] font-semibold leading-tight text-foreground">
-          Invite required
+          Create your organization
         </h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{welcomeMessage}</p>
-
-        {!isLocalMode ? (
-          <div className="mt-6">
-            <div className="text-xs font-medium uppercase text-muted-foreground">Ways forward</div>
-            <div className="mt-3 divide-y divide-border rounded-lg border border-border">
-              <div className="p-3.5">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Get invited</div>
-                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    Ask a Trace admin to add the email below to an organization.
-                  </p>
-                </div>
-              </div>
-              <div className="p-3.5">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Run locally</div>
-                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    Start the full local workspace with{" "}
-                    <code className="rounded bg-surface-deep px-1 py-0.5 text-xs text-foreground">
-                      pnpm dev:local
-                    </code>
-                    .
-                  </p>
-                </div>
-              </div>
-              <div className="p-3.5">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Self-host</div>
-                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    Deploy Trace on your own server with the Docker Compose setup.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <a
-              href={RUNNING_TRACE_DOC_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                buttonVariants({ variant: "outline", size: "lg" }),
-                "mt-4 w-full justify-between",
-              )}
-            >
-              <span className="flex items-center gap-2">
-                Open setup guide
-                <ExternalLink size={14} />
-              </span>
-              <ArrowRight size={14} className="text-muted-foreground" />
-            </a>
-          </div>
-        ) : null}
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          You are signed in, but this account is not part of a Trace organization yet.
+          Create an organization to start using your workspace.
+        </p>
 
         <div className="mt-6 rounded-lg border border-border bg-surface-deep p-3.5">
           <div className="mb-2 flex items-center justify-between gap-3">
@@ -150,7 +87,7 @@ export function NoOrgWelcome() {
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          {isLocalMode ? <CreateOrganizationDialog /> : null}
+          <CreateOrganizationDialog />
           <Button
             onClick={handleCheckAgain}
             disabled={checking}
