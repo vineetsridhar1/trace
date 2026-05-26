@@ -6,7 +6,7 @@ vi.mock("./db.js", async () => {
 });
 
 import { prisma } from "./db.js";
-import { createUserLoader } from "./dataloader.js";
+import { createSessionTicketsLoader, createUserLoader } from "./dataloader.js";
 
 const prismaMock = prisma as any;
 
@@ -28,5 +28,45 @@ describe("createUserLoader", () => {
       null,
       { id: "u2", name: "Bob", avatarUrl: null },
     ]);
+  });
+});
+
+describe("createSessionTicketsLoader", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("limits linked session tickets to the active organization", async () => {
+    prismaMock.ticketLink.findMany.mockResolvedValueOnce([
+      { entityId: "session-1", ticketId: "ticket-1" },
+      { entityId: "session-2", ticketId: "ticket-2" },
+    ]);
+    prismaMock.ticket.findMany.mockResolvedValueOnce([
+      { id: "ticket-1", organizationId: "org-1", links: [], assignees: [] },
+    ]);
+
+    const loader = createSessionTicketsLoader("org-1");
+
+    await expect(loader.loadMany(["session-1", "session-2"])).resolves.toEqual([
+      [{ id: "ticket-1", organizationId: "org-1", links: [], assignees: [] }],
+      [],
+    ]);
+    expect(prismaMock.ticketLink.findMany).toHaveBeenCalledWith({
+      where: {
+        entityType: "session",
+        entityId: { in: ["session-1", "session-2"] },
+        ticket: { organizationId: "org-1" },
+      },
+      select: { entityId: true, ticketId: true },
+    });
+    expect(prismaMock.ticket.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ["ticket-1", "ticket-2"] }, organizationId: "org-1" },
+      include: {
+        assignees: {
+          include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+        },
+        links: true,
+      },
+    });
   });
 });

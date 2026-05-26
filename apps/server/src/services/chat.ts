@@ -18,14 +18,18 @@ function buildMemberKey(...userIds: string[]) {
 
 function chatInOrganizationWhere(organizationId: string): PrismaTypes.ChatWhereInput {
   return {
-    members: {
-      every: {
-        OR: [
-          { leftAt: { not: null } },
-          { user: { orgMemberships: { some: { organizationId } } } },
-        ],
+    AND: [
+      {
+        members: {
+          every: {
+            OR: [
+              { leftAt: { not: null } },
+              { user: { orgMemberships: { some: { organizationId } } } },
+            ],
+          },
+        },
       },
-    },
+    ],
   };
 }
 

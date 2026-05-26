@@ -50,6 +50,24 @@ describe("ChatService", () => {
     ).rejects.toThrow("Chats must include at least one other member");
   });
 
+  it("rejects chats with members outside the active organization", async () => {
+    prismaMock.orgMember.findMany.mockResolvedValueOnce([
+      { user: { id: "user-1", name: "Alice" } },
+    ]);
+
+    const service = new ChatService();
+
+    await expect(
+      service.create({ memberIds: ["user-2"] } as any, "org-1", "user", "user-1"),
+    ).rejects.toThrow("One or more users are not in this organization");
+
+    expect(prismaMock.orgMember.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", userId: { in: ["user-1", "user-2"] } },
+      include: { user: { select: { id: true, name: true } } },
+    });
+    expect(prismaMock.chat.create).not.toHaveBeenCalled();
+  });
+
   it("returns an existing deduplicated DM", async () => {
     prismaMock.orgMember.findMany.mockResolvedValueOnce([
       { user: { id: "user-1", name: "Alice" } },
@@ -161,6 +179,50 @@ describe("ChatService", () => {
       scopeId: "message-root",
     });
     expect(eventServiceMock.create).toHaveBeenCalled();
+  });
+
+  it("checks chat membership inside the active organization before sending messages", async () => {
+    prismaMock.chat.findFirstOrThrow.mockResolvedValueOnce({ id: "chat-1" });
+    prismaMock.message.create.mockResolvedValueOnce({
+      id: "message-1",
+      chatId: "chat-1",
+      actorType: "user",
+      actorId: "user-1",
+      text: "hello",
+      html: null,
+      mentions: null,
+      parentMessageId: null,
+      createdAt: new Date("2026-03-21T00:00:00.000Z"),
+    });
+
+    const service = new ChatService();
+    await service.sendMessage({
+      chatId: "chat-1",
+      text: "hello",
+      organizationId: "org-1",
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(prismaMock.chat.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "chat-1",
+        members: { some: { userId: "user-1", leftAt: null } },
+        AND: [
+          {
+            members: {
+              every: {
+                OR: [
+                  { leftAt: { not: null } },
+                  { user: { orgMemberships: { some: { organizationId: "org-1" } } } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
   });
 
   it("returns the existing message when edits are a no-op", async () => {

@@ -129,4 +129,19 @@ describe("ChannelGroupService", () => {
     expect(assertActorOrgAccess).not.toHaveBeenCalled();
     expect(prismaMock.channel.update).not.toHaveBeenCalled();
   });
+
+  it("rejects channel-group reordering with groups outside the organization", async () => {
+    prismaMock.channelGroup.count.mockResolvedValueOnce(1);
+
+    const service = new ChannelGroupService();
+    await expect(
+      service.reorderGroups("org-1", ["group-1", "group-2"], "user", "user-1"),
+    ).rejects.toThrow("Channel groups must belong to this organization");
+
+    expect(assertActorOrgAccess).toHaveBeenCalledWith(prismaMock, "org-1", "user", "user-1");
+    expect(prismaMock.channelGroup.count).toHaveBeenCalledWith({
+      where: { id: { in: ["group-1", "group-2"] }, organizationId: "org-1" },
+    });
+    expect(prismaMock.channelGroup.update).not.toHaveBeenCalled();
+  });
 });
