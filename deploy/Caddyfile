@@ -1,7 +1,7 @@
 gettrace.org, www.gettrace.org {
 	encode zstd gzip
 
-	@backend path /auth* /graphql* /uploads* /webhooks/github* /ws* /bridge* /terminal* /health
+	@backend path /auth* /graphql* /uploads* /webhooks/github* /slack* /ws* /bridge* /terminal* /health
 	@apple_app_site_association path /.well-known/apple-app-site-association /apple-app-site-association
 
 	handle @backend {
