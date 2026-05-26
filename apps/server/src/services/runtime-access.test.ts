@@ -302,6 +302,26 @@ describe("runtimeAccessService", () => {
     expect(access.allowed).toBe(false);
   });
 
+  it("fails closed for unknown runtime ids", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce(null);
+    sessionRouterMock.getRuntime.mockReturnValue(null);
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(false);
+
+    const access = await runtimeAccessService.getAccessState({
+      userId: "user-2",
+      organizationId: "org-1",
+      runtimeInstanceId: "runtime-missing",
+    });
+
+    expect(access.hostingMode).toBeNull();
+    expect(access.ownerUser).toBeNull();
+    expect(access.bridgeRuntimeId).toBeNull();
+    expect(access.label).toBeNull();
+    expect(access.allowed).toBe(false);
+    expect(access.isOwner).toBe(false);
+    expect(access.capabilities).toEqual([]);
+  });
+
   it("emits an owner-only bridge request event when access is requested", async () => {
     prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
