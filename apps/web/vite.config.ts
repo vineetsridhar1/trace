@@ -55,6 +55,7 @@ export default defineConfig({
           /^\/graphql/,
           /^\/ws/,
           /^\/auth/,
+          /^\/slack/,
           /^\/terminal/,
           /^\/\.well-known/,
           /^\/apple-app-site-association/,
