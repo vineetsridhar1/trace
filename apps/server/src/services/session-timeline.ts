@@ -192,6 +192,13 @@ function isCompletionEvent(event: PrismaEvent): boolean {
   );
 }
 
+function isErrorEvent(event: PrismaEvent): boolean {
+  const payload = asObject(event.payload);
+  return (
+    event.eventType === "session_output" && event.parentId == null && payload?.type === "error"
+  );
+}
+
 function isPrLifecycleEvent(event: PrismaEvent): boolean {
   return (
     event.eventType === "session_pr_opened" ||
@@ -236,7 +243,7 @@ function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
       continue;
     }
 
-    if (isCompletionEvent(event)) {
+    if (isErrorEvent(event) || isCompletionEvent(event)) {
       flushAssistant();
       visibleIds.add(event.id);
     }
@@ -264,6 +271,7 @@ function compactCandidateWhere(
         eventType: "session_output",
         OR: [
           { payload: { path: ["type"], equals: "assistant" } },
+          { payload: { path: ["type"], equals: "error" } },
           { payload: { path: ["type"], equals: "result" } },
         ],
       },

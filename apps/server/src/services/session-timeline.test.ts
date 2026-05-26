@@ -212,6 +212,73 @@ describe("SessionTimelineService", () => {
     expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps session errors visible in compact timelines", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      actorId: "user-1",
+      payload: { prompt: "Run the tool" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const assistantEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "I will run it." }] },
+      },
+      timestamp: new Date("2026-05-14T10:01:00.000Z"),
+    });
+    const errorEvent = event({
+      id: "error",
+      payload: { type: "error", message: "No version is set for command pi" },
+      timestamp: new Date("2026-05-14T10:02:00.000Z"),
+    });
+    const resultEvent = event({
+      id: "result",
+      payload: { type: "result", subtype: "error" },
+      timestamp: new Date("2026-05-14T10:02:01.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([
+      resultEvent,
+      errorEvent,
+      assistantEvent,
+      userEvent,
+    ]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-1",
+      "assistant-final",
+      "error",
+      "result",
+    ]);
+    expect(prismaMock.event.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              eventType: "session_output",
+              OR: expect.arrayContaining([
+                { payload: { path: ["type"], equals: "error" } },
+              ]),
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
   it("skips collapsed ranges when fetched candidates have no hidden thinking", async () => {
     const userEvent = event({
       id: "user-1",

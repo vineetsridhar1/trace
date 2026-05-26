@@ -136,6 +136,9 @@ function renderSessionOutput(
   }
 
   if (type === "result") {
+    if (payload.subtype === "error") {
+      return <CompletionRow timestamp={ts} error={str(payload.message)} />;
+    }
     return <CompletionRow timestamp={ts} />;
   }
 
