@@ -34,6 +34,7 @@ import {
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
+import { hydrateLoginShellPath } from "./shell-path.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -68,6 +69,7 @@ const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
 
 app.setName(appName);
+hydrateLoginShellPath();
 
 async function getSessionCookieHeader(targetUrl: string): Promise<string | null> {
   if (!mainWindow || mainWindow.isDestroyed()) return null;
