@@ -4,11 +4,16 @@
   "version": "0.0.1",
   "productName": "Trace",
   "main": "dist/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vineetsridhar1/trace.git"
+  },
   "scripts": {
     "dev": "pnpm --filter @trace/shared build && tsc -b && electron-forge start",
     "build": "pnpm --filter @trace/shared build && tsc -b",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
+    "package": "node scripts/forge-release.mjs package",
+    "make": "node scripts/forge-release.mjs make",
+    "publish:mac": "node scripts/forge-release.mjs publish",
     "lint": "tsc -b",
     "test": "vitest run",
     "test:unit": "vitest run",
@@ -17,53 +22,21 @@
   "dependencies": {
     "@trace/shared": "workspace:*",
     "node-pty": "^1.1.0",
+    "update-electron-app": "^3.1.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
-    "@electron-forge/maker-deb": "^7.11.1",
-    "@electron-forge/maker-rpm": "^7.11.1",
-    "@electron-forge/maker-squirrel": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/publisher-github": "^7.11.1",
     "@types/node": "^24.5.2",
     "@types/ws": "^8.5.13",
-    "electron": "^33.3.1",
+    "electron": "41.3.0",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"
   },
   "config": {
-    "forge": {
-      "packagerConfig": {
-        "asar": true,
-        "icon": "assets/icon"
-      },
-      "makers": [
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        },
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-deb",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-rpm",
-          "config": {}
-        }
-      ],
-      "plugins": [
-        {
-          "name": "@electron-forge/plugin-auto-unpack-natives",
-          "config": {}
-        }
-      ]
-    }
+    "forge": "./forge.config.mjs"
   }
 }

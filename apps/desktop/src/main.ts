@@ -10,7 +10,9 @@ import {
 } from "electron";
 import path from "path";
 import crypto from "crypto";
+import { readFileSync } from "node:fs";
 import { setTimeout } from "node:timers";
+import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
   BridgeClient,
   getGithubCliStatus,
@@ -32,6 +34,7 @@ import {
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
+import { hydrateLoginShellPath } from "./shell-path.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -39,12 +42,34 @@ const projectParentSelections = new Map<
   string,
   { path: string; timeout: ReturnType<typeof setTimeout> }
 >();
+type BuildConfig = {
+  productionUrl?: string;
+  macUpdateRepo?: string;
+};
+
+function loadBuildConfig(): BuildConfig {
+  try {
+    const raw = readFileSync(path.join(__dirname, "build-config.json"), "utf-8");
+    return JSON.parse(raw) as BuildConfig;
+  } catch {
+    return {};
+  }
+}
+
+const buildConfig = loadBuildConfig();
 const portOffset = Number(process.env.TRACE_PORT || 0);
-const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
+const localServerUrl = `http://localhost:${4000 + portOffset}`;
+const localWebUrl = `http://localhost:${3000 + portOffset}`;
+const defaultServerUrl =
+  app.isPackaged && buildConfig.productionUrl ? buildConfig.productionUrl : localServerUrl;
+const defaultWebUrl =
+  app.isPackaged && buildConfig.productionUrl ? buildConfig.productionUrl : localWebUrl;
+const serverUrl = process.env.TRACE_SERVER_URL ?? defaultServerUrl;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
 
 app.setName(appName);
+hydrateLoginShellPath();
 
 async function getSessionCookieHeader(targetUrl: string): Promise<string | null> {
   if (!mainWindow || mainWindow.isDestroyed()) return null;
@@ -119,7 +144,7 @@ function createWindow() {
     },
   });
 
-  const webUrl = process.env.TRACE_WEB_URL ?? `http://localhost:${3000 + portOffset}`;
+  const webUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
   mainWindow.loadURL(webUrl);
 
   // Open external links in the user's default browser.
@@ -150,6 +175,25 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+}
+
+function configureMacAutoUpdates() {
+  if (!app.isPackaged || process.platform !== "darwin") return;
+  if (!buildConfig.macUpdateRepo) return;
+
+  updateElectronApp({
+    updateSource: {
+      type: UpdateSourceType.ElectronPublicUpdateService,
+      repo: buildConfig.macUpdateRepo,
+    },
+    updateInterval: "30 minutes",
+    onNotifyUser: makeUserNotifier({
+      title: "Trace Update Ready",
+      detail: "A new version of Trace has been downloaded. Restart to apply it.",
+      restartButtonText: "Restart Trace",
+      laterButtonText: "Later",
+    }),
   });
 }
 
@@ -267,6 +311,7 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 
 app.whenReady().then(() => {
   configureApplicationIdentity();
+  configureMacAutoUpdates();
 
   ensureHookRunnerEntrypoint({
     electronBinaryPath: process.execPath,
