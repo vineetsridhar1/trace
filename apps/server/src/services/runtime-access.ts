@@ -443,7 +443,7 @@ class RuntimeAccessService {
     const connected = isConnectedRuntime(input.runtimeInstanceId, input.organizationId);
 
     if (!persisted) {
-      const allowed = hostingMode !== "local";
+      const allowed = hostingMode === "cloud";
       // Never disclose a router-level label/ownership for a bridge that is
       // not registered in the caller's org — sessionRouter is cross-org
       // shared and would otherwise leak another tenant's bridge name.
