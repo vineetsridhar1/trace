@@ -341,6 +341,19 @@ router.get("/oauth/callback", async (req: Request, res: Response) => {
     res.status(400).send(renderHtml("Slack install", "<h1>Invalid state</h1><p>The install link expired or is invalid. Restart from /slack/install.</p>"));
     return;
   }
+  const membership = await prisma.orgMember.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: state.userId,
+        organizationId: state.organizationId,
+      },
+    },
+    select: { role: true },
+  });
+  if (!membership || membership.role !== "admin") {
+    res.status(403).send(renderHtml("Slack install", "<h1>Admin required</h1><p>Only current org admins can complete Slack installs.</p>"));
+    return;
+  }
 
   const oauthResult = await exchangeOAuthCode(code).catch((err: unknown) => {
     console.error("[slack] oauth exchange failed:", (err as Error).message);
@@ -563,7 +576,6 @@ router.get("/bind-channel", async (req: Request, res: Response) => {
   const channels = await prisma.channel.findMany({
     where: {
       organizationId: install.organizationId,
-      members: { some: { userId, leftAt: null } },
     },
     select: { id: true, name: true, type: true },
     orderBy: [{ position: "asc" }, { name: "asc" }],
@@ -1048,11 +1060,10 @@ async function bindSlackChannel(input: {
     where: {
       id: input.traceChannelId,
       organizationId: install.organizationId,
-      members: { some: { userId: input.boundById, leftAt: null } },
     },
     select: { id: true },
   });
-  if (!channel) throw new Error("You do not have access to that Trace channel");
+  if (!channel) throw new Error("Trace channel not found in this organization");
 
   return prisma.slackChannelBinding.upsert({
     where: {
@@ -1595,18 +1606,12 @@ function reasoningLabelForSlack(reasoningEffort: string | null): string {
   return reasoningEffort ? getReasoningEffortLabel(reasoningEffort) : "Default";
 }
 
-async function listVisibleTraceChannels(input: {
+async function listOrgTraceChannels(input: {
   organizationId: string;
-  userId: string;
 }): Promise<Array<{ id: string; name: string; type: string }>> {
   return prisma.channel.findMany({
     where: {
       organizationId: input.organizationId,
-      OR: [
-        { visibility: "public" },
-        { ownerId: input.userId },
-        { members: { some: { userId: input.userId, leftAt: null } } },
-      ],
     },
     select: { id: true, name: true, type: true },
     orderBy: [{ position: "asc" }, { name: "asc" }],
@@ -1656,8 +1661,18 @@ async function openAdvancedStartModal(input: {
     select: { organizationId: true },
   });
   if (!install) return false;
+  const membership = await prisma.orgMember.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: account.userId,
+        organizationId: install.organizationId,
+      },
+    },
+    select: { userId: true },
+  });
+  if (!membership) return false;
   const binding = await resolveSlackChannelBinding(input.slackTeamId, input.slackChannelId);
-  if (!binding) return false;
+  if (!binding || binding.organizationId !== install.organizationId) return false;
   const draft = input.draftId
     ? await loadSlackSessionDraft(input.draftId, input.slackUserId)
     : null;
@@ -1673,17 +1688,9 @@ async function openAdvancedStartModal(input: {
     userId: account.userId,
     tool: selectedTool,
   });
-  const channels = await listVisibleTraceChannels({
+  const channels = await listOrgTraceChannels({
     organizationId: install.organizationId,
-    userId: account.userId,
   });
-  if (!channels.some((channel) => channel.id === binding.traceChannelId)) {
-    const boundChannel = await prisma.channel.findFirst({
-      where: { id: binding.traceChannelId, organizationId: install.organizationId },
-      select: { id: true, name: true, type: true },
-    });
-    if (boundChannel) channels.unshift(boundChannel);
-  }
   if (channels.length === 0) return false;
   const metadata: AdvancedStartMetadata = {
     slackTeamId: input.slackTeamId,
@@ -2856,6 +2863,14 @@ router.post(
         slackChannelId: channelId,
         slackUserId: userId,
         triggerId: command.trigger_id,
+      }).then((opened) => {
+        if (opened) return undefined;
+        return postDraftActionFeedback({
+          slackTeamId: teamId,
+          slackChannelId: channelId,
+          slackUserId: userId,
+          text: "Could not open Trace start. Check that your Trace account is a member of the connected Trace org.",
+        });
       });
       return;
     }
@@ -3038,6 +3053,13 @@ router.post(
         metadata = JSON.parse(payload.view.private_metadata ?? "{}") as AdvancedStartMetadata;
       } catch {
         res.status(200).json({ response_action: "errors", errors: { prompt: "Invalid session metadata." } });
+        return;
+      }
+      if (payload.user?.id !== metadata.slackUserId || payload.team?.id !== metadata.slackTeamId) {
+        res.status(200).json({
+          response_action: "errors",
+          errors: { prompt: "Invalid session metadata." },
+        });
         return;
       }
       const tool = normalizeTool(getViewValue(payload, "tool", "value")) ?? "claude_code";

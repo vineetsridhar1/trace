@@ -1,0 +1,323 @@
+import { createHmac } from "crypto";
+import { createServer, type Server } from "http";
+import type { AddressInfo } from "net";
+import express from "express";
+import cookieParser from "cookie-parser";
+import jwt from "jsonwebtoken";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const slackMocks = vi.hoisted(() => ({
+  postEphemeral: vi.fn(),
+  postMessage: vi.fn(),
+  update: vi.fn(),
+  viewsOpen: vi.fn(),
+}));
+
+vi.mock("../lib/db.js", async () => {
+  const { createPrismaMock } = await import("../../test/helpers.js");
+  const base = createPrismaMock();
+  return {
+    prisma: {
+      ...base,
+      slackInstall: {
+        findUnique: vi.fn(),
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+        upsert: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      slackAccount: {
+        findUnique: vi.fn(),
+        findFirst: vi.fn(),
+        upsert: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      slackChannelBinding: {
+        findUnique: vi.fn(),
+        findMany: vi.fn(),
+        upsert: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      slackSessionDraft: {
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        delete: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      slackThreadSession: {
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        findMany: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      slackProcessedEvent: {
+        create: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+    },
+  };
+});
+
+vi.mock("../lib/slack/client.js", () => ({
+  getSlackBotToken: vi.fn(),
+  getSlackClient: vi.fn(async () => ({
+    chat: {
+      postEphemeral: slackMocks.postEphemeral,
+      postMessage: slackMocks.postMessage,
+      update: slackMocks.update,
+    },
+    views: {
+      open: slackMocks.viewsOpen,
+    },
+  })),
+  invalidateSlackClient: vi.fn(),
+}));
+
+vi.mock("../lib/storage/index.js", () => ({
+  storage: {
+    putObject: vi.fn(),
+    getGetUrl: vi.fn(),
+  },
+}));
+
+vi.mock("../lib/slack/session-orchestrator.js", () => ({
+  startSlackSession: vi.fn(),
+}));
+
+vi.mock("../services/session.js", () => ({
+  sessionService: {
+    updateDefaults: vi.fn(),
+    sendMessage: vi.fn(),
+  },
+}));
+
+vi.mock("../services/runtime-access.js", () => ({
+  runtimeAccessService: {
+    getAccessState: vi.fn(),
+    listAccessibleRuntimeInstanceIds: vi.fn(async () => new Set<string>()),
+    requestAccess: vi.fn(),
+    approveRequest: vi.fn(),
+  },
+}));
+
+vi.mock("../lib/session-router.js", () => ({
+  sessionRouter: {
+    getRuntime: vi.fn(),
+    listRuntimes: vi.fn(() => []),
+  },
+}));
+
+vi.mock("../lib/slack/event-bridge.js", () => ({
+  buildTraceSessionLink: vi.fn(async () => null),
+  slackEventBridge: {
+    attach: vi.fn(),
+  },
+}));
+
+import { prisma } from "../lib/db.js";
+import { slackRouter } from "./slack.js";
+
+type BasePrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
+type PrismaMock = BasePrismaMock & {
+  slackInstall: {
+    findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
+  slackAccount: {
+    findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
+  slackChannelBinding: {
+    findUnique: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
+  slackSessionDraft: {
+    create: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
+  slackThreadSession: {
+    create: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
+  slackProcessedEvent: {
+    create: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
+};
+
+const prismaMock = prisma as unknown as PrismaMock;
+const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const SLACK_SIGNING_SECRET = "test-slack-signing-secret";
+
+function signedSlackHeaders(rawBody: string): HeadersInit {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature =
+    "v0=" +
+    createHmac("sha256", SLACK_SIGNING_SECRET)
+      .update(`v0:${timestamp}:${rawBody}`)
+      .digest("hex");
+  return {
+    "x-slack-request-timestamp": timestamp,
+    "x-slack-signature": signature,
+  };
+}
+
+async function waitForDeferredSlackWork(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+describe("Slack routes", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    vi.stubEnv("SLACK_CLIENT_ID", "client-id");
+    vi.stubEnv("SLACK_CLIENT_SECRET", "client-secret");
+    vi.stubEnv("SLACK_SIGNING_SECRET", SLACK_SIGNING_SECRET);
+    vi.stubEnv("SLACK_REDIRECT_URI", "https://trace.test/slack/oauth/callback");
+
+    slackMocks.postEphemeral.mockResolvedValue({});
+    slackMocks.postMessage.mockResolvedValue({});
+    slackMocks.update.mockResolvedValue({});
+    slackMocks.viewsOpen.mockResolvedValue({});
+
+    const app = express();
+    app.use(cookieParser());
+    app.use("/slack", slackRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  it("does not open the advanced start modal for linked Slack users outside the org", async () => {
+    prismaMock.slackAccount.findUnique.mockResolvedValue({ userId: "user-outside" });
+    prismaMock.slackChannelBinding.findUnique.mockResolvedValue({
+      traceChannelId: "channel-1",
+      organizationId: "org-1",
+    });
+    prismaMock.slackInstall.findUnique.mockResolvedValue({ organizationId: "org-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValue(null);
+
+    const rawBody = new URLSearchParams({
+      team_id: "T1",
+      channel_id: "C1",
+      user_id: "U1",
+      trigger_id: "TRIGGER1",
+      text: "start",
+    }).toString();
+
+    const response = await fetch(`${baseUrl}/slack/commands`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(slackMocks.viewsOpen).not.toHaveBeenCalled();
+    expect(slackMocks.postEphemeral).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C1",
+        user: "U1",
+        text: expect.stringContaining("member of the connected Trace org"),
+      }),
+    );
+  });
+
+  it("does not create mention drafts for linked Slack users outside the org", async () => {
+    prismaMock.slackProcessedEvent.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.slackProcessedEvent.create.mockResolvedValue({});
+    prismaMock.slackInstall.findUnique.mockResolvedValue({
+      organizationId: "org-1",
+      botUserId: "BTRACE",
+    });
+    prismaMock.slackThreadSession.findUnique.mockResolvedValue(null);
+    prismaMock.slackAccount.findUnique.mockResolvedValue({ userId: "user-outside" });
+    prismaMock.orgMember.findUnique.mockResolvedValue(null);
+
+    const rawBody = JSON.stringify({
+      type: "event_callback",
+      team_id: "T1",
+      event_id: "E1",
+      event: {
+        type: "app_mention",
+        user: "U1",
+        channel: "C1",
+        ts: "1710000000.000100",
+        text: "<@BTRACE> summarize the roadmap",
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/slack/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(prismaMock.slackSessionDraft.create).not.toHaveBeenCalled();
+    expect(slackMocks.postEphemeral).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C1",
+        user: "U1",
+        thread_ts: "1710000000.000100",
+        text: expect.stringContaining("not in the connected Trace org"),
+      }),
+    );
+  });
+
+  it("requires current org admin rights before completing Slack OAuth", async () => {
+    const realFetch = globalThis.fetch;
+    const slackFetchMock = vi.fn();
+    vi.stubGlobal("fetch", (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.startsWith(baseUrl)) return realFetch(input, init);
+      return slackFetchMock(input, init);
+    }) satisfies typeof fetch);
+    prismaMock.orgMember.findUnique.mockResolvedValue({ role: "member" });
+    const state = jwt.sign(
+      {
+        organizationId: "org-1",
+        userId: "user-1",
+        tokenType: "slack_install",
+      },
+      JWT_SECRET,
+      { expiresIn: "10m" },
+    );
+
+    const response = await fetch(
+      `${baseUrl}/slack/oauth/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(response.status).toBe(403);
+    expect(slackFetchMock).not.toHaveBeenCalled();
+  });
+});
