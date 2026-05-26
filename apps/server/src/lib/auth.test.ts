@@ -352,6 +352,17 @@ describe("auth helpers", () => {
     expect(context.role).toBe("observer");
   });
 
+  it("rejects websocket context for a requested non-member organization", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-3" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce(null);
+
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
+
+    await expect(buildWsContext({ token, organizationId: "org-private" })).rejects.toThrow(
+      "Not a member of this organization",
+    );
+  });
+
   it("allows mobile websocket auth to use any requested member organization", async () => {
     prismaMock.mobileDevice.findUnique.mockResolvedValueOnce({
       id: "device-2",

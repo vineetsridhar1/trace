@@ -250,6 +250,12 @@ export class ChannelGroupService {
   ) {
     const groups = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+      const groupCount = await tx.channelGroup.count({
+        where: { id: { in: groupIds }, organizationId },
+      });
+      if (groupCount !== new Set(groupIds).size) {
+        throw new Error("Channel groups must belong to this organization");
+      }
 
       const updated = await Promise.all(
         groupIds.map((id, index) =>

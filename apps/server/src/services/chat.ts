@@ -7,7 +7,6 @@ import { participantService } from "./participant.js";
 import {
   normalizeMessageInput,
   buildMessageEventPayload,
-  resolveEventOrgId,
   hydrateMessages,
   type MessageWithSummary,
 } from "./message-utils.js";
@@ -17,8 +16,26 @@ function buildMemberKey(...userIds: string[]) {
   return userIds.sort().join(":");
 }
 
+function chatInOrganizationWhere(organizationId: string): PrismaTypes.ChatWhereInput {
+  return {
+    members: {
+      every: {
+        OR: [
+          { leftAt: { not: null } },
+          { user: { orgMemberships: { some: { organizationId } } } },
+        ],
+      },
+    },
+  };
+}
+
 export class ChatService {
-  async create(input: CreateChatInput, actorType: ActorType, actorId: string) {
+  async create(
+    input: CreateChatInput,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const memberIds: string[] = [...new Set(input.memberIds as string[])];
     if (memberIds.length === 0) {
       throw new ValidationError("Chats must include at least one other member");
@@ -29,14 +46,15 @@ export class ChatService {
       ? [actorId, memberIds[0]]
       : [actorId, ...memberIds.filter((id) => id !== actorId)];
 
-    // Validate all members exist (any user can chat with any user)
-    const validMembers = await prisma.user.findMany({
-      where: { id: { in: allMemberIds } },
-      select: { id: true, name: true },
+    // Validate all active chat members belong to the active organization.
+    const validMemberRows = await prisma.orgMember.findMany({
+      where: { organizationId, userId: { in: allMemberIds } },
+      include: { user: { select: { id: true, name: true } } },
     });
-    if (validMembers.length !== allMemberIds.length) {
-      throw new ValidationError("One or more users not found");
+    if (validMemberRows.length !== allMemberIds.length) {
+      throw new ValidationError("One or more users are not in this organization");
     }
+    const validMembers = validMemberRows.map((row) => row.user);
 
     // Deduplication: check for existing chat with the same members
     const memberKey = buildMemberKey(...allMemberIds);
@@ -52,6 +70,7 @@ export class ChatService {
       where: {
         type: isDM ? "dm" : "group",
         dmKey: memberKey,
+        ...chatInOrganizationWhere(organizationId),
       },
       include: {
         members: {
@@ -69,8 +88,6 @@ export class ChatService {
         validMembers
           .map((m: { id: string; name: string | null }) => m.name ?? "Unknown")
           .join(", "));
-
-    const eventOrgId = await resolveEventOrgId(actorId);
 
     const createChatInTx = async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.create({
@@ -104,7 +121,7 @@ export class ChatService {
 
       const event = await eventService.create(
         {
-          organizationId: eventOrgId,
+          organizationId,
           scopeType: "chat",
           scopeId: chat.id,
           eventType: "chat_created",
@@ -139,6 +156,7 @@ export class ChatService {
           where: {
             type: isDM ? "dm" : "group",
             dmKey: memberKey,
+            ...chatInOrganizationWhere(organizationId),
           },
           include: {
             members: {
@@ -161,6 +179,7 @@ export class ChatService {
     html,
     parentId,
     clientMutationId,
+    organizationId,
     actorType,
     actorId,
   }: {
@@ -169,18 +188,18 @@ export class ChatService {
     html?: string;
     parentId?: string;
     clientMutationId?: string;
+    organizationId: string;
     actorType: ActorType;
     actorId: string;
   }) {
     const normalized = normalizeMessageInput(text, html);
-
-    const eventOrgId = await resolveEventOrgId(actorId);
 
     const message = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
           members: { some: { userId: actorId, leftAt: null } },
+          ...chatInOrganizationWhere(organizationId),
         },
         select: { id: true },
       });
@@ -228,7 +247,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: eventOrgId,
+          organizationId,
           scopeType: "chat",
           scopeId: chat.id,
           eventType: "message_sent",
@@ -265,11 +284,13 @@ export class ChatService {
   async editMessage({
     messageId,
     html,
+    organizationId,
     actorType,
     actorId,
   }: {
     messageId: string;
     html: string;
+    organizationId: string;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -280,6 +301,7 @@ export class ChatService {
         id: messageId,
         chat: {
           members: { some: { userId: actorId, leftAt: null } },
+          ...chatInOrganizationWhere(organizationId),
         },
       },
     });
@@ -306,7 +328,6 @@ export class ChatService {
       throw new ValidationError("Message is not a chat message");
     }
 
-    const eventOrgId = await resolveEventOrgId(actorId);
     const editedAt = new Date();
     const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updatedMessage = await tx.message.update({
@@ -328,7 +349,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: eventOrgId,
+          organizationId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "message_edited",
@@ -350,10 +371,12 @@ export class ChatService {
 
   async deleteMessage({
     messageId,
+    organizationId,
     actorType,
     actorId,
   }: {
     messageId: string;
+    organizationId: string;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -362,6 +385,7 @@ export class ChatService {
         id: messageId,
         chat: {
           members: { some: { userId: actorId, leftAt: null } },
+          ...chatInOrganizationWhere(organizationId),
         },
       },
     });
@@ -380,7 +404,6 @@ export class ChatService {
       throw new ValidationError("Message is not a chat message");
     }
 
-    const eventOrgId = await resolveEventOrgId(actorId);
     const deletedAt = new Date();
     const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const deletedMessage = await tx.message.update({
@@ -400,7 +423,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: eventOrgId,
+          organizationId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "message_deleted",
@@ -426,12 +449,14 @@ export class ChatService {
   async getMessages(
     chatId: string,
     userId: string,
+    organizationId: string,
     opts?: { after?: Date; before?: Date; limit?: number },
   ) {
     await prisma.chat.findFirstOrThrow({
       where: {
         id: chatId,
         members: { some: { userId, leftAt: null } },
+        ...chatInOrganizationWhere(organizationId),
       },
       select: { id: true },
     });
@@ -485,14 +510,19 @@ export class ChatService {
     return hydrateMessages(replies);
   }
 
-  async addMember(chatId: string, userId: string, actorType: ActorType, actorId: string) {
-    const eventOrgId = await resolveEventOrgId(actorId);
-
+  async addMember(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
           members: { some: { userId: actorId, leftAt: null } },
+          ...chatInOrganizationWhere(organizationId),
         },
         select: { type: true },
       });
@@ -501,10 +531,10 @@ export class ChatService {
         throw new ValidationError("Cannot add members to a DM");
       }
 
-      // Validate target user exists
-      const targetUser = await tx.user.findFirst({
-        where: { id: userId },
-        select: { id: true },
+      // Validate target user is in this organization
+      const targetUser = await tx.orgMember.findFirst({
+        where: { userId, organizationId },
+        select: { userId: true },
       });
       if (!targetUser) {
         throw new NotFoundError("User", userId);
@@ -546,7 +576,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: eventOrgId,
+          organizationId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_member_added",
@@ -559,19 +589,18 @@ export class ChatService {
     });
 
     return prisma.chat.findFirstOrThrow({
-      where: { id: chatId },
+      where: { id: chatId, ...chatInOrganizationWhere(organizationId) },
       include: { members: { where: { leftAt: null } } },
     });
   }
 
-  async leave(chatId: string, actorType: ActorType, actorId: string) {
-    const eventOrgId = await resolveEventOrgId(actorId);
-
+  async leave(chatId: string, organizationId: string, actorType: ActorType, actorId: string) {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
           members: { some: { userId: actorId, leftAt: null } },
+          ...chatInOrganizationWhere(organizationId),
         },
         select: { type: true },
       });
@@ -608,7 +637,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: eventOrgId,
+          organizationId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_member_removed",
@@ -621,19 +650,24 @@ export class ChatService {
     });
 
     return prisma.chat.findFirstOrThrow({
-      where: { id: chatId },
+      where: { id: chatId, ...chatInOrganizationWhere(organizationId) },
       include: { members: { where: { leftAt: null } } },
     });
   }
 
-  async rename(chatId: string, name: string, actorType: ActorType, actorId: string) {
-    const eventOrgId = await resolveEventOrgId(actorId);
-
+  async rename(
+    chatId: string,
+    name: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
           members: { some: { userId: actorId, leftAt: null } },
+          ...chatInOrganizationWhere(organizationId),
         },
         select: { type: true },
       });
@@ -650,7 +684,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: eventOrgId,
+          organizationId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_renamed",
@@ -665,10 +699,11 @@ export class ChatService {
     });
   }
 
-  async getChats(userId: string) {
+  async getChats(userId: string, organizationId: string) {
     return prisma.chat.findMany({
       where: {
         members: { some: { userId, leftAt: null } },
+        ...chatInOrganizationWhere(organizationId),
       },
       include: {
         members: {
@@ -679,11 +714,12 @@ export class ChatService {
     });
   }
 
-  async getChat(chatId: string, userId: string) {
+  async getChat(chatId: string, userId: string, organizationId: string) {
     return prisma.chat.findFirst({
       where: {
         id: chatId,
         members: { some: { userId, leftAt: null } },
+        ...chatInOrganizationWhere(organizationId),
       },
       include: {
         members: {

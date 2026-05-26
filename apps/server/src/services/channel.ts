@@ -48,14 +48,14 @@ export class ChannelService {
     });
   }
 
-  async getChannel(channelId: string, userId: string) {
+  async getChannel(channelId: string, organizationId: string, userId: string) {
     await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, ...visibleChannelWhere(userId) },
+      where: { id: channelId, organizationId, ...visibleChannelWhere(userId) },
       select: { id: true },
     });
 
-    return prisma.channel.findUnique({
-      where: { id: channelId },
+    return prisma.channel.findFirst({
+      where: { id: channelId, organizationId },
       include: {
         repo: true,
         owner: { select: { id: true, email: true, name: true, avatarUrl: true } },
@@ -113,6 +113,20 @@ export class ChannelService {
         });
         if (!repo) throw new NotFoundError("Repo", input.repoId!);
         repoName = repo.name;
+      }
+      if (input.groupId) {
+        await tx.channelGroup.findFirstOrThrow({
+          where: { id: input.groupId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+      }
+      if (input.projectIds?.length) {
+        const projectCount = await tx.project.count({
+          where: { id: { in: input.projectIds }, organizationId: input.organizationId },
+        });
+        if (projectCount !== new Set(input.projectIds).size) {
+          throw new ValidationError("One or more projects are not in this organization");
+        }
       }
 
       const { channel, channelPayload } = await createChannelInTransaction(tx, {

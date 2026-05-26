@@ -365,7 +365,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     branchLoader: createBranchLoader(),
     turnLoader: createTurnLoader(),
     chatMembersLoader: createChatMembersLoader(),
-    sessionTicketsLoader: createSessionTicketsLoader(),
+    sessionTicketsLoader: createSessionTicketsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };
@@ -409,10 +409,11 @@ export async function buildWsContext(
     role = localModeMembership.role;
   } else if (requestedOrgId) {
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
-    if (membership) {
-      organizationId = requestedOrgId;
-      role = membership.role as Context["role"];
+    if (!membership) {
+      throw new AuthenticationError("Not a member of this organization");
     }
+    organizationId = requestedOrgId;
+    role = membership.role as Context["role"];
   } else {
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
@@ -439,7 +440,7 @@ export async function buildWsContext(
     branchLoader: createBranchLoader(),
     turnLoader: createTurnLoader(),
     chatMembersLoader: createChatMembersLoader(),
-    sessionTicketsLoader: createSessionTicketsLoader(),
+    sessionTicketsLoader: createSessionTicketsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };

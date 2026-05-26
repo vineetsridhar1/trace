@@ -368,6 +368,7 @@ describe("GraphQL authz guards", () => {
     expect(prisma.channel.findFirst).toHaveBeenCalledWith({
       where: {
         id: "channel-1",
+        organizationId: "org-1",
         OR: [
           { visibility: "public" },
           { ownerId: "user-1" },

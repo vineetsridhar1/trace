@@ -163,6 +163,7 @@ function eventPayloadChannelSnapshot(payload: Record<string, unknown> | null) {
 
 async function canViewChannelEvent(
   event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown },
+  organizationId: string,
   userId: string,
   cache: Map<string, boolean>,
 ): Promise<boolean> {
@@ -203,7 +204,7 @@ async function canViewChannelEvent(
       continue;
     }
     const channel = await prisma.channel.findFirst({
-      where: { id: channelId, ...visibleChannelWhere(userId) },
+      where: { id: channelId, organizationId, ...visibleChannelWhere(userId) },
       select: { id: true },
     });
     const visible = channel !== null;
@@ -238,7 +239,7 @@ export const eventQueries = {
       await assertChatAccess(args.scope.id, ctx.userId);
     }
     if (args.scope?.type === "channel") {
-      await assertChannelAccess(args.scope.id, ctx.userId);
+      await assertChannelAccess(args.scope.id, ctx.userId, orgId);
     }
 
     const events = await eventService.query(args.organizationId, {
@@ -324,7 +325,9 @@ export const eventQueries = {
         event.scopeType === "channel" ||
         eventPayloadChannelIds(eventPayloadRecord(event)).length
       ) {
-        if (await canViewChannelEvent(event, ctx.userId, channelVisibilityCache)) {
+        if (
+          await canViewChannelEvent(event, args.organizationId, ctx.userId, channelVisibilityCache)
+        ) {
           filtered.push(event);
         }
         continue;
@@ -481,7 +484,7 @@ export const eventSubscriptions = {
             event.scopeType === "channel" ||
             eventPayloadChannelIds(eventPayloadRecord(event)).length
           ) {
-            return canViewChannelEvent(event, ctx.userId, channelVisibilityCache);
+            return canViewChannelEvent(event, args.organizationId, ctx.userId, channelVisibilityCache);
           }
           return canViewSessionEvent(
             event,
