@@ -3,6 +3,7 @@ import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { repairNodePtySpawnHelpers } from "./repair-node-pty-spawn-helpers.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopDir = path.resolve(scriptDir, "..");
@@ -73,4 +74,5 @@ if (fromDryRun) {
   run("pnpm", ["--filter", "@trace/desktop", "deploy", "--legacy", releaseDir]);
 }
 
+await repairNodePtySpawnHelpers(releaseDir);
 run("pnpm", ["exec", "electron-forge", command, ...forgeArgs, releaseDir]);
