@@ -182,8 +182,10 @@ export function createPrismaMock() {
       findMany: vi.fn(),
     },
     project: {
+      count: vi.fn(),
       create: vi.fn(),
       findMany: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
@@ -275,6 +277,7 @@ export function createPrismaMock() {
       update: vi.fn(),
     },
     channelGroup: {
+      count: vi.fn(),
       create: vi.fn(),
       findFirst: vi.fn(),
       findFirstOrThrow: vi.fn(),

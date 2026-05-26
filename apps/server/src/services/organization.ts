@@ -342,6 +342,13 @@ export class OrganizationService {
     const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
 
+      if (input.repoId) {
+        await tx.repo.findFirstOrThrow({
+          where: { id: input.repoId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+      }
+
       const project = await tx.project.create({
         data: {
           name: input.name,

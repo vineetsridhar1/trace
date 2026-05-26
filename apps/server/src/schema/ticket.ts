@@ -22,19 +22,27 @@ export const ticketQueries = {
 
 export const ticketMutations = {
   createTicket: (_: unknown, args: { input: CreateTicketInput }, ctx: Context) => {
+    assertOrgAccess(ctx, args.input.organizationId);
     return ticketService.create({
       ...args.input,
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
   },
-  updateTicket: (_: unknown, args: { id: string; input: UpdateTicketInput }, ctx: Context) => {
+  updateTicket: async (
+    _: unknown,
+    args: { id: string; input: UpdateTicketInput },
+    ctx: Context,
+  ) => {
+    await assertScopeAccess("ticket", args.id, ctx.userId, requireOrgContext(ctx));
     return ticketService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
-  commentOnTicket: (_: unknown, args: { ticketId: string; text: string }, ctx: Context) => {
+  commentOnTicket: async (_: unknown, args: { ticketId: string; text: string }, ctx: Context) => {
+    await assertScopeAccess("ticket", args.ticketId, ctx.userId, requireOrgContext(ctx));
     return ticketService.addComment(args.ticketId, args.text, ctx.actorType, ctx.userId);
   },
-  assignTicket: (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+  assignTicket: async (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+    await assertScopeAccess("ticket", args.ticketId, ctx.userId, requireOrgContext(ctx));
     return ticketService.assign({
       ticketId: args.ticketId,
       userId: args.userId,
@@ -42,7 +50,8 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  unassignTicket: (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+  unassignTicket: async (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+    await assertScopeAccess("ticket", args.ticketId, ctx.userId, requireOrgContext(ctx));
     return ticketService.unassign({
       ticketId: args.ticketId,
       userId: args.userId,
@@ -50,11 +59,12 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  linkTicket: (
+  linkTicket: async (
     _: unknown,
     args: { ticketId: string; entityType: EntityType; entityId: string },
     ctx: Context,
   ) => {
+    await assertScopeAccess("ticket", args.ticketId, ctx.userId, requireOrgContext(ctx));
     return ticketService.link({
       ticketId: args.ticketId,
       entityType: args.entityType,
@@ -63,11 +73,12 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  unlinkTicket: (
+  unlinkTicket: async (
     _: unknown,
     args: { ticketId: string; entityType: EntityType; entityId: string },
     ctx: Context,
   ) => {
+    await assertScopeAccess("ticket", args.ticketId, ctx.userId, requireOrgContext(ctx));
     return ticketService.unlink({
       ticketId: args.ticketId,
       entityType: args.entityType,
@@ -115,7 +126,14 @@ export const ticketTypeResolvers = {
       const sessions = await Promise.all(
         sessionLinks.map(async (link) => {
           const session = await ctx.sessionLoader.load(link.entityId);
-          return session instanceof Error ? null : session;
+          if (session instanceof Error) return null;
+          if (!ctx.organizationId) return null;
+          if (
+            (session as { organizationId?: string } | null)?.organizationId !== ctx.organizationId
+          ) {
+            return null;
+          }
+          return session;
         }),
       );
       return sessions.filter(

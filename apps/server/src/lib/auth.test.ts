@@ -22,7 +22,7 @@ vi.mock("./dataloader.js", () => ({
 }));
 
 import { prisma } from "./db.js";
-import { createUserLoader } from "./dataloader.js";
+import { createSessionTicketsLoader, createUserLoader } from "./dataloader.js";
 import {
   authenticateAccessToken,
   buildContext,
@@ -37,6 +37,9 @@ import {
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const createUserLoaderMock = createUserLoader as unknown as ReturnType<typeof vi.fn>;
+const createSessionTicketsLoaderMock = createSessionTicketsLoader as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 describe("auth helpers", () => {
   beforeEach(() => {
@@ -167,6 +170,7 @@ describe("auth helpers", () => {
     expect(context.role).toBe("admin");
     expect(context.actorType).toBe("user");
     expect(createUserLoaderMock).toHaveBeenCalled();
+    expect(createSessionTicketsLoaderMock).toHaveBeenCalledWith("org-1");
   });
 
   it("reads the client source header into HTTP context", async () => {
@@ -350,6 +354,18 @@ describe("auth helpers", () => {
 
     expect(context.userId).toBe("user-3");
     expect(context.role).toBe("observer");
+    expect(createSessionTicketsLoaderMock).toHaveBeenCalledWith("org-3");
+  });
+
+  it("rejects websocket context for a requested non-member organization", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-3" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce(null);
+
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
+
+    await expect(buildWsContext({ token, organizationId: "org-private" })).rejects.toThrow(
+      "Not a member of this organization",
+    );
   });
 
   it("allows mobile websocket auth to use any requested member organization", async () => {

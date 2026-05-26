@@ -131,12 +131,13 @@ export function createChatMembersLoader() {
 }
 
 /** Batch-load tickets linked to sessions by sessionId */
-export function createSessionTicketsLoader() {
+export function createSessionTicketsLoader(organizationId: string | null) {
   return new DataLoader<string, unknown[]>(async (sessionIds: readonly string[]) => {
     const links = await prisma.ticketLink.findMany({
       where: {
         entityType: "session",
         entityId: { in: [...sessionIds] },
+        ...(organizationId ? { ticket: { organizationId } } : {}),
       },
       select: { entityId: true, ticketId: true },
     });
@@ -144,7 +145,7 @@ export function createSessionTicketsLoader() {
     const tickets =
       ticketIds.length > 0
         ? await prisma.ticket.findMany({
-            where: { id: { in: ticketIds } },
+            where: { id: { in: ticketIds }, ...(organizationId ? { organizationId } : {}) },
             include: {
               assignees: {
                 include: { user: { select: { id: true, name: true, avatarUrl: true } } },

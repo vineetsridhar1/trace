@@ -437,6 +437,25 @@ describe("OrganizationService", () => {
     ).rejects.toThrow("Chats cannot be linked to projects");
   });
 
+  it("requires project repos to belong to the project organization", async () => {
+    prismaMock.repo.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new OrganizationService();
+    await expect(
+      service.createProject(
+        { organizationId: "org-1", name: "Roadmap", repoId: "repo-cross-org" } as any,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.repo.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: "repo-cross-org", organizationId: "org-1" },
+      select: { id: true },
+    });
+    expect(prismaMock.project.create).not.toHaveBeenCalled();
+  });
+
   it("fails closed for cross-org writes when the actor is not a member", async () => {
     prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("Not found"));
 

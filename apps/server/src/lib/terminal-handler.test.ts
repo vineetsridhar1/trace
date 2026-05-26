@@ -208,4 +208,46 @@ describe("terminal handler auth", () => {
     expect(mocks.relayFromFrontend).not.toHaveBeenCalled();
     expect(ws.close).toHaveBeenCalledWith(1008, "Access denied");
   });
+
+  it("requires active channel membership before attaching to a channel terminal", async () => {
+    mocks.getTerminalAuthContext.mockReturnValue({
+      kind: "channel",
+      channelId: "channel-1",
+      organizationId: "org-1",
+      repoId: "repo-1",
+      runtimeInstanceId: "runtime-1",
+      ownerUserId: "user-1",
+    });
+    prismaMock.channel.findFirst.mockResolvedValue({
+      id: "channel-1",
+      organizationId: "org-1",
+    });
+    const ws = createMockWs();
+
+    handleTerminalConnection(ws as never, {
+      headers: {},
+      url: "/terminal?token=session-token",
+      socket: { remoteAddress: "127.0.0.1" },
+    });
+    await Promise.resolve();
+    ws.emitMessage({ type: "attach", terminalId: "term-1" });
+
+    await vi.waitFor(() => {
+      expect(mocks.attachFrontend).toHaveBeenCalledWith("term-1", ws, "user-1");
+    });
+    expect(prismaMock.channel.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        organizationId: "org-1",
+        members: { some: { userId: "user-1", leftAt: null } },
+      },
+      select: { id: true, organizationId: true },
+    });
+    expect(mocks.assertAccess).toHaveBeenCalledWith({
+      userId: "user-1",
+      organizationId: "org-1",
+      runtimeInstanceId: "runtime-1",
+      capability: "terminal",
+    });
+  });
 });

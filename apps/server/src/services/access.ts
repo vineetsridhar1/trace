@@ -120,9 +120,18 @@ export async function isActiveChatMember(chatId: string, userId: string) {
   return member !== null;
 }
 
-export async function isActiveChannelMember(channelId: string, userId: string) {
+export async function isActiveChannelMember(
+  channelId: string,
+  userId: string,
+  organizationId?: string,
+) {
   const member = await prisma.channelMember.findFirst({
-    where: { channelId, userId, leftAt: null },
+    where: {
+      channelId,
+      userId,
+      leftAt: null,
+      ...(organizationId ? { channel: { organizationId } } : {}),
+    },
     select: { channelId: true },
   });
 
@@ -184,8 +193,12 @@ export async function assertChatAccess(chatId: string, userId: string) {
   return chat;
 }
 
-export async function assertChannelAccess(channelId: string, userId: string) {
-  const isMember = await isActiveChannelMember(channelId, userId);
+export async function assertChannelAccess(
+  channelId: string,
+  userId: string,
+  organizationId?: string,
+) {
+  const isMember = await isActiveChannelMember(channelId, userId, organizationId);
 
   if (!isMember) {
     throw new Error("Not authorized for this channel");
@@ -205,7 +218,7 @@ export async function assertScopeAccess(
       await assertChatAccess(scopeId, userId);
       return;
     case "channel":
-      await assertChannelAccess(scopeId, userId);
+      await assertChannelAccess(scopeId, userId, organizationId ?? undefined);
       return;
     case "session":
       if (!organizationId) throw new Error("Organization context required for session access");

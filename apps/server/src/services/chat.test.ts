@@ -46,23 +46,37 @@ describe("ChatService", () => {
     const service = new ChatService();
 
     await expect(
-      service.create({ organizationId: "org-1", memberIds: [] } as any, "user", "user-1"),
+      service.create({ memberIds: [] } as any, "org-1", "user", "user-1"),
     ).rejects.toThrow("Chats must include at least one other member");
   });
 
+  it("rejects chats with members outside the active organization", async () => {
+    prismaMock.orgMember.findMany.mockResolvedValueOnce([
+      { user: { id: "user-1", name: "Alice" } },
+    ]);
+
+    const service = new ChatService();
+
+    await expect(
+      service.create({ memberIds: ["user-2"] } as any, "org-1", "user", "user-1"),
+    ).rejects.toThrow("One or more users are not in this organization");
+
+    expect(prismaMock.orgMember.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", userId: { in: ["user-1", "user-2"] } },
+      include: { user: { select: { id: true, name: true } } },
+    });
+    expect(prismaMock.chat.create).not.toHaveBeenCalled();
+  });
+
   it("returns an existing deduplicated DM", async () => {
-    prismaMock.user.findMany.mockResolvedValueOnce([
-      { id: "user-1", name: "Alice" },
-      { id: "user-2", name: "Bob" },
+    prismaMock.orgMember.findMany.mockResolvedValueOnce([
+      { user: { id: "user-1", name: "Alice" } },
+      { user: { id: "user-2", name: "Bob" } },
     ]);
     prismaMock.chat.findFirst.mockResolvedValueOnce({ id: "chat-1", members: [] });
 
     const service = new ChatService();
-    const chat = await service.create(
-      { organizationId: "org-1", memberIds: ["user-2"] } as any,
-      "user",
-      "user-1",
-    );
+    const chat = await service.create({ memberIds: ["user-2"] } as any, "org-1", "user", "user-1");
 
     expect(chat).toEqual({ id: "chat-1", members: [] });
     expect(prismaMock.chat.create).not.toHaveBeenCalled();
@@ -70,17 +84,16 @@ describe("ChatService", () => {
 
   it("creates group chats, auto-subscribes members, and emits chat_created", async () => {
     const createdAt = new Date("2026-03-21T00:00:00.000Z");
-    prismaMock.user.findMany
-      .mockResolvedValueOnce([
-        { id: "user-1", name: "Alice" },
-        { id: "user-2", name: "Bob" },
-        { id: "user-3", name: "Cara" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "user-1", name: "Alice", avatarUrl: null },
-        { id: "user-2", name: "Bob", avatarUrl: null },
-        { id: "user-3", name: "Cara", avatarUrl: null },
-      ]);
+    prismaMock.orgMember.findMany.mockResolvedValueOnce([
+      { user: { id: "user-1", name: "Alice" } },
+      { user: { id: "user-2", name: "Bob" } },
+      { user: { id: "user-3", name: "Cara" } },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-1", name: "Alice", avatarUrl: null },
+      { id: "user-2", name: "Bob", avatarUrl: null },
+      { id: "user-3", name: "Cara", avatarUrl: null },
+    ]);
     prismaMock.chat.findFirst.mockResolvedValueOnce(null);
     prismaMock.chat.create.mockResolvedValueOnce({
       id: "chat-1",
@@ -99,10 +112,10 @@ describe("ChatService", () => {
     const service = new ChatService();
     const chat = await service.create(
       {
-        organizationId: "org-1",
         memberIds: ["user-2", "user-3"],
         name: "Planning",
       } as any,
+      "org-1",
       "user",
       "user-1",
     );
@@ -150,6 +163,7 @@ describe("ChatService", () => {
       chatId: "chat-1",
       text: "hello",
       parentId: "message-root",
+      organizationId: "org-1",
       actorType: "user",
       actorId: "user-1",
     });
@@ -165,6 +179,50 @@ describe("ChatService", () => {
       scopeId: "message-root",
     });
     expect(eventServiceMock.create).toHaveBeenCalled();
+  });
+
+  it("checks chat membership inside the active organization before sending messages", async () => {
+    prismaMock.chat.findFirstOrThrow.mockResolvedValueOnce({ id: "chat-1" });
+    prismaMock.message.create.mockResolvedValueOnce({
+      id: "message-1",
+      chatId: "chat-1",
+      actorType: "user",
+      actorId: "user-1",
+      text: "hello",
+      html: null,
+      mentions: null,
+      parentMessageId: null,
+      createdAt: new Date("2026-03-21T00:00:00.000Z"),
+    });
+
+    const service = new ChatService();
+    await service.sendMessage({
+      chatId: "chat-1",
+      text: "hello",
+      organizationId: "org-1",
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(prismaMock.chat.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "chat-1",
+        members: { some: { userId: "user-1", leftAt: null } },
+        AND: [
+          {
+            members: {
+              every: {
+                OR: [
+                  { leftAt: { not: null } },
+                  { user: { orgMemberships: { some: { organizationId: "org-1" } } } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
   });
 
   it("returns the existing message when edits are a no-op", async () => {
@@ -186,6 +244,7 @@ describe("ChatService", () => {
     const message = await service.editMessage({
       messageId: "message-1",
       html: "<p>hello</p>",
+      organizationId: "org-1",
       actorType: "user",
       actorId: "user-1",
     });
@@ -225,6 +284,7 @@ describe("ChatService", () => {
     const service = new ChatService();
     const message = await service.deleteMessage({
       messageId: "message-1",
+      organizationId: "org-1",
       actorType: "user",
       actorId: "user-1",
     });
@@ -248,7 +308,7 @@ describe("ChatService", () => {
       .mockResolvedValueOnce([]);
 
     const service = new ChatService();
-    const messages = await service.getMessages("chat-1", "user-1", {
+    const messages = await service.getMessages("chat-1", "user-1", "org-1", {
       before: new Date("2026-03-21T00:00:00.000Z"),
       limit: 2,
     });
@@ -268,7 +328,7 @@ describe("ChatService", () => {
     });
 
     const service = new ChatService();
-    await expect(service.rename("chat-1", "Renamed", "user", "user-1")).resolves.toEqual({
+    await expect(service.rename("chat-1", "Renamed", "org-1", "user", "user-1")).resolves.toEqual({
       id: "chat-1",
       name: "Renamed",
       members: [],

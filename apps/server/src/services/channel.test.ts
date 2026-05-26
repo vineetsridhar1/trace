@@ -87,6 +87,49 @@ describe("ChannelService", () => {
     );
   });
 
+  it("gets channels only through the active organization and viewer visibility", async () => {
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({ id: "channel-1" });
+    prismaMock.channel.findFirst.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+    });
+
+    const service = new ChannelService();
+    await expect(service.getChannel("channel-1", "org-1", "user-1")).resolves.toEqual({
+      id: "channel-1",
+      organizationId: "org-1",
+    });
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        organizationId: "org-1",
+        OR: [
+          { visibility: "public" },
+          { ownerId: "user-1" },
+          { members: { some: { userId: "user-1", leftAt: null } } },
+        ],
+      },
+      select: { id: true },
+    });
+    expect(prismaMock.channel.findFirst).toHaveBeenCalledWith({
+      where: { id: "channel-1", organizationId: "org-1" },
+      include: {
+        repo: true,
+        owner: { select: { id: true, email: true, name: true, avatarUrl: true } },
+        members: {
+          where: { userId: "user-1", leftAt: null },
+          select: { userId: true },
+        },
+        _count: {
+          select: {
+            members: { where: { leftAt: null } },
+          },
+        },
+      },
+    });
+  });
+
   it("excludes private channel owners from member-only lists after leaving", async () => {
     prismaMock.channel.findMany.mockResolvedValueOnce([]);
 
@@ -160,6 +203,66 @@ describe("ChannelService", () => {
       ),
     ).rejects.toThrow("repoId is required for coding channels");
 
+    expect(prismaMock.channel.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects channel creation when the group is outside the organization", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.channelGroup.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new ChannelService();
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "general",
+          type: "text",
+          groupId: "group-cross-org",
+        } as any,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.channelGroup.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: "group-cross-org", organizationId: "org-1" },
+      select: { id: true },
+    });
+    expect(prismaMock.channel.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects channel creation when linked projects are outside the organization", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.project.count.mockResolvedValueOnce(1);
+
+    const service = new ChannelService();
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "general",
+          type: "text",
+          projectIds: ["project-1", "project-2", "project-1"],
+        } as any,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("One or more projects are not in this organization");
+
+    expect(prismaMock.project.count).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["project-1", "project-2", "project-1"] },
+        organizationId: "org-1",
+      },
+    });
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
@@ -578,6 +681,7 @@ describe("ChannelService", () => {
       service.sendChannelMessage({
         channelId: "channel-1",
         html: "<p>hello</p>",
+        organizationId: "org-1",
         actorType: "user",
         actorId: "user-1",
       }),
@@ -633,11 +737,12 @@ describe("ChannelService", () => {
     prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
 
     const service = new ChannelService();
-    await service.sendMessage("channel-1", "hello", null, "user", "user-1");
+    await service.sendMessage("channel-1", "hello", null, "org-1", "user", "user-1");
 
     expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
       where: {
         id: "channel-1",
+        organizationId: "org-1",
         type: "coding",
         members: { some: { userId: "user-1", leftAt: null } },
       },
@@ -652,6 +757,42 @@ describe("ChannelService", () => {
       actorType: "user",
       actorId: "user-1",
       parentId: undefined,
+    });
+  });
+
+  it("scopes agent channel message sends to the active organization", async () => {
+    prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({
+      id: "channel-1",
+      organizationId: "org-1",
+      type: "text",
+    });
+    prismaMock.message.create.mockResolvedValueOnce({
+      id: "message-1",
+      channelId: "channel-1",
+      actorType: "agent",
+      actorId: TRACE_AI_USER_ID,
+      text: "hello",
+      html: null,
+      mentions: null,
+      parentMessageId: null,
+      createdAt: new Date("2026-03-22T00:00:00.000Z"),
+    });
+
+    const service = new ChannelService();
+    await service.sendChannelMessage({
+      channelId: "channel-1",
+      text: "hello",
+      organizationId: "org-1",
+      actorType: "agent",
+      actorId: TRACE_AI_USER_ID,
+    });
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "channel-1",
+        organizationId: "org-1",
+      },
+      select: { id: true, organizationId: true, type: true },
     });
   });
 

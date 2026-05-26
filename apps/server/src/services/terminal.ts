@@ -97,7 +97,7 @@ class TerminalService {
         id: input.channelId,
         organizationId: input.organizationId,
         type: "coding",
-        members: { some: { userId: input.userId } },
+        members: { some: { userId: input.userId, leftAt: null } },
       },
       select: { id: true, repoId: true },
     });
@@ -371,7 +371,7 @@ class TerminalService {
         where: {
           id: authContext.channelId,
           organizationId,
-          members: { some: { userId } },
+          members: { some: { userId, leftAt: null } },
         },
         select: { organizationId: true },
       });

@@ -22,7 +22,7 @@ export const channelQueries = {
     });
   },
   channel: async (_: unknown, args: { id: string }, ctx: Context) => {
-    return channelService.getChannel(args.id, ctx.userId);
+    return channelService.getChannel(args.id, requireOrgContext(ctx), ctx.userId);
   },
   channelMessages: (
     _: unknown,
@@ -80,6 +80,7 @@ export const channelMutations = {
       args.channelId,
       args.text,
       args.parentId ?? null,
+      requireOrgContext(ctx),
       ctx.actorType,
       ctx.userId,
     );
@@ -94,6 +95,7 @@ export const channelMutations = {
       text: args.text ?? undefined,
       html: args.html ?? undefined,
       parentId: args.parentId ?? undefined,
+      organizationId: requireOrgContext(ctx),
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
@@ -126,7 +128,7 @@ export const channelSubscriptions = {
       if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");
       }
-      await assertChannelAccess(args.channelId, ctx.userId);
+      await assertChannelAccess(args.channelId, ctx.userId, orgId);
       return pubsub.asyncIterator(topics.channelEvents(args.channelId));
     },
   },

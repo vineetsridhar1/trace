@@ -6,6 +6,7 @@ vi.mock("../lib/pubsub.js", () => ({
   },
   topics: {
     ticketEvents: (id: string) => `ticket:${id}:events`,
+    channelEvents: (id: string) => `channel:${id}:events`,
     sessionPorts: (id: string) => `session:${id}:ports`,
     sessionStatus: (id: string) => `session:${id}:status`,
     sessionEvents: (id: string) => `session:${id}:events`,
@@ -60,6 +61,12 @@ vi.mock("../services/ticket.js", () => ({
   ticketService: {
     list: vi.fn(),
     get: vi.fn(),
+    update: vi.fn(),
+    addComment: vi.fn(),
+    assign: vi.fn(),
+    unassign: vi.fn(),
+    link: vi.fn(),
+    unlink: vi.fn(),
   },
 }));
 
@@ -129,14 +136,15 @@ vi.mock("../services/aiConversation.js", () => ({
   },
 }));
 
-import { ticketQueries, ticketSubscriptions } from "./ticket.js";
+import { ticketMutations, ticketQueries, ticketSubscriptions } from "./ticket.js";
 import { sessionQueries, sessionSubscriptions } from "./session.js";
 import { sessionMutations } from "./session.js";
 import { channelGroupQueries } from "./channelGroup.js";
+import { channelSubscriptions } from "./channel.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
 import { aiConversationQueries, aiConversationMutations } from "./ai-conversation.js";
-import { assertScopeAccess } from "../services/access.js";
+import { assertChannelAccess, assertScopeAccess } from "../services/access.js";
 import { eventService } from "../services/event.js";
 import { ticketService } from "../services/ticket.js";
 import { sessionService } from "../services/session.js";
@@ -299,6 +307,40 @@ describe("GraphQL authz guards", () => {
     expect(assertScopeAccess).toHaveBeenCalledWith("ticket", "ticket-1", "user-1", "org-1");
   });
 
+  it("guards ticket mutations by active org and ticket scope before writing", async () => {
+    await ticketMutations.updateTicket({}, { id: "ticket-1", input: { title: "Updated" } }, ctx);
+    await ticketMutations.commentOnTicket({}, { ticketId: "ticket-1", text: "hello" }, ctx);
+    await ticketMutations.assignTicket({}, { ticketId: "ticket-1", userId: "user-2" }, ctx);
+    await ticketMutations.unassignTicket({}, { ticketId: "ticket-1", userId: "user-2" }, ctx);
+    await ticketMutations.linkTicket(
+      {},
+      { ticketId: "ticket-1", entityType: "session", entityId: "session-1" },
+      ctx,
+    );
+    await ticketMutations.unlinkTicket(
+      {},
+      { ticketId: "ticket-1", entityType: "session", entityId: "session-1" },
+      ctx,
+    );
+
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(1, "ticket", "ticket-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(2, "ticket", "ticket-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(3, "ticket", "ticket-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(4, "ticket", "ticket-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(5, "ticket", "ticket-1", "user-1", "org-1");
+    expect(assertScopeAccess).toHaveBeenNthCalledWith(6, "ticket", "ticket-1", "user-1", "org-1");
+  });
+
+  it("checks channel event subscriptions against the active organization", async () => {
+    await channelSubscriptions.channelEvents.subscribe(
+      {},
+      { channelId: "channel-1", organizationId: "org-1" },
+      ctx,
+    );
+
+    expect(assertChannelAccess).toHaveBeenCalledWith("channel-1", "user-1", "org-1");
+  });
+
   it("guards session subscriptions by org and scope", async () => {
     await sessionSubscriptions.sessionPortsChanged.subscribe(
       {},
@@ -368,6 +410,7 @@ describe("GraphQL authz guards", () => {
     expect(prisma.channel.findFirst).toHaveBeenCalledWith({
       where: {
         id: "channel-1",
+        organizationId: "org-1",
         OR: [
           { visibility: "public" },
           { ownerId: "user-1" },

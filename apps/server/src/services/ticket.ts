@@ -17,6 +17,65 @@ const TICKET_INCLUDE = {
   links: true,
 } as const;
 
+function activeChatMemberInOrgWhere(organizationId: string): Prisma.ChatMemberWhereInput {
+  return {
+    OR: [{ leftAt: { not: null } }, { user: { orgMemberships: { some: { organizationId } } } }],
+  };
+}
+
+async function assertLinkTargetAccess(
+  tx: Prisma.TransactionClient,
+  input: { entityType: EntityType; entityId: string; organizationId: string; actorId: string },
+): Promise<void> {
+  switch (input.entityType) {
+    case "session":
+      await tx.session.findFirstOrThrow({
+        where: { id: input.entityId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      return;
+    case "ticket":
+      await tx.ticket.findFirstOrThrow({
+        where: { id: input.entityId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      return;
+    case "channel":
+      await tx.channel.findFirstOrThrow({
+        where: { id: input.entityId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      return;
+    case "chat":
+      await tx.chat.findFirstOrThrow({
+        where: {
+          id: input.entityId,
+          members: { some: { userId: input.actorId, leftAt: null } },
+          AND: [{ members: { every: activeChatMemberInOrgWhere(input.organizationId) } }],
+        },
+        select: { id: true },
+      });
+      return;
+    case "message":
+      await tx.message.findFirstOrThrow({
+        where: {
+          id: input.entityId,
+          OR: [
+            { channel: { organizationId: input.organizationId } },
+            {
+              chat: {
+                members: { some: { userId: input.actorId, leftAt: null } },
+                AND: [{ members: { every: activeChatMemberInOrgWhere(input.organizationId) } }],
+              },
+            },
+          ],
+        },
+        select: { id: true },
+      });
+      return;
+  }
+}
+
 export class TicketService {
   async list(
     organizationId: string,
@@ -51,6 +110,28 @@ export class TicketService {
   async create(input: CreateTicketServiceInput) {
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+
+      if (input.channelId) {
+        await tx.channel.findFirstOrThrow({
+          where: { id: input.channelId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+      }
+      if (input.projectId) {
+        await tx.project.findFirstOrThrow({
+          where: { id: input.projectId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+      }
+      if (input.assigneeIds?.length) {
+        const assigneeIds = [...new Set(input.assigneeIds)];
+        const memberCount = await tx.orgMember.count({
+          where: { organizationId: input.organizationId, userId: { in: assigneeIds } },
+        });
+        if (memberCount !== assigneeIds.length) {
+          throw new Error("Assignees must belong to the ticket organization");
+        }
+      }
 
       const ticket = await tx.ticket.create({
         data: {
@@ -173,6 +254,10 @@ export class TicketService {
         select: { organizationId: true },
       });
       await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      await tx.orgMember.findUniqueOrThrow({
+        where: { userId_organizationId: { userId, organizationId: existing.organizationId } },
+        select: { userId: true },
+      });
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -265,6 +350,12 @@ export class TicketService {
         select: { organizationId: true },
       });
       await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      await assertLinkTargetAccess(tx, {
+        entityType,
+        entityId,
+        organizationId: existing.organizationId,
+        actorId,
+      });
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });

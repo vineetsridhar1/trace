@@ -179,7 +179,7 @@ export function handleTerminalConnection(
       where: {
         id: authContext.channelId,
         organizationId: authContext.organizationId,
-        members: { some: { userId } },
+        members: { some: { userId, leftAt: null } },
       },
       select: { organizationId: true },
     });
@@ -294,7 +294,7 @@ export function handleTerminalConnection(
             where: {
               id: authContext.channelId,
               organizationId: authContext.organizationId,
-              members: { some: { userId: user.id } },
+              members: { some: { userId: user.id, leftAt: null } },
             },
             select: { id: true, organizationId: true },
           });

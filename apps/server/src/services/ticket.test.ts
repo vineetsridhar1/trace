@@ -22,6 +22,7 @@ describe("TicketService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.count.mockResolvedValue(1);
   });
 
   it("creates tickets with defaults, relationships, and events", async () => {
@@ -75,6 +76,56 @@ describe("TicketService", () => {
       },
       prismaMock,
     );
+  });
+
+  it("validates ticket channel, project, and assignees against the ticket organization", async () => {
+    prismaMock.orgMember.count.mockResolvedValueOnce(1);
+    prismaMock.ticket.create.mockResolvedValueOnce({
+      id: "ticket-1",
+      title: "Fix auth",
+      priority: "medium",
+      organizationId: "org-1",
+    });
+
+    const service = new TicketService();
+    await service.create({
+      organizationId: "org-1",
+      title: "Fix auth",
+      channelId: "channel-1",
+      projectId: "project-1",
+      assigneeIds: ["user-2", "user-2"],
+      actorType: "user",
+      actorId: "user-1",
+    } as any);
+
+    expect(prismaMock.channel.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: "channel-1", organizationId: "org-1" },
+      select: { id: true },
+    });
+    expect(prismaMock.project.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: "project-1", organizationId: "org-1" },
+      select: { id: true },
+    });
+    expect(prismaMock.orgMember.count).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", userId: { in: ["user-2"] } },
+    });
+  });
+
+  it("rejects ticket creation when assignees are outside the organization", async () => {
+    prismaMock.orgMember.count.mockResolvedValueOnce(0);
+
+    const service = new TicketService();
+    await expect(
+      service.create({
+        organizationId: "org-1",
+        title: "Fix auth",
+        assigneeIds: ["user-2"],
+        actorType: "user",
+        actorId: "user-1",
+      } as any),
+    ).rejects.toThrow("Assignees must belong to the ticket organization");
+
+    expect(prismaMock.ticket.create).not.toHaveBeenCalled();
   });
 
   it("updates tickets and records prior status in the event payload", async () => {
@@ -181,6 +232,97 @@ describe("TicketService", () => {
         },
       },
     });
+  });
+
+  it("validates ticket assignment targets against the ticket organization", async () => {
+    prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "ticket-1",
+      organizationId: "org-1",
+    });
+    prismaMock.orgMember.findUniqueOrThrow
+      .mockResolvedValueOnce({ userId: "user-1" })
+      .mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new TicketService();
+    await expect(
+      service.assign({
+        ticketId: "ticket-1",
+        userId: "user-cross-org",
+        actorType: "user",
+        actorId: "user-1",
+      }),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.orgMember.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { userId_organizationId: { userId: "user-cross-org", organizationId: "org-1" } },
+      select: { userId: true },
+    });
+    expect(prismaMock.ticketAssignee.create).not.toHaveBeenCalled();
+  });
+
+  it("validates linked sessions against the ticket organization", async () => {
+    prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "ticket-1",
+      organizationId: "org-1",
+    });
+    prismaMock.session.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new TicketService();
+    await expect(
+      service.link({
+        ticketId: "ticket-1",
+        entityType: "session",
+        entityId: "session-cross-org",
+        actorType: "user",
+        actorId: "user-1",
+      } as any),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.session.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: "session-cross-org", organizationId: "org-1" },
+      select: { id: true },
+    });
+    expect(prismaMock.ticketLink.create).not.toHaveBeenCalled();
+  });
+
+  it("validates linked chats against actor membership and organization membership", async () => {
+    prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "ticket-1",
+      organizationId: "org-1",
+    });
+    prismaMock.chat.findFirstOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new TicketService();
+    await expect(
+      service.link({
+        ticketId: "ticket-1",
+        entityType: "chat",
+        entityId: "chat-private",
+        actorType: "user",
+        actorId: "user-1",
+      } as any),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.chat.findFirstOrThrow).toHaveBeenCalledWith({
+      where: {
+        id: "chat-private",
+        members: { some: { userId: "user-1", leftAt: null } },
+        AND: [
+          {
+            members: {
+              every: {
+                OR: [
+                  { leftAt: { not: null } },
+                  { user: { orgMemberships: { some: { organizationId: "org-1" } } } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    expect(prismaMock.ticketLink.create).not.toHaveBeenCalled();
   });
 
   it("rejects cross-org ticket writes when the actor is not a member", async () => {
