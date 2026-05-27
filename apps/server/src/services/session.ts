@@ -259,7 +259,6 @@ type LinkedCheckoutRuntimeGroup = {
     repoId: string | null;
     branch?: string | null;
     workdir?: string | null;
-    connection?: unknown;
   }>;
 };
 
@@ -1951,7 +1950,6 @@ export class SessionService {
             repoId: true,
             branch: true,
             workdir: true,
-            connection: true,
           },
         },
       },
@@ -2037,9 +2035,7 @@ export class SessionService {
 
     if (!session) return null;
 
-    const ownerRuntimeInstanceId =
-      this.getConnectionRuntimeInstanceId(params.group.connection) ??
-      this.getConnectionRuntimeInstanceId(session.connection);
+    const ownerRuntimeInstanceId = this.getConnectionRuntimeInstanceId(params.group.connection);
     if (!ownerRuntimeInstanceId) return null;
 
     const ownerRuntime = sessionRouter
