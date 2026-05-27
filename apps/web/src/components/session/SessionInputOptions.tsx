@@ -28,6 +28,7 @@ const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
 
 const EFFORT_LINE_HEIGHT = 16;
+const autoRuntimeSelectionFailures = new Set<string>();
 
 interface RuntimeFetchState {
   key: string;
@@ -293,7 +294,7 @@ export function SessionInputOptions({
   );
 
   const handleRuntimeChange = useCallback(
-    async (value: string | null) => {
+    async (value: string | null, options?: { automatic?: boolean }) => {
       if (isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
       if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
@@ -370,8 +371,24 @@ export function SessionInputOptions({
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
+        const description = error instanceof Error ? error.message : undefined;
+        if (options?.automatic && description?.includes("Requested runtime not found")) {
+          autoRuntimeSelectionFailures.add(`${sessionId}:${value}`);
+          setRuntimeFetchState((state) =>
+            state.key === runtimeFetchKey
+              ? {
+                  ...state,
+                  runtimes: state.runtimes.filter(
+                    (runtime: SessionRuntimeInstance) => runtime.id !== value,
+                  ),
+                }
+              : state,
+          );
+          void fetchAvailableRuntimes();
+          return;
+        }
         toast.error("Failed to update session runtime", {
-          description: error instanceof Error ? error.message : undefined,
+          description,
         });
         console.error("Failed to update session runtime:", error);
       }
@@ -384,6 +401,8 @@ export function SessionInputOptions({
       connection,
       cloudDisabledReason,
       cloudEnvironmentAvailable,
+      fetchAvailableRuntimes,
+      runtimeFetchKey,
     ],
   );
 
@@ -408,8 +427,11 @@ export function SessionInputOptions({
     );
     if (!ownedRuntime) return;
 
+    const autoSelectionFailureKey = `${sessionId}:${ownedRuntime.id}`;
+    if (autoRuntimeSelectionFailures.has(autoSelectionFailureKey)) return;
+
     autoSelectedRuntimeSessionRef.current = sessionId;
-    void handleRuntimeChange(ownedRuntime.id);
+    void handleRuntimeChange(ownedRuntime.id, { automatic: true });
   }, [
     channelRepoId,
     currentRuntimeValue,
