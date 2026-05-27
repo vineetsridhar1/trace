@@ -22,7 +22,8 @@ export function NoOrgWelcome() {
   }
 
   return (
-    <div className="app-region-drag flex min-h-dvh items-center justify-center px-4 py-8 [background:var(--trace-window-bg)] backdrop-blur-2xl">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8 [background:var(--trace-window-bg)] backdrop-blur-2xl">
+      <div className="app-region-drag fixed inset-x-0 top-0 h-14" />
       <div className="relative w-full max-w-[560px] overflow-hidden rounded-xl border border-white/10 bg-surface-elevated/45 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-7">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
         <div className="flex items-center justify-between gap-3">
