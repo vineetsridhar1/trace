@@ -140,7 +140,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
       <BridgeSyncHydrator />
       <div
         className={`flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] ${
-          isDesktopShell ? "[background:var(--trace-window-bg)]" : "bg-surface-deep"
+          isDesktopShell ? "bg-transparent" : "bg-surface-deep"
         }`}
       >
         <SidebarProvider className="min-h-0 flex-1">
