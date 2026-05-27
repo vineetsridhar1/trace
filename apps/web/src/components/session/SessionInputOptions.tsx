@@ -29,6 +29,12 @@ const CLOUD_RUNTIME_ID = "__cloud__";
 
 const EFFORT_LINE_HEIGHT = 16;
 
+interface RuntimeFetchState {
+  key: string;
+  loaded: boolean;
+  runtimes: SessionRuntimeInstance[];
+}
+
 function EffortDots({ index, total }: { index: number; total: number }) {
   return (
     <span className="flex flex-col-reverse items-center gap-[2px]" aria-hidden="true">
@@ -154,11 +160,22 @@ export function SessionInputOptions({
     cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
   const autoSelectedRuntimeSessionRef = useRef<string | null>(null);
 
-  // Fetch runtimes when not_started so user can switch
-  const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
+  const runtimeFetchKey = `${sessionId}:${currentTool}:${sessionGroupId ?? ""}`;
+
+  // Fetch runtimes when not_started so user can switch.
+  const [runtimeFetchState, setRuntimeFetchState] = useState<RuntimeFetchState>({
+    key: runtimeFetchKey,
+    loaded: false,
+    runtimes: [],
+  });
+  const runtimeFetchSeqRef = useRef(0);
+  const runtimes =
+    runtimeFetchState.key === runtimeFetchKey ? runtimeFetchState.runtimes : [];
+  const runtimesLoaded = runtimeFetchState.key === runtimeFetchKey && runtimeFetchState.loaded;
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
   const fetchAvailableRuntimes = useCallback(() => {
     if (!isNotStarted || isOptimistic) return Promise.resolve();
+    const fetchSeq = ++runtimeFetchSeqRef.current;
     return client
       .query(AVAILABLE_RUNTIMES_QUERY, {
         tool: currentTool,
@@ -167,16 +184,48 @@ export function SessionInputOptions({
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
         const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
-        if (data) setRuntimes(data);
+        if (runtimeFetchSeqRef.current !== fetchSeq) return;
+        setRuntimeFetchState({
+          key: runtimeFetchKey,
+          loaded: true,
+          runtimes: data ?? [],
+        });
       })
       .catch((error: unknown) => {
+        if (runtimeFetchSeqRef.current === fetchSeq) {
+          setRuntimeFetchState((state) =>
+            state.key === runtimeFetchKey ? { ...state, loaded: false } : state,
+          );
+        }
         console.error("Failed to fetch available runtimes:", error);
       });
-  }, [isNotStarted, isOptimistic, currentTool, sessionGroupId]);
+  }, [isNotStarted, isOptimistic, currentTool, sessionGroupId, runtimeFetchKey]);
 
   useEffect(() => {
     void fetchAvailableRuntimes();
   }, [fetchAvailableRuntimes]);
+
+  useEffect(() => {
+    if (
+      !isNotStarted ||
+      isOptimistic ||
+      runtimeInstanceId ||
+      connectedLocalRuntimes.length > 0
+    ) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void fetchAvailableRuntimes();
+    }, 2_000);
+    return () => window.clearInterval(interval);
+  }, [
+    connectedLocalRuntimes.length,
+    fetchAvailableRuntimes,
+    isNotStarted,
+    isOptimistic,
+    runtimeInstanceId,
+  ]);
 
   const handleToolChange = useCallback(
     async (newTool: ToolOptionValue) => {
@@ -343,6 +392,7 @@ export function SessionInputOptions({
       !isNotStarted ||
       isOptimistic ||
       isCloudRuntime ||
+      !runtimesLoaded ||
       runtimeInstanceId ||
       currentRuntimeValue !== UNBOUND_LOCAL_RUNTIME_ID ||
       autoSelectedRuntimeSessionRef.current === sessionId
@@ -367,6 +417,7 @@ export function SessionInputOptions({
     isCloudRuntime,
     isNotStarted,
     isOptimistic,
+    runtimesLoaded,
     runtimeInstanceId,
     runtimes,
     sessionId,
