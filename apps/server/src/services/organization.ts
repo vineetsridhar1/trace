@@ -11,7 +11,6 @@ import { prisma } from "../lib/db.js";
 import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
-import { isLocalMode } from "../lib/mode.js";
 import { createChannelInTransaction } from "./channel-create.js";
 
 const PROJECT_INCLUDE = {
@@ -116,15 +115,6 @@ export class OrganizationService {
     const name = input.name.trim();
     if (!name) {
       throw new Error("Organization name is required");
-    }
-
-    if (!isLocalMode()) {
-      const existingMemberships = await prisma.orgMember.count({
-        where: { userId: actorId },
-      });
-      if (existingMemberships === 0) {
-        throw new Error("You must be invited to an organization before creating one.");
-      }
     }
 
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
