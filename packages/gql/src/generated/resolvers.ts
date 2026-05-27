@@ -589,7 +589,6 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
-  deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -632,7 +631,6 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
-  setOrgSecret: OrgSecret;
   startSession: Session;
   steerQueuedMessage: Event;
   subscribe: Participant;
@@ -778,11 +776,6 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
-};
-
-export type MutationDeleteOrgSecretArgs = {
-  id: Scalars["ID"]["input"];
-  orgId: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -999,10 +992,6 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
-export type MutationSetOrgSecretArgs = {
-  input: SetOrgSecretInput;
-};
-
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1143,15 +1132,6 @@ export type OrgMember = {
   user: User;
 };
 
-export type OrgSecret = {
-  __typename?: "OrgSecret";
-  createdAt: Scalars["DateTime"]["output"];
-  id: Scalars["ID"]["output"];
-  name: Scalars["String"]["output"];
-  orgId: Scalars["ID"]["output"];
-  updatedAt: Scalars["DateTime"]["output"];
-};
-
 export type Organization = {
   __typename?: "Organization";
   agentEnvironments: Array<AgentEnvironment>;
@@ -1221,7 +1201,6 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
-  orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
@@ -1353,10 +1332,6 @@ export type QueryMySessionsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
-};
-
-export type QueryOrgSecretsArgs = {
-  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryOrganizationArgs = {
@@ -1713,12 +1688,6 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
-};
-
-export type SetOrgSecretInput = {
-  name: Scalars["String"]["input"];
-  orgId: Scalars["ID"]["input"];
-  value: Scalars["String"]["input"];
 };
 
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
@@ -2099,7 +2068,6 @@ export type ResolversTypes = ResolversObject<{
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
   OrgMember: ResolverTypeWrapper<OrgMember>;
-  OrgSecret: ResolverTypeWrapper<OrgSecret>;
   Organization: ResolverTypeWrapper<Organization>;
   Participant: ResolverTypeWrapper<Participant>;
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
@@ -2130,7 +2098,6 @@ export type ResolversTypes = ResolversObject<{
   SessionTimelineMode: SessionTimelineMode;
   SessionTimelinePage: ResolverTypeWrapper<SessionTimelinePage>;
   SetApiTokenInput: SetApiTokenInput;
-  SetOrgSecretInput: SetOrgSecretInput;
   SetupStatus: SetupStatus;
   SlashCommand: ResolverTypeWrapper<SlashCommand>;
   SlashCommandCategory: SlashCommandCategory;
@@ -2206,7 +2173,6 @@ export type ResolversParentTypes = ResolversObject<{
   Mutation: {};
   Notification: Notification;
   OrgMember: OrgMember;
-  OrgSecret: OrgSecret;
   Organization: Organization;
   Participant: Participant;
   PortEndpoint: PortEndpoint;
@@ -2228,7 +2194,6 @@ export type ResolversParentTypes = ResolversObject<{
   SessionTimelineItem: SessionTimelineItem;
   SessionTimelinePage: SessionTimelinePage;
   SetApiTokenInput: SetApiTokenInput;
-  SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
@@ -2868,12 +2833,6 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationDeleteChatMessageArgs, "messageId">
   >;
-  deleteOrgSecret?: Resolver<
-    ResolversTypes["Boolean"],
-    ParentType,
-    ContextType,
-    RequireFields<MutationDeleteOrgSecretArgs, "id" | "orgId">
-  >;
   deleteSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -3126,12 +3085,6 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationSetLinkedCheckoutAutoSyncArgs, "enabled" | "repoId" | "sessionGroupId">
   >;
-  setOrgSecret?: Resolver<
-    ResolversTypes["OrgSecret"],
-    ParentType,
-    ContextType,
-    RequireFields<MutationSetOrgSecretArgs, "input">
-  >;
   startSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -3297,18 +3250,6 @@ export type OrgMemberResolvers<
   organization?: Resolver<ResolversTypes["Organization"], ParentType, ContextType>;
   role?: Resolver<ResolversTypes["UserRole"], ParentType, ContextType>;
   user?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
-export type OrgSecretResolvers<
-  ContextType = Context,
-  ParentType extends ResolversParentTypes["OrgSecret"] = ResolversParentTypes["OrgSecret"],
-> = ResolversObject<{
-  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
-  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  orgId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3485,12 +3426,6 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryMySessionsArgs, "organizationId">
-  >;
-  orgSecrets?: Resolver<
-    Array<ResolversTypes["OrgSecret"]>,
-    ParentType,
-    ContextType,
-    RequireFields<QueryOrgSecretsArgs, "orgId">
   >;
   organization?: Resolver<
     Maybe<ResolversTypes["Organization"]>,
@@ -4066,7 +4001,6 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;
-  OrgSecret?: OrgSecretResolvers<ContextType>;
   Organization?: OrganizationResolvers<ContextType>;
   Participant?: ParticipantResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;

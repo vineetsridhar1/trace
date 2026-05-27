@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Info, Plus, Save } from "lucide-react";
-import type { AgentEnvironment, OrgSecret } from "@trace/gql";
+import type { AgentEnvironment } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
 import {
@@ -27,7 +27,6 @@ type Props = {
   organizationId: string;
   environment: AgentEnvironment | null;
   localBridges: LocalBridgeSummary[];
-  orgSecrets: OrgSecret[];
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 };
@@ -48,7 +47,6 @@ function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraf
     startUrl: config.startUrl ?? "",
     stopUrl: config.stopUrl ?? "",
     statusUrl: config.statusUrl ?? "",
-    authSecretId: config.auth?.secretId ?? "",
     startupTimeoutSeconds: String(config.startupTimeoutSeconds ?? 180),
     launcherMetadata,
   };
@@ -68,7 +66,7 @@ function buildConfig(draft: AgentEnvironmentDraft): Record<string, unknown> {
     startUrl: draft.startUrl.trim(),
     stopUrl: draft.stopUrl.trim(),
     statusUrl: draft.statusUrl.trim(),
-    auth: { type: "bearer", secretId: draft.authSecretId.trim() },
+    auth: { type: "bearer" },
     startupTimeoutSeconds: Number(draft.startupTimeoutSeconds),
     deprovisionPolicy: "on_session_end",
     ...(metadata ? { launcherMetadata: JSON.parse(metadata) as Record<string, unknown> } : {}),
@@ -80,7 +78,6 @@ export function AgentEnvironmentForm({
   organizationId,
   environment,
   localBridges,
-  orgSecrets,
   onOpenChange,
   onSaved,
 }: Props) {
@@ -144,10 +141,7 @@ export function AgentEnvironmentForm({
     }
   }
 
-  const canSubmit =
-    !saving &&
-    !!draft.name.trim() &&
-    (draft.adapterType !== "provisioned" || !!draft.authSecretId.trim());
+  const canSubmit = !saving && !!draft.name.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -179,11 +173,7 @@ export function AgentEnvironmentForm({
           {draft.adapterType === "local" ? (
             <AgentEnvironmentLocalFields draft={draft} localBridges={localBridges} />
           ) : (
-            <AgentEnvironmentProvisionedFields
-              draft={draft}
-              orgSecrets={orgSecrets}
-              update={update}
-            />
+            <AgentEnvironmentProvisionedFields draft={draft} update={update} />
           )}
 
           <DialogFooter>

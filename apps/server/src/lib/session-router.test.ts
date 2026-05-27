@@ -5,24 +5,14 @@ vi.mock("./db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
-vi.mock("../services/org-secret.js", () => ({
-  orgSecretService: {
-    getDecryptedValue: vi.fn().mockResolvedValue("launcher-secret"),
-  },
-}));
-
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
-import { orgSecretService } from "../services/org-secret.js";
 import type { createPrismaMock } from "../../test/helpers.js";
 
 const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
-const orgSecretServiceMock = orgSecretService as unknown as {
-  getDecryptedValue: ReturnType<typeof vi.fn>;
-};
 
 function makeWs() {
   return {
@@ -50,13 +40,14 @@ async function flushPromises() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  orgSecretServiceMock.getDecryptedValue.mockResolvedValue("launcher-secret");
+  process.env.TRACE_CLOUD_LAUNCHER_TOKEN = "launcher-secret";
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  delete process.env.TRACE_CLOUD_LAUNCHER_TOKEN;
 });
 
 describe("SessionRouter stale runtime eviction", () => {
@@ -712,7 +703,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 5,
         deprovisionPolicy: "on_session_end",
       },
@@ -1095,7 +1086,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },
@@ -1127,7 +1118,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
           adapterType: "provisioned",
           config: expect.objectContaining({
             stopUrl: "https://launcher.example/stop",
-            auth: { type: "bearer", secretId: "secret-1" },
+            auth: { type: "bearer" },
             startupTimeoutSeconds: 120,
             deprovisionPolicy: "on_session_end",
           }),
@@ -1176,7 +1167,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "manual",
       },
@@ -1249,7 +1240,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "manual",
       },
@@ -1289,7 +1280,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "manual",
       },
@@ -1362,7 +1353,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },
@@ -1434,7 +1425,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },
@@ -1504,7 +1495,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },
@@ -1641,7 +1632,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },

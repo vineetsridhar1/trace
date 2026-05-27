@@ -11,7 +11,6 @@ import {
   type RuntimeStopResult,
   type RuntimeEnvironment,
 } from "./runtime-adapter-registry.js";
-import { orgSecretService } from "../services/org-secret.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
@@ -39,8 +38,15 @@ const LAUNCHER_REQUEST_TIMEOUT_MS = 30_000;
 
 type ProvisionedAuthConfig = {
   type: "bearer" | "hmac";
-  secretId: string;
 };
+
+function resolveLauncherToken(): string {
+  const token = process.env.TRACE_CLOUD_LAUNCHER_TOKEN?.trim();
+  if (!token) {
+    throw new Error("TRACE_CLOUD_LAUNCHER_TOKEN is required for provisioned runtimes");
+  }
+  return token;
+}
 
 type ProvisionedConfig = {
   startUrl: string;
@@ -184,10 +190,7 @@ function assertProvisionedAuthConfig(value: unknown): ProvisionedAuthConfig {
   if (auth.type !== "bearer" && auth.type !== "hmac") {
     throw new Error("Provisioned agent environment auth.type must be bearer or hmac");
   }
-  if (typeof auth.secretId !== "string" || !auth.secretId.trim()) {
-    throw new Error("Provisioned agent environment auth.secretId must be a non-empty string");
-  }
-  return { type: auth.type, secretId: auth.secretId };
+  return { type: auth.type };
 }
 
 function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedConfig {
@@ -410,6 +413,8 @@ async function readJsonResponse(response: Response, endpointName: string): Promi
 }
 
 async function authenticatedLauncherRequest(params: {
+  // organizationId is retained for telemetry tagging only — the launcher
+  // token now comes from TRACE_CLOUD_LAUNCHER_TOKEN, not per-org storage.
   organizationId: string;
   url: string;
   auth: ProvisionedAuthConfig;
@@ -418,13 +423,7 @@ async function authenticatedLauncherRequest(params: {
   endpointName: string;
   timeoutMs?: number;
 }): Promise<unknown> {
-  const secret = await orgSecretService.getDecryptedValue(
-    params.organizationId,
-    params.auth.secretId,
-  );
-  if (!secret) {
-    throw new Error("Provisioned agent environment auth secret was not found");
-  }
+  const secret = resolveLauncherToken();
 
   const rawBody = JSON.stringify(params.body);
   const requestId = randomUUID();

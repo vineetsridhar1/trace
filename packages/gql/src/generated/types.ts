@@ -586,7 +586,6 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
-  deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -629,7 +628,6 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
-  setOrgSecret: OrgSecret;
   startSession: Session;
   steerQueuedMessage: Event;
   subscribe: Participant;
@@ -775,11 +773,6 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
-};
-
-export type MutationDeleteOrgSecretArgs = {
-  id: Scalars["ID"]["input"];
-  orgId: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -996,10 +989,6 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
-export type MutationSetOrgSecretArgs = {
-  input: SetOrgSecretInput;
-};
-
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1140,15 +1129,6 @@ export type OrgMember = {
   user: User;
 };
 
-export type OrgSecret = {
-  __typename?: "OrgSecret";
-  createdAt: Scalars["DateTime"]["output"];
-  id: Scalars["ID"]["output"];
-  name: Scalars["String"]["output"];
-  orgId: Scalars["ID"]["output"];
-  updatedAt: Scalars["DateTime"]["output"];
-};
-
 export type Organization = {
   __typename?: "Organization";
   agentEnvironments: Array<AgentEnvironment>;
@@ -1218,7 +1198,6 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
-  orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
@@ -1350,10 +1329,6 @@ export type QueryMySessionsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
-};
-
-export type QueryOrgSecretsArgs = {
-  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryOrganizationArgs = {
@@ -1710,12 +1685,6 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
-};
-
-export type SetOrgSecretInput = {
-  name: Scalars["String"]["input"];
-  orgId: Scalars["ID"]["input"];
-  value: Scalars["String"]["input"];
 };
 
 export type SetupStatus = "completed" | "failed" | "idle" | "running";

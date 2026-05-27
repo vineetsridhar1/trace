@@ -1,7 +1,5 @@
-import type { OrgSecret } from "@trace/gql";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import type {
   AgentEnvironmentDraft,
   UpdateAgentEnvironmentDraft,
@@ -10,13 +8,10 @@ import { AgentEnvironmentFieldLabel } from "./AgentEnvironmentFieldLabel";
 
 type Props = {
   draft: AgentEnvironmentDraft;
-  orgSecrets: OrgSecret[];
   update: UpdateAgentEnvironmentDraft;
 };
 
-export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }: Props) {
-  const selectedSecret = orgSecrets.find((secret) => secret.id === draft.authSecretId);
-
+export function AgentEnvironmentProvisionedFields({ draft, update }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-3">
@@ -48,29 +43,10 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
           />
         </label>
       </div>
-      <label className="flex flex-col gap-1.5">
-        <AgentEnvironmentFieldLabel tooltip="Select the organization secret used as the bearer token for launcher requests. Configure secrets in Settings, Launcher Secrets.">
-          Bearer secret
-        </AgentEnvironmentFieldLabel>
-        <Select
-          value={selectedSecret?.id}
-          disabled={!orgSecrets.length}
-          onValueChange={(value) => update("authSecretId", value ?? "")}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select an organization secret">
-              {selectedSecret?.name ?? "Select an organization secret"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {orgSecrets.map((secret) => (
-              <SelectItem key={secret.id} value={secret.id}>
-                {secret.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
+      <p className="text-xs text-muted-foreground">
+        The launcher bearer token is sourced from the TRACE_CLOUD_LAUNCHER_TOKEN environment
+        variable.
+      </p>
       <label className="flex flex-col gap-1.5">
         <AgentEnvironmentFieldLabel tooltip="How long Trace waits for the provisioned runtime to connect before treating startup as failed.">
           Startup timeout seconds

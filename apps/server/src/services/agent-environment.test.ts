@@ -46,7 +46,7 @@ describe("AgentEnvironmentService", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },
@@ -65,7 +65,7 @@ describe("AgentEnvironmentService", () => {
           startUrl: "https://launcher.example/start",
           stopUrl: "https://launcher.example/stop",
           statusUrl: "https://launcher.example/status",
-          auth: { type: "bearer", secretId: "secret-1" },
+          auth: { type: "bearer" },
           startupTimeoutSeconds: 120,
           deprovisionPolicy: "on_session_end",
         },
@@ -86,7 +86,7 @@ describe("AgentEnvironmentService", () => {
           startUrl: "https://launcher.example/start",
           stopUrl: "https://launcher.example/stop",
           statusUrl: "https://launcher.example/status",
-          auth: { type: "bearer", secretId: "secret-1" },
+          auth: { type: "bearer" },
           startupTimeoutSeconds: 120,
           deprovisionPolicy: "on_session_end",
         },
@@ -111,7 +111,7 @@ describe("AgentEnvironmentService", () => {
           startUrl: "https://launcher.example/start",
           stopUrl: "https://launcher.example/stop",
           statusUrl: "https://launcher.example/status",
-          auth: { type: "bearer", secretId: "secret-1" },
+          auth: { type: "bearer" },
           startupTimeoutSeconds: 120,
           deprovisionPolicy: "on_session_end",
         },
@@ -181,7 +181,7 @@ describe("AgentEnvironmentService", () => {
             startUrl: "https://launcher.example/start",
             stopUrl: "https://launcher.example/stop",
             statusUrl: "https://launcher.example/status",
-            auth: { type: "bearer", secretId: "secret-1" },
+            auth: { type: "bearer" },
             startupTimeoutSeconds: 120,
             deprovisionPolicy: "on_session_end",
           },
@@ -201,7 +201,7 @@ describe("AgentEnvironmentService", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
         launcherMetadata: { subnetIds: ["subnet-1"] },
@@ -228,7 +228,7 @@ describe("AgentEnvironmentService", () => {
         "user",
         "user-1",
       ),
-    ).rejects.toThrow("auth config can only include type and secretId");
+    ).rejects.toThrow("auth config can only include type");
 
     expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
   });
@@ -357,7 +357,7 @@ describe("AgentEnvironmentService", () => {
     expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
-  it("rejects credential-shaped config keys that are not secret references", async () => {
+  it("rejects credential-shaped config keys and unknown auth keys", async () => {
     const service = new AgentEnvironmentService();
 
     await expect(
@@ -371,7 +371,7 @@ describe("AgentEnvironmentService", () => {
         "user",
         "user-1",
       ),
-    ).rejects.toThrow("auth config can only include type and secretId");
+    ).rejects.toThrow("auth config can only include type");
 
     await expect(
       service.create(
@@ -454,7 +454,7 @@ describe("AgentEnvironmentService", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },
@@ -560,7 +560,7 @@ describe("AgentEnvironmentService", () => {
             startUrl: "https://launcher.example/start",
             stopUrl: "https://launcher.example/stop",
             statusUrl: "https://launcher.example/status",
-            auth: { type: "bearer", secretId: "secret-1" },
+            auth: { type: "bearer" },
             startupTimeoutSeconds: 120,
             deprovisionPolicy: "on_session_end",
           },
@@ -581,7 +581,7 @@ describe("AgentEnvironmentService", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { type: "bearer", secretId: "secret-1" },
+        auth: { type: "bearer" },
         startupTimeoutSeconds: 120,
         deprovisionPolicy: "on_session_end",
       },
@@ -597,7 +597,7 @@ describe("AgentEnvironmentService", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "Provisioned agent environment auth secret was not found",
+      message: "TRACE_CLOUD_LAUNCHER_TOKEN is required for provisioned runtimes",
     });
   });
 

@@ -7,7 +7,7 @@ import { runtimeAdapterRegistry } from "../lib/runtime-adapters.js";
 import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 import { logAgentEnvironmentTelemetry } from "../lib/agent-environment-telemetry.js";
 
-const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
+const AUTH_CONFIG_KEYS = new Set(["type"]);
 const RAW_SECRET_KEY_PATTERNS = ["apikey", "authorization", "password", "secret", "token"];
 const PUBLIC_PROVISIONED_CONFIG_KEYS = new Set([
   "capabilities",
@@ -71,43 +71,39 @@ function asConfigRecord(
   return config as Record<string, unknown>;
 }
 
-function assertConfigStoresOnlySecretReferences(value: unknown): void {
+function assertConfigHasNoRawSecrets(value: unknown): void {
   if (!value || typeof value !== "object") return;
   if (Array.isArray(value)) {
-    value.forEach(assertConfigStoresOnlySecretReferences);
+    value.forEach(assertConfigHasNoRawSecrets);
     return;
   }
 
   for (const [key, child] of Object.entries(value)) {
     const normalizedKey = key.toLowerCase().replace(/[_-]/g, "");
     if (key === "auth") {
-      assertAuthConfigStoresOnlySecretReferences(child);
+      assertAuthConfigKeysAreAllowed(child);
     } else if (
-      normalizedKey !== "secretid" &&
       RAW_SECRET_KEY_PATTERNS.some((pattern) => normalizedKey.includes(pattern)) &&
       typeof child === "string" &&
       child.trim()
     ) {
-      throw new Error("Agent environment config cannot store raw secrets; reference an OrgSecret");
+      throw new Error(
+        "Agent environment config cannot store raw secrets; configure them via env vars",
+      );
     }
-    assertConfigStoresOnlySecretReferences(child);
+    assertConfigHasNoRawSecrets(child);
   }
 }
 
-function assertAuthConfigStoresOnlySecretReferences(value: unknown): void {
+function assertAuthConfigKeysAreAllowed(value: unknown): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Agent environment auth config must reference an OrgSecret");
+    throw new Error("Agent environment auth config must be an object");
   }
 
   for (const key of Object.keys(value)) {
     if (!AUTH_CONFIG_KEYS.has(key)) {
-      throw new Error("Agent environment auth config can only include type and secretId");
+      throw new Error("Agent environment auth config can only include type");
     }
-  }
-
-  const auth = value as Record<string, unknown>;
-  if (auth.secretId !== undefined && typeof auth.secretId !== "string") {
-    throw new Error("Agent environment auth secretId must be a string");
   }
 }
 
@@ -243,7 +239,7 @@ export class AgentEnvironmentService {
       throw new Error("Local agent environments are created automatically by connected bridges");
     }
     const config = asConfigRecord(input.config);
-    assertConfigStoresOnlySecretReferences(input.config);
+    assertConfigHasNoRawSecrets(input.config);
     await runtimeAdapterRegistry.get(input.adapterType).validateConfig(config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
@@ -436,7 +432,7 @@ export class AgentEnvironmentService {
   ) {
     if (input.name !== undefined) normalizeName(input.name);
     if (input.adapterType !== undefined) assertSupportedAdapter(input.adapterType);
-    if (input.config !== undefined) assertConfigStoresOnlySecretReferences(input.config);
+    if (input.config !== undefined) assertConfigHasNoRawSecrets(input.config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       const existing = await tx.agentEnvironment.findFirstOrThrow({

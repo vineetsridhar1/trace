@@ -10,7 +10,6 @@ export type AgentEnvironmentConfig = Record<string, unknown> & {
   deprovisionPolicy?: "on_session_end" | "manual";
   auth?: {
     type?: "bearer" | "hmac";
-    secretId?: string;
   };
   launcherMetadata?: Record<string, unknown>;
 };
