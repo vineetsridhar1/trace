@@ -100,9 +100,10 @@ export function SessionGroupContentArea({
           fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
         >
           <MonacoFileViewer
-            key={activeFilePath}
+            key={`${activeFilePath}:${activeFile?.lineNumber ?? ""}`}
             sessionGroupId={sessionGroupId}
             filePath={activeFilePath}
+            initialLineNumber={activeFile?.lineNumber}
           />
         </Suspense>
       </div>

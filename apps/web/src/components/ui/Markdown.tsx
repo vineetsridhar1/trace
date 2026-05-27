@@ -2,7 +2,11 @@ import type { ComponentPropsWithoutRef, MouseEvent, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useFileOpen } from "../session/FileOpenContext";
+import {
+  useFileOpen,
+  type FileOpenHandler,
+  type FileOpenRequest,
+} from "../session/FileOpenContext";
 import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
 import {
   createSteerableBlocksPlugin,
@@ -43,17 +47,23 @@ function ExternalLink(props: ComponentPropsWithoutRef<"a">) {
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }
 
-/** Normalize a file path for the file viewer (collapse ./ prefix). */
-function normalizeFilePath(href: string): string {
+/** Normalize a file path for the file viewer (collapse ./ prefix, split trailing line suffix). */
+function normalizeFilePath(href: string): FileOpenRequest {
   let p = href;
   if (p.startsWith("./")) p = p.slice(2);
-  return p;
+  const lineMatch = /^(.+):(\d+)(?::\d+)?$/.exec(p);
+  if (!lineMatch) return { filePath: p };
+  const [, filePath, lineNumber] = lineMatch;
+  if (!filePath || !lineNumber) return { filePath: p };
+  const parsedLineNumber = Number(lineNumber);
+  if (parsedLineNumber < 1) return { filePath: p };
+  return { filePath, lineNumber: parsedLineNumber };
 }
 
 function FileAwareLink({
   onFileOpen,
   ...props
-}: ComponentPropsWithoutRef<"a"> & { onFileOpen: (filePath: string) => void }) {
+}: ComponentPropsWithoutRef<"a"> & { onFileOpen: FileOpenHandler }) {
   const handleClick = useCallback(
     (e: MouseEvent<HTMLAnchorElement>) => {
       const href = props.href;

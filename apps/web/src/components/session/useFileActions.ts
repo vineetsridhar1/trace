@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useUIStore } from "../../stores/ui";
 import type { OpenFileTab } from "./GroupTabStrip";
+import type { FileOpenRequest } from "./FileOpenContext";
 import type {
   DraftAttachmentOpenRequest,
   UploadedAttachmentOpenRequest,
@@ -14,11 +15,19 @@ export function useFileActions() {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
   const handleFileClick = useCallback(
-    (filePath: string) => {
+    (request: string | FileOpenRequest) => {
+      const filePath = typeof request === "string" ? request : request.filePath;
+      const lineNumber = typeof request === "string" ? undefined : request.lineNumber;
       setOpenFiles((prev: OpenFileTab[]) => {
-        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) return prev;
+        if (prev.some((f: OpenFileTab) => f.filePath === filePath)) {
+          return prev.map((file) =>
+            file.filePath === filePath && lineNumber ? { ...file, lineNumber } : file,
+          );
+        }
         const fileName = filePath.split("/").pop() ?? filePath;
-        return [...prev, { filePath, fileName }];
+        const nextFile: OpenFileTab = { filePath, fileName };
+        if (lineNumber) nextFile.lineNumber = lineNumber;
+        return [...prev, nextFile];
       });
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
