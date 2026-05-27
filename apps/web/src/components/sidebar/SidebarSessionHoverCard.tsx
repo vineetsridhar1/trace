@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { GitBranch, Laptop } from "lucide-react";
+import { Calendar, GitBranch, Laptop } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { useAttachedCheckoutsForGroup } from "../../stores/bridges";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
@@ -97,12 +97,15 @@ function SidebarSessionHoverContent({
         {sessionGroupName ?? "Untitled group"}
       </h3>
 
-      <div className="mt-1 flex items-center justify-between gap-4 text-xs text-foreground/65">
-        <p className="min-w-0 truncate">{formatLastMessage(lastMessageAt)}</p>
+      <div className="mt-1.5 flex min-w-0 flex-col gap-1.5 text-xs text-foreground/65">
+        <p className="flex min-w-0 items-center gap-1.5">
+          <Calendar size={11} className="shrink-0" />
+          <span>{formatLastMessage(lastMessageAt)}</span>
+        </p>
         {branch && (
-          <p className="flex max-w-[45%] shrink-0 items-center gap-1 truncate text-right">
+          <p className="flex min-w-0 items-start gap-1.5">
             <GitBranch size={11} className="shrink-0" />
-            <span className="truncate">{branch}</span>
+            <span className="min-w-0 break-words">{branch}</span>
           </p>
         )}
       </div>
