@@ -37,6 +37,16 @@
               "scheme": "https",
               "host": "gettrace.org",
               "pathPrefix": "/m"
+            },
+            {
+              "scheme": "https",
+              "host": "gettrace.org",
+              "pathPrefix": "/c"
+            },
+            {
+              "scheme": "https",
+              "host": "gettrace.org",
+              "pathPrefix": "/g"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]

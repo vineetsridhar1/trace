@@ -8,7 +8,7 @@ describe("buildAppleAppSiteAssociation", () => {
         details: [
           {
             appIDs: ["TEAM123.org.gettrace"],
-            components: [{ "/": "/m/*" }],
+            components: [{ "/": "/m/*" }, { "/": "/c/*" }, { "/": "/g/*" }],
           },
         ],
       },

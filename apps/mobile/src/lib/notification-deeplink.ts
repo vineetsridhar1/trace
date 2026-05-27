@@ -2,9 +2,29 @@ function notificationRoute(path: string): string | null {
   const queryStart = path.indexOf("?");
   const pathname = queryStart >= 0 ? path.slice(0, queryStart) : path;
   const search = queryStart >= 0 ? path.slice(queryStart) : "";
+  const webSessionPath = routePathFromWebSessionPath(pathname, search);
+  if (webSessionPath) return webSessionPath;
   if (pathname.startsWith("/sessions/")) return path;
   if (pathname === "/connections" || pathname === "/(connections)") {
     return `/(connections)${search}`;
+  }
+  return null;
+}
+
+function routePathFromWebSessionPath(pathname: string, search: string): string | null {
+  const parts = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  if (
+    parts[0] === "c" &&
+    parts[2] === "g" &&
+    parts[3] &&
+    (parts.length === 4 || parts.length === 6)
+  ) {
+    const sessionPart = parts[4] === "s" && parts[5] ? `/${parts[5]}` : "";
+    return `/sessions/${parts[3]}${sessionPart}${search}`;
+  }
+  if (parts[0] === "g" && parts[1] && (parts.length === 2 || parts.length === 4)) {
+    const sessionPart = parts[2] === "s" && parts[3] ? `/${parts[3]}` : "";
+    return `/sessions/${parts[1]}${sessionPart}${search}`;
   }
   return null;
 }

@@ -16,6 +16,16 @@ describe("routePathFromNotificationLink", () => {
     );
   });
 
+  it("normalizes Trace web session links", () => {
+    expect(routePathFromNotificationLink("https://gettrace.org/c/c1/g/g1/s/s1")).toBe(
+      "/sessions/g1/s1",
+    );
+    expect(routePathFromNotificationLink("https://gettrace.org/c/c1/g/g1")).toBe("/sessions/g1");
+    expect(routePathFromNotificationLink("https://gettrace.org/g/g1/s/s1?pane=browser")).toBe(
+      "/sessions/g1/s1?pane=browser",
+    );
+  });
+
   it("normalizes bridge review links to the connections tab", () => {
     expect(routePathFromNotificationLink("trace://connections")).toBe("/(connections)");
     expect(routePathFromNotificationLink("trace://connections?requestId=req-1")).toBe(
