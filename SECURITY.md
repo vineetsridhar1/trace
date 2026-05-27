@@ -4,7 +4,7 @@
 
 Please do not open public issues for suspected security vulnerabilities.
 
-Report vulnerabilities by emailing the maintainers at security@gettrace.org with:
+Report vulnerabilities by emailing the maintainers at vineets1600@gmail.com with:
 
 - A description of the issue and its impact
 - Steps to reproduce or a proof of concept
