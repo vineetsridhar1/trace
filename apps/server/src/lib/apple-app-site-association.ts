@@ -20,7 +20,7 @@ export function buildAppleAppSiteAssociation(teamId: string): AppleAppSiteAssoci
       details: [
         {
           appIDs: [`${normalizedTeamId}.${TRACE_IOS_BUNDLE_ID}`],
-          components: [{ "/": "/m/*" }],
+          components: [{ "/": "/m/*" }, { "/": "/c/*" }, { "/": "/g/*" }],
         },
       ],
     },
