@@ -76,3 +76,4 @@ if (fromDryRun) {
 
 await repairNodePtySpawnHelpers(releaseDir);
 run("pnpm", ["exec", "electron-forge", command, ...forgeArgs, releaseDir]);
+await repairNodePtySpawnHelpers(releaseDir);
