@@ -11,9 +11,9 @@ describe("routePathFromNotificationLink", () => {
   });
 
   it("normalizes Trace universal links", () => {
-    expect(routePathFromNotificationLink("https://gettrace.org/m/sessions/g1/s1")).toBe(
-      "/sessions/g1/s1",
-    );
+    expect(
+      routePathFromNotificationLink("https://trace.infra.internal.opendoor.com/m/sessions/g1/s1"),
+    ).toBe("/sessions/g1/s1");
   });
 
   it("normalizes Trace web session links", () => {
@@ -31,9 +31,9 @@ describe("routePathFromNotificationLink", () => {
     expect(routePathFromNotificationLink("trace://connections?requestId=req-1")).toBe(
       "/(connections)?requestId=req-1",
     );
-    expect(routePathFromNotificationLink("https://gettrace.org/m/connections")).toBe(
-      "/(connections)",
-    );
+    expect(
+      routePathFromNotificationLink("https://trace.infra.internal.opendoor.com/m/connections"),
+    ).toBe("/(connections)");
   });
 
   it("normalizes native app-link paths", () => {
@@ -70,9 +70,9 @@ describe("shouldNavigateToNotificationPath", () => {
   });
 
   it("navigates when a same-session notification includes route state", () => {
-    expect(shouldNavigateToNotificationPath("/sessions/g1/s1", "/sessions/g1/s1?pane=browser")).toBe(
-      true,
-    );
+    expect(
+      shouldNavigateToNotificationPath("/sessions/g1/s1", "/sessions/g1/s1?pane=browser"),
+    ).toBe(true);
   });
 
   it("navigates when a session notification targets a different session", () => {

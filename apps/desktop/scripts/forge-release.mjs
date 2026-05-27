@@ -19,9 +19,7 @@ const fromDryRun =
   forgeArgs.some((arg) => arg === "--from-dry-run" || arg === "--from-dry-run=true");
 
 if (!forgeCommands.has(command)) {
-  console.error(
-    "Usage: node scripts/forge-release.mjs <package|make|publish> [forge args]",
-  );
+  console.error("Usage: node scripts/forge-release.mjs <package|make|publish> [forge args]");
   process.exit(1);
 }
 
@@ -29,7 +27,9 @@ const productionUrl = process.env.TRACE_PRODUCTION_URL;
 const updateRepo = process.env.TRACE_DESKTOP_UPDATE_REPO;
 
 if (!productionUrl) {
-  console.error("TRACE_PRODUCTION_URL must be set (e.g. https://gettrace.org)");
+  console.error(
+    "TRACE_PRODUCTION_URL must be set (e.g. https://trace.infra.internal.opendoor.com)",
+  );
   process.exit(1);
 }
 
@@ -58,9 +58,7 @@ function run(cmd, args) {
 
 if (fromDryRun) {
   if (!existsSync(releaseDir)) {
-    console.error(
-      "No desktop release dry-run state found. Run publish:mac --dry-run first.",
-    );
+    console.error("No desktop release dry-run state found. Run publish:mac --dry-run first.");
     process.exit(1);
   }
 } else {
