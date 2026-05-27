@@ -95,8 +95,7 @@ export function AppSidebar() {
     <>
       <Sidebar collapsible="offcanvas" className="border-none">
         <div
-          className="flex size-full flex-col bg-transparent text-sidebar-foreground"
-          style={{ backgroundColor: "transparent" }}
+          className="flex size-full flex-col border-r border-white/10 bg-sidebar text-sidebar-foreground shadow-2xl shadow-black/20 backdrop-blur-2xl"
         >
           <div className="app-region-drag h-12 shrink-0" />
           <SidebarContent className="app-region-no-drag overflow-hidden">
