@@ -1431,6 +1431,27 @@ async function postSessionAccessRequestFeedback(input: {
     });
 }
 
+async function postThreadNotice(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  text: string;
+}): Promise<void> {
+  const client = await getSlackClient(input.slackTeamId);
+  if (!client) return;
+  await client.chat
+    .postMessage({
+      channel: input.slackChannelId,
+      thread_ts: input.slackThreadTs,
+      text: input.text,
+      mrkdwn: true,
+      reply_broadcast: false,
+    })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to post thread notice:", errorMessage(err));
+    });
+}
+
 async function postDraftActionFeedback(input: {
   slackTeamId: string;
   slackChannelId: string;
@@ -1926,10 +1947,19 @@ async function handleAppMention(input: {
         slackThreadTs: threadTs,
       },
     },
-    select: { id: true },
+    select: { id: true, session: { select: { worktreeDeleted: true } } },
   });
   if (existingThread) {
     console.info("[slack] app_mention for existing Trace thread", { teamId, channel, threadTs });
+    if (existingThread.session.worktreeDeleted) {
+      await postThreadNotice({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackThreadTs: threadTs,
+        text: "This Trace session's worktree has been deleted, so it can't accept new messages.",
+      });
+      return;
+    }
     await postMentionFeedback({
       slackTeamId: teamId,
       slackChannelId: channel,
@@ -2235,6 +2265,7 @@ async function handleThreadMessage(input: {
           hosting: true,
           sessionGroupId: true,
           connection: true,
+          worktreeDeleted: true,
           sessionGroup: { select: { connection: true } },
         },
       },
@@ -2271,6 +2302,16 @@ async function handleThreadMessage(input: {
   if (!membership) return;
 
   const text = rawText.trim();
+  if (thread.session.worktreeDeleted) {
+    await postThreadNotice({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackThreadTs: threadTs,
+      text: "This Trace session's worktree has been deleted, so it can't accept new messages.",
+    });
+    return;
+  }
+
   const runtimeInstanceId =
     connectionRuntimeInstanceId(thread.session.connection) ??
     connectionRuntimeInstanceId(thread.session.sessionGroup?.connection);
