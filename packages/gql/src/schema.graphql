@@ -388,6 +388,8 @@ type SessionGroup {
   id: ID!
   name: String!
   slug: String
+  forkedFromSessionGroupId: ID
+  forkedFromSessionGroup: SessionGroup
   status: SessionGroupStatus!
   visibility: SessionGroupVisibility!
   owner: User!
@@ -1189,6 +1191,7 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
+  forkSession(eventId: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!

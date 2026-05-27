@@ -31,6 +31,7 @@ import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
 import {
@@ -171,6 +172,8 @@ export function SessionDetailView({
   hideHeader,
   scrollToEventId,
   onScrollComplete,
+  onForkSession,
+  canForkSession = false,
 }: {
   key?: React.Key;
   sessionId: string;
@@ -178,6 +181,8 @@ export function SessionDetailView({
   hideHeader?: boolean;
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
+  onForkSession?: (eventId: string) => void;
+  canForkSession?: boolean;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const {
@@ -365,9 +370,7 @@ export function SessionDetailView({
     }
 
     const compactNodes: SessionListNode[] = [];
-    let currentCollapsedGroup:
-      | Extract<SessionListNode, { kind: "collapsed-events" }>
-      | null = null;
+    let currentCollapsedGroup: Extract<SessionListNode, { kind: "collapsed-events" }> | null = null;
 
     for (const item of timelineItems) {
       if (item.kind === "collapsed_events") {
@@ -393,6 +396,10 @@ export function SessionDetailView({
 
     return compactNodes;
   }, [events, nodes, timelineItems, timelineMode]);
+  const messageActionsEventIds = useMemo(
+    () => findMessageActionsEventIds(eventIds, events),
+    [eventIds, events],
+  );
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);
@@ -541,6 +548,9 @@ export function SessionDetailView({
                 planComments={planComments}
                 onAddPlanComment={handleAddPlanComment}
                 onRemovePlanComment={handleRemovePlanComment}
+                onForkSession={onForkSession}
+                canForkSession={canForkSession}
+                messageActionsEventIds={messageActionsEventIds}
               />
             )}
             {initialEventsLoading && (

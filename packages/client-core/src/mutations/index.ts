@@ -9,6 +9,15 @@ export const START_SESSION_MUTATION = gql`
   }
 `;
 
+export const FORK_SESSION_MUTATION = gql`
+  mutation ForkSession($eventId: ID!) {
+    forkSession(eventId: $eventId) {
+      id
+      sessionGroupId
+    }
+  }
+`;
+
 export const RUN_SESSION_MUTATION = gql`
   mutation RunSession($id: ID!, $prompt: String, $interactionMode: String) {
     runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) {

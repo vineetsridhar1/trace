@@ -18,6 +18,9 @@ export interface SessionNodeRendererProps {
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
+  onForkSession?: (eventId: string) => void;
+  canForkSession?: boolean;
+  messageActionsEventIds?: ReadonlySet<string>;
 }
 
 export const SessionNodeRenderer = memo(function SessionNodeRenderer({
@@ -30,6 +33,9 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
+  onForkSession,
+  canForkSession = false,
+  messageActionsEventIds,
 }: SessionNodeRendererProps) {
   if (node.kind === "event") {
     return (
@@ -46,6 +52,9 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
           gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           completedAgentTools={completedAgentTools}
           toolResultByUseId={toolResultByUseId}
+          onForkSession={onForkSession}
+          canForkSession={canForkSession}
+          showActions={messageActionsEventIds?.has(node.id) ?? false}
         />
       </div>
     );

@@ -598,6 +598,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkSession: Session;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -816,6 +817,10 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars["String"]["input"];
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationForkSessionArgs = {
+  eventId: Scalars["ID"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -1627,6 +1632,8 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  forkedFromSessionGroup?: Maybe<SessionGroup>;
+  forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -2915,6 +2922,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationEditChatMessageArgs, "html" | "messageId">
   >;
+  forkSession?: Resolver<
+    ResolversTypes["Session"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationForkSessionArgs, "eventId">
+  >;
   joinChannel?: Resolver<
     ResolversTypes["Channel"],
     ParentType,
@@ -3752,6 +3765,8 @@ export type SessionGroupResolvers<
   channel?: Resolver<Maybe<ResolversTypes["Channel"]>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes["SessionConnection"]>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  forkedFromSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
+  forkedFromSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;

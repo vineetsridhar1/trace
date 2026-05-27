@@ -597,6 +597,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkSession: Session;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -815,6 +816,10 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars["String"]["input"];
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationForkSessionArgs = {
+  eventId: Scalars["ID"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -1626,6 +1631,8 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  forkedFromSessionGroup?: Maybe<SessionGroup>;
+  forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1991,6 +1998,7 @@ export type SessionGroupsQuery = {
     id: string;
     name: string;
     slug?: string | null;
+    forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
     prUrl?: string | null;
@@ -2051,6 +2059,7 @@ export type FilteredSessionGroupsQuery = {
     __typename?: "SessionGroup";
     id: string;
     name: string;
+    forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
     prUrl?: string | null;
@@ -2331,6 +2340,7 @@ export type SessionGroupDetailQuery = {
     id: string;
     name: string;
     slug?: string | null;
+    forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
     archivedAt?: string | null;
@@ -3543,6 +3553,7 @@ export const SessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 {
@@ -3710,6 +3721,7 @@ export const FilteredSessionGroupsDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 {
@@ -4577,6 +4589,7 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 {

@@ -19,7 +19,7 @@ import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
-import { assertScopeAccess } from "../services/access.js";
+import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -262,6 +262,17 @@ export const sessionMutations = {
     const orgId = requireOrgContext(ctx);
     return sessionService.start({
       ...args.input,
+      organizationId: orgId,
+      createdById: ctx.userId,
+      actorType: ctx.actorType,
+      clientSource: ctx.clientSource,
+    });
+  },
+  forkSession: (_: unknown, args: { eventId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.forkSession({
+      eventId: args.eventId,
       organizationId: orgId,
       createdById: ctx.userId,
       actorType: ctx.actorType,
@@ -633,6 +644,27 @@ export const sessionTypeResolvers = {
       if (group.ownerUser) return group.ownerUser;
       if (!group.ownerUserId) return null;
       return ctx.userLoader.load(group.ownerUserId);
+    },
+    forkedFromSessionGroup: async (
+      group: { forkedFromSessionGroup?: unknown; forkedFromSessionGroupId?: string | null },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (!ctx.userId) return null;
+      if (group.forkedFromSessionGroup) {
+        const sourceGroup = group.forkedFromSessionGroup as {
+          ownerUserId?: string | null;
+          visibility?: "public" | "private" | null;
+        };
+        return canViewSessionGroup(sourceGroup, ctx.userId) ? group.forkedFromSessionGroup : null;
+      }
+      if (!group.forkedFromSessionGroupId) return null;
+      const sourceGroup = (await ctx.sessionGroupLoader.load(group.forkedFromSessionGroupId)) as {
+        ownerUserId?: string | null;
+        visibility?: "public" | "private" | null;
+      } | null;
+      if (!sourceGroup || !canViewSessionGroup(sourceGroup, ctx.userId)) return null;
+      return sourceGroup;
     },
   },
   Session: {

@@ -7,6 +7,7 @@ import { isLocalMode } from "../lib/mode.js";
 import { pushNotificationService } from "./pushNotificationService.js";
 
 export interface CreateEventInput {
+  id?: string;
   organizationId: string;
   scopeType: ScopeType;
   scopeId: string;
@@ -17,6 +18,7 @@ export interface CreateEventInput {
   parentId?: string;
   metadata?: Prisma.InputJsonValue;
   deferPublish?: boolean;
+  timestamp?: Date;
 }
 
 export interface EventQueryOpts {
@@ -115,6 +117,7 @@ export class EventService {
 
     const event = await db.event.create({
       data: {
+        id: input.id,
         organizationId: input.organizationId,
         scopeType: input.scopeType,
         scopeId: input.scopeId,
@@ -124,6 +127,7 @@ export class EventService {
         actorId: input.actorId,
         parentId: input.parentId,
         metadata: input.metadata ?? {},
+        timestamp: input.timestamp,
       },
     });
 

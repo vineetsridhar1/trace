@@ -59,10 +59,22 @@ function renderAssistantContent(
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
+  sourceEventId: string,
+  onForkSession: ((eventId: string) => void) | undefined,
+  canForkSession: boolean,
+  showActions: boolean,
 ) {
   const message = asJsonObject(payload.message);
   const contentBlocks = message?.content;
   if (!Array.isArray(contentBlocks)) return null;
+
+  let lastTextBlockIndex = -1;
+  for (let i = 0; i < contentBlocks.length; i++) {
+    const block = asJsonObject(contentBlocks[i]);
+    if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
+      lastTextBlockIndex = i;
+    }
+  }
 
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < contentBlocks.length; i++) {
@@ -71,7 +83,16 @@ function renderAssistantContent(
 
     if (block.type === "text" && typeof block.text === "string") {
       if (!block.text.trim()) continue;
-      elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
+      elements.push(
+        <AssistantText
+          key={i}
+          text={block.text}
+          eventId={sourceEventId}
+          onForkSession={onForkSession}
+          canForkSession={canForkSession}
+          showActions={showActions && i === lastTextBlockIndex}
+        />,
+      );
     } else if (block.type === "tool_use") {
       const name = str(block.name, "Tool");
       const toolUseId = typeof block.id === "string" ? block.id : undefined;
@@ -120,6 +141,10 @@ function renderSessionOutput(
   completedAgentTools: Map<string, AgentToolResult>,
   toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
+  sourceEventId: string,
+  onForkSession: ((eventId: string) => void) | undefined,
+  canForkSession: boolean,
+  showActions: boolean,
 ) {
   const type = payload.type;
   if (typeof type !== "string") return null;
@@ -132,6 +157,10 @@ function renderSessionOutput(
       completedAgentTools,
       toolResultByUseId,
       gitCheckpointsByPromptEventId,
+      sourceEventId,
+      onForkSession,
+      canForkSession,
+      showActions,
     );
   }
 
@@ -178,11 +207,17 @@ export const SessionMessage = memo(function SessionMessage({
   gitCheckpointsByPromptEventId,
   completedAgentTools,
   toolResultByUseId,
+  onForkSession,
+  canForkSession = false,
+  showActions = false,
 }: {
   id: string;
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
+  onForkSession?: (eventId: string) => void;
+  canForkSession?: boolean;
+  showActions?: boolean;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -223,6 +258,10 @@ export const SessionMessage = memo(function SessionMessage({
             completedAgentTools,
             toolResultByUseId,
             gitCheckpointsByPromptEventId,
+            id,
+            onForkSession,
+            canForkSession,
+            showActions,
           )
         : null;
 

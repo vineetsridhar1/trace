@@ -20,6 +20,7 @@ const SESSION_GROUPS_QUERY = gql`
       id
       name
       slug
+      forkedFromSessionGroupId
       status
       visibility
       owner {
