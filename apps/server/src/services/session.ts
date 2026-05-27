@@ -2016,7 +2016,7 @@ export class SessionService {
   }
 
   private async refreshLinkedCheckoutBranchFromBridge(params: {
-    runtimeId: string;
+    organizationId: string;
     repoId: string;
     group: LinkedCheckoutRuntimeGroup;
   }): Promise<string | null> {
@@ -2035,10 +2035,23 @@ export class SessionService {
 
     if (!session) return null;
 
+    const ownerRuntimeInstanceId = this.getConnectionRuntimeInstanceId(params.group.connection);
+    if (!ownerRuntimeInstanceId) return null;
+
+    const ownerRuntime = sessionRouter
+      .listRuntimes()
+      .find(
+        (candidate) =>
+          candidate.organizationId === params.organizationId &&
+          candidate.id === ownerRuntimeInstanceId &&
+          candidate.ws.readyState === candidate.ws.OPEN,
+      );
+    if (!ownerRuntime) return null;
+
     let branch: string | null;
     try {
       branch = await sessionRouter.inspectSessionCurrentBranch(
-        params.runtimeId,
+        ownerRuntime.key,
         { sessionId: session.id, workdirHint },
         LINKED_CHECKOUT_BRANCH_REFRESH_TIMEOUT_MS,
       );
@@ -7083,7 +7096,7 @@ export class SessionService {
       { runtimeInstanceId: options?.runtimeInstanceId, requireRegisteredRepo: true },
     );
     const refreshedBranch = await this.refreshLinkedCheckoutBranchFromBridge({
-      runtimeId,
+      organizationId,
       repoId,
       group,
     });
