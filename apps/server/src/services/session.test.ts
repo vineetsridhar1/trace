@@ -2214,6 +2214,7 @@ describe("SessionService", () => {
               prompt: "Initial source prompt",
               attachmentKeys: ["image-key"],
               imageKeys: ["image-key"],
+              checkpoint: { promptEventId: "source-start" },
             },
             actorType: "user",
             actorId: "other-user",
@@ -2328,6 +2329,17 @@ describe("SessionService", () => {
           actorType: "user",
           actorId: "other-user",
         }),
+      });
+      expect(prismaMock.event.update).toHaveBeenCalledWith({
+        where: { id: "forked-start" },
+        data: {
+          payload: expect.objectContaining({
+            checkpoint: { promptEventId: "forked-start" },
+            session: expect.objectContaining({ id: "forked-session" }),
+            sessionGroup: expect.objectContaining({ id: "forked-group" }),
+            sourceSessionId: "source-session",
+          }),
+        },
       });
       expect(eventServiceMock.create).toHaveBeenLastCalledWith(
         expect.objectContaining({

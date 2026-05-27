@@ -3467,24 +3467,26 @@ export class SessionService {
     const copiedEventIds = new Map<string, string>();
     const copiedHistoryEventIds: string[] = [];
     const sourceStartEvent = sourceEvents.find((event) => event.eventType === "session_started");
+    let mergedStartPayload: Record<string, unknown> | null = null;
     if (sourceStartEvent) {
       copiedEventIds.set(sourceStartEvent.id, input.startEventId);
       const sourceStartPayload = jsonRecord(
         rewriteForkPayloadReferences(sourceStartEvent.payload, replacements),
       );
       const targetStartPayload = jsonRecord(input.targetStartEventPayload);
+      mergedStartPayload = {
+        ...sourceStartPayload,
+        session: targetStartPayload.session,
+        sessionGroup: targetStartPayload.sessionGroup,
+        clientSource: targetStartPayload.clientSource,
+        sourceSessionId: input.sourceSessionId,
+        restoreCheckpointId: targetStartPayload.restoreCheckpointId,
+        restoreCheckpointSha: targetStartPayload.restoreCheckpointSha,
+      };
       await tx.event.update({
         where: { id: input.startEventId },
         data: {
-          payload: {
-            ...sourceStartPayload,
-            session: targetStartPayload.session,
-            sessionGroup: targetStartPayload.sessionGroup,
-            clientSource: targetStartPayload.clientSource,
-            sourceSessionId: input.sourceSessionId,
-            restoreCheckpointId: targetStartPayload.restoreCheckpointId,
-            restoreCheckpointSha: targetStartPayload.restoreCheckpointSha,
-          } as Prisma.InputJsonValue,
+          payload: mergedStartPayload as Prisma.InputJsonValue,
           metadata: {
             forkedFromSessionId: input.sourceSessionId,
             forkedFromSessionGroupId: input.sourceSessionGroupId,
@@ -3581,14 +3583,30 @@ export class SessionService {
       }
     }
 
-    if (copiedCheckpointIds.size === 0) return;
-
     const checkpointReplacements = new Map(replacements);
     for (const [sourceEventId, targetEventId] of copiedEventIds) {
       checkpointReplacements.set(sourceEventId, targetEventId);
     }
     for (const [sourceCheckpointId, targetCheckpointId] of copiedCheckpointIds) {
       checkpointReplacements.set(sourceCheckpointId, targetCheckpointId);
+    }
+
+    if (mergedStartPayload) {
+      const targetStartPayload = jsonRecord(input.targetStartEventPayload);
+      const rewrittenStartPayload = jsonRecord(
+        rewriteForkPayloadReferences(mergedStartPayload, checkpointReplacements),
+      );
+      await tx.event.update({
+        where: { id: input.startEventId },
+        data: {
+          payload: {
+            ...rewrittenStartPayload,
+            session: targetStartPayload.session,
+            sessionGroup: targetStartPayload.sessionGroup,
+            sourceSessionId: input.sourceSessionId,
+          } as Prisma.InputJsonValue,
+        },
+      });
     }
 
     const copiedEvents =
