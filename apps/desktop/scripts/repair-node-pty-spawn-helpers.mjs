@@ -34,7 +34,7 @@ export async function repairNodePtySpawnHelpers(rootDir) {
     return counts.reduce((sum, count) => sum + count, 0);
   }
 
-  return visit(path.join(rootDir, "node_modules"));
+  return visit(rootDir);
 }
 
 const isCli = process.argv[1] === fileURLToPath(import.meta.url);
