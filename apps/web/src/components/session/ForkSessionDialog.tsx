@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { FORK_SESSION_MUTATION } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { navigateToSession } from "../../stores/ui";
@@ -27,12 +27,12 @@ export function ForkSessionDialog({
   const [forking, setForking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleOpenChange = (next: boolean) => {
+  const handleOpenChange = useCallback((next: boolean) => {
     if (next) setError(null);
     if (!forking) onOpenChange(next);
-  };
+  }, [forking, onOpenChange]);
 
-  const handleFork = async () => {
+  const handleFork = useCallback(async () => {
     if (!eventId) return;
     setForking(true);
     setError(null);
@@ -56,7 +56,7 @@ export function ForkSessionDialog({
     } finally {
       setForking(false);
     }
-  };
+  }, [eventId, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

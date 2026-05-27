@@ -70,6 +70,8 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   provisionWithoutPrompt?: boolean;
   name?: string | null;
   allowVisibleSourceSession?: boolean;
+  startEventId?: string;
+  buildStartEvent?: (input: StartSessionBuildStartEventInput) => StartSessionEventOverride;
   afterCreate?: (input: StartSessionAfterCreateInput) => Promise<void>;
 };
 
@@ -565,6 +567,23 @@ type SessionWithInclude = Prisma.SessionGetPayload<{
 
 type ForkSourceEvent = Prisma.EventGetPayload<Prisma.EventDefaultArgs>;
 
+type StartSessionBuildStartEventInput = {
+  session: SessionWithInclude;
+  sessionGroup: SessionGroupSummary;
+  sessionGroupSnapshot: SessionGroupSnapshot;
+  startEventId: string;
+  defaultPayload: Prisma.InputJsonValue;
+  defaultMetadata: Prisma.InputJsonValue | undefined;
+};
+
+type StartSessionEventOverride = {
+  payload: Prisma.InputJsonValue;
+  metadata?: Prisma.InputJsonValue;
+  actorType?: ActorType;
+  actorId?: string;
+  timestamp?: Date;
+};
+
 type StartSessionAfterCreateInput = {
   tx: Prisma.TransactionClient;
   session: SessionWithInclude;
@@ -718,6 +737,13 @@ function rewriteForkPayloadReferences(
 function jsonRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
+}
+
+function gitCheckpointIdFromPayload(value: unknown): string | null {
+  const payload = jsonRecord(value);
+  if (payload.type !== "git_checkpoint" && payload.type !== "git_checkpoint_rewrite") return null;
+  const checkpoint = jsonRecord(payload.checkpoint);
+  return typeof checkpoint.id === "string" ? checkpoint.id : null;
 }
 
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
@@ -3221,6 +3247,7 @@ export class SessionService {
         { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
       ]);
 
+      const startEventId = input.startEventId ?? randomUUID();
       const startEventPayload = {
         session: serializeSession(session),
         sessionGroup: sessionGroupSnapshot,
@@ -3233,19 +3260,30 @@ export class SessionService {
           ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
           : {}),
       } as Prisma.InputJsonValue;
+      const startEventMetadata = initialCheckpointContextId
+        ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
+        : undefined;
+      const startEventOverride = input.buildStartEvent?.({
+        session,
+        sessionGroup,
+        sessionGroupSnapshot,
+        startEventId,
+        defaultPayload: startEventPayload,
+        defaultMetadata: startEventMetadata,
+      });
 
-      const startEvent = await eventService.create(
+      await eventService.create(
         {
+          id: startEventId,
           organizationId: input.organizationId,
           scopeType: "session",
           scopeId: session.id,
           eventType: "session_started",
-          payload: startEventPayload,
-          metadata: initialCheckpointContextId
-            ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
-            : undefined,
-          actorType: "user",
-          actorId: input.createdById,
+          payload: startEventOverride?.payload ?? startEventPayload,
+          metadata: startEventOverride?.metadata ?? startEventMetadata,
+          actorType: startEventOverride?.actorType ?? "user",
+          actorId: startEventOverride?.actorId ?? input.createdById,
+          timestamp: startEventOverride?.timestamp,
         },
         tx,
       );
@@ -3255,8 +3293,8 @@ export class SessionService {
           tx,
           session,
           sessionGroup,
-          startEventId: startEvent.id,
-          startEventPayload,
+          startEventId,
+          startEventPayload: startEventOverride?.payload ?? startEventPayload,
         });
       }
 
@@ -3358,14 +3396,14 @@ export class SessionService {
       },
       orderBy: [{ timestamp: "asc" }, { id: "asc" }],
     });
-    const sourceEventIds = sourceEvents.map((event) => event.id);
+    const sourceCheckpointIds = sourceEvents
+      .map((event) => gitCheckpointIdFromPayload(event.payload))
+      .filter((id): id is string => !!id);
 
     const latestCheckpoint = await prisma.gitCheckpoint.findFirst({
       where: {
         sessionGroupId: sourceSessionGroupId,
-        promptEventId: {
-          in: sourceEventIds,
-        },
+        id: { in: sourceCheckpointIds },
       },
       orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
       select: { commitSha: true },
@@ -3375,12 +3413,25 @@ export class SessionService {
       (await prisma.gitCheckpoint.findMany({
         where: {
           sessionGroupId: sourceSessionGroupId,
-          promptEventId: {
-            in: sourceEventIds,
-          },
+          id: { in: sourceCheckpointIds },
         },
         orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
       })) ?? [];
+    const targetStartEventId = randomUUID();
+    const targetEventIds = new Map<string, string>();
+    const sourceStartEvent = sourceEvents.find((event) => event.eventType === "session_started");
+    if (sourceStartEvent) {
+      targetEventIds.set(sourceStartEvent.id, targetStartEventId);
+    }
+    for (const sourceEvent of sourceEvents) {
+      if (sourceEvent.eventType !== "session_started") {
+        targetEventIds.set(sourceEvent.id, randomUUID());
+      }
+    }
+    const targetCheckpointIds = new Map<string, string>();
+    for (const checkpoint of sourceCheckpoints) {
+      targetCheckpointIds.set(checkpoint.id, randomUUID());
+    }
 
     const forkedSession = await this.start({
       tool: sourceSession.tool,
@@ -3402,7 +3453,46 @@ export class SessionService {
       checkpointSha: latestCheckpoint?.commitSha ?? null,
       provisionWithoutPrompt: true,
       name: sourceSession.name,
-      afterCreate: async ({ tx, session, startEventId, startEventPayload }) => {
+      startEventId: targetStartEventId,
+      buildStartEvent: ({ session, defaultPayload }) => {
+        if (!sourceStartEvent || !session.sessionGroupId) {
+          return {
+            payload: defaultPayload,
+          };
+        }
+        const replacements = this.buildForkReplacementMap({
+          sourceSessionId: sourceSession.id,
+          sourceSessionGroupId,
+          targetSessionId: session.id,
+          targetSessionGroupId: session.sessionGroupId,
+          targetEventIds,
+          targetCheckpointIds,
+        });
+        const sourceStartPayload = jsonRecord(
+          rewriteForkPayloadReferences(sourceStartEvent.payload, replacements),
+        );
+        const targetStartPayload = jsonRecord(defaultPayload);
+        return {
+          payload: {
+            ...sourceStartPayload,
+            session: targetStartPayload.session,
+            sessionGroup: targetStartPayload.sessionGroup,
+            clientSource: targetStartPayload.clientSource,
+            sourceSessionId: sourceSession.id,
+            restoreCheckpointId: targetStartPayload.restoreCheckpointId,
+            restoreCheckpointSha: targetStartPayload.restoreCheckpointSha,
+          } as Prisma.InputJsonValue,
+          metadata: {
+            forkedFromSessionId: sourceSession.id,
+            forkedFromSessionGroupId: sourceSessionGroupId,
+            forkedFromEventId: sourceForkEvent.id,
+          } as Prisma.InputJsonValue,
+          actorType: sourceStartEvent.actorType,
+          actorId: sourceStartEvent.actorId,
+          timestamp: sourceStartEvent.timestamp,
+        };
+      },
+      afterCreate: async ({ tx, session, startEventId }) => {
         if (!session.sessionGroupId) {
           throw new Error("Forked session was not assigned to a session group");
         }
@@ -3414,10 +3504,10 @@ export class SessionService {
             targetSessionGroupId: session.sessionGroupId,
             organizationId: input.organizationId,
             startEventId,
-            targetStartEventPayload: startEventPayload,
-            sourceForkEventId: sourceForkEvent.id,
             sourceEvents,
             sourceCheckpoints,
+            targetEventIds,
+            targetCheckpointIds,
           },
           tx,
         );
@@ -3430,6 +3520,27 @@ export class SessionService {
     });
   }
 
+  private buildForkReplacementMap(input: {
+    sourceSessionId: string;
+    sourceSessionGroupId: string;
+    targetSessionId: string;
+    targetSessionGroupId: string;
+    targetEventIds: ReadonlyMap<string, string>;
+    targetCheckpointIds: ReadonlyMap<string, string>;
+  }): Map<string, string> {
+    const replacements = new Map<string, string>([
+      [input.sourceSessionId, input.targetSessionId],
+      [input.sourceSessionGroupId, input.targetSessionGroupId],
+    ]);
+    for (const [sourceEventId, targetEventId] of input.targetEventIds) {
+      replacements.set(sourceEventId, targetEventId);
+    }
+    for (const [sourceCheckpointId, targetCheckpointId] of input.targetCheckpointIds) {
+      replacements.set(sourceCheckpointId, targetCheckpointId);
+    }
+    return replacements;
+  }
+
   private async copyForkedSessionHistory(
     input: {
       sourceSessionId: string;
@@ -3438,8 +3549,6 @@ export class SessionService {
       targetSessionGroupId: string;
       organizationId: string;
       startEventId: string;
-      targetStartEventPayload: Prisma.InputJsonValue;
-      sourceForkEventId: string;
       sourceEvents: ForkSourceEvent[];
       sourceCheckpoints: Array<{
         id: string;
@@ -3455,50 +3564,19 @@ export class SessionService {
         committedAt: Date;
         filesChanged: number;
       }>;
+      targetEventIds: ReadonlyMap<string, string>;
+      targetCheckpointIds: ReadonlyMap<string, string>;
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const sourceEvents = input.sourceEvents;
-
-    const replacements = new Map<string, string>([
-      [input.sourceSessionId, input.targetSessionId],
-      [input.sourceSessionGroupId, input.targetSessionGroupId],
-    ]);
-    const copiedEventIds = new Map<string, string>();
-    const copiedHistoryEventIds: string[] = [];
-    const sourceStartEvent = sourceEvents.find((event) => event.eventType === "session_started");
-    let mergedStartPayload: Record<string, unknown> | null = null;
-    if (sourceStartEvent) {
-      copiedEventIds.set(sourceStartEvent.id, input.startEventId);
-      const sourceStartPayload = jsonRecord(
-        rewriteForkPayloadReferences(sourceStartEvent.payload, replacements),
-      );
-      const targetStartPayload = jsonRecord(input.targetStartEventPayload);
-      mergedStartPayload = {
-        ...sourceStartPayload,
-        session: targetStartPayload.session,
-        sessionGroup: targetStartPayload.sessionGroup,
-        clientSource: targetStartPayload.clientSource,
-        sourceSessionId: input.sourceSessionId,
-        restoreCheckpointId: targetStartPayload.restoreCheckpointId,
-        restoreCheckpointSha: targetStartPayload.restoreCheckpointSha,
-      };
-      await tx.event.update({
-        where: { id: input.startEventId },
-        data: {
-          payload: mergedStartPayload as Prisma.InputJsonValue,
-          metadata: {
-            forkedFromSessionId: input.sourceSessionId,
-            forkedFromSessionGroupId: input.sourceSessionGroupId,
-            forkedFromEventId: input.sourceForkEventId,
-          } as Prisma.InputJsonValue,
-          actorType: sourceStartEvent.actorType,
-          actorId: sourceStartEvent.actorId,
-        },
-      });
-    }
-
-    const copiedCheckpointIds = new Map<string, string>();
+    const replacements = this.buildForkReplacementMap({
+      sourceSessionId: input.sourceSessionId,
+      sourceSessionGroupId: input.sourceSessionGroupId,
+      targetSessionId: input.targetSessionId,
+      targetSessionGroupId: input.targetSessionGroupId,
+      targetEventIds: input.targetEventIds,
+      targetCheckpointIds: input.targetCheckpointIds,
+    });
     const checkpointsBySourcePromptEventId = new Map<string, typeof input.sourceCheckpoints>();
     for (const checkpoint of input.sourceCheckpoints) {
       const existing = checkpointsBySourcePromptEventId.get(checkpoint.promptEventId) ?? [];
@@ -3506,35 +3584,40 @@ export class SessionService {
       checkpointsBySourcePromptEventId.set(checkpoint.promptEventId, existing);
     }
 
-    if (sourceStartEvent) {
-      const sourceCheckpointsForStart =
-        checkpointsBySourcePromptEventId.get(sourceStartEvent.id) ?? [];
-      for (const checkpoint of sourceCheckpointsForStart) {
-        const copiedCheckpoint = await tx.gitCheckpoint.create({
-          data: {
-            sessionId: input.targetSessionId,
-            sessionGroupId: input.targetSessionGroupId,
-            repoId: checkpoint.repoId,
-            promptEventId: input.startEventId,
-            commitSha: checkpoint.commitSha,
-            parentShas: checkpoint.parentShas,
-            treeSha: checkpoint.treeSha,
-            subject: checkpoint.subject,
-            author: checkpoint.author,
-            committedAt: checkpoint.committedAt,
-            filesChanged: checkpoint.filesChanged,
-          },
-        });
-        copiedCheckpointIds.set(checkpoint.id, copiedCheckpoint.id);
-      }
-    }
+    const createCopiedCheckpoint = async (checkpoint: (typeof input.sourceCheckpoints)[number]) => {
+      const targetCheckpointId = input.targetCheckpointIds.get(checkpoint.id);
+      const targetPromptEventId = input.targetEventIds.get(checkpoint.promptEventId);
+      if (!targetCheckpointId || !targetPromptEventId) return;
+      await tx.gitCheckpoint.create({
+        data: {
+          id: targetCheckpointId,
+          sessionId: input.targetSessionId,
+          sessionGroupId: input.targetSessionGroupId,
+          repoId: checkpoint.repoId,
+          promptEventId: targetPromptEventId,
+          commitSha: checkpoint.commitSha,
+          parentShas: checkpoint.parentShas,
+          treeSha: checkpoint.treeSha,
+          subject: checkpoint.subject,
+          author: checkpoint.author,
+          committedAt: checkpoint.committedAt,
+          filesChanged: checkpoint.filesChanged,
+        },
+      });
+    };
 
-    for (const sourceEvent of sourceEvents) {
-      if (sourceEvent.eventType === "session_started") continue;
-      const targetEventId = randomUUID();
-      copiedEventIds.set(sourceEvent.id, targetEventId);
-      copiedHistoryEventIds.push(targetEventId);
-      const copied = await eventService.create(
+    for (const sourceEvent of input.sourceEvents) {
+      const sourceCheckpointsForEvent = checkpointsBySourcePromptEventId.get(sourceEvent.id) ?? [];
+      if (sourceEvent.eventType === "session_started") {
+        for (const checkpoint of sourceCheckpointsForEvent) {
+          await createCopiedCheckpoint(checkpoint);
+        }
+        continue;
+      }
+
+      const targetEventId = input.targetEventIds.get(sourceEvent.id);
+      if (!targetEventId) continue;
+      await eventService.create(
         {
           id: targetEventId,
           organizationId: input.organizationId,
@@ -3553,82 +3636,18 @@ export class SessionService {
             forkedFromSessionGroupId: input.sourceSessionGroupId,
             forkedFromEventId: sourceEvent.id,
           } as Prisma.InputJsonValue,
-          parentId: sourceEvent.parentId ? copiedEventIds.get(sourceEvent.parentId) : undefined,
+          parentId: sourceEvent.parentId ? input.targetEventIds.get(sourceEvent.parentId) : undefined,
           actorType: sourceEvent.actorType,
           actorId: sourceEvent.actorId,
+          timestamp: sourceEvent.timestamp,
           deferPublish: true,
         },
         tx,
       );
 
-      const sourceCheckpointsForEvent =
-        checkpointsBySourcePromptEventId.get(sourceEvent.id) ?? [];
       for (const checkpoint of sourceCheckpointsForEvent) {
-        const copiedCheckpoint = await tx.gitCheckpoint.create({
-          data: {
-            sessionId: input.targetSessionId,
-            sessionGroupId: input.targetSessionGroupId,
-            repoId: checkpoint.repoId,
-            promptEventId: copied.id,
-            commitSha: checkpoint.commitSha,
-            parentShas: checkpoint.parentShas,
-            treeSha: checkpoint.treeSha,
-            subject: checkpoint.subject,
-            author: checkpoint.author,
-            committedAt: checkpoint.committedAt,
-            filesChanged: checkpoint.filesChanged,
-          },
-        });
-        copiedCheckpointIds.set(checkpoint.id, copiedCheckpoint.id);
+        await createCopiedCheckpoint(checkpoint);
       }
-    }
-
-    const checkpointReplacements = new Map(replacements);
-    for (const [sourceEventId, targetEventId] of copiedEventIds) {
-      checkpointReplacements.set(sourceEventId, targetEventId);
-    }
-    for (const [sourceCheckpointId, targetCheckpointId] of copiedCheckpointIds) {
-      checkpointReplacements.set(sourceCheckpointId, targetCheckpointId);
-    }
-
-    if (mergedStartPayload) {
-      const targetStartPayload = jsonRecord(input.targetStartEventPayload);
-      const rewrittenStartPayload = jsonRecord(
-        rewriteForkPayloadReferences(mergedStartPayload, checkpointReplacements),
-      );
-      await tx.event.update({
-        where: { id: input.startEventId },
-        data: {
-          payload: {
-            ...rewrittenStartPayload,
-            session: targetStartPayload.session,
-            sessionGroup: targetStartPayload.sessionGroup,
-            sourceSessionId: input.sourceSessionId,
-          } as Prisma.InputJsonValue,
-        },
-      });
-    }
-
-    const copiedEvents =
-      (await tx.event.findMany({
-        where: {
-          id: { in: copiedHistoryEventIds },
-          scopeType: "session",
-          scopeId: input.targetSessionId,
-        },
-        select: { id: true, payload: true },
-      })) ?? [];
-
-    for (const event of copiedEvents) {
-      await tx.event.update({
-        where: { id: event.id },
-        data: {
-          payload: rewriteForkPayloadReferences(
-            event.payload,
-            checkpointReplacements,
-          ) as Prisma.InputJsonValue,
-        },
-      });
     }
   }
 

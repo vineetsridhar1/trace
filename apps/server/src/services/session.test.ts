@@ -2161,7 +2161,7 @@ describe("SessionService", () => {
           sessionId: "source-session",
           sessionGroupId: "source-group",
           commitSha: "checkpoint-sha",
-          promptEventId: "source-message",
+          promptEventId: "source-start",
         }),
       );
       prismaMock.gitCheckpoint.findMany.mockResolvedValueOnce([
@@ -2170,17 +2170,9 @@ describe("SessionService", () => {
           sessionId: "source-session",
           sessionGroupId: "source-group",
           commitSha: "checkpoint-sha",
-          promptEventId: "source-message",
+          promptEventId: "source-start",
         }),
       ]);
-      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(
-        makeGitCheckpoint({
-          id: "forked-checkpoint",
-          sessionId: "forked-session",
-          sessionGroupId: "forked-group",
-          promptEventId: "forked-message",
-        }),
-      );
       prismaMock.session.findUnique.mockResolvedValueOnce({
         id: "source-session",
         organizationId: "org-1",
@@ -2224,6 +2216,22 @@ describe("SessionService", () => {
             timestamp: new Date("2024-01-01T00:00:00.000Z"),
           },
           {
+            id: "source-checkpoint-event",
+            scopeType: "session",
+            scopeId: "source-session",
+            eventType: "session_output",
+            payload: {
+              type: "git_checkpoint",
+              checkpoint: { id: "source-checkpoint", promptEventId: "source-start" },
+            },
+            actorType: "system",
+            actorId: "system",
+            parentId: null,
+            metadata: null,
+            organizationId: "org-1",
+            timestamp: new Date("2024-01-01T00:00:00.500Z"),
+          },
+          {
             id: "source-message",
             scopeType: "session",
             scopeId: "source-session",
@@ -2232,7 +2240,7 @@ describe("SessionService", () => {
               text: "hello",
               sessionId: "source-session",
               groupId: "source-group",
-              checkpoint: { id: "source-checkpoint", promptEventId: "source-message" },
+              checkpoint: { id: "source-checkpoint", promptEventId: "source-start" },
             },
             actorType: "user",
             actorId: "other-user",
@@ -2241,22 +2249,8 @@ describe("SessionService", () => {
             organizationId: "org-1",
             timestamp: new Date("2024-01-01T00:00:01.000Z"),
           },
-        ])
-        .mockResolvedValueOnce([
-          {
-            id: "forked-message",
-            payload: {
-              text: "hello",
-              sessionId: "forked-session",
-              groupId: "forked-group",
-              checkpoint: { id: "source-checkpoint", promptEventId: "source-message" },
-            },
-          },
         ]);
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(forkedSession);
-      eventServiceMock.create
-        .mockResolvedValueOnce({ id: "forked-start" })
-        .mockResolvedValueOnce({ id: "forked-message" });
 
       const result = await service.forkSession({
         eventId: "source-message",
@@ -2284,9 +2278,7 @@ describe("SessionService", () => {
       expect(prismaMock.gitCheckpoint.findMany).toHaveBeenCalledWith({
         where: {
           sessionGroupId: "source-group",
-          promptEventId: {
-            in: ["source-start", "source-message"],
-          },
+          id: { in: ["source-checkpoint"] },
         },
         orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
       });
@@ -2310,15 +2302,25 @@ describe("SessionService", () => {
         data: [{ ticketId: "ticket-1", entityType: "session", entityId: "forked-session" }],
         skipDuplicates: true,
       });
-      expect(prismaMock.event.update).toHaveBeenCalledWith({
-        where: { id: "forked-start" },
-        data: expect.objectContaining({
+      const startEventCreate = eventServiceMock.create.mock.calls.find(
+        ([event]) => event.eventType === "session_started",
+      )?.[0];
+      const messageEventCreate = eventServiceMock.create.mock.calls.find(
+        ([event]) => event.eventType === "message_sent",
+      )?.[0];
+      expect(startEventCreate).toEqual(
+        expect.objectContaining({
+          id: expect.any(String),
+          scopeId: "forked-session",
+          eventType: "session_started",
+          timestamp: new Date("2024-01-01T00:00:00.000Z"),
           payload: expect.objectContaining({
             session: expect.objectContaining({ id: "forked-session" }),
             sessionGroup: expect.objectContaining({ id: "forked-group" }),
             prompt: "Initial source prompt",
             attachmentKeys: ["image-key"],
             imageKeys: ["image-key"],
+            checkpoint: { promptEventId: expect.any(String) },
             sourceSessionId: "source-session",
           }),
           metadata: expect.objectContaining({
@@ -2329,57 +2331,43 @@ describe("SessionService", () => {
           actorType: "user",
           actorId: "other-user",
         }),
-      });
-      expect(prismaMock.event.update).toHaveBeenCalledWith({
-        where: { id: "forked-start" },
-        data: {
-          payload: expect.objectContaining({
-            checkpoint: { promptEventId: "forked-start" },
-            session: expect.objectContaining({ id: "forked-session" }),
-            sessionGroup: expect.objectContaining({ id: "forked-group" }),
-            sourceSessionId: "source-session",
-          }),
-        },
-      });
-      expect(eventServiceMock.create).toHaveBeenLastCalledWith(
+      );
+      expect(startEventCreate?.payload).toEqual(
         expect.objectContaining({
+          checkpoint: { promptEventId: startEventCreate?.id },
+        }),
+      );
+      expect(messageEventCreate).toEqual(
+        expect.objectContaining({
+          id: expect.any(String),
           scopeId: "forked-session",
           eventType: "message_sent",
-          parentId: "forked-start",
+          parentId: startEventCreate?.id,
+          timestamp: new Date("2024-01-01T00:00:01.000Z"),
           payload: expect.objectContaining({
             sessionId: "forked-session",
             groupId: "forked-group",
+            checkpoint: {
+              id: expect.any(String),
+              promptEventId: startEventCreate?.id,
+            },
           }),
           metadata: expect.objectContaining({
             forkedFromEventId: "source-message",
           }),
           deferPublish: true,
         }),
-        expect.anything(),
       );
       expect(prismaMock.gitCheckpoint.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
+          id: expect.any(String),
           sessionId: "forked-session",
           sessionGroupId: "forked-group",
-          promptEventId: expect.any(String),
+          promptEventId: startEventCreate?.id,
           commitSha: "checkpoint-sha",
         }),
       });
-      expect(prismaMock.event.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: "forked-message" },
-          data: {
-            payload: expect.objectContaining({
-              sessionId: "forked-session",
-              groupId: "forked-group",
-              checkpoint: {
-                id: "forked-checkpoint",
-                promptEventId: expect.any(String),
-              },
-            }),
-          },
-        }),
-      );
+      expect(prismaMock.event.update).not.toHaveBeenCalled();
     });
 
     it("rejects forking private sessions owned by another user", async () => {

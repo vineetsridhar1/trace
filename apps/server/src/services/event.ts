@@ -18,6 +18,7 @@ export interface CreateEventInput {
   parentId?: string;
   metadata?: Prisma.InputJsonValue;
   deferPublish?: boolean;
+  timestamp?: Date;
 }
 
 export interface EventQueryOpts {
@@ -126,6 +127,7 @@ export class EventService {
         actorId: input.actorId,
         parentId: input.parentId,
         metadata: input.metadata ?? {},
+        timestamp: input.timestamp,
       },
     });
 

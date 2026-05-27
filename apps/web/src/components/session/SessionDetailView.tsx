@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
-import { asJsonObject } from "@trace/shared";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
@@ -32,6 +31,7 @@ import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
 import {
@@ -56,88 +56,6 @@ const RUNTIME_FAILURE_STATES = new Set(["failed", "timed_out", "deprovision_fail
 function getConnectionState(connection: Record<string, unknown> | null | undefined): string | null {
   const state = connection?.state;
   return typeof state === "string" ? state : null;
-}
-
-function hasArrayContent(value: unknown): boolean {
-  return Array.isArray(value) && value.length > 0;
-}
-
-function hasUserMessageContent(eventType: string | undefined, payload: unknown): boolean {
-  const record = asJsonObject(payload);
-  if (!record) return false;
-  if (eventType === "message_sent") {
-    return (
-      (typeof record.text === "string" && record.text.trim().length > 0) ||
-      hasArrayContent(record.imageKeys) ||
-      hasArrayContent(record.attachmentKeys)
-    );
-  }
-  if (eventType === "session_started") {
-    return (
-      (typeof record.prompt === "string" && record.prompt.trim().length > 0) ||
-      hasArrayContent(record.imageKeys) ||
-      hasArrayContent(record.attachmentKeys)
-    );
-  }
-  return false;
-}
-
-function hasAssistantTextContent(payload: unknown): boolean {
-  const record = asJsonObject(payload);
-  if (record?.type !== "assistant") return false;
-  const message = asJsonObject(record.message);
-  const content = message?.content;
-  if (!Array.isArray(content)) return false;
-  return content.some((item) => {
-    const block = asJsonObject(item);
-    return block?.type === "text" && typeof block.text === "string" && block.text.trim().length > 0;
-  });
-}
-
-function hasAssistantToolUseContent(payload: unknown): boolean {
-  const record = asJsonObject(payload);
-  if (record?.type !== "assistant") return false;
-  const message = asJsonObject(record.message);
-  const content = message?.content;
-  if (!Array.isArray(content)) return false;
-  return content.some((item) => asJsonObject(item)?.type === "tool_use");
-}
-
-function findMessageActionsEventIds(
-  eventIds: string[],
-  events: Record<string, { eventType?: string; payload?: unknown } | undefined>,
-): ReadonlySet<string> {
-  const actionEventIds = new Set<string>();
-  let pendingFinalAssistantEventIds: string[] = [];
-
-  const flushPendingFinals = () => {
-    for (const id of pendingFinalAssistantEventIds) {
-      actionEventIds.add(id);
-    }
-    pendingFinalAssistantEventIds = [];
-  };
-
-  for (const id of eventIds) {
-    const event = events[id];
-    if (!event) continue;
-
-    if (hasUserMessageContent(event.eventType, event.payload)) {
-      flushPendingFinals();
-      continue;
-    }
-
-    if (event.eventType !== "session_output") continue;
-    if (hasAssistantToolUseContent(event.payload)) {
-      pendingFinalAssistantEventIds = [];
-      continue;
-    }
-    if (hasAssistantTextContent(event.payload)) {
-      pendingFinalAssistantEventIds.push(id);
-    }
-  }
-
-  flushPendingFinals();
-  return actionEventIds;
 }
 
 const SESSION_DETAIL_QUERY = gql`
