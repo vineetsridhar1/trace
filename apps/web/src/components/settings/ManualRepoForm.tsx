@@ -3,15 +3,19 @@ import { Input } from "../ui/input";
 export function ManualRepoForm({
   name,
   remoteUrl,
+  defaultBranch,
   autoFocus,
   onNameChange,
   onRemoteUrlChange,
+  onDefaultBranchChange,
 }: {
   name: string;
   remoteUrl: string;
+  defaultBranch: string;
   autoFocus: boolean;
   onNameChange: (name: string) => void;
   onRemoteUrlChange: (remoteUrl: string) => void;
+  onDefaultBranchChange: (branch: string) => void;
 }) {
   return (
     <>
@@ -22,6 +26,16 @@ export function ManualRepoForm({
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => onNameChange(e.target.value)}
           placeholder="e.g. api-server"
           autoFocus={autoFocus}
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm text-muted-foreground">Default branch</label>
+        <Input
+          value={defaultBranch}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            onDefaultBranchChange(e.target.value)
+          }
+          placeholder="e.g. main"
         />
       </div>
       <div>

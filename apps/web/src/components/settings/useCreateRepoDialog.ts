@@ -36,12 +36,14 @@ export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }:
   const [parentSelection, setParentSelection] = useState<ProjectParentSelection | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualRemoteUrl, setManualRemoteUrl] = useState("");
+  const [defaultBranch, setDefaultBranch] = useState("");
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const open = controlledOpen ?? uncontrolledOpen;
 
   async function handlePickFolder() {
     setError(null);
     setDetected(null);
+    setDefaultBranch("");
 
     const folderPath = await window.trace!.pickFolder();
     if (!folderPath) return;
@@ -58,6 +60,7 @@ export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }:
       remoteUrl: result.remoteUrl,
       defaultBranch: result.defaultBranch,
     });
+    setDefaultBranch(result.defaultBranch);
   }
 
   async function handlePickParentFolder() {
@@ -98,21 +101,22 @@ export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }:
   }
 
   async function handleLink() {
+    const branch = defaultBranch.trim();
     const repo =
       detected ??
       (manualName.trim()
         ? {
             name: manualName.trim(),
             remoteUrl: manualRemoteUrl.trim() || null,
-            defaultBranch: "main",
+            defaultBranch: branch,
           }
         : null);
-    if (!repo) return;
+    if (!repo || !branch) return;
 
     setCreating(true);
     setError(null);
     try {
-      await createRepo(repo, selectedPath ?? undefined);
+      await createRepo({ ...repo, defaultBranch: branch }, selectedPath ?? undefined);
       resetAndClose();
       onCreated?.();
     } catch (saveErr) {
@@ -168,6 +172,7 @@ export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }:
     setParentSelection(null);
     setManualName("");
     setManualRemoteUrl("");
+    setDefaultBranch("");
     setUncontrolledOpen(false);
     onOpenChange?.(false);
   }
@@ -190,12 +195,14 @@ export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }:
     parentSelection,
     manualName,
     manualRemoteUrl,
-    canLink: !!detected || !!manualName.trim(),
+    defaultBranch,
+    canLink: (!!detected || !!manualName.trim()) && !!defaultBranch.trim(),
     canCreate: canCreateLocalProject && !!parentSelection && !!projectName.trim(),
     setMode,
     setProjectName,
     setManualName,
     setManualRemoteUrl,
+    setDefaultBranch,
     handleOpenChange,
     handlePickFolder,
     handlePickParentFolder,

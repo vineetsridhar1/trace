@@ -45,18 +45,17 @@ async function resolveOriginDefaultBranch(folderPath: string): Promise<string | 
 export async function getGitInfo(folderPath: string): Promise<GitInfo | GitInfoError> {
   try {
     await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: folderPath });
-    const [remoteResult, branch] = await Promise.all([
+    const [remoteResult, currentBranch, defaultBranch] = await Promise.all([
       execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }).catch(
         () => null,
       ),
-      resolveCurrentBranch(folderPath).then(
-        async (currentBranch) => currentBranch ?? (await resolveOriginDefaultBranch(folderPath)),
-      ),
+      resolveCurrentBranch(folderPath),
+      resolveOriginDefaultBranch(folderPath),
     ]);
 
     return {
       remoteUrl: remoteResult?.stdout.trim() || null,
-      defaultBranch: branch ?? "main",
+      defaultBranch: currentBranch ?? defaultBranch ?? "main",
       name: path.basename(folderPath),
     };
   } catch {

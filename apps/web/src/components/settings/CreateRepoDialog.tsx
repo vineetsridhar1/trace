@@ -66,7 +66,9 @@ export function CreateRepoDialog({
               {state.mode === "link" ? (
                 <ExistingRepoForm
                   detected={state.detected}
+                  defaultBranch={state.defaultBranch}
                   onPickFolder={state.handlePickFolder}
+                  onDefaultBranchChange={state.setDefaultBranch}
                 />
               ) : (
                 <NewLocalProjectForm
@@ -82,9 +84,11 @@ export function CreateRepoDialog({
             <ManualRepoForm
               name={state.manualName}
               remoteUrl={state.manualRemoteUrl}
+              defaultBranch={state.defaultBranch}
               autoFocus={!isMobile}
               onNameChange={state.setManualName}
               onRemoteUrlChange={state.setManualRemoteUrl}
+              onDefaultBranchChange={state.setDefaultBranch}
             />
           )}
 
