@@ -7808,6 +7808,106 @@ describe("SessionService", () => {
       );
     });
 
+    it("uses the session group runtime over a conflicting session runtime for branch refresh", async () => {
+      const workdir = "/tmp/trace/worktrees/session";
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        branch: "trace/old-branch",
+        workdir,
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-code",
+        },
+        visibility: "public",
+        ownerUserId: "user-1",
+        sessions: [
+          {
+            id: "session-code",
+            repoId: "repo-1",
+            branch: "trace/old-branch",
+            workdir,
+            connection: { state: "connected", runtimeInstanceId: "runtime-other" },
+          },
+        ],
+      });
+      sessionRouterMock.listRuntimes.mockReturnValue([
+        {
+          key: "runtime-code-key",
+          id: "runtime-code",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: [],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          key: "runtime-other-key",
+          id: "runtime-other",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: [],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          key: "runtime-sync-key",
+          id: "runtime-sync",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValueOnce("trace/current-branch");
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ branch: "trace/current-branch" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ branch: "trace/current-branch" }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      sessionRouterMock.syncLinkedCheckout.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        errorCode: null,
+        status: null,
+      });
+
+      await service.syncLinkedCheckout(
+        "group-1",
+        "repo-1",
+        "trace/old-branch",
+        "org-1",
+        "user-1",
+        { runtimeInstanceId: "runtime-sync" },
+      );
+
+      expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
+        "runtime-code-key",
+        { sessionId: "session-code", workdirHint: workdir },
+        5000,
+      );
+      expect(sessionRouterMock.inspectSessionCurrentBranch).not.toHaveBeenCalledWith(
+        "runtime-other-key",
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
+        "runtime-sync-key",
+        expect.objectContaining({
+          branch: "trace/current-branch",
+        }),
+      );
+    });
+
     it("skips branch refresh when the session runtime is unavailable", async () => {
       const workdir = "/tmp/trace/worktrees/session";
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });

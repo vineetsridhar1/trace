@@ -2038,8 +2038,8 @@ export class SessionService {
     if (!session) return null;
 
     const ownerRuntimeInstanceId =
-      this.getConnectionRuntimeInstanceId(session.connection) ??
-      this.getConnectionRuntimeInstanceId(params.group.connection);
+      this.getConnectionRuntimeInstanceId(params.group.connection) ??
+      this.getConnectionRuntimeInstanceId(session.connection);
     if (!ownerRuntimeInstanceId) return null;
 
     const ownerRuntime = sessionRouter
