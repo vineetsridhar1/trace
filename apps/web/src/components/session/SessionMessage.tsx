@@ -62,10 +62,19 @@ function renderAssistantContent(
   sourceEventId: string,
   onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
+  showActions: boolean,
 ) {
   const message = asJsonObject(payload.message);
   const contentBlocks = message?.content;
   if (!Array.isArray(contentBlocks)) return null;
+
+  let lastTextBlockIndex = -1;
+  for (let i = 0; i < contentBlocks.length; i++) {
+    const block = asJsonObject(contentBlocks[i]);
+    if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
+      lastTextBlockIndex = i;
+    }
+  }
 
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < contentBlocks.length; i++) {
@@ -81,6 +90,7 @@ function renderAssistantContent(
           eventId={sourceEventId}
           onForkSession={onForkSession}
           canForkSession={canForkSession}
+          showActions={showActions && i === lastTextBlockIndex}
         />,
       );
     } else if (block.type === "tool_use") {
@@ -134,6 +144,7 @@ function renderSessionOutput(
   sourceEventId: string,
   onForkSession: ((eventId: string) => void) | undefined,
   canForkSession: boolean,
+  showActions: boolean,
 ) {
   const type = payload.type;
   if (typeof type !== "string") return null;
@@ -149,6 +160,7 @@ function renderSessionOutput(
       sourceEventId,
       onForkSession,
       canForkSession,
+      showActions,
     );
   }
 
@@ -194,6 +206,7 @@ export const SessionMessage = memo(function SessionMessage({
   toolResultByUseId,
   onForkSession,
   canForkSession = false,
+  showActions = false,
 }: {
   id: string;
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
@@ -201,6 +214,7 @@ export const SessionMessage = memo(function SessionMessage({
   toolResultByUseId: Map<string, unknown>;
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
+  showActions?: boolean;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -244,6 +258,7 @@ export const SessionMessage = memo(function SessionMessage({
             id,
             onForkSession,
             canForkSession,
+            showActions,
           )
         : null;
 

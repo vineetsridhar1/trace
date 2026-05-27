@@ -8,12 +8,14 @@ export function AssistantText({
   eventId,
   onForkSession,
   canForkSession = false,
+  showActions = false,
 }: {
   key?: React.Key;
   text: string;
   eventId: string;
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
+  showActions?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -30,27 +32,29 @@ export function AssistantText({
   return (
     <div className="activity-row">
       <Markdown>{text}</Markdown>
-      <div className="mt-2 flex items-center gap-3 text-muted-foreground">
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-surface-elevated hover:text-foreground"
-          title={copied ? "Copied" : "Copy message"}
-          aria-label={copied ? "Copied" : "Copy message"}
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-        </button>
-        <button
-          type="button"
-          onClick={() => onForkSession?.(eventId)}
-          disabled={!canForkSession || !onForkSession}
-          className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-          title="Fork session"
-          aria-label="Fork session"
-        >
-          <GitFork size={14} />
-        </button>
-      </div>
+      {showActions ? (
+        <div className="mt-2 flex items-center gap-3 text-muted-foreground">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-surface-elevated hover:text-foreground"
+            title={copied ? "Copied" : "Copy message"}
+            aria-label={copied ? "Copied" : "Copy message"}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onForkSession?.(eventId)}
+            disabled={!canForkSession || !onForkSession}
+            className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+            title="Fork session"
+            aria-label="Fork session"
+          >
+            <GitFork size={14} />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

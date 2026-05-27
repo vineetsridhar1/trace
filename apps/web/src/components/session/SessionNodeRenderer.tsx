@@ -20,6 +20,7 @@ export interface SessionNodeRendererProps {
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
+  messageActionsEventId?: string | null;
 }
 
 export const SessionNodeRenderer = memo(function SessionNodeRenderer({
@@ -34,6 +35,7 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
   onRemovePlanComment,
   onForkSession,
   canForkSession = false,
+  messageActionsEventId = null,
 }: SessionNodeRendererProps) {
   if (node.kind === "event") {
     return (
@@ -52,6 +54,7 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
           toolResultByUseId={toolResultByUseId}
           onForkSession={onForkSession}
           canForkSession={canForkSession}
+          showActions={node.id === messageActionsEventId}
         />
       </div>
     );

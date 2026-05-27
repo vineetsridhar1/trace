@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
+import { asJsonObject } from "@trace/shared";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
@@ -55,6 +56,57 @@ const RUNTIME_FAILURE_STATES = new Set(["failed", "timed_out", "deprovision_fail
 function getConnectionState(connection: Record<string, unknown> | null | undefined): string | null {
   const state = connection?.state;
   return typeof state === "string" ? state : null;
+}
+
+function hasArrayContent(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasUserMessageContent(eventType: string | undefined, payload: unknown): boolean {
+  const record = asJsonObject(payload);
+  if (!record) return false;
+  if (eventType === "message_sent") {
+    return (
+      (typeof record.text === "string" && record.text.trim().length > 0) ||
+      hasArrayContent(record.imageKeys) ||
+      hasArrayContent(record.attachmentKeys)
+    );
+  }
+  if (eventType === "session_started") {
+    return (
+      (typeof record.prompt === "string" && record.prompt.trim().length > 0) ||
+      hasArrayContent(record.imageKeys) ||
+      hasArrayContent(record.attachmentKeys)
+    );
+  }
+  return false;
+}
+
+function hasAssistantTextContent(payload: unknown): boolean {
+  const record = asJsonObject(payload);
+  if (record?.type !== "assistant") return false;
+  const message = asJsonObject(record.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((item) => {
+    const block = asJsonObject(item);
+    return block?.type === "text" && typeof block.text === "string" && block.text.trim().length > 0;
+  });
+}
+
+function findMessageActionsEventId(
+  eventIds: string[],
+  events: Record<string, { eventType?: string; payload?: unknown } | undefined>,
+): string | null {
+  for (let index = eventIds.length - 1; index >= 0; index--) {
+    const event = events[eventIds[index]];
+    if (!event) continue;
+    if (hasUserMessageContent(event.eventType, event.payload)) return null;
+    if (event.eventType === "session_output" && hasAssistantTextContent(event.payload)) {
+      return eventIds[index];
+    }
+  }
+  return null;
 }
 
 const SESSION_DETAIL_QUERY = gql`
@@ -395,6 +447,10 @@ export function SessionDetailView({
 
     return compactNodes;
   }, [events, nodes, timelineItems, timelineMode]);
+  const messageActionsEventId = useMemo(
+    () => findMessageActionsEventId(eventIds, events),
+    [eventIds, events],
+  );
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);
@@ -545,6 +601,7 @@ export function SessionDetailView({
                 onRemovePlanComment={handleRemovePlanComment}
                 onForkSession={onForkSession}
                 canForkSession={canForkSession}
+                messageActionsEventId={messageActionsEventId}
               />
             )}
             {initialEventsLoading && (

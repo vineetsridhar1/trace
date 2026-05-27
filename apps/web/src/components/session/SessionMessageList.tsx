@@ -42,6 +42,7 @@ export interface SessionMessageListProps {
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
+  messageActionsEventId?: string | null;
 }
 
 export function SessionMessageList({
@@ -64,6 +65,7 @@ export function SessionMessageList({
   onRemovePlanComment,
   onForkSession,
   canForkSession = false,
+  messageActionsEventId = null,
 }: SessionMessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -500,6 +502,7 @@ export function SessionMessageList({
                     onRemovePlanComment={onRemovePlanComment}
                     onForkSession={onForkSession}
                     canForkSession={canForkSession}
+                    messageActionsEventId={messageActionsEventId}
                   />
                 )}
               </div>
