@@ -1,8 +1,8 @@
-import type { KeyboardEvent } from "react";
 import { ChevronLeft, ChevronRight, Send, X } from "lucide-react";
 import { useQuestionState } from "@trace/client-core";
 import type { Question, QuestionOption } from "@trace/shared";
 import { QuestionOptionPill } from "./messages/QuestionOptionPill";
+import { PendingRichTextInput } from "./PendingRichTextInput";
 
 interface AskUserQuestionBarProps {
   node: {
@@ -30,18 +30,9 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
     buildResponse,
   } = useQuestionState(node);
 
-  const handleSubmit = () => {
-    const response = buildResponse();
+  const handleSubmit = (currentText?: string) => {
+    const response = buildResponse(currentText);
     if (response) onResponse(response);
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (hasAllAnswers) {
-        handleSubmit();
-      }
-    }
   };
 
   return (
@@ -88,18 +79,22 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
       </div>
 
       {/* Bottom row: custom input, pagination, send */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
+      <div className="flex items-end gap-2">
+        <PendingRichTextInput
           value={currentCustom}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomText(e.target.value)}
-          onKeyDown={handleKeyDown}
+          resetKey={page}
+          onChange={setCustomText}
+          onSubmit={(text) => {
+            if (hasAllAnswers) handleSubmit(text);
+          }}
           placeholder="Other..."
-          className="min-w-0 flex-1 rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-accent/50"
+          submitLabel="Reply"
+          SubmitIcon={Send}
+          submitDisabled={!hasAllAnswers}
         />
 
         {total > 1 && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 pb-0.5">
             <button
               type="button"
               title="Previous question"
@@ -121,15 +116,6 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
           </div>
         )}
 
-        <button
-          type="button"
-          title="Send answers"
-          disabled={!hasAllAnswers}
-          onClick={handleSubmit}
-          className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
-        >
-          <Send className="h-4 w-4" aria-hidden="true" />
-        </button>
       </div>
     </div>
   );
