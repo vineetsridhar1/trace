@@ -12,8 +12,10 @@ import { BranchCombobox } from "../channel/BranchCombobox";
 import { RepoDesktopSection } from "./RepoDesktopSection";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
+import { isLocalMode } from "../../lib/runtime-mode";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
+const LOCAL_MODE_WEBHOOK_DISABLED = "Local mode does not support GitHub webhooks.";
 
 export function RepoCard({
   id,
@@ -32,7 +34,11 @@ export function RepoCard({
   const [saving, setSaving] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
   const [webhookError, setWebhookError] = useState<string | null>(null);
-  const webhookDisabledReason = hasRepoRemote({ remoteUrl }) ? null : WEBHOOK_REPO_REMOTE_REQUIRED;
+  const webhookDisabledReason = isLocalMode
+    ? LOCAL_MODE_WEBHOOK_DISABLED
+    : hasRepoRemote({ remoteUrl })
+      ? null
+      : WEBHOOK_REPO_REMOTE_REQUIRED;
 
   const startEditing = () => {
     setEditBranch(defaultBranch ?? "main");
