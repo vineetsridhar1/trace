@@ -132,6 +132,10 @@
   body {
     @apply bg-surface-deep text-foreground;
   }
+  html.trace-desktop-shell,
+  body.trace-desktop-shell {
+    background: transparent;
+  }
   html {
     @apply bg-surface-deep font-sans;
     font-size: 16px;

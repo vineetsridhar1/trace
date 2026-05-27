@@ -41,9 +41,8 @@ export function NoOrgWelcome() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[rgb(10_10_10_/_0.36)] px-4 py-8 backdrop-blur-2xl">
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(135deg,rgb(255_255_255_/_0.07),rgb(255_255_255_/_0.025)_38%,rgb(0_0_0_/_0.18))]" />
-      <div className="relative w-full max-w-[560px] overflow-hidden rounded-xl border border-white/10 bg-surface-elevated/55 p-6 shadow-2xl shadow-black/35 backdrop-blur-xl sm:p-7">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8 [background:var(--trace-window-bg)] backdrop-blur-2xl">
+      <div className="relative w-full max-w-[560px] overflow-hidden rounded-xl border border-white/10 bg-surface-elevated/45 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-7">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
