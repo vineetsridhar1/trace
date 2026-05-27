@@ -7,6 +7,7 @@ type ThreadBinding = {
   slackTeamId: string;
   slackChannelId: string;
   slackThreadTs: string;
+  assistantMessageTs?: string;
 };
 
 type EventEnvelope = { sessionEvents: PrismaEvent };
@@ -47,6 +48,11 @@ function quoteForSlack(text: string): string {
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
+}
+
+function slackMessageTs(response: unknown): string | null {
+  const result = getObject(response);
+  return typeof result?.ts === "string" && result.ts ? result.ts : null;
 }
 
 async function actorDisplayName(actorId: string): Promise<string> {
@@ -168,7 +174,7 @@ class SlackEventBridgeManager {
     if (event.eventType === "session_output") {
       const text = extractAssistantText(payload);
       if (!text) return;
-      await this.post(binding, text);
+      await this.postOrUpdateAssistant(binding, text);
       return;
     }
 
@@ -204,10 +210,50 @@ class SlackEventBridgeManager {
         thread_ts: binding.slackThreadTs,
         text,
         mrkdwn: true,
+        reply_broadcast: false,
       })
       .catch((err: unknown) => {
         console.warn("[slack-bridge] failed to post message:", (err as Error).message);
       });
+  }
+
+  private async postOrUpdateAssistant(binding: ThreadBinding, text: string): Promise<void> {
+    const client = await getSlackClient(binding.slackTeamId);
+    if (!client) return;
+
+    if (binding.assistantMessageTs) {
+      const updated = await client.chat
+        .update({
+          channel: binding.slackChannelId,
+          ts: binding.assistantMessageTs,
+          text,
+        })
+        .then(() => true)
+        .catch((err: unknown) => {
+          console.warn(
+            "[slack-bridge] failed to update assistant message:",
+            (err as Error).message,
+          );
+          return false;
+        });
+      if (updated) return;
+
+      binding.assistantMessageTs = undefined;
+    }
+
+    const response = await client.chat
+      .postMessage({
+        channel: binding.slackChannelId,
+        thread_ts: binding.slackThreadTs,
+        text,
+        mrkdwn: true,
+        reply_broadcast: false,
+      })
+      .catch((err: unknown) => {
+        console.warn("[slack-bridge] failed to post assistant message:", (err as Error).message);
+        return null;
+      });
+    binding.assistantMessageTs = slackMessageTs(response) ?? undefined;
   }
 
   async rehydrate(): Promise<void> {
