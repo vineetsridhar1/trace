@@ -1,26 +1,19 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Copy, LogOut, Plus, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { LogOut, Plus, RefreshCw } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button } from "../ui/button";
 import { CreateOrganizationDialog } from "../sidebar/CreateOrganizationDialog";
 import { TraceLoader } from "../ui/trace-loader";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export function NoOrgWelcome() {
   const user = useAuthStore((s: AuthState) => s.user);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const logout = useAuthStore((s: AuthState) => s.logout);
   const [checking, setChecking] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const email = user?.email ?? "";
   const name = user?.name?.trim() ?? "";
   const accountLabel = name || email || "No account details available";
-
-  useEffect(() => {
-    return () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-    };
-  }, []);
 
   async function handleCheckAgain() {
     setChecking(true);
@@ -28,20 +21,8 @@ export function NoOrgWelcome() {
     setChecking(false);
   }
 
-  async function handleCopy() {
-    if (!email) return;
-    try {
-      await navigator.clipboard.writeText(email);
-      setCopied(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
-    }
-  }
-
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-8 [background:var(--trace-window-bg)] backdrop-blur-2xl">
+    <div className="app-region-drag flex min-h-dvh items-center justify-center px-4 py-8 [background:var(--trace-window-bg)] backdrop-blur-2xl">
       <div className="relative w-full max-w-[560px] overflow-hidden rounded-xl border border-white/10 bg-surface-elevated/45 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-7">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
         <div className="flex items-center justify-between gap-3">
@@ -54,9 +35,25 @@ export function NoOrgWelcome() {
               <div className="truncate text-xs text-muted-foreground">Start a workspace</div>
             </div>
           </div>
-          <span className="shrink-0 rounded-full border border-white/10 bg-surface-deep/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            No organization
-          </span>
+          <div className="app-region-no-drag shrink-0">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Check again"
+                    disabled={checking}
+                    className="bg-surface-deep/35 text-muted-foreground hover:bg-surface-hover/70 hover:text-foreground"
+                    onClick={handleCheckAgain}
+                  />
+                }
+              >
+                {checking ? <TraceLoader size={14} showLabel={false} /> : <RefreshCw size={15} />}
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Check again</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         <h1 className="mt-8 text-[1.9rem] font-semibold leading-tight text-foreground">
@@ -68,45 +65,25 @@ export function NoOrgWelcome() {
         </p>
 
         <div className="mt-6 rounded-lg border border-white/10 bg-surface-deep/55 p-3.5 shadow-inner shadow-black/20">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              Your account
-            </label>
-            <button
-              type="button"
-              onClick={handleCopy}
-              disabled={!email}
-              className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
+          <label className="mb-2 block text-xs font-medium uppercase text-muted-foreground">
+            Your account
+          </label>
           <div className="truncate text-sm font-medium text-foreground">{accountLabel}</div>
         </div>
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+        <div className="app-region-no-drag mt-5 flex items-center justify-between gap-3">
+          <Button variant="ghost" onClick={() => void logout()} className="gap-2 text-destructive">
+            <LogOut size={14} />
+            Sign out
+          </Button>
           <CreateOrganizationDialog
             trigger={
-              <Button size="lg" className="w-full justify-center gap-2">
+              <Button size="lg" className="justify-center gap-2">
                 <Plus size={14} />
                 Create organization
               </Button>
             }
           />
-          <Button
-            onClick={handleCheckAgain}
-            disabled={checking}
-            variant="outline"
-            className="gap-2 bg-surface-deep/45"
-          >
-            {checking ? <TraceLoader size={14} showLabel={false} /> : <RefreshCw size={14} />}
-            {checking ? "Checking..." : "Check again"}
-          </Button>
-          <Button variant="ghost" onClick={() => void logout()} className="gap-2 text-destructive">
-            <LogOut size={14} />
-            Sign out
-          </Button>
         </div>
       </div>
     </div>
