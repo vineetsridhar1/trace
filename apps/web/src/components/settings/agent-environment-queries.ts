@@ -20,13 +20,6 @@ export const AGENT_ENVIRONMENTS_SETTINGS_QUERY = gql`
       defaultBranch
       webhookActive
     }
-    orgSecrets(orgId: $orgId) {
-      id
-      orgId
-      name
-      createdAt
-      updatedAt
-    }
     myConnections {
       bridge {
         id
@@ -41,18 +34,6 @@ export const AGENT_ENVIRONMENTS_SETTINGS_QUERY = gql`
           name
         }
       }
-    }
-  }
-`;
-
-export const ORG_SECRETS_QUERY = gql`
-  query OrgSecrets($orgId: ID!) {
-    orgSecrets(orgId: $orgId) {
-      id
-      orgId
-      name
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -104,20 +85,3 @@ export const TEST_AGENT_ENVIRONMENT_MUTATION = gql`
   }
 `;
 
-export const SET_ORG_SECRET_MUTATION = gql`
-  mutation SetOrgSecret($input: SetOrgSecretInput!) {
-    setOrgSecret(input: $input) {
-      id
-      orgId
-      name
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-export const DELETE_ORG_SECRET_MUTATION = gql`
-  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {
-    deleteOrgSecret(orgId: $orgId, id: $id)
-  }
-`;

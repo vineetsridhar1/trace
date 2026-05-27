@@ -245,7 +245,6 @@ model Organization {
   events        Event[]
   inboxItems    InboxItem[]
   agentEnvironments AgentEnvironment[]
-  orgSecrets    OrgSecret[]
   cloudMachines CloudMachine[]
   aiConversations  AiConversation[]
   slackInstalls SlackInstall[]
@@ -282,21 +281,6 @@ model AgentEnvironment {
 
   @@index([organizationId])
   @@index([organizationId, adapterType])
-}
-
-model OrgSecret {
-  id             String       @id @default(uuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  encryptedValue String
-  iv             String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([organizationId, name])
-  @@index([organizationId])
 }
 
 model User {

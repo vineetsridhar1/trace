@@ -80,11 +80,6 @@ export function createPrismaMock() {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
-    orgSecret: {
-      delete: vi.fn(),
-      findFirst: vi.fn(),
-      upsert: vi.fn(),
-    },
     pushToken: {
       findMany: vi.fn(),
       findUnique: vi.fn(),

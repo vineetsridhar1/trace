@@ -3,19 +3,12 @@ import {
   authenticateProvisionedRuntimeToken,
   ProvisionedRuntimeAdapter,
 } from "./runtime-adapters.js";
-import { orgSecretService } from "../services/org-secret.js";
-
-vi.mock("../services/org-secret.js", () => ({
-  orgSecretService: {
-    getDecryptedValue: vi.fn().mockResolvedValue("launcher-secret"),
-  },
-}));
 
 const provisionedConfig = {
   startUrl: "https://launcher.example/start",
   stopUrl: "https://launcher.example/stop",
   statusUrl: "https://launcher.example/status",
-  auth: { type: "bearer", secretId: "secret-1" },
+  auth: { type: "bearer" },
   startupTimeoutSeconds: 120,
   deprovisionPolicy: "on_session_end",
 };
@@ -34,13 +27,14 @@ function fetchMock(): ReturnType<typeof vi.fn> {
 describe("ProvisionedRuntimeAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(orgSecretService.getDecryptedValue).mockResolvedValue("launcher-secret");
+    process.env.TRACE_CLOUD_LAUNCHER_TOKEN = "launcher-secret";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeResponse({ status: "unknown" })));
     delete process.env.TRACE_SERVER_PUBLIC_URL;
     delete process.env.TRACE_CLOUD_BRIDGE_URL;
   });
 
   afterEach(() => {
+    delete process.env.TRACE_CLOUD_LAUNCHER_TOKEN;
     vi.unstubAllEnvs();
   });
 
@@ -50,7 +44,7 @@ describe("ProvisionedRuntimeAdapter", () => {
     await expect(
       adapter.validateConfig({
         ...provisionedConfig,
-        auth: { secretId: "secret-1" },
+        auth: {},
       }),
     ).rejects.toThrow("auth.type must be bearer or hmac");
 
@@ -335,7 +329,7 @@ describe("ProvisionedRuntimeAdapter", () => {
           adapterType: "provisioned",
           config: {
             ...provisionedConfig,
-            auth: { type: "hmac", secretId: "secret-1" },
+            auth: { type: "hmac" },
           },
         },
         tool: "codex",

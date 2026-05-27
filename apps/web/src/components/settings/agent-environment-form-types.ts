@@ -11,7 +11,6 @@ export type AgentEnvironmentDraft = {
   startUrl: string;
   stopUrl: string;
   statusUrl: string;
-  authSecretId: string;
   startupTimeoutSeconds: string;
   launcherMetadata: string;
 };

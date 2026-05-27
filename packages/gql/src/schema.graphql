@@ -306,14 +306,6 @@ type AgentEnvironmentTestResult {
   message: String
 }
 
-type OrgSecret {
-  id: ID!
-  orgId: ID!
-  name: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
 type OrgMember {
   user: User!
   organization: Organization!
@@ -1011,12 +1003,6 @@ input UpdateAgentEnvironmentInput {
   isDefault: Boolean
 }
 
-input SetOrgSecretInput {
-  orgId: ID!
-  name: String!
-  value: String!
-}
-
 input CreateOrganizationInput {
   name: String!
 }
@@ -1027,7 +1013,6 @@ type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
-  orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!
@@ -1174,8 +1159,6 @@ type Mutation {
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
   deleteAgentEnvironment(id: ID!): Boolean!
   testAgentEnvironment(id: ID!): AgentEnvironmentTestResult!
-  setOrgSecret(input: SetOrgSecretInput!): OrgSecret!
-  deleteOrgSecret(orgId: ID!, id: ID!): Boolean!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
   addChannelMember(input: AddChannelMemberInput!): Channel!

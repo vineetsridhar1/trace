@@ -7,7 +7,7 @@ import { runtimeAdapterRegistry } from "../lib/runtime-adapters.js";
 import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 import { logAgentEnvironmentTelemetry } from "../lib/agent-environment-telemetry.js";
 
-const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
+const AUTH_CONFIG_KEYS = new Set(["type"]);
 const RAW_SECRET_KEY_PATTERNS = ["apikey", "authorization", "password", "secret", "token"];
 const PUBLIC_PROVISIONED_CONFIG_KEYS = new Set([
   "capabilities",
@@ -83,12 +83,13 @@ function assertConfigStoresOnlySecretReferences(value: unknown): void {
     if (key === "auth") {
       assertAuthConfigStoresOnlySecretReferences(child);
     } else if (
-      normalizedKey !== "secretid" &&
       RAW_SECRET_KEY_PATTERNS.some((pattern) => normalizedKey.includes(pattern)) &&
       typeof child === "string" &&
       child.trim()
     ) {
-      throw new Error("Agent environment config cannot store raw secrets; reference an OrgSecret");
+      throw new Error(
+        "Agent environment config cannot store raw secrets; configure them via env vars",
+      );
     }
     assertConfigStoresOnlySecretReferences(child);
   }
@@ -96,18 +97,13 @@ function assertConfigStoresOnlySecretReferences(value: unknown): void {
 
 function assertAuthConfigStoresOnlySecretReferences(value: unknown): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Agent environment auth config must reference an OrgSecret");
+    throw new Error("Agent environment auth config must be an object");
   }
 
   for (const key of Object.keys(value)) {
     if (!AUTH_CONFIG_KEYS.has(key)) {
-      throw new Error("Agent environment auth config can only include type and secretId");
+      throw new Error("Agent environment auth config can only include type");
     }
-  }
-
-  const auth = value as Record<string, unknown>;
-  if (auth.secretId !== undefined && typeof auth.secretId !== "string") {
-    throw new Error("Agent environment auth secretId must be a string");
   }
 }
 

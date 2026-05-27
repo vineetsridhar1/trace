@@ -38,14 +38,11 @@ type Documents = {
   "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": typeof types.UpdateOrgMemberRoleDocument;
   "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": typeof types.SearchUsersDocument;
   "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.SettingsReposDocument;
-  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n": typeof types.AgentEnvironmentsSettingsDocument;
-  "\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.OrgSecretsDocument;
+  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n": typeof types.AgentEnvironmentsSettingsDocument;
   "\n  mutation CreateAgentEnvironment($input: CreateAgentEnvironmentInput!) {\n    createAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.CreateAgentEnvironmentDocument;
   "\n  mutation UpdateAgentEnvironment($input: UpdateAgentEnvironmentInput!) {\n    updateAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.UpdateAgentEnvironmentDocument;
   "\n  mutation DeleteAgentEnvironment($id: ID!) {\n    deleteAgentEnvironment(id: $id)\n  }\n": typeof types.DeleteAgentEnvironmentDocument;
   "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n": typeof types.TestAgentEnvironmentDocument;
-  "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SetOrgSecretDocument;
-  "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n": typeof types.DeleteOrgSecretDocument;
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateRepoDocument;
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument;
   "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      visibility\n      memberCount\n      viewerIsMember\n    }\n  }\n": typeof types.AllChannelsDocument;
@@ -128,10 +125,8 @@ const documents: Documents = {
     types.SearchUsersDocument,
   "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n":
     types.SettingsReposDocument,
-  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n":
+  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n":
     types.AgentEnvironmentsSettingsDocument,
-  "\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n":
-    types.OrgSecretsDocument,
   "\n  mutation CreateAgentEnvironment($input: CreateAgentEnvironmentInput!) {\n    createAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n":
     types.CreateAgentEnvironmentDocument,
   "\n  mutation UpdateAgentEnvironment($input: UpdateAgentEnvironmentInput!) {\n    updateAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n":
@@ -140,10 +135,6 @@ const documents: Documents = {
     types.DeleteAgentEnvironmentDocument,
   "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n":
     types.TestAgentEnvironmentDocument,
-  "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n":
-    types.SetOrgSecretDocument,
-  "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n":
-    types.DeleteOrgSecretDocument,
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n":
     types.CreateRepoDocument,
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n":
@@ -372,14 +363,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n",
-): (typeof documents)["\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(
-  source: "\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n",
-): (typeof documents)["\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n"];
+  source: "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n",
+): (typeof documents)["\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -404,18 +389,6 @@ export function graphql(
 export function graphql(
   source: "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n",
 ): (typeof documents)["\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(
-  source: "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n",
-): (typeof documents)["\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(
-  source: "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n",
-): (typeof documents)["\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
