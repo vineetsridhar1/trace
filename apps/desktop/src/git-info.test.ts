@@ -57,6 +57,17 @@ describe("getGitInfo", () => {
     });
   });
 
+  it("does not use the current branch as the default branch", async () => {
+    const { repoPath, remoteUrl } = await createOriginFixture();
+    await git(repoPath, ["checkout", "-b", "feature/work"]);
+
+    await expect(getGitInfo(repoPath)).resolves.toEqual({
+      remoteUrl,
+      defaultBranch: "main",
+      name: "repo",
+    });
+  });
+
   it("accepts detached HEAD checkouts with an origin remote", async () => {
     const { repoPath, remoteUrl } = await createOriginFixture();
     const headSha = await git(repoPath, ["rev-parse", "HEAD"]);
