@@ -14,6 +14,7 @@ import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { runtimeDirectory } from "../lib/runtime-directory.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import {
   deriveSessionGroupStatus,
@@ -205,6 +206,8 @@ export const sessionQueries = {
     const runtime =
       (runtimeInstanceId ? sessionRouter.getRuntime(runtimeInstanceId, orgId) : null) ??
       sessionRouter.getRuntimeForSession(args.sessionId);
+    const remoteRuntime =
+      runtime || !runtimeInstanceId ? null : await runtimeDirectory.get(orgId, runtimeInstanceId);
 
     // Try to get skills from bridge
     let skills: BridgeSkillInfo[] = [];
@@ -218,9 +221,10 @@ export const sessionQueries = {
       });
       canUseBridgeSkills = access.hostingMode !== "local" || access.allowed;
     }
-    if (runtime && canUseBridgeSkills) {
+    const skillRuntimeId = runtime?.key ?? remoteRuntime?.runtimeId ?? null;
+    if (skillRuntimeId && canUseBridgeSkills) {
       try {
-        skills = await sessionRouter.listSkills(runtime.key, args.sessionId, {
+        skills = await sessionRouter.listSkills(skillRuntimeId, args.sessionId, {
           workdirHint: session.workdir ?? undefined,
           includeUserSkills: true,
           includeProjectSkills: true,

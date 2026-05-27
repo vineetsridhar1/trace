@@ -1,5 +1,5 @@
 import { redis, redisSub } from "./redis.js";
-import { isLocalMode } from "./mode.js";
+import { shouldUseRedisServices } from "./mode.js";
 
 type SubscriptionHandler = (payload: unknown) => void;
 
@@ -130,7 +130,9 @@ class RedisPubSub extends BasePubSub {
   }
 }
 
-export const pubsub: TracePubSub = isLocalMode() ? new MemoryPubSub() : new RedisPubSub();
+export const pubsub: TracePubSub = shouldUseRedisServices()
+  ? new RedisPubSub()
+  : new MemoryPubSub();
 
 // Standard topic builders
 export const topics = {

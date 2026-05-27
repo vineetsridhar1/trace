@@ -32,7 +32,7 @@ import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
-import { isLocalMode } from "./lib/mode.js";
+import { isLocalMode, shouldUseRedisServices } from "./lib/mode.js";
 import {
   getAllowedCorsOrigins,
   hasSessionCookie,
@@ -113,6 +113,7 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   const localMode = isLocalMode();
+  const redisServices = shouldUseRedisServices();
   const allowedCorsOrigins = getAllowedCorsOrigins({
     localMode,
     nodeEnv: process.env.NODE_ENV,
@@ -305,7 +306,7 @@ async function main() {
           cloudIdleCleanupRunning = true;
           const startedAt = Date.now();
           void withRedisJobLock({
-            enabled: !localMode,
+            enabled: redisServices,
             key: CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY,
             ttlMs: cloudIdleCleanupLockTtlMs,
             run: () =>
@@ -473,10 +474,11 @@ async function main() {
   });
 
   // Connect Redis and initialize pub/sub message listener after binding the health check port.
-  if (!localMode) {
+  if (redisServices) {
     try {
       await connectRedis();
       pubsub.init();
+      sessionRouter.initRuntimeRpc();
     } catch {
       const url = process.env.REDIS_URL ?? "redis://localhost:6379";
       console.error(`\n[redis] Failed to connect to Redis at ${url}`);

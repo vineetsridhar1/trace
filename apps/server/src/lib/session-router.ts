@@ -25,6 +25,9 @@ import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
+import { redis, redisSub } from "./redis.js";
+import { runtimeDirectory } from "./runtime-directory.js";
+import { serverInstanceId } from "./server-instance.js";
 import {
   RuntimeAdapterRegistry,
   type RuntimeAdapter,
@@ -69,6 +72,21 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound"
   | "delivery_failed";
+
+type RuntimeRpcRequest = {
+  rpcRequestId: string;
+  callerInstanceId: string;
+  runtimeId: string;
+  organizationId: string;
+  command: Record<string, unknown>;
+};
+
+type RuntimeRpcResult = {
+  requestId: string;
+  responseType: string;
+  runtimeId?: string;
+  payload: Record<string, unknown>;
+};
 
 export interface RuntimeInstance {
   key: string;
@@ -359,9 +377,251 @@ export class SessionRouter {
       reject: (err: Error) => void;
     }
   >();
+  private rpcInitialized = false;
+  private remoteResponseRoutes = new Map<string, { callerInstanceId: string; runtimeId: string }>();
+  private remoteTerminalRoutes = new Map<string, { callerInstanceId: string; runtimeId: string }>();
 
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
+
+  initRuntimeRpc(): void {
+    if (this.rpcInitialized) return;
+    this.rpcInitialized = true;
+    redisSub.on("message", (channel: string, message: string) => {
+      if (channel === this.rpcTopic(serverInstanceId)) {
+        this.handleRuntimeRpcMessage(message).catch((err: unknown) => {
+          console.error("[runtime-rpc] failed to handle request:", err);
+        });
+      } else if (channel === this.rpcResultTopic(serverInstanceId)) {
+        this.handleRuntimeRpcResultMessage(message);
+      }
+    });
+    redisSub.subscribe(this.rpcTopic(serverInstanceId), this.rpcResultTopic(serverInstanceId)).catch(
+      (err: Error) => {
+        console.error("[runtime-rpc] subscribe failed:", err.message);
+      },
+    );
+  }
+
+  private rpcTopic(ownerInstanceId: string): string {
+    return `trace:runtime-rpc:${ownerInstanceId}`;
+  }
+
+  private rpcResultTopic(callerInstanceId: string): string {
+    return `trace:runtime-rpc-result:${callerInstanceId}`;
+  }
+
+  private async handleRuntimeRpcMessage(message: string): Promise<void> {
+    let request: RuntimeRpcRequest;
+    try {
+      request = JSON.parse(message) as RuntimeRpcRequest;
+    } catch {
+      return;
+    }
+    if (!request || request.callerInstanceId === serverInstanceId) return;
+    const directoryEntry = await runtimeDirectory.get(request.organizationId, request.runtimeId);
+    if (!directoryEntry || directoryEntry.ownerInstanceId !== serverInstanceId) return;
+    const runtime = this.getRuntime(request.runtimeId, request.organizationId);
+    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) return;
+    const bridgeRequestId =
+      typeof request.command.requestId === "string" ? request.command.requestId : null;
+    if (bridgeRequestId) {
+      this.remoteResponseRoutes.set(bridgeRequestId, {
+        callerInstanceId: request.callerInstanceId,
+        runtimeId: request.runtimeId,
+      });
+    }
+    const terminalId =
+      typeof request.command.terminalId === "string" ? request.command.terminalId : null;
+    if (terminalId) {
+      this.remoteTerminalRoutes.set(terminalId, {
+        callerInstanceId: request.callerInstanceId,
+        runtimeId: request.runtimeId,
+      });
+    }
+    try {
+      runtime.ws.send(JSON.stringify(request.command));
+      const sessionId =
+        typeof request.command.sessionId === "string" ? request.command.sessionId : null;
+      if (sessionId) {
+        this.bindSession(sessionId, runtime.key);
+        if (request.command.type === "run" || request.command.type === "send") {
+          runtime.commandDeliveredSessions ??= new Set<string>();
+          runtime.commandDeliveredSessions.add(sessionId);
+        }
+      }
+    } catch {
+      if (bridgeRequestId) this.remoteResponseRoutes.delete(bridgeRequestId);
+    }
+  }
+
+  private handleRuntimeRpcResultMessage(message: string): void {
+    let result: RuntimeRpcResult;
+    try {
+      result = JSON.parse(message) as RuntimeRpcResult;
+    } catch {
+      return;
+    }
+    const payload = result.payload ?? {};
+    switch (result.responseType) {
+      case "branches_result":
+        this.resolveBranchRequest(
+          result.requestId,
+          Array.isArray(payload.branches)
+            ? payload.branches.filter((branch): branch is string => typeof branch === "string")
+            : [],
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "workspace_slugs_result":
+        this.resolveWorkspaceSlugRequest(
+          result.requestId,
+          Array.isArray(payload.slugs)
+            ? payload.slugs.filter((slug): slug is string => typeof slug === "string")
+            : [],
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "files_result":
+        this.resolveFileRequest(
+          result.requestId,
+          Array.isArray(payload.files)
+            ? payload.files.filter((file): file is string => typeof file === "string")
+            : [],
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "file_content_result":
+        this.resolveFileContentRequest(
+          result.requestId,
+          typeof payload.content === "string" ? payload.content : "",
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "branch_diff_result":
+        this.resolveBranchDiffRequest(
+          result.requestId,
+          Array.isArray(payload.files) ? (payload.files as BridgeBranchDiffFile[]) : [],
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "file_at_ref_result":
+        this.resolveFileAtRefRequest(
+          result.requestId,
+          typeof payload.content === "string" ? payload.content : "",
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "skills_result":
+        this.resolveSkillsRequest(
+          result.requestId,
+          Array.isArray(payload.skills) ? (payload.skills as BridgeSkillInfo[]) : [],
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "linked_checkout_status_result":
+        this.resolveLinkedCheckoutStatusRequest(
+          result.requestId,
+          payload.status as BridgeLinkedCheckoutStatus,
+          result.runtimeId,
+        );
+        break;
+      case "linked_checkout_changed_file_result":
+        this.resolveLinkedCheckoutChangedFileRequest(
+          result.requestId,
+          payload.file as BridgeLinkedCheckoutChangedFilePreview | undefined,
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "linked_checkout_action_result":
+        this.resolveLinkedCheckoutActionRequest(
+          result.requestId,
+          payload.result as BridgeLinkedCheckoutActionResultPayload,
+          result.runtimeId,
+        );
+        break;
+      case "session_current_branch_result":
+        this.resolveSessionCurrentBranchRequest(
+          result.requestId,
+          typeof payload.branch === "string" ? payload.branch : null,
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "session_git_sync_status_result":
+        this.resolveSessionGitSyncStatusRequest(
+          result.requestId,
+          payload.status as BridgeSessionGitSyncStatus | undefined,
+          typeof payload.error === "string" ? payload.error : undefined,
+          result.runtimeId,
+        );
+        break;
+      case "terminal_message":
+        void import("./terminal-relay.js").then(({ terminalRelay }) => {
+          const terminalMessage = payload.message;
+          if (!terminalMessage || typeof terminalMessage !== "object") return;
+          if (Array.isArray(terminalMessage)) return;
+          terminalRelay.relayFromBridge(
+            terminalMessage as { type: string; terminalId: string; [key: string]: unknown },
+            result.runtimeId,
+          );
+        });
+        break;
+    }
+  }
+
+  private forwardRemoteBridgeResult(
+    requestId: string,
+    responseType: string,
+    payload: Record<string, unknown>,
+  ): boolean {
+    const route = this.remoteResponseRoutes.get(requestId);
+    if (!route) return false;
+    this.remoteResponseRoutes.delete(requestId);
+    redis
+      .publish(
+        this.rpcResultTopic(route.callerInstanceId),
+        JSON.stringify({ requestId, responseType, runtimeId: route.runtimeId, payload }),
+      )
+      .catch((err: Error) => {
+        console.error("[runtime-rpc] result publish failed:", err.message);
+      });
+    return true;
+  }
+
+  forwardRemoteTerminalMessage(message: {
+    type: string;
+    terminalId: string;
+    [key: string]: unknown;
+  }): boolean {
+    const route = this.remoteTerminalRoutes.get(message.terminalId);
+    if (!route) return false;
+    if (message.type === "terminal_exit" || message.type === "terminal_error") {
+      this.remoteTerminalRoutes.delete(message.terminalId);
+    }
+    redis
+      .publish(
+        this.rpcResultTopic(route.callerInstanceId),
+        JSON.stringify({
+          requestId: message.terminalId,
+          responseType: "terminal_message",
+          runtimeId: route.runtimeId,
+          payload: { message },
+        } satisfies RuntimeRpcResult),
+      )
+      .catch((err: Error) => {
+        console.error("[runtime-rpc] terminal publish failed:", err.message);
+      });
+    return true;
+  }
 
   registerRuntime(runtime: {
     key?: string;
@@ -663,6 +923,13 @@ export class SessionRouter {
     const expectedHomeId = options?.expectedHomeRuntimeId;
     if (expectedHomeId) {
       const expectedRuntime = this.getRuntime(expectedHomeId, options?.organizationId);
+      const remoteRuntime =
+        options?.organizationId && !expectedRuntime
+          ? runtimeDirectory.getCached(options.organizationId, expectedHomeId)
+          : null;
+      if (remoteRuntime && remoteRuntime.ownerInstanceId !== serverInstanceId) {
+        return this.sendToRuntime(expectedHomeId, command, options.organizationId);
+      }
       if (!expectedRuntime || expectedRuntime.ws.readyState !== expectedRuntime.ws.OPEN) {
         return "runtime_disconnected";
       }
@@ -829,7 +1096,31 @@ export class SessionRouter {
     organizationId?: string | null,
   ): DeliveryResult {
     const runtime = this.getRuntime(runtimeId, organizationId);
-    if (!runtime) return "no_runtime";
+    if (!runtime) {
+      const directoryEntry = organizationId
+        ? runtimeDirectory.getCached(organizationId, runtimeId)
+        : runtimeDirectory
+            .listCached()
+            .find((entry) => entry.runtimeId === runtimeId || entry.runtimeKey === runtimeId);
+      const targetOrganizationId = organizationId ?? directoryEntry?.organizationId;
+      if (!directoryEntry || !targetOrganizationId) return "no_runtime";
+      if (directoryEntry.ownerInstanceId === serverInstanceId) return "no_runtime";
+      redis
+        .publish(
+          this.rpcTopic(directoryEntry.ownerInstanceId),
+          JSON.stringify({
+            rpcRequestId: randomUUID(),
+            callerInstanceId: serverInstanceId,
+            runtimeId: directoryEntry.runtimeId,
+            organizationId: targetOrganizationId,
+            command,
+          } satisfies RuntimeRpcRequest),
+        )
+        .catch((err: Error) => {
+          console.error("[runtime-rpc] publish failed:", err.message);
+        });
+      return "delivered";
+    }
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
     try {
       runtime.ws.send(JSON.stringify(command));
@@ -878,7 +1169,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingBranchRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "branches_result", { branches, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingBranchRequests.delete(requestId);
     if (error) {
@@ -946,7 +1240,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingWorkspaceSlugRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "workspace_slugs_result", { slugs, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingWorkspaceSlugRequests.delete(requestId);
     if (error) {
@@ -1005,7 +1302,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingFileRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "files_result", { files, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingFileRequests.delete(requestId);
     if (error) {
@@ -1066,7 +1366,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingFileContentRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "file_content_result", { content, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingFileContentRequests.delete(requestId);
     if (error) {
@@ -1126,7 +1429,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingBranchDiffRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "branch_diff_result", { files, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingBranchDiffRequests.delete(requestId);
     if (error) {
@@ -1188,7 +1494,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingFileAtRefRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "file_at_ref_result", { content, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingFileAtRefRequests.delete(requestId);
     if (error) {
@@ -1258,7 +1567,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingSkillsRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "skills_result", { skills, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingSkillsRequests.delete(requestId);
     if (error) {
@@ -1309,7 +1621,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingLinkedCheckoutStatusRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "linked_checkout_status_result", { status });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingLinkedCheckoutStatusRequests.delete(requestId);
     this.cacheLinkedCheckoutStatus(pending.runtimeId, status);
@@ -1360,7 +1675,13 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingLinkedCheckoutChangedFileRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "linked_checkout_changed_file_result", {
+        file,
+        error,
+      });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingLinkedCheckoutChangedFileRequests.delete(requestId);
     if (error || !file) {
@@ -1520,7 +1841,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingLinkedCheckoutActionRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "linked_checkout_action_result", { result });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingLinkedCheckoutActionRequests.delete(requestId);
     if (result.status) this.cacheLinkedCheckoutStatus(pending.runtimeId, result.status);
@@ -1573,7 +1897,10 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingSessionCurrentBranchRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "session_current_branch_result", { branch, error });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingSessionCurrentBranchRequests.delete(requestId);
     if (error) {
@@ -1629,7 +1956,13 @@ export class SessionRouter {
     sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingSessionGitSyncStatusRequests.get(requestId);
-    if (!pending) return;
+    if (!pending) {
+      this.forwardRemoteBridgeResult(requestId, "session_git_sync_status_result", {
+        status,
+        error,
+      });
+      return;
+    }
     if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingSessionGitSyncStatusRequests.delete(requestId);
     if (error || !status) {

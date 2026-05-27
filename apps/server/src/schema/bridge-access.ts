@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { runtimeDirectory } from "../lib/runtime-directory.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 
 export const bridgeAccessQueries = {
@@ -103,13 +104,15 @@ export const bridgeAccessMutations = {
   },
 };
 
-function rawRegisteredRepoIds(runtime: {
+async function rawRegisteredRepoIds(runtime: {
   instanceId: string;
   organizationId: string;
   metadata?: unknown;
-}): string[] {
+}): Promise<string[]> {
   const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);
   if (live) return live.registeredRepoIds;
+  const directoryEntry = await runtimeDirectory.get(runtime.organizationId, runtime.instanceId);
+  if (directoryEntry) return directoryEntry.registeredRepoIds;
   if (!runtime.metadata || typeof runtime.metadata !== "object" || Array.isArray(runtime.metadata)) {
     return [];
   }
@@ -134,13 +137,14 @@ async function filterRepoIdsToOrganization(repoIds: string[], organizationId: st
 export const bridgeAccessTypeResolvers = {
   BridgeRuntime: {
     connected: (runtime: { instanceId: string; organizationId: string }) =>
-      sessionRouter.isRuntimeAvailable(runtime.instanceId, runtime.organizationId),
+      sessionRouter.isRuntimeAvailable(runtime.instanceId, runtime.organizationId) ||
+      runtimeDirectory.get(runtime.organizationId, runtime.instanceId).then(Boolean),
     registeredRepoIds: async (runtime: {
       instanceId: string;
       organizationId: string;
       metadata?: unknown;
     }) => {
-      return filterRepoIdsToOrganization(rawRegisteredRepoIds(runtime), runtime.organizationId);
+      return filterRepoIdsToOrganization(await rawRegisteredRepoIds(runtime), runtime.organizationId);
     },
     linkedCheckouts: async (runtime: { instanceId: string; organizationId: string }) => {
       const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);

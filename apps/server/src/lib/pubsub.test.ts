@@ -17,6 +17,7 @@ describe("pubsub", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.unstubAllEnvs();
+    vi.stubEnv("TRACE_REDIS", "1");
 
     const redisModule = await import("./redis.js");
     const pubsubModule = await import("./pubsub.js");

@@ -2,6 +2,7 @@ import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { runtimeDirectory } from "../lib/runtime-directory.js";
 import { canViewSessionGroup } from "./access.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { isFullyUnloadedSession } from "./session.js";
@@ -112,8 +113,12 @@ class TerminalService {
     });
     if (!bridge) throw new Error("Bridge not found");
 
-    const runtime = sessionRouter.getRuntime(bridge.instanceId, input.organizationId);
-    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, input.organizationId)) {
+    const localRuntime = sessionRouter.getRuntime(bridge.instanceId, input.organizationId);
+    const remoteRuntime = localRuntime
+      ? null
+      : await runtimeDirectory.get(input.organizationId, bridge.instanceId);
+    const runtime = localRuntime ?? remoteRuntime;
+    if (!runtime) {
       throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
     }
     if (runtime.organizationId !== input.organizationId) {
@@ -126,13 +131,16 @@ class TerminalService {
     await runtimeAccessService.assertAccess({
       userId: input.userId,
       organizationId: input.organizationId,
-      runtimeInstanceId: runtime.id,
+      runtimeInstanceId: localRuntime?.id ?? remoteRuntime?.runtimeId ?? bridge.instanceId,
       capability: "terminal",
     });
 
     let repoPath: string | null = null;
     if (input.requireRepoPath) {
-      const status = await sessionRouter.getLinkedCheckoutStatus(runtime.key, channel.repoId);
+      const status = await sessionRouter.getLinkedCheckoutStatus(
+        localRuntime?.key ?? bridge.instanceId,
+        channel.repoId,
+      );
       repoPath = status.repoPath ?? null;
       if (!repoPath) throw new Error("Repo is not linked on this bridge");
     }
@@ -140,7 +148,7 @@ class TerminalService {
     return {
       channelId: channel.id,
       repoId: channel.repoId,
-      runtimeInstanceId: runtime.id,
+      runtimeInstanceId: localRuntime?.id ?? remoteRuntime?.runtimeId ?? bridge.instanceId,
       repoPath,
     };
   }

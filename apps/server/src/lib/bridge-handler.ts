@@ -15,6 +15,7 @@ import { runtimeAccessService } from "../services/runtime-access.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
+import { runtimeDirectory } from "./runtime-directory.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -95,6 +96,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
   let runtimeId: string = randomUUID();
   let runtimeKey = runtimeId;
   let registered = false;
+  const ownerConnectionId = randomUUID();
   const bridgeAuth = req?.bridgeAuth;
 
   runtimeDebug("bridge websocket connected", {
@@ -239,6 +241,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               metadata: {
                 supportedTools,
                 registeredRepoIds,
+                ownerConnectionId,
               },
             });
             await agentEnvironmentService
@@ -268,6 +271,18 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               id: runtimeId,
               label: bridgeRuntime.label,
               ws,
+              hostingMode: "local",
+              organizationId: bridgeRuntime.organizationId,
+              ownerUserId: bridgeRuntime.ownerUserId,
+              bridgeRuntimeId: bridgeRuntime.id,
+              supportedTools,
+              registeredRepoIds,
+            });
+            await runtimeDirectory.upsert({
+              ownerConnectionId,
+              runtimeId,
+              runtimeKey,
+              label: bridgeRuntime.label,
               hostingMode: "local",
               organizationId: bridgeRuntime.organizationId,
               ownerUserId: bridgeRuntime.ownerUserId,
@@ -338,6 +353,17 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               id: runtimeId,
               label: (msg.label as string) ?? runtimeId,
               ws,
+              hostingMode: "cloud",
+              organizationId: bridgeAuth.organizationId,
+              ownerUserId: bridgeAuth.userId,
+              supportedTools,
+              registeredRepoIds,
+            });
+            await runtimeDirectory.upsert({
+              ownerConnectionId,
+              runtimeId,
+              runtimeKey,
+              label: (msg.label as string) ?? runtimeId,
               hostingMode: "cloud",
               organizationId: bridgeAuth.organizationId,
               ownerUserId: bridgeAuth.userId,
@@ -440,6 +466,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         if (!registered) return;
         const recorded = sessionRouter.recordHeartbeat(runtimeKey, ws);
         if (!recorded) return;
+        if (bridgeAuth?.organizationId) {
+          runtimeDirectory
+            .refresh(bridgeAuth.organizationId, runtimeId, ownerConnectionId)
+            .catch((err: unknown) => {
+              console.error("[bridge] error refreshing runtime directory:", err);
+            });
+        }
         if (Array.isArray(msg.activeSessionIds)) {
           const activeSessionIds = (msg.activeSessionIds as unknown[]).filter(
             (sessionId): sessionId is string => typeof sessionId === "string" && !!sessionId,
@@ -480,6 +513,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           return;
         }
         sessionRouter.addRegisteredRepo(runtimeKey, repoId, ws);
+        if (bridgeAuth?.organizationId) {
+          const runtime = sessionRouter.getRuntime(runtimeId, bridgeAuth.organizationId);
+          runtimeDirectory
+            .refresh(bridgeAuth.organizationId, runtimeId, ownerConnectionId, {
+              registeredRepoIds: runtime?.registeredRepoIds ?? [repoId],
+            })
+            .catch((err: unknown) => {
+              console.error("[bridge] error refreshing runtime registered repos:", err);
+            });
+        }
         if (bridgeAuth?.kind === "local") {
           runtimeAccessService
             .addRegisteredRepoToLocalRuntime({
@@ -716,8 +759,15 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         msg.type === "terminal_exit" ||
         msg.type === "terminal_error"
       ) {
+        const terminalMessage = msg as { type: string; terminalId: string; [key: string]: unknown };
+        if (
+          typeof terminalMessage.terminalId === "string" &&
+          sessionRouter.forwardRemoteTerminalMessage(terminalMessage)
+        ) {
+          return;
+        }
         terminalRelay.relayFromBridge(
-          msg as { type: string; terminalId: string; [key: string]: unknown },
+          terminalMessage,
           runtimeKey,
         );
         return;
@@ -818,6 +868,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     });
     const closedRuntimeId = bridgeAuth?.kind === "local" ? bridgeAuth.instanceId : runtimeId;
     const affectedSessions = registered ? sessionRouter.unregisterRuntime(runtimeKey, ws) : [];
+    if (registered && bridgeAuth?.organizationId) {
+      runtimeDirectory
+        .removeIfOwner(bridgeAuth.organizationId, closedRuntimeId, ownerConnectionId)
+        .catch((err: unknown) => {
+          console.error("[bridge] failed to remove runtime directory entry:", err);
+        });
+    }
     runtimeDebug("bridge close affected sessions", {
       runtimeId: closedRuntimeId,
       affectedSessions,
@@ -825,7 +882,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
     if (bridgeAuth?.kind === "local") {
       runtimeAccessService
-        .markRuntimeDisconnected(closedRuntimeId, bridgeAuth.organizationId)
+        .markRuntimeDisconnected(closedRuntimeId, bridgeAuth.organizationId, ownerConnectionId)
         .catch((err) => {
           console.error("[bridge] failed to mark local runtime disconnected:", err);
         });

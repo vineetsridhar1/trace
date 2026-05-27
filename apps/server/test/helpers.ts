@@ -11,6 +11,8 @@ export function createRedisMock() {
     set: vi.fn(),
     del: vi.fn(),
     get: vi.fn(),
+    hset: vi.fn(),
+    hgetall: vi.fn(),
     incr: vi.fn(),
     expire: vi.fn(),
     ttl: vi.fn(),

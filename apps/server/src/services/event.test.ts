@@ -34,6 +34,7 @@ const redisMock = redis as any;
 
 describe("EventService", () => {
   beforeEach(() => {
+    vi.stubEnv("TRACE_REDIS", "1");
     vi.clearAllMocks();
     redisMock.xadd.mockResolvedValue("1-0");
   });

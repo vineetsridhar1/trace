@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { sessionRouter, type RuntimeInstance } from "../lib/session-router.js";
+import { runtimeDirectory } from "../lib/runtime-directory.js";
 import type { BridgeLinkedCheckoutStatus } from "@trace/shared";
 
 type BridgeWithAccess = Prisma.BridgeRuntimeGetPayload<{
@@ -158,13 +159,20 @@ class ConnectionsService {
       if (runtime.organizationId !== input.organizationId) continue;
       liveById.set(runtime.id, runtime);
     }
+    const remoteRegisteredReposById = new Map<string, string[]>();
+    for (const runtime of await runtimeDirectory.list(input.organizationId)) {
+      if (!liveById.has(runtime.runtimeId)) {
+        remoteRegisteredReposById.set(runtime.runtimeId, runtime.registeredRepoIds);
+      }
+    }
 
     const repoIds = new Set<string>();
     for (const bridge of bridges) {
       if (!hasBridgeWorkAccess(bridge, input.userId)) continue;
       const runtime = liveById.get(bridge.instanceId);
-      if (!runtime) continue;
-      for (const repoId of runtime.registeredRepoIds) repoIds.add(repoId);
+      const registeredRepoIds = runtime?.registeredRepoIds ?? remoteRegisteredReposById.get(bridge.instanceId);
+      if (!registeredRepoIds) continue;
+      for (const repoId of registeredRepoIds) repoIds.add(repoId);
     }
 
     const visibleChannels = repoIds.size

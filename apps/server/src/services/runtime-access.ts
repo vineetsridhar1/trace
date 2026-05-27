@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { runtimeDirectory } from "../lib/runtime-directory.js";
 import { canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
 
@@ -184,17 +185,22 @@ function buildActiveGrantWhere(params: {
   return where;
 }
 
-function isConnectedRuntime(instanceId: string, organizationId: string): boolean {
-  return sessionRouter.isRuntimeAvailable(instanceId, organizationId);
+async function isConnectedRuntime(instanceId: string, organizationId: string): Promise<boolean> {
+  return (
+    sessionRouter.isRuntimeAvailable(instanceId, organizationId) ||
+    !!(await runtimeDirectory.get(organizationId, instanceId))
+  );
 }
 
-function runtimeHostingMode(
+async function runtimeHostingMode(
   runtimeInstanceId: string,
   organizationId: string,
   persisted: { id: string } | null,
-): "cloud" | "local" | null {
+): Promise<"cloud" | "local" | null> {
   const runtime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
   if (runtime) return runtime.hostingMode;
+  const directoryEntry = await runtimeDirectory.get(organizationId, runtimeInstanceId);
+  if (directoryEntry) return directoryEntry.hostingMode;
   if (persisted) return "local";
   if (isCloudMachineRuntimeId(runtimeInstanceId)) return "cloud";
   return null;
@@ -367,9 +373,17 @@ class RuntimeAccessService {
     });
   }
 
-  async markRuntimeDisconnected(instanceId: string, organizationId?: string | null): Promise<void> {
+  async markRuntimeDisconnected(
+    instanceId: string,
+    organizationId?: string | null,
+    ownerConnectionId?: string,
+  ): Promise<void> {
     await prisma.bridgeRuntime.updateMany({
-      where: { instanceId, ...(organizationId ? { organizationId } : {}) },
+      where: {
+        instanceId,
+        ...(organizationId ? { organizationId } : {}),
+        ...(ownerConnectionId ? { metadata: { path: ["ownerConnectionId"], equals: ownerConnectionId } } : {}),
+      },
       data: {
         disconnectedAt: new Date(),
         lastSeenAt: new Date(),
@@ -439,8 +453,12 @@ class RuntimeAccessService {
       },
     });
 
-    const hostingMode = runtimeHostingMode(input.runtimeInstanceId, input.organizationId, persisted);
-    const connected = isConnectedRuntime(input.runtimeInstanceId, input.organizationId);
+    const hostingMode = await runtimeHostingMode(
+      input.runtimeInstanceId,
+      input.organizationId,
+      persisted,
+    );
+    const connected = await isConnectedRuntime(input.runtimeInstanceId, input.organizationId);
 
     if (!persisted) {
       const allowed = hostingMode === "cloud";

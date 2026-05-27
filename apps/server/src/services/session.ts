@@ -47,6 +47,7 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { isLocalMode } from "../lib/mode.js";
+import { runtimeDirectory, type RuntimeDirectoryEntry } from "../lib/runtime-directory.js";
 import {
   assertSessionGroupAccess,
   canViewSessionGroup,
@@ -79,6 +80,11 @@ type PendingInputInfo = {
   kind: "question" | "plan";
   toolUseId: string | null;
 };
+
+type RuntimeSelection = Pick<
+  RuntimeInstance,
+  "id" | "key" | "label" | "hostingMode" | "organizationId" | "ownerUserId" | "supportedTools" | "registeredRepoIds"
+>;
 
 type UserSessionDefaults = {
   defaultSessionTool: CodingTool | null;
@@ -1661,7 +1667,10 @@ export class SessionService {
       throw new ValidationError("Private session groups require an owner");
     }
 
-    const liveRuntime = sessionRouter.getRuntime(params.runtimeInstanceId, params.organizationId);
+    const liveRuntime = await this.getAvailableRuntimeSelection(
+      params.runtimeInstanceId,
+      params.organizationId,
+    );
     if (liveRuntime) {
       if (liveRuntime.hostingMode !== "local" || liveRuntime.ownerUserId !== params.ownerUserId) {
         throw new ValidationError("Private sessions can only run on the owner's local bridge");
@@ -1693,7 +1702,7 @@ export class SessionService {
     tool?: string;
     repoId?: string | null;
     sessionGroupId?: string | null;
-  }): Promise<RuntimeInstance | undefined> {
+  }): Promise<RuntimeSelection | undefined> {
     const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
       userId: params.userId,
       organizationId: params.organizationId,
@@ -1708,7 +1717,49 @@ export class SessionService {
       return runtime;
     }
 
+    const remoteRuntimes = await runtimeDirectory.list(params.organizationId);
+    for (const runtime of remoteRuntimes) {
+      if (runtime.hostingMode !== "local") continue;
+      if (!accessibleRuntimeIds.has(runtime.runtimeId)) continue;
+      if (params.tool && !runtime.supportedTools.includes(params.tool)) continue;
+      if (params.repoId && !runtime.registeredRepoIds.includes(params.repoId)) continue;
+      return this.runtimeSelectionFromDirectory(runtime);
+    }
+
     return undefined;
+  }
+
+  private runtimeSelectionFromDirectory(entry: RuntimeDirectoryEntry): RuntimeSelection {
+    return {
+      id: entry.runtimeId,
+      key: entry.runtimeId,
+      label: entry.label,
+      hostingMode: entry.hostingMode,
+      organizationId: entry.organizationId,
+      ownerUserId: entry.ownerUserId,
+      supportedTools: entry.supportedTools,
+      registeredRepoIds: entry.registeredRepoIds,
+    };
+  }
+
+  private async getAvailableRuntimeSelection(
+    runtimeInstanceId: string,
+    organizationId: string,
+  ): Promise<RuntimeSelection | undefined> {
+    const local = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
+    if (local) return local;
+    const remote = await runtimeDirectory.get(organizationId, runtimeInstanceId);
+    return remote ? this.runtimeSelectionFromDirectory(remote) : undefined;
+  }
+
+  private async isRuntimeAvailable(
+    runtimeInstanceId: string,
+    organizationId: string,
+  ): Promise<boolean> {
+    return (
+      sessionRouter.isRuntimeAvailable(runtimeInstanceId, organizationId) ||
+      !!(await runtimeDirectory.get(organizationId, runtimeInstanceId))
+    );
   }
 
   private async resolveAccessibleLocalRuntimeBinding(params: {
@@ -1743,7 +1794,10 @@ export class SessionService {
         sessionGroupId: params.sessionGroupId,
         failureMessage: params.failureMessage,
       });
-      const runtime = sessionRouter.getRuntime(conn.runtimeInstanceId, params.organizationId);
+      const runtime = await this.getAvailableRuntimeSelection(
+        conn.runtimeInstanceId,
+        params.organizationId,
+      );
       if (runtime) {
         const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
         if (!supportsTool) {
@@ -1862,7 +1916,7 @@ export class SessionService {
         failureMessage: LOCAL_FILE_ACCESS_DENIED_ERROR,
       });
 
-      const runtime = sessionRouter.getRuntime(groupRuntimeId, organizationId);
+      const runtime = await this.getAvailableRuntimeSelection(groupRuntimeId, organizationId);
       if (!runtime) {
         throw new Error("No connected runtime available for this session group");
       }
@@ -1901,7 +1955,7 @@ export class SessionService {
         }
         throw error;
       }
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = await this.getAvailableRuntimeSelection(runtimeId, organizationId);
       if (!runtime) continue;
       return {
         runtimeId: runtime.key,
@@ -1967,7 +2021,8 @@ export class SessionService {
     }
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
-    const ownedRuntimesForRepo = sessionRouter
+    const ownedRuntimesById = new Map<string, RuntimeSelection>();
+    for (const runtime of sessionRouter
       .listRuntimes({ hostingMode: "local" })
       .filter((candidate) => {
         if (candidate.organizationId !== organizationId) return false;
@@ -1978,7 +2033,18 @@ export class SessionService {
         if (candidate.ws.readyState !== candidate.ws.OPEN) return false;
 
         return true;
-      });
+      })) {
+      ownedRuntimesById.set(runtime.id, runtime);
+    }
+    for (const runtime of await runtimeDirectory.list(organizationId)) {
+      if (runtime.hostingMode !== "local") continue;
+      if (runtime.ownerUserId !== userId) continue;
+      if (options.requireRegisteredRepo && !runtime.registeredRepoIds.includes(repoId)) continue;
+      if (!ownedRuntimesById.has(runtime.runtimeId)) {
+        ownedRuntimesById.set(runtime.runtimeId, this.runtimeSelectionFromDirectory(runtime));
+      }
+    }
+    const ownedRuntimesForRepo = [...ownedRuntimesById.values()];
     const runtime = options.runtimeInstanceId
       ? ownedRuntimesForRepo.find((candidate) => candidate.id === options.runtimeInstanceId)
       : (ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
@@ -2796,7 +2862,7 @@ export class SessionService {
 
     if (!hasExplicitTool) {
       const requestedRuntime = input.runtimeInstanceId
-        ? sessionRouter.getRuntime(input.runtimeInstanceId, input.organizationId)
+        ? await this.getAvailableRuntimeSelection(input.runtimeInstanceId, input.organizationId)
         : undefined;
       const localFallbackRuntime =
         requestedRuntime?.hostingMode === "local"
@@ -2852,7 +2918,10 @@ export class SessionService {
     }
     const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
     if (!hasExplicitTool && environmentRuntimeInstanceId) {
-      const runtime = sessionRouter.getRuntime(environmentRuntimeInstanceId, input.organizationId);
+      const runtime = await this.getAvailableRuntimeSelection(
+        environmentRuntimeInstanceId,
+        input.organizationId,
+      );
       const fallbackTool = runtime ? selectRuntimeSupportedTool(runtime, tool) : null;
       if (fallbackTool) {
         tool = fallbackTool;
@@ -2909,7 +2978,7 @@ export class SessionService {
       if (!runtimeId) {
         throw new Error("Requested runtime not found");
       }
-      let runtime = sessionRouter.getRuntime(runtimeId, input.organizationId);
+      let runtime = await this.getAvailableRuntimeSelection(runtimeId, input.organizationId);
       runtimeDebug("startSession resolving requested runtime", {
         sessionId: "pending",
         runtimeInstanceId: runtimeId,
@@ -3018,7 +3087,8 @@ export class SessionService {
 
     if (requestedRuntimeInstanceId && !runtimeLabel) {
       runtimeLabel =
-        sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
+        (await this.getAvailableRuntimeSelection(requestedRuntimeInstanceId, input.organizationId))
+          ?.label ??
         this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
     }
     await this.assertPrivateRuntimeOwner({
@@ -3202,7 +3272,9 @@ export class SessionService {
     const runtimeToBind = requestedRuntimeInstanceId;
     if (runtimeToBind) {
       const runtimeKeyToBind =
-        sessionRouter.getRuntime(runtimeToBind, input.organizationId)?.key ?? runtimeToBind;
+        sessionRouter.getRuntime(runtimeToBind, input.organizationId)?.key ??
+        (await runtimeDirectory.get(input.organizationId, runtimeToBind))?.runtimeKey ??
+        runtimeToBind;
       sessionRouter.bindSession(session.id, runtimeKeyToBind);
     }
 
@@ -3272,7 +3344,12 @@ export class SessionService {
             state: "connecting",
             runtimeInstanceId: input.runtimeInstanceId,
             runtimeLabel:
-              sessionRouter.getRuntime(input.runtimeInstanceId)?.label ?? conn.runtimeLabel,
+              (
+                await this.getAvailableRuntimeSelection(
+                  input.runtimeInstanceId,
+                  session.organizationId,
+                )
+              )?.label ?? conn.runtimeLabel,
           }),
         },
         include: SESSION_INCLUDE,
@@ -3933,7 +4010,10 @@ export class SessionService {
           runtimeInstanceId: config.runtimeInstanceId,
           sessionGroupId: prev.sessionGroupId,
         });
-        const runtime = sessionRouter.getRuntime(config.runtimeInstanceId, organizationId);
+        const runtime = await this.getAvailableRuntimeSelection(
+          config.runtimeInstanceId,
+          organizationId,
+        );
         if (!runtime) throw new Error("Requested runtime not found");
         newHosting = runtime.hostingMode;
         runtimeInstanceId = runtime.id;
@@ -5702,7 +5782,8 @@ export class SessionService {
       state: "connected",
       runtimeInstanceId,
       runtimeLabel:
-        sessionRouter.getRuntime(runtimeInstanceId, session.organizationId)?.label ??
+        (await this.getAvailableRuntimeSelection(runtimeInstanceId, session.organizationId))
+          ?.label ??
         conn.runtimeLabel,
       lastSeen: new Date().toISOString(),
       lastError: undefined,
@@ -6109,7 +6190,7 @@ export class SessionService {
     }
     if (
       session.hosting === "cloud" &&
-      (!homeRuntimeId || !sessionRouter.isRuntimeAvailable(homeRuntimeId, organizationId))
+      (!homeRuntimeId || !(await this.isRuntimeAvailable(homeRuntimeId, organizationId)))
     ) {
       return this.moveSessionInPlace({
         session,
@@ -6123,9 +6204,7 @@ export class SessionService {
     }
 
     const runtime = homeRuntimeId
-      ? sessionRouter.isRuntimeAvailable(homeRuntimeId, organizationId)
-        ? sessionRouter.getRuntime(homeRuntimeId, organizationId)
-        : undefined
+      ? await this.getAvailableRuntimeSelection(homeRuntimeId, organizationId)
       : session.hosting === "local"
         ? await this.resolveDefaultAccessibleLocalRuntime({
             userId: actorId,
@@ -6521,7 +6600,7 @@ export class SessionService {
       sessionRouter.getRuntimeForSession(session.id)?.id ??
       null;
     const inspectableSourceRuntimeId =
-      sourceRuntimeId && sessionRouter.isRuntimeAvailable(sourceRuntimeId, session.organizationId)
+      sourceRuntimeId && (await this.isRuntimeAvailable(sourceRuntimeId, session.organizationId))
         ? sourceRuntimeId
         : null;
     const targetEnvironment =
@@ -6632,6 +6711,8 @@ export class SessionService {
     if (targetHosting === "local" && targetRuntimeInstanceId) {
       const targetRuntimeKey =
         sessionRouter.getRuntime(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
+        (await runtimeDirectory.get(movedSession.organizationId, targetRuntimeInstanceId))
+          ?.runtimeId ??
         targetRuntimeInstanceId;
       sessionRouter.bindSession(movedSession.id, targetRuntimeKey);
     }
@@ -6756,8 +6837,8 @@ export class SessionService {
       runtimeInstanceId,
       sessionGroupId: session.sessionGroupId,
     });
-    const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
-    if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
+    const targetRuntime = await this.getAvailableRuntimeSelection(runtimeInstanceId, organizationId);
+    if (!targetRuntime) {
       throw new Error("Selected runtime is not available");
     }
     if (
@@ -6868,18 +6949,30 @@ export class SessionService {
       throw new AuthorizationError("Not authorized for this session group");
     }
 
-    const allRuntimes = sessionRouter
-      .listRuntimes()
-      .filter(
-        (runtime) =>
-          runtime.hostingMode === "local" &&
-          runtime.organizationId === organizationId &&
-          (scopedGroup?.visibility !== "private" ||
-            runtime.ownerUserId === scopedGroup.ownerUserId) &&
-          runtime.supportedTools.includes(tool),
-      );
+    const directoryRuntimes = await runtimeDirectory.list(organizationId);
+    const allRuntimesById = new Map<string, RuntimeSelection>();
+    for (const runtime of sessionRouter.listRuntimes()) {
+      if (runtime.organizationId !== organizationId) continue;
+      allRuntimesById.set(runtime.id, runtime);
+    }
+    for (const runtime of directoryRuntimes) {
+      if (!allRuntimesById.has(runtime.runtimeId)) {
+        allRuntimesById.set(runtime.runtimeId, this.runtimeSelectionFromDirectory(runtime));
+      }
+    }
+    const allRuntimes = [...allRuntimesById.values()].filter(
+      (runtime) =>
+        runtime.hostingMode === "local" &&
+        runtime.organizationId === organizationId &&
+        (scopedGroup?.visibility !== "private" ||
+          runtime.ownerUserId === scopedGroup.ownerUserId) &&
+        runtime.supportedTools.includes(tool),
+    );
 
-    const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
+    const sessionIds = allRuntimes.flatMap((runtime) => {
+      const local = sessionRouter.getRuntime(runtime.id, organizationId);
+      return local ? [...local.boundSessions] : [];
+    });
     const sessions =
       sessionIds.length === 0
         ? []
@@ -6911,9 +7004,12 @@ export class SessionService {
           label: r.label,
           hostingMode: r.hostingMode,
           supportedTools: r.supportedTools,
-          connected: r.ws.readyState === r.ws.OPEN,
-          sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId))
-            .length,
+          connected: true,
+          sessionCount: (
+            sessionRouter.getRuntime(r.id, organizationId)
+              ? [...(sessionRouter.getRuntime(r.id, organizationId)?.boundSessions ?? [])]
+              : []
+          ).filter((sessionId) => orgSessionIds.has(sessionId)).length,
           registeredRepoIds,
           access,
         };
@@ -6981,16 +7077,16 @@ export class SessionService {
         runtimeInstanceId: runtimeId,
         sessionGroupId,
       });
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = await this.getAvailableRuntimeSelection(runtimeId, organizationId);
       if (!runtime) throw new Error("Requested runtime not found");
-      runtimeId = runtime.key;
+      runtimeId = runtime.id;
     } else {
       const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
         userId,
         organizationId,
         sessionGroupId,
       });
-      const runtime = sessionRouter
+      const localRuntime = sessionRouter
         .listRuntimes()
         .find(
           (runtime) =>
@@ -6998,7 +7094,15 @@ export class SessionService {
             (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
             runtime.registeredRepoIds.includes(repoId),
         );
-      runtimeId = runtime?.key;
+      const remoteRuntime = localRuntime
+        ? undefined
+        : (await runtimeDirectory.list(organizationId)).find(
+            (runtime) =>
+              runtime.hostingMode === "cloud" ||
+              (accessibleRuntimeIds.has(runtime.runtimeId) &&
+                runtime.registeredRepoIds.includes(repoId)),
+          );
+      runtimeId = localRuntime?.id ?? remoteRuntime?.runtimeId;
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected runtime");
     return sessionRouter.listBranches(runtimeId, repoId);
