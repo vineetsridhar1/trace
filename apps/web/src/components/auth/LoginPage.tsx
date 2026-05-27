@@ -234,7 +234,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-dvh items-center justify-center bg-surface-deep">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8 [background:var(--trace-window-bg)] backdrop-blur-2xl">
+      <div className="app-region-drag fixed inset-x-0 top-0 h-14" />
       <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4">
         <div className="space-y-3 text-center">
           <img src="/trace-icon.svg" alt="" className="mx-auto h-16 w-16" />
@@ -246,10 +247,11 @@ export function LoginPage() {
           </div>
         </div>
         {deviceLogin ? (
-          <div className="w-full rounded-xl border border-border bg-background p-5 shadow-sm">
+          <div className="app-region-no-drag relative w-full overflow-hidden rounded-xl border border-white/10 bg-surface-elevated/45 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
             <div className="space-y-3 text-center">
               <p className="text-sm font-medium text-muted-foreground">Enter this GitHub code</p>
-              <div className="rounded-lg border border-border bg-surface-deep px-4 py-3 font-mono text-2xl font-semibold tracking-widest text-foreground">
+              <div className="rounded-lg border border-white/10 bg-surface-deep/55 px-4 py-3 font-mono text-2xl font-semibold tracking-widest text-foreground shadow-inner shadow-black/20">
                 {deviceLogin.userCode}
               </div>
               <p className="text-sm leading-5 text-muted-foreground">
@@ -289,7 +291,8 @@ export function LoginPage() {
             </Button>
           </div>
         ) : (
-          <div className="w-full rounded-xl border border-border bg-background p-5 shadow-sm">
+          <div className="app-region-no-drag relative w-full overflow-hidden rounded-xl border border-white/10 bg-surface-elevated/45 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
             <Button
               onClick={startGithubDeviceLogin}
               size="lg"
