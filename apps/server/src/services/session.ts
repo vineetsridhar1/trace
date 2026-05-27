@@ -2039,7 +2039,7 @@ export class SessionService {
     if (!ownerRuntimeInstanceId) return null;
 
     const ownerRuntime = sessionRouter
-      .listRuntimes({ hostingMode: "local" })
+      .listRuntimes()
       .find(
         (candidate) =>
           candidate.organizationId === params.organizationId &&
