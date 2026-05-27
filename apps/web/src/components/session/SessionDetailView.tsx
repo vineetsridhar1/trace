@@ -94,19 +94,50 @@ function hasAssistantTextContent(payload: unknown): boolean {
   });
 }
 
-function findMessageActionsEventId(
+function hasAssistantToolUseContent(payload: unknown): boolean {
+  const record = asJsonObject(payload);
+  if (record?.type !== "assistant") return false;
+  const message = asJsonObject(record.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((item) => asJsonObject(item)?.type === "tool_use");
+}
+
+function findMessageActionsEventIds(
   eventIds: string[],
   events: Record<string, { eventType?: string; payload?: unknown } | undefined>,
-): string | null {
-  for (let index = eventIds.length - 1; index >= 0; index--) {
-    const event = events[eventIds[index]];
+): ReadonlySet<string> {
+  const actionEventIds = new Set<string>();
+  let pendingFinalAssistantEventIds: string[] = [];
+
+  const flushPendingFinals = () => {
+    for (const id of pendingFinalAssistantEventIds) {
+      actionEventIds.add(id);
+    }
+    pendingFinalAssistantEventIds = [];
+  };
+
+  for (const id of eventIds) {
+    const event = events[id];
     if (!event) continue;
-    if (hasUserMessageContent(event.eventType, event.payload)) return null;
-    if (event.eventType === "session_output" && hasAssistantTextContent(event.payload)) {
-      return eventIds[index];
+
+    if (hasUserMessageContent(event.eventType, event.payload)) {
+      flushPendingFinals();
+      continue;
+    }
+
+    if (event.eventType !== "session_output") continue;
+    if (hasAssistantToolUseContent(event.payload)) {
+      pendingFinalAssistantEventIds = [];
+      continue;
+    }
+    if (hasAssistantTextContent(event.payload)) {
+      pendingFinalAssistantEventIds.push(id);
     }
   }
-  return null;
+
+  flushPendingFinals();
+  return actionEventIds;
 }
 
 const SESSION_DETAIL_QUERY = gql`
@@ -447,8 +478,8 @@ export function SessionDetailView({
 
     return compactNodes;
   }, [events, nodes, timelineItems, timelineMode]);
-  const messageActionsEventId = useMemo(
-    () => findMessageActionsEventId(eventIds, events),
+  const messageActionsEventIds = useMemo(
+    () => findMessageActionsEventIds(eventIds, events),
     [eventIds, events],
   );
   const initialEventsLoading = loading && eventIds.length === 0;
@@ -601,7 +632,7 @@ export function SessionDetailView({
                 onRemovePlanComment={handleRemovePlanComment}
                 onForkSession={onForkSession}
                 canForkSession={canForkSession}
-                messageActionsEventId={messageActionsEventId}
+                messageActionsEventIds={messageActionsEventIds}
               />
             )}
             {initialEventsLoading && (
