@@ -31,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/
 export interface OpenFileTab {
   filePath: string;
   fileName: string;
+  lineNumber?: number;
   isDiff?: boolean;
   diffStatus?: string;
   isDraftAttachment?: boolean;
