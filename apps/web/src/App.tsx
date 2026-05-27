@@ -31,6 +31,18 @@ export function App() {
   const hasOrg = useAuthStore((s: AuthState) => s.orgMemberships.length > 0);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
+  const isDesktopShell = typeof window.trace !== "undefined";
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("trace-desktop-shell", isDesktopShell);
+    document.body.classList.toggle("trace-desktop-shell", isDesktopShell);
+
+    return () => {
+      document.documentElement.classList.remove("trace-desktop-shell");
+      document.body.classList.remove("trace-desktop-shell");
+    };
+  }, [isDesktopShell]);
+
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
@@ -48,7 +60,11 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-surface-deep">
+      <div
+        className={`flex h-dvh items-center justify-center ${
+          isDesktopShell ? "[background:var(--trace-window-bg)]" : "bg-surface-deep"
+        }`}
+      >
         <TraceLoader label="Loading Trace" size={96} />
       </div>
     );

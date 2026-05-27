@@ -1,41 +1,19 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  Copy,
-  ExternalLink,
-  LogOut,
-  RefreshCw,
-} from "lucide-react";
+import { useState } from "react";
+import { LogOut, Plus, RefreshCw } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { cn } from "../../lib/utils";
-import { Button, buttonVariants } from "../ui/button";
-import { isLocalMode } from "../../lib/runtime-mode";
+import { Button } from "../ui/button";
 import { CreateOrganizationDialog } from "../sidebar/CreateOrganizationDialog";
 import { TraceLoader } from "../ui/trace-loader";
-
-const RUNNING_TRACE_DOC_URL =
-  "https://github.com/vineetsridhar1/trace/blob/main/docs/running-trace.md";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export function NoOrgWelcome() {
   const user = useAuthStore((s: AuthState) => s.user);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const logout = useAuthStore((s: AuthState) => s.logout);
   const [checking, setChecking] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const email = user?.email ?? "";
   const name = user?.name?.trim() ?? "";
   const accountLabel = name || email || "No account details available";
-  const welcomeMessage = isLocalMode
-    ? "Create an organization to start your local workspace, or ask an admin to invite you and share the email below."
-    : "You are signed in, but this account is not part of a Trace organization yet.";
-
-  useEffect(() => {
-    return () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-    };
-  }, []);
 
   async function handleCheckAgain() {
     setChecking(true);
@@ -43,127 +21,70 @@ export function NoOrgWelcome() {
     setChecking(false);
   }
 
-  async function handleCopy() {
-    if (!email) return;
-    try {
-      await navigator.clipboard.writeText(email);
-      setCopied(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
-    }
-  }
-
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-surface-deep px-4 py-8">
-      <div className="w-full max-w-[520px] rounded-lg border border-border bg-surface-elevated p-6 shadow-sm sm:p-7">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8 [background:var(--trace-window-bg)] backdrop-blur-2xl">
+      <div className="app-region-drag fixed inset-x-0 top-0 h-14" />
+      <div className="relative w-full max-w-[560px] overflow-hidden rounded-xl border border-white/10 bg-surface-elevated/45 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-7">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-deep">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-surface-deep/70 shadow-sm">
               <img src="/trace-icon.svg" alt="" className="size-7" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-foreground">Trace</div>
-              <div className="truncate text-xs text-muted-foreground">
-                {isLocalMode ? "Local workspace" : "Invite-only beta"}
-              </div>
+              <div className="truncate text-xs text-muted-foreground">Start a workspace</div>
             </div>
           </div>
-          <span className="shrink-0 rounded-full border border-border bg-surface-deep px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            No organization
-          </span>
+          <div className="app-region-no-drag shrink-0">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Check again"
+                    disabled={checking}
+                    className="bg-surface-deep/35 text-muted-foreground hover:bg-surface-hover/70 hover:text-foreground"
+                    onClick={handleCheckAgain}
+                  />
+                }
+              >
+                {checking ? <TraceLoader size={14} showLabel={false} /> : <RefreshCw size={15} />}
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Check again</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
-        <h1 className="mt-7 text-[1.7rem] font-semibold leading-tight text-foreground">
-          Invite required
+        <h1 className="mt-8 text-[1.9rem] font-semibold leading-tight text-foreground">
+          Create your organization
         </h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{welcomeMessage}</p>
+        <p className="mt-2 max-w-[460px] text-sm leading-6 text-muted-foreground">
+          You are signed in, but this account is not part of a Trace organization yet.
+          Create an organization to start using your workspace.
+        </p>
 
-        {!isLocalMode ? (
-          <div className="mt-6">
-            <div className="text-xs font-medium uppercase text-muted-foreground">Ways forward</div>
-            <div className="mt-3 divide-y divide-border rounded-lg border border-border">
-              <div className="p-3.5">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Get invited</div>
-                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    Ask a Trace admin to add the email below to an organization.
-                  </p>
-                </div>
-              </div>
-              <div className="p-3.5">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Run locally</div>
-                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    Start the full local workspace with{" "}
-                    <code className="rounded bg-surface-deep px-1 py-0.5 text-xs text-foreground">
-                      pnpm dev:local
-                    </code>
-                    .
-                  </p>
-                </div>
-              </div>
-              <div className="p-3.5">
-                <div>
-                  <div className="text-sm font-medium text-foreground">Self-host</div>
-                  <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    Deploy Trace on your own server with the Docker Compose setup.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <a
-              href={RUNNING_TRACE_DOC_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                buttonVariants({ variant: "outline", size: "lg" }),
-                "mt-4 w-full justify-between",
-              )}
-            >
-              <span className="flex items-center gap-2">
-                Open setup guide
-                <ExternalLink size={14} />
-              </span>
-              <ArrowRight size={14} className="text-muted-foreground" />
-            </a>
-          </div>
-        ) : null}
-
-        <div className="mt-6 rounded-lg border border-border bg-surface-deep p-3.5">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              Your account
-            </label>
-            <button
-              type="button"
-              onClick={handleCopy}
-              disabled={!email}
-              className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
+        <div className="mt-6 rounded-lg border border-white/10 bg-surface-deep/55 p-3.5 shadow-inner shadow-black/20">
+          <label className="mb-2 block text-xs font-medium uppercase text-muted-foreground">
+            Your account
+          </label>
           <div className="truncate text-sm font-medium text-foreground">{accountLabel}</div>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          {isLocalMode ? <CreateOrganizationDialog /> : null}
-          <Button
-            onClick={handleCheckAgain}
-            disabled={checking}
-            variant="outline"
-            className="gap-2"
-          >
-            {checking ? <TraceLoader size={14} showLabel={false} /> : <RefreshCw size={14} />}
-            {checking ? "Checking..." : "Check again"}
-          </Button>
+        <div className="app-region-no-drag mt-5 flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => void logout()} className="gap-2 text-destructive">
             <LogOut size={14} />
             Sign out
           </Button>
+          <CreateOrganizationDialog
+            trigger={
+              <Button size="lg" className="justify-center gap-2">
+                <Plus size={14} />
+                Create organization
+              </Button>
+            }
+          />
         </div>
       </div>
     </div>
