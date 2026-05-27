@@ -26,8 +26,7 @@ Configure a provisioned Agent Environment with launcher URLs:
   "stopUrl": "https://launcher.example.com/trace/stop-session",
   "statusUrl": "https://launcher.example.com/trace/session-status",
   "auth": {
-    "type": "bearer",
-    "secretId": "org_secret_launcher_token"
+    "type": "bearer"
   },
   "startupTimeoutSeconds": 180,
   "deprovisionPolicy": "on_session_end",
@@ -39,6 +38,10 @@ Configure a provisioned Agent Environment with launcher URLs:
   }
 }
 ```
+
+The bearer token (or HMAC signing key) Trace sends on every launcher request is read from the
+`TRACE_CLOUD_LAUNCHER_TOKEN` env var on the Trace server. The launcher should validate the same
+value out-of-band (e.g., from its own env or secret store).
 
 The launcher may also read cluster, task definition, subnet, and security group settings from its own
 environment instead of trusting request metadata.

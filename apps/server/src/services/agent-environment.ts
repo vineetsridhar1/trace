@@ -71,17 +71,17 @@ function asConfigRecord(
   return config as Record<string, unknown>;
 }
 
-function assertConfigStoresOnlySecretReferences(value: unknown): void {
+function assertConfigHasNoRawSecrets(value: unknown): void {
   if (!value || typeof value !== "object") return;
   if (Array.isArray(value)) {
-    value.forEach(assertConfigStoresOnlySecretReferences);
+    value.forEach(assertConfigHasNoRawSecrets);
     return;
   }
 
   for (const [key, child] of Object.entries(value)) {
     const normalizedKey = key.toLowerCase().replace(/[_-]/g, "");
     if (key === "auth") {
-      assertAuthConfigStoresOnlySecretReferences(child);
+      assertAuthConfigKeysAreAllowed(child);
     } else if (
       RAW_SECRET_KEY_PATTERNS.some((pattern) => normalizedKey.includes(pattern)) &&
       typeof child === "string" &&
@@ -91,11 +91,11 @@ function assertConfigStoresOnlySecretReferences(value: unknown): void {
         "Agent environment config cannot store raw secrets; configure them via env vars",
       );
     }
-    assertConfigStoresOnlySecretReferences(child);
+    assertConfigHasNoRawSecrets(child);
   }
 }
 
-function assertAuthConfigStoresOnlySecretReferences(value: unknown): void {
+function assertAuthConfigKeysAreAllowed(value: unknown): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Agent environment auth config must be an object");
   }
@@ -239,7 +239,7 @@ export class AgentEnvironmentService {
       throw new Error("Local agent environments are created automatically by connected bridges");
     }
     const config = asConfigRecord(input.config);
-    assertConfigStoresOnlySecretReferences(input.config);
+    assertConfigHasNoRawSecrets(input.config);
     await runtimeAdapterRegistry.get(input.adapterType).validateConfig(config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
@@ -432,7 +432,7 @@ export class AgentEnvironmentService {
   ) {
     if (input.name !== undefined) normalizeName(input.name);
     if (input.adapterType !== undefined) assertSupportedAdapter(input.adapterType);
-    if (input.config !== undefined) assertConfigStoresOnlySecretReferences(input.config);
+    if (input.config !== undefined) assertConfigHasNoRawSecrets(input.config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       const existing = await tx.agentEnvironment.findFirstOrThrow({

@@ -413,6 +413,8 @@ async function readJsonResponse(response: Response, endpointName: string): Promi
 }
 
 async function authenticatedLauncherRequest(params: {
+  // organizationId is retained for telemetry tagging only — the launcher
+  // token now comes from TRACE_CLOUD_LAUNCHER_TOKEN, not per-org storage.
   organizationId: string;
   url: string;
   auth: ProvisionedAuthConfig;

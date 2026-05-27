@@ -357,7 +357,7 @@ describe("AgentEnvironmentService", () => {
     expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
-  it("rejects credential-shaped config keys that are not secret references", async () => {
+  it("rejects credential-shaped config keys and unknown auth keys", async () => {
     const service = new AgentEnvironmentService();
 
     await expect(
