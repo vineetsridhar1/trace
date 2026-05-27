@@ -60,7 +60,7 @@ export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }:
       remoteUrl: result.remoteUrl,
       defaultBranch: result.defaultBranch,
     });
-    setDefaultBranch("");
+    setDefaultBranch(result.defaultBranch);
   }
 
   async function handlePickParentFolder() {

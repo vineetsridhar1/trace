@@ -57,13 +57,13 @@ describe("getGitInfo", () => {
     });
   });
 
-  it("does not use the current branch as the default branch", async () => {
+  it("uses the current branch as the default branch", async () => {
     const { repoPath, remoteUrl } = await createOriginFixture();
     await git(repoPath, ["checkout", "-b", "feature/work"]);
 
     await expect(getGitInfo(repoPath)).resolves.toEqual({
       remoteUrl,
-      defaultBranch: "main",
+      defaultBranch: "feature/work",
       name: "repo",
     });
   });

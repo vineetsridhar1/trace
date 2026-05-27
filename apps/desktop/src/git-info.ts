@@ -14,6 +14,18 @@ export interface GitInfoError {
   error: string;
 }
 
+async function resolveCurrentBranch(folderPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["symbolic-ref", "--short", "-q", "HEAD"], {
+      cwd: folderPath,
+    });
+    const branch = stdout.trim();
+    return branch || null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveOriginDefaultBranch(folderPath: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync(
@@ -33,16 +45,17 @@ async function resolveOriginDefaultBranch(folderPath: string): Promise<string | 
 export async function getGitInfo(folderPath: string): Promise<GitInfo | GitInfoError> {
   try {
     await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: folderPath });
-    const [remoteResult, defaultBranch] = await Promise.all([
+    const [remoteResult, currentBranch, defaultBranch] = await Promise.all([
       execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }).catch(
         () => null,
       ),
+      resolveCurrentBranch(folderPath),
       resolveOriginDefaultBranch(folderPath),
     ]);
 
     return {
       remoteUrl: remoteResult?.stdout.trim() || null,
-      defaultBranch: defaultBranch ?? "main",
+      defaultBranch: currentBranch ?? defaultBranch ?? "main",
       name: path.basename(folderPath),
     };
   } catch {
