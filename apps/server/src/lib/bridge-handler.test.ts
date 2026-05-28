@@ -192,6 +192,42 @@ describe("bridge handler auth", () => {
     expect(mocks.addRegisteredRepoToLocalRuntime).not.toHaveBeenCalled();
   });
 
+  it("restores only active terminals that include an owner", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
+      id: "bridge-owned",
+      label: "Laptop",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      activeTerminals: [
+        { terminalId: "term-1", sessionId: "session-1", ownerUserId: "user-1" },
+        { terminalId: "term-ownerless", sessionId: "session-1" },
+      ],
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.restoreTerminals).toHaveBeenCalledWith("org-1:bridge-owned", [
+        { terminalId: "term-1", sessionId: "session-1", ownerUserId: "user-1" },
+      ]);
+    });
+  });
+
   it("closes local bridge authorization failures with a policy violation", async () => {
     const ws = createMockWs();
     mocks.registerLocalRuntimeConnection.mockRejectedValueOnce(

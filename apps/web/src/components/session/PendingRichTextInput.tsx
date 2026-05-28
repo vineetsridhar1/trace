@@ -55,6 +55,7 @@ export function PendingRichTextInput({
           onChange={(text) => onChange(text)}
           placeholder={placeholder}
           disabled={disabled}
+          submitDisabled={submitDisabled}
         />
       </div>
       <button

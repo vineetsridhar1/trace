@@ -114,6 +114,7 @@ export class TerminalRelay {
         type: "terminal_create",
         terminalId,
         sessionId,
+        ownerUserId,
         cols,
         rows,
         cwd: cwd ?? "",
@@ -183,6 +184,7 @@ export class TerminalRelay {
         type: "terminal_create",
         terminalId,
         sessionId,
+        ownerUserId,
         cols,
         rows,
         cwd,
@@ -273,7 +275,7 @@ export class TerminalRelay {
    */
   async restoreTerminals(
     runtimeKey: string,
-    terminals: Array<{ terminalId: string; sessionId: string }>,
+    terminals: Array<{ terminalId: string; sessionId: string; ownerUserId: string }>,
   ): Promise<void> {
     const runtime = sessionRouter.getRuntime(runtimeKey);
     const runtimeInstanceId = runtime?.id ?? runtimeKey;
@@ -330,7 +332,7 @@ export class TerminalRelay {
     );
     const channelsById = new Map(channels.map((channel) => [channel.id, channel]));
 
-    for (const { terminalId, sessionId } of terminals) {
+    for (const { terminalId, sessionId, ownerUserId } of terminals) {
       if (this.terminals.has(terminalId)) continue;
       if (sessionId.startsWith(channelPrefix)) {
         const channelId = sessionId.slice(channelPrefix.length);
@@ -346,7 +348,7 @@ export class TerminalRelay {
           repoId: channel.repoId,
           runtimeInstanceId,
           runtimeKey,
-          ownerUserId: null,
+          ownerUserId,
           frontendWs: null,
           attachedUserId: null,
           ready: true,
@@ -380,7 +382,7 @@ export class TerminalRelay {
         organizationId: sessionContext?.organizationId ?? runtimeOrganizationId,
         runtimeInstanceId,
         runtimeKey,
-        ownerUserId: null,
+        ownerUserId,
         frontendWs: null,
         attachedUserId: null,
         ready: true, // Bridge says it's alive, so it's ready
@@ -442,9 +444,6 @@ export class TerminalRelay {
   attachFrontend(terminalId: string, ws: WebSocket, userId: string): boolean {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
-    if (!entry.ownerUserId) {
-      entry.ownerUserId = userId;
-    }
     entry.frontendWs = ws;
     entry.attachedUserId = userId;
     entry.hasEverAttached = true;

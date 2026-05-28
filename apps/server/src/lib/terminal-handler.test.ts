@@ -171,7 +171,7 @@ describe("terminal handler auth", () => {
     expect(mocks.attachFrontend).not.toHaveBeenCalled();
   });
 
-  it("allows an authorized user to attach a restored terminal with no owner", async () => {
+  it("denies attach to a restored terminal with no owner", async () => {
     mocks.getTerminalAuthContext.mockReturnValue({
       kind: "session",
       sessionId: "session-1",
@@ -193,17 +193,13 @@ describe("terminal handler auth", () => {
     });
     await Promise.resolve();
     ws.emitMessage({ type: "attach", terminalId: "term-1" });
+    await Promise.resolve();
 
-    await vi.waitFor(() => {
-      expect(mocks.attachFrontend).toHaveBeenCalledWith("term-1", ws, "user-1");
-    });
-    expect(mocks.assertAccess).toHaveBeenCalledWith({
-      userId: "user-1",
-      organizationId: "org-1",
-      runtimeInstanceId: "runtime-1",
-      sessionGroupId: "group-1",
-      capability: "terminal",
-    });
+    expect(ws.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "error", message: "Access denied" }),
+    );
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    expect(mocks.attachFrontend).not.toHaveBeenCalled();
   });
 
   it("revalidates terminal capability before forwarding input after attach", async () => {
