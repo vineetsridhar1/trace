@@ -55,7 +55,7 @@ function FileAwareLink({
 
   const href = props.href;
   if (href && fileOpenRequestFromHref(href)) {
-    return <a {...props} href="#" onClick={handleClick} />;
+    return <a {...props} onClick={handleClick} />;
   }
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }

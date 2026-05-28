@@ -89,7 +89,7 @@ describe("TerminalRelay runtime identity", () => {
     ]);
 
     await relay.restoreTerminals("org-1:bridge-1", [
-      { terminalId: "term-1", sessionId: "session-1" },
+      { terminalId: "term-1", sessionId: "session-1", ownerUserId: "user-1" },
     ]);
     relay.attachFrontend("term-1", ws as never, "user-1");
     relay.relayFromBridge({ type: "terminal_ready", terminalId: "term-1" }, "org-1:bridge-1");
@@ -97,11 +97,12 @@ describe("TerminalRelay runtime identity", () => {
     expect(relay.getTerminalAuthContext("term-1")).toMatchObject({
       kind: "session",
       runtimeInstanceId: "bridge-1",
+      ownerUserId: "user-1",
     });
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "ready" }));
   });
 
-  it("claims restored ownerless terminals on first attach", async () => {
+  it("preserves restored terminal ownership", async () => {
     const relay = new TerminalRelay();
     const ws = createOpenWs();
     mocks.sessionFindMany.mockResolvedValueOnce([
@@ -109,11 +110,11 @@ describe("TerminalRelay runtime identity", () => {
     ]);
 
     await relay.restoreTerminals("org-1:bridge-1", [
-      { terminalId: "term-1", sessionId: "session-1" },
+      { terminalId: "term-1", sessionId: "session-1", ownerUserId: "user-1" },
     ]);
-    expect(relay.getTerminalAuthContext("term-1")).toMatchObject({ ownerUserId: null });
+    expect(relay.getTerminalAuthContext("term-1")).toMatchObject({ ownerUserId: "user-1" });
 
-    relay.attachFrontend("term-1", ws as never, "user-1");
+    relay.attachFrontend("term-1", ws as never, "user-2");
 
     expect(relay.getTerminalAuthContext("term-1")).toMatchObject({ ownerUserId: "user-1" });
   });
@@ -124,8 +125,12 @@ describe("TerminalRelay runtime identity", () => {
     mocks.channelFindMany.mockResolvedValueOnce([]);
 
     await relay.restoreTerminals("org-1:bridge-1", [
-      { terminalId: "session-term", sessionId: "session-from-other-org" },
-      { terminalId: "channel-term", sessionId: "channel:channel-from-other-org" },
+      { terminalId: "session-term", sessionId: "session-from-other-org", ownerUserId: "user-1" },
+      {
+        terminalId: "channel-term",
+        sessionId: "channel:channel-from-other-org",
+        ownerUserId: "user-1",
+      },
     ]);
 
     expect(mocks.sessionFindMany).toHaveBeenCalledWith({

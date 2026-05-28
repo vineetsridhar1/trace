@@ -36,7 +36,10 @@ import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
 import { hydrateLoginShellPath } from "./shell-path.js";
 import { repairNodePtySpawnHelpers } from "./node-pty-spawn-helper.js";
-import { movePackagedMacAppToApplicationsFolder } from "./mac-install-location.js";
+import {
+  movePackagedMacAppToApplicationsFolder,
+  shouldMovePackagedMacAppToApplicationsFolder,
+} from "./mac-install-location.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -319,8 +322,20 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 });
 
 app.whenReady().then(() => {
-  if (movePackagedMacAppToApplicationsFolder(app, process.execPath)) {
-    return;
+  if (shouldMovePackagedMacAppToApplicationsFolder(app, process.execPath)) {
+    const response = dialog.showMessageBoxSync({
+      type: "info",
+      buttons: ["Move to Applications", "Continue Here"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Move Trace to Applications",
+      message: "Move Trace to Applications?",
+      detail:
+        "macOS is running Trace from a temporary App Translocation location. Moving Trace to Applications prevents local terminal and bridge launch failures.",
+    });
+    if (response === 0 && movePackagedMacAppToApplicationsFolder(app, process.execPath)) {
+      return;
+    }
   }
 
   configureApplicationIdentity();
