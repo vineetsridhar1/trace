@@ -53,7 +53,7 @@ function notarizeConfigFromEnv() {
 const packagerConfig = {
   appBundleId: "org.gettrace.desktop",
   asar: {
-    unpack: "**/node_modules/node-pty/prebuilds/*/spawn-helper",
+    unpack: "**/node_modules/node-pty/**/spawn-helper",
   },
   icon: path.join(configDir, "assets", "icon"),
 };
