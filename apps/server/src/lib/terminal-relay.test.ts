@@ -101,6 +101,23 @@ describe("TerminalRelay runtime identity", () => {
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "ready" }));
   });
 
+  it("claims restored ownerless terminals on first attach", async () => {
+    const relay = new TerminalRelay();
+    const ws = createOpenWs();
+    mocks.sessionFindMany.mockResolvedValueOnce([
+      { id: "session-1", sessionGroupId: "group-1", organizationId: "org-1" },
+    ]);
+
+    await relay.restoreTerminals("org-1:bridge-1", [
+      { terminalId: "term-1", sessionId: "session-1" },
+    ]);
+    expect(relay.getTerminalAuthContext("term-1")).toMatchObject({ ownerUserId: null });
+
+    relay.attachFrontend("term-1", ws as never, "user-1");
+
+    expect(relay.getTerminalAuthContext("term-1")).toMatchObject({ ownerUserId: "user-1" });
+  });
+
   it("scopes restored session and channel terminal lookups to the runtime organization", async () => {
     const relay = new TerminalRelay();
     mocks.sessionFindMany.mockResolvedValueOnce([]);

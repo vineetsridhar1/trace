@@ -142,7 +142,11 @@ export function handleTerminalConnection(
     };
 
     const authContext = terminalRelay.getTerminalAuthContext(terminalId);
-    if (!authContext || !userId || authContext.ownerUserId !== userId) {
+    if (
+      !authContext ||
+      !userId ||
+      (authContext.ownerUserId && authContext.ownerUserId !== userId)
+    ) {
       return denyCurrentCommand();
     }
 
@@ -243,7 +247,7 @@ export function handleTerminalConnection(
           ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
           return;
         }
-        if (authContext.ownerUserId !== userId) {
+        if (authContext.ownerUserId && authContext.ownerUserId !== userId) {
           ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
           return;
         }

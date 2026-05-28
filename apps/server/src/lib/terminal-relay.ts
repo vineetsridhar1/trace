@@ -442,6 +442,9 @@ export class TerminalRelay {
   attachFrontend(terminalId: string, ws: WebSocket, userId: string): boolean {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
+    if (!entry.ownerUserId) {
+      entry.ownerUserId = userId;
+    }
     entry.frontendWs = ws;
     entry.attachedUserId = userId;
     entry.hasEverAttached = true;
