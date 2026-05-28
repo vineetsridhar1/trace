@@ -60,6 +60,8 @@ describe("repairNodePtySpawnHelpers", () => {
       deps: {
         readdirSync: fs.readdirSync,
         chmodSync: fs.chmodSync,
+        copyFileSync: fs.copyFileSync,
+        existsSync: fs.existsSync,
         removeQuarantineAttribute: (filePath) => quarantinedPaths.push(filePath),
       },
     });
@@ -80,5 +82,37 @@ describe("repairNodePtySpawnHelpers", () => {
 
     expect(repaired).toBe(0);
     expect(fs.statSync(helperPath).mode & 0o777).toBe(0o644);
+  });
+
+  it("copies the active darwin helper next to rebuilt native modules", () => {
+    const root = makeTempDir();
+    const helperDir = path.join(
+      root,
+      "app.asar.unpacked",
+      "node_modules",
+      "node-pty",
+      "prebuilds",
+      `darwin-${process.arch}`,
+    );
+    const nativeDir = path.join(
+      root,
+      "app.asar.unpacked",
+      "node_modules",
+      "node-pty",
+      "build",
+      "Release",
+    );
+    fs.mkdirSync(helperDir, { recursive: true });
+    fs.mkdirSync(nativeDir, { recursive: true });
+    const helperPath = path.join(helperDir, "spawn-helper");
+    const adjacentHelperPath = path.join(nativeDir, "spawn-helper");
+    fs.writeFileSync(helperPath, "helper");
+    fs.writeFileSync(path.join(nativeDir, "pty.node"), "");
+
+    const repaired = repairNodePtySpawnHelpers({ resourcesPath: root });
+
+    expect(repaired).toBe(2);
+    expect(fs.readFileSync(adjacentHelperPath, "utf8")).toBe("helper");
+    expect(fs.statSync(adjacentHelperPath).mode & 0o777).toBe(0o755);
   });
 });

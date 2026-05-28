@@ -1,4 +1,5 @@
-import { chmod, readdir } from "node:fs/promises";
+import { chmod, copyFile, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +18,11 @@ async function removeQuarantineAttribute(filePath) {
 }
 
 export async function repairNodePtySpawnHelpers(rootDir) {
+  const state = {
+    currentDarwinHelperPath: null,
+    nativeDirs: new Set(),
+  };
+
   async function visit(dir) {
     let entries;
     try {
@@ -37,9 +43,25 @@ export async function repairNodePtySpawnHelpers(rootDir) {
           entry.name === "spawn-helper" &&
           entryPath.includes(`${path.sep}node-pty${path.sep}prebuilds${path.sep}`)
         ) {
+          if (
+            entryPath.includes(
+              `${path.sep}node-pty${path.sep}prebuilds${path.sep}darwin-${process.arch}${path.sep}spawn-helper`,
+            )
+          ) {
+            state.currentDarwinHelperPath = entryPath;
+          }
           await chmod(entryPath, 0o755);
           await removeQuarantineAttribute(entryPath);
           return 1;
+        }
+
+        if (
+          entry.isFile() &&
+          entry.name === "pty.node" &&
+          entryPath.includes(`${path.sep}node-pty${path.sep}`) &&
+          !entryPath.includes(`${path.sep}prebuilds${path.sep}win32-`)
+        ) {
+          state.nativeDirs.add(path.dirname(entryPath));
         }
 
         return 0;
@@ -49,7 +71,20 @@ export async function repairNodePtySpawnHelpers(rootDir) {
     return counts.reduce((sum, count) => sum + count, 0);
   }
 
-  return visit(rootDir);
+  let repaired = await visit(rootDir);
+  if (!state.currentDarwinHelperPath) return repaired;
+
+  for (const nativeDir of state.nativeDirs) {
+    const adjacentHelperPath = path.join(nativeDir, "spawn-helper");
+    if (!existsSync(adjacentHelperPath)) {
+      await copyFile(state.currentDarwinHelperPath, adjacentHelperPath);
+    }
+    await chmod(adjacentHelperPath, 0o755);
+    await removeQuarantineAttribute(adjacentHelperPath);
+    repaired += 1;
+  }
+
+  return repaired;
 }
 
 const isCli = process.argv[1] === fileURLToPath(import.meta.url);
