@@ -95,6 +95,27 @@ function resolveRunnerScriptPath(rawPath: string): string {
   return rawPath.replace(/\.asar([/\\])/, ".asar.unpacked$1");
 }
 
+export function buildHookRunnerWrapperScript({
+  electronBinaryPath,
+  runnerScriptPath,
+}: {
+  electronBinaryPath: string;
+  runnerScriptPath: string;
+}): string {
+  return [
+    "#!/bin/sh",
+    "set -eu",
+    `ELECTRON_BINARY=${shellQuote(electronBinaryPath)}`,
+    `TRACE_HOOK_RUNNER=${shellQuote(runnerScriptPath)}`,
+    'if [ ! -x "$ELECTRON_BINARY" ] || [ ! -f "$TRACE_HOOK_RUNNER" ]; then',
+    "  exit 0",
+    "fi",
+    "export ELECTRON_RUN_AS_NODE=1",
+    'exec "$ELECTRON_BINARY" "$TRACE_HOOK_RUNNER" "$@"',
+    "",
+  ].join("\n");
+}
+
 export function ensureHookRunnerEntrypoint({
   electronBinaryPath,
   runnerScriptPath,
@@ -106,14 +127,10 @@ export function ensureHookRunnerEntrypoint({
   fs.mkdirSync(path.dirname(wrapperPath), { recursive: true });
 
   const resolvedRunnerPath = resolveRunnerScriptPath(runnerScriptPath);
-
-  const wrapper = [
-    "#!/bin/sh",
-    "set -eu",
-    "export ELECTRON_RUN_AS_NODE=1",
-    `exec ${shellQuote(electronBinaryPath)} ${shellQuote(resolvedRunnerPath)} "$@"`,
-    "",
-  ].join("\n");
+  const wrapper = buildHookRunnerWrapperScript({
+    electronBinaryPath,
+    runnerScriptPath: resolvedRunnerPath,
+  });
 
   fs.writeFileSync(wrapperPath, wrapper, "utf8");
   fs.chmodSync(wrapperPath, 0o755);
