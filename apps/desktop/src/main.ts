@@ -35,6 +35,7 @@ import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
 import { hydrateLoginShellPath } from "./shell-path.js";
+import { repairNodePtySpawnHelpers } from "./node-pty-spawn-helper.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -70,6 +71,13 @@ const appIconPath = path.join(__dirname, "../assets/icon.png");
 
 app.setName(appName);
 hydrateLoginShellPath();
+if (app.isPackaged) {
+  try {
+    repairNodePtySpawnHelpers({ resourcesPath: process.resourcesPath });
+  } catch (error) {
+    console.warn("[main] failed to repair node-pty spawn helpers", error);
+  }
+}
 
 async function getSessionCookieHeader(targetUrl: string): Promise<string | null> {
   if (!mainWindow || mainWindow.isDestroyed()) return null;
