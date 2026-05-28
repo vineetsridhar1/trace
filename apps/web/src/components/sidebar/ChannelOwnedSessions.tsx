@@ -342,7 +342,7 @@ function OwnedSessionGroupItem({
         </ContextMenuTrigger>
         <ContextMenuContent className="w-56">
           <ContextMenuItem onClick={openSessionGroup}>
-            <ExternalLink size={14} className="mr-1.5 text-muted-foreground" />
+            <ExternalLink size={14} className="mr-1.5" />
             Open workspace
           </ContextMenuItem>
           <ContextMenuItem
@@ -351,45 +351,45 @@ function OwnedSessionGroupItem({
               markSessionGroupDone(record.id);
             }}
           >
-            <Mail size={14} className="mr-1.5 text-muted-foreground" />
+            <Mail size={14} className="mr-1.5" />
             Mark as unread
           </ContextMenuItem>
           <ContextMenuItem onClick={() => setArchiveOpen(true)}>
-            <Archive size={14} className="mr-1.5 text-muted-foreground" />
+            <Archive size={14} className="mr-1.5" />
             Archive workspace
           </ContextMenuItem>
           {record.row.visibility === "public" && isOwner && (
             <ContextMenuItem onClick={() => handleUpdateVisibility("private")}>
-              <Lock size={14} className="mr-1.5 text-muted-foreground" />
+              <Lock size={14} className="mr-1.5" />
               Make private
             </ContextMenuItem>
           )}
           {record.row.visibility === "private" && isOwner && (
             <ContextMenuItem onClick={() => handleUpdateVisibility("public")}>
-              <Unlock size={14} className="mr-1.5 text-muted-foreground" />
+              <Unlock size={14} className="mr-1.5" />
               Make public
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
           {workdir && (
             <ContextMenuItem onClick={() => void navigator.clipboard.writeText(workdir)}>
-              <Copy size={14} className="mr-1.5 text-muted-foreground" />
+              <Copy size={14} className="mr-1.5" />
               Copy working directory
             </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => void navigator.clipboard.writeText(record.id)}>
-            <Copy size={14} className="mr-1.5 text-muted-foreground" />
+            <Copy size={14} className="mr-1.5" />
             Copy workspace ID
           </ContextMenuItem>
           <ContextMenuItem onClick={() => void navigator.clipboard.writeText(groupUrl)}>
-            <Link2 size={14} className="mr-1.5 text-muted-foreground" />
+            <Link2 size={14} className="mr-1.5" />
             Copy deeplink
           </ContextMenuItem>
           {record.prUrl && (
             <ContextMenuItem
               render={
                 <a href={record.prUrl} target="_blank" rel="noopener noreferrer">
-                  <GitPullRequest size={14} className="mr-1.5 text-muted-foreground" />
+                  <GitPullRequest size={14} className="mr-1.5" />
                   View PR
                 </a>
               }
