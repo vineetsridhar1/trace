@@ -92,6 +92,8 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "electron",
+      "fs-xattr",
+      "macos-alias",
       "@prisma/client",
       "@prisma/engines",
       "prisma"
