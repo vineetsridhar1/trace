@@ -5,9 +5,9 @@ import remarkGfm from "remark-gfm";
 import {
   useFileOpen,
   type FileOpenHandler,
-  type FileOpenRequest,
 } from "../session/FileOpenContext";
 import { SteerableMarkdownBlock } from "./SteerableMarkdownBlock";
+import { fileOpenRequestFromHref } from "./markdownFileLinks";
 import {
   createSteerableBlocksPlugin,
   type MarkdownSteerCommentsByBlock,
@@ -33,31 +33,8 @@ function getDataString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/** Returns true if href looks like a file path (not a URL, anchor, or other scheme). */
-function isFilePath(href: string): boolean {
-  if (!href) return false;
-  // Reject anything with a URL scheme (http:, ftp:, javascript:, data:, tel:, etc.)
-  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return false;
-  if (href.startsWith("#")) return false;
-  // Must look like a path — contains a slash or a file extension
-  return href.includes("/") || href.includes(".");
-}
-
 function ExternalLink(props: ComponentPropsWithoutRef<"a">) {
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
-}
-
-/** Normalize a file path for the file viewer (collapse ./ prefix, split trailing line suffix). */
-function normalizeFilePath(href: string): FileOpenRequest {
-  let p = href;
-  if (p.startsWith("./")) p = p.slice(2);
-  const lineMatch = /^(.+):(\d+)(?::\d+)?$/.exec(p);
-  if (!lineMatch) return { filePath: p };
-  const [, filePath, lineNumber] = lineMatch;
-  if (!filePath || !lineNumber) return { filePath: p };
-  const parsedLineNumber = Number(lineNumber);
-  if (parsedLineNumber < 1) return { filePath: p };
-  return { filePath, lineNumber: parsedLineNumber };
 }
 
 function FileAwareLink({
@@ -67,16 +44,17 @@ function FileAwareLink({
   const handleClick = useCallback(
     (e: MouseEvent<HTMLAnchorElement>) => {
       const href = props.href;
-      if (href && isFilePath(href)) {
+      const request = href ? fileOpenRequestFromHref(href) : null;
+      if (request) {
         e.preventDefault();
-        onFileOpen(normalizeFilePath(href));
+        onFileOpen(request);
       }
     },
     [props.href, onFileOpen],
   );
 
   const href = props.href;
-  if (href && isFilePath(href)) {
+  if (href && fileOpenRequestFromHref(href)) {
     return <a {...props} href="#" onClick={handleClick} />;
   }
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
