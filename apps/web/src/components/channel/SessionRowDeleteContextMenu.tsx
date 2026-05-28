@@ -46,7 +46,7 @@ export function SessionRowDeleteContextMenu({
         <button
           type="button"
           role="menuitem"
-          className="flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-destructive outline-none hover:bg-surface-hover focus:bg-surface-hover"
+          className="flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-destructive outline-none hover:bg-white/10 focus:bg-white/10"
           onClick={() => {
             onDelete(menu.row);
             onClose();

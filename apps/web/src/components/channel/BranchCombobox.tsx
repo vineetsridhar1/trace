@@ -114,8 +114,8 @@ export function BranchCombobox({
               type="button"
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none",
-                "hover:bg-accent hover:text-accent-foreground",
-                value === branch && "bg-accent/50",
+                "hover:bg-white/10 hover:text-popover-foreground",
+                value === branch && "bg-white/10",
               )}
               onClick={() => {
                 onChange(branch);

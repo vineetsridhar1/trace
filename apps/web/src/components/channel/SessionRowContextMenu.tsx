@@ -44,7 +44,7 @@ export function SessionRowContextMenu({
   }, [onClose]);
 
   const itemClass =
-    "flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-surface-hover focus:bg-surface-hover";
+    "flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-white/10 focus:bg-white/10";
   const isOwner = menu.row.owner?.id === currentUserId;
 
   return createPortal(
@@ -67,7 +67,7 @@ export function SessionRowContextMenu({
             onClose();
           }}
         >
-          <Link2 className="size-4 text-muted-foreground" />
+          <Link2 className="size-4" />
           Copy session link
         </button>
         {menu.row.prUrl && (
@@ -79,7 +79,7 @@ export function SessionRowContextMenu({
             rel="noopener noreferrer"
             onClick={onClose}
           >
-            <GitPullRequest className="size-4 text-muted-foreground" />
+            <GitPullRequest className="size-4" />
             View PR
           </a>
         )}
@@ -93,7 +93,7 @@ export function SessionRowContextMenu({
             onClose();
           }}
         >
-          <Pencil className="size-4 text-muted-foreground" />
+          <Pencil className="size-4" />
           Rename
         </button>
         {menu.row.visibility === "public" && isOwner && (
@@ -106,7 +106,7 @@ export function SessionRowContextMenu({
               onClose();
             }}
           >
-            <Lock className="size-4 text-muted-foreground" />
+            <Lock className="size-4" />
             Make private
           </button>
         )}
@@ -120,7 +120,7 @@ export function SessionRowContextMenu({
               onClose();
             }}
           >
-            <Unlock className="size-4 text-muted-foreground" />
+            <Unlock className="size-4" />
             Make public
           </button>
         )}
@@ -133,7 +133,7 @@ export function SessionRowContextMenu({
             onClose();
           }}
         >
-          <Archive className="size-4 text-muted-foreground" />
+          <Archive className="size-4" />
           Archive
         </button>
       </div>
