@@ -36,6 +36,7 @@ import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
 import { hydrateLoginShellPath } from "./shell-path.js";
 import { repairNodePtySpawnHelpers } from "./node-pty-spawn-helper.js";
+import { movePackagedMacAppToApplicationsFolder } from "./mac-install-location.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -318,6 +319,10 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 });
 
 app.whenReady().then(() => {
+  if (movePackagedMacAppToApplicationsFolder(app, process.execPath)) {
+    return;
+  }
+
   configureApplicationIdentity();
   configureMacAutoUpdates();
 
