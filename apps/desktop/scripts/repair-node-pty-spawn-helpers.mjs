@@ -1,6 +1,20 @@
 import { chmod, readdir } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+async function removeQuarantineAttribute(filePath) {
+  if (process.platform !== "darwin") return;
+
+  try {
+    await execFileAsync("/usr/bin/xattr", ["-d", "com.apple.quarantine", filePath]);
+  } catch {
+    // The attribute may not exist on locally built artifacts.
+  }
+}
 
 export async function repairNodePtySpawnHelpers(rootDir) {
   async function visit(dir) {
@@ -24,6 +38,7 @@ export async function repairNodePtySpawnHelpers(rootDir) {
           entryPath.includes(`${path.sep}node-pty${path.sep}prebuilds${path.sep}`)
         ) {
           await chmod(entryPath, 0o755);
+          await removeQuarantineAttribute(entryPath);
           return 1;
         }
 

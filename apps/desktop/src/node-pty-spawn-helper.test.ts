@@ -40,6 +40,34 @@ describe("repairNodePtySpawnHelpers", () => {
     expect(fs.statSync(helperPath).mode & 0o777).toBe(0o755);
   });
 
+  it("removes quarantine from unpacked node-pty spawn-helper files", () => {
+    const root = makeTempDir();
+    const helperDir = path.join(
+      root,
+      "app.asar.unpacked",
+      "node_modules",
+      "node-pty",
+      "prebuilds",
+      "darwin-arm64",
+    );
+    fs.mkdirSync(helperDir, { recursive: true });
+    const helperPath = path.join(helperDir, "spawn-helper");
+    fs.writeFileSync(helperPath, "");
+
+    const quarantinedPaths: string[] = [];
+    const repaired = repairNodePtySpawnHelpers({
+      resourcesPath: root,
+      deps: {
+        readdirSync: fs.readdirSync,
+        chmodSync: fs.chmodSync,
+        removeQuarantineAttribute: (filePath) => quarantinedPaths.push(filePath),
+      },
+    });
+
+    expect(repaired).toBe(1);
+    expect(quarantinedPaths).toEqual([helperPath]);
+  });
+
   it("ignores unrelated spawn-helper files", () => {
     const root = makeTempDir();
     const unrelatedDir = path.join(root, "app.asar.unpacked", "other-package");

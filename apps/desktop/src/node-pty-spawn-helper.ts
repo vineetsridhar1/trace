@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 export type RepairNodePtySpawnHelperDeps = {
   readdirSync: typeof fs.readdirSync;
   chmodSync: typeof fs.chmodSync;
+  removeQuarantineAttribute: (filePath: string) => void;
 };
 
 export type RepairNodePtySpawnHelperOptions = {
@@ -12,6 +14,20 @@ export type RepairNodePtySpawnHelperOptions = {
 };
 
 const EXECUTABLE_MODE = 0o755;
+
+function removeQuarantineAttribute(filePath: string): void {
+  if (process.platform !== "darwin") return;
+
+  spawnSync("/usr/bin/xattr", ["-d", "com.apple.quarantine", filePath], {
+    stdio: "ignore",
+  });
+}
+
+const defaultDeps: RepairNodePtySpawnHelperDeps = {
+  readdirSync: fs.readdirSync,
+  chmodSync: fs.chmodSync,
+  removeQuarantineAttribute,
+};
 
 function isNodePtySpawnHelper(filePath: string): boolean {
   return (
@@ -38,6 +54,7 @@ function visit(dir: string, deps: RepairNodePtySpawnHelperDeps): number {
 
     if (entry.isFile() && isNodePtySpawnHelper(entryPath)) {
       deps.chmodSync(entryPath, EXECUTABLE_MODE);
+      deps.removeQuarantineAttribute(entryPath);
       repaired += 1;
     }
   }
@@ -47,7 +64,7 @@ function visit(dir: string, deps: RepairNodePtySpawnHelperDeps): number {
 
 export function repairNodePtySpawnHelpers({
   resourcesPath,
-  deps = fs,
+  deps = defaultDeps,
 }: RepairNodePtySpawnHelperOptions): number {
   return visit(path.join(resourcesPath, "app.asar.unpacked"), deps);
 }
