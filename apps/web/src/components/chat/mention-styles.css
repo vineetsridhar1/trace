@@ -96,6 +96,12 @@
   transform: translateY(-50%) !important;
 }
 
+.pending-rich-text-input .chat-editor .ql-editor {
+  min-height: 38px;
+  max-height: 110px;
+  padding: 8px 12px;
+}
+
 /* Custom scrollbar */
 .chat-editor .ql-editor::-webkit-scrollbar {
   width: 6px;

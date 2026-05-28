@@ -1,7 +1,8 @@
-import { useState } from "react";
 import { X, Send, ChevronLeft, ChevronRight } from "lucide-react";
+import { useQuestionState } from "@trace/client-core";
 import type { Question, QuestionOption } from "@trace/shared";
 import { cn } from "../../lib/utils";
+import { PendingRichTextInput } from "../session/PendingRichTextInput";
 
 export type QuestionData = Question;
 
@@ -18,64 +19,25 @@ export function InboxQuestionBody({
   onSend,
   onDismiss,
 }: InboxQuestionBodyProps) {
-  const total = questions.length;
-  const [page, setPage] = useState(0);
-  const [selections, setSelections] = useState<Record<number, Set<string>>>({});
-  const [customTexts, setCustomTexts] = useState<Record<number, string>>({});
-
-  const q = questions[page];
+  const {
+    page,
+    total,
+    question: q,
+    currentSelected,
+    currentCustom,
+    isFirstPage,
+    isLastPage,
+    hasAllAnswers,
+    toggleOption,
+    setCustomText,
+    goNext,
+    goPrev,
+    buildResponse,
+  } = useQuestionState({ questions });
   if (!q) return null;
 
-  const currentSelected = selections[page] ?? new Set<string>();
-  const currentCustom = customTexts[page] ?? "";
-  const isLastPage = page === total - 1;
-  const isFirstPage = page === 0;
-
-  const hasAllAnswers = Array.from({ length: total }, (_, i) => {
-    const sel = selections[i];
-    const custom = (customTexts[i] ?? "").trim();
-    return (sel && sel.size > 0) || custom.length > 0;
-  }).every(Boolean);
-
-  const toggleOption = (label: string) => {
-    setSelections((prev: Record<number, Set<string>>) => {
-      const current = prev[page] ?? new Set<string>();
-      const next = new Set(current);
-      if (q.multiSelect) {
-        if (next.has(label)) next.delete(label);
-        else next.add(label);
-      } else {
-        if (next.has(label)) next.clear();
-        else {
-          next.clear();
-          next.add(label);
-        }
-      }
-      return { ...prev, [page]: next };
-    });
-  };
-
-  const setCustomText = (text: string) => {
-    setCustomTexts((prev: Record<number, string>) => ({ ...prev, [page]: text }));
-  };
-
-  const buildResponse = (): string | null => {
-    const parts: string[] = [];
-    for (let i = 0; i < total; i++) {
-      const qi = questions[i];
-      const selected = selections[i];
-      const custom = (customTexts[i] ?? "").trim();
-      if (custom) {
-        parts.push(`${qi.header}: ${custom}`);
-      } else if (selected && selected.size > 0) {
-        parts.push(`${qi.header}: ${[...selected].join(", ")}`);
-      }
-    }
-    return parts.length > 0 ? parts.join("\n") : null;
-  };
-
-  const handleSubmit = () => {
-    const response = buildResponse();
+  const handleSubmit = (currentText?: string) => {
+    const response = buildResponse(currentText);
     if (response) onSend(response);
   };
 
@@ -158,30 +120,28 @@ export function InboxQuestionBody({
       )}
 
       {/* Input + nav + actions */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
+      <div className="flex items-end gap-2">
+        <PendingRichTextInput
           value={currentCustom}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomText(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              if (hasAllAnswers) handleSubmit();
-            }
+          resetKey={page}
+          onChange={setCustomText}
+          onSubmit={(text) => {
+            if (hasAllAnswers) handleSubmit(text);
           }}
           placeholder="Other..."
           disabled={sending}
-          className="min-w-0 flex-1 rounded-lg border border-border bg-surface-deep px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          submitLabel="Reply"
+          SubmitIcon={Send}
+          submitDisabled={!hasAllAnswers}
         />
 
         {total > 1 && (
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5 pb-0.5">
             <button
               type="button"
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
-                if (!isFirstPage) setPage((p: number) => p - 1);
+                goPrev();
               }}
               disabled={isFirstPage}
               className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
@@ -192,7 +152,7 @@ export function InboxQuestionBody({
               type="button"
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
-                if (!isLastPage) setPage((p: number) => p + 1);
+                goNext();
               }}
               disabled={isLastPage}
               className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
@@ -201,19 +161,6 @@ export function InboxQuestionBody({
             </button>
           </div>
         )}
-
-        <button
-          type="button"
-          disabled={!hasAllAnswers || sending}
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            handleSubmit();
-          }}
-          className="flex shrink-0 items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
-        >
-          <Send size={12} />
-          Reply
-        </button>
 
         <button
           type="button"
