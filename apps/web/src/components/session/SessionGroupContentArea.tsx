@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import type { OpenFileTab } from "./GroupTabStrip";
+import type { FileEditorBuffer } from "./file-editor-buffer";
 
 const MonacoFileViewer = lazy(() =>
   import("./MonacoFileViewer").then((m) => ({ default: m.MonacoFileViewer })),
@@ -27,6 +28,8 @@ interface SessionGroupContentAreaProps {
   onScrollComplete: () => void;
   onForkSession: (eventId: string) => void;
   canForkSession: boolean;
+  getFileBuffer: (filePath: string) => FileEditorBuffer | undefined;
+  setFileBuffer: (filePath: string, buffer: FileEditorBuffer) => void;
 }
 
 export function SessionGroupContentArea({
@@ -40,6 +43,8 @@ export function SessionGroupContentArea({
   onScrollComplete,
   onForkSession,
   canForkSession,
+  getFileBuffer,
+  setFileBuffer,
 }: SessionGroupContentAreaProps) {
   const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
 
@@ -104,6 +109,8 @@ export function SessionGroupContentArea({
             sessionGroupId={sessionGroupId}
             filePath={activeFilePath}
             initialLineNumber={activeFile?.lineNumber}
+            buffer={getFileBuffer(activeFilePath)}
+            onBufferChange={setFileBuffer}
           />
         </Suspense>
       </div>

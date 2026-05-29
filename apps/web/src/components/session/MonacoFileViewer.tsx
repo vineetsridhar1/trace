@@ -8,6 +8,7 @@ import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { TraceLoader } from "../ui/trace-loader";
 import { getFileRenderViewer, type FileViewMode } from "./file-render-viewers";
+import type { FileEditorBuffer } from "./file-editor-buffer";
 import { toast } from "sonner";
 
 const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
@@ -26,19 +27,32 @@ export function MonacoFileViewer({
   sessionGroupId,
   filePath,
   initialLineNumber,
+  buffer,
+  onBufferChange,
 }: {
   sessionGroupId: string;
   filePath: string;
   initialLineNumber?: number;
+  buffer?: FileEditorBuffer;
+  onBufferChange?: (filePath: string, buffer: FileEditorBuffer) => void;
 }) {
   const renderViewer = getFileRenderViewer(filePath);
   const defaultViewMode = renderViewer?.defaultMode ?? "raw";
-  const [content, setContent] = useState<string | null>(null);
-  const [savedContent, setSavedContent] = useState<string | null>(null);
+  const [content, setContent] = useState<string | null>(() => buffer?.content ?? null);
+  const [savedContent, setSavedContent] = useState<string | null>(
+    () => buffer?.savedContent ?? null,
+  );
   const [viewMode, setViewMode] = useState<FileViewMode>(defaultViewMode);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!buffer);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const storeBuffer = useCallback(
+    (nextContent: string, nextSavedContent: string) => {
+      onBufferChange?.(filePath, { content: nextContent, savedContent: nextSavedContent });
+    },
+    [filePath, onBufferChange],
+  );
 
   const fetchContent = useCallback(
     async (silent = false) => {
@@ -56,6 +70,7 @@ export function MonacoFileViewer({
           const nextContent = result.data?.sessionGroupFileContent ?? "";
           setContent(nextContent);
           setSavedContent(nextContent);
+          storeBuffer(nextContent, nextContent);
           if (!silent) setError(null);
         }
       } catch (err) {
@@ -64,13 +79,18 @@ export function MonacoFileViewer({
         if (!silent) setLoading(false);
       }
     },
-    [sessionGroupId, filePath],
+    [sessionGroupId, filePath, storeBuffer],
   );
 
   // Initial fetch
   useEffect(() => {
+    if (buffer) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
     fetchContent(false);
-  }, [fetchContent]);
+  }, [buffer, fetchContent]);
 
   useEffect(() => {
     setViewMode(defaultViewMode);
@@ -89,6 +109,7 @@ export function MonacoFileViewer({
         throw new Error(result.error?.message ?? "Failed to save file");
       }
       setSavedContent(content);
+      storeBuffer(content, content);
       toast.success("File saved");
     } catch (err) {
       toast.error("Failed to save file", {
@@ -97,7 +118,7 @@ export function MonacoFileViewer({
     } finally {
       setSaving(false);
     }
-  }, [content, filePath, isDirty, saving, sessionGroupId]);
+  }, [content, filePath, isDirty, saving, sessionGroupId, storeBuffer]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -224,7 +245,13 @@ export function MonacoFileViewer({
             value={content ?? ""}
             theme="vs-dark"
             onMount={handleEditorMount}
-            onChange={(value) => setContent(value ?? "")}
+            onChange={(value) => {
+              const nextContent = value ?? "";
+              setContent(nextContent);
+              if (savedContent !== null) {
+                storeBuffer(nextContent, savedContent);
+              }
+            }}
             options={{
               readOnly: false,
               minimap: { enabled: true },
