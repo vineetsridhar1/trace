@@ -3,7 +3,7 @@
     "name": "Trace",
     "owner": "vineets123",
     "slug": "trace-mobile",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "scheme": "trace",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
