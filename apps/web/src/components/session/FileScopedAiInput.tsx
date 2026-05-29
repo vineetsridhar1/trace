@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { QUEUE_SESSION_MESSAGE_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import type { SessionEntity } from "@trace/client-core";
-import { Send } from "lucide-react";
+import { MessageSquarePlus, Send } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
@@ -11,10 +11,13 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
 import { canQueueMessage, canSendMessage } from "./sessionStatus";
+
+const NEW_CHAT_VALUE = "__new_chat__";
 
 function formatFileScopedPrompt(filePath: string, text: string): string {
   return `File context: \`${filePath}\`\n\n${text}`;
@@ -27,9 +30,13 @@ function sessionLabel(session: SessionEntity): string {
 export function FileScopedAiInput({
   filePath,
   sessions,
+  canStartNewChat,
+  onStartNewChat,
 }: {
   filePath: string;
   sessions: SessionEntity[];
+  canStartNewChat: boolean;
+  onStartNewChat: () => void | Promise<void>;
 }) {
   const defaultSessionId = sessions[0]?.id ?? null;
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(defaultSessionId);
@@ -57,11 +64,19 @@ export function FileScopedAiInput({
     setSelectedSessionId(sessions[0].id);
   }, [selectedSessionId, sessions]);
 
-  const handleSessionChange = useCallback((sessionId: string | null) => {
-    if (!sessionId) return;
-    userSelectedSessionRef.current = true;
-    setSelectedSessionId(sessionId);
-  }, []);
+  const handleSessionChange = useCallback(
+    (sessionId: string | null) => {
+      if (!sessionId) return;
+      if (sessionId === NEW_CHAT_VALUE) {
+        userSelectedSessionRef.current = false;
+        void onStartNewChat();
+        return;
+      }
+      userSelectedSessionRef.current = true;
+      setSelectedSessionId(sessionId);
+    },
+    [onStartNewChat],
+  );
 
   const trimmedMessage = message.trim();
   const canSendSelected =
@@ -119,7 +134,7 @@ export function FileScopedAiInput({
       >
         <SelectTrigger
           size="sm"
-          className="h-8 w-44 shrink-0 border-[#3c3c3c] bg-[#1e1e1e] px-2 text-[11px] text-[#cccccc] hover:bg-[#2f3030] focus:ring-0"
+          className="h-8 w-44 shrink-0 border-[#3c3c3c] bg-[#1e1e1e] px-2 text-[11px] text-[#cccccc] hover:bg-white/10 hover:text-foreground focus:ring-0"
           title="Choose agent"
         >
           <SelectValue placeholder="No agents">
@@ -128,10 +143,25 @@ export function FileScopedAiInput({
         </SelectTrigger>
         <SelectContent align="start" className="min-w-56">
           {sessions.map((session) => (
-            <SelectItem key={session.id} value={session.id}>
+            <SelectItem
+              key={session.id}
+              value={session.id}
+              className="hover:bg-white/10 focus:bg-white/10 focus:text-foreground"
+            >
               <span className="min-w-0 truncate">{sessionLabel(session)}</span>
             </SelectItem>
           ))}
+          <SelectSeparator />
+          <SelectItem
+            value={NEW_CHAT_VALUE}
+            disabled={!canStartNewChat}
+            className="hover:bg-white/10 focus:bg-white/10 focus:text-foreground"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <MessageSquarePlus size={14} />
+              New chat
+            </span>
+          </SelectItem>
         </SelectContent>
       </Select>
 

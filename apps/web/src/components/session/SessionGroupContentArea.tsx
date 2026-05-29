@@ -26,6 +26,8 @@ interface SessionGroupContentAreaProps {
   activeTerminalId: string | null;
   selectedSession: { id: string; _optimistic?: boolean } | null;
   sessionsByRecency: SessionEntity[];
+  canStartNewChat: boolean;
+  onStartNewChat: () => void | Promise<void>;
   defaultBranch: string;
   scrollToEventId: string | null;
   onScrollComplete: () => void;
@@ -42,6 +44,8 @@ export function SessionGroupContentArea({
   activeTerminalId,
   selectedSession,
   sessionsByRecency,
+  canStartNewChat,
+  onStartNewChat,
   defaultBranch,
   scrollToEventId,
   onScrollComplete,
@@ -102,7 +106,12 @@ export function SessionGroupContentArea({
             />
           </Suspense>
         </div>
-        <FileScopedAiInput filePath={diffFilePath} sessions={sessionsByRecency} />
+        <FileScopedAiInput
+          filePath={diffFilePath}
+          sessions={sessionsByRecency}
+          canStartNewChat={canStartNewChat}
+          onStartNewChat={onStartNewChat}
+        />
       </div>
     );
   }
@@ -124,7 +133,12 @@ export function SessionGroupContentArea({
             />
           </Suspense>
         </div>
-        <FileScopedAiInput filePath={activeFilePath} sessions={sessionsByRecency} />
+        <FileScopedAiInput
+          filePath={activeFilePath}
+          sessions={sessionsByRecency}
+          canStartNewChat={canStartNewChat}
+          onStartNewChat={onStartNewChat}
+        />
       </div>
     );
   }
