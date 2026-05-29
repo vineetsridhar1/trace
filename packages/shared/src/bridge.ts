@@ -680,6 +680,7 @@ export const WALK_IGNORE = new Set([
   "coverage",
 ]);
 export const MAX_FILE_VIEW_BYTES = 512 * 1024;
+const MAX_WORKTREE_CHANGE_FILES = 200;
 const BINARY_DETECTION_SAMPLE_BYTES = 8 * 1024;
 
 /**
@@ -968,9 +969,18 @@ export async function handleCommitFileChanges(
 
   try {
     const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
-    const status = await deps.gitExec(["status", "--porcelain"], realWorkdir);
-    if (!status.trim()) {
+    const status = await deps.gitExec(["status", "--porcelain=v1", "-z"], realWorkdir);
+    const changes = parseWorktreeStatus(status);
+    if (changes.length === 0) {
       send({ type: "file_commit_result", requestId, error: "No changes to commit" });
+      return;
+    }
+    if (changes.length > MAX_WORKTREE_CHANGE_FILES) {
+      send({
+        type: "file_commit_result",
+        requestId,
+        error: `Too many workspace changes to commit safely (${changes.length} files, ${MAX_WORKTREE_CHANGE_FILES} max)`,
+      });
       return;
     }
 
@@ -1009,8 +1019,17 @@ export async function handleWorktreeChanges(
     const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
     const status = await deps.gitExec(["status", "--porcelain=v1", "-z"], realWorkdir);
     const paths = parseWorktreeStatus(status);
+    if (paths.length > MAX_WORKTREE_CHANGE_FILES) {
+      send({
+        type: "worktree_changes_result",
+        requestId: cmd.requestId,
+        files: [],
+        error: `Too many workspace changes to review (${paths.length} files, ${MAX_WORKTREE_CHANGE_FILES} max)`,
+      });
+      return;
+    }
     const files = await Promise.all(
-      paths.slice(0, 200).map((entry) => buildWorktreeChangedFile(entry, realWorkdir, deps)),
+      paths.map((entry) => buildWorktreeChangedFile(entry, realWorkdir, deps)),
     );
     send({ type: "worktree_changes_result", requestId: cmd.requestId, files });
   } catch (err) {
@@ -1043,7 +1062,11 @@ export async function handleRevertWorktreeFile(
     const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
     const fullPath = deps.path.resolve(realWorkdir, cmd.filePath);
     if (!isPathInsideRoot(realWorkdir, fullPath, deps.path)) {
-      send({ type: "revert_worktree_file_result", requestId: cmd.requestId, error: "Path traversal denied" });
+      send({
+        type: "revert_worktree_file_result",
+        requestId: cmd.requestId,
+        error: "Path traversal denied",
+      });
       return;
     }
 
@@ -1089,15 +1112,23 @@ async function buildWorktreeChangedFile(
   workdir: string,
   deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
 ): Promise<BridgeLinkedCheckoutChangedFile> {
-  const originalContent = await deps
-    .gitExec(["show", `HEAD:${entry.path}`], workdir)
-    .catch(() => "");
+  const originalRaw = await deps.gitExec(["show", `HEAD:${entry.path}`], workdir).catch(() => "");
+  const original = previewTextContent(originalRaw);
   const modifiedContent =
-    entry.status === "D" ? "" : await readWorktreeTextFile(workdir, entry.path, deps).catch(() => "");
+    entry.status === "D"
+      ? { content: "", truncated: false }
+      : await readWorktreeTextFile(workdir, entry.path, deps).catch(() => ({
+          content: "",
+          truncated: false,
+        }));
   const diff = await deps.gitExec(["diff", "--", entry.path], workdir).catch(() => "");
-  const numstat = await deps.gitExec(["diff", "--numstat", "--", entry.path], workdir).catch(() => "");
+  const numstat = await deps
+    .gitExec(["diff", "--numstat", "--", entry.path], workdir)
+    .catch(() => "");
   const [additionsRaw = "0", deletionsRaw = "0"] = numstat.split("\t");
-  const fallbackAdditions = modifiedContent ? modifiedContent.split("\n").length : 0;
+  const fallbackAdditions = modifiedContent.content
+    ? modifiedContent.content.split("\n").length
+    : 0;
   return {
     path: entry.path,
     status: entry.status,
@@ -1105,20 +1136,37 @@ async function buildWorktreeChangedFile(
     deletions: Number.parseInt(deletionsRaw, 10) || 0,
     diff,
     truncated: false,
-    originalContent,
-    modifiedContent,
-    contentTruncated: false,
+    originalContent: original.content,
+    modifiedContent: modifiedContent.content,
+    contentTruncated: original.truncated || modifiedContent.truncated,
   };
 }
 
-function readWorktreeTextFile(
+function previewTextContent(content: string): { content: string; truncated: boolean } {
+  if (Buffer.byteLength(content, "utf8") <= MAX_FILE_VIEW_BYTES) {
+    return { content, truncated: false };
+  }
+  return {
+    content: content.slice(0, MAX_FILE_VIEW_BYTES),
+    truncated: true,
+  };
+}
+
+async function readWorktreeTextFile(
   workdir: string,
   filePath: string,
   deps: { fs: BridgeFsLike; path: BridgePathLike },
-): Promise<string> {
+): Promise<{ content: string; truncated: boolean }> {
   const fullPath = deps.path.resolve(workdir, filePath);
   if (!isPathInsideRoot(workdir, fullPath, deps.path)) {
     return Promise.reject(new Error("Path traversal denied"));
+  }
+  const stats = await deps.fs.promises.stat(fullPath);
+  if (!stats.isFile()) {
+    throw new Error("Not a file");
+  }
+  if (stats.size > MAX_FILE_VIEW_BYTES) {
+    return { content: "", truncated: true };
   }
   return new Promise((resolve, reject) => {
     deps.fs.readFile(fullPath, (err, content) => {
@@ -1126,7 +1174,11 @@ function readWorktreeTextFile(
         reject(err);
         return;
       }
-      resolve(content.toString("utf8"));
+      if (isLikelyBinaryFile(content)) {
+        resolve({ content: "", truncated: true });
+        return;
+      }
+      resolve({ content: content.toString("utf8"), truncated: false });
     });
   });
 }
