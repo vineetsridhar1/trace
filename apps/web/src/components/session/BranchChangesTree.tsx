@@ -81,7 +81,7 @@ function BranchChangesTreeNode({
       <BranchChangedFileRow
         file={file}
         depth={depth}
-        showDirectory={false}
+        pathPosition="none"
         onFileClick={onFileClick}
       />
     );

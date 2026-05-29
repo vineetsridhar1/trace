@@ -132,7 +132,12 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
           <BranchChangesTree files={files} onFileClick={onFileClick} />
         ) : (
           files.map((file) => (
-            <BranchChangedFileRow key={file.path} file={file} onFileClick={onFileClick} />
+            <BranchChangedFileRow
+              key={file.path}
+              file={file}
+              pathPosition="after"
+              onFileClick={onFileClick}
+            />
           ))
         )}
       </div>
