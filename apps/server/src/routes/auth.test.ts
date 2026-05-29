@@ -652,6 +652,56 @@ describe("bridge auth tokens", () => {
     });
   });
 
+  it("does not return 304 for auth/me conditional requests", async () => {
+    const user = {
+      id: "user-1",
+      email: "local@trace.dev",
+      name: "Local User",
+      avatarUrl: null,
+      defaultSessionTool: null,
+      defaultSessionModel: null,
+      defaultSessionReasoningEffort: null,
+      autoArchiveMergedSessions: null,
+      orgMemberships: [],
+    };
+    prismaMock.user.findUnique.mockResolvedValue(user);
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const first = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Cookie: `trace_token=${token}`,
+      },
+    });
+    const etag = first.headers.get("etag");
+
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toContain("no-store");
+    expect(etag).toBeTruthy();
+
+    const second = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Cookie: `trace_token=${token}`,
+        "If-None-Match": etag ?? "",
+      },
+    });
+
+    expect(second.status).toBe(200);
+    expect(second.headers.get("cache-control")).toContain("no-store");
+    await expect(second.json()).resolves.toEqual({
+      user: {
+        id: "user-1",
+        email: "local@trace.dev",
+        name: "Local User",
+        avatarUrl: null,
+        defaultSessionTool: null,
+        defaultSessionModel: null,
+        defaultSessionReasoningEffort: null,
+        autoArchiveMergedSessions: null,
+        orgMemberships: [],
+      },
+    });
+  });
+
   it("clears the browser session cookie on logout", async () => {
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
     const res = await fetch(`${baseUrl}/auth/logout`, {
