@@ -91,6 +91,7 @@ export {
 export { buildSessionNodes } from "./session/nodes.js";
 export { isSessionPreparing, isSessionRuntimeStartingUp } from "./session/preparation.js";
 export type { SessionPreparationFields } from "./session/preparation.js";
+export { formatSessionConnectionError } from "./session/connection-error.js";
 export type {
   AgentToolResult,
   BuildSessionNodesResult,
