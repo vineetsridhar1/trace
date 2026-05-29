@@ -7683,6 +7683,40 @@ export class SessionService {
     );
   }
 
+  async listWorktreeChanges(sessionGroupId: string, organizationId: string, userId: string) {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.listWorktreeChanges(
+      runtime.runtimeId,
+      runtime.sessionId,
+      runtime.workdirHint,
+    );
+  }
+
+  async revertFileChange(
+    sessionGroupId: string,
+    filePath: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    const normalizedPath = this.normalizeFilePath(filePath);
+    await sessionRouter.revertWorktreeFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      runtime.workdirHint,
+    );
+    return true;
+  }
+
   /** Compute the branch diff for a session group (changed files vs default branch). */
   async branchDiff(sessionGroupId: string, organizationId: string, userId: string) {
     const source = await this.resolveGitHubSessionGroupFileSource(

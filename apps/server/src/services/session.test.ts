@@ -67,6 +67,8 @@ vi.mock("../lib/session-router.js", () => ({
     readFile: vi.fn().mockResolvedValue(""),
     writeFile: vi.fn().mockResolvedValue(undefined),
     commitFileChanges: vi.fn().mockResolvedValue("commit123"),
+    listWorktreeChanges: vi.fn().mockResolvedValue([]),
+    revertWorktreeFile: vi.fn().mockResolvedValue(undefined),
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
     syncLinkedCheckout: vi.fn().mockResolvedValue(null),

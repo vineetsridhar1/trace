@@ -621,6 +621,7 @@ export type Mutation = {
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
+  revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
@@ -947,6 +948,11 @@ export type MutationRetrySessionGroupSetupArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type MutationRevertSessionGroupFileChangeArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
@@ -1248,6 +1254,7 @@ export type Query = {
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
+  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1442,6 +1449,10 @@ export type QuerySessionGroupFileContentArgs = {
 };
 
 export type QuerySessionGroupFilesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupWorktreeChangesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 

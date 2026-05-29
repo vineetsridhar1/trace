@@ -623,6 +623,7 @@ export type Mutation = {
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
+  revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
@@ -949,6 +950,11 @@ export type MutationRetrySessionGroupSetupArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type MutationRevertSessionGroupFileChangeArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
@@ -1250,6 +1256,7 @@ export type Query = {
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
+  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1444,6 +1451,10 @@ export type QuerySessionGroupFileContentArgs = {
 };
 
 export type QuerySessionGroupFilesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupWorktreeChangesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2204,6 +2215,36 @@ export type SessionGroupBranchDiffQuery = {
     additions: number;
     deletions: number;
   }>;
+};
+
+export type SessionGroupWorktreeChangesQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionGroupWorktreeChangesQuery = {
+  __typename?: "Query";
+  sessionGroupWorktreeChanges: Array<{
+    __typename?: "LinkedCheckoutChangedFile";
+    path: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    diff: string;
+    truncated: boolean;
+    originalContent: string;
+    modifiedContent: string;
+    contentTruncated: boolean;
+  }>;
+};
+
+export type RevertSessionGroupFileChangeMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+}>;
+
+export type RevertSessionGroupFileChangeMutation = {
+  __typename?: "Mutation";
+  revertSessionGroupFileChange: boolean;
 };
 
 export type SessionGroupFileAtRefQueryVariables = Exact<{
@@ -4169,6 +4210,111 @@ export const SessionGroupBranchDiffDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupBranchDiffQuery, SessionGroupBranchDiffQueryVariables>;
+export const SessionGroupWorktreeChangesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupWorktreeChanges" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroupWorktreeChanges" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "path" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "additions" } },
+                { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                { kind: "Field", name: { kind: "Name", value: "diff" } },
+                { kind: "Field", name: { kind: "Name", value: "truncated" } },
+                { kind: "Field", name: { kind: "Name", value: "originalContent" } },
+                { kind: "Field", name: { kind: "Name", value: "modifiedContent" } },
+                { kind: "Field", name: { kind: "Name", value: "contentTruncated" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionGroupWorktreeChangesQuery,
+  SessionGroupWorktreeChangesQueryVariables
+>;
+export const RevertSessionGroupFileChangeDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RevertSessionGroupFileChange" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "revertSessionGroupFileChange" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  RevertSessionGroupFileChangeMutation,
+  RevertSessionGroupFileChangeMutationVariables
+>;
 export const SessionGroupFileAtRefDocument = {
   kind: "Document",
   definitions: [
