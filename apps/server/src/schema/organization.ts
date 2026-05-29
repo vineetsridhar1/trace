@@ -1,6 +1,5 @@
 import type { Context } from "../context.js";
 import type {
-  CreateOrganizationInput,
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
@@ -48,9 +47,6 @@ export const organizationQueries = {
 };
 
 export const organizationMutations = {
-  createOrganization: (_: unknown, args: { input: CreateOrganizationInput }, ctx: Context) => {
-    return organizationService.createOrganization(args.input, ctx.userId);
-  },
   createRepo: (_: unknown, args: { input: CreateRepoInput }, ctx: Context) => {
     assertOrgAccess(ctx, args.input.organizationId);
     return organizationService.createRepo(args.input, ctx.actorType, ctx.userId);

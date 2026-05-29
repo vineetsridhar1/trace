@@ -1,8 +1,7 @@
-import { ChevronDown, Check, Plus } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import { useAuthStore, type OrgMembership } from "@trace/client-core";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
-import { CreateOrganizationDialog } from "./CreateOrganizationDialog";
 import { switchActiveOrganization } from "../../lib/org-switch";
 
 export function OrgSwitcher({ compact, large }: { compact?: boolean; large?: boolean }) {
@@ -68,21 +67,6 @@ export function OrgSwitcher({ compact, large }: { compact?: boolean; large?: boo
             </span>
           </button>
         ))}
-        <div className="mx-2 my-1.5 h-px bg-border" />
-        <CreateOrganizationDialog
-          trigger={
-            <button
-              type="button"
-              className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground transition-colors hover:bg-white/10"
-            >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-foreground">
-                <Plus size={13} />
-              </div>
-              <span className="flex-1 truncate text-left font-medium">Create organization</span>
-              <span className="h-5 w-5 shrink-0" />
-            </button>
-          }
-        />
       </PopoverContent>
     </Popover>
   );

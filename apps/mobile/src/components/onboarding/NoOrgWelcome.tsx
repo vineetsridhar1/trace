@@ -5,7 +5,6 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
 import { handleMobileSignOut } from "@/lib/auth";
 import { useTheme } from "@/theme";
-import { CreateOrganizationForm } from "@/components/settings/CreateOrganizationForm";
 
 export function NoOrgWelcome() {
   const theme = useTheme();
@@ -56,16 +55,12 @@ export function NoOrgWelcome() {
         ]}
       >
         <Text variant="title2" color="foreground">
-          Create your organization
+          You're not in an organization yet
         </Text>
         <Text variant="footnote" color="mutedForeground" style={styles.message}>
           You are signed in, but this account is not part of a Trace organization yet.
-          Create an organization to start using your workspace.
+          Ask an organization admin to invite you, then check again.
         </Text>
-
-        <View style={styles.createBlock}>
-          <CreateOrganizationForm />
-        </View>
 
         <View style={styles.emailBlock}>
           <Text variant="caption1" color="dimForeground" style={styles.emailLabel}>
@@ -134,9 +129,6 @@ const styles = StyleSheet.create({
   emailBlock: {
     marginTop: 20,
     gap: 8,
-  },
-  createBlock: {
-    marginTop: 24,
   },
   emailLabel: {
     letterSpacing: 0.8,

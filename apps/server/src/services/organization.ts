@@ -1,5 +1,4 @@
 import type {
-  CreateOrganizationInput,
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
@@ -8,7 +7,7 @@ import type {
 } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
-import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { createChannelInTransaction } from "./channel-create.js";
@@ -108,81 +107,6 @@ export class OrganizationService {
       select: { id: true, name: true, email: true, avatarUrl: true },
       orderBy: [{ name: "asc" }, { email: "asc" }],
       take: 10,
-    });
-  }
-
-  async createOrganization(input: CreateOrganizationInput, actorId: string) {
-    const name = input.name.trim();
-    if (!name) {
-      throw new Error("Organization name is required");
-    }
-
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.user.findUniqueOrThrow({
-        where: { id: actorId },
-        select: { id: true },
-      });
-      await tx.user.upsert({
-        where: { id: TRACE_AI_USER_ID },
-        update: {
-          email: TRACE_AI_EMAIL,
-          name: TRACE_AI_NAME,
-          avatarUrl: null,
-          githubId: null,
-        },
-        create: {
-          id: TRACE_AI_USER_ID,
-          email: TRACE_AI_EMAIL,
-          name: TRACE_AI_NAME,
-        },
-        select: { id: true },
-      });
-
-      const organization = await tx.organization.create({
-        data: { name },
-        select: { id: true, name: true },
-      });
-
-      const member = await tx.orgMember.create({
-        data: {
-          userId: actorId,
-          organizationId: organization.id,
-          role: "admin",
-        },
-        include: {
-          user: { select: { id: true, name: true, email: true, avatarUrl: true } },
-          organization: { select: { id: true, name: true } },
-        },
-      });
-
-      await tx.orgMember.create({
-        data: {
-          userId: TRACE_AI_USER_ID,
-          organizationId: organization.id,
-          role: "member",
-        },
-      });
-
-      await eventService.create(
-        {
-          organizationId: organization.id,
-          scopeType: "system",
-          scopeId: organization.id,
-          eventType: "organization_created",
-          payload: {
-            organization,
-            member: {
-              userId: actorId,
-              role: "admin",
-            },
-          },
-          actorType: "user",
-          actorId,
-        },
-        tx,
-      );
-
-      return member;
     });
   }
 
