@@ -158,7 +158,9 @@
 
 .app-region-no-drag .app-region-drag,
 .app-region-no-drag .app-region-drag * {
-  -webkit-app-region: drag;
+  -webkit-app-region: drag !important;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .app-region-drag :is(
@@ -189,7 +191,9 @@
     [role="menuitem"],
     [role="textbox"]
   ) * {
-  -webkit-app-region: no-drag;
+  -webkit-app-region: no-drag !important;
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 /* ── Button utilities ── */
