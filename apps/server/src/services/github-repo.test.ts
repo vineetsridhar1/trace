@@ -108,31 +108,25 @@ describe("GitHubRepoService", () => {
     );
   });
 
-  it("collects branch diff files across paginated compare responses", async () => {
+  it("uses only the first compare response for changed files", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse(
-          { files: [{ filename: "src/one.ts", status: "modified", additions: 1, deletions: 0 }] },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Link: '<https://api.github.com/repos/acme/trace/compare/main...feature?page=2>; rel="next"',
-            },
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { files: [{ filename: "src/one.ts", status: "modified", additions: 1, deletions: 0 }] },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Link: '<https://api.github.com/repos/acme/trace/compare/main...feature?page=2>; rel="next"',
           },
-        ),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          files: [{ filename: "src/two.ts", status: "added", additions: 2, deletions: 0 }],
-        }),
-      );
+        },
+      ),
+    );
 
     const service = new GitHubRepoService();
     await expect(service.branchDiff(repo, "main", "feature", "gh-token")).resolves.toEqual([
       { path: "src/one.ts", status: "M", additions: 1, deletions: 0 },
-      { path: "src/two.ts", status: "A", additions: 2, deletions: 0 },
     ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("retries branch compare with path-style refs for branch names with slashes", async () => {
