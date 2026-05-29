@@ -685,6 +685,10 @@ export function SessionGroupDetailView({
                     activeTerminalId={activeTerminal?.id ?? null}
                     selectedSession={selectedSession}
                     sessionsByRecency={sessionsByRecency}
+                    canStartNewChat={
+                      !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
+                    }
+                    onStartNewChat={handleNewChat}
                     defaultBranch={groupRepo?.defaultBranch ?? "main"}
                     getFileBuffer={getFileBuffer}
                     setFileBuffer={setFileBuffer}
