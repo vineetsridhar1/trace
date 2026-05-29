@@ -1234,6 +1234,7 @@ type Mutation {
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
   saveSessionGroupFile(sessionGroupId: ID!, filePath: String!, content: String!): Boolean!
+  commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   requestBridgeAccess(
     runtimeInstanceId: ID!
     scopeType: BridgeAccessScopeType!

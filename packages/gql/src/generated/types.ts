@@ -569,6 +569,7 @@ export type Mutation = {
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
+  commitSessionGroupFileChanges: Scalars["String"]["output"];
   createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -701,6 +702,11 @@ export type MutationCommitLinkedCheckoutChangesArgs = {
   message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCommitSessionGroupFileChangesArgs = {
+  message?: InputMaybe<Scalars["String"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 

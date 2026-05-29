@@ -23,6 +23,7 @@ import {
   handleListFiles,
   handleReadFile,
   handleWriteFile,
+  handleCommitFileChanges,
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
@@ -1589,6 +1590,14 @@ export class BridgeClient implements IBridgeClient {
       }
       case "write_file": {
         handleWriteFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
+        break;
+      }
+      case "commit_file_changes": {
+        void handleCommitFileChanges(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+          fs,
+          path,
+          gitExec: this.gitExec,
+        });
         break;
       }
       case "branch_diff": {

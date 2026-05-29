@@ -7664,6 +7664,25 @@ export class SessionService {
     return true;
   }
 
+  async commitFileChanges(
+    sessionGroupId: string,
+    message: string | undefined,
+    organizationId: string,
+    userId: string,
+  ): Promise<string> {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.commitFileChanges(
+      runtime.runtimeId,
+      runtime.sessionId,
+      message,
+      runtime.workdirHint,
+    );
+  }
+
   /** Compute the branch diff for a session group (changed files vs default branch). */
   async branchDiff(sessionGroupId: string, organizationId: string, userId: string) {
     const source = await this.resolveGitHubSessionGroupFileSource(

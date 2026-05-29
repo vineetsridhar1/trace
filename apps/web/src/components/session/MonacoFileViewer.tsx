@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { gql } from "@urql/core";
-import { Code2, Eye, RefreshCw, Save } from "lucide-react";
+import { Code2, Eye, GitCommitHorizontal, RefreshCw, Save } from "lucide-react";
 import { client } from "../../lib/urql";
 import { getLanguageFromPath } from "../../lib/monaco-utils";
 import { cn } from "../../lib/utils";
@@ -20,6 +20,12 @@ const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
 const SAVE_SESSION_GROUP_FILE_MUTATION = gql`
   mutation SaveSessionGroupFile($sessionGroupId: ID!, $filePath: String!, $content: String!) {
     saveSessionGroupFile(sessionGroupId: $sessionGroupId, filePath: $filePath, content: $content)
+  }
+`;
+
+const COMMIT_SESSION_GROUP_FILE_CHANGES_MUTATION = gql`
+  mutation CommitSessionGroupFileChanges($sessionGroupId: ID!, $message: String) {
+    commitSessionGroupFileChanges(sessionGroupId: $sessionGroupId, message: $message)
   }
 `;
 
@@ -45,6 +51,7 @@ export function MonacoFileViewer({
   const [viewMode, setViewMode] = useState<FileViewMode>(defaultViewMode);
   const [loading, setLoading] = useState(!buffer);
   const [saving, setSaving] = useState(false);
+  const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const storeBuffer = useCallback(
@@ -98,8 +105,9 @@ export function MonacoFileViewer({
 
   const isDirty = content !== null && savedContent !== null && content !== savedContent;
 
-  const handleSave = useCallback(async () => {
-    if (!isDirty || content === null || saving) return;
+  const saveCurrentContent = useCallback(async () => {
+    if (!isDirty || content === null) return true;
+    if (saving) return false;
     setSaving(true);
     try {
       const result = await client
@@ -111,14 +119,55 @@ export function MonacoFileViewer({
       setSavedContent(content);
       storeBuffer(content, content);
       toast.success("File saved");
+      return true;
     } catch (err) {
       toast.error("Failed to save file", {
         description: err instanceof Error ? err.message : undefined,
       });
+      return false;
     } finally {
       setSaving(false);
     }
   }, [content, filePath, isDirty, saving, sessionGroupId, storeBuffer]);
+
+  const handleSave = useCallback(async () => {
+    await saveCurrentContent();
+  }, [saveCurrentContent]);
+
+  const handleCommit = useCallback(async () => {
+    if (committing || saving) return;
+    const message = window.prompt(
+      "Commit message",
+      `Update ${filePath.split("/").pop() ?? "files"}`,
+    );
+    if (message === null) return;
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) return;
+
+    setCommitting(true);
+    try {
+      const saved = await saveCurrentContent();
+      if (!saved) return;
+
+      const result = await client
+        .mutation(COMMIT_SESSION_GROUP_FILE_CHANGES_MUTATION, {
+          sessionGroupId,
+          message: trimmedMessage,
+        })
+        .toPromise();
+      const commitSha = result.data?.commitSessionGroupFileChanges;
+      if (result.error || typeof commitSha !== "string" || !commitSha) {
+        throw new Error(result.error?.message ?? "Failed to commit changes");
+      }
+      toast.success("Changes committed", { description: commitSha.slice(0, 7) });
+    } catch (err) {
+      toast.error("Failed to commit changes", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setCommitting(false);
+    }
+  }, [committing, filePath, saveCurrentContent, saving, sessionGroupId]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -188,6 +237,18 @@ export function MonacoFileViewer({
           >
             <Save size={12} />
             Save
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={saving || committing}
+            onClick={() => void handleCommit()}
+            className="h-6 rounded border border-[#3c3c3c] px-2 text-[11px] text-[#cccccc] hover:bg-[#2f3030] hover:text-[#ffffff] disabled:opacity-40"
+            title="Commit workspace changes"
+          >
+            <GitCommitHorizontal size={12} />
+            {committing ? "Committing..." : "Commit"}
           </Button>
           {renderViewer && (
             <div className="flex items-center rounded-md border border-[#3c3c3c] bg-[#1e1e1e] p-0.5">

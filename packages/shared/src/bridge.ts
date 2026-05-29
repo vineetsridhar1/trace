@@ -128,6 +128,15 @@ export interface BridgeWriteFileCommand {
   workdirHint?: string;
 }
 
+export interface BridgeCommitFileChangesCommand {
+  type: "commit_file_changes";
+  requestId: string;
+  sessionId: string;
+  message?: string | null;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
+}
+
 export interface BridgeBranchDiffCommand {
   type: "branch_diff";
   requestId: string;
@@ -275,6 +284,7 @@ export type BridgeCommand =
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
+  | BridgeCommitFileChangesCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
@@ -514,6 +524,13 @@ export interface BridgeFileWriteResult {
   error?: string;
 }
 
+export interface BridgeFileCommitResult {
+  type: "file_commit_result";
+  requestId: string;
+  commitSha?: string;
+  error?: string;
+}
+
 export interface BridgeBranchDiffFile {
   path: string;
   status: string;
@@ -596,6 +613,7 @@ export type BridgeMessage =
   | BridgeFilesResult
   | BridgeFileContentResult
   | BridgeFileWriteResult
+  | BridgeFileCommitResult
   | BridgeBranchDiffResult
   | BridgeFileAtRefResult
   | BridgeSkillsResult
@@ -894,6 +912,48 @@ export function handleWriteFile(
       });
     }
   })();
+}
+
+/**
+ * Handle a `commit_file_changes` bridge command. Commits current worktree changes in the session.
+ */
+export async function handleCommitFileChanges(
+  cmd: BridgeCommitFileChangesCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
+): Promise<void> {
+  const { requestId, sessionId, message, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({
+      type: "file_commit_result",
+      requestId,
+      error: `No workdir known for session ${sessionId}`,
+    });
+    return;
+  }
+
+  try {
+    const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
+    const status = await deps.gitExec(["status", "--porcelain"], realWorkdir);
+    if (!status.trim()) {
+      send({ type: "file_commit_result", requestId, error: "No changes to commit" });
+      return;
+    }
+
+    const commitMessage = message?.trim() || "Update files from Trace";
+    await deps.gitExec(["add", "-A"], realWorkdir);
+    await deps.gitExec(["commit", "-m", commitMessage], realWorkdir);
+    const commitSha = (await deps.gitExec(["rev-parse", "HEAD"], realWorkdir)).trim();
+    send({ type: "file_commit_result", requestId, commitSha });
+  } catch (err) {
+    send({
+      type: "file_commit_result",
+      requestId,
+      error: err instanceof Error ? err.message : "Failed to commit changes",
+    });
+  }
 }
 
 // --- Shared branch diff / file-at-ref handlers ---

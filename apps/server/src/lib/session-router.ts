@@ -10,6 +10,7 @@ import type {
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeWriteFileCommand,
+  BridgeCommitFileChangesCommand,
   BridgeBranchDiffCommand,
   BridgeFileAtRefCommand,
   BridgeBranchDiffFile,
@@ -54,6 +55,7 @@ export type SessionCommand =
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
+  | BridgeCommitFileChangesCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
@@ -298,6 +300,11 @@ export class SessionRouter {
   private pendingFileWriteRequests = new Map<
     string,
     { runtimeId: string; resolve: () => void; reject: (err: Error) => void }
+  >();
+  /** Pending file commit requests: requestId → resolve/reject */
+  private pendingFileCommitRequests = new Map<
+    string,
+    { runtimeId: string; resolve: (commitSha: string) => void; reject: (err: Error) => void }
   >();
   /** Pending branch diff requests: requestId → resolve/reject */
   private pendingBranchDiffRequests = new Map<
@@ -1137,6 +1144,68 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve();
+    }
+  }
+
+  /**
+   * Ask a runtime to commit the current file changes in its live workspace.
+   */
+  commitFileChanges(
+    runtimeId: string,
+    sessionId: string,
+    message?: string | null,
+    workdirHint?: string,
+    timeoutMs = 60_000,
+  ): Promise<string> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "commit_file_changes",
+      requestId,
+      sessionId,
+      message,
+      workdirHint,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFileCommitRequests.delete(requestId);
+        reject(new Error("File commit request timed out"));
+      }, timeoutMs);
+
+      this.pendingFileCommitRequests.set(requestId, {
+        runtimeId,
+        resolve: (commitSha) => {
+          clearTimeout(timer);
+          resolve(commitSha);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  /** Resolve a pending file commit request (called from bridge handler). */
+  resolveFileCommitRequest(
+    requestId: string,
+    commitSha?: string,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingFileCommitRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingFileCommitRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else if (commitSha) {
+      pending.resolve(commitSha);
+    } else {
+      pending.reject(new Error("File commit did not return a commit SHA"));
     }
   }
 
