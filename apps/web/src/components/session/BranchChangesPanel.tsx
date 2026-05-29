@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
-import { Circle, RefreshCw } from "lucide-react";
+import { List, ListTree, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { TraceLoader } from "../ui/trace-loader";
+import type { BranchChangesViewMode, BranchDiffFile } from "./branch-changes-types";
+import { BranchChangedFileRow } from "./BranchChangedFileRow";
+import { BranchChangesTree } from "./BranchChangesTree";
 
 const SESSION_GROUP_BRANCH_DIFF_QUERY = gql`
   query SessionGroupBranchDiff($sessionGroupId: ID!) {
@@ -16,28 +19,14 @@ const SESSION_GROUP_BRANCH_DIFF_QUERY = gql`
   }
 `;
 
-interface BranchDiffFile {
-  path: string;
-  status: string;
-  additions: number;
-  deletions: number;
-}
-
 interface BranchChangesPanelProps {
   sessionGroupId: string;
   onFileClick: (filePath: string, status: string) => void;
 }
 
-const statusColor: Record<string, string> = {
-  A: "text-green-400 fill-green-400",
-  M: "text-yellow-400 fill-yellow-400",
-  D: "text-red-400 fill-red-400",
-  R: "text-blue-400 fill-blue-400",
-  C: "text-blue-400 fill-blue-400",
-};
-
 export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChangesPanelProps) {
   const [files, setFiles] = useState<BranchDiffFile[]>([]);
+  const [viewMode, setViewMode] = useState<BranchChangesViewMode>("tree");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,42 +90,51 @@ export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChange
         <span className="text-[11px] text-muted-foreground">
           {files.length} file{files.length !== 1 ? "s" : ""} changed
         </span>
-        <button
-          type="button"
-          onClick={fetchDiff}
-          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
-          title="Refresh"
-        >
-          <RefreshCw size={12} />
-        </button>
+        <div className="flex items-center gap-1">
+          <div className="flex items-center rounded-md border border-border bg-surface-deep p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("tree")}
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground",
+                viewMode === "tree" && "bg-surface-elevated text-foreground",
+              )}
+              title="Tree view"
+              aria-pressed={viewMode === "tree"}
+            >
+              <ListTree size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("flat")}
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground",
+                viewMode === "flat" && "bg-surface-elevated text-foreground",
+              )}
+              title="Flat view"
+              aria-pressed={viewMode === "flat"}
+            >
+              <List size={12} />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={fetchDiff}
+            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+            title="Refresh"
+          >
+            <RefreshCw size={12} />
+          </button>
+        </div>
       </div>
       <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto">
-        {files.map((file: BranchDiffFile) => {
-          const parts = file.path.split("/");
-          const fileName = parts.pop() ?? file.path;
-          const dirName = parts.length > 0 ? parts.join("/") + "/" : "";
-          const color = statusColor[file.status] ?? "text-muted-foreground fill-muted-foreground";
-
-          return (
-            <button
-              key={file.path}
-              type="button"
-              onClick={() => onFileClick(file.path, file.status)}
-              className="flex w-full items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-surface-hover"
-            >
-              <Circle size={6} className={cn("shrink-0", color)} />
-              <span className="min-w-0 flex-1 truncate text-[11px]">
-                <span className="text-muted-foreground">{dirName}</span>
-                <span className="text-foreground">{fileName}</span>
-              </span>
-              <span className="shrink-0 font-mono text-[10px]">
-                {file.additions > 0 && <span className="text-green-400">+{file.additions}</span>}
-                {file.additions > 0 && file.deletions > 0 && " "}
-                {file.deletions > 0 && <span className="text-red-400">-{file.deletions}</span>}
-              </span>
-            </button>
-          );
-        })}
+        {viewMode === "tree" ? (
+          <BranchChangesTree files={files} onFileClick={onFileClick} />
+        ) : (
+          files.map((file) => (
+            <BranchChangedFileRow key={file.path} file={file} onFileClick={onFileClick} />
+          ))
+        )}
       </div>
     </div>
   );
