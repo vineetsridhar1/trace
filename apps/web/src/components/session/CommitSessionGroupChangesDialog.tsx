@@ -37,6 +37,7 @@ interface CommitSessionGroupChangesDialogProps {
   pending: boolean;
   onClose: () => void;
   onCommit: (message: string) => Promise<void>;
+  onChangesUpdated?: (hasChanges: boolean) => void;
 }
 
 export function CommitSessionGroupChangesDialog({
@@ -45,6 +46,7 @@ export function CommitSessionGroupChangesDialog({
   pending,
   onClose,
   onCommit,
+  onChangesUpdated,
 }: CommitSessionGroupChangesDialogProps) {
   const [files, setFiles] = useState<DesktopLinkedCheckoutChangedFile[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -93,6 +95,11 @@ export function CommitSessionGroupChangesDialog({
     if (selectedPath && files.some((file) => file.path === selectedPath)) return;
     setSelectedPath(files[0]?.path ?? null);
   }, [files, open, selectedPath]);
+
+  useEffect(() => {
+    if (!open) return;
+    onChangesUpdated?.(files.length > 0);
+  }, [files.length, onChangesUpdated, open]);
 
   const selectedFile = useMemo(
     () => files.find((file) => file.path === selectedPath) ?? files[0] ?? null,

@@ -30,6 +30,14 @@ const COMMIT_SESSION_GROUP_FILE_CHANGES_MUTATION = gql`
   }
 `;
 
+const SESSION_GROUP_WORKTREE_CHANGES_QUERY = gql`
+  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {
+    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {
+      path
+    }
+  }
+`;
+
 export function MonacoFileViewer({
   sessionGroupId,
   filePath,
@@ -54,6 +62,7 @@ export function MonacoFileViewer({
   const [saving, setSaving] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
+  const [hasWorktreeChanges, setHasWorktreeChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const contentRef = useRef<string | null>(content);
   const savedContentRef = useRef<string | null>(savedContent);
@@ -61,6 +70,7 @@ export function MonacoFileViewer({
   const activeSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const mountedRef = useRef(false);
   const blurDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const didInitialWorktreeRefreshRef = useRef(false);
 
   useEffect(() => {
     contentRef.current = content;
@@ -123,6 +133,25 @@ export function MonacoFileViewer({
 
   const isDirty = content !== null && savedContent !== null && content !== savedContent;
 
+  const refreshWorktreeChanges = useCallback(async () => {
+    try {
+      const result = await client
+        .query(SESSION_GROUP_WORKTREE_CHANGES_QUERY, { sessionGroupId })
+        .toPromise();
+      if (result.error) return;
+      setHasWorktreeChanges((result.data?.sessionGroupWorktreeChanges ?? []).length > 0);
+    } catch {
+      // Leave the current indicator alone on transient bridge/query failures.
+    }
+  }, [sessionGroupId]);
+
+  useEffect(() => {
+    if (content === null) return;
+    if (didInitialWorktreeRefreshRef.current) return;
+    didInitialWorktreeRefreshRef.current = true;
+    void refreshWorktreeChanges();
+  }, [content, refreshWorktreeChanges]);
+
   const saveCurrentContent = useCallback(async (options?: { silent?: boolean }) => {
     const nextContent = contentRef.current;
     const nextSavedContent = savedContentRef.current;
@@ -148,6 +177,7 @@ export function MonacoFileViewer({
       savedContentRef.current = nextContent;
       if (mountedRef.current) setSavedContent(nextContent);
       storeBuffer(nextContent, nextContent);
+      if (mountedRef.current) void refreshWorktreeChanges();
       if (!options?.silent) toast.success("File saved");
       return true;
     })();
@@ -166,7 +196,7 @@ export function MonacoFileViewer({
       activeSavePromiseRef.current = null;
       if (mountedRef.current) setSaving(false);
     }
-  }, [filePath, sessionGroupId, storeBuffer]);
+  }, [filePath, refreshWorktreeChanges, sessionGroupId, storeBuffer]);
 
   const handleSave = useCallback(async () => {
     await saveCurrentContent();
@@ -202,6 +232,7 @@ export function MonacoFileViewer({
         throw new Error(result.error?.message ?? "Failed to commit changes");
       }
       toast.success("Changes committed", { description: commitSha.slice(0, 7) });
+      setHasWorktreeChanges(false);
       setCommitDialogOpen(false);
     } catch (err) {
       toast.error("Failed to commit changes", {
@@ -262,6 +293,7 @@ export function MonacoFileViewer({
   const language = getLanguageFromPath(filePath);
   const RenderedViewer = renderViewer?.Component;
   const showingRendered = viewMode === "rendered" && !!RenderedViewer;
+  const showCommitButton = isDirty || hasWorktreeChanges || committing;
 
   return (
     <div className="flex h-full flex-col bg-[#1e1e1e]">
@@ -273,18 +305,20 @@ export function MonacoFileViewer({
               {saving ? "Saving..." : "Unsaved"}
             </span>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={saving || committing}
-            onClick={() => void handleOpenCommitDialog()}
-            className="h-6 rounded border border-[#3c3c3c] px-2 text-[11px] text-[#cccccc] hover:bg-[#2f3030] hover:text-[#ffffff] disabled:opacity-40"
-            title="Commit workspace changes"
-          >
-            <GitCommitHorizontal size={12} />
-            {committing ? "Committing..." : "Commit"}
-          </Button>
+          {showCommitButton && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={saving || committing}
+              onClick={() => void handleOpenCommitDialog()}
+              className="h-7 rounded border border-amber-500/50 bg-amber-500/15 px-2.5 text-[11px] font-medium text-amber-100 hover:bg-amber-500/25 hover:text-amber-50 disabled:opacity-40"
+              title="Review and commit workspace changes"
+            >
+              <GitCommitHorizontal size={12} />
+              {committing ? "Committing..." : "Commit changes"}
+            </Button>
+          )}
           {renderViewer && (
             <div className="flex items-center rounded-md border border-[#3c3c3c] bg-[#1e1e1e] p-0.5">
               <Button
@@ -379,6 +413,7 @@ export function MonacoFileViewer({
         pending={committing}
         onClose={() => setCommitDialogOpen(false)}
         onCommit={handleCommit}
+        onChangesUpdated={setHasWorktreeChanges}
       />
     </div>
   );

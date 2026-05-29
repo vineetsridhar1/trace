@@ -2296,6 +2296,15 @@ export type CommitSessionGroupFileChangesMutation = {
   commitSessionGroupFileChanges: string;
 };
 
+export type SessionGroupWorktreeChangesForCommitButtonQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionGroupWorktreeChangesForCommitButtonQuery = {
+  __typename?: "Query";
+  sessionGroupWorktreeChanges: Array<{ __typename?: "LinkedCheckoutChangedFile"; path: string }>;
+};
+
 export type SessionDetailQueryVariables = Exact<{
   id: Scalars["ID"]["input"];
 }>;
@@ -4588,6 +4597,49 @@ export const CommitSessionGroupFileChangesDocument = {
 } as unknown as DocumentNode<
   CommitSessionGroupFileChangesMutation,
   CommitSessionGroupFileChangesMutationVariables
+>;
+export const SessionGroupWorktreeChangesForCommitButtonDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupWorktreeChangesForCommitButton" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroupWorktreeChanges" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "path" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionGroupWorktreeChangesForCommitButtonQuery,
+  SessionGroupWorktreeChangesForCommitButtonQueryVariables
 >;
 export const SessionDetailDocument = {
   kind: "Document",
