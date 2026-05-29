@@ -45,22 +45,22 @@ export function FileCommandPalette({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="max-h-[calc(100dvh-4rem)] max-w-2xl gap-0 overflow-hidden rounded-lg border border-border bg-surface-deep p-0 shadow-2xl"
+        className="max-h-[calc(100dvh-4rem)] w-[min(92vw,980px)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#111111] p-0 shadow-2xl sm:max-w-[980px]"
       >
         <DialogTitle className="sr-only">Open file</DialogTitle>
         <DialogDescription className="sr-only">
           Search repository files and open the selected path in a file tab.
         </DialogDescription>
-        <Command shouldFilter={false} loop className="rounded-lg bg-surface-deep">
+        <Command shouldFilter={false} loop className="rounded-lg bg-[#111111]">
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder="Search files by name or path..."
+            placeholder="Search files by name or path"
             autoFocus
           />
           <CommandList>
             {!hasQuery ? (
-              <div className="flex h-36 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+              <div className="flex h-28 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
                 <FileCode size={18} />
                 <p>Start typing to search files.</p>
               </div>
@@ -79,7 +79,7 @@ export function FileCommandPalette({
             ) : (
               <>
                 {results.length > 0 && (
-                  <CommandGroup heading={query ? "Matching files" : "Repository files"}>
+                  <CommandGroup>
                     {results.map(({ path }) => {
                       const fileName = path.split("/").pop() ?? path;
                       const Icon = getFileIcon(fileName);
@@ -95,15 +95,13 @@ export function FileCommandPalette({
                             onOpenFile(path);
                             onOpenChange(false);
                           }}
-                          className="min-h-9"
+                          className="h-9 rounded-md px-3 text-[13px]"
                         >
-                          <Icon className={getFileColor(fileName)} />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm">{fileName}</div>
+                          <Icon className={getFileColor(fileName)} size={16} />
+                          <div className="flex min-w-0 flex-1 items-baseline">
+                            <span className="truncate font-medium text-[#d4d4d4]">{fileName}</span>
                             {directory && (
-                              <div className="truncate text-xs text-muted-foreground">
-                                {directory}
-                              </div>
+                              <span className="ml-2 truncate text-[#858585]">{directory}</span>
                             )}
                           </div>
                         </CommandItem>
@@ -114,11 +112,6 @@ export function FileCommandPalette({
                 {files.length > 0 && results.length === 0 && (
                   <div className="py-6 text-center text-sm text-muted-foreground">
                     No files found.
-                  </div>
-                )}
-                {hasQuery && files.length > results.length && (
-                  <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-                    Showing {results.length} of {files.length} files
                   </div>
                 )}
                 {hasQuery && files.length === 0 && (
