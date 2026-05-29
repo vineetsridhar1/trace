@@ -53,6 +53,8 @@ import {
   visibleSessionGroupWhere,
   visibleSessionWhere,
 } from "./access.js";
+import { apiTokenService } from "./api-token.js";
+import { githubRepoService, parseGitHubRepo, type GitHubRepoRef } from "./github-repo.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -590,6 +592,14 @@ type StartSessionAfterCreateInput = {
   sessionGroup: SessionGroupSummary;
   startEventId: string;
   startEventPayload: Prisma.InputJsonValue;
+};
+
+type GitHubSessionGroupFileSource = {
+  repo: GitHubRepoRef;
+  token: string;
+  branch: string;
+  defaultBranch: string;
+  workdir: string | null;
 };
 
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
@@ -7605,21 +7615,21 @@ export class SessionService {
     return sessionRouter.setLinkedCheckoutAutoSync(runtimeId, repoId, enabled);
   }
 
-  /** List files in a session group's working directory by delegating to the bridge runtime. */
+  /** List files in a session group's branch from GitHub. */
   async listFiles(
     sessionGroupId: string,
     organizationId: string,
     userId: string,
   ): Promise<string[]> {
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+    const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    return sessionRouter.listFiles(runtime.runtimeId, runtime.sessionId, runtime.workdirHint);
+    return githubRepoService.listFiles(source.repo, source.branch, source.token);
   }
 
-  /** Read a file's content from a session group's working directory. */
+  /** Read a file's content from a session group's GitHub branch. */
   async readFile(
     sessionGroupId: string,
     filePath: string,
@@ -7627,32 +7637,13 @@ export class SessionService {
     userId: string,
   ): Promise<string> {
     const normalizedPath = this.normalizeFilePath(filePath);
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+    const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    let relativePath = normalizedPath;
-    if (normalizedPath.startsWith("/") && runtime.workdirHint) {
-      const prefix = runtime.workdirHint.replace(/\/$/, "") + "/";
-      if (normalizedPath.startsWith(prefix)) {
-        relativePath = normalizedPath.slice(prefix.length);
-      }
-    }
-    const allowedFiles = await sessionRouter.listFiles(
-      runtime.runtimeId,
-      runtime.sessionId,
-      runtime.workdirHint,
-    );
-    if (!allowedFiles.includes(relativePath)) {
-      throw new Error(INVALID_FILE_PATH_ERROR);
-    }
-    return sessionRouter.readFile(
-      runtime.runtimeId,
-      runtime.sessionId,
-      normalizedPath,
-      runtime.workdirHint,
-    );
+    const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
+    return githubRepoService.readFile(source.repo, source.branch, relativePath, source.token);
   }
 
   /** Save a file's content to a session group's working directory. */
@@ -7736,35 +7727,25 @@ export class SessionService {
     return true;
   }
 
-  /** Compute the branch diff for a session group (changed files vs default branch). */
+  /** Compute the branch diff for a session group from GitHub (changed files vs default branch). */
   async branchDiff(sessionGroupId: string, organizationId: string, userId: string) {
-    const group = await prisma.sessionGroup.findFirst({
-      where: { id: sessionGroupId, organizationId },
-      select: {
-        id: true,
-        worktreeDeleted: true,
-        repo: { select: { defaultBranch: true } },
-      },
-    });
-    if (!group) throw new Error("Session group not found");
-    if (group.worktreeDeleted) {
-      throw new Error("Cannot access files: session worktree has been deleted");
-    }
-    const baseBranch = "origin/" + (group.repo?.defaultBranch ?? "main");
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+    const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    return sessionRouter.branchDiff(
-      runtime.runtimeId,
-      runtime.sessionId,
-      baseBranch,
-      runtime.workdirHint,
+    if (source.branch === source.defaultBranch) {
+      return [];
+    }
+    return githubRepoService.branchDiff(
+      source.repo,
+      source.defaultBranch,
+      source.branch,
+      source.token,
     );
   }
 
-  /** Read a file's content at a specific git ref from a session group's runtime. */
+  /** Read a file's content at a specific GitHub ref. */
   async readFileAtRef(
     sessionGroupId: string,
     filePath: string,
@@ -7776,19 +7757,92 @@ export class SessionService {
     if (!this.isSafeGitRef(ref)) {
       throw new Error("Invalid git ref");
     }
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    const normalizedPath = this.normalizeFilePath(filePath);
-    return sessionRouter.fileAtRef(
-      runtime.runtimeId,
-      runtime.sessionId,
-      normalizedPath,
-      ref,
-      runtime.workdirHint,
+    const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
+    return githubRepoService.readFile(
+      source.repo,
+      this.toGitHubRef(ref),
+      relativePath,
+      source.token,
     );
+  }
+
+  private async resolveGitHubSessionGroupFileSource(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<GitHubSessionGroupFileSource> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        id: true,
+        branch: true,
+        workdir: true,
+        visibility: true,
+        ownerUserId: true,
+        repo: { select: { remoteUrl: true, defaultBranch: true } },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
+    if (!group.repo?.remoteUrl) {
+      throw new Error("Cannot access files: this session group has no GitHub remote.");
+    }
+
+    const repo = parseGitHubRepo(group.repo.remoteUrl);
+    if (!repo) {
+      throw new Error("Cannot access files: this session group's remote is not a GitHub repo.");
+    }
+
+    const tokens = await apiTokenService.getDecryptedTokens(userId);
+    if (!tokens.github) {
+      throw new Error("No GitHub token configured. Please add a GitHub API token first.");
+    }
+
+    const defaultBranch = this.toGitHubRef(group.repo.defaultBranch || "main");
+    const branch = this.toGitHubRef(group.branch || defaultBranch);
+
+    return {
+      repo,
+      token: tokens.github,
+      branch,
+      defaultBranch,
+      workdir: group.workdir,
+    };
+  }
+
+  private toRepoRelativeFilePath(filePath: string, workdir: string | null): string {
+    let relativePath = filePath;
+    if (filePath.startsWith("/")) {
+      if (!workdir) {
+        throw new Error(INVALID_FILE_PATH_ERROR);
+      }
+      const workdirPrefix = workdir.replace(/\/$/, "") + "/";
+      if (!filePath.startsWith(workdirPrefix)) {
+        throw new Error(INVALID_FILE_PATH_ERROR);
+      }
+      relativePath = filePath.slice(workdirPrefix.length);
+    }
+
+    const parts = relativePath.split("/");
+    if (
+      relativePath.startsWith("/") ||
+      parts.some((part) => part.length === 0 || part === "." || part === "..")
+    ) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
+    }
+    return relativePath;
+  }
+
+  private toGitHubRef(ref: string): string {
+    return ref.replace(/^origin\//, "");
   }
 
   private isSafeGitRef(ref: string): boolean {
