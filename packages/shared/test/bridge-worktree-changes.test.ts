@@ -13,7 +13,7 @@ function makeStatus(count: number): string {
 
 function makeFs(): BridgeFsLike {
   return {
-    readFile: vi.fn(),
+    readFile: vi.fn((_filePath, callback) => callback(null, Buffer.from("new"))),
     promises: {
       readdir: vi.fn(),
       realpath: vi.fn(async (value: string) => value),
@@ -24,9 +24,15 @@ function makeFs(): BridgeFsLike {
 }
 
 describe("worktree change bridge handlers", () => {
-  it("refuses to return an incomplete review set when too many files changed", async () => {
+  it("returns the first 200 changed files for review", async () => {
     const sent: BridgeMessage[] = [];
-    const gitExec = vi.fn(async () => makeStatus(201));
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === "status") return makeStatus(201);
+      if (args[0] === "show") return "old";
+      if (args[0] === "diff" && args[1] === "--numstat") return "1\t0\tsrc/file.ts";
+      if (args[0] === "diff") return "";
+      return "";
+    });
 
     await handleWorktreeChanges(
       { type: "worktree_changes", requestId: "req-1", sessionId: "session-1" },
@@ -35,20 +41,17 @@ describe("worktree change bridge handlers", () => {
       { fs: makeFs(), path, gitExec },
     );
 
-    expect(sent).toEqual([
-      {
-        type: "worktree_changes_result",
-        requestId: "req-1",
-        files: [],
-        error: "Too many workspace changes to review (201 files, 200 max)",
-      },
-    ]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.type).toBe("worktree_changes_result");
+    expect(sent[0]).toMatchObject({ requestId: "req-1" });
+    expect(sent[0]?.type === "worktree_changes_result" ? sent[0].files : []).toHaveLength(200);
   });
 
-  it("refuses to commit more files than the review dialog can show", async () => {
+  it("commits all workspace changes even when only 200 are shown for review", async () => {
     const sent: BridgeMessage[] = [];
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[0] === "status") return makeStatus(201);
+      if (args[0] === "rev-parse") return "abc123\n";
       return "";
     });
 
@@ -59,12 +62,13 @@ describe("worktree change bridge handlers", () => {
       { fs: makeFs(), path, gitExec },
     );
 
-    expect(gitExec).toHaveBeenCalledTimes(1);
+    expect(gitExec).toHaveBeenCalledWith(["add", "-A"], "/repo");
+    expect(gitExec).toHaveBeenCalledWith(["commit", "-m", "Update files from Trace"], "/repo");
     expect(sent).toEqual([
       {
         type: "file_commit_result",
         requestId: "req-1",
-        error: "Too many workspace changes to commit safely (201 files, 200 max)",
+        commitSha: "abc123",
       },
     ]);
   });
