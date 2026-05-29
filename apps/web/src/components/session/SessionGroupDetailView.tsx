@@ -684,6 +684,7 @@ export function SessionGroupDetailView({
                     openFiles={openFiles}
                     activeTerminalId={activeTerminal?.id ?? null}
                     selectedSession={selectedSession}
+                    sessionsByRecency={sessionsByRecency}
                     defaultBranch={groupRepo?.defaultBranch ?? "main"}
                     getFileBuffer={getFileBuffer}
                     setFileBuffer={setFileBuffer}
