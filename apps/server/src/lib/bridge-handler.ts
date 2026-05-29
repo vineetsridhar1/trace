@@ -675,6 +675,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "file_commit_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveFileCommitRequest(
+          msg.requestId,
+          typeof msg.commitSha === "string" ? msg.commitSha : undefined,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
       if (msg.type === "branch_diff_result" && typeof msg.requestId === "string") {
         const files = Array.isArray(msg.files)
           ? (msg.files as Array<{

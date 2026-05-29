@@ -444,6 +444,20 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  commitSessionGroupFileChanges: (
+    _: unknown,
+    args: { sessionGroupId: string; message?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.commitFileChanges(
+      args.sessionGroupId,
+      args.message ?? undefined,
+      orgId,
+      ctx.userId,
+    );
+  },
   linkLinkedCheckoutRepo: (
     _: unknown,
     args: {

@@ -66,6 +66,7 @@ vi.mock("../lib/session-router.js", () => ({
     listFiles: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue(""),
     writeFile: vi.fn().mockResolvedValue(undefined),
+    commitFileChanges: vi.fn().mockResolvedValue("commit123"),
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
     syncLinkedCheckout: vi.fn().mockResolvedValue(null),
@@ -2889,6 +2890,43 @@ describe("SessionService", () => {
         capability: "session",
       });
       expect(sessionRouterMock.writeFile).not.toHaveBeenCalled();
+    });
+
+    it("commits file changes through the live session group runtime", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        connection: { runtimeInstanceId: "runtime-1" },
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.commitFileChanges.mockResolvedValueOnce("abcdef123456");
+
+      await expect(
+        service.commitFileChanges("group-1", "Update app", "org-1", "user-1"),
+      ).resolves.toBe("abcdef123456");
+      expect(sessionRouterMock.commitFileChanges).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "Update app",
+        "/tmp/trace",
+      );
     });
   });
 

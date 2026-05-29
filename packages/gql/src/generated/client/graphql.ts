@@ -571,6 +571,7 @@ export type Mutation = {
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
+  commitSessionGroupFileChanges: Scalars["String"]["output"];
   createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -703,6 +704,11 @@ export type MutationCommitLinkedCheckoutChangesArgs = {
   message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCommitSessionGroupFileChangesArgs = {
+  message?: InputMaybe<Scalars["String"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2237,6 +2243,16 @@ export type SaveSessionGroupFileMutationVariables = Exact<{
 export type SaveSessionGroupFileMutation = {
   __typename?: "Mutation";
   saveSessionGroupFile: boolean;
+};
+
+export type CommitSessionGroupFileChangesMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  message?: InputMaybe<Scalars["String"]["input"]>;
+}>;
+
+export type CommitSessionGroupFileChangesMutation = {
+  __typename?: "Mutation";
+  commitSessionGroupFileChanges: string;
 };
 
 export type SessionDetailQueryVariables = Exact<{
@@ -4378,6 +4394,55 @@ export const SaveSessionGroupFileDocument = {
     },
   ],
 } as unknown as DocumentNode<SaveSessionGroupFileMutation, SaveSessionGroupFileMutationVariables>;
+export const CommitSessionGroupFileChangesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CommitSessionGroupFileChanges" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "message" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "commitSessionGroupFileChanges" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "message" },
+                value: { kind: "Variable", name: { kind: "Name", value: "message" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CommitSessionGroupFileChangesMutation,
+  CommitSessionGroupFileChangesMutationVariables
+>;
 export const SessionDetailDocument = {
   kind: "Document",
   definitions: [
