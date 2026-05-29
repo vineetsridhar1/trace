@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { gql } from "@urql/core";
-import { Code2, Eye, GitCommitHorizontal, RefreshCw, Save } from "lucide-react";
+import { Code2, Eye, GitCommitHorizontal, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { getLanguageFromPath } from "../../lib/monaco-utils";
 import { cn } from "../../lib/utils";
@@ -55,6 +55,19 @@ export function MonacoFileViewer({
   const [committing, setCommitting] = useState(false);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const contentRef = useRef<string | null>(content);
+  const savedContentRef = useRef<string | null>(savedContent);
+  const savingRef = useRef(false);
+  const mountedRef = useRef(false);
+  const blurDisposableRef = useRef<{ dispose: () => void } | null>(null);
+
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
+
+  useEffect(() => {
+    savedContentRef.current = savedContent;
+  }, [savedContent]);
 
   const storeBuffer = useCallback(
     (nextContent: string, nextSavedContent: string) => {
@@ -77,6 +90,8 @@ export function MonacoFileViewer({
           if (!silent) setError(result.error.message);
         } else {
           const nextContent = result.data?.sessionGroupFileContent ?? "";
+          contentRef.current = nextContent;
+          savedContentRef.current = nextContent;
           setContent(nextContent);
           setSavedContent(nextContent);
           storeBuffer(nextContent, nextContent);
@@ -107,33 +122,56 @@ export function MonacoFileViewer({
 
   const isDirty = content !== null && savedContent !== null && content !== savedContent;
 
-  const saveCurrentContent = useCallback(async () => {
-    if (!isDirty || content === null) return true;
-    if (saving) return false;
-    setSaving(true);
+  const saveCurrentContent = useCallback(async (options?: { silent?: boolean }) => {
+    const nextContent = contentRef.current;
+    const nextSavedContent = savedContentRef.current;
+    if (nextContent === null || nextSavedContent === null || nextContent === nextSavedContent) {
+      return true;
+    }
+    if (savingRef.current) return false;
+    savingRef.current = true;
+    if (mountedRef.current) setSaving(true);
     try {
       const result = await client
-        .mutation(SAVE_SESSION_GROUP_FILE_MUTATION, { sessionGroupId, filePath, content })
+        .mutation(SAVE_SESSION_GROUP_FILE_MUTATION, {
+          sessionGroupId,
+          filePath,
+          content: nextContent,
+        })
         .toPromise();
       if (result.error || result.data?.saveSessionGroupFile !== true) {
         throw new Error(result.error?.message ?? "Failed to save file");
       }
-      setSavedContent(content);
-      storeBuffer(content, content);
-      toast.success("File saved");
+      savedContentRef.current = nextContent;
+      if (mountedRef.current) setSavedContent(nextContent);
+      storeBuffer(nextContent, nextContent);
+      if (!options?.silent) toast.success("File saved");
       return true;
     } catch (err) {
-      toast.error("Failed to save file", {
-        description: err instanceof Error ? err.message : undefined,
-      });
+      if (!options?.silent) {
+        toast.error("Failed to save file", {
+          description: err instanceof Error ? err.message : undefined,
+        });
+      }
       return false;
     } finally {
-      setSaving(false);
+      savingRef.current = false;
+      if (mountedRef.current) setSaving(false);
     }
-  }, [content, filePath, isDirty, saving, sessionGroupId, storeBuffer]);
+  }, [filePath, sessionGroupId, storeBuffer]);
 
   const handleSave = useCallback(async () => {
     await saveCurrentContent();
+  }, [saveCurrentContent]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      blurDisposableRef.current?.dispose();
+      blurDisposableRef.current = null;
+      void saveCurrentContent({ silent: true });
+    };
   }, [saveCurrentContent]);
 
   const handleOpenCommitDialog = useCallback(async () => {
@@ -179,11 +217,15 @@ export function MonacoFileViewer({
 
   const handleEditorMount = useCallback<OnMount>(
     (editor) => {
+      blurDisposableRef.current?.dispose();
+      blurDisposableRef.current = editor.onDidBlurEditorWidget(() => {
+        void saveCurrentContent({ silent: true });
+      });
       if (!initialLineNumber) return;
       editor.revealLineInCenter(initialLineNumber);
       editor.setPosition({ lineNumber: initialLineNumber, column: 1 });
     },
-    [initialLineNumber],
+    [initialLineNumber, saveCurrentContent],
   );
 
   if (loading) {
@@ -223,18 +265,6 @@ export function MonacoFileViewer({
               {saving ? "Saving..." : "Unsaved"}
             </span>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={!isDirty || saving}
-            onClick={() => void handleSave()}
-            className="h-6 rounded border border-[#3c3c3c] px-2 text-[11px] text-[#cccccc] hover:bg-[#2f3030] hover:text-[#ffffff] disabled:opacity-40"
-            title="Save file"
-          >
-            <Save size={12} />
-            Save
-          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -305,6 +335,7 @@ export function MonacoFileViewer({
             onMount={handleEditorMount}
             onChange={(value) => {
               const nextContent = value ?? "";
+              contentRef.current = nextContent;
               setContent(nextContent);
               if (savedContent !== null) {
                 storeBuffer(nextContent, savedContent);
