@@ -2798,11 +2798,19 @@ describe("SessionService", () => {
         id: "runtime-1",
         key: "org-1:runtime-1",
         label: "Runtime",
+        hostingMode: "local",
       });
 
       await expect(
         service.saveFile("group-1", "/tmp/trace/src/app.ts", "hello", "org-1", "user-1"),
       ).resolves.toBe(true);
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith({
+        userId: "user-1",
+        organizationId: "org-1",
+        runtimeInstanceId: "runtime-1",
+        sessionGroupId: "group-1",
+        capability: "session",
+      });
       expect(sessionRouterMock.writeFile).toHaveBeenCalledWith(
         "org-1:runtime-1",
         "session-1",
@@ -2810,6 +2818,77 @@ describe("SessionService", () => {
         "hello",
         "/tmp/trace",
       );
+    });
+
+    it("rejects saves to visible cloud session groups owned by another user", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        connection: { runtimeInstanceId: "runtime-1" },
+        visibility: "public",
+        ownerUserId: "owner-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "cloud",
+      });
+
+      await expect(
+        service.saveFile("group-1", "/tmp/trace/src/app.ts", "hello", "org-1", "user-2"),
+      ).rejects.toThrow("Not authorized to edit this session group");
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
+      expect(sessionRouterMock.writeFile).not.toHaveBeenCalled();
+    });
+
+    it("requires session bridge access before saving through another user's local runtime", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        connection: { runtimeInstanceId: "runtime-1" },
+        visibility: "public",
+        ownerUserId: "owner-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(new Error("bridge denied"));
+
+      await expect(
+        service.saveFile("group-1", "/tmp/trace/src/app.ts", "hello", "org-1", "user-2"),
+      ).rejects.toThrow("Access denied");
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith({
+        userId: "user-2",
+        organizationId: "org-1",
+        runtimeInstanceId: "runtime-1",
+        sessionGroupId: "group-1",
+        capability: "session",
+      });
+      expect(sessionRouterMock.writeFile).not.toHaveBeenCalled();
     });
   });
 
