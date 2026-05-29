@@ -16,6 +16,42 @@ export function hasGitRefNamespaceConflict(candidate: string, refs: Iterable<str
   return false;
 }
 
+export function branchNameFromGitRef(ref: string): string | null {
+  const trimmed = ref.trim();
+  if (trimmed.startsWith("refs/heads/")) return trimmed.slice("refs/heads/".length);
+  if (!trimmed.startsWith("refs/remotes/")) return null;
+
+  const remoteBranch = trimmed.slice("refs/remotes/".length);
+  const separatorIndex = remoteBranch.indexOf("/");
+  if (separatorIndex === -1) return null;
+
+  const branch = remoteBranch.slice(separatorIndex + 1);
+  return branch === "HEAD" ? null : branch;
+}
+
+export function branchNamesFromGitRefsOutput(output: string): string[] {
+  return output
+    .split("\n")
+    .map(branchNameFromGitRef)
+    .filter((branch): branch is string => !!branch);
+}
+
+export function resolveGeneratedTraceWorktreeBranch(
+  slug: string,
+  refs: Iterable<string>,
+  now: () => number = Date.now,
+): string {
+  const generatedBranch = generatedTraceWorktreeBranch(slug);
+  if (!hasGitRefNamespaceConflict(generatedBranch, refs)) return generatedBranch;
+
+  for (let i = 2; i <= 999; i++) {
+    const candidate = `${generatedBranch}-${i}`;
+    if (!hasGitRefNamespaceConflict(candidate, refs)) return candidate;
+  }
+
+  return `${generatedBranch}-${now()}`;
+}
+
 export function shouldRepairRenamedTraceWorktreeBranch({
   currentBranch,
   requestedBranch,

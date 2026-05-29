@@ -5,8 +5,9 @@ import { execFile } from "child_process";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import {
   assertValidCommitSha,
+  branchNamesFromGitRefsOutput,
   generatedTraceWorktreeBranch,
-  hasGitRefNamespaceConflict,
+  resolveGeneratedTraceWorktreeBranch,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "@trace/shared";
 import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
@@ -140,22 +141,11 @@ async function listBranchRefs(repoPath: string): Promise<string[]> {
       ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"],
       { cwd: repoPath },
     );
-    return stdout
-      .split("\n")
-      .map((line) => {
-        const ref = line.trim();
-        if (ref.startsWith("refs/heads/")) return ref.slice("refs/heads/".length);
-        if (ref.startsWith("refs/remotes/")) {
-          const remoteBranch = ref.slice("refs/remotes/".length);
-          const separatorIndex = remoteBranch.indexOf("/");
-          if (separatorIndex === -1) return null;
-          const branch = remoteBranch.slice(separatorIndex + 1);
-          return branch === "HEAD" ? null : branch;
-        }
-        return null;
-      })
-      .filter((branch): branch is string => !!branch);
-  } catch {
+    return branchNamesFromGitRefsOutput(stdout);
+  } catch (error) {
+    console.warn(
+      `[worktree] failed to list branch refs for namespace check: ${getErrorMessage(error)}`,
+    );
     return [];
   }
 }
@@ -171,14 +161,7 @@ async function resolveWorktreeBranch(
     return startBranch;
   }
   const refs = await listBranchRefs(repoPath);
-  if (!hasGitRefNamespaceConflict(generatedBranch, refs)) return generatedBranch;
-
-  for (let i = 2; i <= 999; i++) {
-    const candidate = `${generatedBranch}-${i}`;
-    if (!hasGitRefNamespaceConflict(candidate, refs)) return candidate;
-  }
-
-  return `${generatedBranch}-${Date.now()}`;
+  return resolveGeneratedTraceWorktreeBranch(slug, refs);
 }
 
 async function resolveAvailableWorktreeSlug(
