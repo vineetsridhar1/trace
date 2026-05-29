@@ -36,12 +36,13 @@ export function FileScopedAiInput({
   filePath: string;
   sessions: SessionEntity[];
   canStartNewChat: boolean;
-  onStartNewChat: () => void | Promise<void>;
+  onStartNewChat: () => Promise<string | null>;
 }) {
   const defaultSessionId = sessions[0]?.id ?? null;
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(defaultSessionId);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [creatingNewChat, setCreatingNewChat] = useState(false);
   const userSelectedSessionRef = useRef(false);
 
   const selectedSession = useMemo(
@@ -69,7 +70,17 @@ export function FileScopedAiInput({
       if (!sessionId) return;
       if (sessionId === NEW_CHAT_VALUE) {
         userSelectedSessionRef.current = false;
-        void onStartNewChat();
+        setCreatingNewChat(true);
+        void onStartNewChat()
+          .then((newSessionId) => {
+            if (!newSessionId) return;
+            userSelectedSessionRef.current = true;
+            setSelectedSessionId(newSessionId);
+          })
+          .catch((error) => {
+            toast.error(error instanceof Error ? error.message : "Failed to create session");
+          })
+          .finally(() => setCreatingNewChat(false));
         return;
       }
       userSelectedSessionRef.current = true;
@@ -88,7 +99,8 @@ export function FileScopedAiInput({
       selectedSession.worktreeDeleted,
     ) ||
       canQueueMessage(selectedSession.agentStatus, selectedSession.worktreeDeleted));
-  const canSubmit = trimmedMessage.length > 0 && canSendSelected && !sending;
+  const canSubmit = trimmedMessage.length > 0 && canSendSelected && !sending && !creatingNewChat;
+  const inputDisabled = creatingNewChat || !canSendSelected || sending;
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -130,7 +142,7 @@ export function FileScopedAiInput({
       <Select
         value={selectedSessionId ?? ""}
         onValueChange={handleSessionChange}
-        disabled={sessions.length === 0 || sending}
+        disabled={sessions.length === 0 || sending || creatingNewChat}
       >
         <SelectTrigger
           size="sm"
@@ -138,7 +150,11 @@ export function FileScopedAiInput({
           title="Choose agent"
         >
           <SelectValue placeholder="No agents">
-            {selectedSession ? sessionLabel(selectedSession) : undefined}
+            {creatingNewChat
+              ? "Creating chat..."
+              : selectedSession
+                ? sessionLabel(selectedSession)
+                : undefined}
           </SelectValue>
         </SelectTrigger>
         <SelectContent align="start" className="min-w-56">
@@ -168,9 +184,11 @@ export function FileScopedAiInput({
       <Input
         value={message}
         onChange={(event) => setMessage(event.currentTarget.value)}
-        disabled={!canSendSelected || sending}
+        disabled={inputDisabled}
         placeholder={
-          sessions.length === 0
+          creatingNewChat
+            ? "Creating chat..."
+            : sessions.length === 0
             ? "No agents in this workspace"
             : canSendSelected
               ? "Ask about this file..."
@@ -178,7 +196,7 @@ export function FileScopedAiInput({
         }
         className={cn(
           "h-8 min-w-0 flex-1 rounded-md border-[#3c3c3c] bg-[#1e1e1e] px-3 text-[12px] text-[#d4d4d4] placeholder:text-[#777777] focus-visible:border-[#5a5a5a] focus-visible:ring-0",
-          !canSendSelected && "cursor-not-allowed opacity-60",
+          inputDisabled && "cursor-not-allowed opacity-60",
         )}
       />
 

@@ -27,7 +27,7 @@ interface SessionGroupContentAreaProps {
   selectedSession: { id: string; _optimistic?: boolean } | null;
   sessionsByRecency: SessionEntity[];
   canStartNewChat: boolean;
-  onStartNewChat: () => void | Promise<void>;
+  onStartNewChat: () => Promise<string | null>;
   defaultBranch: string;
   scrollToEventId: string | null;
   onScrollComplete: () => void;

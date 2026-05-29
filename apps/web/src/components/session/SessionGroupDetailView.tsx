@@ -548,7 +548,7 @@ export function SessionGroupDetailView({
   }, []);
 
   const handleNewChat = useCallback(async () => {
-    if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return;
+    if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return null;
     const resolvedChannelId =
       getSessionGroupChannelId(
         useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
@@ -575,13 +575,13 @@ export function SessionGroupDetailView({
 
     if (result.error) {
       toast.error("Failed to create session", { description: result.error.message });
-      return;
+      return null;
     }
 
     const newSessionId = result.data?.startSession?.id;
     if (!newSessionId) {
       toast.error("Failed to create session");
-      return;
+      return null;
     }
 
     optimisticallyInsertSession({
@@ -597,6 +597,7 @@ export function SessionGroupDetailView({
     });
     openSessionTab(sessionGroupId, newSessionId);
     setActiveSessionId(newSessionId);
+    return newSessionId;
   }, [
     groupSessions,
     groupBranch,
