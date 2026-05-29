@@ -244,7 +244,7 @@ describe("createWorktree", () => {
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args[0] === "symbolic-ref") {
-          callback(null, "trace/otter\n");
+          callback(null, "trace-otter\n");
           return {} as ReturnType<typeof execFileMock>;
         }
         if (
@@ -525,16 +525,83 @@ describe("createWorktree", () => {
       startBranch: "feature/source",
     });
 
-    expect(result.branch).toBe("trace/otter");
+    expect(result.branch).toBe("trace-otter");
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       [
         "worktree",
         "add",
         "-b",
-        "trace/otter",
+        "trace-otter",
         expect.stringContaining("/trace/sessions/repo-1/otter"),
         "origin/feature/source",
+      ],
+      expect.objectContaining({ cwd: "/tmp/repo" }),
+      expect.any(Function),
+    );
+  });
+
+  it("avoids generated branch names that conflict with existing ref namespaces", async () => {
+    existsSyncMock.mockReturnValue(false);
+    generateAnimalSlugMock.mockReturnValue("otter");
+    getUsedSlugsMock.mockResolvedValue(new Set());
+
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout?: string) => void,
+      ) => {
+        if (args[0] === "remote") {
+          callback(null, "git@example.com:repo.git\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "fetch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          callback(args[2] === "origin/main" ? null : new Error("missing ref"));
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "for-each-ref") {
+          callback(null, "refs/remotes/origin/trace-otter/explain-slack-disabled\n");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args.includes("worktree") && args.includes("add")) {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+        if (args[0] === "reset" || args[0] === "clean" || args[0] === "branch") {
+          callback(null, "");
+          return {} as ReturnType<typeof execFileMock>;
+        }
+
+        callback(new Error(`Unexpected git call: ${args.join(" ")}`));
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+
+    const { createWorktree } = await import("./worktree.js");
+    const result = await createWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      slug: "otter",
+      defaultBranch: "main",
+    });
+
+    expect(result.branch).toBe("trace-otter-2");
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      [
+        "worktree",
+        "add",
+        "-b",
+        "trace-otter-2",
+        expect.stringContaining("/trace/sessions/repo-1/otter"),
+        "origin/main",
       ],
       expect.objectContaining({ cwd: "/tmp/repo" }),
       expect.any(Function),
@@ -590,7 +657,7 @@ describe("createWorktree", () => {
       gitHooksEnabled: true,
     });
 
-    expect(result.branch).toBe("trace/otter");
+    expect(result.branch).toBe("trace-otter");
     expect(installOrRepairRepoHooksBestEffortMock).toHaveBeenCalledWith(
       expect.stringContaining("/trace/sessions/repo-1/otter"),
       "session worktree creation",
@@ -620,7 +687,7 @@ describe("createWorktree", () => {
         if (args[0] === "rev-parse" && args[1] === "--verify") {
           const ref = args[2];
           callback(
-            ref === "origin/main" || ref === "trace/otter" ? null : new Error("missing ref"),
+            ref === "origin/main" || ref === "trace-otter" ? null : new Error("missing ref"),
           );
           return {} as ReturnType<typeof execFileMock>;
         }
@@ -648,7 +715,7 @@ describe("createWorktree", () => {
     });
 
     expect(result.slug).toBe("otter");
-    expect(result.branch).toBe("trace/otter");
+    expect(result.branch).toBe("trace-otter");
     expect(generateAnimalSlugMock).not.toHaveBeenCalled();
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
@@ -656,7 +723,7 @@ describe("createWorktree", () => {
         "worktree",
         "add",
         expect.stringContaining("/trace/sessions/repo-1/otter"),
-        "trace/otter",
+        "trace-otter",
       ],
       expect.objectContaining({ cwd: "/tmp/repo" }),
       expect.any(Function),
@@ -712,14 +779,14 @@ describe("createWorktree", () => {
 
     expect(generateAnimalSlugMock).toHaveBeenCalledWith(usedSlugs);
     expect(result.slug).toBe("mink");
-    expect(result.branch).toBe("trace/mink");
+    expect(result.branch).toBe("trace-mink");
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       [
         "worktree",
         "add",
         "-b",
-        "trace/mink",
+        "trace-mink",
         expect.stringContaining("/trace/sessions/repo-1/mink"),
         "origin/main",
       ],
@@ -785,7 +852,7 @@ describe("createWorktree", () => {
       defaultBranch: "main",
     });
 
-    expect(result.branch).toBe("trace/otter");
+    expect(result.branch).toBe("trace-otter");
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining("git worktree add reported an error after creating"),
     );
@@ -846,14 +913,14 @@ describe("createWorktree", () => {
       defaultBranch: "main",
     });
 
-    expect(result.branch).toBe("trace/otter");
+    expect(result.branch).toBe("trace-otter");
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       [
         "worktree",
         "add",
         "-b",
-        "trace/otter",
+        "trace-otter",
         expect.stringContaining("/trace/sessions/repo-1/otter"),
         "main",
       ],
@@ -907,7 +974,7 @@ describe("createWorktree", () => {
       defaultBranch: "main",
     });
 
-    expect(result.branch).toBe("trace/partridge");
+    expect(result.branch).toBe("trace-partridge");
     expect(execFileMock).toHaveBeenCalledWith(
       "git",
       [
@@ -915,7 +982,7 @@ describe("createWorktree", () => {
         "add",
         "--orphan",
         "-b",
-        "trace/partridge",
+        "trace-partridge",
         expect.stringContaining("/trace/sessions/repo-1/partridge"),
       ],
       expect.objectContaining({ cwd: "/tmp/repo" }),

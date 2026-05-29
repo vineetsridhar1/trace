@@ -191,6 +191,8 @@ export {
 } from "./runtime-ids.js";
 export {
   generatedTraceWorktreeBranch,
+  hasGitRefNamespaceConflict,
+  isTraceWorktreeBranch,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "./worktree-branch.js";
 

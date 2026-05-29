@@ -6,6 +6,7 @@ import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import {
   assertValidCommitSha,
   generatedTraceWorktreeBranch,
+  hasGitRefNamespaceConflict,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "@trace/shared";
 import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
@@ -132,16 +133,52 @@ async function hasRemoteOrigin(repoPath: string): Promise<boolean> {
   );
 }
 
-function resolveWorktreeBranch(
+async function listBranchRefs(repoPath: string): Promise<string[]> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"],
+      { cwd: repoPath },
+    );
+    return stdout
+      .split("\n")
+      .map((line) => {
+        const ref = line.trim();
+        if (ref.startsWith("refs/heads/")) return ref.slice("refs/heads/".length);
+        if (ref.startsWith("refs/remotes/")) {
+          const remoteBranch = ref.slice("refs/remotes/".length);
+          const separatorIndex = remoteBranch.indexOf("/");
+          if (separatorIndex === -1) return null;
+          const branch = remoteBranch.slice(separatorIndex + 1);
+          return branch === "HEAD" ? null : branch;
+        }
+        return null;
+      })
+      .filter((branch): branch is string => !!branch);
+  } catch {
+    return [];
+  }
+}
+
+async function resolveWorktreeBranch(
+  repoPath: string,
   slug: string,
   startBranch: string | undefined,
   preserveBranchName: boolean | undefined,
-): string {
+): Promise<string> {
   const generatedBranch = generatedTraceWorktreeBranch(slug);
   if (preserveBranchName && startBranch && startBranch !== generatedBranch) {
     return startBranch;
   }
-  return generatedBranch;
+  const refs = await listBranchRefs(repoPath);
+  if (!hasGitRefNamespaceConflict(generatedBranch, refs)) return generatedBranch;
+
+  for (let i = 2; i <= 999; i++) {
+    const candidate = `${generatedBranch}-${i}`;
+    if (!hasGitRefNamespaceConflict(candidate, refs)) return candidate;
+  }
+
+  return `${generatedBranch}-${Date.now()}`;
 }
 
 async function resolveAvailableWorktreeSlug(
@@ -176,7 +213,7 @@ export async function createWorktree({
   defaultBranch: string;
   /** Branch to base the new worktree on (e.g. from the parent session). Falls back to defaultBranch. */
   startBranch?: string;
-  /** Reuse the persisted branch name instead of generating trace/{slug}. */
+  /** Reuse the persisted branch name instead of generating trace-{slug}. */
   preserveBranchName?: boolean;
   /** Commit SHA to restore from instead of branching from origin/{startBranch|defaultBranch}. */
   checkpointSha?: string;
@@ -185,7 +222,6 @@ export async function createWorktree({
 }): Promise<{ workdir: string; branch: string; slug: string }> {
   const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
   const worktreeSlug = await resolveAvailableWorktreeSlug(sessionsDir, repoPath, slug);
-  const branch = resolveWorktreeBranch(worktreeSlug, startBranch, preserveBranchName);
   const targetPath = path.join(sessionsDir, worktreeSlug);
 
   // Ensure parent directory exists
@@ -215,6 +251,12 @@ export async function createWorktree({
     checkpointSha ?? (await resolveBaseBranch(repoPath, startBranch, defaultBranch));
   const baseRef =
     resolvedBaseRef === "HEAD" && !(await refExists(repoPath, "HEAD")) ? null : resolvedBaseRef;
+  const branch = await resolveWorktreeBranch(
+    repoPath,
+    worktreeSlug,
+    startBranch,
+    preserveBranchName,
+  );
 
   // If the worktree directory already exists, reuse the stable slug path.
   // Trace-owned branches can still be reset to the requested remote/checkpoint
