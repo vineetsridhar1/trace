@@ -163,6 +163,7 @@ class SlackEventBridgeManager {
     }
 
     if (event.eventType === "message_sent" && event.actorType === "user") {
+      binding.assistantMessageTs = undefined;
       if (payload.clientSource === "slack") return;
       const text = typeof payload.text === "string" ? payload.text.trim() : "";
       if (!text) return;
