@@ -161,7 +161,9 @@ export function CommitSessionGroupChangesDialog({
               <div className="flex h-11 items-center justify-between border-b border-border px-3">
                 <span className="text-xs font-medium text-muted-foreground">Workspace Changes</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{files.length} files</span>
+                  <span className="text-xs text-muted-foreground">
+                    {files.length >= 200 ? "Showing 200 files" : `${files.length} files`}
+                  </span>
                   <button
                     type="button"
                     onClick={() => void refresh()}
@@ -248,7 +250,8 @@ export function CommitSessionGroupChangesDialog({
                 Commit The Changes
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Create a git commit in this session worktree from the files shown on the left.
+                Create a git commit from all current workspace changes. The list shows up to 200
+                changed files.
               </p>
               <Textarea
                 className="mt-3 min-h-20"

@@ -975,14 +975,6 @@ export async function handleCommitFileChanges(
       send({ type: "file_commit_result", requestId, error: "No changes to commit" });
       return;
     }
-    if (changes.length > MAX_WORKTREE_CHANGE_FILES) {
-      send({
-        type: "file_commit_result",
-        requestId,
-        error: `Too many workspace changes to commit safely (${changes.length} files, ${MAX_WORKTREE_CHANGE_FILES} max)`,
-      });
-      return;
-    }
 
     const commitMessage = message?.trim() || "Update files from Trace";
     await deps.gitExec(["add", "-A"], realWorkdir);
@@ -1019,17 +1011,10 @@ export async function handleWorktreeChanges(
     const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
     const status = await deps.gitExec(["status", "--porcelain=v1", "-z"], realWorkdir);
     const paths = parseWorktreeStatus(status);
-    if (paths.length > MAX_WORKTREE_CHANGE_FILES) {
-      send({
-        type: "worktree_changes_result",
-        requestId: cmd.requestId,
-        files: [],
-        error: `Too many workspace changes to review (${paths.length} files, ${MAX_WORKTREE_CHANGE_FILES} max)`,
-      });
-      return;
-    }
     const files = await Promise.all(
-      paths.map((entry) => buildWorktreeChangedFile(entry, realWorkdir, deps)),
+      paths
+        .slice(0, MAX_WORKTREE_CHANGE_FILES)
+        .map((entry) => buildWorktreeChangedFile(entry, realWorkdir, deps)),
     );
     send({ type: "worktree_changes_result", requestId: cmd.requestId, files });
   } catch (err) {
