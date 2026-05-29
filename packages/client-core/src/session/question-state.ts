@@ -71,21 +71,27 @@ export function useQuestionState(node: QuestionNode) {
     if (!isFirstPage) setPage((p) => p - 1);
   }, [isFirstPage]);
 
-  const buildResponse = useCallback((): string | null => {
-    const parts: string[] = [];
-    for (let i = 0; i < total; i++) {
-      const qi = node.questions[i];
-      if (!qi) continue;
-      const selected = selections[i];
-      const custom = (customTexts[i] ?? "").trim();
-      if (custom) {
-        parts.push(`${qi.header}: ${custom}`);
-      } else if (selected && selected.size > 0) {
-        parts.push(`${qi.header}: ${[...selected].join(", ")}`);
+  const buildResponse = useCallback(
+    (currentPageCustomOverride?: string): string | null => {
+      const parts: string[] = [];
+      for (let i = 0; i < total; i++) {
+        const qi = node.questions[i];
+        if (!qi) continue;
+        const selected = selections[i];
+        const custom =
+          i === page && currentPageCustomOverride !== undefined
+            ? currentPageCustomOverride.trim()
+            : (customTexts[i] ?? "").trim();
+        if (custom) {
+          parts.push(`${qi.header}: ${custom}`);
+        } else if (selected && selected.size > 0) {
+          parts.push(`${qi.header}: ${[...selected].join(", ")}`);
+        }
       }
-    }
-    return parts.length > 0 ? parts.join("\n") : null;
-  }, [total, node.questions, selections, customTexts]);
+      return parts.length > 0 ? parts.join("\n") : null;
+    },
+    [total, node.questions, selections, customTexts, page],
+  );
 
   return {
     page,

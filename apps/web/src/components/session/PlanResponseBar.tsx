@@ -18,6 +18,7 @@ import {
   getCommentGroupIndex,
 } from "./planCommentPrompts";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import { PendingRichTextInput } from "./PendingRichTextInput";
 
 interface PlanResponseBarProps {
   sessionId: string;
@@ -81,15 +82,16 @@ export function PlanResponseBar({
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
   const defaultHosting = resolveSupportedHostingForRepo(hosting ?? "local", repo) ?? "local";
 
-  const handleClearContext = useCallback(async () => {
+  const handleClearContext = useCallback(async (noteOverride?: string) => {
     if (sending || !sessionGroupId) return;
     setSending(true);
     try {
+      const note = noteOverride ?? feedback;
       const prompt = hasComments
         ? buildApproveWithCommentsPrompt({
             planContent,
             commentGroups,
-            note: feedback.trim(),
+            note: note.trim(),
           })
         : `Implement the following plan:\n\n${planContent}`;
       const result = await client
@@ -152,17 +154,18 @@ export function PlanResponseBar({
     openSessionTab,
   ]);
 
-  const handleKeepContext = useCallback(async () => {
+  const handleKeepContext = useCallback(async (noteOverride?: string) => {
     if (sending) return;
     setSending(true);
     try {
+      const note = noteOverride ?? feedback;
       await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
           text: hasComments
             ? buildApproveWithCommentsPrompt({
                 commentGroups,
-                note: feedback.trim(),
+                note: note.trim(),
               })
             : "Approved. Implement this plan.",
         })
@@ -176,8 +179,8 @@ export function PlanResponseBar({
     }
   }, [commentGroups, feedback, hasComments, onClearPlanComments, sessionId, sending]);
 
-  const handleRevise = useCallback(async () => {
-    const text = feedback.trim();
+  const handleRevise = useCallback(async (textOverride?: string) => {
+    const text = (textOverride ?? feedback).trim();
     if ((!text && !hasComments) || sending) return;
     setSending(true);
     try {
@@ -201,9 +204,9 @@ export function PlanResponseBar({
     (label: string) => {
       if (hasComments) {
         if (label === APPROVE_NEW_SESSION) {
-          handleClearContext();
+          void handleClearContext();
         } else {
-          handleKeepContext();
+          void handleKeepContext();
         }
         return;
       }
@@ -214,15 +217,19 @@ export function PlanResponseBar({
     [hasComments, handleClearContext, handleKeepContext, selected],
   );
 
-  const handleSubmit = useCallback(() => {
-    if (!hasComments && selected === APPROVE_NEW_SESSION) {
-      handleClearContext();
-    } else if (!hasComments && selected === APPROVE_KEEP_CONTEXT) {
-      handleKeepContext();
-    } else if (feedback.trim() || hasComments) {
-      handleRevise();
-    }
-  }, [selected, feedback, hasComments, handleClearContext, handleKeepContext, handleRevise]);
+  const handleSubmit = useCallback(
+    (textOverride?: string) => {
+      const text = textOverride ?? feedback;
+      if (!hasComments && selected === APPROVE_NEW_SESSION) {
+        void handleClearContext(text);
+      } else if (!hasComments && selected === APPROVE_KEEP_CONTEXT) {
+        void handleKeepContext(text);
+      } else if ((textOverride ?? feedback).trim() || hasComments) {
+        void handleRevise(text);
+      }
+    },
+    [feedback, hasComments, selected, handleClearContext, handleKeepContext, handleRevise],
+  );
 
   const hasAnswer = selected !== null || feedback.trim().length > 0 || hasComments;
   const primaryLabel = hasComments ? "Send comments" : selected ? "Approve" : "Revise";
@@ -278,21 +285,16 @@ export function PlanResponseBar({
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
+      <div className="flex items-end gap-2">
+        <PendingRichTextInput
           value={feedback}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-            setFeedback(e.target.value);
-            if (e.target.value && !hasComments) setSelected(null);
+          resetKey={selected ?? "feedback"}
+          onChange={(text) => {
+            setFeedback(text);
+            if (text && !hasComments) setSelected(null);
           }}
-          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              if (hasAnswer) {
-                handleSubmit();
-              }
-            }
+          onSubmit={(text) => {
+            if (hasAnswer) handleSubmit(text);
           }}
           placeholder={
             hasComments
@@ -300,17 +302,11 @@ export function PlanResponseBar({
               : "Suggest changes to revise the plan..."
           }
           disabled={sending}
-          className="flex-1 rounded-lg border border-border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+          submitLabel={primaryLabel}
+          SubmitIcon={Send}
+          submitDisabled={!hasAnswer}
+          allowEmptySubmit
         />
-        <button
-          type="button"
-          disabled={!hasAnswer || sending}
-          onClick={handleSubmit}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
-        >
-          <Send size={14} />
-          {primaryLabel}
-        </button>
       </div>
     </div>
   );

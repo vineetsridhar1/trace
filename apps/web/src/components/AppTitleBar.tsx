@@ -5,7 +5,11 @@ export function AppTitleBar() {
   const isDesktopShell = typeof window.trace !== "undefined";
 
   return (
-    <div className="app-region-drag pointer-events-none fixed left-0 top-[env(safe-area-inset-top)] z-[100] flex h-12 w-[20rem] items-center">
+    <div
+      className={`app-region-drag fixed left-0 top-[env(safe-area-inset-top)] z-[100] flex h-12 w-[20rem] items-center ${
+        isDesktopShell ? "" : "pointer-events-none"
+      }`}
+    >
       <div
         className={`app-region-no-drag pointer-events-auto flex min-w-0 items-center gap-2.5 ${
           isDesktopShell ? "ml-[92px]" : "ml-3"

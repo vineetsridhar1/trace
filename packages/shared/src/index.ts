@@ -190,7 +190,12 @@ export {
   isCloudMachineRuntimeId,
 } from "./runtime-ids.js";
 export {
+  branchNameFromGitRef,
+  branchNamesFromGitRefsOutput,
   generatedTraceWorktreeBranch,
+  hasGitRefNamespaceConflict,
+  isTraceWorktreeBranch,
+  resolveGeneratedTraceWorktreeBranch,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "./worktree-branch.js";
 

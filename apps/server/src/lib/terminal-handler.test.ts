@@ -171,6 +171,37 @@ describe("terminal handler auth", () => {
     expect(mocks.attachFrontend).not.toHaveBeenCalled();
   });
 
+  it("denies attach to a restored terminal with no owner", async () => {
+    mocks.getTerminalAuthContext.mockReturnValue({
+      kind: "session",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      runtimeInstanceId: "runtime-1",
+      ownerUserId: null,
+    });
+    prismaMock.session.findFirst.mockResolvedValue({
+      id: "session-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+    });
+    const ws = createMockWs();
+
+    handleTerminalConnection(ws as never, {
+      headers: {},
+      url: "/terminal?token=session-token",
+      socket: { remoteAddress: "127.0.0.1" },
+    });
+    await Promise.resolve();
+    ws.emitMessage({ type: "attach", terminalId: "term-1" });
+    await Promise.resolve();
+
+    expect(ws.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "error", message: "Access denied" }),
+    );
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    expect(mocks.attachFrontend).not.toHaveBeenCalled();
+  });
+
   it("revalidates terminal capability before forwarding input after attach", async () => {
     mocks.getTerminalAuthContext.mockReturnValue({
       kind: "session",

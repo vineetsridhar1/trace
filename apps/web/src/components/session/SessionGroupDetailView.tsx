@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
@@ -27,6 +33,27 @@ import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+
+const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-sidebar-width";
+const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
+const MIN_SESSION_SIDEBAR_WIDTH = 240;
+const MAX_SESSION_SIDEBAR_WIDTH = 560;
+
+function clampSessionSidebarWidth(width: number): number {
+  return Math.min(MAX_SESSION_SIDEBAR_WIDTH, Math.max(MIN_SESSION_SIDEBAR_WIDTH, width));
+}
+
+function getStoredSessionSidebarWidth(): number {
+  if (typeof window === "undefined") return DEFAULT_SESSION_SIDEBAR_WIDTH;
+
+  const stored = localStorage.getItem(SESSION_SIDEBAR_WIDTH_KEY);
+  if (!stored) return DEFAULT_SESSION_SIDEBAR_WIDTH;
+
+  const parsed = parseInt(stored, 10);
+  return Number.isFinite(parsed)
+    ? clampSessionSidebarWidth(parsed)
+    : DEFAULT_SESSION_SIDEBAR_WIDTH;
+}
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
@@ -201,10 +228,13 @@ export function SessionGroupDetailView({
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
+  const [sidebarWidth, setSidebarWidth] = useState(() => getStoredSessionSidebarWidth());
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [forkEventId, setForkEventId] = useState<string | null>(null);
+  const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
     setForkDialogOpen(true);
@@ -447,6 +477,50 @@ export function SessionGroupDetailView({
     });
   }, []);
 
+  const handleSidebarResizeStart = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      sidebarResizeCleanupRef.current?.();
+      const startX = event.clientX;
+      const startWidth = sidebarWidth;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+
+      setIsResizingSidebar(true);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const nextWidth = clampSessionSidebarWidth(startWidth + startX - moveEvent.clientX);
+        setSidebarWidth(nextWidth);
+      };
+
+      const handleMouseUp = () => {
+        sidebarResizeCleanupRef.current?.();
+        setIsResizingSidebar(false);
+        setSidebarWidth((width) => {
+          localStorage.setItem(SESSION_SIDEBAR_WIDTH_KEY, String(width));
+          return width;
+        });
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      sidebarResizeCleanupRef.current = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        sidebarResizeCleanupRef.current = null;
+      };
+    },
+    [sidebarWidth],
+  );
+
+  useEffect(() => {
+    return () => sidebarResizeCleanupRef.current?.();
+  }, []);
+
   const handleNewChat = useCallback(async () => {
     if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return;
     const resolvedChannelId =
@@ -591,7 +665,16 @@ export function SessionGroupDetailView({
                   />
                 </div>
                 {showSidebar && !selectedSessionIsOptimistic && (
-                  <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
+                  <div
+                    className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
+                      isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
+                    }`}
+                    style={{ width: sidebarWidth }}
+                  >
+                    <div
+                      onMouseDown={handleSidebarResizeStart}
+                      className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
+                    />
                     <SidebarPanel
                       sessionGroupId={sessionGroupId}
                       activeSessionId={selectedSession?.id ?? null}

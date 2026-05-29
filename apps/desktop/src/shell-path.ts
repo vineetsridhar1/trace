@@ -58,6 +58,10 @@ export function hydrateLoginShellPath(
   env: NodeJS.ProcessEnv = process.env,
   execFileSyncFn: ExecFileSyncFn = execFileSync,
 ): boolean {
+  if (!env.SHELL?.trim() && process.platform !== "win32") {
+    env.SHELL = "/bin/zsh";
+  }
+
   const loginShellPath = readLoginShellPath(env, execFileSyncFn);
   const mergedPath = mergePaths(
     loginShellPath ?? "",

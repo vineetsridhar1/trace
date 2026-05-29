@@ -10,6 +10,20 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
+  it("exposes Claude 4.8 as an option while defaulting Claude Code to 4.7", () => {
+    expect(getDefaultModel("claude_code")).toBe("claude-opus-4-7[1m]");
+    expect(getModelsForTool("claude_code")).toEqual([
+      { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+      { value: "claude-opus-4-8", label: "Opus 4.8" },
+      { value: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)" },
+      { value: "claude-opus-4-7", label: "Opus 4.7" },
+      { value: "claude-opus-4-7[1m]", label: "Opus 4.7 (1M)" },
+      { value: "claude-haiku-4-5", label: "Haiku 4.5" },
+    ]);
+    expect(isSupportedModel("claude_code", "claude-opus-4-8")).toBe(true);
+    expect(isSupportedModel("claude_code", "claude-opus-4-8[1m]")).toBe(true);
+  });
+
   it("exposes Pi-backed API and subscription models and defaults to API OpenAI", () => {
     expect(getDefaultModel("pi")).toBe("openai/gpt-5.5");
     expect(getDefaultReasoningEffort("pi")).toBe("medium");

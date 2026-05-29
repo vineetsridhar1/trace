@@ -409,11 +409,12 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           // Restore terminal relay entries from bridge-reported active terminals
           if (Array.isArray(msg.activeTerminals) && msg.activeTerminals.length > 0) {
             const activeTerminals = (msg.activeTerminals as unknown[]).filter(
-              (t): t is { terminalId: string; sessionId: string } =>
+              (t): t is { terminalId: string; sessionId: string; ownerUserId: string } =>
                 typeof t === "object" &&
                 t !== null &&
                 typeof (t as Record<string, unknown>).terminalId === "string" &&
-                typeof (t as Record<string, unknown>).sessionId === "string",
+                typeof (t as Record<string, unknown>).sessionId === "string" &&
+                typeof (t as Record<string, unknown>).ownerUserId === "string",
             );
             if (activeTerminals.length > 0) {
               runtimeDebug("restoring terminals from bridge", {

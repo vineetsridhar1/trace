@@ -16,6 +16,7 @@ export class TerminalManager {
   private terminals = new Map<string, pty.IPty>();
   /** Maps terminalId → sessionId for session-scoped cleanup */
   private terminalSessions = new Map<string, string>();
+  private terminalOwners = new Map<string, string>();
   private defaultShell: string;
 
   constructor(
@@ -28,7 +29,14 @@ export class TerminalManager {
       (os.platform() === "win32" ? "powershell.exe" : "/bin/bash");
   }
 
-  create(terminalId: string, sessionId: string, cwd: string, cols: number, rows: number): void {
+  create(
+    terminalId: string,
+    sessionId: string,
+    ownerUserId: string,
+    cwd: string,
+    cols: number,
+    rows: number,
+  ): void {
     if (this.terminals.has(terminalId)) {
       this.destroy(terminalId);
     }
@@ -61,11 +69,13 @@ export class TerminalManager {
     terminal.onExit(({ exitCode }) => {
       this.terminals.delete(terminalId);
       this.terminalSessions.delete(terminalId);
+      this.terminalOwners.delete(terminalId);
       this.callbacks.onExit(terminalId, exitCode);
     });
 
     this.terminals.set(terminalId, terminal);
     this.terminalSessions.set(terminalId, sessionId);
+    this.terminalOwners.set(terminalId, ownerUserId);
   }
 
   write(terminalId: string, data: string): void {
@@ -89,6 +99,7 @@ export class TerminalManager {
       this.terminals.delete(terminalId);
     }
     this.terminalSessions.delete(terminalId);
+    this.terminalOwners.delete(terminalId);
   }
 
   destroyAll(): void {
@@ -102,11 +113,12 @@ export class TerminalManager {
     return this.terminals.size > 0;
   }
 
-  /** Returns all active terminals as { terminalId, sessionId } pairs. */
-  getActiveTerminals(): Array<{ terminalId: string; sessionId: string }> {
-    const result: Array<{ terminalId: string; sessionId: string }> = [];
+  /** Returns all active terminals with the original owner preserved for reconnect restore. */
+  getActiveTerminals(): Array<{ terminalId: string; sessionId: string; ownerUserId: string }> {
+    const result: Array<{ terminalId: string; sessionId: string; ownerUserId: string }> = [];
     for (const [terminalId, sessionId] of this.terminalSessions) {
-      result.push({ terminalId, sessionId });
+      const ownerUserId = this.terminalOwners.get(terminalId);
+      if (ownerUserId) result.push({ terminalId, sessionId, ownerUserId });
     }
     return result;
   }

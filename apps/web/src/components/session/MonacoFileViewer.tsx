@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import Editor from "@monaco-editor/react";
+import Editor, { type OnMount } from "@monaco-editor/react";
 import { gql } from "@urql/core";
 import { Code2, Eye, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
@@ -18,9 +18,11 @@ const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
 export function MonacoFileViewer({
   sessionGroupId,
   filePath,
+  initialLineNumber,
 }: {
   sessionGroupId: string;
   filePath: string;
+  initialLineNumber?: number;
 }) {
   const renderViewer = getFileRenderViewer(filePath);
   const defaultViewMode = renderViewer?.defaultMode ?? "raw";
@@ -62,6 +64,15 @@ export function MonacoFileViewer({
   useEffect(() => {
     setViewMode(defaultViewMode);
   }, [filePath, defaultViewMode]);
+
+  const handleEditorMount = useCallback<OnMount>(
+    (editor) => {
+      if (!initialLineNumber) return;
+      editor.revealLineInCenter(initialLineNumber);
+      editor.setPosition({ lineNumber: initialLineNumber, column: 1 });
+    },
+    [initialLineNumber],
+  );
 
   if (loading) {
     return (
@@ -150,6 +161,7 @@ export function MonacoFileViewer({
             language={language}
             value={content ?? ""}
             theme="vs-dark"
+            onMount={handleEditorMount}
             options={{
               readOnly: true,
               minimap: { enabled: true },

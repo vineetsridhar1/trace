@@ -227,6 +227,7 @@ export interface BridgeTerminalCreateCommand {
   type: "terminal_create";
   terminalId: string;
   sessionId: string;
+  ownerUserId: string;
   cols: number;
   rows: number;
   cwd: string;
@@ -296,7 +297,7 @@ export interface BridgeRuntimeHello {
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];
   /** Active terminal ptys still running on this bridge (reported on reconnect). */
-  activeTerminals?: Array<{ terminalId: string; sessionId: string }>;
+  activeTerminals?: Array<{ terminalId: string; sessionId: string; ownerUserId: string }>;
 }
 
 export interface BridgeRuntimeHeartbeat {

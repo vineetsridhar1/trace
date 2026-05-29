@@ -700,10 +700,10 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "terminal_create": {
-        const { terminalId, sessionId, cols, rows, cwd } = cmd;
+        const { terminalId, sessionId, ownerUserId, cols, rows, cwd } = cmd;
         const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();
         try {
-          this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
+          this.terminalManager.create(terminalId, sessionId, ownerUserId, workdir, cols, rows);
           this.send({ type: "terminal_ready", terminalId });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

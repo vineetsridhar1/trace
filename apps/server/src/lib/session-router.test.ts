@@ -962,6 +962,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         type: "terminal_create",
         terminalId: "term-1",
         sessionId: "session-1",
+        ownerUserId: "user-1",
         cols: 80,
         rows: 24,
         cwd: "/repo",
@@ -972,6 +973,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         type: "terminal_create",
         terminalId: "term-2",
         sessionId: "session-1",
+        ownerUserId: "user-1",
         cols: 120,
         rows: 30,
         cwd: "/repo",
@@ -1005,8 +1007,10 @@ describe("SessionRouter runtime adapter dispatch", () => {
         type: "terminal_create",
         terminalId: "term-a",
         sessionId: "session-1",
+        ownerUserId: "user-1",
         cols: 80,
         rows: 24,
+        cwd: "/repo",
       }),
     ).toBe("delivered");
     expect(
@@ -1014,8 +1018,10 @@ describe("SessionRouter runtime adapter dispatch", () => {
         type: "terminal_create",
         terminalId: "term-b",
         sessionId: "session-1",
+        ownerUserId: "user-1",
         cols: 120,
         rows: 32,
+        cwd: "/repo",
       }),
     ).toBe("delivered");
     expect(

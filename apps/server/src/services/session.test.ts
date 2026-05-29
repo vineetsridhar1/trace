@@ -32,6 +32,21 @@ vi.mock("./runtime-access.js", () => ({
   },
 }));
 
+vi.mock("./api-token.js", () => ({
+  apiTokenService: {
+    getDecryptedTokens: vi.fn().mockResolvedValue({ github: "gh-token" }),
+  },
+}));
+
+vi.mock("./github-repo.js", () => ({
+  githubRepoService: {
+    listFiles: vi.fn().mockResolvedValue([]),
+    readFile: vi.fn().mockResolvedValue("file contents"),
+    branchDiff: vi.fn().mockResolvedValue([]),
+  },
+  parseGitHubRepo: vi.fn().mockReturnValue({ owner: "trace", repo: "trace" }),
+}));
+
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     send: vi.fn().mockReturnValue("delivered"),
@@ -108,6 +123,8 @@ import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { apiTokenService } from "./api-token.js";
+import { githubRepoService, parseGitHubRepo } from "./github-repo.js";
 import { inboxService } from "./inbox.js";
 import {
   getDefaultModel,
@@ -134,6 +151,9 @@ const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminal
 const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
   typeof runtimeAccessService
 >;
+const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiTokenService>;
+const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
+const parseGitHubRepoMock = parseGitHubRepo as unknown as MockedDeep<typeof parseGitHubRepo>;
 const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
 const getDefaultModelMock = vi.mocked(getDefaultModel);
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
@@ -299,6 +319,11 @@ describe("SessionService", () => {
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
     sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
     sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
+    apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
+    githubRepoServiceMock.listFiles.mockResolvedValue([]);
+    githubRepoServiceMock.readFile.mockResolvedValue("file contents");
+    githubRepoServiceMock.branchDiff.mockResolvedValue([]);
+    parseGitHubRepoMock.mockReturnValue({ owner: "trace", repo: "trace" });
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
       sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
@@ -2676,51 +2701,79 @@ describe("SessionService", () => {
   });
 
   describe("file access", () => {
-    it("rejects local file access for non-owners", async () => {
-      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
-        new Error("Access denied: you do not have permission to use this local bridge"),
-      );
+    it("rejects private session group file access for non-owners", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
+        branch: "trace/test",
         workdir: "/tmp/trace",
         worktreeDeleted: false,
-        connection: { runtimeInstanceId: "runtime-1" },
+        visibility: "private",
+        ownerUserId: "owner-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
       });
-      prismaMock.session.findMany.mockResolvedValueOnce([
-        {
-          id: "session-1",
-          workdir: "/tmp/trace",
-          connection: { runtimeInstanceId: "runtime-1" },
-        },
-      ]);
 
       await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
-        "Access denied: you do not have permission to access files on this local bridge",
+        "Not authorized for this session group",
       );
-      expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+      expect(githubRepoServiceMock.listFiles).not.toHaveBeenCalled();
     });
 
-    it("rejects file reads for paths outside the enumerated file list", async () => {
+    it("rejects file access when the user has no GitHub token", async () => {
+      apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({});
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
+        branch: "trace/test",
         workdir: "/tmp/trace",
         worktreeDeleted: false,
-        connection: { runtimeInstanceId: "runtime-1" },
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
       });
-      prismaMock.session.findMany.mockResolvedValueOnce([
-        {
-          id: "session-1",
-          workdir: "/tmp/trace",
-          connection: { runtimeInstanceId: "runtime-1" },
-        },
-      ]);
-      sessionRouterMock.getRuntime.mockReturnValueOnce({ id: "runtime-1" });
-      sessionRouterMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
 
-      await expect(service.readFile("group-1", "secrets.txt", "org-1", "user-1")).rejects.toThrow(
-        "Invalid file path",
+      await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
+        "No GitHub token configured. Please add a GitHub API token first.",
       );
-      expect(sessionRouterMock.readFile).not.toHaveBeenCalled();
+      expect(githubRepoServiceMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("rejects file reads for invalid relative paths", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+
+      await expect(
+        service.readFile("group-1", "../secrets.txt", "org-1", "user-1"),
+      ).rejects.toThrow("Invalid file path");
+      expect(githubRepoServiceMock.readFile).not.toHaveBeenCalled();
+    });
+
+    it("reads GitHub files by converting absolute workdir paths to repo-relative paths", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.readFile.mockResolvedValueOnce("hello");
+
+      await expect(
+        service.readFile("group-1", "/tmp/trace/src/app.ts", "org-1", "user-1"),
+      ).resolves.toBe("hello");
+      expect(githubRepoServiceMock.readFile).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "src/app.ts",
+        "gh-token",
+      );
     });
   });
 
@@ -7996,7 +8049,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-home",
         { sessionId: "session-home", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
         where: { sessionGroupId: "group-1" },
@@ -8096,7 +8149,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-code-key",
         { sessionId: "session-code", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
         "runtime-sync-key",
@@ -8191,7 +8244,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-code-key",
         { sessionId: "session-code", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(sessionRouterMock.inspectSessionCurrentBranch).not.toHaveBeenCalledWith(
         "runtime-other-key",
@@ -8281,7 +8334,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-cloud-key",
         { sessionId: "session-code", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
         "runtime-sync-key",

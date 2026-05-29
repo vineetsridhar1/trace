@@ -53,7 +53,7 @@ function notarizeConfigFromEnv() {
 const packagerConfig = {
   appBundleId: "org.gettrace.desktop",
   asar: {
-    unpack: "**/node_modules/node-pty/prebuilds/*/spawn-helper",
+    unpack: "**/node_modules/node-pty/**/spawn-helper",
   },
   icon: path.join(configDir, "assets", "icon"),
 };
@@ -73,6 +73,26 @@ if (!skipSigning) {
 export default {
   packagerConfig,
   makers: [
+    {
+      name: "@electron-forge/maker-dmg",
+      platforms: ["darwin"],
+      config: {
+        title: "Install Trace",
+        icon: path.join(configDir, "assets", "icon.icns"),
+        iconSize: 96,
+        format: "ULFO",
+        contents: (opts) => [
+          { x: 192, y: 240, type: "file", path: opts.appPath },
+          { x: 466, y: 240, type: "link", path: "/Applications" },
+        ],
+        additionalDMGOptions: {
+          "background-color": "#f7f7f8",
+          window: {
+            size: { width: 658, height: 420 },
+          },
+        },
+      },
+    },
     {
       name: "@electron-forge/maker-zip",
       platforms: ["darwin"],

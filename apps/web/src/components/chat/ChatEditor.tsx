@@ -67,6 +67,7 @@ interface ChatEditorProps {
   onSubmit: (html: string, text: string, options?: ChatEditorSubmitOptions) => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
+  submitDisabled?: boolean;
   initialHtml?: string;
   mentionableUsers?: MentionableUser[];
   currentUserId?: string | null;
@@ -83,6 +84,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     onSubmit,
     placeholder = "Type a message...",
     disabled,
+    submitDisabled,
     initialHtml = "",
     mentionableUsers = [],
     currentUserId,
@@ -291,7 +293,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   const submit = useCallback(
     async (options?: ChatEditorSubmitOptions) => {
       const editor = quillRef.current?.getEditor();
-      if (!editor || disabled) return false;
+      if (!editor || disabled || submitDisabled) return false;
 
       const html = editor.root.innerHTML;
       const text = editor.getText().trim();
@@ -314,7 +316,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         return false;
       }
     },
-    [clearEditor, disabled, onSubmit],
+    [clearEditor, disabled, onSubmit, submitDisabled],
   );
 
   useImperativeHandle(

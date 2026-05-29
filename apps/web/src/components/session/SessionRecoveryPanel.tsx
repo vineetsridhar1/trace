@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, ArrowRightLeft, WifiOff } from "lucide-react";
-import { useEntityField } from "@trace/client-core";
+import {
+  formatSessionConnectionError,
+  RETRY_SESSION_CONNECTION_MUTATION,
+  useEntityField,
+} from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
-import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
@@ -52,7 +55,9 @@ export function SessionRecoveryPanel({
     | string
     | undefined;
 
-  const lastError = (connection?.lastError as string) ?? undefined;
+  const lastError = formatSessionConnectionError(
+    typeof connection?.lastError === "string" ? connection.lastError : null,
+  );
   const canRetry = (connection?.canRetry as boolean | undefined) ?? true;
   const moveRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(connection);
   const { access: moveBridgeAccess } = useBridgeRuntimeAccess(

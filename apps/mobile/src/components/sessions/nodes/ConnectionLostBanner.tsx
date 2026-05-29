@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
+import {
+  formatSessionConnectionError,
+  RETRY_SESSION_CONNECTION_MUTATION,
+} from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
 import { useAppForegroundStatus } from "@/hooks/useAppForegroundStatus";
 import { useNowTicker } from "@/hooks/useNowTicker";
@@ -12,7 +15,7 @@ import { getClient } from "@/lib/urql";
 
 interface ConnectionLostBannerProps {
   sessionId: string;
-  /** Optional human-friendly reason from the session's connection.lastError. */
+  /** Optional reason from the session's connection.lastError. */
   reason?: string | null;
 }
 
@@ -23,6 +26,7 @@ interface ConnectionLostBannerProps {
  */
 export function ConnectionLostBanner({ sessionId, reason }: ConnectionLostBannerProps) {
   const theme = useTheme();
+  const connectionError = formatSessionConnectionError(reason);
   const { appActive, foregroundedAt } = useAppForegroundStatus();
   const tickEnabled =
     appActive &&
@@ -78,9 +82,9 @@ export function ConnectionLostBanner({ sessionId, reason }: ConnectionLostBanner
         <Text variant="footnote" style={{ color: theme.colors.foreground, fontWeight: "600" }}>
           Connection lost
         </Text>
-        {reason ? (
+        {connectionError ? (
           <Text variant="caption1" color="mutedForeground" numberOfLines={2}>
-            {reason}
+            {connectionError}
           </Text>
         ) : null}
       </View>
