@@ -20,6 +20,7 @@ import {
   parseBranchOutput,
   handleListFiles,
   handleReadFile,
+  handleWriteFile,
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
@@ -677,6 +678,11 @@ export class ContainerBridge implements IBridgeClient {
 
       case "read_file": {
         handleReadFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
+        break;
+      }
+
+      case "write_file": {
+        handleWriteFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
         break;
       }
 
