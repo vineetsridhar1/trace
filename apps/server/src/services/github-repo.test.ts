@@ -95,4 +95,38 @@ describe("GitHubRepoService", () => {
       expect.any(Object),
     );
   });
+
+  it("retries branch compare with path-style refs for branch names with slashes", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ message: "Not Found" }, { status: 404 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          files: [{ filename: "src/app.ts", status: "modified", additions: 3, deletions: 1 }],
+        }),
+      );
+
+    const service = new GitHubRepoService();
+    await expect(service.branchDiff(repo, "main", "trace/branch", "gh-token")).resolves.toEqual([
+      { path: "src/app.ts", status: "M", additions: 3, deletions: 1 },
+    ]);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.github.com/repos/acme/trace/compare/main...trace/branch",
+      expect.any(Object),
+    );
+  });
+
+  it("returns an actionable branch compare error after GitHub 404s", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ message: "Not Found" }, { status: 404 }),
+    );
+
+    const service = new GitHubRepoService();
+    await expect(service.branchDiff(repo, "main", "missing/branch", "gh-token")).rejects.toThrow(
+      'GitHub branch diff unavailable: could not compare "main" to "missing/branch".',
+    );
+  });
 });
