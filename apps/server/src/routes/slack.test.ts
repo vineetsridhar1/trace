@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const slackMocks = vi.hoisted(() => ({
   postEphemeral: vi.fn(),
   postMessage: vi.fn(),
+  replies: vi.fn(),
   update: vi.fn(),
   viewsOpen: vi.fn(),
 }));
@@ -65,6 +66,9 @@ vi.mock("../lib/slack/client.js", () => ({
       postEphemeral: slackMocks.postEphemeral,
       postMessage: slackMocks.postMessage,
       update: slackMocks.update,
+    },
+    conversations: {
+      replies: slackMocks.replies,
     },
     views: {
       open: slackMocks.viewsOpen,
@@ -195,6 +199,7 @@ describe("Slack routes", () => {
 
     slackMocks.postEphemeral.mockResolvedValue({});
     slackMocks.postMessage.mockResolvedValue({});
+    slackMocks.replies.mockResolvedValue({ messages: [] });
     slackMocks.update.mockResolvedValue({});
     slackMocks.viewsOpen.mockResolvedValue({});
 
@@ -294,6 +299,114 @@ describe("Slack routes", () => {
         user: "U1",
         thread_ts: "1710000000.000100",
         text: expect.stringContaining("not in the connected Trace org"),
+      }),
+    );
+  });
+
+  it("includes prior Slack thread messages in new Trace session drafts from reply mentions", async () => {
+    prismaMock.slackProcessedEvent.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.slackProcessedEvent.create.mockResolvedValue({});
+    prismaMock.slackInstall.findUnique.mockResolvedValue({
+      organizationId: "org-1",
+      botUserId: "BTRACE",
+    });
+    prismaMock.slackThreadSession.findUnique.mockResolvedValue(null);
+    prismaMock.slackAccount.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.slackChannelBinding.findUnique.mockResolvedValue({
+      traceChannelId: "channel-1",
+      organizationId: "org-1",
+    });
+    prismaMock.slackSessionDraft.create.mockResolvedValue({ id: "draft-1" });
+    prismaMock.slackSessionDraft.findUnique.mockResolvedValue({
+      id: "draft-1",
+      slackTeamId: "T1",
+      slackChannelId: "C1",
+      slackThreadTs: "1710000200.000100",
+      slackUserId: "U1",
+      organizationId: "org-1",
+      traceChannelId: "channel-1",
+      prompt: "draft prompt",
+      fileRefs: [],
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      defaultSessionTool: "claude_code",
+      defaultSessionModel: null,
+      defaultSessionReasoningEffort: null,
+    });
+    prismaMock.agentEnvironment.findMany.mockResolvedValue([
+      { id: "env-1", name: "Cloud", isDefault: true },
+    ]);
+    slackMocks.replies.mockResolvedValue({
+      messages: [
+        {
+          user: "UOBS",
+          ts: "1710000200.000100",
+          text: "Alert: checkout-api error rate is 35%",
+        },
+        {
+          user: "U2",
+          ts: "1710000201.000100",
+          text: "Looks related to deploy abc123",
+        },
+        {
+          user: "U1",
+          ts: "1710000202.000100",
+          text: "<@BTRACE>",
+        },
+      ],
+    });
+
+    const rawBody = JSON.stringify({
+      type: "event_callback",
+      team_id: "T1",
+      event_id: "E3",
+      event: {
+        type: "app_mention",
+        user: "U1",
+        channel: "C1",
+        channel_type: "channel",
+        ts: "1710000202.000100",
+        thread_ts: "1710000200.000100",
+        text: "<@BTRACE>",
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/slack/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(slackMocks.replies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C1",
+        ts: "1710000200.000100",
+      }),
+    );
+    expect(prismaMock.slackSessionDraft.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prompt: expect.stringContaining("Slack thread context before this @trace mention"),
+        }),
+      }),
+    );
+    const createCall = prismaMock.slackSessionDraft.create.mock.calls[0]?.[0];
+    const prompt =
+      typeof createCall?.data?.prompt === "string" ? createCall.data.prompt : "";
+    expect(prompt).toContain("<@UOBS>: Alert: checkout-api error rate is 35%");
+    expect(prompt).toContain("<@U2>: Looks related to deploy abc123");
+    expect(prompt).toContain("Use the Slack thread context above to investigate and fix the issue.");
+    expect(slackMocks.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C1",
+        thread_ts: "1710000200.000100",
+        text: "Start Trace session",
       }),
     );
   });

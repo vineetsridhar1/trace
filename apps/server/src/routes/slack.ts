@@ -41,6 +41,8 @@ const BIND_STATE_TTL_SECONDS = 10 * 60;
 const RECENT_MENTION_TTL_MS = 30 * 1000;
 const SLACK_MAX_FILE_COUNT = 4;
 const SLACK_MAX_FILE_BYTES = 10 * 1024 * 1024;
+const SLACK_THREAD_CONTEXT_MAX_MESSAGES = 30;
+const SLACK_THREAD_CONTEXT_MAX_CHARS = 12_000;
 const recentMentionKeys = new Map<string, number>();
 const SLACK_SCOPES = [
   "app_mentions:read",
@@ -771,6 +773,15 @@ type SlackEventFile = {
   url_private_download?: string;
 };
 
+type SlackThreadReply = {
+  user?: string;
+  username?: string;
+  bot_id?: string;
+  text?: string;
+  ts?: string;
+  attachments?: unknown[];
+};
+
 type SlackStoredFileRef = {
   key: string;
   kind: "image";
@@ -830,6 +841,12 @@ type SlackBridgeAccessApproveValue = SlackBridgeAccessRequestValue & {
 
 function stripBotMention(text: string, botUserId: string): string {
   return text.replace(new RegExp(`<@${botUserId}>`, "g"), "").trim();
+}
+
+function getObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function errorMessage(error: unknown): string {
@@ -1015,6 +1032,126 @@ function parseSlackPrompt(text: string): ParsedSlackPrompt {
 
   result.prompt = promptParts.join(" ").trim();
   return result;
+}
+
+function slackTsValue(ts: string | undefined): number | null {
+  if (!ts) return null;
+  const value = Number(ts);
+  return Number.isFinite(value) ? value : null;
+}
+
+function asSlackThreadReplies(value: unknown): SlackThreadReply[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((reply): reply is SlackThreadReply => {
+    return !!reply && typeof reply === "object" && !Array.isArray(reply);
+  });
+}
+
+function slackAttachmentText(attachments: unknown[] | undefined): string {
+  if (!Array.isArray(attachments)) return "";
+  return attachments
+    .map((attachment) => {
+      const item = getObject(attachment);
+      if (!item) return "";
+      return ["pretext", "title", "text", "fallback"]
+        .map((key) => {
+          const value = item[key];
+          return typeof value === "string" ? value.trim() : "";
+        })
+        .filter(Boolean)
+        .join("\n");
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function slackReplyAuthor(reply: SlackThreadReply): string {
+  if (reply.user) return `<@${reply.user}>`;
+  if (reply.username?.trim()) return reply.username.trim();
+  if (reply.bot_id) return `bot:${reply.bot_id}`;
+  return "Slack";
+}
+
+function slackReplyBody(reply: SlackThreadReply, botUserId: string): string {
+  const text = typeof reply.text === "string" ? stripBotMention(reply.text, botUserId) : "";
+  return [text.trim(), slackAttachmentText(reply.attachments)].filter(Boolean).join("\n").trim();
+}
+
+function truncateSlackThreadContext(text: string): string {
+  if (text.length <= SLACK_THREAD_CONTEXT_MAX_CHARS) return text;
+  return `${text.slice(0, SLACK_THREAD_CONTEXT_MAX_CHARS - 1)}…`;
+}
+
+function formatSlackThreadContext(input: {
+  replies: SlackThreadReply[];
+  mentionTs: string;
+  botUserId: string;
+}): string {
+  const mentionTsValue = slackTsValue(input.mentionTs);
+  if (mentionTsValue === null) return "";
+
+  const lines = input.replies
+    .filter((reply) => {
+      const ts = slackTsValue(reply.ts);
+      return ts !== null && ts < mentionTsValue;
+    })
+    .sort((a, b) => (slackTsValue(a.ts) ?? 0) - (slackTsValue(b.ts) ?? 0))
+    .slice(-SLACK_THREAD_CONTEXT_MAX_MESSAGES)
+    .map((reply) => {
+      const body = slackReplyBody(reply, input.botUserId);
+      return body ? `${slackReplyAuthor(reply)}: ${body}` : "";
+    })
+    .filter(Boolean);
+
+  return truncateSlackThreadContext(lines.join("\n\n"));
+}
+
+async function loadSlackThreadContext(input: {
+  slackTeamId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  mentionTs: string;
+  botUserId: string;
+}): Promise<string> {
+  if (input.slackThreadTs === input.mentionTs) return "";
+
+  const client = await getSlackClient(input.slackTeamId);
+  if (!client) return "";
+  const response = await client.conversations
+    .replies({
+      channel: input.slackChannelId,
+      ts: input.slackThreadTs,
+      limit: SLACK_THREAD_CONTEXT_MAX_MESSAGES + 1,
+      inclusive: true,
+    })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to load thread context:", errorMessage(err));
+      return null;
+    });
+  const responseObject = getObject(response);
+  return formatSlackThreadContext({
+    replies: asSlackThreadReplies(responseObject?.messages),
+    mentionTs: input.mentionTs,
+    botUserId: input.botUserId,
+  });
+}
+
+function promptWithSlackThreadContext(input: {
+  prompt: string;
+  threadContext: string;
+}): string {
+  const context = input.threadContext.trim();
+  if (!context) return input.prompt;
+
+  const request =
+    input.prompt.trim() ||
+    "Use the Slack thread context above to investigate and fix the issue.";
+  return [
+    "Slack thread context before this @trace mention:",
+    context,
+    "User request:",
+    request,
+  ].join("\n\n");
 }
 
 async function resolveSlackAccount(slackTeamId: string, slackUserId: string) {
@@ -2012,7 +2149,17 @@ async function handleAppMention(input: {
 
   const rawText = typeof event.text === "string" ? event.text : "";
   const parsed = parseSlackPrompt(stripBotMention(rawText, install.botUserId));
-  const prompt = parsed.prompt;
+  const threadContext = await loadSlackThreadContext({
+    slackTeamId: teamId,
+    slackChannelId: channel,
+    slackThreadTs: threadTs,
+    mentionTs: ts,
+    botUserId: install.botUserId,
+  });
+  const prompt = promptWithSlackThreadContext({
+    prompt: parsed.prompt,
+    threadContext,
+  });
 
   const files = await ingestSlackFiles({
     slackTeamId: teamId,
