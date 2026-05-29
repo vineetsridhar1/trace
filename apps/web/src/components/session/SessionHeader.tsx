@@ -158,7 +158,7 @@ export function SessionHeader({
   }, [showHistory, closeHistory]);
 
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
+    <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
       {panelMode ? (
         <button
           onClick={() => setActiveSessionId(null)}
@@ -264,7 +264,7 @@ export function SessionHeader({
             <History size={14} />
           </button>
           {showHistory && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
+            <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
               <SessionHistory sessionId={sessionId} />
             </div>
           )}

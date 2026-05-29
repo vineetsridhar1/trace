@@ -96,7 +96,7 @@ export function GroupHeader({
   const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
+    <div className="app-region-drag flex h-12 shrink-0 items-center gap-3 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
       {selectedSessionId && (
         <span
           className={cn(
@@ -157,7 +157,7 @@ export function GroupHeader({
           <History size={14} />
         </button>
         {showHistory && selectedSessionId && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
+          <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
             <SessionHistory sessionId={selectedSessionId} />
           </div>
         )}
