@@ -7624,6 +7624,32 @@ export class SessionService {
     return githubRepoService.readFile(source.repo, source.branch, relativePath, source.token);
   }
 
+  /** Save a file's content to a session group's GitHub branch. */
+  async saveFile(
+    sessionGroupId: string,
+    filePath: string,
+    content: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const source = await this.resolveGitHubSessionGroupFileSource(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
+    await githubRepoService.updateFile(
+      source.repo,
+      source.branch,
+      relativePath,
+      content,
+      source.token,
+      `Update ${relativePath}`,
+    );
+    return true;
+  }
+
   /** Compute the branch diff for a session group (changed files vs default branch). */
   async branchDiff(sessionGroupId: string, organizationId: string, userId: string) {
     const source = await this.resolveGitHubSessionGroupFileSource(

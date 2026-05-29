@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { gql } from "@urql/core";
-import { Code2, Eye, RefreshCw } from "lucide-react";
+import { Code2, Eye, RefreshCw, Save } from "lucide-react";
 import { client } from "../../lib/urql";
 import { getLanguageFromPath } from "../../lib/monaco-utils";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { TraceLoader } from "../ui/trace-loader";
 import { getFileRenderViewer, type FileViewMode } from "./file-render-viewers";
+import { toast } from "sonner";
 
 const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
   query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {
     sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)
+  }
+`;
+
+const SAVE_SESSION_GROUP_FILE_MUTATION = gql`
+  mutation SaveSessionGroupFile($sessionGroupId: ID!, $filePath: String!, $content: String!) {
+    saveSessionGroupFile(sessionGroupId: $sessionGroupId, filePath: $filePath, content: $content)
   }
 `;
 
@@ -27,8 +34,10 @@ export function MonacoFileViewer({
   const renderViewer = getFileRenderViewer(filePath);
   const defaultViewMode = renderViewer?.defaultMode ?? "raw";
   const [content, setContent] = useState<string | null>(null);
+  const [savedContent, setSavedContent] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<FileViewMode>(defaultViewMode);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchContent = useCallback(
@@ -44,7 +53,9 @@ export function MonacoFileViewer({
         if (result.error) {
           if (!silent) setError(result.error.message);
         } else {
-          setContent(result.data?.sessionGroupFileContent ?? "");
+          const nextContent = result.data?.sessionGroupFileContent ?? "";
+          setContent(nextContent);
+          setSavedContent(nextContent);
           if (!silent) setError(null);
         }
       } catch (err) {
@@ -64,6 +75,40 @@ export function MonacoFileViewer({
   useEffect(() => {
     setViewMode(defaultViewMode);
   }, [filePath, defaultViewMode]);
+
+  const isDirty = content !== null && savedContent !== null && content !== savedContent;
+
+  const handleSave = useCallback(async () => {
+    if (!isDirty || content === null || saving) return;
+    setSaving(true);
+    try {
+      const result = await client
+        .mutation(SAVE_SESSION_GROUP_FILE_MUTATION, { sessionGroupId, filePath, content })
+        .toPromise();
+      if (result.error || result.data?.saveSessionGroupFile !== true) {
+        throw new Error(result.error?.message ?? "Failed to save file");
+      }
+      setSavedContent(content);
+      toast.success("File saved");
+    } catch (err) {
+      toast.error("Failed to save file", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [content, filePath, isDirty, saving, sessionGroupId]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      void handleSave();
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleSave]);
 
   const handleEditorMount = useCallback<OnMount>(
     (editor) => {
@@ -106,6 +151,23 @@ export function MonacoFileViewer({
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-[#2d2d2d] bg-[#252526] px-2">
         <div className="min-w-0 flex-1 truncate px-1 text-[11px] text-[#bbbbbb]">{filePath}</div>
         <div className="flex shrink-0 items-center gap-1">
+          {isDirty && (
+            <span className="px-1 text-[11px] text-[#bbbbbb]">
+              {saving ? "Saving..." : "Unsaved"}
+            </span>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={!isDirty || saving}
+            onClick={() => void handleSave()}
+            className="h-6 rounded border border-[#3c3c3c] px-2 text-[11px] text-[#cccccc] hover:bg-[#2f3030] hover:text-[#ffffff] disabled:opacity-40"
+            title="Save file"
+          >
+            <Save size={12} />
+            Save
+          </Button>
           {renderViewer && (
             <div className="flex items-center rounded-md border border-[#3c3c3c] bg-[#1e1e1e] p-0.5">
               <Button
@@ -162,8 +224,9 @@ export function MonacoFileViewer({
             value={content ?? ""}
             theme="vs-dark"
             onMount={handleEditorMount}
+            onChange={(value) => setContent(value ?? "")}
             options={{
-              readOnly: true,
+              readOnly: false,
               minimap: { enabled: true },
               scrollBeyondLastLine: false,
               fontSize: 13,
