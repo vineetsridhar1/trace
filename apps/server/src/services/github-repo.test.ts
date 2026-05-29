@@ -20,7 +20,9 @@ describe("GitHubRepoService", () => {
 
   it("parses GitHub remote URLs", () => {
     expect(parseGitHubRepo("https://github.com/acme/trace.git")).toEqual(repo);
+    expect(parseGitHubRepo("https://github.com/acme/trace/")).toEqual(repo);
     expect(parseGitHubRepo("git@github.com:acme/trace.git")).toEqual(repo);
+    expect(parseGitHubRepo("git@github.com:acme/trace/")).toEqual(repo);
     expect(parseGitHubRepo("https://example.com/acme/trace.git")).toBeNull();
   });
 
@@ -47,6 +49,16 @@ describe("GitHubRepoService", () => {
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer gh-token" }),
       }),
+    );
+  });
+
+  it("fails when GitHub truncates a recursive tree", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse({ truncated: true, tree: [] }));
+
+    const service = new GitHubRepoService();
+    await expect(service.listFiles(repo, "main", "gh-token")).rejects.toThrow(
+      "GitHub file tree is too large to list completely.",
     );
   });
 
@@ -94,6 +106,33 @@ describe("GitHubRepoService", () => {
       "https://api.github.com/repos/acme/trace/compare/main...trace%2Fbranch",
       expect.any(Object),
     );
+  });
+
+  it("collects branch diff files across paginated compare responses", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { files: [{ filename: "src/one.ts", status: "modified", additions: 1, deletions: 0 }] },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Link: '<https://api.github.com/repos/acme/trace/compare/main...feature?page=2>; rel="next"',
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          files: [{ filename: "src/two.ts", status: "added", additions: 2, deletions: 0 }],
+        }),
+      );
+
+    const service = new GitHubRepoService();
+    await expect(service.branchDiff(repo, "main", "feature", "gh-token")).resolves.toEqual([
+      { path: "src/one.ts", status: "M", additions: 1, deletions: 0 },
+      { path: "src/two.ts", status: "A", additions: 2, deletions: 0 },
+    ]);
   });
 
   it("retries branch compare with path-style refs for branch names with slashes", async () => {

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
@@ -228,6 +234,7 @@ export function SessionGroupDetailView({
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [forkEventId, setForkEventId] = useState<string | null>(null);
+  const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
     setForkDialogOpen(true);
@@ -473,6 +480,7 @@ export function SessionGroupDetailView({
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       event.preventDefault();
+      sidebarResizeCleanupRef.current?.();
       const startX = event.clientX;
       const startWidth = sidebarWidth;
       const previousCursor = document.body.style.cursor;
@@ -488,10 +496,7 @@ export function SessionGroupDetailView({
       };
 
       const handleMouseUp = () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
+        sidebarResizeCleanupRef.current?.();
         setIsResizingSidebar(false);
         setSidebarWidth((width) => {
           localStorage.setItem(SESSION_SIDEBAR_WIDTH_KEY, String(width));
@@ -501,9 +506,20 @@ export function SessionGroupDetailView({
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      sidebarResizeCleanupRef.current = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        sidebarResizeCleanupRef.current = null;
+      };
     },
     [sidebarWidth],
   );
+
+  useEffect(() => {
+    return () => sidebarResizeCleanupRef.current?.();
+  }, []);
 
   const handleNewChat = useCallback(async () => {
     if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return;

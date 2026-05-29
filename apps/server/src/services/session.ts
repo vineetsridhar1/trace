@@ -7621,10 +7621,6 @@ export class SessionService {
     );
     const normalizedPath = this.normalizeFilePath(filePath);
     const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
-    const allowedFiles = await githubRepoService.listFiles(source.repo, source.branch, source.token);
-    if (!allowedFiles.includes(relativePath)) {
-      throw new Error(INVALID_FILE_PATH_ERROR);
-    }
     return githubRepoService.readFile(source.repo, source.branch, relativePath, source.token);
   }
 

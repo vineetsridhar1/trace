@@ -21,7 +21,11 @@ export function BranchChangesTree({ files, onFileClick }: BranchChangesTreeProps
   );
 
   useEffect(() => {
-    setExpandedPaths(directoryPathsFromTree(tree));
+    const nextDirectoryPaths = directoryPathsFromTree(tree);
+    setExpandedPaths((prev) => {
+      if (prev.size === 0) return nextDirectoryPaths;
+      return new Set([...prev].filter((path) => nextDirectoryPaths.has(path)));
+    });
   }, [tree]);
 
   const handleToggle = useCallback((path: string) => {
