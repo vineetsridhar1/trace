@@ -9,6 +9,7 @@ import { Button } from "../ui/button";
 import { TraceLoader } from "../ui/trace-loader";
 import { getFileRenderViewer, type FileViewMode } from "./file-render-viewers";
 import type { FileEditorBuffer } from "./file-editor-buffer";
+import { CommitSessionGroupChangesDialog } from "./CommitSessionGroupChangesDialog";
 import { toast } from "sonner";
 
 const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
@@ -52,6 +53,7 @@ export function MonacoFileViewer({
   const [loading, setLoading] = useState(!buffer);
   const [saving, setSaving] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const storeBuffer = useCallback(
@@ -134,25 +136,19 @@ export function MonacoFileViewer({
     await saveCurrentContent();
   }, [saveCurrentContent]);
 
-  const handleCommit = useCallback(async () => {
+  const handleOpenCommitDialog = useCallback(async () => {
     if (committing || saving) return;
-    const message = window.prompt(
-      "Commit message",
-      `Update ${filePath.split("/").pop() ?? "files"}`,
-    );
-    if (message === null) return;
-    const trimmedMessage = message.trim();
-    if (!trimmedMessage) return;
+    const saved = await saveCurrentContent();
+    if (saved) setCommitDialogOpen(true);
+  }, [committing, saveCurrentContent, saving]);
 
+  const handleCommit = useCallback(async (message: string) => {
     setCommitting(true);
     try {
-      const saved = await saveCurrentContent();
-      if (!saved) return;
-
       const result = await client
         .mutation(COMMIT_SESSION_GROUP_FILE_CHANGES_MUTATION, {
           sessionGroupId,
-          message: trimmedMessage,
+          message,
         })
         .toPromise();
       const commitSha = result.data?.commitSessionGroupFileChanges;
@@ -160,6 +156,7 @@ export function MonacoFileViewer({
         throw new Error(result.error?.message ?? "Failed to commit changes");
       }
       toast.success("Changes committed", { description: commitSha.slice(0, 7) });
+      setCommitDialogOpen(false);
     } catch (err) {
       toast.error("Failed to commit changes", {
         description: err instanceof Error ? err.message : undefined,
@@ -167,7 +164,7 @@ export function MonacoFileViewer({
     } finally {
       setCommitting(false);
     }
-  }, [committing, filePath, saveCurrentContent, saving, sessionGroupId]);
+  }, [sessionGroupId]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -243,7 +240,7 @@ export function MonacoFileViewer({
             variant="ghost"
             size="xs"
             disabled={saving || committing}
-            onClick={() => void handleCommit()}
+            onClick={() => void handleOpenCommitDialog()}
             className="h-6 rounded border border-[#3c3c3c] px-2 text-[11px] text-[#cccccc] hover:bg-[#2f3030] hover:text-[#ffffff] disabled:opacity-40"
             title="Commit workspace changes"
           >
@@ -337,6 +334,13 @@ export function MonacoFileViewer({
           />
         )}
       </div>
+      <CommitSessionGroupChangesDialog
+        open={commitDialogOpen}
+        sessionGroupId={sessionGroupId}
+        pending={committing}
+        onClose={() => setCommitDialogOpen(false)}
+        onCommit={handleCommit}
+      />
     </div>
   );
 }

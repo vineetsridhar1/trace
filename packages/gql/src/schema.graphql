@@ -1103,6 +1103,7 @@ type Query {
     filePath: String!
     runtimeInstanceId: ID
   ): LinkedCheckoutChangedFile!
+  sessionGroupWorktreeChanges(sessionGroupId: ID!): [LinkedCheckoutChangedFile!]!
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
@@ -1235,6 +1236,7 @@ type Mutation {
   moveSessionToCloud(sessionId: ID!): Session!
   saveSessionGroupFile(sessionGroupId: ID!, filePath: String!, content: String!): Boolean!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
+  revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(
     runtimeInstanceId: ID!
     scopeType: BridgeAccessScopeType!

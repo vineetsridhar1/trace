@@ -178,6 +178,11 @@ export const sessionQueries = {
       args.runtimeInstanceId ?? undefined,
     );
   },
+  sessionGroupWorktreeChanges: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.listWorktreeChanges(args.sessionGroupId, orgId, ctx.userId);
+  },
   sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
 
@@ -457,6 +462,15 @@ export const sessionMutations = {
       orgId,
       ctx.userId,
     );
+  },
+  revertSessionGroupFileChange: (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.revertFileChange(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
   linkLinkedCheckoutRepo: (
     _: unknown,

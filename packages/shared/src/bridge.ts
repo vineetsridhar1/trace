@@ -137,6 +137,21 @@ export interface BridgeCommitFileChangesCommand {
   workdirHint?: string;
 }
 
+export interface BridgeWorktreeChangesCommand {
+  type: "worktree_changes";
+  requestId: string;
+  sessionId: string;
+  workdirHint?: string;
+}
+
+export interface BridgeRevertWorktreeFileCommand {
+  type: "revert_worktree_file";
+  requestId: string;
+  sessionId: string;
+  filePath: string;
+  workdirHint?: string;
+}
+
 export interface BridgeBranchDiffCommand {
   type: "branch_diff";
   requestId: string;
@@ -285,6 +300,8 @@ export type BridgeCommand =
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
   | BridgeCommitFileChangesCommand
+  | BridgeWorktreeChangesCommand
+  | BridgeRevertWorktreeFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
@@ -531,6 +548,19 @@ export interface BridgeFileCommitResult {
   error?: string;
 }
 
+export interface BridgeWorktreeChangesResult {
+  type: "worktree_changes_result";
+  requestId: string;
+  files: BridgeLinkedCheckoutChangedFile[];
+  error?: string;
+}
+
+export interface BridgeRevertWorktreeFileResult {
+  type: "revert_worktree_file_result";
+  requestId: string;
+  error?: string;
+}
+
 export interface BridgeBranchDiffFile {
   path: string;
   status: string;
@@ -614,6 +644,8 @@ export type BridgeMessage =
   | BridgeFileContentResult
   | BridgeFileWriteResult
   | BridgeFileCommitResult
+  | BridgeWorktreeChangesResult
+  | BridgeRevertWorktreeFileResult
   | BridgeBranchDiffResult
   | BridgeFileAtRefResult
   | BridgeSkillsResult
@@ -954,6 +986,149 @@ export async function handleCommitFileChanges(
       error: err instanceof Error ? err.message : "Failed to commit changes",
     });
   }
+}
+
+export async function handleWorktreeChanges(
+  cmd: BridgeWorktreeChangesCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
+): Promise<void> {
+  const workdir = sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+  if (!workdir) {
+    send({
+      type: "worktree_changes_result",
+      requestId: cmd.requestId,
+      files: [],
+      error: `No workdir known for session ${cmd.sessionId}`,
+    });
+    return;
+  }
+
+  try {
+    const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
+    const status = await deps.gitExec(["status", "--porcelain=v1", "-z"], realWorkdir);
+    const paths = parseWorktreeStatus(status);
+    const files = await Promise.all(
+      paths.slice(0, 200).map((entry) => buildWorktreeChangedFile(entry, realWorkdir, deps)),
+    );
+    send({ type: "worktree_changes_result", requestId: cmd.requestId, files });
+  } catch (err) {
+    send({
+      type: "worktree_changes_result",
+      requestId: cmd.requestId,
+      files: [],
+      error: err instanceof Error ? err.message : "Failed to load worktree changes",
+    });
+  }
+}
+
+export async function handleRevertWorktreeFile(
+  cmd: BridgeRevertWorktreeFileCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
+): Promise<void> {
+  const workdir = sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+  if (!workdir) {
+    send({
+      type: "revert_worktree_file_result",
+      requestId: cmd.requestId,
+      error: `No workdir known for session ${cmd.sessionId}`,
+    });
+    return;
+  }
+
+  try {
+    const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
+    const fullPath = deps.path.resolve(realWorkdir, cmd.filePath);
+    if (!isPathInsideRoot(realWorkdir, fullPath, deps.path)) {
+      send({ type: "revert_worktree_file_result", requestId: cmd.requestId, error: "Path traversal denied" });
+      return;
+    }
+
+    const relativePath = deps.path.relative(realWorkdir, fullPath);
+    const tracked = await deps
+      .gitExec(["ls-files", "--error-unmatch", "--", relativePath], realWorkdir)
+      .then(() => true)
+      .catch(() => false);
+    if (tracked) {
+      await deps.gitExec(["checkout", "HEAD", "--", relativePath], realWorkdir);
+    } else {
+      await deps.gitExec(["clean", "-f", "--", relativePath], realWorkdir);
+    }
+    send({ type: "revert_worktree_file_result", requestId: cmd.requestId });
+  } catch (err) {
+    send({
+      type: "revert_worktree_file_result",
+      requestId: cmd.requestId,
+      error: err instanceof Error ? err.message : "Failed to revert file",
+    });
+  }
+}
+
+type WorktreeStatusEntry = { path: string; status: string };
+
+function parseWorktreeStatus(status: string): WorktreeStatusEntry[] {
+  const entries = status.split("\0").filter(Boolean);
+  const paths: WorktreeStatusEntry[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index] ?? "";
+    const code = entry.slice(0, 2);
+    const path = entry.slice(3);
+    if (!path) continue;
+    const statusCode = code === "??" ? "A" : code.trim()[0] || "M";
+    paths.push({ path, status: statusCode });
+    if (code.includes("R") || code.includes("C")) index += 1;
+  }
+  return paths;
+}
+
+async function buildWorktreeChangedFile(
+  entry: WorktreeStatusEntry,
+  workdir: string,
+  deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
+): Promise<BridgeLinkedCheckoutChangedFile> {
+  const originalContent = await deps
+    .gitExec(["show", `HEAD:${entry.path}`], workdir)
+    .catch(() => "");
+  const modifiedContent =
+    entry.status === "D" ? "" : await readWorktreeTextFile(workdir, entry.path, deps).catch(() => "");
+  const diff = await deps.gitExec(["diff", "--", entry.path], workdir).catch(() => "");
+  const numstat = await deps.gitExec(["diff", "--numstat", "--", entry.path], workdir).catch(() => "");
+  const [additionsRaw = "0", deletionsRaw = "0"] = numstat.split("\t");
+  const fallbackAdditions = modifiedContent ? modifiedContent.split("\n").length : 0;
+  return {
+    path: entry.path,
+    status: entry.status,
+    additions: Number.parseInt(additionsRaw, 10) || (entry.status === "A" ? fallbackAdditions : 0),
+    deletions: Number.parseInt(deletionsRaw, 10) || 0,
+    diff,
+    truncated: false,
+    originalContent,
+    modifiedContent,
+    contentTruncated: false,
+  };
+}
+
+function readWorktreeTextFile(
+  workdir: string,
+  filePath: string,
+  deps: { fs: BridgeFsLike; path: BridgePathLike },
+): Promise<string> {
+  const fullPath = deps.path.resolve(workdir, filePath);
+  if (!isPathInsideRoot(workdir, fullPath, deps.path)) {
+    return Promise.reject(new Error("Path traversal denied"));
+  }
+  return new Promise((resolve, reject) => {
+    deps.fs.readFile(fullPath, (err, content) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(content.toString("utf8"));
+    });
+  });
 }
 
 // --- Shared branch diff / file-at-ref handlers ---
