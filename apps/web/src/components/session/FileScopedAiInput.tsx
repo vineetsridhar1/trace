@@ -122,7 +122,9 @@ export function FileScopedAiInput({
           className="h-8 w-44 shrink-0 border-[#3c3c3c] bg-[#1e1e1e] px-2 text-[11px] text-[#cccccc] hover:bg-[#2f3030] focus:ring-0"
           title="Choose agent"
         >
-          <SelectValue placeholder="No agents" />
+          <SelectValue placeholder="No agents">
+            {selectedSession ? sessionLabel(selectedSession) : undefined}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent align="start" className="min-w-56">
           {sessions.map((session) => (
