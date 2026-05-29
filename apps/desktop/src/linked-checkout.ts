@@ -489,25 +489,6 @@ async function resolveRefCommitSha(repoPath: string, ref: string): Promise<strin
   return runGit(repoPath, ["rev-parse", `${ref}^{commit}`]);
 }
 
-async function fetchOriginIfAvailable(repoPath: string): Promise<void> {
-  try {
-    await runGit(repoPath, ["remote", "get-url", "origin"]);
-  } catch {
-    return;
-  }
-
-  try {
-    await execFileAsync("git", ["fetch", "origin", "--prune"], {
-      cwd: repoPath,
-      maxBuffer: GIT_MAX_BUFFER,
-    });
-  } catch (error) {
-    console.warn(
-      `[linked-checkout] origin fetch failed; using cached refs: ${formatGitError(error)}`,
-    );
-  }
-}
-
 async function pushBranchToOriginIfAvailable(repoPath: string, branch: string): Promise<boolean> {
   assertSafeGitRef(branch);
   if (branch.includes(":") || branch.startsWith("refs/")) {
@@ -653,6 +634,29 @@ export async function resolveTargetCommitSha(
   if (remoteSha) return remoteSha;
 
   throw new Error(`Branch not found: ${branch}`);
+}
+
+export async function resolveSyncTargetCommitSha(
+  repoPath: string,
+  branch: string,
+  commitSha?: string | null,
+): Promise<string> {
+  if (commitSha) {
+    try {
+      return await resolveTargetCommitSha(repoPath, branch, commitSha);
+    } catch {
+      await fetchTargetBranchIfAvailable(repoPath, branch);
+      return resolveTargetCommitSha(repoPath, branch, commitSha);
+    }
+  }
+
+  const worktreePath = await findWorktreePathForBranch(repoPath, branch);
+  if (worktreePath) {
+    return getCurrentCommitSha(worktreePath);
+  }
+
+  await fetchTargetBranchIfAvailable(repoPath, branch);
+  return resolveTargetCommitSha(repoPath, branch);
 }
 
 async function switchToDetachedCommit(repoPath: string, commitSha: string): Promise<void> {
@@ -985,6 +989,24 @@ async function readCurrentGitState(repoPath: string): Promise<{
   }
 }
 
+async function readChangedFilesState(repoPath: string): Promise<{
+  dirty: boolean;
+  changedFiles: BridgeLinkedCheckoutChangedFile[];
+}> {
+  try {
+    const changedFiles = await listChangedFiles(repoPath);
+    return {
+      dirty: changedFiles.length > 0,
+      changedFiles,
+    };
+  } catch {
+    return {
+      dirty: await hasUncommittedChanges(repoPath).catch(() => false),
+      changedFiles: [],
+    };
+  }
+}
+
 async function readStatus(repoId: string): Promise<LinkedCheckoutStatus> {
   const repoConfig = getRepoConfig(repoId);
   const repoPath = repoConfig?.path ?? null;
@@ -994,10 +1016,9 @@ async function readStatus(repoId: string): Promise<LinkedCheckoutStatus> {
     return buildStatus(repoId, null, attachment, null, null, false, []);
   }
 
-  const [{ currentBranch, currentCommitSha }, dirty, changedFiles] = await Promise.all([
+  const [{ currentBranch, currentCommitSha }, changedFilesState] = await Promise.all([
     readCurrentGitState(repoPath),
-    hasUncommittedChanges(repoPath).catch(() => false),
-    listChangedFiles(repoPath).catch(() => []),
+    readChangedFilesState(repoPath),
   ]);
   return buildStatus(
     repoId,
@@ -1005,8 +1026,8 @@ async function readStatus(repoId: string): Promise<LinkedCheckoutStatus> {
     attachment,
     currentBranch,
     currentCommitSha,
-    dirty,
-    changedFiles,
+    changedFilesState.dirty,
+    changedFilesState.changedFiles,
   );
 }
 
@@ -1099,9 +1120,11 @@ export function syncLinkedCheckout(
     try {
       const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
       const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
-      await fetchOriginIfAvailable(repoPath);
-      await fetchTargetBranchIfAvailable(repoPath, input.branch);
-      let targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
+      let targetCommitSha = await resolveSyncTargetCommitSha(
+        repoPath,
+        input.branch,
+        input.commitSha,
+      );
       let rebaseAttachmentPrimed = false;
 
       if (await requiresSyncConflictResolution(repoPath, targetCommitSha)) {
