@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
 import { GitCommitHorizontal, RefreshCw, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +52,7 @@ export function CommitSessionGroupChangesDialog({
   const [loading, setLoading] = useState(false);
   const [revertingPath, setRevertingPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const emptyRetryAttemptedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -71,8 +72,17 @@ export function CommitSessionGroupChangesDialog({
 
   useEffect(() => {
     if (!open) return;
+    emptyRetryAttemptedRef.current = false;
     void refresh();
   }, [open, refresh]);
+
+  useEffect(() => {
+    if (!open || loading || error || files.length > 0) return;
+    if (emptyRetryAttemptedRef.current) return;
+    emptyRetryAttemptedRef.current = true;
+    const timer = window.setTimeout(() => void refresh(), 300);
+    return () => window.clearTimeout(timer);
+  }, [error, files.length, loading, open, refresh]);
 
   useEffect(() => {
     if (!open) {

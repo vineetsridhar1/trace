@@ -58,6 +58,7 @@ export function MonacoFileViewer({
   const contentRef = useRef<string | null>(content);
   const savedContentRef = useRef<string | null>(savedContent);
   const savingRef = useRef(false);
+  const activeSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const mountedRef = useRef(false);
   const blurDisposableRef = useRef<{ dispose: () => void } | null>(null);
 
@@ -128,10 +129,12 @@ export function MonacoFileViewer({
     if (nextContent === null || nextSavedContent === null || nextContent === nextSavedContent) {
       return true;
     }
-    if (savingRef.current) return false;
+    if (savingRef.current && activeSavePromiseRef.current) {
+      return activeSavePromiseRef.current;
+    }
     savingRef.current = true;
     if (mountedRef.current) setSaving(true);
-    try {
+    const savePromise = (async () => {
       const result = await client
         .mutation(SAVE_SESSION_GROUP_FILE_MUTATION, {
           sessionGroupId,
@@ -147,6 +150,10 @@ export function MonacoFileViewer({
       storeBuffer(nextContent, nextContent);
       if (!options?.silent) toast.success("File saved");
       return true;
+    })();
+    activeSavePromiseRef.current = savePromise;
+    try {
+      return await savePromise;
     } catch (err) {
       if (!options?.silent) {
         toast.error("Failed to save file", {
@@ -156,6 +163,7 @@ export function MonacoFileViewer({
       return false;
     } finally {
       savingRef.current = false;
+      activeSavePromiseRef.current = null;
       if (mountedRef.current) setSaving(false);
     }
   }, [filePath, sessionGroupId, storeBuffer]);
