@@ -118,6 +118,16 @@ export interface BridgeReadFileCommand {
   workdirHint?: string;
 }
 
+export interface BridgeWriteFileCommand {
+  type: "write_file";
+  requestId: string;
+  sessionId: string;
+  relativePath: string;
+  content: string;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
+}
+
 export interface BridgeBranchDiffCommand {
   type: "branch_diff";
   requestId: string;
@@ -264,6 +274,7 @@ export type BridgeCommand =
   | BridgeListWorkspaceSlugsCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
+  | BridgeWriteFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
@@ -497,6 +508,12 @@ export interface BridgeFileContentResult {
   error?: string;
 }
 
+export interface BridgeFileWriteResult {
+  type: "file_write_result";
+  requestId: string;
+  error?: string;
+}
+
 export interface BridgeBranchDiffFile {
   path: string;
   status: string;
@@ -578,6 +595,7 @@ export type BridgeMessage =
   | BridgeWorkspaceSlugsResult
   | BridgeFilesResult
   | BridgeFileContentResult
+  | BridgeFileWriteResult
   | BridgeBranchDiffResult
   | BridgeFileAtRefResult
   | BridgeSkillsResult
@@ -660,6 +678,7 @@ export interface BridgeFsLike {
     ) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>>;
     realpath: (p: string) => Promise<string>;
     stat: (p: string) => Promise<{ size: number; isFile: () => boolean }>;
+    writeFile: (p: string, data: string) => Promise<void>;
   };
 }
 export interface BridgePathLike {
@@ -810,6 +829,68 @@ export function handleReadFile(
         requestId,
         content: "",
         error: err instanceof Error ? err.message : "Failed to read file",
+      });
+    }
+  })();
+}
+
+/**
+ * Handle a `write_file` bridge command. Writes only existing text files inside the workdir.
+ */
+export function handleWriteFile(
+  cmd: BridgeWriteFileCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { fs: BridgeFsLike; path: BridgePathLike },
+): void {
+  const { requestId, sessionId, relativePath, content, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({
+      type: "file_write_result",
+      requestId,
+      error: `No workdir known for session ${sessionId}`,
+    });
+    return;
+  }
+  if (Buffer.byteLength(content, "utf8") > MAX_FILE_VIEW_BYTES) {
+    send({
+      type: "file_write_result",
+      requestId,
+      error: `File too large to save (${Math.ceil(MAX_FILE_VIEW_BYTES / 1024)} KB max)`,
+    });
+    return;
+  }
+
+  const normalizedWorkdir = deps.path.resolve(workdir);
+  const fullPath = deps.path.resolve(normalizedWorkdir, relativePath);
+  if (!isPathInsideRoot(normalizedWorkdir, fullPath, deps.path)) {
+    send({ type: "file_write_result", requestId, error: "Path traversal denied" });
+    return;
+  }
+
+  void (async () => {
+    try {
+      const realWorkdir = await deps.fs.promises.realpath(normalizedWorkdir);
+      const realPath = await deps.fs.promises.realpath(fullPath);
+      if (!isPathInsideRoot(realWorkdir, realPath, deps.path)) {
+        send({ type: "file_write_result", requestId, error: "Path traversal denied" });
+        return;
+      }
+
+      const stats = await deps.fs.promises.stat(realPath);
+      if (!stats.isFile()) {
+        send({ type: "file_write_result", requestId, error: "Not a file" });
+        return;
+      }
+
+      await deps.fs.promises.writeFile(realPath, content);
+      send({ type: "file_write_result", requestId });
+    } catch (err) {
+      send({
+        type: "file_write_result",
+        requestId,
+        error: err instanceof Error ? err.message : "Failed to write file",
       });
     }
   })();

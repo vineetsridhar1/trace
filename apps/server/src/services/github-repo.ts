@@ -25,7 +25,6 @@ interface GitHubContentResponse {
   content?: unknown;
   encoding?: unknown;
   download_url?: unknown;
-  sha?: unknown;
 }
 
 interface GitHubCompareResponse {
@@ -117,36 +116,6 @@ export class GitHubRepoService {
     return "";
   }
 
-  async updateFile(
-    repo: GitHubRepoRef,
-    ref: string,
-    filePath: string,
-    content: string,
-    token: string,
-    message: string,
-  ): Promise<void> {
-    const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-    const existing = await this.request<GitHubContentResponse>(
-      repo,
-      `/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`,
-      token,
-    );
-
-    if (existing.type !== "file" || typeof existing.sha !== "string") {
-      throw new Error("GitHub path is not a file");
-    }
-
-    await this.request<Record<string, unknown>>(repo, `/contents/${encodedPath}`, token, {
-      method: "PUT",
-      body: JSON.stringify({
-        message,
-        content: Buffer.from(content, "utf8").toString("base64"),
-        branch: ref,
-        sha: existing.sha,
-      }),
-    });
-  }
-
   async branchDiff(
     repo: GitHubRepoRef,
     baseRef: string,
@@ -189,17 +158,12 @@ export class GitHubRepoService {
       }));
   }
 
-  private async request<T>(
-    repo: GitHubRepoRef,
-    path: string,
-    token: string,
-    init?: RequestInit,
-  ): Promise<T> {
+  private async request<T>(repo: GitHubRepoRef, path: string, token: string): Promise<T> {
     const response = await fetch(
       `https://api.github.com/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(
         repo.repo,
       )}${path}`,
-      { ...init, headers: { ...this.headers(token), ...init?.headers } },
+      { headers: this.headers(token) },
     );
 
     if (!response.ok) {

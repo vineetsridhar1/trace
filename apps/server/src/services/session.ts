@@ -7632,20 +7632,18 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<boolean> {
-    const source = await this.resolveGitHubSessionGroupFileSource(
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
       sessionGroupId,
       organizationId,
       userId,
     );
     const normalizedPath = this.normalizeFilePath(filePath);
-    const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
-    await githubRepoService.updateFile(
-      source.repo,
-      source.branch,
-      relativePath,
+    await sessionRouter.writeFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
       content,
-      source.token,
-      `Update ${relativePath}`,
+      runtime.workdirHint,
     );
     return true;
   }

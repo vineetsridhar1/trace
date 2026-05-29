@@ -9,6 +9,7 @@ import type {
   BridgeTerminalDestroyCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
+  BridgeWriteFileCommand,
   BridgeBranchDiffCommand,
   BridgeFileAtRefCommand,
   BridgeBranchDiffFile,
@@ -52,6 +53,7 @@ export type SessionCommand =
   | BaseSessionCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
+  | BridgeWriteFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
@@ -291,6 +293,11 @@ export class SessionRouter {
   private pendingFileContentRequests = new Map<
     string,
     { runtimeId: string; resolve: (content: string) => void; reject: (err: Error) => void }
+  >();
+  /** Pending file write requests: requestId → resolve/reject */
+  private pendingFileWriteRequests = new Map<
+    string,
+    { runtimeId: string; resolve: () => void; reject: (err: Error) => void }
   >();
   /** Pending branch diff requests: requestId → resolve/reject */
   private pendingBranchDiffRequests = new Map<
@@ -1073,6 +1080,63 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(content);
+    }
+  }
+
+  /**
+   * Ask a runtime to write a file's contents to its live workspace.
+   */
+  writeFile(
+    runtimeId: string,
+    sessionId: string,
+    relativePath: string,
+    content: string,
+    workdirHint?: string,
+    timeoutMs = 15_000,
+  ): Promise<void> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "write_file",
+      requestId,
+      sessionId,
+      relativePath,
+      content,
+      workdirHint,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFileWriteRequests.delete(requestId);
+        reject(new Error("File write request timed out"));
+      }, timeoutMs);
+
+      this.pendingFileWriteRequests.set(requestId, {
+        runtimeId,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  /** Resolve a pending file write request (called from bridge handler). */
+  resolveFileWriteRequest(requestId: string, error?: string, sourceRuntimeId?: string): void {
+    const pending = this.pendingFileWriteRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingFileWriteRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve();
     }
   }
 

@@ -42,7 +42,6 @@ vi.mock("./github-repo.js", () => ({
   githubRepoService: {
     listFiles: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue("file contents"),
-    updateFile: vi.fn().mockResolvedValue(undefined),
     branchDiff: vi.fn().mockResolvedValue([]),
   },
   parseGitHubRepo: vi.fn().mockReturnValue({ owner: "trace", repo: "trace" }),
@@ -66,6 +65,7 @@ vi.mock("../lib/session-router.js", () => ({
     listBranches: vi.fn().mockResolvedValue([]),
     listFiles: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue(""),
+    writeFile: vi.fn().mockResolvedValue(undefined),
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
     syncLinkedCheckout: vi.fn().mockResolvedValue(null),
@@ -323,7 +323,6 @@ describe("SessionService", () => {
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
     githubRepoServiceMock.readFile.mockResolvedValue("file contents");
-    githubRepoServiceMock.updateFile.mockResolvedValue(undefined);
     githubRepoServiceMock.branchDiff.mockResolvedValue([]);
     parseGitHubRepoMock.mockReturnValue({ owner: "trace", repo: "trace" });
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
@@ -2777,27 +2776,39 @@ describe("SessionService", () => {
       );
     });
 
-    it("saves GitHub files by converting absolute workdir paths to repo-relative paths", async () => {
+    it("saves files through the live session group runtime", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
         branch: "trace/test",
         workdir: "/tmp/trace",
         worktreeDeleted: false,
+        connection: { runtimeInstanceId: "runtime-1" },
         visibility: "public",
         ownerUserId: "user-1",
         repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
       });
 
       await expect(
         service.saveFile("group-1", "/tmp/trace/src/app.ts", "hello", "org-1", "user-1"),
       ).resolves.toBe(true);
-      expect(githubRepoServiceMock.updateFile).toHaveBeenCalledWith(
-        { owner: "trace", repo: "trace" },
-        "trace/test",
-        "src/app.ts",
+      expect(sessionRouterMock.writeFile).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "/tmp/trace/src/app.ts",
         "hello",
-        "gh-token",
-        "Update src/app.ts",
+        "/tmp/trace",
       );
     });
   });
