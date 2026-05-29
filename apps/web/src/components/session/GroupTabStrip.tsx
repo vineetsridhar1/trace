@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Circle,
+  FilePlus2,
   FileCode,
   GitCompareArrows,
   MessageSquarePlus,
@@ -59,6 +60,7 @@ interface GroupTabStripProps {
   onCloseFile: (filePath: string) => void;
   onNewChat: () => void;
   onOpenTerminal: () => void;
+  onOpenFilePalette: () => void;
   canNewChat: boolean;
   canOpenTerminal: boolean;
 }
@@ -88,6 +90,7 @@ export function GroupTabStrip({
   onCloseFile,
   onNewChat,
   onOpenTerminal,
+  onOpenFilePalette,
   canNewChat,
   canOpenTerminal,
 }: GroupTabStripProps) {
@@ -137,11 +140,15 @@ export function GroupTabStrip({
         e.preventDefault();
         setDropdownOpen(false);
         onOpenTerminal();
+      } else if (e.key === "3") {
+        e.preventDefault();
+        setDropdownOpen(false);
+        onOpenFilePalette();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [dropdownOpen, canNewChat, canOpenTerminal, onNewChat, onOpenTerminal]);
+  }, [dropdownOpen, canNewChat, canOpenTerminal, onNewChat, onOpenTerminal, onOpenFilePalette]);
 
   return (
     <TooltipProvider delay={300}>
@@ -340,6 +347,11 @@ export function GroupTabStrip({
                   <TerminalSquare size={14} />
                   Terminal
                   <DropdownMenuShortcut>2</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onOpenFilePalette}>
+                  <FilePlus2 size={14} />
+                  File
+                  <DropdownMenuShortcut>3</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

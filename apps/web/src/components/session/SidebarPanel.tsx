@@ -12,8 +12,12 @@ interface SidebarPanelProps {
   sessionGroupId: string;
   activeSessionId: string | null;
   activeTab: SidebarTab;
+  files: string[];
+  filesLoading: boolean;
+  filesError: string | null;
   onTabChange: (tab: SidebarTab) => void;
   onFileClick: (filePath: string) => void;
+  onRefreshFiles: () => Promise<void>;
   onDiffFileClick?: (filePath: string, status: string) => void;
   highlightCheckpointId?: string | null;
   onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
@@ -29,8 +33,12 @@ export function SidebarPanel({
   sessionGroupId,
   activeSessionId,
   activeTab,
+  files,
+  filesLoading,
+  filesError,
   onTabChange,
   onFileClick,
+  onRefreshFiles,
   onDiffFileClick,
   highlightCheckpointId,
   onCheckpointClick,
@@ -78,7 +86,13 @@ export function SidebarPanel({
             />
           </div>
         ) : activeTab === "files" ? (
-          <FileExplorer sessionGroupId={sessionGroupId} onFileClick={onFileClick} />
+          <FileExplorer
+            files={files}
+            loading={filesLoading}
+            error={filesError}
+            onRefresh={onRefreshFiles}
+            onFileClick={onFileClick}
+          />
         ) : activeTab === "changes" ? (
           <BranchChangesPanel
             sessionGroupId={sessionGroupId}

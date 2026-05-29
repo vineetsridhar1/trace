@@ -18,6 +18,7 @@ import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-cor
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
+import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
@@ -29,6 +30,7 @@ import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeR
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
+import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
@@ -234,6 +236,7 @@ export function SessionGroupDetailView({
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [forkEventId, setForkEventId] = useState<string | null>(null);
+  const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
@@ -251,6 +254,12 @@ export function SessionGroupDetailView({
     sessionGroupId,
     terminals,
   });
+  const {
+    files: sessionGroupFiles,
+    loading: sessionGroupFilesLoading,
+    error: sessionGroupFilesError,
+    refreshFiles,
+  } = useSessionGroupFiles(sessionGroupId);
 
   const {
     openFiles,
@@ -477,6 +486,21 @@ export function SessionGroupDetailView({
     });
   }, []);
 
+  const handleOpenFilePalette = useCallback(() => {
+    setFilePaletteOpen(true);
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      setFilePaletteOpen((open) => !open);
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       event.preventDefault();
@@ -643,6 +667,7 @@ export function SessionGroupDetailView({
                 onCloseFile={handleCloseFile}
                 onNewChat={handleNewChat}
                 onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
+                onOpenFilePalette={handleOpenFilePalette}
                 canNewChat={
                   !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
                 }
@@ -679,8 +704,12 @@ export function SessionGroupDetailView({
                       sessionGroupId={sessionGroupId}
                       activeSessionId={selectedSession?.id ?? null}
                       activeTab={sidebarTab}
+                      files={sessionGroupFiles}
+                      filesLoading={sessionGroupFilesLoading}
+                      filesError={sessionGroupFilesError}
                       onTabChange={handleSidebarTabChange}
                       onFileClick={handleFileClick}
+                      onRefreshFiles={refreshFiles}
                       onDiffFileClick={handleDiffFileClick}
                       highlightCheckpointId={highlightCheckpointId}
                       onCheckpointClick={handleCheckpointClick}
@@ -695,6 +724,15 @@ export function SessionGroupDetailView({
                 sessionName={selectedSession?.name ?? "this session"}
                 open={forkDialogOpen}
                 onOpenChange={setForkDialogOpen}
+              />
+              <FileCommandPalette
+                open={filePaletteOpen}
+                files={sessionGroupFiles}
+                loading={sessionGroupFilesLoading}
+                error={sessionGroupFilesError}
+                onOpenChange={setFilePaletteOpen}
+                onRefresh={refreshFiles}
+                onOpenFile={handleFileClick}
               />
             </div>
           </UploadedAttachmentOpenContext.Provider>
