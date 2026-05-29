@@ -117,17 +117,12 @@ export class GitHubRepoService {
     headRef: string,
     token: string,
   ): Promise<GitHubBranchDiffFile[]> {
-    const files: GitHubCompareResponse["files"] = [];
+    let response: GitHubCompareResponse | null = null;
     let compareNotFound = false;
-    let compared = false;
 
     for (const path of this.comparePaths(baseRef, headRef)) {
       try {
-        const responses = await this.requestAllPages<GitHubCompareResponse>(repo, path, token);
-        compared = true;
-        for (const response of responses) {
-          files.push(...(response.files ?? []));
-        }
+        response = await this.request<GitHubCompareResponse>(repo, path, token);
         break;
       } catch (error) {
         if (error instanceof GitHubApiError && error.status === 404) {
@@ -138,18 +133,17 @@ export class GitHubRepoService {
       }
     }
 
-    if (!compared && compareNotFound) {
-      throw new Error(
-        `GitHub branch diff unavailable: could not compare "${baseRef}" to "${headRef}". ` +
-          "Make sure the session branch has been pushed to GitHub and your token can access the repo.",
-      );
-    }
-
-    if (!compared) {
+    if (!response) {
+      if (compareNotFound) {
+        throw new Error(
+          `GitHub branch diff unavailable: could not compare "${baseRef}" to "${headRef}". ` +
+            "Make sure the session branch has been pushed to GitHub and your token can access the repo.",
+        );
+      }
       throw new Error("GitHub branch diff unavailable.");
     }
 
-    return files
+    return (response.files ?? [])
       .filter((file) => typeof file.filename === "string")
       .map((file) => ({
         path: file.filename as string,
@@ -160,63 +154,19 @@ export class GitHubRepoService {
   }
 
   private async request<T>(repo: GitHubRepoRef, path: string, token: string): Promise<T> {
-    const { data } = await this.requestPage<T>(repo, path, token);
-    return data;
-  }
-
-  private async requestAllPages<T>(
-    repo: GitHubRepoRef,
-    path: string,
-    token: string,
-  ): Promise<T[]> {
-    const pages: T[] = [];
-    let nextPathOrUrl: string | null = path;
-
-    while (nextPathOrUrl) {
-      const page: { data: T; next: string | null } = await this.requestPage<T>(
-        repo,
-        nextPathOrUrl,
-        token,
-      );
-      pages.push(page.data);
-      nextPathOrUrl = page.next;
-    }
-
-    return pages;
-  }
-
-  private async requestPage<T>(
-    repo: GitHubRepoRef,
-    pathOrUrl: string,
-    token: string,
-  ): Promise<{ data: T; next: string | null }> {
-    const url = pathOrUrl.startsWith("https://")
-      ? pathOrUrl
-      : `https://api.github.com/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(
-          repo.repo,
-        )}${pathOrUrl}`;
-
-    const response = await fetch(url, { headers: this.headers(token) });
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(
+        repo.repo,
+      )}${path}`,
+      { headers: this.headers(token) },
+    );
 
     if (!response.ok) {
       const body = await response.text();
       throw new GitHubApiError(response.status, body);
     }
 
-    const data = (await response.json()) as T;
-    const next: string | null = this.nextLink(response.headers.get("link"));
-    return { data, next };
-  }
-
-  private nextLink(linkHeader: string | null): string | null {
-    if (!linkHeader) return null;
-
-    for (const part of linkHeader.split(",")) {
-      const match = part.match(/<([^>]+)>;\s*rel="([^"]+)"/);
-      if (match?.[2] === "next") return match[1];
-    }
-
-    return null;
+    return (await response.json()) as T;
   }
 
   private comparePaths(baseRef: string, headRef: string): string[] {
