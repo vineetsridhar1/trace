@@ -9,13 +9,18 @@ import { App } from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./index.css";
 
-sessionStorage.removeItem("chunk-reload");
+const CHUNK_RELOAD_KEY = "chunk-reload";
+
 window.addEventListener("vite:preloadError", () => {
-  if (!sessionStorage.getItem("chunk-reload")) {
-    sessionStorage.setItem("chunk-reload", "1");
+  if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
     window.location.reload();
   }
 });
+
+window.setTimeout(() => {
+  sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+}, 10_000);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
