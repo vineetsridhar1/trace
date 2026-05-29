@@ -34,13 +34,18 @@ export function FileCommandPalette({
     if (!open) setQuery("");
   }, [open]);
 
-  const results = useMemo(() => searchFilePaths(files, query, MAX_FILE_RESULTS), [files, query]);
+  const trimmedQuery = query.trim();
+  const hasQuery = trimmedQuery.length > 0;
+  const results = useMemo(
+    () => (hasQuery ? searchFilePaths(files, trimmedQuery, MAX_FILE_RESULTS) : []),
+    [files, hasQuery, trimmedQuery],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="top-[22dvh] max-w-2xl gap-0 overflow-hidden rounded-lg border border-border bg-surface-deep p-0 shadow-2xl"
+        className="max-h-[calc(100dvh-4rem)] max-w-2xl gap-0 overflow-hidden rounded-lg border border-border bg-surface-deep p-0 shadow-2xl"
       >
         <DialogTitle className="sr-only">Open file</DialogTitle>
         <DialogDescription className="sr-only">
@@ -54,7 +59,12 @@ export function FileCommandPalette({
             autoFocus
           />
           <CommandList>
-            {loading ? (
+            {!hasQuery ? (
+              <div className="flex h-36 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+                <FileCode size={18} />
+                <p>Start typing to search files.</p>
+              </div>
+            ) : loading ? (
               <div className="flex h-24 items-center justify-center">
                 <TraceLoader size={16} showLabel={false} />
               </div>
@@ -106,12 +116,12 @@ export function FileCommandPalette({
                     No files found.
                   </div>
                 )}
-                {files.length > results.length && (
+                {hasQuery && files.length > results.length && (
                   <div className="border-t px-3 py-2 text-xs text-muted-foreground">
                     Showing {results.length} of {files.length} files
                   </div>
                 )}
-                {files.length === 0 && (
+                {hasQuery && files.length === 0 && (
                   <div className="flex h-24 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
                     <FileCode size={16} />
                     No files found
