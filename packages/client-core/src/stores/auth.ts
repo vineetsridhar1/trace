@@ -78,7 +78,6 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
       if (storedOrgId) headers["X-Organization-Id"] = storedOrgId;
 
       const res = await platform.fetch(`${platform.apiUrl}/auth/me`, {
-        cache: "no-store",
         credentials: "include",
         headers,
       });
