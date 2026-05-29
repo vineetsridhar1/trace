@@ -135,19 +135,6 @@ export function GroupHeader({
         disabledReason={moveDisabledReason}
       />
 
-      <button
-        onClick={onToggleSidebar}
-        className={cn(
-          "hidden h-8 w-8 items-center justify-center rounded-md transition-colors sm:flex",
-          showSidebar
-            ? "bg-surface-elevated text-foreground"
-            : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-        )}
-        title="Toggle sidebar"
-      >
-        <PanelRight size={14} />
-      </button>
-
       <div className="relative" ref={historyRef}>
         <button
           onClick={() => setShowHistory((value: boolean) => !value)}
@@ -184,6 +171,19 @@ export function GroupHeader({
           {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         </button>
       )}
+
+      <button
+        onClick={onToggleSidebar}
+        className={cn(
+          "hidden h-8 w-8 items-center justify-center rounded-md transition-colors sm:flex",
+          showSidebar
+            ? "bg-surface-elevated text-foreground"
+            : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+        )}
+        title="Toggle sidebar"
+      >
+        <PanelRight size={14} />
+      </button>
     </div>
   );
 }
