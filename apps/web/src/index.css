@@ -156,6 +156,42 @@
   -webkit-app-region: no-drag;
 }
 
+.app-region-no-drag .app-region-drag,
+.app-region-no-drag .app-region-drag * {
+  -webkit-app-region: drag;
+}
+
+.app-region-drag :is(
+    .app-region-no-drag,
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    [contenteditable="true"],
+    [role="button"],
+    [role="link"],
+    [role="menu"],
+    [role="menuitem"],
+    [role="textbox"]
+  ),
+.app-region-drag :is(
+    .app-region-no-drag,
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    [contenteditable="true"],
+    [role="button"],
+    [role="link"],
+    [role="menu"],
+    [role="menuitem"],
+    [role="textbox"]
+  ) * {
+  -webkit-app-region: no-drag;
+}
+
 /* ── Button utilities ── */
 .btn-primary {
   color: white !important;

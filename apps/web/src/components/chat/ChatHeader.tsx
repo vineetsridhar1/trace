@@ -72,7 +72,7 @@ export function ChatHeader({ chatId }: { chatId: string }) {
   };
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+    <div className="app-region-drag flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
       {type === "dm" ? (
         <>
           {otherMember?.user.avatarUrl ? (

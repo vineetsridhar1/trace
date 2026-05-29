@@ -118,7 +118,7 @@ export function TicketsView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+      <header className="app-region-drag flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
         <SquareCheck size={18} className="text-muted-foreground" />
         <h2 className="text-lg font-semibold text-foreground">Tickets</h2>
         <ConnectionStatus />
