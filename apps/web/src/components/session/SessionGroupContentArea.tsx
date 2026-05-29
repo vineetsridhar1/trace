@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "react";
+import type { SessionEntity } from "@trace/client-core";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
+import { FileScopedAiInput } from "./FileScopedAiInput";
 import type { OpenFileTab } from "./GroupTabStrip";
 import type { FileEditorBuffer } from "./file-editor-buffer";
 
@@ -23,6 +25,7 @@ interface SessionGroupContentAreaProps {
   openFiles: OpenFileTab[];
   activeTerminalId: string | null;
   selectedSession: { id: string; _optimistic?: boolean } | null;
+  sessionsByRecency: SessionEntity[];
   defaultBranch: string;
   scrollToEventId: string | null;
   onScrollComplete: () => void;
@@ -38,6 +41,7 @@ export function SessionGroupContentArea({
   openFiles,
   activeTerminalId,
   selectedSession,
+  sessionsByRecency,
   defaultBranch,
   scrollToEventId,
   onScrollComplete,
@@ -81,38 +85,46 @@ export function SessionGroupContentArea({
   }
 
   if (activeFilePath?.startsWith("diff:")) {
+    const diffFilePath = activeFilePath.slice(5);
+
     return (
-      <div className="h-full">
-        <Suspense
-          fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
-        >
-          <MonacoDiffViewer
-            key={activeFilePath}
-            sessionGroupId={sessionGroupId}
-            filePath={activeFilePath.slice(5)}
-            status={activeFile?.diffStatus ?? "M"}
-            defaultBranch={defaultBranch}
-          />
-        </Suspense>
+      <div className="flex h-full flex-col">
+        <div className="min-h-0 flex-1">
+          <Suspense
+            fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
+          >
+            <MonacoDiffViewer
+              key={activeFilePath}
+              sessionGroupId={sessionGroupId}
+              filePath={diffFilePath}
+              status={activeFile?.diffStatus ?? "M"}
+              defaultBranch={defaultBranch}
+            />
+          </Suspense>
+        </div>
+        <FileScopedAiInput filePath={diffFilePath} sessions={sessionsByRecency} />
       </div>
     );
   }
 
   if (activeFilePath) {
     return (
-      <div className="h-full">
-        <Suspense
-          fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
-        >
-          <MonacoFileViewer
-            key={`${activeFilePath}:${activeFile?.lineNumber ?? ""}`}
-            sessionGroupId={sessionGroupId}
-            filePath={activeFilePath}
-            initialLineNumber={activeFile?.lineNumber}
-            buffer={getFileBuffer(activeFilePath)}
-            onBufferChange={setFileBuffer}
-          />
-        </Suspense>
+      <div className="flex h-full flex-col">
+        <div className="min-h-0 flex-1">
+          <Suspense
+            fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}
+          >
+            <MonacoFileViewer
+              key={`${activeFilePath}:${activeFile?.lineNumber ?? ""}`}
+              sessionGroupId={sessionGroupId}
+              filePath={activeFilePath}
+              initialLineNumber={activeFile?.lineNumber}
+              buffer={getFileBuffer(activeFilePath)}
+              onBufferChange={setFileBuffer}
+            />
+          </Suspense>
+        </div>
+        <FileScopedAiInput filePath={activeFilePath} sessions={sessionsByRecency} />
       </div>
     );
   }
