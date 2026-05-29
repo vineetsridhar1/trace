@@ -1707,6 +1707,7 @@ export class SessionService {
     organizationId: string;
     runtimeInstanceId?: string | null;
     sessionGroupId?: string | null;
+    capability?: "session" | "terminal";
     failureMessage?: string;
   }): Promise<void> {
     try {
@@ -1715,6 +1716,7 @@ export class SessionService {
         organizationId: params.organizationId,
         runtimeInstanceId: params.runtimeInstanceId,
         sessionGroupId: params.sessionGroupId,
+        capability: params.capability,
       });
     } catch (error) {
       if (params.failureMessage && error instanceof Error) {
@@ -1933,18 +1935,19 @@ export class SessionService {
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
     if (groupRuntimeId) {
+      const runtime = sessionRouter.getRuntime(groupRuntimeId, organizationId);
+      if (!runtime) {
+        throw new Error("No connected runtime available for this session group");
+      }
+      this.assertSessionGroupFileWriteAccess(group, runtime, userId);
       await this.assertRuntimeAccess({
         userId,
         organizationId,
         runtimeInstanceId: groupRuntimeId,
         sessionGroupId,
+        capability: "session",
         failureMessage: LOCAL_FILE_ACCESS_DENIED_ERROR,
       });
-
-      const runtime = sessionRouter.getRuntime(groupRuntimeId, organizationId);
-      if (!runtime) {
-        throw new Error("No connected runtime available for this session group");
-      }
 
       const sessionOnGroupRuntime = sessions.find(
         (session: { id: string; workdir: string | null; connection: unknown }) =>
@@ -1965,12 +1968,16 @@ export class SessionService {
     for (const session of sessions) {
       const runtimeId = resolveSessionRuntimeId(session);
       if (!runtimeId) continue;
+      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      if (!runtime) continue;
       try {
+        this.assertSessionGroupFileWriteAccess(group, runtime, userId);
         await this.assertRuntimeAccess({
           userId,
           organizationId,
           runtimeInstanceId: runtimeId,
           sessionGroupId,
+          capability: "session",
           failureMessage: LOCAL_FILE_ACCESS_DENIED_ERROR,
         });
       } catch (error) {
@@ -1980,8 +1987,6 @@ export class SessionService {
         }
         throw error;
       }
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
-      if (!runtime) continue;
       return {
         runtimeId: runtime.key,
         sessionId: session.id,
@@ -1993,6 +1998,17 @@ export class SessionService {
       throw new Error(LOCAL_FILE_ACCESS_DENIED_ERROR);
     }
     throw new Error("No connected runtime available for this session group");
+  }
+
+  private assertSessionGroupFileWriteAccess(
+    group: { ownerUserId: string | null },
+    runtime: RuntimeInstance,
+    userId: string,
+  ): void {
+    if (group.ownerUserId === userId) return;
+    if (runtime.hostingMode === "cloud") {
+      throw new AuthorizationError("Not authorized to edit this session group");
+    }
   }
 
   private getConnectionRuntimeInstanceId(connection: unknown): string | null {
