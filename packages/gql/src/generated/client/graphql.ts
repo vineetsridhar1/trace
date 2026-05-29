@@ -2193,12 +2193,6 @@ export type SessionGroupBranchDiffQuery = {
   }>;
 };
 
-export type SessionGroupFilesQueryVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-}>;
-
-export type SessionGroupFilesQuery = { __typename?: "Query"; sessionGroupFiles: Array<string> };
-
 export type SessionGroupFileAtRefQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
   filePath: Scalars["String"]["input"];
@@ -2419,6 +2413,12 @@ export type SessionGroupDetailQuery = {
     }>;
   } | null;
 };
+
+export type SessionGroupFilesQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionGroupFilesQuery = { __typename?: "Query"; sessionGroupFiles: Array<string> };
 
 export type MyApiTokensQueryVariables = Exact<{ [key: string]: never }>;
 
@@ -4135,42 +4135,6 @@ export const SessionGroupBranchDiffDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupBranchDiffQuery, SessionGroupBranchDiffQueryVariables>;
-export const SessionGroupFilesDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "SessionGroupFiles" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionGroupFiles" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-            ],
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SessionGroupFilesQuery, SessionGroupFilesQueryVariables>;
 export const SessionGroupFileAtRefDocument = {
   kind: "Document",
   definitions: [
@@ -4751,6 +4715,42 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
+export const SessionGroupFilesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupFiles" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroupFiles" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionGroupFilesQuery, SessionGroupFilesQueryVariables>;
 export const MyApiTokensDocument = {
   kind: "Document",
   definitions: [
