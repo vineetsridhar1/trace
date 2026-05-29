@@ -178,6 +178,11 @@ export const sessionQueries = {
       args.runtimeInstanceId ?? undefined,
     );
   },
+  sessionGroupWorktreeChanges: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.listWorktreeChanges(args.sessionGroupId, orgId, ctx.userId);
+  },
   sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
 
@@ -428,6 +433,44 @@ export const sessionMutations = {
       ctx.actorType,
       ctx.userId,
     );
+  },
+  saveSessionGroupFile: (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string; content: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.saveFile(
+      args.sessionGroupId,
+      args.filePath,
+      args.content,
+      orgId,
+      ctx.userId,
+    );
+  },
+  commitSessionGroupFileChanges: (
+    _: unknown,
+    args: { sessionGroupId: string; message?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.commitFileChanges(
+      args.sessionGroupId,
+      args.message ?? undefined,
+      orgId,
+      ctx.userId,
+    );
+  },
+  revertSessionGroupFileChange: (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.revertFileChange(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
   linkLinkedCheckoutRepo: (
     _: unknown,

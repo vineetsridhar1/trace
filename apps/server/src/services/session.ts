@@ -1707,6 +1707,7 @@ export class SessionService {
     organizationId: string;
     runtimeInstanceId?: string | null;
     sessionGroupId?: string | null;
+    capability?: "session" | "terminal";
     failureMessage?: string;
   }): Promise<void> {
     try {
@@ -1715,6 +1716,7 @@ export class SessionService {
         organizationId: params.organizationId,
         runtimeInstanceId: params.runtimeInstanceId,
         sessionGroupId: params.sessionGroupId,
+        capability: params.capability,
       });
     } catch (error) {
       if (params.failureMessage && error instanceof Error) {
@@ -1901,6 +1903,7 @@ export class SessionService {
     sessionGroupId: string,
     organizationId: string,
     userId: string,
+    options: { requireWrite?: boolean } = {},
   ): Promise<{ runtimeId: string; sessionId: string; workdirHint?: string }> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
@@ -1933,18 +1936,21 @@ export class SessionService {
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
     if (groupRuntimeId) {
+      const runtime = sessionRouter.getRuntime(groupRuntimeId, organizationId);
+      if (!runtime) {
+        throw new Error("No connected runtime available for this session group");
+      }
+      if (options.requireWrite) {
+        this.assertSessionGroupFileWriteAccess(group, runtime, userId);
+      }
       await this.assertRuntimeAccess({
         userId,
         organizationId,
         runtimeInstanceId: groupRuntimeId,
         sessionGroupId,
+        capability: "session",
         failureMessage: LOCAL_FILE_ACCESS_DENIED_ERROR,
       });
-
-      const runtime = sessionRouter.getRuntime(groupRuntimeId, organizationId);
-      if (!runtime) {
-        throw new Error("No connected runtime available for this session group");
-      }
 
       const sessionOnGroupRuntime = sessions.find(
         (session: { id: string; workdir: string | null; connection: unknown }) =>
@@ -1965,12 +1971,18 @@ export class SessionService {
     for (const session of sessions) {
       const runtimeId = resolveSessionRuntimeId(session);
       if (!runtimeId) continue;
+      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      if (!runtime) continue;
       try {
+        if (options.requireWrite) {
+          this.assertSessionGroupFileWriteAccess(group, runtime, userId);
+        }
         await this.assertRuntimeAccess({
           userId,
           organizationId,
           runtimeInstanceId: runtimeId,
           sessionGroupId,
+          capability: "session",
           failureMessage: LOCAL_FILE_ACCESS_DENIED_ERROR,
         });
       } catch (error) {
@@ -1980,8 +1992,6 @@ export class SessionService {
         }
         throw error;
       }
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
-      if (!runtime) continue;
       return {
         runtimeId: runtime.key,
         sessionId: session.id,
@@ -1993,6 +2003,17 @@ export class SessionService {
       throw new Error(LOCAL_FILE_ACCESS_DENIED_ERROR);
     }
     throw new Error("No connected runtime available for this session group");
+  }
+
+  private assertSessionGroupFileWriteAccess(
+    group: { ownerUserId: string | null },
+    runtime: RuntimeInstance,
+    userId: string,
+  ): void {
+    if (group.ownerUserId === userId) return;
+    if (runtime.hostingMode === "cloud") {
+      throw new AuthorizationError("Not authorized to edit this session group");
+    }
   }
 
   private getConnectionRuntimeInstanceId(connection: unknown): string | null {
@@ -2532,12 +2553,7 @@ export class SessionService {
     });
   }
 
-  async search(
-    organizationId: string,
-    userId: string,
-    query: string,
-    channelId?: string | null,
-  ) {
+  async search(organizationId: string, userId: string, query: string, channelId?: string | null) {
     const trimmed = query.trim().slice(0, 200);
     if (trimmed.length < 2) return { sessions: [], sessionGroups: [] };
 
@@ -2930,16 +2946,20 @@ export class SessionService {
       ? null
       : reuseExistingGroupRuntimeSelection
         ? null
-      : await agentEnvironmentService.resolveForSessionRequest({
-          organizationId: input.organizationId,
-          environmentId: input.environmentId ?? null,
-          adapterType:
-            input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
-          tool,
-          validateTool: !!input.prompt,
-          actorType: input.actorType ?? "user",
-          actorId: input.createdById,
-        });
+        : await agentEnvironmentService.resolveForSessionRequest({
+            organizationId: input.organizationId,
+            environmentId: input.environmentId ?? null,
+            adapterType:
+              input.hosting === "cloud"
+                ? "provisioned"
+                : input.hosting === "local"
+                  ? "local"
+                  : null,
+            tool,
+            validateTool: !!input.prompt,
+            actorType: input.actorType ?? "user",
+            actorId: input.createdById,
+          });
     const hasCompatibilityRuntimeFallback =
       deferRuntimeSelection ||
       !!input.hosting ||
@@ -3659,7 +3679,9 @@ export class SessionService {
             forkedFromSessionGroupId: input.sourceSessionGroupId,
             forkedFromEventId: sourceEvent.id,
           } as Prisma.InputJsonValue,
-          parentId: sourceEvent.parentId ? input.targetEventIds.get(sourceEvent.parentId) : undefined,
+          parentId: sourceEvent.parentId
+            ? input.targetEventIds.get(sourceEvent.parentId)
+            : undefined,
           actorType: sourceEvent.actorType,
           actorId: sourceEvent.actorId,
           timestamp: sourceEvent.timestamp,
@@ -7593,7 +7615,7 @@ export class SessionService {
     return sessionRouter.setLinkedCheckoutAutoSync(runtimeId, repoId, enabled);
   }
 
-  /** List files in a session group's GitHub branch. */
+  /** List files in a session group's branch from GitHub. */
   async listFiles(
     sessionGroupId: string,
     organizationId: string,
@@ -7614,28 +7636,113 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<string> {
+    const normalizedPath = this.normalizeFilePath(filePath);
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    const normalizedPath = this.normalizeFilePath(filePath);
     const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
     return githubRepoService.readFile(source.repo, source.branch, relativePath, source.token);
   }
 
-  /** Compute the branch diff for a session group (changed files vs default branch). */
+  /** Save a file's content to a session group's working directory. */
+  async saveFile(
+    sessionGroupId: string,
+    filePath: string,
+    content: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    await sessionRouter.writeFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      content,
+      runtime.workdirHint,
+    );
+    return true;
+  }
+
+  async commitFileChanges(
+    sessionGroupId: string,
+    message: string | undefined,
+    organizationId: string,
+    userId: string,
+  ): Promise<string> {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    return sessionRouter.commitFileChanges(
+      runtime.runtimeId,
+      runtime.sessionId,
+      message,
+      runtime.workdirHint,
+    );
+  }
+
+  async listWorktreeChanges(sessionGroupId: string, organizationId: string, userId: string) {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    return sessionRouter.listWorktreeChanges(
+      runtime.runtimeId,
+      runtime.sessionId,
+      runtime.workdirHint,
+    );
+  }
+
+  async revertFileChange(
+    sessionGroupId: string,
+    filePath: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    await sessionRouter.revertWorktreeFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      runtime.workdirHint,
+    );
+    return true;
+  }
+
+  /** Compute the branch diff for a session group from GitHub (changed files vs default branch). */
   async branchDiff(sessionGroupId: string, organizationId: string, userId: string) {
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    const baseBranch = this.toGitHubRef(source.defaultBranch);
-    const headBranch = this.toGitHubRef(source.branch);
-    if (baseBranch === headBranch) return [];
-
-    return githubRepoService.branchDiff(source.repo, baseBranch, headBranch, source.token);
+    if (source.branch === source.defaultBranch) {
+      return [];
+    }
+    return githubRepoService.branchDiff(
+      source.repo,
+      source.defaultBranch,
+      source.branch,
+      source.token,
+    );
   }
 
   /** Read a file's content at a specific GitHub ref. */
@@ -7650,14 +7757,19 @@ export class SessionService {
     if (!this.isSafeGitRef(ref)) {
       throw new Error("Invalid git ref");
     }
+    const normalizedPath = this.normalizeFilePath(filePath);
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
       organizationId,
       userId,
     );
-    const normalizedPath = this.normalizeFilePath(filePath);
     const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
-    return githubRepoService.readFile(source.repo, this.toGitHubRef(ref), relativePath, source.token);
+    return githubRepoService.readFile(
+      source.repo,
+      this.toGitHubRef(ref),
+      relativePath,
+      source.token,
+    );
   }
 
   private async resolveGitHubSessionGroupFileSource(
@@ -7671,24 +7783,14 @@ export class SessionService {
         id: true,
         branch: true,
         workdir: true,
-        worktreeDeleted: true,
         visibility: true,
         ownerUserId: true,
-        repo: {
-          select: {
-            remoteUrl: true,
-            defaultBranch: true,
-          },
-        },
+        repo: { select: { remoteUrl: true, defaultBranch: true } },
       },
     });
-
     if (!group) throw new Error("Session group not found");
     if (!canViewSessionGroup(group, userId)) {
       throw new AuthorizationError("Not authorized for this session group");
-    }
-    if (group.worktreeDeleted) {
-      throw new Error("Cannot access files: session worktree has been deleted");
     }
     if (!group.repo?.remoteUrl) {
       throw new Error("Cannot access files: this session group has no GitHub remote.");
@@ -7700,16 +7802,18 @@ export class SessionService {
     }
 
     const tokens = await apiTokenService.getDecryptedTokens(userId);
-    const token = tokens.github;
-    if (!token) {
+    if (!tokens.github) {
       throw new Error("No GitHub token configured. Please add a GitHub API token first.");
     }
 
+    const defaultBranch = this.toGitHubRef(group.repo.defaultBranch || "main");
+    const branch = this.toGitHubRef(group.branch || defaultBranch);
+
     return {
       repo,
-      token,
-      branch: this.toGitHubRef(group.branch?.trim() || group.repo.defaultBranch),
-      defaultBranch: this.toGitHubRef(group.repo.defaultBranch),
+      token: tokens.github,
+      branch,
+      defaultBranch,
       workdir: group.workdir,
     };
   }
@@ -7717,15 +7821,14 @@ export class SessionService {
   private toRepoRelativeFilePath(filePath: string, workdir: string | null): string {
     let relativePath = filePath;
     if (filePath.startsWith("/")) {
-      const normalizedWorkdir = workdir?.replace(/\/$/, "");
-      if (!normalizedWorkdir) {
+      if (!workdir) {
         throw new Error(INVALID_FILE_PATH_ERROR);
       }
-      const prefix = `${normalizedWorkdir}/`;
-      if (!filePath.startsWith(prefix)) {
+      const workdirPrefix = workdir.replace(/\/$/, "") + "/";
+      if (!filePath.startsWith(workdirPrefix)) {
         throw new Error(INVALID_FILE_PATH_ERROR);
       }
-      relativePath = filePath.slice(prefix.length);
+      relativePath = filePath.slice(workdirPrefix.length);
     }
 
     const parts = relativePath.split("/");
@@ -7735,7 +7838,6 @@ export class SessionService {
     ) {
       throw new Error(INVALID_FILE_PATH_ERROR);
     }
-
     return relativePath;
   }
 
@@ -8487,13 +8589,10 @@ export class SessionService {
 
     const cleaned: string[] = [];
     for (const group of groups) {
-      const latestActivity = group.sessions.reduce<Date>(
-        (latest, session) => {
-          const sessionActivity = session.lastMessageAt ?? session.updatedAt;
-          return sessionActivity > latest ? sessionActivity : latest;
-        },
-        group.updatedAt,
-      );
+      const latestActivity = group.sessions.reduce<Date>((latest, session) => {
+        const sessionActivity = session.lastMessageAt ?? session.updatedAt;
+        return sessionActivity > latest ? sessionActivity : latest;
+      }, group.updatedAt);
       if (latestActivity > cutoff) continue;
 
       const groupConnection = this.parseConnection(group.connection);
@@ -8523,7 +8622,10 @@ export class SessionService {
         if (!sessionHasRuntimeBinding) continue;
       }
 
-      const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(group, cloudSession);
+      const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
+        group,
+        cloudSession,
+      );
       if (!cleanedRuntime) continue;
 
       cleaned.push(group.id);
@@ -8805,9 +8907,7 @@ export class SessionService {
     }
 
     const branchMismatch =
-      branch &&
-      session.sessionGroup.branch &&
-      branch !== session.sessionGroup.branch
+      branch && session.sessionGroup.branch && branch !== session.sessionGroup.branch
         ? `Observed branch ${branch} does not match tracked branch ${session.sessionGroup.branch}`
         : null;
     const eventSessionId = session.sessionGroup.sessions?.[0]?.id ?? session.id;

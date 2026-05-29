@@ -78,6 +78,17 @@ const mobilePairRateLimit: RateLimitConfig = {
   windowSeconds: 60,
 };
 
+function preventAuthResponseCaching(req: Request, res: Response) {
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+    "Surrogate-Control": "no-store",
+  });
+}
+
 function githubOAuthGrantUrl(): string {
   return `https://github.com/settings/connections/applications/${GITHUB_CLIENT_ID}`;
 }
@@ -677,6 +688,8 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
 
 // Get current user with org memberships
 router.get("/auth/me", async (req: Request, res: Response) => {
+  preventAuthResponseCaching(req, res);
+
   const authenticated = await resolveAuthenticatedUser(req);
   if (rejectExternalLocalModeRequest(req, res, authenticated)) {
     return;

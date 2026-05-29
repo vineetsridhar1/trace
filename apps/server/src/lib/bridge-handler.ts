@@ -666,6 +666,57 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "file_write_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveFileWriteRequest(
+          msg.requestId,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
+      if (msg.type === "file_commit_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveFileCommitRequest(
+          msg.requestId,
+          typeof msg.commitSha === "string" ? msg.commitSha : undefined,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
+      if (msg.type === "worktree_changes_result" && typeof msg.requestId === "string") {
+        const files = Array.isArray(msg.files)
+          ? (msg.files as Array<{
+              path: string;
+              status: string;
+              additions: number;
+              deletions: number;
+              diff: string;
+              truncated: boolean;
+              originalContent: string;
+              modifiedContent: string;
+              contentTruncated: boolean;
+            }>)
+          : [];
+        sessionRouter.resolveWorktreeChangesRequest(
+          msg.requestId,
+          files,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
+      if (msg.type === "revert_worktree_file_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveRevertWorktreeFileRequest(
+          msg.requestId,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
       if (msg.type === "branch_diff_result" && typeof msg.requestId === "string") {
         const files = Array.isArray(msg.files)
           ? (msg.files as Array<{

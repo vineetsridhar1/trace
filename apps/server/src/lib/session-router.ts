@@ -9,6 +9,11 @@ import type {
   BridgeTerminalDestroyCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
+  BridgeWriteFileCommand,
+  BridgeCommitFileChangesCommand,
+  BridgeWorktreeChangesCommand,
+  BridgeRevertWorktreeFileCommand,
+  BridgeLinkedCheckoutChangedFile,
   BridgeBranchDiffCommand,
   BridgeFileAtRefCommand,
   BridgeBranchDiffFile,
@@ -52,6 +57,10 @@ export type SessionCommand =
   | BaseSessionCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
+  | BridgeWriteFileCommand
+  | BridgeCommitFileChangesCommand
+  | BridgeWorktreeChangesCommand
+  | BridgeRevertWorktreeFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
@@ -291,6 +300,28 @@ export class SessionRouter {
   private pendingFileContentRequests = new Map<
     string,
     { runtimeId: string; resolve: (content: string) => void; reject: (err: Error) => void }
+  >();
+  /** Pending file write requests: requestId → resolve/reject */
+  private pendingFileWriteRequests = new Map<
+    string,
+    { runtimeId: string; resolve: () => void; reject: (err: Error) => void }
+  >();
+  /** Pending file commit requests: requestId → resolve/reject */
+  private pendingFileCommitRequests = new Map<
+    string,
+    { runtimeId: string; resolve: (commitSha: string) => void; reject: (err: Error) => void }
+  >();
+  private pendingWorktreeChangesRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (files: BridgeLinkedCheckoutChangedFile[]) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  private pendingRevertWorktreeFileRequests = new Map<
+    string,
+    { runtimeId: string; resolve: () => void; reject: (err: Error) => void }
   >();
   /** Pending branch diff requests: requestId → resolve/reject */
   private pendingBranchDiffRequests = new Map<
@@ -1073,6 +1104,234 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(content);
+    }
+  }
+
+  /**
+   * Ask a runtime to write a file's contents to its live workspace.
+   */
+  writeFile(
+    runtimeId: string,
+    sessionId: string,
+    relativePath: string,
+    content: string,
+    workdirHint?: string,
+    timeoutMs = 15_000,
+  ): Promise<void> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "write_file",
+      requestId,
+      sessionId,
+      relativePath,
+      content,
+      workdirHint,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFileWriteRequests.delete(requestId);
+        reject(new Error("File write request timed out"));
+      }, timeoutMs);
+
+      this.pendingFileWriteRequests.set(requestId, {
+        runtimeId,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  /** Resolve a pending file write request (called from bridge handler). */
+  resolveFileWriteRequest(requestId: string, error?: string, sourceRuntimeId?: string): void {
+    const pending = this.pendingFileWriteRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingFileWriteRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve();
+    }
+  }
+
+  /**
+   * Ask a runtime to commit the current file changes in its live workspace.
+   */
+  commitFileChanges(
+    runtimeId: string,
+    sessionId: string,
+    message?: string | null,
+    workdirHint?: string,
+    timeoutMs = 60_000,
+  ): Promise<string> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "commit_file_changes",
+      requestId,
+      sessionId,
+      message,
+      workdirHint,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFileCommitRequests.delete(requestId);
+        reject(new Error("File commit request timed out"));
+      }, timeoutMs);
+
+      this.pendingFileCommitRequests.set(requestId, {
+        runtimeId,
+        resolve: (commitSha) => {
+          clearTimeout(timer);
+          resolve(commitSha);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  /** Resolve a pending file commit request (called from bridge handler). */
+  resolveFileCommitRequest(
+    requestId: string,
+    commitSha?: string,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingFileCommitRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingFileCommitRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else if (commitSha) {
+      pending.resolve(commitSha);
+    } else {
+      pending.reject(new Error("File commit did not return a commit SHA"));
+    }
+  }
+
+  listWorktreeChanges(
+    runtimeId: string,
+    sessionId: string,
+    workdirHint?: string,
+    timeoutMs = 15_000,
+  ): Promise<BridgeLinkedCheckoutChangedFile[]> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "worktree_changes",
+      requestId,
+      sessionId,
+      workdirHint,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeLinkedCheckoutChangedFile[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingWorktreeChangesRequests.delete(requestId);
+        reject(new Error("Worktree changes request timed out"));
+      }, timeoutMs);
+
+      this.pendingWorktreeChangesRequests.set(requestId, {
+        runtimeId,
+        resolve: (files) => {
+          clearTimeout(timer);
+          resolve(files);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveWorktreeChangesRequest(
+    requestId: string,
+    files: BridgeLinkedCheckoutChangedFile[],
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingWorktreeChangesRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingWorktreeChangesRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(files);
+    }
+  }
+
+  revertWorktreeFile(
+    runtimeId: string,
+    sessionId: string,
+    filePath: string,
+    workdirHint?: string,
+    timeoutMs = 15_000,
+  ): Promise<void> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "revert_worktree_file",
+      requestId,
+      sessionId,
+      filePath,
+      workdirHint,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingRevertWorktreeFileRequests.delete(requestId);
+        reject(new Error("Revert file request timed out"));
+      }, timeoutMs);
+
+      this.pendingRevertWorktreeFileRequests.set(requestId, {
+        runtimeId,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveRevertWorktreeFileRequest(
+    requestId: string,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingRevertWorktreeFileRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingRevertWorktreeFileRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve();
     }
   }
 

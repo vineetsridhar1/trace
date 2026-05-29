@@ -569,6 +569,7 @@ export type Mutation = {
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
+  commitSessionGroupFileChanges: Scalars["String"]["output"];
   createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -619,8 +620,10 @@ export type Mutation = {
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
+  revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
+  saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
@@ -698,6 +701,11 @@ export type MutationCommitLinkedCheckoutChangesArgs = {
   message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCommitSessionGroupFileChangesArgs = {
+  message?: InputMaybe<Scalars["String"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -933,6 +941,11 @@ export type MutationRetrySessionGroupSetupArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type MutationRevertSessionGroupFileChangeArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
@@ -941,6 +954,12 @@ export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationSaveSessionGroupFileArgs = {
+  content: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationSendChannelMessageArgs = {
@@ -1214,6 +1233,7 @@ export type Query = {
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
+  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1404,6 +1424,10 @@ export type QuerySessionGroupFileContentArgs = {
 };
 
 export type QuerySessionGroupFilesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupWorktreeChangesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 

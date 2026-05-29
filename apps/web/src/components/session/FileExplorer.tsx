@@ -1,49 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { gql } from "@urql/core";
 import { RefreshCw } from "lucide-react";
-import { client } from "../../lib/urql";
 import { TraceLoader } from "../ui/trace-loader";
 import { buildTree, type FileTreeNode } from "./file-explorer-utils";
 import { FileTreeItem } from "./FileTreeItem";
 
-const SESSION_GROUP_FILES_QUERY = gql`
-  query SessionGroupFiles($sessionGroupId: ID!) {
-    sessionGroupFiles(sessionGroupId: $sessionGroupId)
-  }
-`;
-
 export function FileExplorer({
-  sessionGroupId,
+  files,
+  loading,
+  error,
+  onRefresh,
   onFileClick,
 }: {
-  sessionGroupId: string;
+  files: string[];
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => Promise<void>;
   onFileClick: (filePath: string) => void;
 }) {
-  const [files, setFiles] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
-
-  const fetchFiles = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await client.query(SESSION_GROUP_FILES_QUERY, { sessionGroupId }).toPromise();
-      if (result.error) {
-        setError(result.error.message);
-      } else {
-        setFiles(result.data?.sessionGroupFiles ?? []);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load files");
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionGroupId]);
-
-  useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -89,7 +63,7 @@ export function FileExplorer({
       <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
         <p className="text-xs text-muted-foreground">{error}</p>
         <button
-          onClick={fetchFiles}
+          onClick={() => void onRefresh()}
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <RefreshCw size={12} />
@@ -114,7 +88,7 @@ export function FileExplorer({
           Explorer
         </span>
         <button
-          onClick={fetchFiles}
+          onClick={() => void onRefresh()}
           className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
           title="Refresh"
         >

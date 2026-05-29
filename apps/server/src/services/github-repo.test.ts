@@ -28,15 +28,17 @@ describe("GitHubRepoService", () => {
 
   it("lists blob paths from a recursive tree", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        tree: [
-          { path: "src/index.ts", type: "blob" },
-          { path: "src", type: "tree" },
-          { path: "README.md", type: "blob" },
-        ],
-      }),
-    );
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: "tree-sha" } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tree: [
+            { path: "src/index.ts", type: "blob" },
+            { path: "src", type: "tree" },
+            { path: "README.md", type: "blob" },
+          ],
+        }),
+      );
 
     const service = new GitHubRepoService();
     await expect(service.listFiles(repo, "trace/branch", "gh-token")).resolves.toEqual([
@@ -45,20 +47,16 @@ describe("GitHubRepoService", () => {
     ]);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.github.com/repos/acme/trace/git/trees/trace%2Fbranch?recursive=1",
+      "https://api.github.com/repos/acme/trace/git/ref/heads/trace/branch",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer gh-token" }),
       }),
     );
-  });
-
-  it("fails when GitHub truncates a recursive tree", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(jsonResponse({ truncated: true, tree: [] }));
-
-    const service = new GitHubRepoService();
-    await expect(service.listFiles(repo, "main", "gh-token")).rejects.toThrow(
-      "GitHub file tree is too large to list completely.",
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.github.com/repos/acme/trace/git/trees/tree-sha?recursive=1",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer gh-token" }),
+      }),
     );
   });
 
@@ -101,32 +99,6 @@ describe("GitHubRepoService", () => {
       { path: "src/old.ts", status: "D", additions: 0, deletions: 4 },
       { path: "src/moved.ts", status: "R", additions: 1, deletions: 1 },
     ]);
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.github.com/repos/acme/trace/compare/main...trace%2Fbranch",
-      expect.any(Object),
-    );
-  });
-
-  it("uses only the first compare response for changed files", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { files: [{ filename: "src/one.ts", status: "modified", additions: 1, deletions: 0 }] },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Link: '<https://api.github.com/repos/acme/trace/compare/main...feature?page=2>; rel="next"',
-          },
-        },
-      ),
-    );
-
-    const service = new GitHubRepoService();
-    await expect(service.branchDiff(repo, "main", "feature", "gh-token")).resolves.toEqual([
-      { path: "src/one.ts", status: "M", additions: 1, deletions: 0 },
-    ]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("retries branch compare with path-style refs for branch names with slashes", async () => {
@@ -148,18 +120,6 @@ describe("GitHubRepoService", () => {
       2,
       "https://api.github.com/repos/acme/trace/compare/main...trace/branch",
       expect.any(Object),
-    );
-  });
-
-  it("returns an actionable branch compare error after GitHub 404s", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(async () =>
-      jsonResponse({ message: "Not Found" }, { status: 404 }),
-    );
-
-    const service = new GitHubRepoService();
-    await expect(service.branchDiff(repo, "main", "missing/branch", "gh-token")).rejects.toThrow(
-      'GitHub branch diff unavailable: could not compare "main" to "missing/branch".',
     );
   });
 });

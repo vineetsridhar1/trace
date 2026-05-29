@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useUIStore } from "../../stores/ui";
 import type { OpenFileTab } from "./GroupTabStrip";
 import type { FileOpenRequest } from "./FileOpenContext";
+import type { FileEditorBuffer } from "./file-editor-buffer";
 import type {
   DraftAttachmentOpenRequest,
   UploadedAttachmentOpenRequest,
@@ -13,6 +14,15 @@ export function useFileActions() {
   );
   const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const fileBuffersRef = useRef(new Map<string, FileEditorBuffer>());
+
+  const getFileBuffer = useCallback((filePath: string) => {
+    return fileBuffersRef.current.get(filePath);
+  }, []);
+
+  const setFileBuffer = useCallback((filePath: string, buffer: FileEditorBuffer) => {
+    fileBuffersRef.current.set(filePath, buffer);
+  }, []);
 
   const handleFileClick = useCallback(
     (request: string | FileOpenRequest) => {
@@ -101,6 +111,7 @@ export function useFileActions() {
   );
 
   const handleCloseFile = useCallback((filePath: string) => {
+    fileBuffersRef.current.delete(filePath);
     setOpenFiles((prev: OpenFileTab[]) => prev.filter((f: OpenFileTab) => f.filePath !== filePath));
     setActiveFilePath((prev: string | null) => (prev === filePath ? null : prev));
   }, []);
@@ -109,6 +120,8 @@ export function useFileActions() {
     openFiles,
     activeFilePath,
     setActiveFilePath,
+    getFileBuffer,
+    setFileBuffer,
     handleFileClick,
     handleDraftAttachmentClick,
     handleUploadedAttachmentClick,

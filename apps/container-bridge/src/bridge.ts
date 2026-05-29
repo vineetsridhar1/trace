@@ -20,6 +20,10 @@ import {
   parseBranchOutput,
   handleListFiles,
   handleReadFile,
+  handleWriteFile,
+  handleCommitFileChanges,
+  handleWorktreeChanges,
+  handleRevertWorktreeFile,
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
@@ -677,6 +681,38 @@ export class ContainerBridge implements IBridgeClient {
 
       case "read_file": {
         handleReadFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
+        break;
+      }
+
+      case "write_file": {
+        handleWriteFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
+        break;
+      }
+
+      case "commit_file_changes": {
+        void handleCommitFileChanges(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+          fs,
+          path,
+          gitExec: this.gitExec,
+        });
+        break;
+      }
+
+      case "worktree_changes": {
+        void handleWorktreeChanges(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+          fs,
+          path,
+          gitExec: this.gitExec,
+        });
+        break;
+      }
+
+      case "revert_worktree_file": {
+        void handleRevertWorktreeFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+          fs,
+          path,
+          gitExec: this.gitExec,
+        });
         break;
       }
 

@@ -13,10 +13,7 @@ export interface GitHubBranchDiffFile {
 }
 
 interface GitHubTreeResponse {
-  tree?: Array<{
-    path?: unknown;
-    type?: unknown;
-  }>;
+  tree?: Array<{ path?: unknown; type?: unknown }>;
   truncated?: unknown;
 }
 
@@ -25,6 +22,12 @@ interface GitHubContentResponse {
   content?: unknown;
   encoding?: unknown;
   download_url?: unknown;
+}
+
+interface GitHubRefResponse {
+  object?: {
+    sha?: unknown;
+  };
 }
 
 interface GitHubCompareResponse {
@@ -66,9 +69,10 @@ export function parseGitHubRepo(remoteUrl: string): GitHubRepoRef | null {
 
 export class GitHubRepoService {
   async listFiles(repo: GitHubRepoRef, ref: string, token: string): Promise<string[]> {
+    const treeRef = await this.resolveTreeRef(repo, ref, token);
     const response = await this.request<GitHubTreeResponse>(
       repo,
-      `/git/trees/${encodeURIComponent(ref)}?recursive=1`,
+      `/git/trees/${encodeURIComponent(treeRef)}?recursive=1`,
       token,
     );
 
@@ -82,7 +86,12 @@ export class GitHubRepoService {
       .sort((a, b) => a.localeCompare(b));
   }
 
-  async readFile(repo: GitHubRepoRef, ref: string, filePath: string, token: string): Promise<string> {
+  async readFile(
+    repo: GitHubRepoRef,
+    ref: string,
+    filePath: string,
+    token: string,
+  ): Promise<string> {
     const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
     const response = await this.request<GitHubContentResponse>(
       repo,
@@ -99,9 +108,7 @@ export class GitHubRepoService {
     }
 
     if (typeof response.download_url === "string") {
-      const raw = await fetch(response.download_url, {
-        headers: this.headers(token),
-      });
+      const raw = await fetch(response.download_url, { headers: this.headers(token) });
       if (!raw.ok) {
         throw new Error(`GitHub API error (${raw.status}): ${await raw.text()}`);
       }
@@ -162,8 +169,7 @@ export class GitHubRepoService {
     );
 
     if (!response.ok) {
-      const body = await response.text();
-      throw new GitHubApiError(response.status, body);
+      throw new GitHubApiError(response.status, await response.text());
     }
 
     return (await response.json()) as T;
@@ -179,6 +185,27 @@ export class GitHubRepoService {
     }
 
     return Array.from(new Set(paths));
+  }
+
+  private async resolveTreeRef(repo: GitHubRepoRef, ref: string, token: string): Promise<string> {
+    for (const refPath of [`heads/${ref}`, `tags/${ref}`]) {
+      try {
+        const response = await this.request<GitHubRefResponse>(
+          repo,
+          `/git/ref/${this.encodePathRef(refPath)}`,
+          token,
+        );
+        if (typeof response.object?.sha === "string") {
+          return response.object.sha;
+        }
+      } catch (error) {
+        if (error instanceof GitHubApiError && error.status === 404) {
+          continue;
+        }
+        throw error;
+      }
+    }
+    return ref;
   }
 
   private encodePathRef(ref: string): string {
