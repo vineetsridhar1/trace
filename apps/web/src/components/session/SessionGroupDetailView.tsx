@@ -265,6 +265,8 @@ export function SessionGroupDetailView({
     openFiles,
     activeFilePath,
     setActiveFilePath,
+    getFileBuffer,
+    setFileBuffer,
     handleFileClick,
     handleDraftAttachmentClick,
     handleUploadedAttachmentClick,
@@ -683,6 +685,8 @@ export function SessionGroupDetailView({
                     activeTerminalId={activeTerminal?.id ?? null}
                     selectedSession={selectedSession}
                     defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                    getFileBuffer={getFileBuffer}
+                    setFileBuffer={setFileBuffer}
                     scrollToEventId={scrollToEventId}
                     onScrollComplete={handleScrollComplete}
                     onForkSession={handleOpenForkDialog}
