@@ -27,7 +27,6 @@ vi.mock("./config.js", () => {
 
 vi.mock("./linked-checkout.js", () => ({
   withRepoLock: async <T>(_repoId: string, fn: () => Promise<T>) => fn(),
-  fetchTargetBranchIfAvailable: vi.fn(async () => undefined),
   pauseExistingAttachment: vi.fn(async (repoId: string, error: string) => {
     // Mirror the real helper's effect: flip autoSyncEnabled off + record error.
     const config = await import("./config.js");
@@ -40,6 +39,10 @@ vi.mock("./linked-checkout.js", () => ({
     });
   }),
   resolveTargetCommitSha: vi.fn(async (_repoPath: string, branch: string) => {
+    if (branch === "main") return "a".repeat(40);
+    throw new Error(`Branch not found: ${branch}`);
+  }),
+  resolveSyncTargetCommitSha: vi.fn(async (_repoPath: string, branch: string) => {
     if (branch === "main") return "a".repeat(40);
     throw new Error(`Branch not found: ${branch}`);
   }),
@@ -69,9 +72,9 @@ const configMock = config as unknown as {
 };
 
 const linkedCheckoutMock = linkedCheckout as unknown as {
-  fetchTargetBranchIfAvailable: ReturnType<typeof vi.fn>;
   pauseExistingAttachment: ReturnType<typeof vi.fn>;
   resolveTargetCommitSha: ReturnType<typeof vi.fn>;
+  resolveSyncTargetCommitSha: ReturnType<typeof vi.fn>;
 };
 const runtimeDebugMock = runtimeDebug as ReturnType<typeof vi.fn>;
 
@@ -127,11 +130,11 @@ function createDeferred<T>(): {
 beforeEach(() => {
   configMock.__reset();
   configMock.setRepoLinkedCheckout.mockClear();
-  linkedCheckoutMock.fetchTargetBranchIfAvailable.mockClear();
   linkedCheckoutMock.pauseExistingAttachment.mockClear();
   linkedCheckoutMock.resolveTargetCommitSha.mockClear();
+  linkedCheckoutMock.resolveSyncTargetCommitSha.mockClear();
   runtimeDebugMock.mockClear();
-  linkedCheckoutMock.resolveTargetCommitSha.mockImplementation(
+  linkedCheckoutMock.resolveSyncTargetCommitSha.mockImplementation(
     async (_repoPath: string, branch: string) => {
       if (branch === "main") return "a".repeat(40);
       throw new Error(`Branch not found: ${branch}`);
@@ -149,16 +152,12 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     const deps = makeDeps({
       revParseHead: vi.fn(async () => "a".repeat(40)),
     });
-    linkedCheckoutMock.resolveTargetCommitSha.mockResolvedValueOnce("b".repeat(40));
+    linkedCheckoutMock.resolveSyncTargetCommitSha.mockResolvedValueOnce("b".repeat(40));
     const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
 
     await manager.reconcileAll();
 
     expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "b".repeat(40));
-    expect(linkedCheckoutMock.fetchTargetBranchIfAvailable).toHaveBeenCalledWith(
-      "/tmp/repo-repo-1",
-      "main",
-    );
     expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
       lastSyncedCommitSha: "b".repeat(40),
       lastSyncError: null,
@@ -195,7 +194,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
       revParseHead: vi.fn(async () => "a".repeat(40)),
       hasTrackedChanges: vi.fn(async () => true),
     });
-    linkedCheckoutMock.resolveTargetCommitSha.mockResolvedValueOnce("b".repeat(40));
+    linkedCheckoutMock.resolveSyncTargetCommitSha.mockResolvedValueOnce("b".repeat(40));
     const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
 
     await manager.reconcileAll();
@@ -241,7 +240,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
       targetBranch: "trace/rhino",
       lastSyncedCommitSha: "a".repeat(40),
     });
-    linkedCheckoutMock.resolveTargetCommitSha.mockImplementation(
+    linkedCheckoutMock.resolveSyncTargetCommitSha.mockImplementation(
       async (_repoPath: string, branch: string) => {
         if (branch === "trace/rhino") return "b".repeat(40);
         throw new Error(`Branch not found: ${branch}`);
@@ -254,7 +253,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledWith(
       "/tmp/repo-repo-1",
       "trace/rhino",
     );
@@ -273,7 +272,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).not.toHaveBeenCalled();
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).not.toHaveBeenCalled();
   });
 
   it("does not leave the global tick marked in-flight when there are no active repos", async () => {
@@ -298,8 +297,8 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcile("repo-1");
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledTimes(1);
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledWith(
       "/tmp/repo-repo-1",
       "main",
     );
@@ -312,14 +311,14 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcile("repo-1");
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).not.toHaveBeenCalled();
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).not.toHaveBeenCalled();
   });
 
   it("start runs immediately and only schedules the next tick after the current one finishes", async () => {
     vi.useFakeTimers();
     seedAttachment("repo-1");
     const resolveGate = createDeferred<string>();
-    linkedCheckoutMock.resolveTargetCommitSha.mockImplementation(
+    linkedCheckoutMock.resolveSyncTargetCommitSha.mockImplementation(
       async (_repoPath: string, branch: string) => {
         if (branch !== "main") throw new Error(`Branch not found: ${branch}`);
         return resolveGate.promise;
@@ -333,24 +332,24 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     manager.start();
 
     await vi.waitFor(() => {
-      expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+      expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledTimes(1);
     });
 
     await vi.advanceTimersByTimeAsync(15_000);
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledTimes(1);
 
     resolveGate.resolve("a".repeat(40));
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(15_000);
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(2);
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledTimes(2);
   });
 
   it("stop prevents rescheduling after an in-flight tick completes", async () => {
     vi.useFakeTimers();
     seedAttachment("repo-1");
     const resolveGate = createDeferred<string>();
-    linkedCheckoutMock.resolveTargetCommitSha.mockImplementation(
+    linkedCheckoutMock.resolveSyncTargetCommitSha.mockImplementation(
       async (_repoPath: string, branch: string) => {
         if (branch !== "main") throw new Error(`Branch not found: ${branch}`);
         return resolveGate.promise;
@@ -362,7 +361,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     manager.start();
 
     await vi.waitFor(() => {
-      expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+      expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledTimes(1);
     });
 
     manager.stop();
@@ -370,6 +369,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(30_000);
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    expect(linkedCheckoutMock.resolveSyncTargetCommitSha).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,9 +8,8 @@ import {
 } from "./config.js";
 import { formatGitError, getCurrentBranch, isSafeGitRef, runGit } from "./git-utils.js";
 import {
-  fetchTargetBranchIfAvailable,
   pauseExistingAttachment,
-  resolveTargetCommitSha,
+  resolveSyncTargetCommitSha,
   withRepoLock,
 } from "./linked-checkout.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -232,8 +231,7 @@ export class LinkedCheckoutAutoSyncManager {
 
       let targetSha: string;
       try {
-        await fetchTargetBranchIfAvailable(repoPath, targetBranch);
-        targetSha = await resolveTargetCommitSha(repoPath, targetBranch);
+        targetSha = await resolveSyncTargetCommitSha(repoPath, targetBranch);
       } catch (error) {
         this.logTick("failed resolving target sha", {
           repoId,

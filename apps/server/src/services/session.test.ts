@@ -7996,7 +7996,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-home",
         { sessionId: "session-home", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
         where: { sessionGroupId: "group-1" },
@@ -8096,7 +8096,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-code-key",
         { sessionId: "session-code", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
         "runtime-sync-key",
@@ -8191,7 +8191,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-code-key",
         { sessionId: "session-code", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(sessionRouterMock.inspectSessionCurrentBranch).not.toHaveBeenCalledWith(
         "runtime-other-key",
@@ -8281,7 +8281,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-cloud-key",
         { sessionId: "session-code", workdirHint: workdir },
-        5000,
+        1500,
       );
       expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith(
         "runtime-sync-key",

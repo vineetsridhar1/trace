@@ -423,7 +423,7 @@ describe("linked checkout commit-back", () => {
     expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
   }, 15_000);
 
-  it("fetches origin before resolving the branch for sync", async () => {
+  it("fetches the target branch before resolving the branch for sync", async () => {
     const { repoPath, latestSha } = await createRepoFixtureWithStaleOrigin();
     seedRepo("repo-1", repoPath);
 
@@ -439,6 +439,28 @@ describe("linked checkout commit-back", () => {
     expect(result.status.currentCommitSha).toBe(latestSha);
     expect(result.status.lastSyncedCommitSha).toBe(latestSha);
     expect(await git(repoPath, ["rev-parse", "origin/trace/raccoon"])).toBe(latestSha);
+  }, 15_000);
+
+  it("skips fetching when the target worktree is available locally", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+    await git(repoPath, ["remote", "add", "origin", path.join(repoPath, "../missing-origin.git")]);
+    const targetSha = await git(worktreePath, ["rev-parse", "HEAD"]);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const result = await syncLinkedCheckout({
+        repoId: "repo-1",
+        sessionGroupId: "group-1",
+        branch: "trace/raccoon",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.status.currentCommitSha).toBe(targetSha);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   }, 15_000);
 
   it("syncs to the fetched remote branch when a stale local branch diverged", async () => {
@@ -506,6 +528,8 @@ describe("linked checkout commit-back", () => {
   it("continues sync with cached refs when origin fetch fails", async () => {
     const { repoPath, worktreePath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);
+    const targetSha = await git(worktreePath, ["rev-parse", "HEAD"]);
+    await git(repoPath, ["worktree", "remove", worktreePath]);
     await git(repoPath, ["remote", "add", "origin", path.join(repoPath, "../missing-origin.git")]);
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
@@ -519,8 +543,8 @@ describe("linked checkout commit-back", () => {
       expect(result.ok).toBe(true);
       expect(result.status.autoSyncEnabled).toBe(true);
       expect(result.status.lastSyncError).toBeNull();
-      expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("origin fetch failed"));
+      expect(result.status.currentCommitSha).toBe(targetSha);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("target branch fetch failed"));
     } finally {
       warnSpy.mockRestore();
     }
