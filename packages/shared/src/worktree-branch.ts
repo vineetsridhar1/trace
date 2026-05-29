@@ -1,5 +1,19 @@
 export function generatedTraceWorktreeBranch(slug: string): string {
-  return `trace/${slug}`;
+  return `trace-${slug}`;
+}
+
+export function isTraceWorktreeBranch(branch: string): boolean {
+  return branch.startsWith("trace/") || branch.startsWith("trace-");
+}
+
+export function hasGitRefNamespaceConflict(candidate: string, refs: Iterable<string>): boolean {
+  for (const ref of refs) {
+    if (ref === candidate) continue;
+    if (ref.startsWith(`${candidate}/`) || candidate.startsWith(`${ref}/`)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function shouldRepairRenamedTraceWorktreeBranch({
@@ -18,7 +32,7 @@ export function shouldRepairRenamedTraceWorktreeBranch({
     !!currentBranch &&
     !!persistedBranch &&
     currentBranch !== requestedBranch &&
-    currentBranch.startsWith("trace/") &&
+    isTraceWorktreeBranch(currentBranch) &&
     requestedBranch === persistedBranch
   );
 }

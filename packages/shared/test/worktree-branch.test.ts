@@ -1,12 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   generatedTraceWorktreeBranch,
+  hasGitRefNamespaceConflict,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "../src/worktree-branch.js";
 
 describe("worktree branch repair", () => {
   it("generates Trace worktree branches from slugs", () => {
-    expect(generatedTraceWorktreeBranch("otter")).toBe("trace/otter");
+    expect(generatedTraceWorktreeBranch("otter")).toBe("trace-otter");
+  });
+
+  it("detects git ref namespace conflicts", () => {
+    expect(
+      hasGitRefNamespaceConflict("trace-gharial/explain-slack-disabled", ["trace-gharial"]),
+    ).toBe(true);
+    expect(
+      hasGitRefNamespaceConflict("trace-gharial", ["trace-gharial/explain-slack-disabled"]),
+    ).toBe(true);
+    expect(hasGitRefNamespaceConflict("trace-gharial", ["trace-gharial"])).toBe(false);
+    expect(hasGitRefNamespaceConflict("trace-gharial-fix", ["trace-gharial"])).toBe(false);
   });
 
   it("repairs stale generated Trace branches after a branch rename", () => {
