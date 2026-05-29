@@ -38,6 +38,15 @@ interface GitHubCompareResponse {
 
 const GITHUB_API_VERSION = "2022-11-28";
 
+class GitHubApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(`GitHub API error (${status}): ${body}`);
+  }
+}
+
 export function parseGitHubRepo(remoteUrl: string): GitHubRepoRef | null {
   const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/i);
   if (!match) return null;
@@ -94,8 +103,31 @@ export class GitHubRepoService {
     headRef: string,
     token: string,
   ): Promise<GitHubBranchDiffFile[]> {
-    const basehead = encodeURIComponent(`${baseRef}...${headRef}`);
-    const response = await this.request<GitHubCompareResponse>(repo, `/compare/${basehead}`, token);
+    let response: GitHubCompareResponse | null = null;
+    let compareNotFound = false;
+
+    for (const path of this.comparePaths(baseRef, headRef)) {
+      try {
+        response = await this.request<GitHubCompareResponse>(repo, path, token);
+        break;
+      } catch (error) {
+        if (error instanceof GitHubApiError && error.status === 404) {
+          compareNotFound = true;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!response) {
+      if (compareNotFound) {
+        throw new Error(
+          `GitHub branch diff unavailable: could not compare "${baseRef}" to "${headRef}". ` +
+            "Make sure the session branch has been pushed to GitHub and your token can access the repo.",
+        );
+      }
+      throw new Error("GitHub branch diff unavailable.");
+    }
 
     return (response.files ?? [])
       .filter((file) => typeof file.filename === "string")
@@ -117,10 +149,26 @@ export class GitHubRepoService {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`GitHub API error (${response.status}): ${body}`);
+      throw new GitHubApiError(response.status, body);
     }
 
     return (await response.json()) as T;
+  }
+
+  private comparePaths(baseRef: string, headRef: string): string[] {
+    const encodedBasehead = `/compare/${encodeURIComponent(`${baseRef}...${headRef}`)}`;
+    const pathBasehead = `/compare/${this.encodePathRef(baseRef)}...${this.encodePathRef(headRef)}`;
+    const paths = [encodedBasehead, pathBasehead];
+
+    if (!headRef.startsWith("heads/")) {
+      paths.push(`/compare/${this.encodePathRef(baseRef)}...heads/${this.encodePathRef(headRef)}`);
+    }
+
+    return Array.from(new Set(paths));
+  }
+
+  private encodePathRef(ref: string): string {
+    return ref.split("/").map(encodeURIComponent).join("/");
   }
 
   private headers(token: string): HeadersInit {
