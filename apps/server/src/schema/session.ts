@@ -429,6 +429,21 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  saveSessionGroupFile: (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string; content: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.saveFile(
+      args.sessionGroupId,
+      args.filePath,
+      args.content,
+      orgId,
+      ctx.userId,
+    );
+  },
   linkLinkedCheckoutRepo: (
     _: unknown,
     args: {

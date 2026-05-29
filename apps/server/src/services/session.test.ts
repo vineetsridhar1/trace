@@ -42,6 +42,7 @@ vi.mock("./github-repo.js", () => ({
   githubRepoService: {
     listFiles: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue("file contents"),
+    updateFile: vi.fn().mockResolvedValue(undefined),
     branchDiff: vi.fn().mockResolvedValue([]),
   },
   parseGitHubRepo: vi.fn().mockReturnValue({ owner: "trace", repo: "trace" }),
@@ -322,6 +323,7 @@ describe("SessionService", () => {
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
     githubRepoServiceMock.readFile.mockResolvedValue("file contents");
+    githubRepoServiceMock.updateFile.mockResolvedValue(undefined);
     githubRepoServiceMock.branchDiff.mockResolvedValue([]);
     parseGitHubRepoMock.mockReturnValue({ owner: "trace", repo: "trace" });
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
@@ -2218,63 +2220,62 @@ describe("SessionService", () => {
       });
       prismaMock.sessionGroup.create.mockResolvedValueOnce(forkedGroup);
       prismaMock.session.create.mockResolvedValueOnce(forkedSession);
-      prismaMock.event.findMany
-        .mockResolvedValueOnce([
-          {
-            id: "source-start",
-            scopeType: "session",
-            scopeId: "source-session",
-            eventType: "session_started",
-            payload: {
-              session: { id: "source-session" },
-              sessionGroup: { id: "source-group" },
-              prompt: "Initial source prompt",
-              attachmentKeys: ["image-key"],
-              imageKeys: ["image-key"],
-              checkpoint: { promptEventId: "source-start" },
-            },
-            actorType: "user",
-            actorId: "other-user",
-            parentId: null,
-            metadata: null,
-            organizationId: "org-1",
-            timestamp: new Date("2024-01-01T00:00:00.000Z"),
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          id: "source-start",
+          scopeType: "session",
+          scopeId: "source-session",
+          eventType: "session_started",
+          payload: {
+            session: { id: "source-session" },
+            sessionGroup: { id: "source-group" },
+            prompt: "Initial source prompt",
+            attachmentKeys: ["image-key"],
+            imageKeys: ["image-key"],
+            checkpoint: { promptEventId: "source-start" },
           },
-          {
-            id: "source-checkpoint-event",
-            scopeType: "session",
-            scopeId: "source-session",
-            eventType: "session_output",
-            payload: {
-              type: "git_checkpoint",
-              checkpoint: { id: "source-checkpoint", promptEventId: "source-start" },
-            },
-            actorType: "system",
-            actorId: "system",
-            parentId: null,
-            metadata: null,
-            organizationId: "org-1",
-            timestamp: new Date("2024-01-01T00:00:00.500Z"),
+          actorType: "user",
+          actorId: "other-user",
+          parentId: null,
+          metadata: null,
+          organizationId: "org-1",
+          timestamp: new Date("2024-01-01T00:00:00.000Z"),
+        },
+        {
+          id: "source-checkpoint-event",
+          scopeType: "session",
+          scopeId: "source-session",
+          eventType: "session_output",
+          payload: {
+            type: "git_checkpoint",
+            checkpoint: { id: "source-checkpoint", promptEventId: "source-start" },
           },
-          {
-            id: "source-message",
-            scopeType: "session",
-            scopeId: "source-session",
-            eventType: "message_sent",
-            payload: {
-              text: "hello",
-              sessionId: "source-session",
-              groupId: "source-group",
-              checkpoint: { id: "source-checkpoint", promptEventId: "source-start" },
-            },
-            actorType: "user",
-            actorId: "other-user",
-            parentId: "source-start",
-            metadata: null,
-            organizationId: "org-1",
-            timestamp: new Date("2024-01-01T00:00:01.000Z"),
+          actorType: "system",
+          actorId: "system",
+          parentId: null,
+          metadata: null,
+          organizationId: "org-1",
+          timestamp: new Date("2024-01-01T00:00:00.500Z"),
+        },
+        {
+          id: "source-message",
+          scopeType: "session",
+          scopeId: "source-session",
+          eventType: "message_sent",
+          payload: {
+            text: "hello",
+            sessionId: "source-session",
+            groupId: "source-group",
+            checkpoint: { id: "source-checkpoint", promptEventId: "source-start" },
           },
-        ]);
+          actorType: "user",
+          actorId: "other-user",
+          parentId: "source-start",
+          metadata: null,
+          organizationId: "org-1",
+          timestamp: new Date("2024-01-01T00:00:01.000Z"),
+        },
+      ]);
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(forkedSession);
 
       const result = await service.forkSession({
@@ -2773,6 +2774,30 @@ describe("SessionService", () => {
         "trace/test",
         "src/app.ts",
         "gh-token",
+      );
+    });
+
+    it("saves GitHub files by converting absolute workdir paths to repo-relative paths", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+
+      await expect(
+        service.saveFile("group-1", "/tmp/trace/src/app.ts", "hello", "org-1", "user-1"),
+      ).resolves.toBe(true);
+      expect(githubRepoServiceMock.updateFile).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "src/app.ts",
+        "hello",
+        "gh-token",
+        "Update src/app.ts",
       );
     });
   });
@@ -8038,13 +8063,7 @@ describe("SessionService", () => {
         },
       });
 
-      await service.syncLinkedCheckout(
-        "group-1",
-        "repo-1",
-        "trace/old-raccoon",
-        "org-1",
-        "user-1",
-      );
+      await service.syncLinkedCheckout("group-1", "repo-1", "trace/old-raccoon", "org-1", "user-1");
 
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-home",
@@ -8137,14 +8156,9 @@ describe("SessionService", () => {
         status: null,
       });
 
-      await service.syncLinkedCheckout(
-        "group-1",
-        "repo-1",
-        "trace/old-branch",
-        "org-1",
-        "user-1",
-        { runtimeInstanceId: "runtime-sync" },
-      );
+      await service.syncLinkedCheckout("group-1", "repo-1", "trace/old-branch", "org-1", "user-1", {
+        runtimeInstanceId: "runtime-sync",
+      });
 
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-code-key",
@@ -8232,14 +8246,9 @@ describe("SessionService", () => {
         status: null,
       });
 
-      await service.syncLinkedCheckout(
-        "group-1",
-        "repo-1",
-        "trace/old-branch",
-        "org-1",
-        "user-1",
-        { runtimeInstanceId: "runtime-sync" },
-      );
+      await service.syncLinkedCheckout("group-1", "repo-1", "trace/old-branch", "org-1", "user-1", {
+        runtimeInstanceId: "runtime-sync",
+      });
 
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-code-key",
@@ -8322,14 +8331,9 @@ describe("SessionService", () => {
         status: null,
       });
 
-      await service.syncLinkedCheckout(
-        "group-1",
-        "repo-1",
-        "trace/old-branch",
-        "org-1",
-        "user-1",
-        { runtimeInstanceId: "runtime-sync" },
-      );
+      await service.syncLinkedCheckout("group-1", "repo-1", "trace/old-branch", "org-1", "user-1", {
+        runtimeInstanceId: "runtime-sync",
+      });
 
       expect(sessionRouterMock.inspectSessionCurrentBranch).toHaveBeenCalledWith(
         "runtime-cloud-key",

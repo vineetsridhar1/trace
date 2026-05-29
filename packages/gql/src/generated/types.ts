@@ -622,6 +622,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
+  saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
@@ -948,6 +949,12 @@ export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationSaveSessionGroupFileArgs = {
+  content: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationSendChannelMessageArgs = {

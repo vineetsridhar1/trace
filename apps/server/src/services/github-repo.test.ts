@@ -83,6 +83,44 @@ describe("GitHubRepoService", () => {
     );
   });
 
+  it("updates file content on a branch", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ type: "file", sha: "abc123" }))
+      .mockResolvedValueOnce(jsonResponse({ content: { path: "src/app file.ts" } }));
+
+    const service = new GitHubRepoService();
+    await expect(
+      service.updateFile(
+        repo,
+        "trace/branch",
+        "src/app file.ts",
+        "hello\n",
+        "gh-token",
+        "Edit file",
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.github.com/repos/acme/trace/contents/src/app%20file.ts?ref=trace%2Fbranch",
+      expect.any(Object),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.github.com/repos/acme/trace/contents/src/app%20file.ts",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          message: "Edit file",
+          content: Buffer.from("hello\n", "utf8").toString("base64"),
+          branch: "trace/branch",
+          sha: "abc123",
+        }),
+      }),
+    );
+  });
+
   it("maps compare files into branch diff entries", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(

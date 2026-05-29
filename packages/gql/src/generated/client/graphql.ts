@@ -624,6 +624,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
+  saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
@@ -950,6 +951,12 @@ export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationSaveSessionGroupFileArgs = {
+  content: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationSendChannelMessageArgs = {
@@ -2219,6 +2226,17 @@ export type SessionGroupFileContentQueryVariables = Exact<{
 export type SessionGroupFileContentQuery = {
   __typename?: "Query";
   sessionGroupFileContent: string;
+};
+
+export type SaveSessionGroupFileMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  content: Scalars["String"]["input"];
+}>;
+
+export type SaveSessionGroupFileMutation = {
+  __typename?: "Mutation";
+  saveSessionGroupFile: boolean;
 };
 
 export type SessionDetailQueryVariables = Exact<{
@@ -4298,6 +4316,68 @@ export const SessionGroupFileContentDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupFileContentQuery, SessionGroupFileContentQueryVariables>;
+export const SaveSessionGroupFileDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SaveSessionGroupFile" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "content" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "saveSessionGroupFile" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "content" },
+                value: { kind: "Variable", name: { kind: "Name", value: "content" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SaveSessionGroupFileMutation, SaveSessionGroupFileMutationVariables>;
 export const SessionDetailDocument = {
   kind: "Document",
   definitions: [
