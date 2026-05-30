@@ -16,6 +16,7 @@ import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -137,14 +138,16 @@ export function GroupHeader({
       <LinkedCheckoutActions state={linkedCheckout} />
 
       {hasRunScripts && (
-        <button
-          onClick={handleRun}
-          disabled={!canRun || !canInteract}
-          className={headerIconButtonClass}
-          title="Run scripts"
-        >
-          <Play size={13} />
-        </button>
+        <ActionTooltip label="Run scripts">
+          <button
+            onClick={handleRun}
+            disabled={!canRun || !canInteract}
+            className={headerIconButtonClass}
+            aria-label="Run scripts"
+          >
+            <Play size={13} />
+          </button>
+        </ActionTooltip>
       )}
 
       <SessionMoveButton
@@ -154,13 +157,15 @@ export function GroupHeader({
       />
 
       <div className="relative" ref={historyRef}>
-        <button
-          onClick={() => setShowHistory((value: boolean) => !value)}
-          className={headerIconButtonClass}
-          title="Group history"
-        >
-          <History size={13} />
-        </button>
+        <ActionTooltip label="Group history">
+          <button
+            onClick={() => setShowHistory((value: boolean) => !value)}
+            className={headerIconButtonClass}
+            aria-label="Group history"
+          >
+            <History size={13} />
+          </button>
+        </ActionTooltip>
         {showHistory && selectedSessionId && (
           <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
             <SessionHistory sessionId={selectedSessionId} />
@@ -169,28 +174,30 @@ export function GroupHeader({
       </div>
 
       {panelMode && (
-        <button
-          onClick={onToggleFullscreen}
-          className={cn(headerIconButtonClass, "hidden sm:flex")}
-          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-        >
-          {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-        </button>
+        <ActionTooltip label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+          <button
+            onClick={onToggleFullscreen}
+            className={cn(headerIconButtonClass, "hidden sm:flex")}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+        </ActionTooltip>
       )}
 
-      <button
-        onClick={onToggleSidebar}
-        className={cn(
-          headerIconButtonClass,
-          "hidden sm:flex",
-          showSidebar
-            ? "bg-surface-hover text-foreground"
-            : undefined,
-        )}
-        title="Toggle sidebar"
-      >
-        <PanelRight size={13} />
-      </button>
+      <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
+        <button
+          onClick={onToggleSidebar}
+          className={cn(
+            headerIconButtonClass,
+            "hidden sm:flex",
+            showSidebar ? "bg-surface-hover text-foreground" : undefined,
+          )}
+          aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
+        >
+          <PanelRight size={13} />
+        </button>
+      </ActionTooltip>
     </div>
   );
 }
