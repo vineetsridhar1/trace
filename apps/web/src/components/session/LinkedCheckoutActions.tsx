@@ -16,7 +16,7 @@ type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
 const actionGroupClass =
   "flex h-9 shrink-0 items-center gap-1 rounded-md border border-border bg-surface-deep p-0.5";
 const primaryActionClass =
-  "h-8 cursor-pointer rounded-md bg-emerald-500 px-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+  "h-8 cursor-pointer rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-sm font-medium text-emerald-300 hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 const secondaryActionClass =
   "h-8 cursor-pointer rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-sm font-medium text-emerald-300 hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 const menuActionClass =
@@ -51,7 +51,7 @@ export function LinkedCheckoutActions({ state }: Props) {
     }
   };
 
-  const syncTooltip = `This syncs the session branch to your local checkout on ${state.targetDisplayLabel}.`;
+  const syncTooltip = `This spotlights the session branch in your local checkout on ${state.targetDisplayLabel}.`;
 
   if (needsTargetSelection) {
     return (
@@ -69,7 +69,7 @@ export function LinkedCheckoutActions({ state }: Props) {
             className={primaryActionClass}
             onClick={() => setSheetOpen(true)}
           >
-            Sync
+            Spotlight
           </Button>
           <Button
             size="sm"
@@ -151,11 +151,7 @@ export function LinkedCheckoutActions({ state }: Props) {
                 className={primaryActionClass}
                 onClick={() => void runAction("sync", onSync)}
                 disabled={pending}
-                aria-label={
-                  isAttachedToThisGroup
-                    ? `Sync checkout on ${state.targetDisplayLabel}`
-                    : `Sync to checkout on ${state.targetDisplayLabel}`
-                }
+                aria-label={`Spotlight checkout on ${state.targetDisplayLabel}`}
               />
             }
           >
@@ -164,7 +160,7 @@ export function LinkedCheckoutActions({ state }: Props) {
             ) : (
               <RefreshCw size={14} />
             )}
-            Sync
+            Spotlight
           </TooltipTrigger>
           <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
         </Tooltip>
