@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { ChevronDown, Spotlight } from "lucide-react";
 import { Button } from "../ui/button";
 import { TraceLoader } from "../ui/trace-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
@@ -158,7 +158,7 @@ export function LinkedCheckoutActions({ state }: Props) {
             {pendingAction === "sync" ? (
               <TraceLoader size={13} showLabel={false} />
             ) : (
-              <RefreshCw size={13} />
+              <Spotlight size={13} />
             )}
             Spotlight
           </TooltipTrigger>
