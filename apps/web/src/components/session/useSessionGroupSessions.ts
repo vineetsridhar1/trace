@@ -42,14 +42,17 @@ export function useSessionGroupSessions(
   }, [groupSessions]);
 
   const sessionTabs = useMemo(() => {
-    if (!openTabIds) return [];
-    const sessionMap = new Map(
-      groupSessions.map((session: SessionEntity) => [session.id, session]),
-    );
-    return openTabIds
-      .map((sessionId) => sessionMap.get(sessionId))
-      .filter((session): session is SessionEntity => session != null);
-  }, [groupSessions, openTabIds]);
+    if (!openTabIds) return sessionsByRecency;
+    const openIndex = new Map(openTabIds.map((sessionId, index) => [sessionId, index]));
+    return [...sessionsByRecency].sort((a, b) => {
+      const aIndex = openIndex.get(a.id);
+      const bIndex = openIndex.get(b.id);
+      if (aIndex != null && bIndex != null) return aIndex - bIndex;
+      if (aIndex != null) return -1;
+      if (bIndex != null) return 1;
+      return 0;
+    });
+  }, [openTabIds, sessionsByRecency]);
 
   const selectedSession = useMemo(
     () =>

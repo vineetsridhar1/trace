@@ -667,7 +667,7 @@ export function SessionGroupDetailView({
                 activeFilePath={activeFilePath}
                 onSelectSession={handleSelectSession}
                 onCloseSession={handleCloseSession}
-                canCloseSessions={sessionTabs.length > 1}
+                canCloseSessions={false}
                 onSelectTerminal={handleSelectTerminal}
                 onCloseTerminal={handleCloseTerminal}
                 onRenameTerminal={renameTerminal}
