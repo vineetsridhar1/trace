@@ -160,6 +160,11 @@
   -webkit-app-region: no-drag;
 }
 
+.app-region-no-drag {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
 .app-region-no-drag .app-region-drag,
 .app-region-no-drag .app-region-drag * {
   app-region: drag !important;
@@ -395,6 +400,8 @@
   word-break: break-all;
   max-height: 300px;
   overflow-y: auto;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Inline diff view */
@@ -441,6 +448,8 @@
   padding-right: 10px;
   white-space: pre-wrap;
   word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .inline-diff-context {
@@ -531,6 +540,8 @@
   font-size: 11px;
   line-height: 1.6;
   font-family: Menlo, Monaco, monospace;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* ── Markdown ── */
@@ -540,6 +551,8 @@
   line-height: 1.65;
   color: var(--foreground);
   word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .markdown-body p {
