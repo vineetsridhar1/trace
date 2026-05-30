@@ -78,7 +78,7 @@ export function GitHubActions({
   return (
     <div
       className={cn(
-        "app-region-no-drag flex h-9 shrink-0 items-center gap-1 rounded-md border border-border bg-surface-deep p-0.5",
+        "app-region-no-drag flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-deep p-0.5",
         className,
       )}
     >
@@ -88,24 +88,24 @@ export function GitHubActions({
             href={prUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-sm font-semibold text-emerald-400 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-300"
+            className="flex h-7 items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 text-xs font-semibold text-emerald-400 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-300"
             title="View Pull Request"
           >
             <span>{prLabel}</span>
-            <MoveUpRight size={14} />
+            <MoveUpRight size={13} />
           </a>
           <DisabledTooltip message={disabledReason}>
             <button
               type="button"
               onClick={() => void sendAction("merge")}
               disabled={!!disabledReason || pendingAction !== null}
-              className="flex h-8 items-center gap-1.5 rounded-md bg-emerald-500 px-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-400 disabled:pointer-events-none disabled:opacity-50"
+              className="flex h-7 items-center gap-1 rounded-md bg-emerald-500 px-2 text-xs font-medium text-white transition-colors hover:bg-emerald-400 disabled:pointer-events-none disabled:opacity-50"
               title={disabledReason ?? "Merge Pull Request"}
             >
               {pendingAction === "merge" ? (
-                <Loader2 size={15} className="animate-spin" />
+                <Loader2 size={13} className="animate-spin" />
               ) : (
-                <GitMerge size={15} />
+                <GitMerge size={13} />
               )}
               Merge
             </button>
@@ -117,13 +117,13 @@ export function GitHubActions({
             type="button"
             onClick={() => void sendAction("create")}
             disabled={!!disabledReason || pendingAction !== null}
-            className="flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-sm font-medium text-emerald-300 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-200 disabled:pointer-events-none disabled:opacity-50"
+            className="flex h-7 items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 text-xs font-medium text-emerald-300 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-200 disabled:pointer-events-none disabled:opacity-50"
             title={disabledReason ?? "Create Pull Request"}
           >
             {pendingAction === "create" ? (
-              <Loader2 size={15} className="animate-spin" />
+              <Loader2 size={13} className="animate-spin" />
             ) : (
-              <GitPullRequestArrow size={15} />
+              <GitPullRequestArrow size={13} />
             )}
             Create PR
           </button>
