@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Circle,
-  GitPullRequest,
   PanelRight,
   History,
   Maximize2,
@@ -16,6 +15,7 @@ import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
+import { GitHubActions } from "./GitHubActions";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -28,6 +28,9 @@ interface GroupHeaderProps {
   canInteract: boolean;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
+  selectedAgentStatus?: string;
+  selectedConnection?: Record<string, unknown> | null;
+  selectedWorktreeDeleted?: boolean;
   canMoveSession: boolean;
   moveDisabledReason?: string;
   groupPrUrl: string | null | undefined;
@@ -49,6 +52,9 @@ export function GroupHeader({
   canInteract,
   selectedSessionStatus,
   selectedSessionId,
+  selectedAgentStatus,
+  selectedConnection,
+  selectedWorktreeDeleted,
   canMoveSession,
   moveDisabledReason,
   groupPrUrl,
@@ -150,17 +156,14 @@ export function GroupHeader({
         )}
       </div>
 
-      {groupPrUrl && (
-        <a
-          href={groupPrUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-          title="View Pull Request"
-        >
-          <GitPullRequest size={14} />
-        </a>
-      )}
+      <GitHubActions
+        sessionId={selectedSessionId}
+        prUrl={groupPrUrl}
+        agentStatus={selectedAgentStatus}
+        connection={selectedConnection}
+        worktreeDeleted={selectedWorktreeDeleted}
+        canInteract={canInteract}
+      />
 
       {panelMode && (
         <button
