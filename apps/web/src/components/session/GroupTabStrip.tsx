@@ -68,7 +68,7 @@ interface GroupTabStripProps {
 const tabBase =
   "inline-flex max-w-[220px] shrink-0 items-center gap-2 border-r border-border/40 px-3 py-2 text-xs transition-colors";
 
-const tabActive = "bg-surface-elevated text-foreground";
+const tabActive = "bg-surface-deep text-foreground";
 
 const tabInactive = "bg-surface-deep text-muted-foreground hover:text-foreground";
 
