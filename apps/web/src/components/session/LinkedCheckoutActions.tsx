@@ -2,10 +2,10 @@ import { useState } from "react";
 import { ChevronDown, Spotlight } from "lucide-react";
 import { Button } from "../ui/button";
 import { TraceLoader } from "../ui/trace-loader";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { LinkedCheckoutSyncConflictDialog } from "./LinkedCheckoutSyncConflictDialog";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutControlSheet } from "./LinkedCheckoutControlSheet";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 interface Props {
   state: LinkedCheckoutHeaderState;
@@ -64,22 +64,25 @@ export function LinkedCheckoutActions({ state }: Props) {
           onRunAction={(action, fn) => void runAction(action, fn)}
         />
         <div className={actionGroupClass}>
-          <Button
-            size="sm"
-            className={primaryActionClass}
-            onClick={() => setSheetOpen(true)}
-          >
-            Spotlight
-          </Button>
-          <Button
-            size="sm"
-            className={menuActionClass}
-            onClick={() => setSheetOpen(true)}
-            aria-label="Choose local checkout target"
-            title="Choose local checkout target"
-          >
-            <ChevronDown size={12} />
-          </Button>
+          <ActionTooltip label="Choose local checkout target">
+            <Button
+              size="sm"
+              className={primaryActionClass}
+              onClick={() => setSheetOpen(true)}
+            >
+              Spotlight
+            </Button>
+          </ActionTooltip>
+          <ActionTooltip label="Choose local checkout target">
+            <Button
+              size="sm"
+              className={menuActionClass}
+              onClick={() => setSheetOpen(true)}
+              aria-label="Choose local checkout target"
+            >
+              <ChevronDown size={12} />
+            </Button>
+          </ActionTooltip>
         </div>
       </>
     );
@@ -96,24 +99,26 @@ export function LinkedCheckoutActions({ state }: Props) {
           onRunAction={(action, fn) => void runAction(action, fn)}
         />
         <div className={actionGroupClass}>
-          <Button
-            size="sm"
-            className={secondaryActionClass}
-            onClick={() => void runAction("link", onLinkRepo)}
-            disabled={pending || !canLinkRepo}
-            title={`Link checkout on ${state.targetDisplayLabel}`}
-          >
-            {pendingAction === "link" ? "Linking..." : "Link"}
-          </Button>
-          <Button
-            size="sm"
-            className={menuActionClass}
-            onClick={() => setSheetOpen(true)}
-            aria-label="Local checkout settings"
-            title="Local checkout settings"
-          >
-            <ChevronDown size={12} />
-          </Button>
+          <ActionTooltip label={`Link checkout on ${state.targetDisplayLabel}`}>
+            <Button
+              size="sm"
+              className={secondaryActionClass}
+              onClick={() => void runAction("link", onLinkRepo)}
+              disabled={pending || !canLinkRepo}
+            >
+              {pendingAction === "link" ? "Linking..." : "Link"}
+            </Button>
+          </ActionTooltip>
+          <ActionTooltip label="Local checkout settings">
+            <Button
+              size="sm"
+              className={menuActionClass}
+              onClick={() => setSheetOpen(true)}
+              aria-label="Local checkout settings"
+            >
+              <ChevronDown size={12} />
+            </Button>
+          </ActionTooltip>
         </div>
       </>
     );
@@ -143,17 +148,13 @@ export function LinkedCheckoutActions({ state }: Props) {
       />
 
       <div className={actionGroupClass}>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                size="sm"
-                className={primaryActionClass}
-                onClick={() => void runAction("sync", onSync)}
-                disabled={pending}
-                aria-label={`Spotlight checkout on ${state.targetDisplayLabel}`}
-              />
-            }
+        <ActionTooltip label={syncTooltip} contentClassName="max-w-72">
+          <Button
+            size="sm"
+            className={primaryActionClass}
+            onClick={() => void runAction("sync", onSync)}
+            disabled={pending}
+            aria-label={`Spotlight checkout on ${state.targetDisplayLabel}`}
           >
             {pendingAction === "sync" ? (
               <TraceLoader size={13} showLabel={false} />
@@ -161,20 +162,22 @@ export function LinkedCheckoutActions({ state }: Props) {
               <Spotlight size={13} className="text-amber-300" />
             )}
             Spotlight
-          </TooltipTrigger>
-          <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
-        </Tooltip>
-        <Button
-          size="sm"
-          className={menuActionClass}
-          onClick={() => setSheetOpen(true)}
-          aria-label={
-            isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"
-          }
-          title={isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"}
+          </Button>
+        </ActionTooltip>
+        <ActionTooltip
+          label={isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"}
         >
-          <ChevronDown size={12} />
-        </Button>
+          <Button
+            size="sm"
+            className={menuActionClass}
+            onClick={() => setSheetOpen(true)}
+            aria-label={
+              isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"
+            }
+          >
+            <ChevronDown size={12} />
+          </Button>
+        </ActionTooltip>
       </div>
     </>
   );

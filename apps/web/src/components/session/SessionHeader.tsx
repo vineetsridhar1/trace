@@ -31,6 +31,7 @@ import { SessionMoveButton } from "./SessionMoveButton";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { TraceLoader } from "../ui/trace-loader";
 import { GitHubActions } from "./GitHubActions";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
@@ -163,21 +164,25 @@ export function SessionHeader({
   return (
     <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border bg-surface-mid px-4 py-2">
       {panelMode ? (
-        <button
-          onClick={() => setActiveSessionId(null)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
-          title="Close panel"
-        >
-          <X size={16} />
-        </button>
+        <ActionTooltip label="Close panel">
+          <button
+            onClick={() => setActiveSessionId(null)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Close panel"
+          >
+            <X size={16} />
+          </button>
+        </ActionTooltip>
       ) : (
-        <button
-          onClick={() => setActiveSessionId(null)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
-          title="Back to sessions"
-        >
-          <ArrowLeft size={16} />
-        </button>
+        <ActionTooltip label="Back to sessions">
+          <button
+            onClick={() => setActiveSessionId(null)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Back to sessions"
+          >
+            <ArrowLeft size={16} />
+          </button>
+        </ActionTooltip>
       )}
 
       {disconnected ? (
@@ -229,26 +234,30 @@ export function SessionHeader({
 
       <div className="flex shrink-0 items-center gap-1">
         {panelMode && (
-          <button
-            onClick={toggleFullscreen}
-            className={headerIconButtonClass}
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          </button>
+          <ActionTooltip label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+            <button
+              onClick={toggleFullscreen}
+              className={headerIconButtonClass}
+              aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            >
+              {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          </ActionTooltip>
         )}
 
         {onToggleTerminal && (
-          <button
-            onClick={onToggleTerminal}
-            className={cn(
-              headerIconButtonClass,
-              terminalOpen ? "bg-surface-hover text-foreground" : undefined,
-            )}
-            title="Toggle terminal"
-          >
-            <TerminalSquare size={13} />
-          </button>
+          <ActionTooltip label={terminalOpen ? "Hide terminal" : "Show terminal"}>
+            <button
+              onClick={onToggleTerminal}
+              className={cn(
+                headerIconButtonClass,
+                terminalOpen ? "bg-surface-hover text-foreground" : undefined,
+              )}
+              aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}
+            >
+              <TerminalSquare size={13} />
+            </button>
+          </ActionTooltip>
         )}
 
         <SessionMoveButton
@@ -258,13 +267,15 @@ export function SessionHeader({
         />
 
         <div className="relative" ref={historyRef}>
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className={headerIconButtonClass}
-            title="Session history"
-          >
-            <History size={13} />
-          </button>
+          <ActionTooltip label="Session history">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={headerIconButtonClass}
+              aria-label="Session history"
+            >
+              <History size={13} />
+            </button>
+          </ActionTooltip>
           {showHistory && (
             <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
               <SessionHistory sessionId={sessionId} />

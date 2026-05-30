@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { QUEUE_SESSION_MESSAGE_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
-import { DisabledTooltip } from "../ui/DisabledTooltip";
+import { ActionTooltip } from "../ui/ActionTooltip";
 import { canQueueMessage, canSendMessage } from "./sessionStatus";
 
 const CREATE_PR_PROMPT =
@@ -86,23 +86,24 @@ export function GitHubActions({
     >
       {prUrl && prLabel ? (
         <>
-          <a
-            href={prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={neutralActionClass}
-            title="View Pull Request"
-          >
-            <span className="font-semibold text-emerald-400">{prLabel}</span>
-            <MoveUpRight size={13} className="text-muted-foreground" />
-          </a>
-          <DisabledTooltip message={disabledReason}>
+          <ActionTooltip label="View pull request">
+            <a
+              href={prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={neutralActionClass}
+              aria-label="View pull request"
+            >
+              <span className="font-semibold text-emerald-400">{prLabel}</span>
+              <MoveUpRight size={13} className="text-muted-foreground" />
+            </a>
+          </ActionTooltip>
+          <ActionTooltip label={disabledReason ?? "Merge pull request"}>
             <button
               type="button"
               onClick={() => void sendAction("merge")}
               disabled={!!disabledReason || pendingAction !== null}
               className={neutralActionClass}
-              title={disabledReason ?? "Merge Pull Request"}
             >
               {pendingAction === "merge" ? (
                 <Loader2 size={13} className="animate-spin text-emerald-400" />
@@ -111,16 +112,15 @@ export function GitHubActions({
               )}
               Merge
             </button>
-          </DisabledTooltip>
+          </ActionTooltip>
         </>
       ) : (
-        <DisabledTooltip message={disabledReason}>
+        <ActionTooltip label={disabledReason ?? "Create pull request"}>
           <button
             type="button"
             onClick={() => void sendAction("create")}
             disabled={!!disabledReason || pendingAction !== null}
             className={neutralActionClass}
-            title={disabledReason ?? "Create Pull Request"}
           >
             {pendingAction === "create" ? (
               <Loader2 size={13} className="animate-spin text-emerald-400" />
@@ -129,7 +129,7 @@ export function GitHubActions({
             )}
             Create PR
           </button>
-        </DisabledTooltip>
+        </ActionTooltip>
       )}
     </div>
   );
