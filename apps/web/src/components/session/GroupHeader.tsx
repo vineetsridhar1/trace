@@ -122,6 +122,15 @@ export function GroupHeader({
         <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
 
+      <GitHubActions
+        sessionId={selectedSessionId}
+        prUrl={groupPrUrl}
+        agentStatus={selectedAgentStatus}
+        connection={selectedConnection}
+        worktreeDeleted={selectedWorktreeDeleted}
+        canInteract={canInteract}
+      />
+
       <LinkedCheckoutActions state={linkedCheckout} />
 
       {hasRunScripts && (
@@ -155,15 +164,6 @@ export function GroupHeader({
           </div>
         )}
       </div>
-
-      <GitHubActions
-        sessionId={selectedSessionId}
-        prUrl={groupPrUrl}
-        agentStatus={selectedAgentStatus}
-        connection={selectedConnection}
-        worktreeDeleted={selectedWorktreeDeleted}
-        canInteract={canInteract}
-      />
 
       {panelMode && (
         <button

@@ -13,6 +13,15 @@ interface Props {
 
 type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
 
+const actionGroupClass =
+  "flex h-9 shrink-0 items-center gap-1 rounded-md border border-border bg-surface-deep p-0.5";
+const primaryActionClass =
+  "h-8 cursor-pointer rounded-md bg-emerald-500 px-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+const secondaryActionClass =
+  "h-8 cursor-pointer rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-sm font-medium text-emerald-300 hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+const menuActionClass =
+  "h-8 cursor-pointer rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-emerald-300 hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+
 export function LinkedCheckoutActions({ state }: Props) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -54,19 +63,17 @@ export function LinkedCheckoutActions({ state }: Props) {
           onOpenChange={setSheetOpen}
           onRunAction={(action, fn) => void runAction(action, fn)}
         />
-        <div className="flex shrink-0 items-center">
+        <div className={actionGroupClass}>
           <Button
-            variant="secondary"
             size="sm"
-            className="rounded-r-none border-r border-border/70"
+            className={primaryActionClass}
             onClick={() => setSheetOpen(true)}
           >
             Sync
           </Button>
           <Button
-            variant="secondary"
             size="sm"
-            className="rounded-l-none px-1.5"
+            className={menuActionClass}
             onClick={() => setSheetOpen(true)}
             aria-label="Choose local checkout target"
             title="Choose local checkout target"
@@ -88,11 +95,10 @@ export function LinkedCheckoutActions({ state }: Props) {
           onOpenChange={setSheetOpen}
           onRunAction={(action, fn) => void runAction(action, fn)}
         />
-        <div className="flex shrink-0 items-center">
+        <div className={actionGroupClass}>
           <Button
-            variant="outline"
             size="sm"
-            className="rounded-r-none border-r-0"
+            className={secondaryActionClass}
             onClick={() => void runAction("link", onLinkRepo)}
             disabled={pending || !canLinkRepo}
             title={`Link checkout on ${state.targetDisplayLabel}`}
@@ -100,9 +106,8 @@ export function LinkedCheckoutActions({ state }: Props) {
             {pendingAction === "link" ? "Linking..." : "Link"}
           </Button>
           <Button
-            variant="outline"
             size="sm"
-            className="rounded-l-none px-1.5"
+            className={menuActionClass}
             onClick={() => setSheetOpen(true)}
             aria-label="Local checkout settings"
             title="Local checkout settings"
@@ -137,14 +142,13 @@ export function LinkedCheckoutActions({ state }: Props) {
         onResolve={onResolveSyncConflict}
       />
 
-      <div className="flex shrink-0 items-center">
+      <div className={actionGroupClass}>
         <Tooltip>
           <TooltipTrigger
             render={
               <Button
-                variant="secondary"
                 size="sm"
-                className="rounded-r-none border-r border-border/70"
+                className={primaryActionClass}
                 onClick={() => void runAction("sync", onSync)}
                 disabled={pending}
                 aria-label={
@@ -165,9 +169,8 @@ export function LinkedCheckoutActions({ state }: Props) {
           <TooltipContent className="max-w-72">{syncTooltip}</TooltipContent>
         </Tooltip>
         <Button
-          variant="secondary"
           size="sm"
-          className="rounded-l-none px-1.5"
+          className={menuActionClass}
           onClick={() => setSheetOpen(true)}
           aria-label={
             isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"
