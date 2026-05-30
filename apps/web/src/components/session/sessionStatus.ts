@@ -158,14 +158,13 @@ export function getSessionGroupDisplayStatus(
   prUrl: string | null | undefined,
   archivedAt?: string | null | undefined,
   sessions?: Array<SessionPreparationFields | null | undefined>,
-  sessionPrUrls?: Array<string | null | undefined>,
 ): string {
   if (archivedAt) return "archived";
   // Merged is terminal and takes priority over all other states,
   // including needs_input and in_review (which depends on prUrl).
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
-  if (prUrl || sessionPrUrls?.some(Boolean)) return "in_review";
+  if (prUrl) return "in_review";
   if (sessions?.some(isSessionPreparing) && !agentStatuses.some((s) => s === "active")) {
     return "preparing";
   }
