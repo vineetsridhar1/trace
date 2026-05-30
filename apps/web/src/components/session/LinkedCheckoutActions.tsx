@@ -14,7 +14,7 @@ interface Props {
 type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
 
 const actionGroupClass =
-  "flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-deep p-0.5";
+  "flex h-8 shrink-0 items-center gap-1";
 const primaryActionClass =
   "h-7 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-2 text-xs font-medium text-amber-300 hover:border-amber-400/65 hover:bg-amber-500/15 hover:text-amber-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 const secondaryActionClass =
