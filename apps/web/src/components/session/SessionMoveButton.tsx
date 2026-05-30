@@ -30,12 +30,12 @@ export function SessionMoveButton({
         <PopoverTrigger
           disabled={unavailable}
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
-            open ? "bg-surface-elevated text-foreground" : undefined,
+            "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:cursor-default disabled:opacity-40",
+            open ? "bg-surface-hover text-foreground" : undefined,
             className,
           )}
         >
-          <ArrowRightLeft size={14} />
+          <ArrowRightLeft size={13} />
         </PopoverTrigger>
       </span>
       {sessionId && (
