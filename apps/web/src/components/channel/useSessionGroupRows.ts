@@ -139,7 +139,6 @@ export function useSessionGroupRows(
         const sessionStatuses = groupSessions.map(
           (session: SessionEntity) => session.sessionStatus,
         );
-        const sessionPrUrls = groupSessions.map((session: SessionEntity) => session.prUrl);
         const prUrl = group.prUrl as string | null | undefined;
         const archivedAt = group.archivedAt as string | null | undefined;
         const displaySessionStatus =
@@ -150,7 +149,6 @@ export function useSessionGroupRows(
                 prUrl,
                 archivedAt,
                 groupSessions,
-                sessionPrUrls,
               )
             : ((group.status as string | undefined) ?? "in_progress");
         const displayAgentStatus = archivedAt
