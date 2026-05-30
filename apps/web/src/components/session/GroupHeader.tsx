@@ -102,7 +102,7 @@ export function GroupHeader({
   const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
 
   return (
-    <div className="app-region-drag flex h-12 shrink-0 items-center gap-3 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
+    <div className="app-region-drag flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface-mid py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
       {selectedSessionId && (
         <span
           className={cn(

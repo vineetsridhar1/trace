@@ -81,6 +81,7 @@
   --font-sans: "Geist Variable", sans-serif;
 
   --color-surface: var(--th-surface);
+  --color-surface-mid: var(--th-surface-mid);
   --color-surface-deep: var(--th-surface-deep);
   --color-surface-elevated: var(--th-surface-elevated);
   --color-surface-hover: var(--th-surface-hover);

@@ -158,7 +158,7 @@ export function SessionHeader({
   }, [showHistory, closeHistory]);
 
   return (
-    <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
+    <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border bg-surface-mid px-4 py-2">
       {panelMode ? (
         <button
           onClick={() => setActiveSessionId(null)}
