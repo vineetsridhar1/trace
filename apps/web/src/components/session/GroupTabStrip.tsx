@@ -68,9 +68,9 @@ interface GroupTabStripProps {
 const tabBase =
   "inline-flex max-w-[220px] shrink-0 items-center gap-2 border-r border-border/40 px-3 py-2 text-xs transition-colors";
 
-const tabActive = "bg-surface-deep text-foreground";
+const tabActive = "bg-background text-foreground";
 
-const tabInactive = "bg-surface-deep text-muted-foreground hover:text-foreground";
+const tabInactive = "bg-background text-muted-foreground hover:text-foreground";
 
 export function GroupTabStrip({
   sessionTabs,
@@ -152,7 +152,7 @@ export function GroupTabStrip({
 
   return (
     <TooltipProvider delay={300}>
-      <div className="shrink-0 bg-surface-deep">
+      <div className="shrink-0 bg-background">
         <div className="native-scrollbar overflow-x-auto">
           <div className="flex min-w-max">
             {sessionTabs.map((session) => {
