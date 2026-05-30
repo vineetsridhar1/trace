@@ -6,7 +6,6 @@ import {
   Monitor,
   Cloud,
   TerminalSquare,
-  GitPullRequest,
   Maximize2,
   Minimize2,
   X,
@@ -30,6 +29,7 @@ import { ScrambleText } from "../ui/ScrambleText";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { TraceLoader } from "../ui/trace-loader";
+import { GitHubActions } from "./GitHubActions";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
@@ -270,17 +270,14 @@ export function SessionHeader({
           )}
         </div>
 
-        {prUrl && (
-          <a
-            href={prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
-            title="View Pull Request"
-          >
-            <GitPullRequest size={14} />
-          </a>
-        )}
+        <GitHubActions
+          sessionId={sessionId}
+          prUrl={prUrl}
+          agentStatus={agentStatus}
+          connection={connection}
+          worktreeDeleted={worktreeDeleted}
+          canInteract={bridgeInteractionAllowed}
+        />
       </div>
     </div>
   );
