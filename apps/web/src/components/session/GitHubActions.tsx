@@ -11,6 +11,8 @@ const CREATE_PR_PROMPT =
   "Create a pull request for this session branch. Push any required commits, open the PR against the repository's normal merge target, and report the PR link.";
 const MERGE_PR_PROMPT =
   "Merge the pull request for this session branch. Verify it is ready to merge, merge it using the repository's normal strategy, and report the result.";
+const neutralActionClass =
+  "flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border/70 bg-background/40 px-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 
 function getPullRequestLabel(prUrl: string): string {
   const match = prUrl.match(/\/pull\/(\d+)(?:[/?#]|$)/);
@@ -88,24 +90,24 @@ export function GitHubActions({
             href={prUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-7 items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 text-xs font-semibold text-emerald-400 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-300"
+            className={neutralActionClass}
             title="View Pull Request"
           >
-            <span>{prLabel}</span>
-            <MoveUpRight size={13} />
+            <span className="font-semibold text-emerald-400">{prLabel}</span>
+            <MoveUpRight size={13} className="text-muted-foreground" />
           </a>
           <DisabledTooltip message={disabledReason}>
             <button
               type="button"
               onClick={() => void sendAction("merge")}
               disabled={!!disabledReason || pendingAction !== null}
-              className="flex h-7 items-center gap-1 rounded-md bg-emerald-500 px-2 text-xs font-medium text-white transition-colors hover:bg-emerald-400 disabled:pointer-events-none disabled:opacity-50"
+              className={neutralActionClass}
               title={disabledReason ?? "Merge Pull Request"}
             >
               {pendingAction === "merge" ? (
-                <Loader2 size={13} className="animate-spin" />
+                <Loader2 size={13} className="animate-spin text-emerald-400" />
               ) : (
-                <GitMerge size={13} />
+                <GitMerge size={13} className="text-emerald-400" />
               )}
               Merge
             </button>
@@ -117,13 +119,13 @@ export function GitHubActions({
             type="button"
             onClick={() => void sendAction("create")}
             disabled={!!disabledReason || pendingAction !== null}
-            className="flex h-7 items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 text-xs font-medium text-emerald-300 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/15 hover:text-emerald-200 disabled:pointer-events-none disabled:opacity-50"
+            className={neutralActionClass}
             title={disabledReason ?? "Create Pull Request"}
           >
             {pendingAction === "create" ? (
-              <Loader2 size={13} className="animate-spin" />
+              <Loader2 size={13} className="animate-spin text-emerald-400" />
             ) : (
-              <GitPullRequestArrow size={13} />
+              <GitPullRequestArrow size={13} className="text-emerald-400" />
             )}
             Create PR
           </button>

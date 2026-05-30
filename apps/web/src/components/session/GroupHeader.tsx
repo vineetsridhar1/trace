@@ -41,6 +41,9 @@ interface GroupHeaderProps {
   onToggleSidebar: () => void;
 }
 
+const headerIconButtonClass =
+  "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:cursor-default disabled:opacity-40";
+
 export function GroupHeader({
   groupName,
   sessionGroupId,
@@ -137,10 +140,10 @@ export function GroupHeader({
         <button
           onClick={handleRun}
           disabled={!canRun || !canInteract}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+          className={headerIconButtonClass}
           title="Run scripts"
         >
-          <Play size={14} />
+          <Play size={13} />
         </button>
       )}
 
@@ -153,10 +156,10 @@ export function GroupHeader({
       <div className="relative" ref={historyRef}>
         <button
           onClick={() => setShowHistory((value: boolean) => !value)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
+          className={headerIconButtonClass}
           title="Group history"
         >
-          <History size={14} />
+          <History size={13} />
         </button>
         {showHistory && selectedSessionId && (
           <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
@@ -168,24 +171,25 @@ export function GroupHeader({
       {panelMode && (
         <button
           onClick={onToggleFullscreen}
-          className="hidden h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground sm:flex"
+          className={cn(headerIconButtonClass, "hidden sm:flex")}
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
         >
-          {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
         </button>
       )}
 
       <button
         onClick={onToggleSidebar}
         className={cn(
-          "hidden h-8 w-8 items-center justify-center rounded-md transition-colors sm:flex",
+          headerIconButtonClass,
+          "hidden sm:flex",
           showSidebar
-            ? "bg-surface-elevated text-foreground"
-            : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+            ? "bg-surface-hover text-foreground"
+            : undefined,
         )}
         title="Toggle sidebar"
       >
-        <PanelRight size={14} />
+        <PanelRight size={13} />
       </button>
     </div>
   );
