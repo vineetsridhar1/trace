@@ -66,11 +66,11 @@ interface GroupTabStripProps {
 }
 
 const tabBase =
-  "inline-flex max-w-[220px] shrink-0 items-center gap-2 border-r border-border/40 px-3 py-2 text-xs transition-colors";
+  "inline-flex max-w-[220px] shrink-0 items-center gap-2 border-r border-b-2 border-border/40 px-3 py-2 text-xs transition-colors";
 
-const tabActive = "bg-surface-mid text-foreground";
+const tabActive = "border-b-accent bg-surface-mid text-foreground";
 
-const tabInactive = "bg-surface-mid text-muted-foreground hover:text-foreground";
+const tabInactive = "border-b-transparent bg-surface-mid text-muted-foreground hover:text-foreground";
 
 export function GroupTabStrip({
   sessionTabs,
