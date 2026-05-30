@@ -14,13 +14,13 @@ interface Props {
 type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
 
 const actionGroupClass =
-  "flex h-9 shrink-0 items-center gap-1 rounded-md border border-border bg-surface-deep p-0.5";
+  "flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-deep p-0.5";
 const primaryActionClass =
-  "h-8 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-2.5 text-sm font-medium text-amber-300 hover:border-amber-400/65 hover:bg-amber-500/15 hover:text-amber-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+  "h-7 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-2 text-xs font-medium text-amber-300 hover:border-amber-400/65 hover:bg-amber-500/15 hover:text-amber-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 const secondaryActionClass =
-  "h-8 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-2.5 text-sm font-medium text-amber-300 hover:border-amber-400/65 hover:bg-amber-500/15 hover:text-amber-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+  "h-7 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-2 text-xs font-medium text-amber-300 hover:border-amber-400/65 hover:bg-amber-500/15 hover:text-amber-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 const menuActionClass =
-  "h-8 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-1.5 text-amber-300 hover:border-amber-400/65 hover:bg-amber-500/15 hover:text-amber-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+  "h-7 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-1.5 text-amber-300 hover:border-amber-400/65 hover:bg-amber-500/15 hover:text-amber-200 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 
 export function LinkedCheckoutActions({ state }: Props) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -78,7 +78,7 @@ export function LinkedCheckoutActions({ state }: Props) {
             aria-label="Choose local checkout target"
             title="Choose local checkout target"
           >
-            <ChevronDown size={13} />
+            <ChevronDown size={12} />
           </Button>
         </div>
       </>
@@ -112,7 +112,7 @@ export function LinkedCheckoutActions({ state }: Props) {
             aria-label="Local checkout settings"
             title="Local checkout settings"
           >
-            <ChevronDown size={13} />
+            <ChevronDown size={12} />
           </Button>
         </div>
       </>
@@ -156,9 +156,9 @@ export function LinkedCheckoutActions({ state }: Props) {
             }
           >
             {pendingAction === "sync" ? (
-              <TraceLoader size={14} showLabel={false} />
+              <TraceLoader size={13} showLabel={false} />
             ) : (
-              <RefreshCw size={14} />
+              <RefreshCw size={13} />
             )}
             Spotlight
           </TooltipTrigger>
@@ -173,7 +173,7 @@ export function LinkedCheckoutActions({ state }: Props) {
           }
           title={isAttachedToThisGroup ? "Local checkout settings" : "Choose local checkout target"}
         >
-          <ChevronDown size={13} />
+          <ChevronDown size={12} />
         </Button>
       </div>
     </>
