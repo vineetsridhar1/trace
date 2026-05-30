@@ -78,7 +78,7 @@ export function GitHubActions({
   return (
     <div
       className={cn(
-        "app-region-no-drag flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-deep p-0.5",
+        "app-region-no-drag flex h-8 shrink-0 items-center gap-1",
         className,
       )}
     >
