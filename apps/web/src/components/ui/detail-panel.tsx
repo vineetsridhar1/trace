@@ -246,7 +246,7 @@ export function DetailPanel({
       <div
         ref={panelRef}
         className={cn(
-          "min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg bg-background",
+          "min-w-0 overflow-hidden rounded-tr-lg bg-background",
           isDragging ? "" : panelTransitionClass,
           isOpen ? "border" : "border-transparent",
         )}
