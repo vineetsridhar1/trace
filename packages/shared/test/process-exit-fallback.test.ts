@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { spawn } from "child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AntigravityAdapter } from "../src/adapters/antigravity.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
 import { CodexAdapter } from "../src/adapters/codex.js";
 import { PiAdapter } from "../src/adapters/pi.js";
@@ -185,6 +186,87 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onOutput).toHaveBeenCalledWith({
       type: "assistant",
       message: { content: [{ type: "text", text: "done" }] },
+    });
+  });
+
+  it("completes an Antigravity run when the process exits but stdout never closes", () => {
+    const adapter = new AntigravityAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "wait for checks",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].emit("exit", 0);
+    vi.advanceTimersByTime(999);
+    expect(onComplete).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes Antigravity print + resume flags and emits stdout as one assistant text block", () => {
+    const adapter = new AntigravityAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "implement feature",
+      cwd: "/tmp",
+      toolSessionId: "conv-123",
+      onOutput,
+      onComplete,
+    });
+
+    expect(spawn).toHaveBeenCalledWith(
+      "agy",
+      [
+        "-p",
+        "implement feature",
+        "--dangerously-skip-permissions",
+        "--print-timeout",
+        "30m0s",
+        "--conversation",
+        "conv-123",
+      ],
+      expect.objectContaining({ cwd: "/tmp", stdio: ["ignore", "pipe", "pipe"] }),
+    );
+
+    spawnedChildren[0].stdout.write("Here is the result.\n");
+    spawnedChildren[0].emit("close", 0);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "Here is the result." }] },
+    });
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("wraps Antigravity output as a plan block in plan mode", () => {
+    const adapter = new AntigravityAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "draft a plan",
+      cwd: "/tmp",
+      interactionMode: "plan",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write("Step 1. Step 2.\n");
+    spawnedChildren[0].emit("close", 0);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "plan", content: "Step 1. Step 2." }] },
     });
   });
 

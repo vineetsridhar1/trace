@@ -85,6 +85,7 @@ enum CodingTool {
   codex
   custom
   pi
+  antigravity
 }
 
 enum ChatType {
