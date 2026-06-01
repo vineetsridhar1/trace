@@ -208,6 +208,14 @@
   user-select: auto;
 }
 
+.app-region-no-drag .app-region-drag :is(button:disabled, [aria-disabled="true"]),
+.app-region-no-drag .app-region-drag :is(button:disabled, [aria-disabled="true"]) * {
+  app-region: drag !important;
+  -webkit-app-region: drag !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* ── Button utilities ── */
 .btn-primary {
   color: white !important;

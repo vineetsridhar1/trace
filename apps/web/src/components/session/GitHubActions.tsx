@@ -12,7 +12,7 @@ const CREATE_PR_PROMPT =
 const MERGE_PR_PROMPT =
   "Merge the pull request for this session branch. Verify it is ready to merge, merge it using the repository's normal strategy, and report the result.";
 const neutralActionClass =
-  "flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border/70 bg-background/40 px-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
+  "app-region-no-drag flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border/70 bg-background/40 px-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover disabled:pointer-events-none disabled:cursor-default disabled:opacity-50";
 
 function getPullRequestLabel(prUrl: string): string {
   const match = prUrl.match(/\/pull\/(\d+)(?:[/?#]|$)/);
@@ -80,7 +80,7 @@ export function GitHubActions({
   return (
     <div
       className={cn(
-        "app-region-no-drag flex h-8 shrink-0 items-center gap-1",
+        "flex h-8 shrink-0 items-center gap-1",
         className,
       )}
     >
