@@ -662,9 +662,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       };
     }
     const config = parseProvisionedConfig(configRecord(input.environment.config));
-    const providerRuntimeId =
-      optionalString(input.connection?.providerRuntimeId) ??
-      optionalString(input.connection?.cloudMachineId);
+    const providerRuntimeId = optionalString(input.connection?.providerRuntimeId);
     if (!providerRuntimeId) {
       return { ok: true, status: "not_found" };
     }
@@ -695,9 +693,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       return { status: "unknown", message: "Provisioned runtime environment missing" };
     }
     const config = parseProvisionedConfig(configRecord(input.environment.config));
-    const providerRuntimeId =
-      optionalString(input.connection?.providerRuntimeId) ??
-      optionalString(input.connection?.cloudMachineId);
+    const providerRuntimeId = optionalString(input.connection?.providerRuntimeId);
     if (!providerRuntimeId) return { status: "unknown", message: "Provider runtime ID missing" };
 
     const json = await authenticatedLauncherRequest({

@@ -18,7 +18,7 @@ describe("bridgeAccessStoreKey", () => {
 
 describe("buildFallbackBridgeAccess", () => {
   it("allows cloud runtimes by default", () => {
-    expect(buildFallbackBridgeAccess("cloud-machine-123")).toMatchObject({
+    expect(buildFallbackBridgeAccess("runtime_123")).toMatchObject({
       hostingMode: "cloud",
       allowed: true,
       isOwner: true,

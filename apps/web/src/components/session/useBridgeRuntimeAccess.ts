@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../../lib/urql";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
-import { isCloudMachineRuntimeId } from "@trace/shared";
+import { isProvisionedRuntimeId } from "@trace/shared";
 import type { BridgeAccessCapability } from "@trace/gql";
 
 type BridgeUser = {
@@ -50,7 +50,7 @@ export function isBridgeInteractionAllowed(access: BridgeRuntimeAccessInfo | nul
 }
 
 function buildFallbackAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo {
-  const hostingMode = isCloudMachineRuntimeId(runtimeInstanceId) ? "cloud" : "local";
+  const hostingMode = isProvisionedRuntimeId(runtimeInstanceId) ? "cloud" : "local";
   const allowed = hostingMode !== "local";
 
   return {

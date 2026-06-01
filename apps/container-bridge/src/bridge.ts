@@ -45,7 +45,6 @@ import {
   getWorkspaceSlugs,
   removeWorktree,
   getRepoPath,
-  listClonedRepoIds,
 } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
@@ -96,7 +95,7 @@ function getPendingInputToolUseId(output: ToolOutput): string | null {
 }
 
 /**
- * Multi-session container bridge — runs inside a Fly Machine (one per user per org).
+ * Multi-session container bridge for provisioned runtimes.
  * Mirrors the desktop BridgeClient pattern: Map-based adapters, dynamic session binding.
  * Handles prepare/delete commands for repo cloning and worktree management.
  */
@@ -138,7 +137,7 @@ export class ContainerBridge implements IBridgeClient {
   constructor(
     private readonly serverUrl: string,
     private readonly token: string,
-    private readonly machineId: string,
+    private readonly runtimeInstanceId: string,
     private readonly defaultTool: string,
   ) {
     this.terminalManager = new TerminalManager({
@@ -161,22 +160,17 @@ export class ContainerBridge implements IBridgeClient {
     this.ws.on("open", () => {
       console.log("[container-bridge] connected to server");
       this.consecutiveFailures = 0;
-      const provisionedRuntimeInstanceId = process.env.TRACE_RUNTIME_INSTANCE_ID?.trim();
-      const instanceId = provisionedRuntimeInstanceId ?? `cloud-machine-${this.machineId}`;
-      const registeredRepoIds = provisionedRuntimeInstanceId ? [] : listClonedRepoIds();
       const supportedTools = ["claude_code", "codex"];
       if (hasExecutable("pi")) supportedTools.push("pi");
-      // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
-      // they intentionally register no pre-existing repos.
       this.send({
         type: "runtime_hello",
-        instanceId,
-        label: instanceId,
+        instanceId: this.runtimeInstanceId,
+        label: this.runtimeInstanceId,
         hostingMode: "cloud",
         protocolVersion: BRIDGE_PROTOCOL_VERSION,
         agentVersion: AGENT_VERSION,
         supportedTools,
-        registeredRepoIds,
+        registeredRepoIds: [],
         activeTerminals: this.terminalManager.getActiveTerminals(),
       });
       this.flushOutbox();
@@ -272,7 +266,7 @@ export class ContainerBridge implements IBridgeClient {
     this.heartbeatTimer = setInterval(() => {
       this.send({
         type: "runtime_heartbeat",
-        instanceId: `cloud-machine-${this.machineId}`,
+        instanceId: this.runtimeInstanceId,
         activeSessionIds: [...this.activeRuns.keys()],
       });
     }, 10_000);

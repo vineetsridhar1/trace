@@ -264,14 +264,14 @@ describe("bridge handler auth", () => {
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
       },
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-victim",
+      instanceId: "runtime_victim",
       hostingMode: "cloud",
     });
     await Promise.resolve();
@@ -286,14 +286,14 @@ describe("bridge handler auth", () => {
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
       },
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       label: "owned cloud",
       hostingMode: "cloud",
       protocolVersion: 1,
@@ -305,7 +305,7 @@ describe("bridge handler auth", () => {
 
     expect(mocks.registerRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: "cloud-machine-owned",
+        id: "runtime_owned",
         label: "owned cloud",
         hostingMode: "cloud",
         organizationId: "org-1",
@@ -323,7 +323,7 @@ describe("bridge handler auth", () => {
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
         sessionId: "session-1",
@@ -334,7 +334,7 @@ describe("bridge handler auth", () => {
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
       protocolVersion: 0,
       agentVersion: "0.1.0",
@@ -353,7 +353,7 @@ describe("bridge handler auth", () => {
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
         sessionId: "session-1",
@@ -364,7 +364,7 @@ describe("bridge handler auth", () => {
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
       protocolVersion: 1,
       agentVersion: "0.1.0",
@@ -381,13 +381,13 @@ describe("bridge handler auth", () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
       id: "session-1",
-      connection: { state: "connecting", runtimeInstanceId: "cloud-machine-owned" },
+      connection: { state: "connecting", runtimeInstanceId: "runtime_owned" },
     });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
         sessionId: "session-1",
@@ -398,7 +398,7 @@ describe("bridge handler auth", () => {
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
       protocolVersion: 1,
       agentVersion: "0.1.0",
@@ -407,10 +407,10 @@ describe("bridge handler auth", () => {
     });
     await Promise.resolve();
 
-    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "cloud-machine-owned");
+    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "runtime_owned");
     expect(mocks.registerRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: "cloud-machine-owned",
+        id: "runtime_owned",
         hostingMode: "cloud",
         supportedTools: ["codex"],
         registeredRepoIds: [],
@@ -428,7 +428,7 @@ describe("bridge handler auth", () => {
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
         sessionId: "session-1",
@@ -439,7 +439,7 @@ describe("bridge handler auth", () => {
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
       protocolVersion: 1,
       agentVersion: "0.1.0",
@@ -448,7 +448,7 @@ describe("bridge handler auth", () => {
     });
     await Promise.resolve();
 
-    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "cloud-machine-owned");
+    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "runtime_owned");
     expect(ws.close).not.toHaveBeenCalledWith(1008, "Session is not waiting for this runtime");
   });
 
@@ -462,7 +462,7 @@ describe("bridge handler auth", () => {
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
         sessionId: "session-1",
@@ -473,7 +473,7 @@ describe("bridge handler auth", () => {
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
       protocolVersion: 1,
       agentVersion: "0.1.0",
@@ -490,13 +490,13 @@ describe("bridge handler auth", () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
       id: "session-1",
-      connection: { state: "timed_out", runtimeInstanceId: "cloud-machine-owned" },
+      connection: { state: "timed_out", runtimeInstanceId: "runtime_owned" },
     });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
         sessionId: "session-1",
@@ -507,7 +507,7 @@ describe("bridge handler auth", () => {
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
       protocolVersion: 1,
       agentVersion: "0.1.0",
@@ -523,21 +523,21 @@ describe("bridge handler auth", () => {
   it("ignores session output for sessions not bound to this bridge runtime", async () => {
     const ws = createMockWs();
     mocks.getRuntimeForSession.mockReturnValue({
-      id: "cloud-machine-other",
+      id: "runtime_other",
       ws: createMockWs(),
     });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
       },
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
     });
     await Promise.resolve();
@@ -555,20 +555,20 @@ describe("bridge handler auth", () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
       id: "session-1",
-      connection: { state: "connected", runtimeInstanceId: "cloud-machine-owned" },
+      connection: { state: "connected", runtimeInstanceId: "runtime_owned" },
     });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
       },
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
     });
     await Promise.resolve();
@@ -862,13 +862,13 @@ describe("bridge handler auth", () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
       id: "session-1",
-      connection: { state: "connecting", runtimeInstanceId: "cloud-machine-owned" },
+      connection: { state: "connecting", runtimeInstanceId: "runtime_owned" },
     });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
         sessionId: "session-1",
@@ -879,7 +879,7 @@ describe("bridge handler auth", () => {
     });
     ws.emitMessage({
       type: "runtime_hello",
-      instanceId: "cloud-machine-owned",
+      instanceId: "runtime_owned",
       hostingMode: "cloud",
       protocolVersion: 1,
       agentVersion: "0.1.0",
@@ -908,15 +908,15 @@ describe("bridge handler auth", () => {
     await vi.waitFor(() => {
       expect(mocks.relayFromBridge).toHaveBeenCalledWith(
         expect.objectContaining({ type: "terminal_output", terminalId: "term-1", data: "one" }),
-        "cloud-machine-owned",
+        "runtime_owned",
       );
       expect(mocks.relayFromBridge).toHaveBeenCalledWith(
         expect.objectContaining({ type: "terminal_output", terminalId: "term-2", data: "two" }),
-        "cloud-machine-owned",
+        "runtime_owned",
       );
       expect(mocks.relayFromBridge).toHaveBeenCalledWith(
         expect.objectContaining({ type: "terminal_exit", terminalId: "term-1", exitCode: 0 }),
-        "cloud-machine-owned",
+        "runtime_owned",
       );
     });
   });
@@ -987,7 +987,7 @@ describe("bridge handler auth", () => {
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
         kind: "cloud",
-        instanceId: "cloud-machine-owned",
+        instanceId: "runtime_owned",
         organizationId: "org-1",
         userId: "user-1",
       },
