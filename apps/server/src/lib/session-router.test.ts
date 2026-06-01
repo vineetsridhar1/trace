@@ -1215,6 +1215,94 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(lifecycleEvents).toEqual([]);
   });
 
+  it("deletes session resources without stopping a shared provisioned runtime when requested", async () => {
+    const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopped" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "connecting" };
+      },
+      stopSession: provisionedStop,
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({
+      id: "env-1",
+      name: "Shared Launcher",
+      adapterType: "provisioned",
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { type: "bearer", secretId: "secret-1" },
+        startupTimeoutSeconds: 120,
+        deprovisionPolicy: "on_session_end",
+      },
+    });
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-shared",
+      label: "Shared Cloud",
+      ws,
+      hostingMode: "cloud",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+    router.bindSession("session-1", "runtime-shared");
+    const lifecycleEvents: string[] = [];
+
+    await router.destroyRuntime(
+      "session-1",
+      {
+        hosting: "cloud",
+        organizationId: "org-1",
+        workdir: "/workspace/group-1",
+        repoId: "repo-1",
+        connection: {
+          adapterType: "provisioned",
+          environmentId: "env-1",
+          providerRuntimeId: "provider-shared",
+        },
+      },
+      {
+        reason: "session_unloaded",
+        skipProviderStop: true,
+        onLifecycle: (eventType) => {
+          lifecycleEvents.push(eventType);
+        },
+      },
+    );
+
+    expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"type":"delete"'));
+    expect(provisionedStop).not.toHaveBeenCalled();
+    expect(lifecycleEvents).toEqual([]);
+    expect(router.getRuntimeForSession("session-1")).toBeUndefined();
+  });
+
   it("stops manual-policy provisioned runtimes for idle cleanup", async () => {
     const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopped" });
     const provisionedAdapter: RuntimeAdapter = {

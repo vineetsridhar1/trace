@@ -6105,7 +6105,7 @@ describe("SessionService", () => {
             sessionGroupId: "group-1",
             organizationId: "org-1",
             workdir: null,
-            connection: disconnectOnDeprovisionConnection,
+            connection,
           }),
         )
         .mockResolvedValueOnce(
@@ -6222,6 +6222,72 @@ describe("SessionService", () => {
       );
     });
 
+    it("does not deprovision an idle group when another active cloud session shares the runtime", async () => {
+      const connection = {
+        state: "connected",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-shared",
+        providerRuntimeId: "provider-shared",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:31:00.000Z"),
+              connection,
+            },
+          ],
+        },
+      ]);
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          sessionGroupId: "group-1",
+          organizationId: "org-1",
+          workdir: null,
+          connection,
+        }),
+      );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        workdir: "/workspace/group-1",
+        repoId: "repo-1",
+        connection,
+      });
+      prismaMock.session.count.mockResolvedValueOnce(1);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          id: { not: "session-1" },
+          organizationId: "org-1",
+          hosting: "cloud",
+          sessionStatus: { not: "merged" },
+        }),
+      });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(terminalRelayMock.destroyAllForSessionGroup).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
     it("keeps active cloud session groups running even without recent messages", async () => {
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
         {
@@ -6309,7 +6375,7 @@ describe("SessionService", () => {
             sessionGroupId: "group-1",
             organizationId: "org-1",
             workdir: null,
-            connection: disconnectOnDeprovisionConnection,
+            connection,
           }),
         )
         .mockResolvedValueOnce(
@@ -9158,6 +9224,101 @@ describe("SessionService", () => {
       );
       expect(sessionRouterMock.destroyRuntime.mock.invocationCallOrder[0]).toBeLessThan(
         eventServiceMock.create.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("does not stop a shared provisioned runtime when auto-archiving a merged group", async () => {
+      const prUrl = "https://github.com/trace/trace/pull/100";
+      const connection = {
+        state: "connected",
+        adapterType: "provisioned",
+        runtimeInstanceId: "runtime-shared",
+        providerRuntimeId: "provider-shared",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({ prUrl })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({ prUrl, workdir: "/workspace/group-1", connection }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        })
+        .mockResolvedValueOnce({
+          workdir: "/workspace/group-1",
+          repoId: "repo-1",
+          connection,
+        })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({
+            prUrl,
+            workdir: null,
+            connection,
+            worktreeDeleted: true,
+          }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({
+            prUrl,
+            workdir: null,
+            connection,
+            worktreeDeleted: true,
+          }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { createdBy: { autoArchiveMergedSessions: true } },
+      ]);
+      prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
+      prismaMock.session.findUnique.mockResolvedValue(
+        makeSession({
+          id: "session-1",
+          hosting: "cloud",
+          organizationId: "org-1",
+          workdir: "/workspace/group-1",
+          repoId: "repo-1",
+          connection,
+          sessionGroupId: "group-1",
+        }),
+      );
+      prismaMock.session.count.mockResolvedValueOnce(1);
+
+      await service.markPrMerged({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl,
+        organizationId: "org-1",
+      });
+
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          hosting: "cloud",
+          connection,
+        }),
+        expect.objectContaining({
+          reason: "session_unloaded",
+          skipProviderStop: true,
+        }),
+      );
+      expect(prismaMock.session.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          id: { not: "session-1" },
+          organizationId: "org-1",
+          hosting: "cloud",
+          sessionStatus: { not: "merged" },
+        }),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_pr_merged",
+          payload: expect.objectContaining({
+            worktreeDeleted: true,
+          }),
+        }),
       );
     });
 

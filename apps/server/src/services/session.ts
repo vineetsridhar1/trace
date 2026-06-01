@@ -1565,6 +1565,40 @@ export class SessionService {
     });
   }
 
+  private async hasActiveSharedProvisionedRuntimeSession(
+    sessionId: string,
+    session: {
+      hosting: string;
+      organizationId?: string;
+      connection?: unknown;
+    },
+  ): Promise<boolean> {
+    const connection = this.parseConnection(session.connection);
+    if (session.hosting !== "cloud" && connection.adapterType !== "provisioned") return false;
+
+    const providerRuntimeIds = [
+      typeof connection.providerRuntimeId === "string" ? connection.providerRuntimeId : null,
+      typeof connection.cloudMachineId === "string" ? connection.cloudMachineId : null,
+    ].filter((value): value is string => !!value);
+    if (providerRuntimeIds.length === 0) return false;
+
+    const activeSharedRuntimeSessions = await prisma.session.count({
+      where: {
+        id: { not: sessionId },
+        ...(session.organizationId ? { organizationId: session.organizationId } : {}),
+        hosting: "cloud",
+        agentStatus: { notIn: [...FULLY_UNLOADED_AGENT_STATUSES] },
+        sessionStatus: { not: "merged" },
+        OR: providerRuntimeIds.flatMap((runtimeId) => [
+          { connection: { path: ["providerRuntimeId"], equals: runtimeId } },
+          { connection: { path: ["cloudMachineId"], equals: runtimeId } },
+        ]),
+      },
+    });
+
+    return activeSharedRuntimeSessions > 0;
+  }
+
   /**
    * Find sessions whose provisioned runtime is stuck in stopping or
    * deprovision_failed and retry the adapter stop.
@@ -4148,11 +4182,14 @@ export class SessionService {
       }
       await this.resetReconcileState(id);
       const runtimeSession = await this.withGroupRuntimeState(session);
-      await sessionRouter.destroyRuntime(
+      const skipProviderStop = await this.hasActiveSharedProvisionedRuntimeSession(
         id,
         runtimeSession,
-        this.destroyRuntimeOptions(id, "session_deleted"),
       );
+      await sessionRouter.destroyRuntime(id, runtimeSession, {
+        ...this.destroyRuntimeOptions(id, "session_deleted"),
+        skipProviderStop,
+      });
     } else {
       terminalRelay.destroyAllForSession(id);
       try {
@@ -8638,13 +8675,6 @@ export class SessionService {
     group: IdleCloudSessionGroupCandidate,
     cloudSession: IdleCloudSessionGroupCandidate["sessions"][number],
   ): Promise<boolean> {
-    const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => ({
-      ...conn,
-      disconnectOnDeprovision: true,
-      disconnectReason: "idle_session_group_cleanup",
-    }));
-    if (!disconnectFlagged) return false;
-
     const session = await prisma.session.findUnique({
       where: { id: cloudSession.id },
       select: {
@@ -8659,11 +8689,26 @@ export class SessionService {
     if (!session) return false;
 
     const runtimeSession = await this.withGroupRuntimeState(session);
+    if (await this.hasActiveSharedProvisionedRuntimeSession(cloudSession.id, runtimeSession)) {
+      return false;
+    }
+
+    const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => ({
+      ...conn,
+      disconnectOnDeprovision: true,
+      disconnectReason: "idle_session_group_cleanup",
+    }));
+    if (!disconnectFlagged) return false;
+    const runtimeSessionWithDisconnectFlag = {
+      ...runtimeSession,
+      connection: disconnectFlagged.updated,
+    };
+
     terminalRelay.destroyAllForSessionGroup(group.id);
     try {
       await sessionRouter.destroyRuntime(
         cloudSession.id,
-        runtimeSession,
+        runtimeSessionWithDisconnectFlag,
         this.destroyRuntimeOptions(cloudSession.id, "idle_session_group_cleanup"),
       );
       return true;
@@ -8705,11 +8750,18 @@ export class SessionService {
 
     if (isGroupUnload && session.sessionGroupId) {
       const runtimeSession = await this.withGroupRuntimeState(session);
+      const skipProviderStop = await this.hasActiveSharedProvisionedRuntimeSession(
+        sessionId,
+        runtimeSession,
+      );
 
       // Group-level unload: destroy all terminals and the shared runtime
       terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
       try {
-        await sessionRouter.destroyRuntime(sessionId, runtimeSession, destroyOptions);
+        await sessionRouter.destroyRuntime(sessionId, runtimeSession, {
+          ...destroyOptions,
+          skipProviderStop,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(
@@ -8741,8 +8793,15 @@ export class SessionService {
       if (activeSiblingCount === 0) {
         // Last session in the group — tear down the shared runtime
         const runtimeSession = await this.withGroupRuntimeState(session);
+        const skipProviderStop = await this.hasActiveSharedProvisionedRuntimeSession(
+          sessionId,
+          runtimeSession,
+        );
         try {
-          await sessionRouter.destroyRuntime(sessionId, runtimeSession, destroyOptions);
+          await sessionRouter.destroyRuntime(sessionId, runtimeSession, {
+            ...destroyOptions,
+            skipProviderStop,
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
@@ -8757,8 +8816,15 @@ export class SessionService {
       return false;
     } else {
       // No group — just destroy the runtime
+      const skipProviderStop = await this.hasActiveSharedProvisionedRuntimeSession(
+        sessionId,
+        session,
+      );
       try {
-        await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
+        await sessionRouter.destroyRuntime(sessionId, session, {
+          ...destroyOptions,
+          skipProviderStop,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
