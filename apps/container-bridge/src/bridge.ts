@@ -135,11 +135,6 @@ export class ContainerBridge implements IBridgeClient {
         else resolve(stdout);
       });
     });
-  private lastActivity = Date.now();
-  private idleCheckTimer: ReturnType<typeof setInterval> | null = null;
-  /** Exit if no sessions/terminals have been active for this long. */
-  private static IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-
   constructor(
     private readonly serverUrl: string,
     private readonly token: string,
@@ -222,10 +217,6 @@ export class ContainerBridge implements IBridgeClient {
     }
     this.adapters.clear();
     this.outbox.clear();
-    if (this.idleCheckTimer) {
-      clearInterval(this.idleCheckTimer);
-      this.idleCheckTimer = null;
-    }
     this.ws?.close();
     this.ws = null;
     this.pendingInputToolUseIds.clear();
@@ -274,33 +265,6 @@ export class ContainerBridge implements IBridgeClient {
       this.reconnectTimer = null;
       this.connect();
     }, delay);
-  }
-
-  private touchActivity(): void {
-    this.lastActivity = Date.now();
-  }
-
-  /** Returns true if there are active sessions or terminals. */
-  private hasActiveWork(): boolean {
-    return this.adapters.size > 0 || this.terminalManager.hasTerminals();
-  }
-
-  startIdleWatch(): void {
-    if (this.idleCheckTimer) return;
-    this.idleCheckTimer = setInterval(() => {
-      if (this.hasActiveWork()) {
-        this.lastActivity = Date.now();
-        return;
-      }
-      const idleMs = Date.now() - this.lastActivity;
-      if (idleMs >= ContainerBridge.IDLE_TIMEOUT_MS) {
-        console.log(
-          `[container-bridge] idle for ${Math.round(idleMs / 1000)}s with no active work, exiting`,
-        );
-        this.disconnect();
-        process.exit(0);
-      }
-    }, 60_000); // Check every minute
   }
 
   private startHeartbeat(): void {
@@ -356,7 +320,6 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private handleCommand(cmd: BridgeCommand): void {
-    this.touchActivity();
     switch (cmd.type) {
       case "run":
       case "send": {
