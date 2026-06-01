@@ -398,7 +398,7 @@ export class ContainerBridge implements IBridgeClient {
 
         (async () => {
           try {
-            await ensureRepo(repoId, repoRemoteUrl);
+            await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
             this.send({ type: "repo_linked", repoId });
 
             if (readOnly) {
@@ -483,7 +483,7 @@ export class ContainerBridge implements IBridgeClient {
 
         (async () => {
           try {
-            await ensureRepo(repoId, repoRemoteUrl);
+            await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
             this.send({ type: "repo_linked", repoId });
             const {
               workdir,
