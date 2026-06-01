@@ -31,14 +31,20 @@ export function listClonedRepoIds(): string[] {
 }
 
 /**
- * Ensure a bare repo exists at /repos/{repoId}.
+ * Ensure a repo exists at /repos/{repoId}.
  * Clones if missing, fetches if already present.
  */
-export async function ensureRepo(repoId: string, remoteUrl: string | null): Promise<string> {
+export async function ensureRepo(
+  repoId: string,
+  remoteUrl: string | null,
+  branch: string | undefined,
+  defaultBranch: string,
+): Promise<string> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
   if (!remoteUrl) {
     throw new Error("Cloud workspaces require a repo remote URL.");
   }
+  const cloneBranch = branch ?? defaultBranch;
 
   // Inject GitHub token into HTTPS URL for private repo access
   let authUrl = remoteUrl;
@@ -51,17 +57,60 @@ export async function ensureRepo(repoId: string, remoteUrl: string | null): Prom
   }
 
   if (fs.existsSync(repoPath)) {
-    // Repo already cloned — fetch latest
-    console.log(`[workspace] fetching latest for repo ${repoId}`);
-    await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+    console.log(`[workspace] fetching ${cloneBranch} for repo ${repoId}`);
+    try {
+      await fetchBranch(repoPath, cloneBranch);
+    } catch (error) {
+      console.warn(
+        `[workspace] branch fetch failed for repo ${repoId}, falling back to fetch --all: ${getErrorMessage(error)}`,
+      );
+      await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+    }
     return repoPath;
   }
 
-  // Clone the repo (bare-ish: we use worktrees for actual working copies)
   fs.mkdirSync(REPOS_DIR, { recursive: true });
   console.log(`[workspace] cloning ${remoteUrl} into ${repoPath}`);
-  await execFileAsync("git", ["clone", authUrl, repoPath]);
+  await execFileAsync("git", [
+    "clone",
+    "--filter=blob:none",
+    "--no-tags",
+    "--single-branch",
+    "--branch",
+    cloneBranch,
+    ...repoCacheReferenceArgs(repoId),
+    authUrl,
+    repoPath,
+  ]);
   return repoPath;
+}
+
+function repoCacheReferenceArgs(repoId: string): string[] {
+  const cacheDir = process.env.TRACE_REPO_CACHE_DIR;
+  if (!cacheDir) return [];
+
+  const cachePath = `${cacheDir}/${repoId}.git`;
+  return fs.existsSync(cachePath) ? ["--reference-if-able", cachePath] : [];
+}
+
+async function fetchBranch(repoPath: string, branch: string): Promise<void> {
+  await execFileAsync(
+    "git",
+    [
+      "fetch",
+      "--filter=blob:none",
+      "--no-tags",
+      "origin",
+      `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+    ],
+    { cwd: repoPath },
+  );
+}
+
+async function fetchRef(repoPath: string, ref: string): Promise<void> {
+  await execFileAsync("git", ["fetch", "--filter=blob:none", "--no-tags", "origin", ref], {
+    cwd: repoPath,
+  });
 }
 
 export async function getWorkspaceSlugs(repoId: string): Promise<Set<string>> {
@@ -153,7 +202,14 @@ export async function createWorktree({
       .then(() => true)
       .catch(() => false);
     if (!reachable) {
-      await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+      try {
+        await fetchRef(repoPath, checkpointSha);
+      } catch (error) {
+        console.warn(
+          `[workspace] checkpoint fetch failed for ${checkpointSha}, falling back to fetch --all: ${getErrorMessage(error)}`,
+        );
+        await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+      }
     }
   }
 
