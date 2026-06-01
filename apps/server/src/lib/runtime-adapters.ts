@@ -392,10 +392,34 @@ function isRetryableLauncherStatus(status: number | undefined): boolean {
   return false;
 }
 
+function isHtmlResponse(text: string): boolean {
+  const trimmed = text.trimStart().toLowerCase();
+  return trimmed.startsWith("<!doctype html") || trimmed.startsWith("<html");
+}
+
+function launcherErrorDetail(
+  text: string,
+  endpointName: string,
+  status: number,
+): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  if (isHtmlResponse(trimmed)) {
+    const pathHint =
+      status === 404
+        ? `; check the configured ${endpointName}Url host and path`
+        : "";
+    return `: launcher returned an HTML error page${pathHint}`;
+  }
+
+  return `: ${trimmed.slice(0, 500)}`;
+}
+
 async function readJsonResponse(response: Response, endpointName: string): Promise<unknown> {
   const text = await response.text();
   if (!response.ok) {
-    const detail = text.trim() ? `: ${text.trim().slice(0, 500)}` : "";
+    const detail = launcherErrorDetail(text, endpointName, response.status);
     throw new ProvisionedLauncherError(
       `Provisioned ${endpointName} request failed with HTTP ${response.status}${detail}`,
       response.status,

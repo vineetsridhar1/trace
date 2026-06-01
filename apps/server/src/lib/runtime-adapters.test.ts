@@ -27,6 +27,13 @@ function makeResponse(body: Record<string, unknown>, status = 200): Response {
   });
 }
 
+function makeTextResponse(body: string, status: number, contentType = "text/plain"): Response {
+  return new Response(body, {
+    status,
+    headers: { "Content-Type": contentType },
+  });
+}
+
 function fetchMock(): ReturnType<typeof vi.fn> {
   return global.fetch as unknown as ReturnType<typeof vi.fn>;
 }
@@ -439,6 +446,35 @@ describe("ProvisionedRuntimeAdapter", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("summarizes HTML launcher errors with endpoint path guidance", async () => {
+    fetchMock().mockResolvedValueOnce(
+      makeTextResponse(
+        "<html><head><title>404 Not Found</title></head><body><center><h1>404 Not Found</h1></center><hr><center>nginx</center></body></html>",
+        404,
+        "text/html",
+      ),
+    );
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.startSession({
+        sessionId: "session-html-404",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: provisionedConfig,
+        },
+        tool: "codex",
+        bridgeUrl: "wss://trace.example/bridge",
+      }),
+    ).rejects.toThrow(
+      "Provisioned start request failed with HTTP 404: launcher returned an HTML error page; check the configured startUrl host and path",
+    );
   });
 
   it("reuses idempotency keys for duplicate start and stop calls", async () => {
