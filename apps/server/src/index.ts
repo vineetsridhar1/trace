@@ -26,7 +26,6 @@ import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/brid
 import { sessionRouter } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
-import { createLegacyCloudMachineCompatibilityService } from "./lib/cloud-machine-compatibility.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
@@ -137,8 +136,6 @@ async function main() {
   };
   app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
   app.get("/apple-app-site-association", sendAppleAppSiteAssociation);
-
-  const cloudMachineService = createLegacyCloudMachineCompatibilityService({ localMode });
 
   app.use(
     cors({
@@ -375,19 +372,7 @@ async function main() {
         const bridgeReq = req as IncomingMessage & BridgeConnectionRequest;
 
         if (cloudToken) {
-          const provisionedBridge = authenticateProvisionedRuntimeToken(cloudToken);
-          const cloudBridge = provisionedBridge
-            ? null
-            : await cloudMachineService?.authenticateBridgeToken(cloudToken);
-          const bridge = provisionedBridge
-            ? provisionedBridge
-            : cloudBridge
-              ? {
-                  instanceId: cloudBridge.runtimeInstanceId,
-                  organizationId: cloudBridge.organizationId,
-                  userId: cloudBridge.userId,
-                }
-              : null;
+          const bridge = authenticateProvisionedRuntimeToken(cloudToken);
           if (!bridge) {
             rejectUpgrade(401, "Unauthorized");
             return;
@@ -397,14 +382,10 @@ async function main() {
             instanceId: bridge.instanceId,
             organizationId: bridge.organizationId,
             userId: bridge.userId,
-            ...(provisionedBridge
-              ? {
-                  sessionId: provisionedBridge.sessionId,
-                  environmentId: provisionedBridge.environmentId,
-                  allowedScope: provisionedBridge.allowedScope,
-                  tool: provisionedBridge.tool,
-                }
-              : {}),
+            sessionId: bridge.sessionId,
+            environmentId: bridge.environmentId,
+            allowedScope: bridge.allowedScope,
+            tool: bridge.tool,
           };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
@@ -485,11 +466,6 @@ async function main() {
       );
       process.exit(1);
     }
-  }
-
-  // Restore cloud machine state from DB
-  if (cloudMachineService) {
-    await cloudMachineService.restoreFromDb();
   }
 
   // Reattach Slack event bridges only when Slack is configured.

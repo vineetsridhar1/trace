@@ -1321,10 +1321,7 @@ export class SessionService {
     const runtimePatch: Partial<SessionConnectionData> = {
       ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
       ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
-      ...(update.providerRuntimeId && {
-        cloudMachineId: update.providerRuntimeId,
-        providerRuntimeId: update.providerRuntimeId,
-      }),
+      ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
       ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
       ...(update.providerStatus && { providerStatus: update.providerStatus }),
     };
@@ -7002,12 +6999,10 @@ export class SessionService {
       const sessionConnection = this.parseConnection(session.connection);
       const runtimeHasBinding =
         !!runtimeConnection.runtimeInstanceId ||
-        !!runtimeConnection.providerRuntimeId ||
-        typeof runtimeConnection.cloudMachineId === "string";
+        !!runtimeConnection.providerRuntimeId;
       const sessionHasBinding =
         !!sessionConnection.runtimeInstanceId ||
-        !!sessionConnection.providerRuntimeId ||
-        typeof sessionConnection.cloudMachineId === "string";
+        !!sessionConnection.providerRuntimeId;
       if (!runtimeHasBinding && sessionHasBinding) {
         sourceCloudRuntimeSession = {
           ...sourceCloudRuntimeSession,
@@ -8599,17 +8594,14 @@ export class SessionService {
       const groupHasRuntimeBinding =
         !!group.workdir ||
         !!groupConnection.runtimeInstanceId ||
-        !!groupConnection.providerRuntimeId ||
-        typeof groupConnection.cloudMachineId === "string";
+        !!groupConnection.providerRuntimeId;
       const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
       if (cloudSessions.some((session) => session.agentStatus === "active")) continue;
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
           return (
-            !!sessionConnection.runtimeInstanceId ||
-            !!sessionConnection.providerRuntimeId ||
-            typeof sessionConnection.cloudMachineId === "string"
+            !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId
           );
         }) ?? cloudSessions[0];
       if (!cloudSession) continue;
@@ -8617,8 +8609,7 @@ export class SessionService {
         const sessionConnection = this.parseConnection(cloudSession.connection);
         const sessionHasRuntimeBinding =
           !!sessionConnection.runtimeInstanceId ||
-          !!sessionConnection.providerRuntimeId ||
-          typeof sessionConnection.cloudMachineId === "string";
+          !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
 

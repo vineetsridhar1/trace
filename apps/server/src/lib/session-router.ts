@@ -224,9 +224,7 @@ function lifecycleSnapshotFromConnection(
   if (runtimeInstanceId) snapshot.runtimeInstanceId = runtimeInstanceId;
   const runtimeLabel = optionalConnectionString(connection, "runtimeLabel");
   if (runtimeLabel) snapshot.runtimeLabel = runtimeLabel;
-  const providerRuntimeId =
-    optionalConnectionString(connection, "providerRuntimeId") ??
-    optionalConnectionString(connection, "cloudMachineId");
+  const providerRuntimeId = optionalConnectionString(connection, "providerRuntimeId");
   if (providerRuntimeId) snapshot.providerRuntimeId = providerRuntimeId;
   const providerRuntimeUrl = optionalConnectionString(connection, "providerRuntimeUrl");
   if (providerRuntimeUrl) snapshot.providerRuntimeUrl = providerRuntimeUrl;
