@@ -54,6 +54,17 @@ export class OrgSecretService {
     return decryptSecret(secret.encryptedValue, secret.iv);
   }
 
+  async getDecryptedValueByName(organizationId: string, name: string): Promise<string | null> {
+    const normalizedName = name.trim();
+    if (!normalizedName) return null;
+
+    const secret = await prisma.orgSecret.findUnique({
+      where: { organizationId_name: { organizationId, name: normalizedName } },
+    });
+    if (!secret) return null;
+    return decryptSecret(secret.encryptedValue, secret.iv);
+  }
+
   async delete(
     organizationId: string,
     id: string,

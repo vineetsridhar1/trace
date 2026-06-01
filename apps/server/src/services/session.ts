@@ -55,6 +55,7 @@ import {
 } from "./access.js";
 import { apiTokenService } from "./api-token.js";
 import { githubRepoService, parseGitHubRepo, type GitHubRepoRef } from "./github-repo.js";
+import { orgSecretService } from "./org-secret.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -108,6 +109,7 @@ const LOCAL_TOOL_FALLBACK_ORDER: readonly CodingTool[] = [
 ];
 const PI_INSTALL_COMMAND = "npm install -g @earendil-works/pi-coding-agent";
 const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
+const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
 
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
@@ -7847,8 +7849,16 @@ export class SessionService {
     }
 
     const tokens = await apiTokenService.getDecryptedTokens(userId);
-    if (!tokens.github) {
-      throw new Error("No GitHub token configured. Please add a GitHub API token first.");
+    const githubToken =
+      tokens.github ??
+      (await orgSecretService.getDecryptedValueByName(
+        organizationId,
+        ORG_GITHUB_TOKEN_SECRET_NAME,
+      ));
+    if (!githubToken) {
+      throw new Error(
+        `No GitHub token configured. Add a personal GitHub API token or ask an org admin to add an org secret named ${ORG_GITHUB_TOKEN_SECRET_NAME}.`,
+      );
     }
 
     const defaultBranch = this.toGitHubRef(group.repo.defaultBranch || "main");
@@ -7856,7 +7866,7 @@ export class SessionService {
 
     return {
       repo,
-      token: tokens.github,
+      token: githubToken,
       branch,
       defaultBranch,
       workdir: group.workdir,

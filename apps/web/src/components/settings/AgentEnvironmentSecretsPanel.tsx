@@ -61,7 +61,7 @@ export function AgentEnvironmentSecretsPanel({ organizationId, orgSecrets, onSav
     <section className="mb-4 rounded-lg border border-border bg-surface-deep p-4">
       <div className="mb-3 flex items-center gap-2">
         <KeyRound size={16} className="text-muted-foreground" />
-        <h3 className="text-sm font-medium text-foreground">Launcher Secrets</h3>
+        <h3 className="text-sm font-medium text-foreground">Secrets</h3>
       </div>
       <form onSubmit={saveSecret} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
         <Input placeholder="Name" value={name} onChange={(event) => setName(event.target.value)} />
