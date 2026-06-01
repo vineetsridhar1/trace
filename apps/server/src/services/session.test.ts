@@ -113,6 +113,12 @@ vi.mock("./api-token.js", () => ({
   },
 }));
 
+vi.mock("./org-secret.js", () => ({
+  orgSecretService: {
+    getDecryptedValueByName: vi.fn().mockResolvedValue(null),
+  },
+}));
+
 vi.mock("./github-repo.js", () => ({
   githubRepoService: {
     listFiles: vi.fn().mockResolvedValue([]),
@@ -130,6 +136,7 @@ import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
 import { githubRepoService, parseGitHubRepo } from "./github-repo.js";
+import { orgSecretService } from "./org-secret.js";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -157,6 +164,7 @@ const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
 >;
 const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
 const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiTokenService>;
+const orgSecretServiceMock = orgSecretService as unknown as MockedDeep<typeof orgSecretService>;
 const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
@@ -324,6 +332,7 @@ describe("SessionService", () => {
     sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
     sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
+    orgSecretServiceMock.getDecryptedValueByName.mockResolvedValue(null);
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
     githubRepoServiceMock.readFile.mockResolvedValue("file contents");
     githubRepoServiceMock.branchDiff.mockResolvedValue([]);
@@ -2745,7 +2754,62 @@ describe("SessionService", () => {
       await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
         "No GitHub token configured",
       );
+      expect(orgSecretServiceMock.getDecryptedValueByName).toHaveBeenCalledWith(
+        "org-1",
+        "GITHUB_TOKEN",
+      );
       expect(githubRepoServiceMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("uses the organization GitHub token when the user has no GitHub token", async () => {
+      apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({});
+      orgSecretServiceMock.getDecryptedValueByName.mockResolvedValueOnce("org-gh-token");
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).resolves.toEqual([
+        "src/app.ts",
+      ]);
+      expect(orgSecretServiceMock.getDecryptedValueByName).toHaveBeenCalledWith(
+        "org-1",
+        "GITHUB_TOKEN",
+      );
+      expect(githubRepoServiceMock.listFiles).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "org-gh-token",
+      );
+    });
+
+    it("prefers the user's GitHub token over the organization GitHub token", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).resolves.toEqual([
+        "src/app.ts",
+      ]);
+      expect(orgSecretServiceMock.getDecryptedValueByName).not.toHaveBeenCalled();
+      expect(githubRepoServiceMock.listFiles).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "gh-token",
+      );
     });
 
     it("reads GitHub files by converting absolute workdir paths to repo-relative paths", async () => {
