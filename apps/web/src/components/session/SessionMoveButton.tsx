@@ -3,6 +3,7 @@ import { ArrowRightLeft } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { cn } from "../../lib/utils";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 export function SessionMoveButton({
   sessionId,
@@ -12,32 +13,33 @@ export function SessionMoveButton({
 }: {
   sessionId: string | null;
   disabled?: boolean;
-  /** Tooltip shown when the button is disabled, in place of the default title. */
+  /** Tooltip shown when the button cannot be used. */
   disabledReason?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const unavailable = disabled || !sessionId;
-  const title = !sessionId
-    ? undefined
+  const label = !sessionId
+    ? "Select a session to move"
     : disabledReason && unavailable
       ? disabledReason
       : "Move session";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <span title={title} className="inline-flex">
+      <ActionTooltip label={label}>
         <PopoverTrigger
           disabled={unavailable}
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
-            open ? "bg-surface-elevated text-foreground" : undefined,
+            "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:cursor-default disabled:opacity-40",
+            open ? "bg-surface-hover text-foreground" : undefined,
             className,
           )}
+          aria-label="Move session"
         >
-          <ArrowRightLeft size={14} />
+          <ArrowRightLeft size={13} />
         </PopoverTrigger>
-      </span>
+      </ActionTooltip>
       {sessionId && (
         <PopoverContent align="end" className="w-80 bg-transparent p-0 shadow-none ring-0">
           <SessionRuntimePicker

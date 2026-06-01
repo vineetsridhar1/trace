@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Circle,
-  GitPullRequest,
   PanelRight,
   History,
   Maximize2,
@@ -16,6 +15,8 @@ import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
+import { GitHubActions } from "./GitHubActions";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -28,6 +29,9 @@ interface GroupHeaderProps {
   canInteract: boolean;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
+  selectedAgentStatus?: string;
+  selectedConnection?: Record<string, unknown> | null;
+  selectedWorktreeDeleted?: boolean;
   canMoveSession: boolean;
   moveDisabledReason?: string;
   groupPrUrl: string | null | undefined;
@@ -37,6 +41,9 @@ interface GroupHeaderProps {
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
 }
+
+const headerIconButtonClass =
+  "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:cursor-default disabled:opacity-40";
 
 export function GroupHeader({
   groupName,
@@ -49,6 +56,9 @@ export function GroupHeader({
   canInteract,
   selectedSessionStatus,
   selectedSessionId,
+  selectedAgentStatus,
+  selectedConnection,
+  selectedWorktreeDeleted,
   canMoveSession,
   moveDisabledReason,
   groupPrUrl,
@@ -96,7 +106,7 @@ export function GroupHeader({
   const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
 
   return (
-    <div className="app-region-drag flex h-12 shrink-0 items-center gap-3 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
+    <div className="app-region-drag flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface-mid py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
       {selectedSessionId && (
         <span
           className={cn(
@@ -116,17 +126,28 @@ export function GroupHeader({
         <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
 
+      <GitHubActions
+        sessionId={selectedSessionId}
+        prUrl={groupPrUrl}
+        agentStatus={selectedAgentStatus}
+        connection={selectedConnection}
+        worktreeDeleted={selectedWorktreeDeleted}
+        canInteract={canInteract}
+      />
+
       <LinkedCheckoutActions state={linkedCheckout} />
 
       {hasRunScripts && (
-        <button
-          onClick={handleRun}
-          disabled={!canRun || !canInteract}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
-          title="Run scripts"
-        >
-          <Play size={14} />
-        </button>
+        <ActionTooltip label="Run scripts">
+          <button
+            onClick={handleRun}
+            disabled={!canRun || !canInteract}
+            className={headerIconButtonClass}
+            aria-label="Run scripts"
+          >
+            <Play size={13} />
+          </button>
+        </ActionTooltip>
       )}
 
       <SessionMoveButton
@@ -136,13 +157,15 @@ export function GroupHeader({
       />
 
       <div className="relative" ref={historyRef}>
-        <button
-          onClick={() => setShowHistory((value: boolean) => !value)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-          title="Group history"
-        >
-          <History size={14} />
-        </button>
+        <ActionTooltip label="Group history">
+          <button
+            onClick={() => setShowHistory((value: boolean) => !value)}
+            className={headerIconButtonClass}
+            aria-label="Group history"
+          >
+            <History size={13} />
+          </button>
+        </ActionTooltip>
         {showHistory && selectedSessionId && (
           <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
             <SessionHistory sessionId={selectedSessionId} />
@@ -150,40 +173,31 @@ export function GroupHeader({
         )}
       </div>
 
-      {groupPrUrl && (
-        <a
-          href={groupPrUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-          title="View Pull Request"
-        >
-          <GitPullRequest size={14} />
-        </a>
-      )}
-
       {panelMode && (
-        <button
-          onClick={onToggleFullscreen}
-          className="hidden h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground sm:flex"
-          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-        >
-          {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-        </button>
+        <ActionTooltip label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+          <button
+            onClick={onToggleFullscreen}
+            className={cn(headerIconButtonClass, "hidden sm:flex")}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+        </ActionTooltip>
       )}
 
-      <button
-        onClick={onToggleSidebar}
-        className={cn(
-          "hidden h-8 w-8 items-center justify-center rounded-md transition-colors sm:flex",
-          showSidebar
-            ? "bg-surface-elevated text-foreground"
-            : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-        )}
-        title="Toggle sidebar"
-      >
-        <PanelRight size={14} />
-      </button>
+      <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
+        <button
+          onClick={onToggleSidebar}
+          className={cn(
+            headerIconButtonClass,
+            "hidden sm:flex",
+            showSidebar ? "bg-surface-hover text-foreground" : undefined,
+          )}
+          aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
+        >
+          <PanelRight size={13} />
+        </button>
+      </ActionTooltip>
     </div>
   );
 }

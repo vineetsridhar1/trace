@@ -6,7 +6,6 @@ import {
   Monitor,
   Cloud,
   TerminalSquare,
-  GitPullRequest,
   Maximize2,
   Minimize2,
   X,
@@ -14,6 +13,7 @@ import {
 import { useEntityField } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { useDetailPanelStore } from "../../stores/detail-panel";
+import { cn } from "../../lib/utils";
 import {
   agentStatusColor,
   getDisplayAgentStatus,
@@ -30,9 +30,13 @@ import { ScrambleText } from "../ui/ScrambleText";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { TraceLoader } from "../ui/trace-loader";
+import { GitHubActions } from "./GitHubActions";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
+const headerIconButtonClass =
+  "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:cursor-default disabled:opacity-40";
 
 export function SessionHeader({
   sessionId,
@@ -158,23 +162,27 @@ export function SessionHeader({
   }, [showHistory, closeHistory]);
 
   return (
-    <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
+    <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border bg-surface-mid px-4 py-2">
       {panelMode ? (
-        <button
-          onClick={() => setActiveSessionId(null)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
-          title="Close panel"
-        >
-          <X size={16} />
-        </button>
+        <ActionTooltip label="Close panel">
+          <button
+            onClick={() => setActiveSessionId(null)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Close panel"
+          >
+            <X size={16} />
+          </button>
+        </ActionTooltip>
       ) : (
-        <button
-          onClick={() => setActiveSessionId(null)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
-          title="Back to sessions"
-        >
-          <ArrowLeft size={16} />
-        </button>
+        <ActionTooltip label="Back to sessions">
+          <button
+            onClick={() => setActiveSessionId(null)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Back to sessions"
+          >
+            <ArrowLeft size={16} />
+          </button>
+        </ActionTooltip>
       )}
 
       {disconnected ? (
@@ -226,27 +234,30 @@ export function SessionHeader({
 
       <div className="flex shrink-0 items-center gap-1">
         {panelMode && (
-          <button
-            onClick={toggleFullscreen}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
+          <ActionTooltip label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+            <button
+              onClick={toggleFullscreen}
+              className={headerIconButtonClass}
+              aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            >
+              {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          </ActionTooltip>
         )}
 
         {onToggleTerminal && (
-          <button
-            onClick={onToggleTerminal}
-            className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-              terminalOpen
-                ? "bg-surface-elevated text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
-            }`}
-            title="Toggle terminal"
-          >
-            <TerminalSquare size={14} />
-          </button>
+          <ActionTooltip label={terminalOpen ? "Hide terminal" : "Show terminal"}>
+            <button
+              onClick={onToggleTerminal}
+              className={cn(
+                headerIconButtonClass,
+                terminalOpen ? "bg-surface-hover text-foreground" : undefined,
+              )}
+              aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}
+            >
+              <TerminalSquare size={13} />
+            </button>
+          </ActionTooltip>
         )}
 
         <SessionMoveButton
@@ -256,13 +267,15 @@ export function SessionHeader({
         />
 
         <div className="relative" ref={historyRef}>
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
-            title="Session history"
-          >
-            <History size={14} />
-          </button>
+          <ActionTooltip label="Session history">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={headerIconButtonClass}
+              aria-label="Session history"
+            >
+              <History size={13} />
+            </button>
+          </ActionTooltip>
           {showHistory && (
             <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
               <SessionHistory sessionId={sessionId} />
@@ -270,17 +283,14 @@ export function SessionHeader({
           )}
         </div>
 
-        {prUrl && (
-          <a
-            href={prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
-            title="View Pull Request"
-          >
-            <GitPullRequest size={14} />
-          </a>
-        )}
+        <GitHubActions
+          sessionId={sessionId}
+          prUrl={prUrl}
+          agentStatus={agentStatus}
+          connection={connection}
+          worktreeDeleted={worktreeDeleted}
+          canInteract={bridgeInteractionAllowed}
+        />
       </div>
     </div>
   );

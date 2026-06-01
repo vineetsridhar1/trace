@@ -642,6 +642,11 @@ export function SessionGroupDetailView({
                 selectedSessionId={
                   selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)
                 }
+                selectedAgentStatus={selectedSession?.agentStatus}
+                selectedConnection={
+                  selectedSession?.connection as Record<string, unknown> | null | undefined
+                }
+                selectedWorktreeDeleted={selectedSession?.worktreeDeleted}
                 canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
                 moveDisabledReason={moveDisabledReason}
                 groupPrUrl={groupPrUrl}
@@ -662,7 +667,7 @@ export function SessionGroupDetailView({
                 activeFilePath={activeFilePath}
                 onSelectSession={handleSelectSession}
                 onCloseSession={handleCloseSession}
-                canCloseSessions={sessionTabs.length > 1}
+                canCloseSessions={false}
                 onSelectTerminal={handleSelectTerminal}
                 onCloseTerminal={handleCloseTerminal}
                 onRenameTerminal={renameTerminal}

@@ -81,6 +81,7 @@
   --font-sans: "Geist Variable", sans-serif;
 
   --color-surface: var(--th-surface);
+  --color-surface-mid: var(--th-surface-mid);
   --color-surface-deep: var(--th-surface-deep);
   --color-surface-elevated: var(--th-surface-elevated);
   --color-surface-hover: var(--th-surface-hover);
@@ -158,6 +159,11 @@
 .app-region-no-drag * {
   app-region: no-drag;
   -webkit-app-region: no-drag;
+}
+
+.app-region-no-drag {
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 .app-region-no-drag .app-region-drag,
@@ -395,6 +401,8 @@
   word-break: break-all;
   max-height: 300px;
   overflow-y: auto;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Inline diff view */
@@ -441,6 +449,8 @@
   padding-right: 10px;
   white-space: pre-wrap;
   word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .inline-diff-context {
@@ -531,6 +541,8 @@
   font-size: 11px;
   line-height: 1.6;
   font-family: Menlo, Monaco, monospace;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* ── Markdown ── */
@@ -540,6 +552,8 @@
   line-height: 1.65;
   color: var(--foreground);
   word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .markdown-body p {

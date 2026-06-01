@@ -12,6 +12,7 @@ import {
   ResponsiveDialogTitle as DialogTitle,
   ResponsiveDialogTrigger as DialogTrigger,
 } from "../ui/responsive-dialog";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 const ADD_CHAT_MEMBER_MUTATION = gql`
   mutation AddChatMember($input: AddChatMemberInput!) {
@@ -74,12 +75,14 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-        title="Add member"
-      >
-        <UserPlus size={16} />
-      </DialogTrigger>
+      <ActionTooltip label="Add member">
+        <DialogTrigger
+          className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="Add member"
+        >
+          <UserPlus size={16} />
+        </DialogTrigger>
+      </ActionTooltip>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Member</DialogTitle>

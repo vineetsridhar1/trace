@@ -6,6 +6,7 @@ import { useEntityField } from "@trace/client-core";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AddMemberDialog } from "./AddMemberDialog";
+import { ActionTooltip } from "../ui/ActionTooltip";
 
 const RENAME_CHAT_MUTATION = gql`
   mutation RenameChat($chatId: ID!, $name: String!) {
@@ -101,13 +102,18 @@ export function ChatHeader({ chatId }: { chatId: string }) {
               className="h-7 rounded border border-border bg-surface-elevated px-2 text-lg font-bold text-foreground outline-none focus:border-ring"
             />
           ) : (
-            <button onClick={handleStartEdit} className="group/title flex items-center gap-1.5">
-              <h2 className="text-lg font-bold text-foreground">{displayName}</h2>
-              <Pencil
-                size={14}
-                className="text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100"
-              />
-            </button>
+            <ActionTooltip label="Rename group chat">
+              <button
+                onClick={handleStartEdit}
+                className="group/title flex items-center gap-1.5"
+              >
+                <h2 className="text-lg font-bold text-foreground">{displayName}</h2>
+                <Pencil
+                  size={14}
+                  className="text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100"
+                />
+              </button>
+            </ActionTooltip>
           )}
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{members?.length ?? 0} members</span>
