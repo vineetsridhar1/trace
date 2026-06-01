@@ -16,7 +16,7 @@ import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 
-const CODING_TOOLS = new Set(["claude_code", "codex", "custom", "pi"]);
+const CODING_TOOLS = new Set(["antigravity", "claude_code", "codex", "custom", "pi"]);
 const PROVISIONED_DEPROVISION_POLICIES = new Set(["on_session_end", "manual"]);
 const PROVISIONED_STATUS_VALUES = new Set([
   "unknown",

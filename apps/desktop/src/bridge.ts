@@ -41,7 +41,12 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";
-import { ClaudeCodeAdapter, CodexAdapter, PiAdapter } from "@trace/shared/adapters";
+import {
+  AntigravityAdapter,
+  ClaudeCodeAdapter,
+  CodexAdapter,
+  PiAdapter,
+} from "@trace/shared/adapters";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
   commitLinkedCheckoutChanges,
@@ -662,6 +667,7 @@ export class BridgeClient implements IBridgeClient {
     if (hasExecutable("claude")) supportedTools.push("claude_code");
     if (hasExecutable("codex")) supportedTools.push("codex");
     if (hasExecutable("pi")) supportedTools.push("pi");
+    if (hasExecutable("agy")) supportedTools.push("antigravity");
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
       label,
@@ -716,6 +722,8 @@ export class BridgeClient implements IBridgeClient {
 
   private createAdapter(tool?: string): CodingToolAdapter {
     switch (tool) {
+      case "antigravity":
+        return new AntigravityAdapter();
       case "pi":
         return new PiAdapter();
       case "codex":

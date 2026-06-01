@@ -68,14 +68,24 @@ export function ToolModelPicker({
         ? getModelProviderForModel(nextTool, model)?.value
         : nextProviderGroups[0]?.value;
     setPickerProvider(nextProvider ?? null);
-    setLayer(nextProviderGroups.length > 0 ? "providers" : "models");
-    if (nextTool === tool) return;
 
-    setPending(true);
-    try {
-      await onToolChange(nextTool);
-    } finally {
-      setPending(false);
+    if (nextTool !== tool) {
+      setPending(true);
+      try {
+        await onToolChange(nextTool);
+      } finally {
+        setPending(false);
+      }
+    }
+
+    // Tools with no selectable model (e.g. Antigravity) have nothing more to
+    // pick — apply the tool and close rather than showing an empty model layer.
+    if (nextProviderGroups.length > 0) {
+      setLayer("providers");
+    } else if (getModelsForTool(nextTool).length > 0) {
+      setLayer("models");
+    } else {
+      setOpen(false);
     }
   }
 
@@ -108,8 +118,12 @@ export function ToolModelPicker({
       >
         <ToolIcon tool={tool} className="size-3.5 shrink-0" />
         <span className="truncate">{getToolLabel(tool)}</span>
-        <span className="text-muted-foreground/60">/</span>
-        <span className="truncate">{model ? getModelLabel(model) : "Model"}</span>
+        {getModelsForTool(tool).length > 0 ? (
+          <>
+            <span className="text-muted-foreground/60">/</span>
+            <span className="truncate">{model ? getModelLabel(model) : "Model"}</span>
+          </>
+        ) : null}
         <ChevronDown className="size-3.5 shrink-0" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 overflow-hidden p-1.5">
