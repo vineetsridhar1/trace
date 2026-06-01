@@ -1,4 +1,7 @@
 import { execFile, spawn } from "child_process";
+import { existsSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 
 let codexLoginPromise: Promise<void> | null = null;
 let codexLoggedIn = false;
@@ -76,6 +79,25 @@ export async function ensureToolReady(tool: string): Promise<void> {
     await loginCodex();
   } else if (tool === "pi") {
     await ensureBinaryAvailable("pi", "pi");
+  } else if (tool === "antigravity") {
+    await ensureAntigravityReady();
+  }
+}
+
+/**
+ * Antigravity (`agy`) authenticates via the user's logged-in Google account
+ * (OAuth creds on disk) or an API key — there's no separate login step to run.
+ * Soft gate: confirm the binary is present and that *some* credential exists,
+ * rather than hard-requiring a specific env var (which would block OAuth).
+ */
+async function ensureAntigravityReady(): Promise<void> {
+  await ensureBinaryAvailable("agy", "antigravity");
+  const hasApiKey = Boolean(process.env.GEMINI_API_KEY || process.env.ANTIGRAVITY_API_KEY);
+  const hasOAuthCreds = existsSync(join(homedir(), ".gemini", "oauth_creds.json"));
+  if (!hasApiKey && !hasOAuthCreds) {
+    throw new Error(
+      "Cannot run antigravity: not authenticated. Set GEMINI_API_KEY or sign in with `agy` using your Google account.",
+    );
   }
 }
 

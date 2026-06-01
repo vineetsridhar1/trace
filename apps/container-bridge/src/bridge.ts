@@ -38,7 +38,12 @@ import {
   BridgeOutbox,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
-import { ClaudeCodeAdapter, CodexAdapter, PiAdapter } from "@trace/shared/adapters";
+import {
+  AntigravityAdapter,
+  ClaudeCodeAdapter,
+  CodexAdapter,
+  PiAdapter,
+} from "@trace/shared/adapters";
 import {
   ensureRepo,
   createWorktree,
@@ -171,6 +176,7 @@ export class ContainerBridge implements IBridgeClient {
       const registeredRepoIds = provisionedRuntimeInstanceId ? [] : listClonedRepoIds();
       const supportedTools = ["claude_code", "codex"];
       if (hasExecutable("pi")) supportedTools.push("pi");
+      if (hasExecutable("agy")) supportedTools.push("antigravity");
       // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
       // they intentionally register no pre-existing repos.
       this.send({
@@ -345,6 +351,8 @@ export class ContainerBridge implements IBridgeClient {
   private createAdapter(tool?: string): CodingToolAdapter {
     const resolvedTool = tool ?? this.defaultTool;
     switch (resolvedTool) {
+      case "antigravity":
+        return new AntigravityAdapter();
       case "pi":
         return new PiAdapter();
       case "codex":

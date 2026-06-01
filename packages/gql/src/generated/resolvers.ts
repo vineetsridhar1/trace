@@ -266,7 +266,7 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
-export type CodingTool = "claude_code" | "codex" | "custom" | "pi";
+export type CodingTool = "antigravity" | "claude_code" | "codex" | "custom" | "pi";
 
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
