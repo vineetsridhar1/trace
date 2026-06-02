@@ -110,7 +110,11 @@ function rawRegisteredRepoIds(runtime: {
 }): string[] {
   const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);
   if (live) return live.registeredRepoIds;
-  if (!runtime.metadata || typeof runtime.metadata !== "object" || Array.isArray(runtime.metadata)) {
+  if (
+    !runtime.metadata ||
+    typeof runtime.metadata !== "object" ||
+    Array.isArray(runtime.metadata)
+  ) {
     return [];
   }
   const registeredRepoIds = (runtime.metadata as Record<string, unknown>).registeredRepoIds;
@@ -158,6 +162,17 @@ export const bridgeAccessTypeResolvers = {
   LinkedCheckoutStatus: {
     changedFiles: (status: { changedFiles?: unknown[] | null }) =>
       Array.isArray(status.changedFiles) ? status.changedFiles : [],
+    changedFilesTotalCount: (status: {
+      changedFiles?: unknown[] | null;
+      changedFilesTotalCount?: number | null;
+    }) =>
+      typeof status.changedFilesTotalCount === "number"
+        ? status.changedFilesTotalCount
+        : Array.isArray(status.changedFiles)
+          ? status.changedFiles.length
+          : 0,
+    changedFilesTruncated: (status: { changedFilesTruncated?: boolean | null }) =>
+      status.changedFilesTruncated ?? false,
     // Batch via DataLoader so a polled `myBridgeRuntimes` with N checkouts
     // becomes a single `IN (…)` query per type, not N findUnique calls.
     // Org-scope post-load: every parent path is already owner-gated, but

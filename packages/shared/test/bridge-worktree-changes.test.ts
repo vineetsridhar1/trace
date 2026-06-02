@@ -44,6 +44,11 @@ describe("worktree change bridge handlers", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.type).toBe("worktree_changes_result");
     expect(sent[0]).toMatchObject({ requestId: "req-1" });
+    expect(sent[0]).toMatchObject({
+      type: "worktree_changes_result",
+      totalCount: 201,
+      truncated: true,
+    });
     expect(sent[0]?.type === "worktree_changes_result" ? sent[0].files : []).toHaveLength(200);
   });
 
@@ -65,6 +70,11 @@ describe("worktree change bridge handlers", () => {
     );
 
     const files = sent[0]?.type === "worktree_changes_result" ? sent[0].files : [];
+    expect(sent[0]).toMatchObject({
+      type: "worktree_changes_result",
+      totalCount: 1,
+      truncated: false,
+    });
     expect(files).toHaveLength(1);
     expect(Buffer.byteLength(files[0]?.diff ?? "", "utf8")).toBeLessThanOrEqual(64 * 1024);
     expect(Buffer.byteLength(files[0]?.originalContent ?? "", "utf8")).toBeLessThanOrEqual(
@@ -92,6 +102,11 @@ describe("worktree change bridge handlers", () => {
     );
 
     const files = sent[0]?.type === "worktree_changes_result" ? sent[0].files : [];
+    expect(sent[0]).toMatchObject({
+      type: "worktree_changes_result",
+      totalCount: 40,
+      truncated: true,
+    });
     expect(files.length).toBeGreaterThan(0);
     expect(files.length).toBeLessThan(40);
     expect(Buffer.byteLength(JSON.stringify(files), "utf8")).toBeLessThan(600 * 1024);

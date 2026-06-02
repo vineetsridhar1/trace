@@ -519,6 +519,8 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
   changedFiles: Array<LinkedCheckoutChangedFile>;
+  changedFilesTotalCount: Scalars["Int"]["output"];
+  changedFilesTruncated: Scalars["Boolean"]["output"];
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];
@@ -1257,7 +1259,7 @@ export type Query = {
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
+  sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1982,6 +1984,13 @@ export type User = {
 
 export type UserRole = "admin" | "member" | "observer";
 
+export type WorktreeChangesResult = {
+  __typename?: "WorktreeChangesResult";
+  files: Array<LinkedCheckoutChangedFile>;
+  totalCount: Scalars["Int"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
 export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
@@ -2237,18 +2246,23 @@ export type SessionGroupWorktreeChangesQueryVariables = Exact<{
 
 export type SessionGroupWorktreeChangesQuery = {
   __typename?: "Query";
-  sessionGroupWorktreeChanges: Array<{
-    __typename?: "LinkedCheckoutChangedFile";
-    path: string;
-    status: string;
-    additions: number;
-    deletions: number;
-    diff: string;
+  sessionGroupWorktreeChanges: {
+    __typename?: "WorktreeChangesResult";
+    totalCount: number;
     truncated: boolean;
-    originalContent: string;
-    modifiedContent: string;
-    contentTruncated: boolean;
-  }>;
+    files: Array<{
+      __typename?: "LinkedCheckoutChangedFile";
+      path: string;
+      status: string;
+      additions: number;
+      deletions: number;
+      diff: string;
+      truncated: boolean;
+      originalContent: string;
+      modifiedContent: string;
+      contentTruncated: boolean;
+    }>;
+  };
 };
 
 export type RevertSessionGroupFileChangeMutationVariables = Exact<{
@@ -2322,7 +2336,7 @@ export type SessionGroupWorktreeChangesForCommitButtonQueryVariables = Exact<{
 
 export type SessionGroupWorktreeChangesForCommitButtonQuery = {
   __typename?: "Query";
-  sessionGroupWorktreeChanges: Array<{ __typename?: "LinkedCheckoutChangedFile"; path: string }>;
+  sessionGroupWorktreeChanges: { __typename?: "WorktreeChangesResult"; totalCount: number };
 };
 
 export type SessionDetailQueryVariables = Exact<{
@@ -4272,15 +4286,26 @@ export const SessionGroupWorktreeChangesDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "path" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "additions" } },
-                { kind: "Field", name: { kind: "Name", value: "deletions" } },
-                { kind: "Field", name: { kind: "Name", value: "diff" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "diff" } },
+                      { kind: "Field", name: { kind: "Name", value: "truncated" } },
+                      { kind: "Field", name: { kind: "Name", value: "originalContent" } },
+                      { kind: "Field", name: { kind: "Name", value: "modifiedContent" } },
+                      { kind: "Field", name: { kind: "Name", value: "contentTruncated" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "totalCount" } },
                 { kind: "Field", name: { kind: "Name", value: "truncated" } },
-                { kind: "Field", name: { kind: "Name", value: "originalContent" } },
-                { kind: "Field", name: { kind: "Name", value: "modifiedContent" } },
-                { kind: "Field", name: { kind: "Name", value: "contentTruncated" } },
               ],
             },
           },
@@ -4659,7 +4684,7 @@ export const SessionGroupWorktreeChangesForCommitButtonDocument = {
             ],
             selectionSet: {
               kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "path" } }],
+              selections: [{ kind: "Field", name: { kind: "Name", value: "totalCount" } }],
             },
           },
         ],

@@ -2,10 +2,19 @@ const MAX_CHILD_ENV_BYTES = 64 * 1024;
 const MAX_CHILD_ENV_VALUE_BYTES = 16 * 1024;
 
 const ESSENTIAL_ENV_KEYS = new Set([
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_BASE_URL",
+  "ANTHROPIC_MODEL",
+  "CODEX_HOME",
   "HOME",
   "LANG",
   "LC_ALL",
   "LOGNAME",
+  "OPENAI_API_KEY",
+  "OPENAI_BASE_URL",
+  "OPENAI_ORG_ID",
+  "OPENAI_PROJECT_ID",
   "PATH",
   "PWD",
   "SHELL",
@@ -58,9 +67,7 @@ export function buildChildProcessEnv(
     }
 
     return Object.fromEntries(
-      entries
-        .filter((entry) => !dropped.has(entry.key))
-        .map((entry) => [entry.key, entry.value]),
+      entries.filter((entry) => !dropped.has(entry.key)).map((entry) => [entry.key, entry.value]),
     );
   }
 

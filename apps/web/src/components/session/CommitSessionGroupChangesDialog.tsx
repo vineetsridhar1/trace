@@ -12,15 +12,19 @@ import { LinkedCheckoutDiffViewer } from "./LinkedCheckoutDiffViewer";
 const SESSION_GROUP_WORKTREE_CHANGES_QUERY = gql`
   query SessionGroupWorktreeChanges($sessionGroupId: ID!) {
     sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {
-      path
-      status
-      additions
-      deletions
-      diff
+      files {
+        path
+        status
+        additions
+        deletions
+        diff
+        truncated
+        originalContent
+        modifiedContent
+        contentTruncated
+      }
+      totalCount
       truncated
-      originalContent
-      modifiedContent
-      contentTruncated
     }
   }
 `;
@@ -51,6 +55,8 @@ export function CommitSessionGroupChangesDialog({
   const [files, setFiles] = useState<DesktopLinkedCheckoutChangedFile[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [commitMessage, setCommitMessage] = useState("Update files from Trace");
+  const [totalCount, setTotalCount] = useState(0);
+  const [listTruncated, setListTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [revertingPath, setRevertingPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +70,10 @@ export function CommitSessionGroupChangesDialog({
         .query(SESSION_GROUP_WORKTREE_CHANGES_QUERY, { sessionGroupId })
         .toPromise();
       if (result.error) throw result.error;
-      setFiles(result.data?.sessionGroupWorktreeChanges ?? []);
+      const changes = result.data?.sessionGroupWorktreeChanges;
+      setFiles(changes?.files ?? []);
+      setTotalCount(changes?.totalCount ?? 0);
+      setListTruncated(changes?.truncated ?? false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load changes");
     } finally {
@@ -90,6 +99,8 @@ export function CommitSessionGroupChangesDialog({
     if (!open) {
       setSelectedPath(null);
       setCommitMessage("Update files from Trace");
+      setTotalCount(0);
+      setListTruncated(false);
       return;
     }
     if (selectedPath && files.some((file) => file.path === selectedPath)) return;
@@ -98,8 +109,8 @@ export function CommitSessionGroupChangesDialog({
 
   useEffect(() => {
     if (!open) return;
-    onChangesUpdated?.(files.length > 0);
-  }, [files.length, onChangesUpdated, open]);
+    onChangesUpdated?.(totalCount > 0);
+  }, [onChangesUpdated, open, totalCount]);
 
   const selectedFile = useMemo(
     () => files.find((file) => file.path === selectedPath) ?? files[0] ?? null,
@@ -130,7 +141,7 @@ export function CommitSessionGroupChangesDialog({
   );
 
   const trimmedMessage = commitMessage.trim();
-  const commitDisabled = pending || loading || files.length === 0 || trimmedMessage.length === 0;
+  const commitDisabled = pending || loading || totalCount === 0 || trimmedMessage.length === 0;
   const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
 
   return (
@@ -162,7 +173,9 @@ export function CommitSessionGroupChangesDialog({
                 <span className="text-xs font-medium text-muted-foreground">Workspace Changes</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    {files.length >= 200 ? "Showing 200 files" : `${files.length} files`}
+                    {listTruncated
+                      ? `Showing ${files.length} of ${totalCount} files`
+                      : `${files.length} files`}
                   </span>
                   <button
                     type="button"
@@ -175,6 +188,12 @@ export function CommitSessionGroupChangesDialog({
                   </button>
                 </div>
               </div>
+              {listTruncated ? (
+                <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  Some files are hidden to keep the preview bounded. Commit still includes all
+                  workspace changes.
+                </div>
+              ) : null}
               <div className="max-h-52 overflow-auto p-2 lg:max-h-none">
                 {error ? (
                   <div className="px-2 py-6 text-left text-xs text-red-400">{error}</div>

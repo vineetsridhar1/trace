@@ -363,14 +363,18 @@ async function readChangedFileContents(
   };
 }
 
-async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutChangedFile[]> {
+async function listChangedFiles(repoPath: string): Promise<{
+  files: BridgeLinkedCheckoutChangedFile[];
+  totalCount: number;
+  truncated: boolean;
+}> {
   const [changedPaths, untrackedPaths] = await Promise.all([
     listChangedPaths(repoPath),
     listUntrackedPaths(repoPath),
   ]);
   const untrackedPathSet = new Set(untrackedPaths);
 
-  return Promise.all(
+  const files = await Promise.all(
     changedPaths.slice(0, LINKED_CHECKOUT_STATUS_FILE_LIMIT).map(async (relativePath) => {
       const untracked = untrackedPathSet.has(relativePath);
 
@@ -387,6 +391,11 @@ async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutC
       };
     }),
   );
+  return {
+    files,
+    totalCount: changedPaths.length,
+    truncated: changedPaths.length > files.length,
+  };
 }
 
 async function readChangedFilePreview(
@@ -956,6 +965,8 @@ function buildStatus(
   currentCommitSha: string | null,
   hasUncommittedChangesInRepo: boolean,
   changedFiles: BridgeLinkedCheckoutChangedFile[],
+  changedFilesTotalCount = changedFiles.length,
+  changedFilesTruncated = false,
 ): LinkedCheckoutStatus {
   return {
     repoId,
@@ -972,6 +983,8 @@ function buildStatus(
     restoreCommitSha: attachment?.originalCommitSha ?? null,
     hasUncommittedChanges: hasUncommittedChangesInRepo,
     changedFiles,
+    changedFilesTotalCount,
+    changedFilesTruncated,
   };
 }
 
@@ -993,17 +1006,24 @@ async function readCurrentGitState(repoPath: string): Promise<{
 async function readChangedFilesState(repoPath: string): Promise<{
   dirty: boolean;
   changedFiles: BridgeLinkedCheckoutChangedFile[];
+  totalCount: number;
+  truncated: boolean;
 }> {
   try {
     const changedFiles = await listChangedFiles(repoPath);
     return {
-      dirty: changedFiles.length > 0,
-      changedFiles,
+      dirty: changedFiles.totalCount > 0,
+      changedFiles: changedFiles.files,
+      totalCount: changedFiles.totalCount,
+      truncated: changedFiles.truncated,
     };
   } catch {
+    const dirty = await hasUncommittedChanges(repoPath).catch(() => false);
     return {
-      dirty: await hasUncommittedChanges(repoPath).catch(() => false),
+      dirty,
       changedFiles: [],
+      totalCount: dirty ? 1 : 0,
+      truncated: dirty,
     };
   }
 }
@@ -1029,6 +1049,8 @@ async function readStatus(repoId: string): Promise<LinkedCheckoutStatus> {
     currentCommitSha,
     changedFilesState.dirty,
     changedFilesState.changedFiles,
+    changedFilesState.totalCount,
+    changedFilesState.truncated,
   );
 }
 

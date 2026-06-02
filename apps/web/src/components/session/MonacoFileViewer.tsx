@@ -38,7 +38,7 @@ const COMMIT_SESSION_GROUP_FILE_CHANGES_MUTATION = gql`
 const SESSION_GROUP_WORKTREE_CHANGES_QUERY = gql`
   query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {
     sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {
-      path
+      totalCount
     }
   }
 `;
@@ -152,7 +152,7 @@ export function MonacoFileViewer({
         .query(SESSION_GROUP_WORKTREE_CHANGES_QUERY, { sessionGroupId })
         .toPromise();
       if (result.error) return;
-      setHasWorktreeChanges((result.data?.sessionGroupWorktreeChanges ?? []).length > 0);
+      setHasWorktreeChanges((result.data?.sessionGroupWorktreeChanges.totalCount ?? 0) > 0);
     } catch {
       // Leave the current indicator alone on transient bridge/query failures.
     }

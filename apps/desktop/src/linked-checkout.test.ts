@@ -629,17 +629,13 @@ describe("linked checkout commit-back", () => {
       fs.writeFileSync(path.join(repoPath, `scratch-${index}.txt`), "temp\n");
     }
 
-    const result = await syncLinkedCheckout({
-      repoId: "repo-1",
-      sessionGroupId: "group-1",
-      branch: "trace/raccoon",
-    });
+    const status = await getLinkedCheckoutStatus("repo-1");
 
-    expect(result.ok).toBe(false);
-    expect(result.errorCode).toBe("DIRTY_ROOT_CHECKOUT");
-    expect(result.status.hasUncommittedChanges).toBe(true);
-    expect(result.status.changedFiles).toHaveLength(200);
-    expect(result.status.changedFiles[0]).toMatchObject({
+    expect(status.hasUncommittedChanges).toBe(true);
+    expect(status.changedFiles).toHaveLength(200);
+    expect(status.changedFilesTotalCount).toBe(250);
+    expect(status.changedFilesTruncated).toBe(true);
+    expect(status.changedFiles[0]).toMatchObject({
       status: "A",
       additions: 0,
       deletions: 0,

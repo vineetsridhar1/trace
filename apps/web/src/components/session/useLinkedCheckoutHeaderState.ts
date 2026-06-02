@@ -37,6 +37,8 @@ export interface LinkedCheckoutHeaderState {
   autoSyncEnabled: boolean;
   hasUncommittedChanges: boolean;
   changedFiles: DesktopLinkedCheckoutChangedFile[];
+  changedFilesTotalCount: number;
+  changedFilesTruncated: boolean;
   summaryBranch: string | null | undefined;
   syncedCommitSha: string | null;
   lastSyncError: string | null | undefined;
@@ -392,6 +394,8 @@ export function useLinkedCheckoutHeaderState({
     autoSyncEnabled: !!status?.autoSyncEnabled,
     hasUncommittedChanges: !!status?.hasUncommittedChanges,
     changedFiles: status?.changedFiles ?? [],
+    changedFilesTotalCount: status?.changedFilesTotalCount ?? status?.changedFiles.length ?? 0,
+    changedFilesTruncated: status?.changedFilesTruncated ?? false,
     summaryBranch,
     syncedCommitSha,
     lastSyncError: status?.lastSyncError,

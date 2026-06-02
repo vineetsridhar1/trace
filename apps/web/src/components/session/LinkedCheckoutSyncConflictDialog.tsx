@@ -10,6 +10,8 @@ interface LinkedCheckoutSyncConflictDialogProps {
   open: boolean;
   error: string | null;
   changedFiles: DesktopLinkedCheckoutChangedFile[];
+  changedFilesTotalCount: number;
+  changedFilesTruncated: boolean;
   repoId: string | null | undefined;
   sessionGroupId: string;
   runtimeInstanceId: string | null;
@@ -25,6 +27,8 @@ export function LinkedCheckoutSyncConflictDialog({
   open,
   error,
   changedFiles,
+  changedFilesTotalCount,
+  changedFilesTruncated,
   repoId,
   sessionGroupId,
   runtimeInstanceId,
@@ -82,8 +86,18 @@ export function LinkedCheckoutSyncConflictDialog({
             <div className="min-h-0 border-b border-border bg-muted/25 lg:border-r lg:border-b-0">
               <div className="flex h-11 items-center justify-between border-b border-border px-3">
                 <span className="text-xs font-medium text-muted-foreground">Working Changes</span>
-                <span className="text-xs text-muted-foreground">{changedFiles.length} files</span>
+                <span className="text-xs text-muted-foreground">
+                  {changedFilesTruncated
+                    ? `Showing ${changedFiles.length} of ${changedFilesTotalCount} files`
+                    : `${changedFiles.length} files`}
+                </span>
               </div>
+              {changedFilesTruncated ? (
+                <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  Some files are hidden to keep the preview bounded. The selected action still
+                  applies to all main worktree changes.
+                </div>
+              ) : null}
               <div className="max-h-52 overflow-auto p-2 lg:max-h-none">
                 {changedFiles.length === 0 ? (
                   <div className="px-2 py-6 text-left text-xs text-muted-foreground">
