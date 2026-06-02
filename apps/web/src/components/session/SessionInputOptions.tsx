@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
@@ -18,7 +18,7 @@ import {
   type ReasoningEffortOption,
 } from "./modelOptions";
 import { ToolModelPicker } from "./ToolModelPicker";
-import { normalizeTool, TOOL_OPTIONS, type ToolOptionValue } from "./picker/pickerShared";
+import { normalizeTool, type ToolOptionValue } from "./picker/pickerShared";
 import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
@@ -156,42 +156,7 @@ export function SessionInputOptions({
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
-  const connectedLocalRuntimes = useMemo(
-    () => runtimes.filter(isAccessibleLocalRuntime),
-    [runtimes],
-  );
-  const disabledToolReasons = useMemo<Partial<Record<ToolOptionValue, string>>>(() => {
-    if (!isNotStarted || isCloudRuntime) return {};
-
-    const selectedRuntime = runtimeInstanceId
-      ? runtimes.find((runtime) => runtime.id === runtimeInstanceId)
-      : null;
-    const supportedTools = selectedRuntime
-      ? new Set(selectedRuntime.supportedTools)
-      : currentRuntimeValue === UNBOUND_LOCAL_RUNTIME_ID
-        ? new Set(connectedLocalRuntimes.flatMap((runtime) => runtime.supportedTools))
-        : null;
-    if (!supportedTools) return {};
-
-    const runtimeName = selectedRuntime?.label ?? runtimeLabel ?? "this runtime";
-    const result: Partial<Record<ToolOptionValue, string>> = {};
-    for (const option of TOOL_OPTIONS) {
-      if (option.value === currentTool || supportedTools.has(option.value)) continue;
-      result[option.value] = selectedRuntime
-        ? `${option.label} is not installed on ${runtimeName}.`
-        : `No connected local runtime has ${option.label} installed.`;
-    }
-    return result;
-  }, [
-    connectedLocalRuntimes,
-    currentRuntimeValue,
-    currentTool,
-    isCloudRuntime,
-    isNotStarted,
-    runtimeInstanceId,
-    runtimeLabel,
-    runtimes,
-  ]);
+  const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
   const fetchAvailableRuntimes = useCallback(() => {
     if (!isNotStarted || isOptimistic) return Promise.resolve();
     return client
@@ -439,7 +404,6 @@ export function SessionInputOptions({
         tool={currentTool}
         model={currentModel}
         disabled={isActive || isOptimistic}
-        disabledToolReasons={disabledToolReasons}
         onToolChange={handleToolChange}
         onModelChange={handleModelChange}
       />
