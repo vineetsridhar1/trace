@@ -156,42 +156,73 @@ export function SessionInputOptions({
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
+  const [toolRuntimes, setToolRuntimes] = useState<
+    Partial<Record<ToolOptionValue, SessionRuntimeInstance[]>>
+  >({});
   const connectedLocalRuntimes = useMemo(
     () => runtimes.filter(isAccessibleLocalRuntime),
     [runtimes],
   );
   const disabledToolReasons = useMemo<Partial<Record<ToolOptionValue, string>>>(() => {
-    if (!isNotStarted || isCloudRuntime) return {};
+    if (!isNotStarted) return {};
 
-    const selectedRuntime = runtimeInstanceId
-      ? runtimes.find((runtime) => runtime.id === runtimeInstanceId)
-      : null;
-    const supportedTools = selectedRuntime
-      ? new Set(selectedRuntime.supportedTools)
-      : currentRuntimeValue === UNBOUND_LOCAL_RUNTIME_ID
-        ? new Set(connectedLocalRuntimes.flatMap((runtime) => runtime.supportedTools))
-        : null;
-    if (!supportedTools) return {};
-
-    const runtimeName = selectedRuntime?.label ?? runtimeLabel ?? "this runtime";
     const result: Partial<Record<ToolOptionValue, string>> = {};
     for (const option of TOOL_OPTIONS) {
-      if (option.value === currentTool || supportedTools.has(option.value)) continue;
-      result[option.value] = selectedRuntime
-        ? `${option.label} is not installed on ${runtimeName}.`
+      if (option.value === currentTool) continue;
+
+      const matches = toolRuntimes[option.value];
+      if (!matches) continue;
+
+      const accessibleMatches = matches.filter(isAccessibleLocalRuntime);
+      const eligibleMatches = channelRepoId
+        ? accessibleMatches.filter((runtime) => runtime.registeredRepoIds.includes(channelRepoId))
+        : accessibleMatches;
+      const selectedRuntimeSupportsTool = runtimeInstanceId
+        ? eligibleMatches.some((runtime) => runtime.id === runtimeInstanceId)
+        : false;
+      const canSelectTool = runtimeInstanceId
+        ? selectedRuntimeSupportsTool
+        : eligibleMatches.length > 0;
+      if (canSelectTool) continue;
+
+      result[option.value] = runtimeInstanceId
+        ? `${option.label} is not installed on ${runtimeLabel ?? "this runtime"}.`
         : `No connected local runtime has ${option.label} installed.`;
     }
     return result;
   }, [
-    connectedLocalRuntimes,
-    currentRuntimeValue,
+    channelRepoId,
     currentTool,
-    isCloudRuntime,
     isNotStarted,
     runtimeInstanceId,
     runtimeLabel,
-    runtimes,
+    toolRuntimes,
   ]);
+  const fetchToolRuntimeAvailability = useCallback(() => {
+    if (!isNotStarted || isOptimistic) return Promise.resolve();
+    return Promise.all(
+      TOOL_OPTIONS.map((option) =>
+        client
+          .query(AVAILABLE_RUNTIMES_QUERY, {
+            tool: option.value,
+            sessionGroupId: sessionGroupId ?? null,
+          })
+          .toPromise()
+          .then((result: { data?: Record<string, unknown> }) => [
+            option.value,
+            (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[],
+          ] as const),
+      ),
+    )
+      .then((entries) => {
+        setToolRuntimes(Object.fromEntries(entries));
+        const currentToolRuntimes = entries.find(([toolValue]) => toolValue === currentTool)?.[1];
+        if (currentToolRuntimes) setRuntimes(currentToolRuntimes);
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to fetch tool runtime availability:", error);
+      });
+  }, [currentTool, isNotStarted, isOptimistic, sessionGroupId]);
   const fetchAvailableRuntimes = useCallback(() => {
     if (!isNotStarted || isOptimistic) return Promise.resolve();
     return client
@@ -210,8 +241,8 @@ export function SessionInputOptions({
   }, [isNotStarted, isOptimistic, currentTool, sessionGroupId]);
 
   useEffect(() => {
-    void fetchAvailableRuntimes();
-  }, [fetchAvailableRuntimes]);
+    void fetchToolRuntimeAvailability();
+  }, [fetchToolRuntimeAvailability]);
 
   const handleToolChange = useCallback(
     async (newTool: ToolOptionValue) => {
@@ -440,6 +471,7 @@ export function SessionInputOptions({
         model={currentModel}
         disabled={isActive || isOptimistic}
         disabledToolReasons={disabledToolReasons}
+        onOpen={fetchToolRuntimeAvailability}
         onToolChange={handleToolChange}
         onModelChange={handleModelChange}
       />
