@@ -16,12 +16,14 @@ const TOOL_OPTIONS = [
   { value: "claude_code", label: "Claude Code" },
   { value: "codex", label: "Codex" },
   { value: "pi", label: "Pi" },
+  { value: "antigravity", label: "Antigravity" },
 ] as const;
 
 const TOOL_LABELS: Record<string, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
   pi: "Pi",
+  antigravity: "Antigravity",
 };
 
 type SessionDefaultsPatch = Pick<

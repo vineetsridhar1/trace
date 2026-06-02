@@ -19,6 +19,7 @@ import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
+import { getToolLabel } from "./picker/pickerShared";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { cn } from "../../lib/utils";
@@ -122,7 +123,7 @@ export function SessionInput({
     bridgeInteractionAllowed &&
     !isOptimistic &&
     (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
-  const displayModel = model ? getModelLabel(model) : "Claude Code";
+  const displayModel = model ? getModelLabel(model) : getToolLabel(tool ?? "claude_code");
 
   const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
 
