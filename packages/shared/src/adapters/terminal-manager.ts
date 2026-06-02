@@ -1,6 +1,7 @@
 import * as pty from "node-pty";
 import os from "os";
 import fs from "fs";
+import { buildChildProcessEnv } from "./spawn-env.js";
 
 export interface TerminalCallbacks {
   onOutput: (terminalId: string, data: string) => void;
@@ -59,7 +60,7 @@ export class TerminalManager {
       cols,
       rows,
       cwd: safeCwd,
-      env: process.env as Record<string, string>,
+      env: buildChildProcessEnv(),
     });
 
     terminal.onData((data) => {
