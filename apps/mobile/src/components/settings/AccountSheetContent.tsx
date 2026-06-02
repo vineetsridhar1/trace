@@ -22,6 +22,7 @@ export function AccountSheetContent() {
   const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
 
   const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
+  const canSwitchOrg = memberships.length > 1;
   const userName = user?.name ?? user?.email ?? "Trace user";
   const userEmail = user?.email ?? "Signed in";
   function openOrgSwitcher() {
@@ -87,8 +88,8 @@ export function AccountSheetContent() {
         <ListRow
           title="Active organization"
           subtitle={activeOrg?.organization.name ?? "No active organization"}
-          disclosureIndicator
-          onPress={openOrgSwitcher}
+          disclosureIndicator={canSwitchOrg}
+          onPress={canSwitchOrg ? openOrgSwitcher : undefined}
           separator
         />
         <ListRow

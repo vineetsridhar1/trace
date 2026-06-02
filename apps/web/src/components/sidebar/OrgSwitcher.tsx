@@ -12,29 +12,38 @@ export function OrgSwitcher({ compact, large }: { compact?: boolean; large?: boo
     (m: OrgMembership) => m.organizationId === activeOrgId,
   )?.organization;
   const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
+  const showSwitcher = orgList.length > 1;
   const triggerClassName = compact
-    ? "flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm transition-colors hover:bg-white/10"
-    : `flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-white/10 ${large ? "py-2.5" : ""}`;
+    ? `flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-sm transition-colors ${showSwitcher ? "cursor-pointer hover:bg-white/10" : ""}`
+    : `flex h-full w-full items-center gap-2 px-3 transition-colors ${showSwitcher ? "cursor-pointer hover:bg-white/10" : ""} ${large ? "py-2.5" : ""}`;
   const avatarClassName = compact
     ? "h-5 w-5 rounded-md text-[9px]"
     : `${large ? "h-7.5 w-7.5 text-xs" : "h-7 w-7 text-xs"} rounded-lg`;
   const chevronSize = compact ? 12 : large ? 15 : 14;
 
+  const labelContent = (
+    <>
+      <div
+        className={`flex shrink-0 items-center justify-center bg-accent font-bold text-accent-foreground ${avatarClassName}`}
+      >
+        {getInitials(activeOrg?.name ?? "")}
+      </div>
+      <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-foreground">
+        {activeOrg?.name ?? "Workspace"}
+      </span>
+      {showSwitcher ? (
+        <ChevronDown size={chevronSize} className="shrink-0 text-foreground" />
+      ) : null}
+    </>
+  );
+
+  if (!showSwitcher) {
+    return <div className={triggerClassName}>{labelContent}</div>;
+  }
+
   return (
     <Popover>
-      <PopoverTrigger className={triggerClassName}>
-        <div
-          className={`flex shrink-0 items-center justify-center bg-accent font-bold text-accent-foreground ${avatarClassName}`}
-        >
-          {getInitials(activeOrg?.name ?? "")}
-        </div>
-        <span
-          className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-foreground"
-        >
-          {activeOrg?.name ?? "Workspace"}
-        </span>
-        <ChevronDown size={chevronSize} className="shrink-0 text-foreground" />
-      </PopoverTrigger>
+      <PopoverTrigger className={triggerClassName}>{labelContent}</PopoverTrigger>
       <PopoverContent
         side="bottom"
         align="start"
