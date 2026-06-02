@@ -1256,6 +1256,7 @@ export type Query = {
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
+  sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
   sessionGroups: Array<SessionGroup>;
@@ -1447,6 +1448,11 @@ export type QuerySessionGroupFileAtRefArgs = {
 };
 
 export type QuerySessionGroupFileContentArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -1673,6 +1679,14 @@ export type SessionGroup = {
   visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
+};
+
+export type SessionGroupFileContentResult = {
+  __typename?: "SessionGroupFileContentResult";
+  content: Scalars["String"]["output"];
+  ref: Scalars["String"]["output"];
+  requestedRef: Scalars["String"]["output"];
+  usedFallback: Scalars["Boolean"]["output"];
 };
 
 export type SessionGroupStatus =
@@ -2143,6 +2157,7 @@ export type ResolversTypes = ResolversObject<{
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
+  SessionGroupFileContentResult: ResolverTypeWrapper<SessionGroupFileContentResult>;
   SessionGroupStatus: SessionGroupStatus;
   SessionGroupVisibility: SessionGroupVisibility;
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
@@ -2246,6 +2261,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
+  SessionGroupFileContentResult: SessionGroupFileContentResult;
   SessionPromptIndexItem: SessionPromptIndexItem;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
@@ -3624,6 +3640,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionGroupFileContentArgs, "filePath" | "sessionGroupId">
   >;
+  sessionGroupFileContentWithSource?: Resolver<
+    ResolversTypes["SessionGroupFileContentResult"],
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionGroupFileContentWithSourceArgs, "filePath" | "sessionGroupId">
+  >;
   sessionGroupFiles?: Resolver<
     Array<ResolversTypes["String"]>,
     ParentType,
@@ -3830,6 +3852,18 @@ export type SessionGroupResolvers<
   visibility?: Resolver<ResolversTypes["SessionGroupVisibility"], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   worktreeDeleted?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionGroupFileContentResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionGroupFileContentResult"] =
+    ResolversParentTypes["SessionGroupFileContentResult"],
+> = ResolversObject<{
+  content?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  ref?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  requestedRef?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  usedFallback?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4126,6 +4160,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
+  SessionGroupFileContentResult?: SessionGroupFileContentResultResolvers<ContextType>;
   SessionPromptIndexItem?: SessionPromptIndexItemResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;

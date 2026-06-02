@@ -602,6 +602,13 @@ type GitHubSessionGroupFileSource = {
   workdir: string | null;
 };
 
+type SessionGroupFileContentResult = {
+  content: string;
+  ref: string;
+  requestedRef: string;
+  usedFallback: boolean;
+};
+
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
   "Access denied: you do not have permission to access files on this local bridge";
@@ -7636,6 +7643,17 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<string> {
+    const result = await this.readFileWithSource(sessionGroupId, filePath, organizationId, userId);
+    return result.content;
+  }
+
+  /** Read a file's content and report whether it came from the requested branch or default branch. */
+  async readFileWithSource(
+    sessionGroupId: string,
+    filePath: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<SessionGroupFileContentResult> {
     const normalizedPath = this.normalizeFilePath(filePath);
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
@@ -7643,7 +7661,34 @@ export class SessionService {
       userId,
     );
     const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
-    return githubRepoService.readFile(source.repo, source.branch, relativePath, source.token);
+    try {
+      return {
+        content: await githubRepoService.readFile(
+          source.repo,
+          source.branch,
+          relativePath,
+          source.token,
+        ),
+        ref: source.branch,
+        requestedRef: source.branch,
+        usedFallback: false,
+      };
+    } catch (error) {
+      if (source.branch === source.defaultBranch) {
+        throw error;
+      }
+      return {
+        content: await githubRepoService.readFile(
+          source.repo,
+          source.defaultBranch,
+          relativePath,
+          source.token,
+        ),
+        ref: source.defaultBranch,
+        requestedRef: source.branch,
+        usedFallback: true,
+      };
+    }
   }
 
   /** Save a file's content to a session group's working directory. */

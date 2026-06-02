@@ -2772,6 +2772,43 @@ describe("SessionService", () => {
       expect(sessionRouterMock.readFile).not.toHaveBeenCalled();
     });
 
+    it("falls back to the default branch when reading the session branch fails", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.readFile
+        .mockRejectedValueOnce(new Error("GitHub API error (404): Not Found"))
+        .mockResolvedValueOnce("default branch contents");
+
+      await expect(
+        service.readFileWithSource("group-1", "/tmp/trace/src/app.ts", "org-1", "user-1"),
+      ).resolves.toEqual({
+        content: "default branch contents",
+        ref: "main",
+        requestedRef: "trace/test",
+        usedFallback: true,
+      });
+      expect(githubRepoServiceMock.readFile).toHaveBeenNthCalledWith(
+        1,
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "src/app.ts",
+        "gh-token",
+      );
+      expect(githubRepoServiceMock.readFile).toHaveBeenNthCalledWith(
+        2,
+        { owner: "trace", repo: "trace" },
+        "main",
+        "src/app.ts",
+        "gh-token",
+      );
+    });
+
     it("computes branch diffs through GitHub", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",

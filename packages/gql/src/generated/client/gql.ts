@@ -28,7 +28,7 @@ type Documents = {
   "\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.RevertSessionGroupFileChangeDocument;
   "\n  query SessionGroupFileAtRef($sessionGroupId: ID!, $filePath: String!, $ref: String!) {\n    sessionGroupFileAtRef(sessionGroupId: $sessionGroupId, filePath: $filePath, ref: $ref)\n  }\n": typeof types.SessionGroupFileAtRefDocument;
   "\n  query SessionGroupFileContentForDiff($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.SessionGroupFileContentForDiffDocument;
-  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.SessionGroupFileContentDocument;
+  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n": typeof types.SessionGroupFileContentDocument;
   "\n  mutation SaveSessionGroupFile($sessionGroupId: ID!, $filePath: String!, $content: String!) {\n    saveSessionGroupFile(sessionGroupId: $sessionGroupId, filePath: $filePath, content: $content)\n  }\n": typeof types.SaveSessionGroupFileDocument;
   "\n  mutation CommitSessionGroupFileChanges($sessionGroupId: ID!, $message: String) {\n    commitSessionGroupFileChanges(sessionGroupId: $sessionGroupId, message: $message)\n  }\n": typeof types.CommitSessionGroupFileChangesDocument;
   "\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n    }\n  }\n": typeof types.SessionGroupWorktreeChangesForCommitButtonDocument;
@@ -113,7 +113,7 @@ const documents: Documents = {
     types.SessionGroupFileAtRefDocument,
   "\n  query SessionGroupFileContentForDiff($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n":
     types.SessionGroupFileContentForDiffDocument,
-  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n":
+  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n":
     types.SessionGroupFileContentDocument,
   "\n  mutation SaveSessionGroupFile($sessionGroupId: ID!, $filePath: String!, $content: String!) {\n    saveSessionGroupFile(sessionGroupId: $sessionGroupId, filePath: $filePath, content: $content)\n  }\n":
     types.SaveSessionGroupFileDocument,
@@ -327,8 +327,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n",
-): (typeof documents)["\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n"];
+  source: "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n",
+): (typeof documents)["\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
