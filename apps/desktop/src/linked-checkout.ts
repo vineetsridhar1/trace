@@ -110,8 +110,8 @@ interface ChangedPathState {
 const LINKED_CHECKOUT_COMMIT_MESSAGE = "Commit linked checkout changes";
 const LINKED_CHECKOUT_REBASE_STASH_MESSAGE = "Trace linked checkout rebase";
 const LINKED_CHECKOUT_SYNC_STASH_MESSAGE = "Trace linked checkout stash";
-const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 120_000;
-const LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT = 300_000;
+const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 80_000;
+const LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT = 80_000;
 const LINKED_CHECKOUT_STATUS_FILE_LIMIT = 200;
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
