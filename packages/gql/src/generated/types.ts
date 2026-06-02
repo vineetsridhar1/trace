@@ -328,10 +328,6 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
-export type CreateOrganizationInput = {
-  name: Scalars["String"]["input"];
-};
-
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -576,7 +572,6 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
-  createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -735,10 +730,6 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
-};
-
-export type MutationCreateOrganizationArgs = {
-  input: CreateOrganizationInput;
 };
 
 export type MutationCreateProjectArgs = {

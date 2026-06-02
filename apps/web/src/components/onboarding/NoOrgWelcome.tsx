@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { LogOut, Plus, RefreshCw } from "lucide-react";
+import { LogOut, RefreshCw } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button } from "../ui/button";
-import { CreateOrganizationDialog } from "../sidebar/CreateOrganizationDialog";
 import { TraceLoader } from "../ui/trace-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
@@ -58,11 +57,11 @@ export function NoOrgWelcome() {
         </div>
 
         <h1 className="mt-8 text-[1.9rem] font-semibold leading-tight text-foreground">
-          Create your organization
+          You're not in an organization yet
         </h1>
         <p className="mt-2 max-w-[460px] text-sm leading-6 text-muted-foreground">
           You are signed in, but this account is not part of a Trace organization yet.
-          Create an organization to start using your workspace.
+          Ask an organization admin to invite you, then check again.
         </p>
 
         <div className="mt-6 rounded-lg border border-white/10 bg-surface-deep/55 p-3.5 shadow-inner shadow-black/20">
@@ -77,14 +76,15 @@ export function NoOrgWelcome() {
             <LogOut size={14} />
             Sign out
           </Button>
-          <CreateOrganizationDialog
-            trigger={
-              <Button size="lg" className="justify-center gap-2">
-                <Plus size={14} />
-                Create organization
-              </Button>
-            }
-          />
+          <Button
+            size="lg"
+            className="justify-center gap-2"
+            disabled={checking}
+            onClick={handleCheckAgain}
+          >
+            {checking ? <TraceLoader size={14} showLabel={false} /> : <RefreshCw size={14} />}
+            Check again
+          </Button>
         </div>
       </div>
     </div>

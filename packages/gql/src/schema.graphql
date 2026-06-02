@@ -1005,10 +1005,6 @@ input UpdateAgentEnvironmentInput {
   isDefault: Boolean
 }
 
-input CreateOrganizationInput {
-  name: String!
-}
-
 # --- Queries ---
 
 type Query {
@@ -1281,7 +1277,6 @@ type Mutation {
   linkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
   unlinkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
-  createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!

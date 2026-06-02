@@ -331,10 +331,6 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
-export type CreateOrganizationInput = {
-  name: Scalars["String"]["input"];
-};
-
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -579,7 +575,6 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
-  createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -738,10 +733,6 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
-};
-
-export type MutationCreateOrganizationArgs = {
-  input: CreateOrganizationInput;
 };
 
 export type MutationCreateProjectArgs = {
@@ -2065,7 +2056,6 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
-  CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
@@ -2178,7 +2168,6 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
-  CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
@@ -2796,12 +2785,6 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateChatArgs, "input">
-  >;
-  createOrganization?: Resolver<
-    ResolversTypes["OrgMember"],
-    ParentType,
-    ContextType,
-    RequireFields<MutationCreateOrganizationArgs, "input">
   >;
   createProject?: Resolver<
     ResolversTypes["Project"],
