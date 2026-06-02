@@ -782,6 +782,13 @@ type BranchDiffFile {
   deletions: Int!
 }
 
+type SessionGroupFileContentResult {
+  content: String!
+  ref: String!
+  requestedRef: String!
+  usedFallback: Boolean!
+}
+
 type Notification {
   id: ID!
   type: String!
@@ -1090,6 +1097,7 @@ type Query {
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
+  sessionGroupFileContentWithSource(sessionGroupId: ID!, filePath: String!): SessionGroupFileContentResult!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(

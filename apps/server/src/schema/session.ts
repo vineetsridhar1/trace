@@ -124,6 +124,14 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.readFile(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
+  sessionGroupFileContentWithSource: (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.readFileWithSource(args.sessionGroupId, args.filePath, orgId, ctx.userId);
+  },
   sessionGroupBranchDiff: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.branchDiff(args.sessionGroupId, orgId, ctx.userId);

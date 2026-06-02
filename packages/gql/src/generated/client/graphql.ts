@@ -1255,6 +1255,7 @@ export type Query = {
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
+  sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
   sessionGroups: Array<SessionGroup>;
@@ -1446,6 +1447,11 @@ export type QuerySessionGroupFileAtRefArgs = {
 };
 
 export type QuerySessionGroupFileContentArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -1672,6 +1678,14 @@ export type SessionGroup = {
   visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
+};
+
+export type SessionGroupFileContentResult = {
+  __typename?: "SessionGroupFileContentResult";
+  content: Scalars["String"]["output"];
+  ref: Scalars["String"]["output"];
+  requestedRef: Scalars["String"]["output"];
+  usedFallback: Scalars["Boolean"]["output"];
 };
 
 export type SessionGroupStatus =
@@ -2272,7 +2286,13 @@ export type SessionGroupFileContentQueryVariables = Exact<{
 
 export type SessionGroupFileContentQuery = {
   __typename?: "Query";
-  sessionGroupFileContent: string;
+  sessionGroupFileContentWithSource: {
+    __typename?: "SessionGroupFileContentResult";
+    content: string;
+    ref: string;
+    requestedRef: string;
+    usedFallback: boolean;
+  };
 };
 
 export type SaveSessionGroupFileMutationVariables = Exact<{
@@ -4468,7 +4488,7 @@ export const SessionGroupFileContentDocument = {
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "sessionGroupFileContent" },
+            name: { kind: "Name", value: "sessionGroupFileContentWithSource" },
             arguments: [
               {
                 kind: "Argument",
@@ -4481,6 +4501,15 @@ export const SessionGroupFileContentDocument = {
                 value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
               },
             ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "ref" } },
+                { kind: "Field", name: { kind: "Name", value: "requestedRef" } },
+                { kind: "Field", name: { kind: "Name", value: "usedFallback" } },
+              ],
+            },
           },
         ],
       },
