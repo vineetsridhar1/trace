@@ -166,6 +166,20 @@ export function SessionInputOptions({
   const disabledToolReasons = useMemo<Partial<Record<ToolOptionValue, string>>>(() => {
     if (!isNotStarted) return {};
 
+    const selectedRuntime = runtimeInstanceId
+      ? runtimes.find((runtime) => runtime.id === runtimeInstanceId)
+      : null;
+    if (selectedRuntime) {
+      const supportedTools = new Set(selectedRuntime.supportedTools);
+      const result: Partial<Record<ToolOptionValue, string>> = {};
+      for (const option of TOOL_OPTIONS) {
+        if (option.value === currentTool || supportedTools.has(option.value)) continue;
+        result[option.value] =
+          `${option.label} is not installed on ${selectedRuntime.label ?? runtimeLabel ?? "this runtime"}.`;
+      }
+      return result;
+    }
+
     const result: Partial<Record<ToolOptionValue, string>> = {};
     for (const option of TOOL_OPTIONS) {
       if (option.value === currentTool) continue;
@@ -196,6 +210,7 @@ export function SessionInputOptions({
     isNotStarted,
     runtimeInstanceId,
     runtimeLabel,
+    runtimes,
     toolRuntimes,
   ]);
   const fetchToolRuntimeAvailability = useCallback(() => {
