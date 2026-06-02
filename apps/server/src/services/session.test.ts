@@ -52,7 +52,7 @@ vi.mock("../lib/session-router.js", () => ({
     readFile: vi.fn().mockResolvedValue(""),
     writeFile: vi.fn().mockResolvedValue(undefined),
     commitFileChanges: vi.fn().mockResolvedValue("commit123"),
-    listWorktreeChanges: vi.fn().mockResolvedValue([]),
+    listWorktreeChanges: vi.fn().mockResolvedValue({ files: [], totalCount: 0, truncated: false }),
     revertWorktreeFile: vi.fn().mockResolvedValue(undefined),
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
@@ -3930,12 +3930,26 @@ describe("SessionService", () => {
       prismaMock.event.findFirst.mockResolvedValueOnce(null);
       prismaMock.event.findMany.mockResolvedValueOnce([
         {
+          id: "event-start",
           eventType: "session_started",
           payload: { prompt: "Initial task" },
         },
         {
+          id: "event-message",
           eventType: "message_sent",
           payload: { text: "Follow-up instruction" },
+        },
+      ]);
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          id: "event-message",
+          eventType: "message_sent",
+          payload: { text: "Follow-up instruction" },
+        },
+        {
+          id: "event-start",
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
         },
       ]);
       prismaMock.session.update.mockResolvedValueOnce(session);
@@ -4316,12 +4330,26 @@ describe("SessionService", () => {
       );
       prismaMock.event.findMany.mockResolvedValueOnce([
         {
+          id: "event-start",
           eventType: "session_started",
           payload: { prompt: "Initial task" },
         },
         {
+          id: "event-message",
           eventType: "message_sent",
           payload: { text: "Follow-up instruction" },
+        },
+      ]);
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          id: "event-message",
+          eventType: "message_sent",
+          payload: { text: "Follow-up instruction" },
+        },
+        {
+          id: "event-start",
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
         },
       ]);
       prismaMock.event.findFirst.mockResolvedValueOnce({ id: "event-message-1" });
@@ -4378,25 +4406,37 @@ describe("SessionService", () => {
       );
       prismaMock.event.findMany.mockResolvedValueOnce([
         {
+          id: "event-start",
           eventType: "session_started",
           payload: { prompt: "Initial task" },
         },
-        ...Array.from({ length: 16 }, (_value, index) => ({
-          eventType: "session_output",
-          payload: {
-            type: "assistant",
-            message: {
-              content: [
-                {
-                  type: "text",
-                  text: `${index === 15 ? "latest-final" : `entry-${index}`} ${"x".repeat(
-                    20_000,
-                  )} ${index === 15 ? "latest-final-tail" : `entry-${index}-tail`}`,
-                },
-              ],
+      ]);
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        ...Array.from({ length: 16 }, (_value, offset) => {
+          const index = 15 - offset;
+          return {
+            id: `event-output-${index}`,
+            eventType: "session_output",
+            payload: {
+              type: "assistant",
+              message: {
+                content: [
+                  {
+                    type: "text",
+                    text: `${index === 15 ? "latest-final" : `entry-${index}`} ${"x".repeat(
+                      20_000,
+                    )} ${index === 15 ? "latest-final-tail" : `entry-${index}-tail`}`,
+                  },
+                ],
+              },
             },
-          },
-        })),
+          };
+        }),
+        {
+          id: "event-start",
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
+        },
       ]);
       prismaMock.event.findFirst.mockResolvedValueOnce({ id: "event-message-1" });
       sessionRouterMock.send.mockReturnValueOnce("delivered");

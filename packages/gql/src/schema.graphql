@@ -1097,7 +1097,10 @@ type Query {
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
-  sessionGroupFileContentWithSource(sessionGroupId: ID!, filePath: String!): SessionGroupFileContentResult!
+  sessionGroupFileContentWithSource(
+    sessionGroupId: ID!
+    filePath: String!
+  ): SessionGroupFileContentResult!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(
@@ -1111,7 +1114,7 @@ type Query {
     filePath: String!
     runtimeInstanceId: ID
   ): LinkedCheckoutChangedFile!
-  sessionGroupWorktreeChanges(sessionGroupId: ID!): [LinkedCheckoutChangedFile!]!
+  sessionGroupWorktreeChanges(sessionGroupId: ID!): WorktreeChangesResult!
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
@@ -1152,6 +1155,8 @@ type LinkedCheckoutStatus {
   restoreCommitSha: String
   hasUncommittedChanges: Boolean!
   changedFiles: [LinkedCheckoutChangedFile!]!
+  changedFilesTotalCount: Int!
+  changedFilesTruncated: Boolean!
 }
 
 type LinkedCheckoutChangedFile {
@@ -1164,6 +1169,12 @@ type LinkedCheckoutChangedFile {
   originalContent: String!
   modifiedContent: String!
   contentTruncated: Boolean!
+}
+
+type WorktreeChangesResult {
+  files: [LinkedCheckoutChangedFile!]!
+  totalCount: Int!
+  truncated: Boolean!
 }
 
 type LinkedCheckoutActionResult {

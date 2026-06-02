@@ -14,6 +14,7 @@ import type {
   BridgeWorktreeChangesCommand,
   BridgeRevertWorktreeFileCommand,
   BridgeLinkedCheckoutChangedFile,
+  BridgeWorktreeChangesPayload,
   BridgeBranchDiffCommand,
   BridgeFileAtRefCommand,
   BridgeBranchDiffFile,
@@ -313,7 +314,7 @@ export class SessionRouter {
     string,
     {
       runtimeId: string;
-      resolve: (files: BridgeLinkedCheckoutChangedFile[]) => void;
+      resolve: (result: BridgeWorktreeChangesPayload) => void;
       reject: (err: Error) => void;
     }
   >();
@@ -1229,7 +1230,7 @@ export class SessionRouter {
     sessionId: string,
     workdirHint?: string,
     timeoutMs = 15_000,
-  ): Promise<BridgeLinkedCheckoutChangedFile[]> {
+  ): Promise<BridgeWorktreeChangesPayload> {
     const requestId = randomUUID();
     const result = this.sendToRuntime(runtimeId, {
       type: "worktree_changes",
@@ -1241,7 +1242,7 @@ export class SessionRouter {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
 
-    return new Promise<BridgeLinkedCheckoutChangedFile[]>((resolve, reject) => {
+    return new Promise<BridgeWorktreeChangesPayload>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingWorktreeChangesRequests.delete(requestId);
         reject(new Error("Worktree changes request timed out"));
@@ -1249,9 +1250,9 @@ export class SessionRouter {
 
       this.pendingWorktreeChangesRequests.set(requestId, {
         runtimeId,
-        resolve: (files) => {
+        resolve: (result) => {
           clearTimeout(timer);
-          resolve(files);
+          resolve(result);
         },
         reject: (err) => {
           clearTimeout(timer);
@@ -1264,6 +1265,8 @@ export class SessionRouter {
   resolveWorktreeChangesRequest(
     requestId: string,
     files: BridgeLinkedCheckoutChangedFile[],
+    totalCount: number,
+    truncated: boolean,
     error?: string,
     sourceRuntimeId?: string,
   ): void {
@@ -1274,7 +1277,7 @@ export class SessionRouter {
     if (error) {
       pending.reject(new Error(error));
     } else {
-      pending.resolve(files);
+      pending.resolve({ files, totalCount, truncated });
     }
   }
 

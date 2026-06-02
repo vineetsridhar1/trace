@@ -517,6 +517,8 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
   changedFiles: Array<LinkedCheckoutChangedFile>;
+  changedFilesTotalCount: Scalars["Int"]["output"];
+  changedFilesTruncated: Scalars["Boolean"]["output"];
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];
@@ -1255,7 +1257,7 @@ export type Query = {
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
+  sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1979,3 +1981,10 @@ export type User = {
 };
 
 export type UserRole = "admin" | "member" | "observer";
+
+export type WorktreeChangesResult = {
+  __typename?: "WorktreeChangesResult";
+  files: Array<LinkedCheckoutChangedFile>;
+  totalCount: Scalars["Int"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};

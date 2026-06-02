@@ -139,6 +139,8 @@ export function LinkedCheckoutActions({ state }: Props) {
         open={state.syncConflictOpen}
         error={state.syncConflictError}
         changedFiles={state.changedFiles}
+        changedFilesTotalCount={state.changedFilesTotalCount}
+        changedFilesTruncated={state.changedFilesTruncated}
         repoId={state.repoId}
         sessionGroupId={state.sessionGroupId}
         runtimeInstanceId={state.targetRuntimeInstanceId}

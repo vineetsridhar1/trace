@@ -769,6 +769,19 @@ function gitCheckpointIdFromPayload(value: unknown): string | null {
 const MAX_SESSION_NAME_LENGTH = 80;
 const MAX_CONVERSATION_CONTEXT_CHARS = 96 * 1024;
 const MAX_CONVERSATION_CONTEXT_ENTRY_CHARS = 12 * 1024;
+const CONVERSATION_CONTEXT_EVENT_PAGE_SIZE = 100;
+const MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED = 500;
+
+type ConversationContextEvent = {
+  id: string;
+  eventType: string;
+  payload: Prisma.JsonValue;
+};
+
+type ConversationLineSource = {
+  role: "User" | "Assistant";
+  text: string;
+};
 
 /** Instruction appended to every session prompt so the AI can set or update the title at any time. */
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
@@ -836,49 +849,128 @@ const BRANCH_TAG_RE = /<trace-branch>([\s\S]*?)<\/trace-branch>/;
  * Used to give a new coding tool context when switching mid-session.
  */
 async function buildConversationContext(sessionId: string): Promise<string | null> {
-  const events = await prisma.event.findMany({
+  const firstEntry = await findFirstConversationContextEntry(sessionId);
+  if (!firstEntry) return null;
+
+  const selectedTail: string[] = [];
+  const maxBodyChars = conversationHistoryBodyBudget();
+  let bodyChars = firstEntry.lines.join("\n\n").length;
+  let omitted = false;
+  let cursorId: string | undefined;
+  let scanned = 0;
+  let reachedFirstEntry = false;
+
+  while (scanned < MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED && !reachedFirstEntry) {
+    const events = await fetchConversationContextEvents(sessionId, "desc", cursorId);
+    if (events.length === 0) break;
+
+    for (const evt of events) {
+      scanned += 1;
+      if (evt.id === firstEntry.eventId) {
+        reachedFirstEntry = true;
+        continue;
+      }
+
+      const lines = conversationLineSourcesFromEvent(evt).map((line) =>
+        formatConversationLine(line.role, line.text),
+      );
+      for (const line of [...lines].reverse()) {
+        const separatorChars = bodyChars > 0 ? 2 : 0;
+        if (bodyChars + separatorChars + line.length > maxBodyChars) {
+          omitted = true;
+          reachedFirstEntry = true;
+          break;
+        }
+        selectedTail.unshift(line);
+        bodyChars += separatorChars + line.length;
+      }
+
+      if (reachedFirstEntry || scanned >= MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) break;
+    }
+
+    cursorId = events.at(-1)?.id;
+  }
+
+  if (!reachedFirstEntry) {
+    omitted = true;
+  }
+
+  return buildBoundedConversationHistory(firstEntry.lines, selectedTail, omitted);
+}
+
+async function fetchConversationContextEvents(
+  sessionId: string,
+  direction: "asc" | "desc",
+  cursorId?: string,
+): Promise<ConversationContextEvent[]> {
+  return prisma.event.findMany({
     where: {
       scopeId: sessionId,
       scopeType: "session",
       eventType: { in: ["session_started", "message_sent", "session_output"] },
     },
-    orderBy: { timestamp: "asc" },
-    select: { eventType: true, payload: true },
+    orderBy: [{ timestamp: direction }, { id: direction }],
+    take: CONVERSATION_CONTEXT_EVENT_PAGE_SIZE,
+    ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+    select: { id: true, eventType: true, payload: true },
   });
+}
 
-  const lines: string[] = [];
+async function findFirstConversationContextEntry(
+  sessionId: string,
+): Promise<{ eventId: string; lines: string[] } | null> {
+  let cursorId: string | undefined;
+  let scanned = 0;
 
-  for (const evt of events) {
-    const payload = evt.payload as Record<string, unknown>;
+  while (scanned < MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) {
+    const events = await fetchConversationContextEvents(sessionId, "asc", cursorId);
+    if (events.length === 0) break;
 
-    if (evt.eventType === "session_started") {
-      const prompt = payload.prompt as string | undefined;
-      if (prompt) lines.push(formatConversationLine("User", prompt, { preserveStart: true }));
-      continue;
-    }
-
-    if (evt.eventType === "message_sent") {
-      const text = payload.text as string | undefined;
-      if (text) lines.push(formatConversationLine("User", text));
-      continue;
-    }
-
-    // Assistant output — extract only text blocks, skip tool calls
-    if (payload.type === "assistant") {
-      const message = payload.message as Record<string, unknown> | undefined;
-      const content = message?.content;
-      if (!Array.isArray(content)) continue;
-      for (const block of content) {
-        const b = block as Record<string, unknown>;
-        if (b.type === "text" && typeof b.text === "string") {
-          lines.push(formatConversationLine("Assistant", b.text));
-        }
+    for (const evt of events) {
+      scanned += 1;
+      const sources = conversationLineSourcesFromEvent(evt);
+      if (sources.length > 0) {
+        return {
+          eventId: evt.id,
+          lines: sources.map((line, index) =>
+            formatConversationLine(line.role, line.text, { preserveStart: index === 0 }),
+          ),
+        };
       }
+      if (scanned >= MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) break;
     }
+
+    cursorId = events.at(-1)?.id;
   }
 
-  if (lines.length === 0) return null;
-  return buildBoundedConversationHistory(lines);
+  return null;
+}
+
+function conversationLineSourcesFromEvent(evt: ConversationContextEvent): ConversationLineSource[] {
+  const payload = evt.payload as Record<string, unknown>;
+
+  if (evt.eventType === "session_started") {
+    return typeof payload.prompt === "string" ? [{ role: "User", text: payload.prompt }] : [];
+  }
+
+  if (evt.eventType === "message_sent") {
+    return typeof payload.text === "string" ? [{ role: "User", text: payload.text }] : [];
+  }
+
+  if (payload.type !== "assistant") return [];
+
+  const message = payload.message as Record<string, unknown> | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content)) return [];
+
+  const lines: ConversationLineSource[] = [];
+  for (const block of content) {
+    const b = block as Record<string, unknown>;
+    if (b.type === "text" && typeof b.text === "string") {
+      lines.push({ role: "Assistant", text: b.text });
+    }
+  }
+  return lines;
 }
 
 function formatConversationLine(
@@ -906,31 +998,25 @@ function clipConversationText(
   return `${marker}${text.slice(text.length - available)}`;
 }
 
-function buildBoundedConversationHistory(lines: string[]): string {
+function conversationHistoryBodyBudget(): number {
   const header =
     "<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n";
   const footer = "\n</conversation-history>";
-  const maxBodyChars = Math.max(0, MAX_CONVERSATION_CONTEXT_CHARS - header.length - footer.length);
-  const firstLine = lines[0];
-  const selectedTail: string[] = [];
-  let bodyChars = firstLine.length;
-  let omitted = 0;
+  return Math.max(0, MAX_CONVERSATION_CONTEXT_CHARS - header.length - footer.length);
+}
 
-  for (let index = lines.length - 1; index >= 1; index -= 1) {
-    const line = lines[index];
-    const separatorChars = bodyChars > 0 ? 2 : 0;
-    if (bodyChars + separatorChars + line.length > maxBodyChars) {
-      omitted = index;
-      break;
-    }
-    selectedTail.unshift(line);
-    bodyChars += separatorChars + line.length;
-  }
-
-  const bodyParts = [firstLine];
-  if (omitted > 0) {
+function buildBoundedConversationHistory(
+  firstLines: string[],
+  selectedTail: string[],
+  omitted: boolean,
+): string {
+  const header =
+    "<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n";
+  const footer = "\n</conversation-history>";
+  const bodyParts = [...firstLines];
+  if (omitted) {
     bodyParts.push(
-      `[Trace omitted ${omitted} middle conversation entries to keep this resume prompt bounded.]`,
+      "[Trace omitted middle conversation entries to keep this resume prompt bounded.]",
     );
   }
   bodyParts.push(...selectedTail);

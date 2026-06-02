@@ -520,6 +520,8 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
   changedFiles: Array<LinkedCheckoutChangedFile>;
+  changedFilesTotalCount: Scalars["Int"]["output"];
+  changedFilesTruncated: Scalars["Boolean"]["output"];
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];
@@ -1258,7 +1260,7 @@ export type Query = {
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
+  sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1983,6 +1985,13 @@ export type User = {
 
 export type UserRole = "admin" | "member" | "observer";
 
+export type WorktreeChangesResult = {
+  __typename?: "WorktreeChangesResult";
+  files: Array<LinkedCheckoutChangedFile>;
+  totalCount: Scalars["Int"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
 export type WithIndex<TObject> = TObject & Record<string, any>;
 export type ResolversObject<TObject> = WithIndex<TObject>;
 
@@ -2194,6 +2203,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
   UserRole: UserRole;
+  WorktreeChangesResult: ResolverTypeWrapper<WorktreeChangesResult>;
 }>;
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -2287,6 +2297,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
+  WorktreeChangesResult: WorktreeChangesResult;
 }>;
 
 export type ActorResolvers<
@@ -2708,6 +2719,8 @@ export type LinkedCheckoutStatusResolvers<
     ParentType,
     ContextType
   >;
+  changedFilesTotalCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  changedFilesTruncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   currentBranch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   currentCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   hasUncommittedChanges?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
@@ -3653,7 +3666,7 @@ export type QueryResolvers<
     RequireFields<QuerySessionGroupFilesArgs, "sessionGroupId">
   >;
   sessionGroupWorktreeChanges?: Resolver<
-    Array<ResolversTypes["LinkedCheckoutChangedFile"]>,
+    ResolversTypes["WorktreeChangesResult"],
     ParentType,
     ContextType,
     RequireFields<QuerySessionGroupWorktreeChangesArgs, "sessionGroupId">
@@ -4115,6 +4128,17 @@ export type UserResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type WorktreeChangesResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["WorktreeChangesResult"] =
+    ResolversParentTypes["WorktreeChangesResult"],
+> = ResolversObject<{
+  files?: Resolver<Array<ResolversTypes["LinkedCheckoutChangedFile"]>, ParentType, ContextType>;
+  totalCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  truncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
   AgentEnvironment?: AgentEnvironmentResolvers<ContextType>;
@@ -4175,4 +4199,5 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   TicketLink?: TicketLinkResolvers<ContextType>;
   Turn?: TurnResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
+  WorktreeChangesResult?: WorktreeChangesResultResolvers<ContextType>;
 }>;

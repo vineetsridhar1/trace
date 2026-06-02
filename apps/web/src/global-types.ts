@@ -64,6 +64,8 @@ declare global {
     restoreCommitSha: string | null;
     hasUncommittedChanges: boolean;
     changedFiles: DesktopLinkedCheckoutChangedFile[];
+    changedFilesTotalCount: number;
+    changedFilesTruncated: boolean;
   };
 
   type DesktopLinkedCheckoutChangedFile = {

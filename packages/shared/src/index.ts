@@ -56,6 +56,7 @@ export type {
   BridgeCommitFileChangesCommand,
   BridgeFileCommitResult,
   BridgeWorktreeChangesCommand,
+  BridgeWorktreeChangesPayload,
   BridgeWorktreeChangesResult,
   BridgeRevertWorktreeFileCommand,
   BridgeRevertWorktreeFileResult,

@@ -702,6 +702,8 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveWorktreeChangesRequest(
           msg.requestId,
           files,
+          typeof msg.totalCount === "number" ? msg.totalCount : files.length,
+          msg.truncated === true,
           typeof msg.error === "string" ? msg.error : undefined,
           runtimeKey,
         );
