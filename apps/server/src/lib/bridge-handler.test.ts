@@ -192,6 +192,42 @@ describe("bridge handler auth", () => {
     expect(mocks.addRegisteredRepoToLocalRuntime).not.toHaveBeenCalled();
   });
 
+  it("registers antigravity as a supported local bridge tool", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
+      id: "bridge-owned",
+      label: "Laptop",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      hostingMode: "local",
+      supportedTools: ["antigravity"],
+      registeredRepoIds: [],
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "bridge-owned",
+          supportedTools: ["antigravity"],
+        }),
+      );
+    });
+    expect(ws.close).not.toHaveBeenCalled();
+  });
+
   it("restores only active terminals that include an owner", async () => {
     const ws = createMockWs();
     mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
