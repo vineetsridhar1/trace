@@ -202,15 +202,16 @@ describe("coding tool adapter process exit fallback", () => {
       "claude",
       [
         "-p",
+        "--input-format",
+        "text",
         "--output-format",
         "stream-json",
         "--verbose",
         "--dangerously-skip-permissions",
-        "--",
-        "- fix this bug",
       ],
-      expect.objectContaining({ cwd: "/tmp" }),
+      expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
     );
+    expect(spawnedChildren[0].stdin.read()?.toString()).toBe("- fix this bug");
 
     new CodexAdapter().run({
       prompt: "- fix this bug",
@@ -220,9 +221,10 @@ describe("coding tool adapter process exit fallback", () => {
     });
     expect(spawn).toHaveBeenLastCalledWith(
       "codex",
-      ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--", "- fix this bug"],
-      expect.objectContaining({ cwd: "/tmp" }),
+      ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-"],
+      expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
     );
+    expect(spawnedChildren[1].stdin.read()?.toString()).toBe("- fix this bug");
 
     new PiAdapter().run({
       prompt: "- fix this bug",
