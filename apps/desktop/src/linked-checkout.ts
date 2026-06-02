@@ -112,6 +112,7 @@ const LINKED_CHECKOUT_REBASE_STASH_MESSAGE = "Trace linked checkout rebase";
 const LINKED_CHECKOUT_SYNC_STASH_MESSAGE = "Trace linked checkout stash";
 const LINKED_CHECKOUT_DIFF_PREVIEW_LIMIT = 120_000;
 const LINKED_CHECKOUT_CONTENT_PREVIEW_LIMIT = 300_000;
+const LINKED_CHECKOUT_STATUS_FILE_LIMIT = 200;
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
   return runGit(repoPath, ["rev-parse", "HEAD"]);
@@ -370,7 +371,7 @@ async function listChangedFiles(repoPath: string): Promise<BridgeLinkedCheckoutC
   const untrackedPathSet = new Set(untrackedPaths);
 
   return Promise.all(
-    changedPaths.map(async (relativePath) => {
+    changedPaths.slice(0, LINKED_CHECKOUT_STATUS_FILE_LIMIT).map(async (relativePath) => {
       const untracked = untrackedPathSet.has(relativePath);
 
       return {
