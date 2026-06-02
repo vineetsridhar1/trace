@@ -888,11 +888,9 @@ function formatConversationLine(role: "User" | "Assistant", text: string): strin
 function clipConversationText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
 
-  const marker = `\n\n[Trace clipped ${text.length - maxChars} characters from this transcript entry.]\n\n`;
+  const marker = `\n\n[Trace clipped earlier content from this transcript entry.]\n\n`;
   const available = Math.max(0, maxChars - marker.length);
-  const headChars = Math.ceil(available / 2);
-  const tailChars = Math.floor(available / 2);
-  return `${text.slice(0, headChars)}${marker}${text.slice(text.length - tailChars)}`;
+  return `${marker}${text.slice(text.length - available)}`;
 }
 
 function buildBoundedConversationHistory(lines: string[]): string {

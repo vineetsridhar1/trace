@@ -4391,7 +4391,7 @@ describe("SessionService", () => {
                   type: "text",
                   text: `${index === 15 ? "latest-final" : `entry-${index}`} ${"x".repeat(
                     20_000,
-                  )}`,
+                  )} ${index === 15 ? "latest-final-tail" : `entry-${index}-tail`}`,
                 },
               ],
             },
@@ -4412,8 +4412,9 @@ describe("SessionService", () => {
         | undefined;
       expect(sendCommand?.prompt?.length).toBeLessThan(110_000);
       expect(sendCommand?.prompt).toContain("Trace omitted");
-      expect(sendCommand?.prompt).toContain("Trace clipped");
-      expect(sendCommand?.prompt).toContain("latest-final");
+      expect(sendCommand?.prompt).toContain("Trace clipped earlier content");
+      expect(sendCommand?.prompt).not.toContain("latest-final ");
+      expect(sendCommand?.prompt).toContain("latest-final-tail");
     });
 
     it("ignores recovery from an old bridge process after a new tool id is stored", async () => {
