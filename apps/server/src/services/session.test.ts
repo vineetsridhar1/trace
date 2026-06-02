@@ -4411,8 +4411,10 @@ describe("SessionService", () => {
         | { prompt?: string }
         | undefined;
       expect(sendCommand?.prompt?.length).toBeLessThan(110_000);
+      expect(sendCommand?.prompt).toContain("[User]: Initial task");
       expect(sendCommand?.prompt).toContain("Trace omitted");
       expect(sendCommand?.prompt).toContain("Trace clipped earlier content");
+      expect(sendCommand?.prompt).not.toContain("entry-0-tail");
       expect(sendCommand?.prompt).not.toContain("latest-final ");
       expect(sendCommand?.prompt).toContain("latest-final-tail");
     });

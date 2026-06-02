@@ -853,7 +853,7 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
 
     if (evt.eventType === "session_started") {
       const prompt = payload.prompt as string | undefined;
-      if (prompt) lines.push(formatConversationLine("User", prompt));
+      if (prompt) lines.push(formatConversationLine("User", prompt, { preserveStart: true }));
       continue;
     }
 
@@ -881,15 +881,28 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
   return buildBoundedConversationHistory(lines);
 }
 
-function formatConversationLine(role: "User" | "Assistant", text: string): string {
-  return clipConversationText(`[${role}]: ${text}`, MAX_CONVERSATION_CONTEXT_ENTRY_CHARS);
+function formatConversationLine(
+  role: "User" | "Assistant",
+  text: string,
+  options?: { preserveStart?: boolean },
+): string {
+  return clipConversationText(`[${role}]: ${text}`, MAX_CONVERSATION_CONTEXT_ENTRY_CHARS, options);
 }
 
-function clipConversationText(text: string, maxChars: number): string {
+function clipConversationText(
+  text: string,
+  maxChars: number,
+  options?: { preserveStart?: boolean },
+): string {
   if (text.length <= maxChars) return text;
 
-  const marker = `\n\n[Trace clipped earlier content from this transcript entry.]\n\n`;
+  const marker = options?.preserveStart
+    ? `\n\n[Trace clipped later content from this transcript entry.]\n\n`
+    : `\n\n[Trace clipped earlier content from this transcript entry.]\n\n`;
   const available = Math.max(0, maxChars - marker.length);
+  if (options?.preserveStart) {
+    return `${text.slice(0, available)}${marker}`;
+  }
   return `${marker}${text.slice(text.length - available)}`;
 }
 
@@ -898,26 +911,30 @@ function buildBoundedConversationHistory(lines: string[]): string {
     "<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n";
   const footer = "\n</conversation-history>";
   const maxBodyChars = Math.max(0, MAX_CONVERSATION_CONTEXT_CHARS - header.length - footer.length);
-  const selected: string[] = [];
-  let bodyChars = 0;
+  const firstLine = lines[0];
+  const selectedTail: string[] = [];
+  let bodyChars = firstLine.length;
   let omitted = 0;
 
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
+  for (let index = lines.length - 1; index >= 1; index -= 1) {
     const line = lines[index];
-    const separatorChars = selected.length > 0 ? 2 : 0;
+    const separatorChars = bodyChars > 0 ? 2 : 0;
     if (bodyChars + separatorChars + line.length > maxBodyChars) {
-      omitted = index + 1;
+      omitted = index;
       break;
     }
-    selected.unshift(line);
+    selectedTail.unshift(line);
     bodyChars += separatorChars + line.length;
   }
 
-  const omissionNotice =
-    omitted > 0
-      ? `[Trace omitted ${omitted} older conversation entries to keep this resume prompt bounded.]\n\n`
-      : "";
-  return `${header}${omissionNotice}${selected.join("\n\n")}${footer}`;
+  const bodyParts = [firstLine];
+  if (omitted > 0) {
+    bodyParts.push(
+      `[Trace omitted ${omitted} middle conversation entries to keep this resume prompt bounded.]`,
+    );
+  }
+  bodyParts.push(...selectedTail);
+  return `${header}${bodyParts.join("\n\n")}${footer}`;
 }
 
 function buildMigrationPrompt(sourceGitStatusVerified: boolean): string {
