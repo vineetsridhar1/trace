@@ -767,6 +767,8 @@ function gitCheckpointIdFromPayload(value: unknown): string | null {
 
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
 const MAX_SESSION_NAME_LENGTH = 80;
+const MAX_CONVERSATION_CONTEXT_CHARS = 96 * 1024;
+const MAX_CONVERSATION_CONTEXT_ENTRY_CHARS = 12 * 1024;
 
 /** Instruction appended to every session prompt so the AI can set or update the title at any time. */
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
@@ -841,6 +843,7 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
       eventType: { in: ["session_started", "message_sent", "session_output"] },
     },
     orderBy: { timestamp: "asc" },
+    select: { eventType: true, payload: true },
   });
 
   const lines: string[] = [];
@@ -850,13 +853,13 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
 
     if (evt.eventType === "session_started") {
       const prompt = payload.prompt as string | undefined;
-      if (prompt) lines.push(`[User]: ${prompt}`);
+      if (prompt) lines.push(formatConversationLine("User", prompt));
       continue;
     }
 
     if (evt.eventType === "message_sent") {
       const text = payload.text as string | undefined;
-      if (text) lines.push(`[User]: ${text}`);
+      if (text) lines.push(formatConversationLine("User", text));
       continue;
     }
 
@@ -868,14 +871,55 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
       for (const block of content) {
         const b = block as Record<string, unknown>;
         if (b.type === "text" && typeof b.text === "string") {
-          lines.push(`[Assistant]: ${b.text}`);
+          lines.push(formatConversationLine("Assistant", b.text));
         }
       }
     }
   }
 
   if (lines.length === 0) return null;
-  return `<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n${lines.join("\n\n")}\n</conversation-history>`;
+  return buildBoundedConversationHistory(lines);
+}
+
+function formatConversationLine(role: "User" | "Assistant", text: string): string {
+  return clipConversationText(`[${role}]: ${text}`, MAX_CONVERSATION_CONTEXT_ENTRY_CHARS);
+}
+
+function clipConversationText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+
+  const marker = `\n\n[Trace clipped ${text.length - maxChars} characters from this transcript entry.]\n\n`;
+  const available = Math.max(0, maxChars - marker.length);
+  const headChars = Math.ceil(available / 2);
+  const tailChars = Math.floor(available / 2);
+  return `${text.slice(0, headChars)}${marker}${text.slice(text.length - tailChars)}`;
+}
+
+function buildBoundedConversationHistory(lines: string[]): string {
+  const header =
+    "<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n";
+  const footer = "\n</conversation-history>";
+  const maxBodyChars = Math.max(0, MAX_CONVERSATION_CONTEXT_CHARS - header.length - footer.length);
+  const selected: string[] = [];
+  let bodyChars = 0;
+  let omitted = 0;
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    const separatorChars = selected.length > 0 ? 2 : 0;
+    if (bodyChars + separatorChars + line.length > maxBodyChars) {
+      omitted = index + 1;
+      break;
+    }
+    selected.unshift(line);
+    bodyChars += separatorChars + line.length;
+  }
+
+  const omissionNotice =
+    omitted > 0
+      ? `[Trace omitted ${omitted} older conversation entries to keep this resume prompt bounded.]\n\n`
+      : "";
+  return `${header}${omissionNotice}${selected.join("\n\n")}${footer}`;
 }
 
 function buildMigrationPrompt(sourceGitStatusVerified: boolean): string {

@@ -4360,6 +4360,62 @@ describe("SessionService", () => {
       );
     });
 
+    it("clips long recovery conversation history before sending it to the runtime", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "active",
+          workdir: "/tmp/worktree",
+          toolSessionId: "stale-tool-session",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
+        },
+        ...Array.from({ length: 16 }, (_value, index) => ({
+          eventType: "session_output",
+          payload: {
+            type: "assistant",
+            message: {
+              content: [
+                {
+                  type: "text",
+                  text: `${index === 15 ? "latest-final" : `entry-${index}`} ${"x".repeat(
+                    20_000,
+                  )}`,
+                },
+              ],
+            },
+          },
+        })),
+      ]);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "event-message-1" });
+      sessionRouterMock.send.mockReturnValueOnce("delivered");
+
+      await service.recoverMissingToolSession("session-1", {
+        toolSessionId: "stale-tool-session",
+        message: "No conversation found with session ID stale-tool-session",
+        interactionMode: "code",
+      });
+
+      const sendCommand = sessionRouterMock.send.mock.calls[0]?.[1] as
+        | { prompt?: string }
+        | undefined;
+      expect(sendCommand?.prompt?.length).toBeLessThan(110_000);
+      expect(sendCommand?.prompt).toContain("Trace omitted");
+      expect(sendCommand?.prompt).toContain("Trace clipped");
+      expect(sendCommand?.prompt).toContain("latest-final");
+    });
+
     it("ignores recovery from an old bridge process after a new tool id is stored", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(
         makeSession({
