@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { AgentEnvironment, Repo } from "@trace/gql";
+import type { AgentEnvironment, OrgSecret, Repo } from "@trace/gql";
 import { useAuthStore, useEntityIds, useEntityStore } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
 import { client } from "../../lib/urql";
@@ -22,6 +22,7 @@ export function useAgentEnvironmentsSettings() {
   const environmentsById = useEntityStore((s) => s.agentEnvironments);
   const [loading, setLoading] = useState(true);
   const [localBridges, setLocalBridges] = useState<LocalBridgeSummary[]>([]);
+  const [orgSecrets, setOrgSecrets] = useState<OrgSecret[]>([]);
   const [editingEnvironmentId, setEditingEnvironmentId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export function useAgentEnvironmentsSettings() {
           [],
       );
       upsertMany("repos", (result.data?.repos as Array<Repo & { id: string }> | undefined) ?? []);
+      setOrgSecrets((result.data?.orgSecrets as OrgSecret[] | undefined) ?? []);
       setLocalBridges(parseLocalBridges(result.data?.myConnections));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load agent environments");
@@ -124,6 +126,7 @@ export function useAgentEnvironmentsSettings() {
     formOpen,
     loading,
     localBridges,
+    orgSecrets,
     pendingActionId,
     setFormOpen,
     testResults,

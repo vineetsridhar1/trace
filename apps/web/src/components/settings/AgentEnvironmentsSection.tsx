@@ -3,6 +3,7 @@ import { Button } from "../ui/button";
 import { AgentEnvironmentForm } from "./AgentEnvironmentForm";
 import { AgentEnvironmentLocalBridgeList } from "./AgentEnvironmentLocalBridgeList";
 import { AgentEnvironmentRow } from "./AgentEnvironmentRow";
+import { AgentEnvironmentSecretsPanel } from "./AgentEnvironmentSecretsPanel";
 import { useAgentEnvironmentsSettings } from "./useAgentEnvironmentsSettings";
 
 export function AgentEnvironmentsSection() {
@@ -33,6 +34,14 @@ export function AgentEnvironmentsSection() {
       ) : (
         <>
           <AgentEnvironmentLocalBridgeList localBridges={settings.localBridges} />
+
+          {settings.activeOrgId ? (
+            <AgentEnvironmentSecretsPanel
+              organizationId={settings.activeOrgId}
+              orgSecrets={settings.orgSecrets}
+              onSaved={() => void settings.fetchSettings()}
+            />
+          ) : null}
 
           <section className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
