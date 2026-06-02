@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { BridgeAccessCapability } from "@trace/gql";
-import { isCloudMachineRuntimeId } from "@trace/shared";
+import { isProvisionedRuntimeId } from "@trace/shared";
 
 type BridgeUser = {
   id: string;
@@ -53,7 +53,7 @@ export function bridgeAccessStoreKey(
 }
 
 export function buildFallbackBridgeAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo {
-  const hostingMode = isCloudMachineRuntimeId(runtimeInstanceId) ? "cloud" : "local";
+  const hostingMode = isProvisionedRuntimeId(runtimeInstanceId) ? "cloud" : "local";
   const allowed = hostingMode !== "local";
 
   return {

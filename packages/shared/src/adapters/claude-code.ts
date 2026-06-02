@@ -4,6 +4,7 @@ import { resolve } from "path";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
 import { parseQuestion } from "./coding-tool.js";
+import { buildChildProcessEnv } from "./spawn-env.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
@@ -43,7 +44,14 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const args = ["-p", "--output-format", "stream-json", "--verbose"];
+    const args = [
+      "-p",
+      "--input-format",
+      "text",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+    ];
     if (model) {
       args.push("--model", model);
     }
@@ -58,15 +66,16 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
-    args.push("--", prompt);
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("claude", args, {
       cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      stdio: ["pipe", "pipe", "pipe"],
+      env: buildChildProcessEnv(),
       detached: true,
     });
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(prompt);
     this.process = child;
 
     // Track process exit code so readline close handler can emit a fallback result

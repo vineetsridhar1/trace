@@ -306,6 +306,14 @@ type AgentEnvironmentTestResult {
   message: String
 }
 
+type OrgSecret {
+  id: ID!
+  orgId: ID!
+  name: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 type OrgMember {
   user: User!
   organization: Organization!
@@ -774,6 +782,13 @@ type BranchDiffFile {
   deletions: Int!
 }
 
+type SessionGroupFileContentResult {
+  content: String!
+  ref: String!
+  requestedRef: String!
+  usedFallback: Boolean!
+}
+
 type Notification {
   id: ID!
   type: String!
@@ -1005,12 +1020,19 @@ input UpdateAgentEnvironmentInput {
   isDefault: Boolean
 }
 
+input SetOrgSecretInput {
+  orgId: ID!
+  name: String!
+  value: String!
+}
+
 # --- Queries ---
 
 type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
+  orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!
@@ -1071,6 +1093,10 @@ type Query {
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
+  sessionGroupFileContentWithSource(
+    sessionGroupId: ID!
+    filePath: String!
+  ): SessionGroupFileContentResult!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(
@@ -1084,7 +1110,7 @@ type Query {
     filePath: String!
     runtimeInstanceId: ID
   ): LinkedCheckoutChangedFile!
-  sessionGroupWorktreeChanges(sessionGroupId: ID!): [LinkedCheckoutChangedFile!]!
+  sessionGroupWorktreeChanges(sessionGroupId: ID!): WorktreeChangesResult!
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
@@ -1125,6 +1151,8 @@ type LinkedCheckoutStatus {
   restoreCommitSha: String
   hasUncommittedChanges: Boolean!
   changedFiles: [LinkedCheckoutChangedFile!]!
+  changedFilesTotalCount: Int!
+  changedFilesTruncated: Boolean!
 }
 
 type LinkedCheckoutChangedFile {
@@ -1137,6 +1165,12 @@ type LinkedCheckoutChangedFile {
   originalContent: String!
   modifiedContent: String!
   contentTruncated: Boolean!
+}
+
+type WorktreeChangesResult {
+  files: [LinkedCheckoutChangedFile!]!
+  totalCount: Int!
+  truncated: Boolean!
 }
 
 type LinkedCheckoutActionResult {
@@ -1158,6 +1192,8 @@ type Mutation {
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
   deleteAgentEnvironment(id: ID!): Boolean!
   testAgentEnvironment(id: ID!): AgentEnvironmentTestResult!
+  setOrgSecret(input: SetOrgSecretInput!): OrgSecret!
+  deleteOrgSecret(orgId: ID!, id: ID!): Boolean!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
   addChannelMember(input: AddChannelMemberInput!): Channel!

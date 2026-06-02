@@ -139,13 +139,6 @@ enum ParticipantScope {
   system
 }
 
-enum CloudMachineStatus {
-  creating
-  started
-  stopped
-  destroyed
-}
-
 enum AiConversationVisibility {
   PRIVATE
   ORG
@@ -245,7 +238,7 @@ model Organization {
   events        Event[]
   inboxItems    InboxItem[]
   agentEnvironments AgentEnvironment[]
-  cloudMachines CloudMachine[]
+  orgSecrets    OrgSecret[]
   aiConversations  AiConversation[]
   slackInstalls SlackInstall[]
   slackChannelBindings SlackChannelBinding[]
@@ -283,6 +276,21 @@ model AgentEnvironment {
   @@index([organizationId, adapterType])
 }
 
+model OrgSecret {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  encryptedValue String
+  iv             String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
 model User {
   id             String       @id @default(uuid())
   email          String       @unique
@@ -314,7 +322,6 @@ model User {
   participants         Participant[]
   apiTokens         ApiToken[]
   pushTokens        PushToken[]
-  cloudMachines     CloudMachine[]
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
   queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
@@ -683,25 +690,6 @@ model GitCheckpoint {
   @@index([sessionGroupId, committedAt])
   @@index([repoId, committedAt])
   @@index([promptEventId])
-}
-
-model CloudMachine {
-  id                String             @id @default(uuid())
-  provider          String             // "fly", "aws", etc.
-  providerMachineId String
-  userId            String
-  user              User               @relation(fields: [userId], references: [id])
-  organizationId    String
-  organization      Organization       @relation(fields: [organizationId], references: [id])
-  status            CloudMachineStatus @default(creating)
-  bridgeToken       String             @unique
-  runtimeInstanceId String             @unique
-  providerMetadata  Json?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-
-  @@unique([userId, organizationId])
-  @@index([status])
 }
 
 model BridgeRuntime {

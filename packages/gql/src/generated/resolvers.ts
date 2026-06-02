@@ -516,6 +516,8 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
   changedFiles: Array<LinkedCheckoutChangedFile>;
+  changedFilesTotalCount: Scalars["Int"]["output"];
+  changedFilesTruncated: Scalars["Boolean"]["output"];
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];
@@ -585,6 +587,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -629,6 +632,7 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
+  setOrgSecret: OrgSecret;
   startSession: Session;
   steerQueuedMessage: Event;
   subscribe: Participant;
@@ -775,6 +779,11 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteOrgSecretArgs = {
+  id: Scalars["ID"]["input"];
+  orgId: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -1002,6 +1011,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSetOrgSecretArgs = {
+  input: SetOrgSecretInput;
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1142,6 +1155,15 @@ export type OrgMember = {
   user: User;
 };
 
+export type OrgSecret = {
+  __typename?: "OrgSecret";
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type Organization = {
   __typename?: "Organization";
   agentEnvironments: Array<AgentEnvironment>;
@@ -1211,6 +1233,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
@@ -1226,8 +1249,9 @@ export type Query = {
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
+  sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
+  sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1345,6 +1369,10 @@ export type QueryMySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryOrgSecretsArgs = {
+  orgId: Scalars["ID"]["input"];
+};
+
 export type QueryOrganizationArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1413,6 +1441,11 @@ export type QuerySessionGroupFileAtRefArgs = {
 };
 
 export type QuerySessionGroupFileContentArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -1641,6 +1674,14 @@ export type SessionGroup = {
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
 
+export type SessionGroupFileContentResult = {
+  __typename?: "SessionGroupFileContentResult";
+  content: Scalars["String"]["output"];
+  ref: Scalars["String"]["output"];
+  requestedRef: Scalars["String"]["output"];
+  usedFallback: Scalars["Boolean"]["output"];
+};
+
 export type SessionGroupStatus =
   | "archived"
   | "failed"
@@ -1703,6 +1744,12 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetOrgSecretInput = {
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+  value: Scalars["String"]["input"];
 };
 
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
@@ -1929,6 +1976,13 @@ export type User = {
 
 export type UserRole = "admin" | "member" | "observer";
 
+export type WorktreeChangesResult = {
+  __typename?: "WorktreeChangesResult";
+  files: Array<LinkedCheckoutChangedFile>;
+  totalCount: Scalars["Int"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
+
 export type WithIndex<TObject> = TObject & Record<string, any>;
 export type ResolversObject<TObject> = WithIndex<TObject>;
 
@@ -2082,6 +2136,7 @@ export type ResolversTypes = ResolversObject<{
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
   OrgMember: ResolverTypeWrapper<OrgMember>;
+  OrgSecret: ResolverTypeWrapper<OrgSecret>;
   Organization: ResolverTypeWrapper<Organization>;
   Participant: ResolverTypeWrapper<Participant>;
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
@@ -2101,6 +2156,7 @@ export type ResolversTypes = ResolversObject<{
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
+  SessionGroupFileContentResult: ResolverTypeWrapper<SessionGroupFileContentResult>;
   SessionGroupStatus: SessionGroupStatus;
   SessionGroupVisibility: SessionGroupVisibility;
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
@@ -2112,6 +2168,7 @@ export type ResolversTypes = ResolversObject<{
   SessionTimelineMode: SessionTimelineMode;
   SessionTimelinePage: ResolverTypeWrapper<SessionTimelinePage>;
   SetApiTokenInput: SetApiTokenInput;
+  SetOrgSecretInput: SetOrgSecretInput;
   SetupStatus: SetupStatus;
   SlashCommand: ResolverTypeWrapper<SlashCommand>;
   SlashCommandCategory: SlashCommandCategory;
@@ -2136,6 +2193,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
   UserRole: UserRole;
+  WorktreeChangesResult: ResolverTypeWrapper<WorktreeChangesResult>;
 }>;
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -2186,6 +2244,7 @@ export type ResolversParentTypes = ResolversObject<{
   Mutation: {};
   Notification: Notification;
   OrgMember: OrgMember;
+  OrgSecret: OrgSecret;
   Organization: Organization;
   Participant: Participant;
   PortEndpoint: PortEndpoint;
@@ -2201,12 +2260,14 @@ export type ResolversParentTypes = ResolversObject<{
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
+  SessionGroupFileContentResult: SessionGroupFileContentResult;
   SessionPromptIndexItem: SessionPromptIndexItem;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
   SessionTimelineItem: SessionTimelineItem;
   SessionTimelinePage: SessionTimelinePage;
   SetApiTokenInput: SetApiTokenInput;
+  SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
@@ -2225,6 +2286,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
+  WorktreeChangesResult: WorktreeChangesResult;
 }>;
 
 export type ActorResolvers<
@@ -2646,6 +2708,8 @@ export type LinkedCheckoutStatusResolvers<
     ParentType,
     ContextType
   >;
+  changedFilesTotalCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  changedFilesTruncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   currentBranch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   currentCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   hasUncommittedChanges?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
@@ -2845,6 +2909,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationDeleteChatMessageArgs, "messageId">
+  >;
+  deleteOrgSecret?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDeleteOrgSecretArgs, "id" | "orgId">
   >;
   deleteSession?: Resolver<
     ResolversTypes["Session"],
@@ -3110,6 +3180,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationSetLinkedCheckoutAutoSyncArgs, "enabled" | "repoId" | "sessionGroupId">
   >;
+  setOrgSecret?: Resolver<
+    ResolversTypes["OrgSecret"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSetOrgSecretArgs, "input">
+  >;
   startSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -3275,6 +3351,18 @@ export type OrgMemberResolvers<
   organization?: Resolver<ResolversTypes["Organization"], ParentType, ContextType>;
   role?: Resolver<ResolversTypes["UserRole"], ParentType, ContextType>;
   user?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type OrgSecretResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["OrgSecret"] = ResolversParentTypes["OrgSecret"],
+> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  orgId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3452,6 +3540,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryMySessionsArgs, "organizationId">
   >;
+  orgSecrets?: Resolver<
+    Array<ResolversTypes["OrgSecret"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryOrgSecretsArgs, "orgId">
+  >;
   organization?: Resolver<
     Maybe<ResolversTypes["Organization"]>,
     ParentType,
@@ -3542,6 +3636,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionGroupFileContentArgs, "filePath" | "sessionGroupId">
   >;
+  sessionGroupFileContentWithSource?: Resolver<
+    ResolversTypes["SessionGroupFileContentResult"],
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionGroupFileContentWithSourceArgs, "filePath" | "sessionGroupId">
+  >;
   sessionGroupFiles?: Resolver<
     Array<ResolversTypes["String"]>,
     ParentType,
@@ -3549,7 +3649,7 @@ export type QueryResolvers<
     RequireFields<QuerySessionGroupFilesArgs, "sessionGroupId">
   >;
   sessionGroupWorktreeChanges?: Resolver<
-    Array<ResolversTypes["LinkedCheckoutChangedFile"]>,
+    ResolversTypes["WorktreeChangesResult"],
     ParentType,
     ContextType,
     RequireFields<QuerySessionGroupWorktreeChangesArgs, "sessionGroupId">
@@ -3748,6 +3848,18 @@ export type SessionGroupResolvers<
   visibility?: Resolver<ResolversTypes["SessionGroupVisibility"], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   worktreeDeleted?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionGroupFileContentResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionGroupFileContentResult"] =
+    ResolversParentTypes["SessionGroupFileContentResult"],
+> = ResolversObject<{
+  content?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  ref?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  requestedRef?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  usedFallback?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3999,6 +4111,17 @@ export type UserResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type WorktreeChangesResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["WorktreeChangesResult"] =
+    ResolversParentTypes["WorktreeChangesResult"],
+> = ResolversObject<{
+  files?: Resolver<Array<ResolversTypes["LinkedCheckoutChangedFile"]>, ParentType, ContextType>;
+  totalCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  truncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
   AgentEnvironment?: AgentEnvironmentResolvers<ContextType>;
@@ -4032,6 +4155,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;
+  OrgSecret?: OrgSecretResolvers<ContextType>;
   Organization?: OrganizationResolvers<ContextType>;
   Participant?: ParticipantResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;
@@ -4043,6 +4167,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
+  SessionGroupFileContentResult?: SessionGroupFileContentResultResolvers<ContextType>;
   SessionPromptIndexItem?: SessionPromptIndexItemResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;
@@ -4057,4 +4182,5 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   TicketLink?: TicketLinkResolvers<ContextType>;
   Turn?: TurnResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
+  WorktreeChangesResult?: WorktreeChangesResultResolvers<ContextType>;
 }>;

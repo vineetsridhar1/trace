@@ -513,6 +513,8 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
   changedFiles: Array<LinkedCheckoutChangedFile>;
+  changedFilesTotalCount: Scalars["Int"]["output"];
+  changedFilesTruncated: Scalars["Boolean"]["output"];
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];
@@ -582,6 +584,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -626,6 +629,7 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
+  setOrgSecret: OrgSecret;
   startSession: Session;
   steerQueuedMessage: Event;
   subscribe: Participant;
@@ -772,6 +776,11 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteOrgSecretArgs = {
+  id: Scalars["ID"]["input"];
+  orgId: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -999,6 +1008,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSetOrgSecretArgs = {
+  input: SetOrgSecretInput;
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1139,6 +1152,15 @@ export type OrgMember = {
   user: User;
 };
 
+export type OrgSecret = {
+  __typename?: "OrgSecret";
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type Organization = {
   __typename?: "Organization";
   agentEnvironments: Array<AgentEnvironment>;
@@ -1208,6 +1230,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
@@ -1223,8 +1246,9 @@ export type Query = {
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
+  sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
+  sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1342,6 +1366,10 @@ export type QueryMySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryOrgSecretsArgs = {
+  orgId: Scalars["ID"]["input"];
+};
+
 export type QueryOrganizationArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1410,6 +1438,11 @@ export type QuerySessionGroupFileAtRefArgs = {
 };
 
 export type QuerySessionGroupFileContentArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -1638,6 +1671,14 @@ export type SessionGroup = {
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
 
+export type SessionGroupFileContentResult = {
+  __typename?: "SessionGroupFileContentResult";
+  content: Scalars["String"]["output"];
+  ref: Scalars["String"]["output"];
+  requestedRef: Scalars["String"]["output"];
+  usedFallback: Scalars["Boolean"]["output"];
+};
+
 export type SessionGroupStatus =
   | "archived"
   | "failed"
@@ -1700,6 +1741,12 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetOrgSecretInput = {
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+  value: Scalars["String"]["input"];
 };
 
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
@@ -1925,3 +1972,10 @@ export type User = {
 };
 
 export type UserRole = "admin" | "member" | "observer";
+
+export type WorktreeChangesResult = {
+  __typename?: "WorktreeChangesResult";
+  files: Array<LinkedCheckoutChangedFile>;
+  totalCount: Scalars["Int"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};

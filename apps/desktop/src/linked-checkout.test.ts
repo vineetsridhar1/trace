@@ -621,6 +621,28 @@ describe("linked checkout commit-back", () => {
     expect(preview.contentTruncated).toBe(false);
   }, 15_000);
 
+  it("caps dirty-root status files so a large untracked checkout does not flood the app", async () => {
+    const { repoPath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    for (let index = 0; index < 250; index += 1) {
+      fs.writeFileSync(path.join(repoPath, `scratch-${index}.txt`), "temp\n");
+    }
+
+    const status = await getLinkedCheckoutStatus("repo-1");
+
+    expect(status.hasUncommittedChanges).toBe(true);
+    expect(status.changedFiles).toHaveLength(200);
+    expect(status.changedFilesTotalCount).toBe(250);
+    expect(status.changedFilesTruncated).toBe(true);
+    expect(status.changedFiles[0]).toMatchObject({
+      status: "A",
+      additions: 0,
+      deletions: 0,
+      truncated: false,
+    });
+  }, 15_000);
+
   it("does not pause the attachment when sync stops for conflict resolution", async () => {
     const { repoPath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);

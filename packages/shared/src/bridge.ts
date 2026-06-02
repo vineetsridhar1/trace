@@ -419,6 +419,8 @@ export interface BridgeLinkedCheckoutStatus {
   restoreCommitSha: string | null;
   hasUncommittedChanges: boolean;
   changedFiles: BridgeLinkedCheckoutChangedFile[];
+  changedFilesTotalCount: number;
+  changedFilesTruncated: boolean;
 }
 
 export interface BridgeLinkedCheckoutChangedFile {
@@ -434,6 +436,12 @@ export interface BridgeLinkedCheckoutChangedFile {
 }
 
 export type BridgeLinkedCheckoutChangedFilePreview = BridgeLinkedCheckoutChangedFile;
+
+export interface BridgeWorktreeChangesPayload {
+  files: BridgeLinkedCheckoutChangedFile[];
+  totalCount: number;
+  truncated: boolean;
+}
 
 export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
 
@@ -552,6 +560,8 @@ export interface BridgeWorktreeChangesResult {
   type: "worktree_changes_result";
   requestId: string;
   files: BridgeLinkedCheckoutChangedFile[];
+  totalCount: number;
+  truncated: boolean;
   error?: string;
 }
 
@@ -681,6 +691,8 @@ export const WALK_IGNORE = new Set([
 ]);
 export const MAX_FILE_VIEW_BYTES = 512 * 1024;
 const MAX_WORKTREE_CHANGE_FILES = 200;
+const MAX_WORKTREE_CHANGE_FIELD_BYTES = 64 * 1024;
+const MAX_WORKTREE_CHANGES_PAYLOAD_BYTES = 512 * 1024;
 const BINARY_DETECTION_SAMPLE_BYTES = 8 * 1024;
 
 /**
@@ -1002,6 +1014,8 @@ export async function handleWorktreeChanges(
       type: "worktree_changes_result",
       requestId: cmd.requestId,
       files: [],
+      totalCount: 0,
+      truncated: false,
       error: `No workdir known for session ${cmd.sessionId}`,
     });
     return;
@@ -1011,17 +1025,33 @@ export async function handleWorktreeChanges(
     const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
     const status = await deps.gitExec(["status", "--porcelain=v1", "-z"], realWorkdir);
     const paths = parseWorktreeStatus(status);
-    const files = await Promise.all(
-      paths
-        .slice(0, MAX_WORKTREE_CHANGE_FILES)
-        .map((entry) => buildWorktreeChangedFile(entry, realWorkdir, deps)),
-    );
-    send({ type: "worktree_changes_result", requestId: cmd.requestId, files });
+    const files: BridgeLinkedCheckoutChangedFile[] = [];
+    let payloadBytes = 0;
+    let truncated = paths.length > MAX_WORKTREE_CHANGE_FILES;
+    for (const entry of paths.slice(0, MAX_WORKTREE_CHANGE_FILES)) {
+      const file = await buildWorktreeChangedFile(entry, realWorkdir, deps);
+      const fileBytes = changedFilePayloadBytes(file);
+      if (files.length > 0 && payloadBytes + fileBytes > MAX_WORKTREE_CHANGES_PAYLOAD_BYTES) {
+        truncated = true;
+        break;
+      }
+      files.push(file);
+      payloadBytes += fileBytes;
+    }
+    send({
+      type: "worktree_changes_result",
+      requestId: cmd.requestId,
+      files,
+      totalCount: paths.length,
+      truncated,
+    });
   } catch (err) {
     send({
       type: "worktree_changes_result",
       requestId: cmd.requestId,
       files: [],
+      totalCount: 0,
+      truncated: false,
       error: err instanceof Error ? err.message : "Failed to load worktree changes",
     });
   }
@@ -1098,15 +1128,23 @@ async function buildWorktreeChangedFile(
   deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
 ): Promise<BridgeLinkedCheckoutChangedFile> {
   const originalRaw = await deps.gitExec(["show", `HEAD:${entry.path}`], workdir).catch(() => "");
-  const original = previewTextContent(originalRaw);
+  const original = previewTextContent(originalRaw, MAX_WORKTREE_CHANGE_FIELD_BYTES);
   const modifiedContent =
     entry.status === "D"
       ? { content: "", truncated: false }
-      : await readWorktreeTextFile(workdir, entry.path, deps).catch(() => ({
+      : await readWorktreeTextFile(
+          workdir,
+          entry.path,
+          deps,
+          MAX_WORKTREE_CHANGE_FIELD_BYTES,
+        ).catch(() => ({
           content: "",
           truncated: false,
         }));
-  const diff = await deps.gitExec(["diff", "--", entry.path], workdir).catch(() => "");
+  const diffPreview = previewTextContent(
+    await deps.gitExec(["diff", "--", entry.path], workdir).catch(() => ""),
+    MAX_WORKTREE_CHANGE_FIELD_BYTES,
+  );
   const numstat = await deps
     .gitExec(["diff", "--numstat", "--", entry.path], workdir)
     .catch(() => "");
@@ -1119,20 +1157,34 @@ async function buildWorktreeChangedFile(
     status: entry.status,
     additions: Number.parseInt(additionsRaw, 10) || (entry.status === "A" ? fallbackAdditions : 0),
     deletions: Number.parseInt(deletionsRaw, 10) || 0,
-    diff,
-    truncated: false,
+    diff: diffPreview.content,
+    truncated: diffPreview.truncated,
     originalContent: original.content,
     modifiedContent: modifiedContent.content,
     contentTruncated: original.truncated || modifiedContent.truncated,
   };
 }
 
-function previewTextContent(content: string): { content: string; truncated: boolean } {
-  if (Buffer.byteLength(content, "utf8") <= MAX_FILE_VIEW_BYTES) {
+function changedFilePayloadBytes(file: BridgeLinkedCheckoutChangedFile): number {
+  return Buffer.byteLength(
+    `${file.path}\0${file.status}\0${file.diff}\0${file.originalContent}\0${file.modifiedContent}`,
+    "utf8",
+  );
+}
+
+function previewTextContent(
+  content: string,
+  maxBytes = MAX_FILE_VIEW_BYTES,
+): { content: string; truncated: boolean } {
+  if (Buffer.byteLength(content, "utf8") <= maxBytes) {
     return { content, truncated: false };
   }
+  let preview = content.slice(0, maxBytes);
+  while (Buffer.byteLength(preview, "utf8") > maxBytes) {
+    preview = preview.slice(0, -1);
+  }
   return {
-    content: content.slice(0, MAX_FILE_VIEW_BYTES),
+    content: preview,
     truncated: true,
   };
 }
@@ -1141,6 +1193,7 @@ async function readWorktreeTextFile(
   workdir: string,
   filePath: string,
   deps: { fs: BridgeFsLike; path: BridgePathLike },
+  maxBytes = MAX_FILE_VIEW_BYTES,
 ): Promise<{ content: string; truncated: boolean }> {
   const fullPath = deps.path.resolve(workdir, filePath);
   if (!isPathInsideRoot(workdir, fullPath, deps.path)) {
@@ -1150,7 +1203,7 @@ async function readWorktreeTextFile(
   if (!stats.isFile()) {
     throw new Error("Not a file");
   }
-  if (stats.size > MAX_FILE_VIEW_BYTES) {
+  if (stats.size > maxBytes) {
     return { content: "", truncated: true };
   }
   return new Promise((resolve, reject) => {

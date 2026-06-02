@@ -1,3 +1,9 @@
+const UNIVERSAL_LINK_HOSTS = new Set([
+  "gettrace.org",
+  "www.gettrace.org",
+  "trace.infra.internal.opendoor.com",
+]);
+
 function notificationRoute(path: string): string | null {
   const queryStart = path.indexOf("?");
   const pathname = queryStart >= 0 ? path.slice(0, queryStart) : path;
@@ -73,7 +79,7 @@ export function routePathFromNotificationLink(deepLink: string): string | null {
       const host = url.hostname ? `/${url.hostname}` : "";
       return notificationRoute(`${host}${url.pathname}${url.search}`);
     }
-    if (url.protocol === "https:" && url.hostname === "gettrace.org") {
+    if (url.protocol === "https:" && UNIVERSAL_LINK_HOSTS.has(url.hostname)) {
       const path = url.pathname.startsWith("/m/")
         ? `${url.pathname.slice(2)}${url.search}`
         : `${url.pathname}${url.search}`;

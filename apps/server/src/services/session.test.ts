@@ -52,7 +52,7 @@ vi.mock("../lib/session-router.js", () => ({
     readFile: vi.fn().mockResolvedValue(""),
     writeFile: vi.fn().mockResolvedValue(undefined),
     commitFileChanges: vi.fn().mockResolvedValue("commit123"),
-    listWorktreeChanges: vi.fn().mockResolvedValue([]),
+    listWorktreeChanges: vi.fn().mockResolvedValue({ files: [], totalCount: 0, truncated: false }),
     revertWorktreeFile: vi.fn().mockResolvedValue(undefined),
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
@@ -113,6 +113,12 @@ vi.mock("./api-token.js", () => ({
   },
 }));
 
+vi.mock("./org-secret.js", () => ({
+  orgSecretService: {
+    getDecryptedValueByName: vi.fn().mockResolvedValue(null),
+  },
+}));
+
 vi.mock("./github-repo.js", () => ({
   githubRepoService: {
     listFiles: vi.fn().mockResolvedValue([]),
@@ -130,6 +136,7 @@ import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
 import { githubRepoService, parseGitHubRepo } from "./github-repo.js";
+import { orgSecretService } from "./org-secret.js";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -157,6 +164,7 @@ const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
 >;
 const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
 const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiTokenService>;
+const orgSecretServiceMock = orgSecretService as unknown as MockedDeep<typeof orgSecretService>;
 const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
@@ -324,6 +332,7 @@ describe("SessionService", () => {
     sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
     sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
+    orgSecretServiceMock.getDecryptedValueByName.mockResolvedValue(null);
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
     githubRepoServiceMock.readFile.mockResolvedValue("file contents");
     githubRepoServiceMock.branchDiff.mockResolvedValue([]);
@@ -2745,7 +2754,62 @@ describe("SessionService", () => {
       await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
         "No GitHub token configured",
       );
+      expect(orgSecretServiceMock.getDecryptedValueByName).toHaveBeenCalledWith(
+        "org-1",
+        "GITHUB_TOKEN",
+      );
       expect(githubRepoServiceMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("uses the organization GitHub token when the user has no GitHub token", async () => {
+      apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({});
+      orgSecretServiceMock.getDecryptedValueByName.mockResolvedValueOnce("org-gh-token");
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).resolves.toEqual([
+        "src/app.ts",
+      ]);
+      expect(orgSecretServiceMock.getDecryptedValueByName).toHaveBeenCalledWith(
+        "org-1",
+        "GITHUB_TOKEN",
+      );
+      expect(githubRepoServiceMock.listFiles).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "org-gh-token",
+      );
+    });
+
+    it("prefers the user's GitHub token over the organization GitHub token", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).resolves.toEqual([
+        "src/app.ts",
+      ]);
+      expect(orgSecretServiceMock.getDecryptedValueByName).not.toHaveBeenCalled();
+      expect(githubRepoServiceMock.listFiles).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "gh-token",
+      );
     });
 
     it("reads GitHub files by converting absolute workdir paths to repo-relative paths", async () => {
@@ -2770,6 +2834,43 @@ describe("SessionService", () => {
       );
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
       expect(sessionRouterMock.readFile).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the default branch when reading the session branch fails", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.readFile
+        .mockRejectedValueOnce(new Error("GitHub API error (404): Not Found"))
+        .mockResolvedValueOnce("default branch contents");
+
+      await expect(
+        service.readFileWithSource("group-1", "/tmp/trace/src/app.ts", "org-1", "user-1"),
+      ).resolves.toEqual({
+        content: "default branch contents",
+        ref: "main",
+        requestedRef: "trace/test",
+        usedFallback: true,
+      });
+      expect(githubRepoServiceMock.readFile).toHaveBeenNthCalledWith(
+        1,
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "src/app.ts",
+        "gh-token",
+      );
+      expect(githubRepoServiceMock.readFile).toHaveBeenNthCalledWith(
+        2,
+        { owner: "trace", repo: "trace" },
+        "main",
+        "src/app.ts",
+        "gh-token",
+      );
     });
 
     it("computes branch diffs through GitHub", async () => {
@@ -3829,12 +3930,26 @@ describe("SessionService", () => {
       prismaMock.event.findFirst.mockResolvedValueOnce(null);
       prismaMock.event.findMany.mockResolvedValueOnce([
         {
+          id: "event-start",
           eventType: "session_started",
           payload: { prompt: "Initial task" },
         },
         {
+          id: "event-message",
           eventType: "message_sent",
           payload: { text: "Follow-up instruction" },
+        },
+      ]);
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          id: "event-message",
+          eventType: "message_sent",
+          payload: { text: "Follow-up instruction" },
+        },
+        {
+          id: "event-start",
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
         },
       ]);
       prismaMock.session.update.mockResolvedValueOnce(session);
@@ -4215,12 +4330,26 @@ describe("SessionService", () => {
       );
       prismaMock.event.findMany.mockResolvedValueOnce([
         {
+          id: "event-start",
           eventType: "session_started",
           payload: { prompt: "Initial task" },
         },
         {
+          id: "event-message",
           eventType: "message_sent",
           payload: { text: "Follow-up instruction" },
+        },
+      ]);
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          id: "event-message",
+          eventType: "message_sent",
+          payload: { text: "Follow-up instruction" },
+        },
+        {
+          id: "event-start",
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
         },
       ]);
       prismaMock.event.findFirst.mockResolvedValueOnce({ id: "event-message-1" });
@@ -4257,6 +4386,77 @@ describe("SessionService", () => {
           payload: expect.objectContaining({ type: "tool_session_recovered" }),
         }),
       );
+    });
+
+    it("clips long recovery conversation history before sending it to the runtime", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "active",
+          workdir: "/tmp/worktree",
+          toolSessionId: "stale-tool-session",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          id: "event-start",
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
+        },
+      ]);
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        ...Array.from({ length: 16 }, (_value, offset) => {
+          const index = 15 - offset;
+          return {
+            id: `event-output-${index}`,
+            eventType: "session_output",
+            payload: {
+              type: "assistant",
+              message: {
+                content: [
+                  {
+                    type: "text",
+                    text: `${index === 15 ? "latest-final" : `entry-${index}`} ${"x".repeat(
+                      20_000,
+                    )} ${index === 15 ? "latest-final-tail" : `entry-${index}-tail`}`,
+                  },
+                ],
+              },
+            },
+          };
+        }),
+        {
+          id: "event-start",
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
+        },
+      ]);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "event-message-1" });
+      sessionRouterMock.send.mockReturnValueOnce("delivered");
+
+      await service.recoverMissingToolSession("session-1", {
+        toolSessionId: "stale-tool-session",
+        message: "No conversation found with session ID stale-tool-session",
+        interactionMode: "code",
+      });
+
+      const sendCommand = sessionRouterMock.send.mock.calls[0]?.[1] as
+        | { prompt?: string }
+        | undefined;
+      expect(sendCommand?.prompt?.length).toBeLessThan(110_000);
+      expect(sendCommand?.prompt).toContain("[User]: Initial task");
+      expect(sendCommand?.prompt).toContain("Trace omitted");
+      expect(sendCommand?.prompt).toContain("Trace clipped earlier content");
+      expect(sendCommand?.prompt).not.toContain("entry-0-tail");
+      expect(sendCommand?.prompt).not.toContain("latest-final ");
+      expect(sendCommand?.prompt).toContain("latest-final-tail");
     });
 
     it("ignores recovery from an old bridge process after a new tool id is stored", async () => {

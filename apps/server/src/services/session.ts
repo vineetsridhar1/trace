@@ -55,6 +55,7 @@ import {
 } from "./access.js";
 import { apiTokenService } from "./api-token.js";
 import { githubRepoService, parseGitHubRepo, type GitHubRepoRef } from "./github-repo.js";
+import { orgSecretService } from "./org-secret.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -108,6 +109,7 @@ const LOCAL_TOOL_FALLBACK_ORDER: readonly CodingTool[] = [
 ];
 const PI_INSTALL_COMMAND = "npm install -g @earendil-works/pi-coding-agent";
 const PI_INSTALL_DOCS_URL = "https://pi.dev/docs/latest/quickstart";
+const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
 
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
@@ -602,6 +604,13 @@ type GitHubSessionGroupFileSource = {
   workdir: string | null;
 };
 
+type SessionGroupFileContentResult = {
+  content: string;
+  ref: string;
+  requestedRef: string;
+  usedFallback: boolean;
+};
+
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
   "Access denied: you do not have permission to access files on this local bridge";
@@ -758,6 +767,21 @@ function gitCheckpointIdFromPayload(value: unknown): string | null {
 
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
 const MAX_SESSION_NAME_LENGTH = 80;
+const MAX_CONVERSATION_CONTEXT_CHARS = 96 * 1024;
+const MAX_CONVERSATION_CONTEXT_ENTRY_CHARS = 12 * 1024;
+const CONVERSATION_CONTEXT_EVENT_PAGE_SIZE = 100;
+const MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED = 500;
+
+type ConversationContextEvent = {
+  id: string;
+  eventType: string;
+  payload: Prisma.JsonValue;
+};
+
+type ConversationLineSource = {
+  role: "User" | "Assistant";
+  text: string;
+};
 
 /** Instruction appended to every session prompt so the AI can set or update the title at any time. */
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
@@ -825,48 +849,178 @@ const BRANCH_TAG_RE = /<trace-branch>([\s\S]*?)<\/trace-branch>/;
  * Used to give a new coding tool context when switching mid-session.
  */
 async function buildConversationContext(sessionId: string): Promise<string | null> {
-  const events = await prisma.event.findMany({
+  const firstEntry = await findFirstConversationContextEntry(sessionId);
+  if (!firstEntry) return null;
+
+  const selectedTail: string[] = [];
+  const maxBodyChars = conversationHistoryBodyBudget();
+  let bodyChars = firstEntry.lines.join("\n\n").length;
+  let omitted = false;
+  let cursorId: string | undefined;
+  let scanned = 0;
+  let reachedFirstEntry = false;
+
+  while (scanned < MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED && !reachedFirstEntry) {
+    const events = await fetchConversationContextEvents(sessionId, "desc", cursorId);
+    if (events.length === 0) break;
+
+    for (const evt of events) {
+      scanned += 1;
+      if (evt.id === firstEntry.eventId) {
+        reachedFirstEntry = true;
+        continue;
+      }
+
+      const lines = conversationLineSourcesFromEvent(evt).map((line) =>
+        formatConversationLine(line.role, line.text),
+      );
+      for (const line of [...lines].reverse()) {
+        const separatorChars = bodyChars > 0 ? 2 : 0;
+        if (bodyChars + separatorChars + line.length > maxBodyChars) {
+          omitted = true;
+          reachedFirstEntry = true;
+          break;
+        }
+        selectedTail.unshift(line);
+        bodyChars += separatorChars + line.length;
+      }
+
+      if (reachedFirstEntry || scanned >= MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) break;
+    }
+
+    cursorId = events.at(-1)?.id;
+  }
+
+  if (!reachedFirstEntry) {
+    omitted = true;
+  }
+
+  return buildBoundedConversationHistory(firstEntry.lines, selectedTail, omitted);
+}
+
+async function fetchConversationContextEvents(
+  sessionId: string,
+  direction: "asc" | "desc",
+  cursorId?: string,
+): Promise<ConversationContextEvent[]> {
+  return prisma.event.findMany({
     where: {
       scopeId: sessionId,
       scopeType: "session",
       eventType: { in: ["session_started", "message_sent", "session_output"] },
     },
-    orderBy: { timestamp: "asc" },
+    orderBy: [{ timestamp: direction }, { id: direction }],
+    take: CONVERSATION_CONTEXT_EVENT_PAGE_SIZE,
+    ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+    select: { id: true, eventType: true, payload: true },
   });
+}
 
-  const lines: string[] = [];
+async function findFirstConversationContextEntry(
+  sessionId: string,
+): Promise<{ eventId: string; lines: string[] } | null> {
+  let cursorId: string | undefined;
+  let scanned = 0;
 
-  for (const evt of events) {
-    const payload = evt.payload as Record<string, unknown>;
+  while (scanned < MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) {
+    const events = await fetchConversationContextEvents(sessionId, "asc", cursorId);
+    if (events.length === 0) break;
 
-    if (evt.eventType === "session_started") {
-      const prompt = payload.prompt as string | undefined;
-      if (prompt) lines.push(`[User]: ${prompt}`);
-      continue;
-    }
-
-    if (evt.eventType === "message_sent") {
-      const text = payload.text as string | undefined;
-      if (text) lines.push(`[User]: ${text}`);
-      continue;
-    }
-
-    // Assistant output — extract only text blocks, skip tool calls
-    if (payload.type === "assistant") {
-      const message = payload.message as Record<string, unknown> | undefined;
-      const content = message?.content;
-      if (!Array.isArray(content)) continue;
-      for (const block of content) {
-        const b = block as Record<string, unknown>;
-        if (b.type === "text" && typeof b.text === "string") {
-          lines.push(`[Assistant]: ${b.text}`);
-        }
+    for (const evt of events) {
+      scanned += 1;
+      const sources = conversationLineSourcesFromEvent(evt);
+      if (sources.length > 0) {
+        return {
+          eventId: evt.id,
+          lines: sources.map((line, index) =>
+            formatConversationLine(line.role, line.text, { preserveStart: index === 0 }),
+          ),
+        };
       }
+      if (scanned >= MAX_CONVERSATION_CONTEXT_EVENTS_SCANNED) break;
     }
+
+    cursorId = events.at(-1)?.id;
   }
 
-  if (lines.length === 0) return null;
-  return `<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n${lines.join("\n\n")}\n</conversation-history>`;
+  return null;
+}
+
+function conversationLineSourcesFromEvent(evt: ConversationContextEvent): ConversationLineSource[] {
+  const payload = evt.payload as Record<string, unknown>;
+
+  if (evt.eventType === "session_started") {
+    return typeof payload.prompt === "string" ? [{ role: "User", text: payload.prompt }] : [];
+  }
+
+  if (evt.eventType === "message_sent") {
+    return typeof payload.text === "string" ? [{ role: "User", text: payload.text }] : [];
+  }
+
+  if (payload.type !== "assistant") return [];
+
+  const message = payload.message as Record<string, unknown> | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content)) return [];
+
+  const lines: ConversationLineSource[] = [];
+  for (const block of content) {
+    const b = block as Record<string, unknown>;
+    if (b.type === "text" && typeof b.text === "string") {
+      lines.push({ role: "Assistant", text: b.text });
+    }
+  }
+  return lines;
+}
+
+function formatConversationLine(
+  role: "User" | "Assistant",
+  text: string,
+  options?: { preserveStart?: boolean },
+): string {
+  return clipConversationText(`[${role}]: ${text}`, MAX_CONVERSATION_CONTEXT_ENTRY_CHARS, options);
+}
+
+function clipConversationText(
+  text: string,
+  maxChars: number,
+  options?: { preserveStart?: boolean },
+): string {
+  if (text.length <= maxChars) return text;
+
+  const marker = options?.preserveStart
+    ? `\n\n[Trace clipped later content from this transcript entry.]\n\n`
+    : `\n\n[Trace clipped earlier content from this transcript entry.]\n\n`;
+  const available = Math.max(0, maxChars - marker.length);
+  if (options?.preserveStart) {
+    return `${text.slice(0, available)}${marker}`;
+  }
+  return `${marker}${text.slice(text.length - available)}`;
+}
+
+function conversationHistoryBodyBudget(): number {
+  const header =
+    "<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n";
+  const footer = "\n</conversation-history>";
+  return Math.max(0, MAX_CONVERSATION_CONTEXT_CHARS - header.length - footer.length);
+}
+
+function buildBoundedConversationHistory(
+  firstLines: string[],
+  selectedTail: string[],
+  omitted: boolean,
+): string {
+  const header =
+    "<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n";
+  const footer = "\n</conversation-history>";
+  const bodyParts = [...firstLines];
+  if (omitted) {
+    bodyParts.push(
+      "[Trace omitted middle conversation entries to keep this resume prompt bounded.]",
+    );
+  }
+  bodyParts.push(...selectedTail);
+  return `${header}${bodyParts.join("\n\n")}${footer}`;
 }
 
 function buildMigrationPrompt(sourceGitStatusVerified: boolean): string {
@@ -1321,10 +1475,7 @@ export class SessionService {
     const runtimePatch: Partial<SessionConnectionData> = {
       ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
       ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
-      ...(update.providerRuntimeId && {
-        cloudMachineId: update.providerRuntimeId,
-        providerRuntimeId: update.providerRuntimeId,
-      }),
+      ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
       ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
       ...(update.providerStatus && { providerStatus: update.providerStatus }),
     };
@@ -7002,12 +7153,10 @@ export class SessionService {
       const sessionConnection = this.parseConnection(session.connection);
       const runtimeHasBinding =
         !!runtimeConnection.runtimeInstanceId ||
-        !!runtimeConnection.providerRuntimeId ||
-        typeof runtimeConnection.cloudMachineId === "string";
+        !!runtimeConnection.providerRuntimeId;
       const sessionHasBinding =
         !!sessionConnection.runtimeInstanceId ||
-        !!sessionConnection.providerRuntimeId ||
-        typeof sessionConnection.cloudMachineId === "string";
+        !!sessionConnection.providerRuntimeId;
       if (!runtimeHasBinding && sessionHasBinding) {
         sourceCloudRuntimeSession = {
           ...sourceCloudRuntimeSession,
@@ -7636,6 +7785,17 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<string> {
+    const result = await this.readFileWithSource(sessionGroupId, filePath, organizationId, userId);
+    return result.content;
+  }
+
+  /** Read a file's content and report whether it came from the requested branch or default branch. */
+  async readFileWithSource(
+    sessionGroupId: string,
+    filePath: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<SessionGroupFileContentResult> {
     const normalizedPath = this.normalizeFilePath(filePath);
     const source = await this.resolveGitHubSessionGroupFileSource(
       sessionGroupId,
@@ -7643,7 +7803,34 @@ export class SessionService {
       userId,
     );
     const relativePath = this.toRepoRelativeFilePath(normalizedPath, source.workdir);
-    return githubRepoService.readFile(source.repo, source.branch, relativePath, source.token);
+    try {
+      return {
+        content: await githubRepoService.readFile(
+          source.repo,
+          source.branch,
+          relativePath,
+          source.token,
+        ),
+        ref: source.branch,
+        requestedRef: source.branch,
+        usedFallback: false,
+      };
+    } catch (error) {
+      if (source.branch === source.defaultBranch) {
+        throw error;
+      }
+      return {
+        content: await githubRepoService.readFile(
+          source.repo,
+          source.defaultBranch,
+          relativePath,
+          source.token,
+        ),
+        ref: source.defaultBranch,
+        requestedRef: source.branch,
+        usedFallback: true,
+      };
+    }
   }
 
   /** Save a file's content to a session group's working directory. */
@@ -7802,8 +7989,16 @@ export class SessionService {
     }
 
     const tokens = await apiTokenService.getDecryptedTokens(userId);
-    if (!tokens.github) {
-      throw new Error("No GitHub token configured. Please add a GitHub API token first.");
+    const githubToken =
+      tokens.github ??
+      (await orgSecretService.getDecryptedValueByName(
+        organizationId,
+        ORG_GITHUB_TOKEN_SECRET_NAME,
+      ));
+    if (!githubToken) {
+      throw new Error(
+        `No GitHub token configured. Add a personal GitHub API token or ask an org admin to add an org secret named ${ORG_GITHUB_TOKEN_SECRET_NAME}.`,
+      );
     }
 
     const defaultBranch = this.toGitHubRef(group.repo.defaultBranch || "main");
@@ -7811,7 +8006,7 @@ export class SessionService {
 
     return {
       repo,
-      token: tokens.github,
+      token: githubToken,
       branch,
       defaultBranch,
       workdir: group.workdir,
@@ -8599,17 +8794,14 @@ export class SessionService {
       const groupHasRuntimeBinding =
         !!group.workdir ||
         !!groupConnection.runtimeInstanceId ||
-        !!groupConnection.providerRuntimeId ||
-        typeof groupConnection.cloudMachineId === "string";
+        !!groupConnection.providerRuntimeId;
       const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
       if (cloudSessions.some((session) => session.agentStatus === "active")) continue;
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
           return (
-            !!sessionConnection.runtimeInstanceId ||
-            !!sessionConnection.providerRuntimeId ||
-            typeof sessionConnection.cloudMachineId === "string"
+            !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId
           );
         }) ?? cloudSessions[0];
       if (!cloudSession) continue;
@@ -8617,8 +8809,7 @@ export class SessionService {
         const sessionConnection = this.parseConnection(cloudSession.connection);
         const sessionHasRuntimeBinding =
           !!sessionConnection.runtimeInstanceId ||
-          !!sessionConnection.providerRuntimeId ||
-          typeof sessionConnection.cloudMachineId === "string";
+          !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
 

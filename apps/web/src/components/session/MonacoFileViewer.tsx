@@ -14,7 +14,12 @@ import { toast } from "sonner";
 
 const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
   query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {
-    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)
+    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {
+      content
+      ref
+      requestedRef
+      usedFallback
+    }
   }
 `;
 
@@ -33,7 +38,7 @@ const COMMIT_SESSION_GROUP_FILE_CHANGES_MUTATION = gql`
 const SESSION_GROUP_WORKTREE_CHANGES_QUERY = gql`
   query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {
     sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {
-      path
+      totalCount
     }
   }
 `;
@@ -64,6 +69,7 @@ export function MonacoFileViewer({
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [hasWorktreeChanges, setHasWorktreeChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sourceWarning, setSourceWarning] = useState<string | null>(null);
   const contentRef = useRef<string | null>(content);
   const savedContentRef = useRef<string | null>(savedContent);
   const savingRef = useRef(false);
@@ -100,11 +106,17 @@ export function MonacoFileViewer({
         if (result.error) {
           if (!silent) setError(result.error.message);
         } else {
-          const nextContent = result.data?.sessionGroupFileContent ?? "";
+          const source = result.data?.sessionGroupFileContentWithSource;
+          const nextContent = source?.content ?? "";
           contentRef.current = nextContent;
           savedContentRef.current = nextContent;
           setContent(nextContent);
           setSavedContent(nextContent);
+          setSourceWarning(
+            source?.usedFallback
+              ? `Showing ${source.ref} because ${source.requestedRef} is not available on GitHub. This file may be out of date.`
+              : null,
+          );
           storeBuffer(nextContent, nextContent);
           if (!silent) setError(null);
         }
@@ -122,6 +134,7 @@ export function MonacoFileViewer({
     if (buffer) {
       setLoading(false);
       setError(null);
+      setSourceWarning(null);
       return;
     }
     fetchContent(false);
@@ -139,7 +152,7 @@ export function MonacoFileViewer({
         .query(SESSION_GROUP_WORKTREE_CHANGES_QUERY, { sessionGroupId })
         .toPromise();
       if (result.error) return;
-      setHasWorktreeChanges((result.data?.sessionGroupWorktreeChanges ?? []).length > 0);
+      setHasWorktreeChanges((result.data?.sessionGroupWorktreeChanges.totalCount ?? 0) > 0);
     } catch {
       // Leave the current indicator alone on transient bridge/query failures.
     }
@@ -365,6 +378,11 @@ export function MonacoFileViewer({
           </Button>
         </div>
       </div>
+      {sourceWarning && (
+        <div className="shrink-0 border-b border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100">
+          {sourceWarning}
+        </div>
+      )}
       <div className="min-h-0 flex-1">
         {showingRendered && RenderedViewer ? (
           <RenderedViewer content={content ?? ""} filePath={filePath} />

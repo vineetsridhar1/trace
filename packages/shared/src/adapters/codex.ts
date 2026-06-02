@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
+import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -44,7 +45,7 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     const args = this.threadId
-      ? ["exec", "resume", this.threadId, "--json", "--dangerously-bypass-approvals-and-sandbox"]
+      ? ["exec", "resume", "--json", "--dangerously-bypass-approvals-and-sandbox"]
       : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox"];
     if (model) {
       args.push("--model", model);
@@ -52,15 +53,20 @@ export class CodexAdapter implements CodingToolAdapter {
     if (reasoningEffort) {
       args.push("--config", `model_reasoning_effort="${reasoningEffort}"`);
     }
-    args.push("--", prompt);
+    if (this.threadId) {
+      args.push(this.threadId);
+    }
+    args.push("-");
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("codex", args, {
       cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      stdio: ["pipe", "pipe", "pipe"],
+      env: buildChildProcessEnv(),
       detached: true,
     });
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(prompt);
     this.process = child;
 
     const isCurrentProcess = () =>

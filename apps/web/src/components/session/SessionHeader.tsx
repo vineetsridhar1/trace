@@ -36,7 +36,7 @@ import { ActionTooltip } from "../ui/ActionTooltip";
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
 const headerIconButtonClass =
-  "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:cursor-default disabled:opacity-40";
+  "app-region-no-drag flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border/70 bg-background/40 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:pointer-events-none disabled:cursor-default disabled:opacity-40";
 
 export function SessionHeader({
   sessionId,
@@ -167,7 +167,7 @@ export function SessionHeader({
         <ActionTooltip label="Close panel">
           <button
             onClick={() => setActiveSessionId(null)}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            className="app-region-no-drag flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Close panel"
           >
             <X size={16} />
@@ -177,7 +177,7 @@ export function SessionHeader({
         <ActionTooltip label="Back to sessions">
           <button
             onClick={() => setActiveSessionId(null)}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            className="app-region-no-drag flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Back to sessions"
           >
             <ArrowLeft size={16} />

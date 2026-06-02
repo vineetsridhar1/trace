@@ -8,7 +8,8 @@
     "build": "tsc -b",
     "dev": "tsc -b --watch",
     "start": "node dist/index.js",
-    "lint": "tsc -b"
+    "lint": "tsc -b",
+    "test": "vitest run"
   },
   "dependencies": {
     "@trace/shared": "workspace:*",
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@types/ws": "^8.5.13",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
   }
 }

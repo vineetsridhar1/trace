@@ -45,7 +45,6 @@ import {
   getWorkspaceSlugs,
   removeWorktree,
   getRepoPath,
-  listClonedRepoIds,
 } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
@@ -96,7 +95,7 @@ function getPendingInputToolUseId(output: ToolOutput): string | null {
 }
 
 /**
- * Multi-session container bridge — runs inside a Fly Machine (one per user per org).
+ * Multi-session container bridge for provisioned runtimes.
  * Mirrors the desktop BridgeClient pattern: Map-based adapters, dynamic session binding.
  * Handles prepare/delete commands for repo cloning and worktree management.
  */
@@ -135,15 +134,10 @@ export class ContainerBridge implements IBridgeClient {
         else resolve(stdout);
       });
     });
-  private lastActivity = Date.now();
-  private idleCheckTimer: ReturnType<typeof setInterval> | null = null;
-  /** Exit if no sessions/terminals have been active for this long. */
-  private static IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-
   constructor(
     private readonly serverUrl: string,
     private readonly token: string,
-    private readonly machineId: string,
+    private readonly runtimeInstanceId: string,
     private readonly defaultTool: string,
   ) {
     this.terminalManager = new TerminalManager({
@@ -166,22 +160,17 @@ export class ContainerBridge implements IBridgeClient {
     this.ws.on("open", () => {
       console.log("[container-bridge] connected to server");
       this.consecutiveFailures = 0;
-      const provisionedRuntimeInstanceId = process.env.TRACE_RUNTIME_INSTANCE_ID?.trim();
-      const instanceId = provisionedRuntimeInstanceId ?? `cloud-machine-${this.machineId}`;
-      const registeredRepoIds = provisionedRuntimeInstanceId ? [] : listClonedRepoIds();
       const supportedTools = ["claude_code", "codex"];
       if (hasExecutable("pi")) supportedTools.push("pi");
-      // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
-      // they intentionally register no pre-existing repos.
       this.send({
         type: "runtime_hello",
-        instanceId,
-        label: instanceId,
+        instanceId: this.runtimeInstanceId,
+        label: this.runtimeInstanceId,
         hostingMode: "cloud",
         protocolVersion: BRIDGE_PROTOCOL_VERSION,
         agentVersion: AGENT_VERSION,
         supportedTools,
-        registeredRepoIds,
+        registeredRepoIds: [],
         activeTerminals: this.terminalManager.getActiveTerminals(),
       });
       this.flushOutbox();
@@ -222,10 +211,6 @@ export class ContainerBridge implements IBridgeClient {
     }
     this.adapters.clear();
     this.outbox.clear();
-    if (this.idleCheckTimer) {
-      clearInterval(this.idleCheckTimer);
-      this.idleCheckTimer = null;
-    }
     this.ws?.close();
     this.ws = null;
     this.pendingInputToolUseIds.clear();
@@ -276,39 +261,12 @@ export class ContainerBridge implements IBridgeClient {
     }, delay);
   }
 
-  private touchActivity(): void {
-    this.lastActivity = Date.now();
-  }
-
-  /** Returns true if there are active sessions or terminals. */
-  private hasActiveWork(): boolean {
-    return this.adapters.size > 0 || this.terminalManager.hasTerminals();
-  }
-
-  startIdleWatch(): void {
-    if (this.idleCheckTimer) return;
-    this.idleCheckTimer = setInterval(() => {
-      if (this.hasActiveWork()) {
-        this.lastActivity = Date.now();
-        return;
-      }
-      const idleMs = Date.now() - this.lastActivity;
-      if (idleMs >= ContainerBridge.IDLE_TIMEOUT_MS) {
-        console.log(
-          `[container-bridge] idle for ${Math.round(idleMs / 1000)}s with no active work, exiting`,
-        );
-        this.disconnect();
-        process.exit(0);
-      }
-    }, 60_000); // Check every minute
-  }
-
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       this.send({
         type: "runtime_heartbeat",
-        instanceId: `cloud-machine-${this.machineId}`,
+        instanceId: this.runtimeInstanceId,
         activeSessionIds: [...this.activeRuns.keys()],
       });
     }, 10_000);
@@ -356,7 +314,6 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private handleCommand(cmd: BridgeCommand): void {
-    this.touchActivity();
     switch (cmd.type) {
       case "run":
       case "send": {
@@ -398,7 +355,7 @@ export class ContainerBridge implements IBridgeClient {
 
         (async () => {
           try {
-            await ensureRepo(repoId, repoRemoteUrl);
+            await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
             this.send({ type: "repo_linked", repoId });
 
             if (readOnly) {
@@ -483,7 +440,7 @@ export class ContainerBridge implements IBridgeClient {
 
         (async () => {
           try {
-            await ensureRepo(repoId, repoRemoteUrl);
+            await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
             this.send({ type: "repo_linked", repoId });
             const {
               workdir,

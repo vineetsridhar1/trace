@@ -712,6 +712,8 @@ const LINKED_CHECKOUT_STATUS_FIELDS = `
   restoreBranch
   restoreCommitSha
   hasUncommittedChanges
+  changedFilesTotalCount
+  changedFilesTruncated
   changedFiles {
     path
     status

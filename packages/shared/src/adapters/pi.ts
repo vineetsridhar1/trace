@@ -7,6 +7,7 @@ import type {
   ToolOutput,
   ToolResultBlock,
 } from "./coding-tool.js";
+import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -79,7 +80,7 @@ export class PiAdapter implements CodingToolAdapter {
     const child = spawn("pi", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
+      env: buildChildProcessEnv(),
       detached: true,
     });
     child.stdin?.on("error", () => {});

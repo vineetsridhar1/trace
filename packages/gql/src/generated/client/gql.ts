@@ -24,14 +24,14 @@ type Documents = {
   "\n  mutation RenameChat($chatId: ID!, $name: String!) {\n    renameChat(chatId: $chatId, name: $name) {\n      id\n      name\n    }\n  }\n": typeof types.RenameChatDocument;
   "\n  query ThreadReplies($rootMessageId: ID!, $limit: Int) {\n    threadReplies(rootMessageId: $rootMessageId, limit: $limit) {\n      id\n      chatId\n      channelId\n      text\n      html\n      mentions\n      parentMessageId\n      replyCount\n      latestReplyAt\n      threadRepliers {\n        type\n        id\n        name\n        avatarUrl\n      }\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      createdAt\n      updatedAt\n      editedAt\n      deletedAt\n    }\n  }\n": typeof types.ThreadRepliesDocument;
   "\n  query SessionGroupBranchDiff($sessionGroupId: ID!) {\n    sessionGroupBranchDiff(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n    }\n  }\n": typeof types.SessionGroupBranchDiffDocument;
-  "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n      diff\n      truncated\n      originalContent\n      modifiedContent\n      contentTruncated\n    }\n  }\n": typeof types.SessionGroupWorktreeChangesDocument;
+  "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      files {\n        path\n        status\n        additions\n        deletions\n        diff\n        truncated\n        originalContent\n        modifiedContent\n        contentTruncated\n      }\n      totalCount\n      truncated\n    }\n  }\n": typeof types.SessionGroupWorktreeChangesDocument;
   "\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.RevertSessionGroupFileChangeDocument;
   "\n  query SessionGroupFileAtRef($sessionGroupId: ID!, $filePath: String!, $ref: String!) {\n    sessionGroupFileAtRef(sessionGroupId: $sessionGroupId, filePath: $filePath, ref: $ref)\n  }\n": typeof types.SessionGroupFileAtRefDocument;
   "\n  query SessionGroupFileContentForDiff($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.SessionGroupFileContentForDiffDocument;
-  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.SessionGroupFileContentDocument;
+  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n": typeof types.SessionGroupFileContentDocument;
   "\n  mutation SaveSessionGroupFile($sessionGroupId: ID!, $filePath: String!, $content: String!) {\n    saveSessionGroupFile(sessionGroupId: $sessionGroupId, filePath: $filePath, content: $content)\n  }\n": typeof types.SaveSessionGroupFileDocument;
   "\n  mutation CommitSessionGroupFileChanges($sessionGroupId: ID!, $message: String) {\n    commitSessionGroupFileChanges(sessionGroupId: $sessionGroupId, message: $message)\n  }\n": typeof types.CommitSessionGroupFileChangesDocument;
-  "\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n    }\n  }\n": typeof types.SessionGroupWorktreeChangesForCommitButtonDocument;
+  "\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      totalCount\n    }\n  }\n": typeof types.SessionGroupWorktreeChangesForCommitButtonDocument;
   "\n  query SessionDetail($id: ID!) {\n    session(id: $id) {\n      id\n      name\n      agentStatus\n      sessionStatus\n      tool\n      model\n      reasoningEffort\n      hosting\n      repo {\n        id\n        name\n        remoteUrl\n      }\n      branch\n      workdir\n      prUrl\n      worktreeDeleted\n      lastUserMessageAt\n      lastMessageAt\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n        autoRetryable\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      sessionGroupId\n      sessionGroup {\n        id\n        name\n        branch\n        prUrl\n        workdir\n        worktreeDeleted\n        gitCheckpoints {\n          id\n          sessionId\n          promptEventId\n          commitSha\n          subject\n          author\n          committedAt\n          filesChanged\n          createdAt\n        }\n        channel {\n          id\n        }\n        repo {\n          id\n          name\n          remoteUrl\n        }\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n          autoRetryable\n        }\n        createdAt\n        updatedAt\n        setupStatus\n        setupError\n      }\n      gitCheckpoints {\n        id\n        sessionId\n        promptEventId\n        commitSha\n        subject\n        author\n        committedAt\n        filesChanged\n        createdAt\n      }\n      channel {\n        id\n      }\n      queuedMessages {\n        id\n        sessionId\n        text\n        imageKeys: attachmentKeys\n        interactionMode\n        position\n        createdAt\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SessionDetailDocument;
   "\n  query SessionGroupDetail($id: ID!) {\n    sessionGroup(id: $id) {\n      id\n      name\n      slug\n      forkedFromSessionGroupId\n      status\n      visibility\n      owner {\n        id\n        name\n        avatarUrl\n      }\n      archivedAt\n      branch\n      prUrl\n      workdir\n      worktreeDeleted\n      gitCheckpoints {\n        id\n        sessionId\n        promptEventId\n        commitSha\n        subject\n        author\n        committedAt\n        filesChanged\n        createdAt\n      }\n      repo {\n        id\n        name\n        remoteUrl\n        defaultBranch\n      }\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n        autoRetryable\n      }\n      channel {\n        id\n      }\n      setupStatus\n      setupError\n      createdAt\n      updatedAt\n      sessions {\n        id\n        name\n        agentStatus\n        sessionStatus\n        tool\n        model\n        reasoningEffort\n        hosting\n        branch\n        workdir\n        worktreeDeleted\n        sessionGroupId\n        lastUserMessageAt\n        lastMessageAt\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n          autoRetryable\n        }\n        createdBy {\n          id\n          name\n          avatarUrl\n        }\n        repo {\n          id\n          name\n          remoteUrl\n        }\n        channel {\n          id\n        }\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": typeof types.SessionGroupDetailDocument;
   "\n  query SessionGroupFiles($sessionGroupId: ID!) {\n    sessionGroupFiles(sessionGroupId: $sessionGroupId)\n  }\n": typeof types.SessionGroupFilesDocument;
@@ -43,11 +43,14 @@ type Documents = {
   "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": typeof types.UpdateOrgMemberRoleDocument;
   "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": typeof types.SearchUsersDocument;
   "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.SettingsReposDocument;
-  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n": typeof types.AgentEnvironmentsSettingsDocument;
+  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n": typeof types.AgentEnvironmentsSettingsDocument;
+  "\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.OrgSecretsDocument;
   "\n  mutation CreateAgentEnvironment($input: CreateAgentEnvironmentInput!) {\n    createAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.CreateAgentEnvironmentDocument;
   "\n  mutation UpdateAgentEnvironment($input: UpdateAgentEnvironmentInput!) {\n    updateAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.UpdateAgentEnvironmentDocument;
   "\n  mutation DeleteAgentEnvironment($id: ID!) {\n    deleteAgentEnvironment(id: $id)\n  }\n": typeof types.DeleteAgentEnvironmentDocument;
   "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n": typeof types.TestAgentEnvironmentDocument;
+  "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SetOrgSecretDocument;
+  "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n": typeof types.DeleteOrgSecretDocument;
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateRepoDocument;
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument;
   "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      visibility\n      memberCount\n      viewerIsMember\n    }\n  }\n": typeof types.AllChannelsDocument;
@@ -102,7 +105,7 @@ const documents: Documents = {
     types.ThreadRepliesDocument,
   "\n  query SessionGroupBranchDiff($sessionGroupId: ID!) {\n    sessionGroupBranchDiff(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n    }\n  }\n":
     types.SessionGroupBranchDiffDocument,
-  "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n      diff\n      truncated\n      originalContent\n      modifiedContent\n      contentTruncated\n    }\n  }\n":
+  "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      files {\n        path\n        status\n        additions\n        deletions\n        diff\n        truncated\n        originalContent\n        modifiedContent\n        contentTruncated\n      }\n      totalCount\n      truncated\n    }\n  }\n":
     types.SessionGroupWorktreeChangesDocument,
   "\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n":
     types.RevertSessionGroupFileChangeDocument,
@@ -110,13 +113,13 @@ const documents: Documents = {
     types.SessionGroupFileAtRefDocument,
   "\n  query SessionGroupFileContentForDiff($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n":
     types.SessionGroupFileContentForDiffDocument,
-  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n":
+  "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n":
     types.SessionGroupFileContentDocument,
   "\n  mutation SaveSessionGroupFile($sessionGroupId: ID!, $filePath: String!, $content: String!) {\n    saveSessionGroupFile(sessionGroupId: $sessionGroupId, filePath: $filePath, content: $content)\n  }\n":
     types.SaveSessionGroupFileDocument,
   "\n  mutation CommitSessionGroupFileChanges($sessionGroupId: ID!, $message: String) {\n    commitSessionGroupFileChanges(sessionGroupId: $sessionGroupId, message: $message)\n  }\n":
     types.CommitSessionGroupFileChangesDocument,
-  "\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n    }\n  }\n":
+  "\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      totalCount\n    }\n  }\n":
     types.SessionGroupWorktreeChangesForCommitButtonDocument,
   "\n  query SessionDetail($id: ID!) {\n    session(id: $id) {\n      id\n      name\n      agentStatus\n      sessionStatus\n      tool\n      model\n      reasoningEffort\n      hosting\n      repo {\n        id\n        name\n        remoteUrl\n      }\n      branch\n      workdir\n      prUrl\n      worktreeDeleted\n      lastUserMessageAt\n      lastMessageAt\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n        autoRetryable\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      sessionGroupId\n      sessionGroup {\n        id\n        name\n        branch\n        prUrl\n        workdir\n        worktreeDeleted\n        gitCheckpoints {\n          id\n          sessionId\n          promptEventId\n          commitSha\n          subject\n          author\n          committedAt\n          filesChanged\n          createdAt\n        }\n        channel {\n          id\n        }\n        repo {\n          id\n          name\n          remoteUrl\n        }\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n          autoRetryable\n        }\n        createdAt\n        updatedAt\n        setupStatus\n        setupError\n      }\n      gitCheckpoints {\n        id\n        sessionId\n        promptEventId\n        commitSha\n        subject\n        author\n        committedAt\n        filesChanged\n        createdAt\n      }\n      channel {\n        id\n      }\n      queuedMessages {\n        id\n        sessionId\n        text\n        imageKeys: attachmentKeys\n        interactionMode\n        position\n        createdAt\n      }\n      createdAt\n      updatedAt\n    }\n  }\n":
     types.SessionDetailDocument,
@@ -140,8 +143,10 @@ const documents: Documents = {
     types.SearchUsersDocument,
   "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n":
     types.SettingsReposDocument,
-  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n":
+  "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n":
     types.AgentEnvironmentsSettingsDocument,
+  "\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n":
+    types.OrgSecretsDocument,
   "\n  mutation CreateAgentEnvironment($input: CreateAgentEnvironmentInput!) {\n    createAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n":
     types.CreateAgentEnvironmentDocument,
   "\n  mutation UpdateAgentEnvironment($input: UpdateAgentEnvironmentInput!) {\n    updateAgentEnvironment(input: $input) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n  }\n":
@@ -150,6 +155,10 @@ const documents: Documents = {
     types.DeleteAgentEnvironmentDocument,
   "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n":
     types.TestAgentEnvironmentDocument,
+  "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n":
+    types.SetOrgSecretDocument,
+  "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n":
+    types.DeleteOrgSecretDocument,
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n":
     types.CreateRepoDocument,
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n":
@@ -294,8 +303,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n      diff\n      truncated\n      originalContent\n      modifiedContent\n      contentTruncated\n    }\n  }\n",
-): (typeof documents)["\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n      diff\n      truncated\n      originalContent\n      modifiedContent\n      contentTruncated\n    }\n  }\n"];
+  source: "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      files {\n        path\n        status\n        additions\n        deletions\n        diff\n        truncated\n        originalContent\n        modifiedContent\n        contentTruncated\n      }\n      totalCount\n      truncated\n    }\n  }\n",
+): (typeof documents)["\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      files {\n        path\n        status\n        additions\n        deletions\n        diff\n        truncated\n        originalContent\n        modifiedContent\n        contentTruncated\n      }\n      totalCount\n      truncated\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -318,8 +327,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n",
-): (typeof documents)["\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n"];
+  source: "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n",
+): (typeof documents)["\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -336,8 +345,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n    }\n  }\n",
-): (typeof documents)["\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      path\n    }\n  }\n"];
+  source: "\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      totalCount\n    }\n  }\n",
+): (typeof documents)["\n  query SessionGroupWorktreeChangesForCommitButton($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      totalCount\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -408,8 +417,14 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n",
-): (typeof documents)["\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n"];
+  source: "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n",
+): (typeof documents)["\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n",
+): (typeof documents)["\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -434,6 +449,18 @@ export function graphql(
 export function graphql(
   source: "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n",
 ): (typeof documents)["\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n",
+): (typeof documents)["\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n",
+): (typeof documents)["\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

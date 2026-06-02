@@ -515,6 +515,8 @@ export type LinkedCheckoutStatus = {
   attachedSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   autoSyncEnabled: Scalars["Boolean"]["output"];
   changedFiles: Array<LinkedCheckoutChangedFile>;
+  changedFilesTotalCount: Scalars["Int"]["output"];
+  changedFilesTruncated: Scalars["Boolean"]["output"];
   currentBranch?: Maybe<Scalars["String"]["output"]>;
   currentCommitSha?: Maybe<Scalars["String"]["output"]>;
   hasUncommittedChanges: Scalars["Boolean"]["output"];
@@ -584,6 +586,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -628,6 +631,7 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
+  setOrgSecret: OrgSecret;
   startSession: Session;
   steerQueuedMessage: Event;
   subscribe: Participant;
@@ -774,6 +778,11 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteOrgSecretArgs = {
+  id: Scalars["ID"]["input"];
+  orgId: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -1001,6 +1010,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSetOrgSecretArgs = {
+  input: SetOrgSecretInput;
+};
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -1141,6 +1154,15 @@ export type OrgMember = {
   user: User;
 };
 
+export type OrgSecret = {
+  __typename?: "OrgSecret";
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type Organization = {
   __typename?: "Organization";
   agentEnvironments: Array<AgentEnvironment>;
@@ -1210,6 +1232,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
@@ -1225,8 +1248,9 @@ export type Query = {
   sessionGroupBranchDiff: Array<BranchDiffFile>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
+  sessionGroupFileContentWithSource: SessionGroupFileContentResult;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
-  sessionGroupWorktreeChanges: Array<LinkedCheckoutChangedFile>;
+  sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
   sessionSlashCommands: Array<SlashCommand>;
@@ -1344,6 +1368,10 @@ export type QueryMySessionsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryOrgSecretsArgs = {
+  orgId: Scalars["ID"]["input"];
+};
+
 export type QueryOrganizationArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1412,6 +1440,11 @@ export type QuerySessionGroupFileAtRefArgs = {
 };
 
 export type QuerySessionGroupFileContentArgs = {
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -1640,6 +1673,14 @@ export type SessionGroup = {
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
 
+export type SessionGroupFileContentResult = {
+  __typename?: "SessionGroupFileContentResult";
+  content: Scalars["String"]["output"];
+  ref: Scalars["String"]["output"];
+  requestedRef: Scalars["String"]["output"];
+  usedFallback: Scalars["Boolean"]["output"];
+};
+
 export type SessionGroupStatus =
   | "archived"
   | "failed"
@@ -1702,6 +1743,12 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetOrgSecretInput = {
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+  value: Scalars["String"]["input"];
 };
 
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
@@ -1927,6 +1974,13 @@ export type User = {
 };
 
 export type UserRole = "admin" | "member" | "observer";
+
+export type WorktreeChangesResult = {
+  __typename?: "WorktreeChangesResult";
+  files: Array<LinkedCheckoutChangedFile>;
+  totalCount: Scalars["Int"]["output"];
+  truncated: Scalars["Boolean"]["output"];
+};
 
 export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
@@ -2183,18 +2237,23 @@ export type SessionGroupWorktreeChangesQueryVariables = Exact<{
 
 export type SessionGroupWorktreeChangesQuery = {
   __typename?: "Query";
-  sessionGroupWorktreeChanges: Array<{
-    __typename?: "LinkedCheckoutChangedFile";
-    path: string;
-    status: string;
-    additions: number;
-    deletions: number;
-    diff: string;
+  sessionGroupWorktreeChanges: {
+    __typename?: "WorktreeChangesResult";
+    totalCount: number;
     truncated: boolean;
-    originalContent: string;
-    modifiedContent: string;
-    contentTruncated: boolean;
-  }>;
+    files: Array<{
+      __typename?: "LinkedCheckoutChangedFile";
+      path: string;
+      status: string;
+      additions: number;
+      deletions: number;
+      diff: string;
+      truncated: boolean;
+      originalContent: string;
+      modifiedContent: string;
+      contentTruncated: boolean;
+    }>;
+  };
 };
 
 export type RevertSessionGroupFileChangeMutationVariables = Exact<{
@@ -2232,7 +2291,13 @@ export type SessionGroupFileContentQueryVariables = Exact<{
 
 export type SessionGroupFileContentQuery = {
   __typename?: "Query";
-  sessionGroupFileContent: string;
+  sessionGroupFileContentWithSource: {
+    __typename?: "SessionGroupFileContentResult";
+    content: string;
+    ref: string;
+    requestedRef: string;
+    usedFallback: boolean;
+  };
 };
 
 export type SaveSessionGroupFileMutationVariables = Exact<{
@@ -2262,7 +2327,7 @@ export type SessionGroupWorktreeChangesForCommitButtonQueryVariables = Exact<{
 
 export type SessionGroupWorktreeChangesForCommitButtonQuery = {
   __typename?: "Query";
-  sessionGroupWorktreeChanges: Array<{ __typename?: "LinkedCheckoutChangedFile"; path: string }>;
+  sessionGroupWorktreeChanges: { __typename?: "WorktreeChangesResult"; totalCount: number };
 };
 
 export type SessionDetailQueryVariables = Exact<{
@@ -2598,6 +2663,14 @@ export type AgentEnvironmentsSettingsQuery = {
     defaultBranch: string;
     webhookActive: boolean;
   }>;
+  orgSecrets: Array<{
+    __typename?: "OrgSecret";
+    id: string;
+    orgId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   myConnections: Array<{
     __typename?: "ConnectionsBridge";
     bridge: {
@@ -2612,6 +2685,22 @@ export type AgentEnvironmentsSettingsQuery = {
       __typename?: "ConnectionsRepoEntry";
       repo: { __typename?: "Repo"; id: string; name: string };
     }>;
+  }>;
+};
+
+export type OrgSecretsQueryVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+}>;
+
+export type OrgSecretsQuery = {
+  __typename?: "Query";
+  orgSecrets: Array<{
+    __typename?: "OrgSecret";
+    id: string;
+    orgId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
   }>;
 };
 
@@ -2676,6 +2765,29 @@ export type TestAgentEnvironmentMutation = {
     message?: string | null;
   };
 };
+
+export type SetOrgSecretMutationVariables = Exact<{
+  input: SetOrgSecretInput;
+}>;
+
+export type SetOrgSecretMutation = {
+  __typename?: "Mutation";
+  setOrgSecret: {
+    __typename?: "OrgSecret";
+    id: string;
+    orgId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+
+export type DeleteOrgSecretMutationVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+  id: Scalars["ID"]["input"];
+}>;
+
+export type DeleteOrgSecretMutation = { __typename?: "Mutation"; deleteOrgSecret: boolean };
 
 export type CreateRepoMutationVariables = Exact<{
   input: CreateRepoInput;
@@ -4165,15 +4277,26 @@ export const SessionGroupWorktreeChangesDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "path" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "additions" } },
-                { kind: "Field", name: { kind: "Name", value: "deletions" } },
-                { kind: "Field", name: { kind: "Name", value: "diff" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "files" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "path" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "additions" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletions" } },
+                      { kind: "Field", name: { kind: "Name", value: "diff" } },
+                      { kind: "Field", name: { kind: "Name", value: "truncated" } },
+                      { kind: "Field", name: { kind: "Name", value: "originalContent" } },
+                      { kind: "Field", name: { kind: "Name", value: "modifiedContent" } },
+                      { kind: "Field", name: { kind: "Name", value: "contentTruncated" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "totalCount" } },
                 { kind: "Field", name: { kind: "Name", value: "truncated" } },
-                { kind: "Field", name: { kind: "Name", value: "originalContent" } },
-                { kind: "Field", name: { kind: "Name", value: "modifiedContent" } },
-                { kind: "Field", name: { kind: "Name", value: "contentTruncated" } },
               ],
             },
           },
@@ -4381,7 +4504,7 @@ export const SessionGroupFileContentDocument = {
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "sessionGroupFileContent" },
+            name: { kind: "Name", value: "sessionGroupFileContentWithSource" },
             arguments: [
               {
                 kind: "Argument",
@@ -4394,6 +4517,15 @@ export const SessionGroupFileContentDocument = {
                 value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
               },
             ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "content" } },
+                { kind: "Field", name: { kind: "Name", value: "ref" } },
+                { kind: "Field", name: { kind: "Name", value: "requestedRef" } },
+                { kind: "Field", name: { kind: "Name", value: "usedFallback" } },
+              ],
+            },
           },
         ],
       },
@@ -4543,7 +4675,7 @@ export const SessionGroupWorktreeChangesForCommitButtonDocument = {
             ],
             selectionSet: {
               kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "path" } }],
+              selections: [{ kind: "Field", name: { kind: "Name", value: "totalCount" } }],
             },
           },
         ],
@@ -5485,6 +5617,27 @@ export const AgentEnvironmentsSettingsDocument = {
           },
           {
             kind: "Field",
+            name: { kind: "Name", value: "orgSecrets" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
             name: { kind: "Name", value: "myConnections" },
             selectionSet: {
               kind: "SelectionSet",
@@ -5534,6 +5687,52 @@ export const AgentEnvironmentsSettingsDocument = {
   AgentEnvironmentsSettingsQuery,
   AgentEnvironmentsSettingsQueryVariables
 >;
+export const OrgSecretsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "OrgSecrets" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "orgSecrets" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<OrgSecretsQuery, OrgSecretsQueryVariables>;
 export const CreateAgentEnvironmentDocument = {
   kind: "Document",
   definitions: [
@@ -5728,6 +5927,101 @@ export const TestAgentEnvironmentDocument = {
     },
   ],
 } as unknown as DocumentNode<TestAgentEnvironmentMutation, TestAgentEnvironmentMutationVariables>;
+export const SetOrgSecretDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SetOrgSecret" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SetOrgSecretInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "setOrgSecret" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "orgId" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SetOrgSecretMutation, SetOrgSecretMutationVariables>;
+export const DeleteOrgSecretDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteOrgSecret" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "deleteOrgSecret" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DeleteOrgSecretMutation, DeleteOrgSecretMutationVariables>;
 export const CreateRepoDocument = {
   kind: "Document",
   definitions: [

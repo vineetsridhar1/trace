@@ -117,6 +117,8 @@ function emptyLinkedCheckoutStatus(repoId: string) {
     restoreCommitSha: null,
     hasUncommittedChanges: false,
     changedFiles: [],
+    changedFilesTotalCount: 0,
+    changedFilesTruncated: false,
   };
 }
 

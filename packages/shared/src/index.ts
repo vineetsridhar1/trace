@@ -56,6 +56,7 @@ export type {
   BridgeCommitFileChangesCommand,
   BridgeFileCommitResult,
   BridgeWorktreeChangesCommand,
+  BridgeWorktreeChangesPayload,
   BridgeWorktreeChangesResult,
   BridgeRevertWorktreeFileCommand,
   BridgeRevertWorktreeFileResult,
@@ -197,9 +198,8 @@ export {
   hasVisibleUserSessionContent,
 } from "./session-content.js";
 export {
-  CLOUD_MACHINE_RUNTIME_PREFIX,
   PROVISIONED_RUNTIME_PREFIX,
-  isCloudMachineRuntimeId,
+  isProvisionedRuntimeId,
 } from "./runtime-ids.js";
 export {
   branchNameFromGitRef,

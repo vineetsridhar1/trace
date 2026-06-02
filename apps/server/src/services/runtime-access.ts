@@ -1,5 +1,5 @@
 import { Prisma, type BridgeAccessCapability, type BridgeAccessScopeType } from "@prisma/client";
-import { isCloudMachineRuntimeId } from "@trace/shared";
+import { isProvisionedRuntimeId } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -196,7 +196,7 @@ function runtimeHostingMode(
   const runtime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
   if (runtime) return runtime.hostingMode;
   if (persisted) return "local";
-  if (isCloudMachineRuntimeId(runtimeInstanceId)) return "cloud";
+  if (isProvisionedRuntimeId(runtimeInstanceId)) return "cloud";
   return null;
 }
 

@@ -26,9 +26,8 @@ export {
   isSupportedReasoningEffort,
 } from "./models.js";
 export {
-  CLOUD_MACHINE_RUNTIME_PREFIX,
   PROVISIONED_RUNTIME_PREFIX,
-  isCloudMachineRuntimeId,
+  isProvisionedRuntimeId,
 } from "./runtime-ids.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";

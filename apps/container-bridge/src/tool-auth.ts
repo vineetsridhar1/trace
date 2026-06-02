@@ -1,4 +1,5 @@
 import { execFile, spawn } from "child_process";
+import { buildChildProcessEnv } from "@trace/shared/adapters";
 
 let codexLoginPromise: Promise<void> | null = null;
 let codexLoggedIn = false;
@@ -10,13 +11,18 @@ const TOOL_ENV_VARS: Partial<Record<string, string>> = {
 
 function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = execFile(binary, ["--version"], { timeout: 2_000 }, (error) => {
-      if (error) {
-        reject(new Error(`Cannot run ${tool}: the \`${binary}\` binary was not found on PATH.`));
-      } else {
-        resolve();
-      }
-    });
+    const child = execFile(
+      binary,
+      ["--version"],
+      { env: buildChildProcessEnv(), timeout: 2_000 },
+      (error) => {
+        if (error) {
+          reject(new Error(`Cannot run ${tool}: the \`${binary}\` binary was not found on PATH.`));
+        } else {
+          resolve();
+        }
+      },
+    );
     child.on("error", () => {
       reject(new Error(`Cannot run ${tool}: the \`${binary}\` binary was not found on PATH.`));
     });
@@ -25,15 +31,18 @@ function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
 
 async function loginCodex(): Promise<void> {
   if (codexLoggedIn) return;
-  if (!process.env.OPENAI_API_KEY) return;
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return;
   if (codexLoginPromise) return codexLoginPromise;
 
   console.log("[container-bridge] logging in to codex...");
   codexLoginPromise = new Promise<void>((resolve, reject) => {
-    const child = spawn("sh", ["-c", 'echo "$OPENAI_API_KEY" | codex login --with-api-key'], {
-      env: { ...process.env },
-      stdio: ["inherit", "pipe", "pipe"],
+    const child = spawn("codex", ["login", "--with-api-key"], {
+      env: buildChildProcessEnv(),
+      stdio: ["pipe", "pipe", "pipe"],
     });
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(apiKey);
 
     const outLines: string[] = [];
     const errLines: string[] = [];

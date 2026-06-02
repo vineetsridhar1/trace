@@ -8,6 +8,7 @@ import {
   Code,
   MonitorCog,
   ServerCog,
+  KeyRound,
   Plug,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
@@ -20,6 +21,7 @@ import { MembersSection } from "./MembersSection";
 import { ChannelsSection } from "./ChannelsSection";
 import { BridgeAccessSection } from "./BridgeAccessSection";
 import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
+import { OrgSecretsSection } from "./OrgSecretsSection";
 import { ConnectionsSection } from "./ConnectionsSection";
 import { IntegrationsSection } from "./IntegrationsSection";
 import { isLocalMode } from "../../lib/runtime-mode";
@@ -34,6 +36,7 @@ type SettingsTab =
   | "connections"
   | "bridge-access"
   | "agent-environments"
+  | "org-secrets"
   | "integrations";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
@@ -45,6 +48,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "api-keys", label: "API Keys", icon: Key },
   { id: "bridge-access", label: "Bridge Access", icon: MonitorCog },
   { id: "agent-environments", label: "Agent Environments", icon: ServerCog },
+  { id: "org-secrets", label: "Org Secrets", icon: KeyRound },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "channels", label: "Channels", icon: Code },
 ];
@@ -91,6 +95,7 @@ export function SettingsPage() {
     activeTab === "channels" ||
     activeTab === "bridge-access" ||
     activeTab === "agent-environments" ||
+    activeTab === "org-secrets" ||
     activeTab === "integrations"
       ? "mx-auto max-w-5xl"
       : "mx-auto max-w-2xl";
@@ -133,6 +138,7 @@ export function SettingsPage() {
             {activeTab === "api-keys" && <ApiTokensSection />}
             {activeTab === "bridge-access" && <BridgeAccessSection />}
             {activeTab === "agent-environments" && <AgentEnvironmentsSection />}
+            {activeTab === "org-secrets" && <OrgSecretsSection />}
             {activeTab === "integrations" && <IntegrationsSection />}
             {activeTab === "channels" && <ChannelsSection />}
           </div>

@@ -52,15 +52,10 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function optionalEnv(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
-}
-
 async function main(): Promise<void> {
   const bridgeUrl = requireEnv("TRACE_BRIDGE_URL");
-  const bridgeToken = optionalEnv("TRACE_RUNTIME_TOKEN") ?? requireEnv("BRIDGE_TOKEN");
-  const machineId = optionalEnv("TRACE_RUNTIME_INSTANCE_ID") ?? requireEnv("CLOUD_MACHINE_ID");
+  const bridgeToken = requireEnv("TRACE_RUNTIME_TOKEN");
+  const runtimeInstanceId = requireEnv("TRACE_RUNTIME_INSTANCE_ID");
   const tool = process.env.CODING_TOOL ?? process.env.TRACE_TOOL ?? "claude_code";
 
   // Set up SSH key before any git operations
@@ -70,9 +65,8 @@ async function main(): Promise<void> {
   await loginAvailableTools();
 
   // Connect to server — sessions register dynamically via prepare commands
-  const bridge = new ContainerBridge(bridgeUrl, bridgeToken, machineId, tool);
+  const bridge = new ContainerBridge(bridgeUrl, bridgeToken, runtimeInstanceId, tool);
   bridge.connect();
-  bridge.startIdleWatch();
 
   // Keep the process alive
   process.on("SIGTERM", () => {

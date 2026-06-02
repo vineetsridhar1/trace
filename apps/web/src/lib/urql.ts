@@ -2,10 +2,12 @@ import { createGqlClient, type GqlClient } from "@trace/client-core";
 import { useConnectionStore } from "../stores/connection";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
-const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+const browserLocation =
+  typeof window !== "undefined" ? window.location : { protocol: "http:", host: "localhost" };
+const wsProtocol = browserLocation.protocol === "https:" ? "wss:" : "ws:";
 const wsBase = API_URL
   ? API_URL.replace(/^https?:/, wsProtocol)
-  : `${wsProtocol}//${window.location.host}`;
+  : `${wsProtocol}//${browserLocation.host}`;
 
 function buildClient(): GqlClient {
   return createGqlClient({

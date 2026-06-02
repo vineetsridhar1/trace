@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Event } from "@trace/gql";
 import { mergeCompactTailEventItems, type SessionTimelineDisplayItem } from "./useSessionEvents";
+
+vi.mock("../lib/urql", () => ({
+  client: {
+    query: vi.fn(),
+    subscription: vi.fn(),
+  },
+}));
 
 function sessionEvent(
   partial: Partial<Event> & { id: string; timestamp: string },
