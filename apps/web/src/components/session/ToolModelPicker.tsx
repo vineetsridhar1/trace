@@ -25,7 +25,6 @@ interface ToolModelPickerProps {
   model?: string | null;
   disabled?: boolean;
   disabledToolReasons?: Partial<Record<ToolOptionValue, string>>;
-  onOpen?: () => Promise<void> | void;
   onToolChange: (tool: ToolOptionValue) => Promise<void> | void;
   onModelChange: (model: string) => Promise<void> | void;
 }
@@ -35,7 +34,6 @@ export function ToolModelPicker({
   model,
   disabled,
   disabledToolReasons,
-  onOpen,
   onToolChange,
   onModelChange,
 }: ToolModelPickerProps) {
@@ -61,7 +59,6 @@ export function ToolModelPicker({
       setLayer("tools");
       setPickerTool(nextTool);
       setPickerProvider(getModelProviderForModel(nextTool, model)?.value ?? null);
-      void onOpen?.();
     }
   }
 
