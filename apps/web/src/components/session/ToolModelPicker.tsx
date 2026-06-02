@@ -24,6 +24,7 @@ interface ToolModelPickerProps {
   tool: ToolOptionValue;
   model?: string | null;
   disabled?: boolean;
+  disabledToolReasons?: Partial<Record<ToolOptionValue, string>>;
   onToolChange: (tool: ToolOptionValue) => Promise<void> | void;
   onModelChange: (model: string) => Promise<void> | void;
 }
@@ -32,6 +33,7 @@ export function ToolModelPicker({
   tool,
   model,
   disabled,
+  disabledToolReasons,
   onToolChange,
   onModelChange,
 }: ToolModelPickerProps) {
@@ -61,6 +63,7 @@ export function ToolModelPicker({
   }
 
   async function handleToolSelect(nextTool: ToolOptionValue) {
+    if (nextTool !== tool && disabledToolReasons?.[nextTool]) return;
     setPickerTool(nextTool);
     const nextProviderGroups = getModelProviderGroupsForTool(nextTool);
     const nextProvider =
@@ -133,6 +136,7 @@ export function ToolModelPicker({
               key="tools"
               currentTool={tool}
               pending={pending}
+              disabledToolReasons={disabledToolReasons}
               onSelect={handleToolSelect}
             />
           ) : layer === "providers" ? (
