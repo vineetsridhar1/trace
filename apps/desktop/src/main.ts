@@ -15,6 +15,7 @@ import { setTimeout } from "node:timers";
 import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
   BridgeClient,
+  getGithubCliToken,
   getGithubCliStatus,
   type BridgeConnectionStatus,
 } from "./bridge.js";
@@ -51,6 +52,15 @@ type BuildConfig = {
   productionUrl?: string;
   macUpdateRepo?: string;
 };
+
+type ConfigureGithubTokenFromCliResult =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
 
 function loadBuildConfig(): BuildConfig {
   try {
@@ -93,6 +103,86 @@ async function getSessionCookieHeader(targetUrl: string): Promise<string | null>
 }
 
 const bridge = new BridgeClient(serverUrl, getSessionCookieHeader);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readGraphQLError(payload: unknown): string | null {
+  if (!isRecord(payload) || !Array.isArray(payload.errors)) return null;
+
+  for (const error of payload.errors) {
+    if (isRecord(error) && typeof error.message === "string" && error.message.trim()) {
+      return error.message;
+    }
+  }
+  return null;
+}
+
+function didSetGithubToken(payload: unknown): boolean {
+  if (!isRecord(payload) || !isRecord(payload.data)) return false;
+  const setApiToken = payload.data.setApiToken;
+  return isRecord(setApiToken) && setApiToken.provider === "github" && setApiToken.isSet === true;
+}
+
+async function configureGithubTokenFromCli(): Promise<ConfigureGithubTokenFromCliResult> {
+  try {
+    const token = await getGithubCliToken();
+    const graphqlUrl = new URL("/graphql", serverUrl);
+    const cookieHeader = await getSessionCookieHeader(graphqlUrl.toString());
+    if (!cookieHeader) {
+      throw new Error("Trace login cookie is not available. Sign in again, then retry.");
+    }
+
+    const response = await fetch(graphqlUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: cookieHeader,
+        "X-Trace-Client-Source": "desktop-github-cli-token",
+      },
+      body: JSON.stringify({
+        query: `
+          mutation ConfigureGithubTokenFromCli($input: SetApiTokenInput!) {
+            setApiToken(input: $input) {
+              provider
+              isSet
+              updatedAt
+            }
+          }
+        `,
+        variables: {
+          input: {
+            provider: "github",
+            token,
+          },
+        },
+      }),
+    });
+
+    const responseText = await response.text();
+    let payload: unknown = null;
+    try {
+      payload = responseText ? (JSON.parse(responseText) as unknown) : null;
+    } catch {
+      const fallbackError = responseText || `GraphQL request failed with ${response.status}`;
+      throw new Error(fallbackError);
+    }
+    const graphQLError = readGraphQLError(payload);
+    if (!response.ok || graphQLError) {
+      const fallbackError = responseText || `GraphQL request failed with ${response.status}`;
+      throw new Error(graphQLError ?? fallbackError);
+    }
+    if (!didSetGithubToken(payload)) {
+      throw new Error("Trace did not confirm that the GitHub token was saved.");
+    }
+
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message };
+  }
+}
 
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -307,6 +397,10 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 
 ipcMain.handle("get-github-cli-status", async () => {
   return getGithubCliStatus();
+});
+
+ipcMain.handle("configure-github-token-from-cli", async () => {
+  return configureGithubTokenFromCli();
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());

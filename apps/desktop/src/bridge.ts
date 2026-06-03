@@ -204,6 +204,30 @@ export async function getGithubCliStatus(): Promise<GithubCliStatus> {
   }
 }
 
+export async function getGithubCliToken(): Promise<string> {
+  if (!hasExecutable("gh")) {
+    throw new Error("GitHub CLI (gh) is not installed.");
+  }
+
+  try {
+    const { stdout } = await execFileAsync("gh", ["auth", "token", "--hostname", "github.com"], {
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: "1",
+      },
+      maxBuffer: 1024 * 1024,
+      timeout: 5_000,
+    });
+    const token = stdout.trim();
+    if (!token) {
+      throw new Error("GitHub CLI did not return an auth token.");
+    }
+    return token;
+  } catch (error) {
+    throw new Error(extractExecErrorMessage(error));
+  }
+}
+
 async function inspectLocalPrStatus(workdir: string): Promise<{
   branch: string | null;
   pr: BridgePrObservation | null;

@@ -49,6 +49,15 @@ declare global {
     error: string | null;
   };
 
+  type DesktopGithubCliTokenConfigurationResult =
+    | {
+        ok: true;
+      }
+    | {
+        ok: false;
+        error: string;
+      };
+
   type DesktopLinkedCheckoutStatus = {
     repoId: string;
     repoPath: string | null;
@@ -150,6 +159,7 @@ declare global {
     getRepoPath: (repoId: string) => Promise<string | null>;
     getRepoConfig: (repoId: string) => Promise<DesktopRepoConfig | null>;
     getGithubCliStatus: () => Promise<DesktopGithubCliStatus>;
+    configureGithubTokenFromCli: () => Promise<DesktopGithubCliTokenConfigurationResult>;
     setRepoGitHooksEnabled: (
       repoId: string,
       enabled: boolean,
