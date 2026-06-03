@@ -1,27 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-function getCliStatusDetail({
-  canImportFromCli,
-  canCheckCliStatus,
-  checkingCli,
-  status,
-}: {
-  canImportFromCli: boolean;
-  canCheckCliStatus: boolean;
-  checkingCli: boolean;
-  status: DesktopGithubCliStatus | null;
-}): string | null {
-  if (!canCheckCliStatus) {
-    return "Automatic CLI import is available in Trace Desktop. In a browser, paste a token in Settings.";
-  }
-  if (checkingCli || !status) return "Checking GitHub CLI status on this machine...";
-  if (!status.installed) return "Install GitHub CLI, then run gh auth login.";
-  if (!status.authenticated) return "Run gh auth login on this machine, then retry.";
-  if (!canImportFromCli) return "Restart Trace to load GitHub CLI token import.";
-  return "GitHub CLI is logged in, so Trace can import that token automatically.";
-}
-
 export function useGithubCliTokenConfiguration({
   enabled,
   onConfigured,
@@ -30,6 +9,7 @@ export function useGithubCliTokenConfiguration({
   onConfigured: () => Promise<void> | void;
 }) {
   const [githubCliStatus, setGithubCliStatus] = useState<DesktopGithubCliStatus | null>(null);
+  const [cliStatusChecked, setCliStatusChecked] = useState(false);
   const [checkingCli, setCheckingCli] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [configurationError, setConfigurationError] = useState<string | null>(null);
@@ -46,9 +26,11 @@ export function useGithubCliTokenConfiguration({
     if (!enabled || typeof traceBridge?.getGithubCliStatus !== "function") {
       setGithubCliStatus(null);
       setCheckingCli(false);
+      setCliStatusChecked(enabled);
       return;
     }
 
+    setCliStatusChecked(false);
     setCheckingCli(true);
     try {
       const status = await traceBridge.getGithubCliStatus();
@@ -62,6 +44,7 @@ export function useGithubCliTokenConfiguration({
       });
     } finally {
       setCheckingCli(false);
+      setCliStatusChecked(true);
     }
   }, [enabled]);
 
@@ -73,9 +56,11 @@ export function useGithubCliTokenConfiguration({
     if (!enabled || typeof traceBridge?.getGithubCliStatus !== "function") {
       setGithubCliStatus(null);
       setCheckingCli(false);
+      setCliStatusChecked(enabled);
       return;
     }
 
+    setCliStatusChecked(false);
     setCheckingCli(true);
     traceBridge
       .getGithubCliStatus()
@@ -93,7 +78,10 @@ export function useGithubCliTokenConfiguration({
         });
       })
       .finally(() => {
-        if (!cancelled) setCheckingCli(false);
+        if (!cancelled) {
+          setCheckingCli(false);
+          setCliStatusChecked(true);
+        }
       });
 
     return () => {
@@ -123,16 +111,10 @@ export function useGithubCliTokenConfiguration({
 
   return {
     canConfigureFromCli,
+    checkingCli,
     configuring,
     configurationError,
-    cliStatusDetail: enabled
-      ? getCliStatusDetail({
-          canImportFromCli,
-          canCheckCliStatus,
-          checkingCli,
-          status: githubCliStatus,
-        })
-      : null,
+    showLoginInstructions: enabled && cliStatusChecked && !checkingCli && !canConfigureFromCli,
     cliStatusError:
       githubCliStatus && !githubCliStatus.authenticated ? githubCliStatus.error : null,
     configureFromCli,

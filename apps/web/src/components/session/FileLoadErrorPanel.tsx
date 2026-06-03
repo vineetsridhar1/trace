@@ -17,10 +17,11 @@ export function FileLoadErrorPanel({
   const missingGithubToken = isMissingGithubTokenError(error);
   const {
     canConfigureFromCli,
+    checkingCli,
     configuring,
     configurationError,
-    cliStatusDetail,
     cliStatusError,
+    showLoginInstructions,
     configureFromCli,
     refreshCliStatus,
   } = useGithubCliTokenConfiguration({
@@ -41,7 +42,11 @@ export function FileLoadErrorPanel({
           <p className="break-words text-xs text-muted-foreground">{error}</p>
         </div>
 
-        {missingGithubToken && (
+        {checkingCli && missingGithubToken && (
+          <p className="text-xs text-muted-foreground">Checking GitHub CLI status...</p>
+        )}
+
+        {showLoginInstructions && (
           <div className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface-deep px-4 py-3 text-left">
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium text-foreground">GitHub access is not configured</p>
@@ -55,9 +60,8 @@ export function FileLoadErrorPanel({
                 Run <code className="font-mono text-foreground">gh auth login</code> if GitHub CLI
                 is not logged in.
               </li>
-              <li>Or paste a token in Settings, API Keys, GitHub.</li>
+              <li>Then retry, or paste a token in Settings, API Keys, GitHub.</li>
             </ol>
-            {cliStatusDetail && <p className="text-xs text-muted-foreground">{cliStatusDetail}</p>}
             {cliStatusError && (
               <p className="break-words font-mono text-xs text-muted-foreground">
                 {cliStatusError}
@@ -81,10 +85,12 @@ export function FileLoadErrorPanel({
               {configuring ? "Configuring..." : "Use GitHub CLI token"}
             </Button>
           )}
-          <Button type="button" variant="ghost" size="sm" onClick={() => void handleRetry()}>
-            <RefreshCw data-icon="inline-start" />
-            Retry
-          </Button>
+          {!canConfigureFromCli && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => void handleRetry()}>
+              <RefreshCw data-icon="inline-start" />
+              Retry
+            </Button>
+          )}
         </div>
       </div>
     </div>
