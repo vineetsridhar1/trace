@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("trace", {
   getRepoPath: (repoId: string) => ipcRenderer.invoke("get-repo-path", repoId),
   getRepoConfig: (repoId: string) => ipcRenderer.invoke("get-repo-config", repoId),
   getGithubCliStatus: () => ipcRenderer.invoke("get-github-cli-status"),
+  configureGithubTokenFromCli: () => ipcRenderer.invoke("configure-github-token-from-cli"),
   setRepoGitHooksEnabled: (repoId: string, enabled: boolean) =>
     ipcRenderer.invoke("set-repo-git-hooks-enabled", repoId, enabled),
   getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),

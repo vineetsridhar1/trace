@@ -10,6 +10,7 @@ import { TraceLoader } from "../ui/trace-loader";
 import { getFileRenderViewer, type FileViewMode } from "./file-render-viewers";
 import type { FileEditorBuffer } from "./file-editor-buffer";
 import { CommitSessionGroupChangesDialog } from "./CommitSessionGroupChangesDialog";
+import { FileLoadErrorPanel } from "./FileLoadErrorPanel";
 import { toast } from "sonner";
 
 const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
@@ -289,18 +290,7 @@ export function MonacoFileViewer({
   }
 
   if (error) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-[#1e1e1e] px-4 text-center">
-        <p className="text-sm text-red-400">Failed to load file</p>
-        <p className="text-xs text-muted-foreground">{error}</p>
-        <button
-          onClick={() => fetchContent(false)}
-          className="mt-2 text-xs text-blue-400 hover:underline"
-        >
-          Retry
-        </button>
-      </div>
-    );
+    return <FileLoadErrorPanel error={error} onRetry={() => fetchContent(false)} />;
   }
 
   const language = getLanguageFromPath(filePath);
