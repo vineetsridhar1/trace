@@ -66,6 +66,7 @@ export async function ensureRepo(
       );
       await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
     }
+    await detachRepoHead(repoPath);
     return repoPath;
   }
 
@@ -82,7 +83,12 @@ export async function ensureRepo(
     authUrl,
     repoPath,
   ]);
+  await detachRepoHead(repoPath);
   return repoPath;
+}
+
+async function detachRepoHead(repoPath: string): Promise<void> {
+  await execFileAsync("git", ["checkout", "--detach"], { cwd: repoPath });
 }
 
 function repoCacheReferenceArgs(repoId: string): string[] {

@@ -80,6 +80,7 @@ describe("workspace repo setup", () => {
       "https://github.com/acme/project.git",
       "/repos/repo-1",
     ]);
+    expect(gitArgsAt(1)).toEqual(["checkout", "--detach"]);
   });
 
   it("uses the default branch for new clones when no branch is requested", async () => {
@@ -141,6 +142,7 @@ describe("workspace repo setup", () => {
       "origin",
       "+refs/heads/feature/work:refs/remotes/origin/feature/work",
     ]);
+    expect(gitArgsAt(1)).toEqual(["checkout", "--detach"]);
   });
 
   it("keeps read-only repo paths usable after cloning", async () => {
