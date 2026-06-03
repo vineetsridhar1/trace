@@ -43,15 +43,10 @@ import {
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
-
-const RUNTIME_BOOTING_STATES = new Set([
-  "pending",
-  "requested",
-  "provisioning",
-  "booting",
-  "connecting",
-]);
-const RUNTIME_FAILURE_STATES = new Set(["failed", "timed_out", "deprovision_failed"]);
+import {
+  getRuntimeLifecycleState,
+  isRuntimeLifecycleFailureState,
+} from "./sessionRuntimeLifecycle";
 
 function getConnectionState(connection: Record<string, unknown> | null | undefined): string | null {
   const state = connection?.state;
@@ -403,19 +398,11 @@ export function SessionDetailView({
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);
-  const groupRuntimeConnected = groupConnectionState === "connected";
-  const suppressSharedCloudStartupNotice =
-    groupRuntimeConnected &&
-    connectionState !== null &&
-    RUNTIME_BOOTING_STATES.has(connectionState);
-  const runtimeLifecycleState =
-    hosting === "cloud" &&
-    connectionState !== null &&
-    connectionState !== "connected" &&
-    !suppressSharedCloudStartupNotice &&
-    (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
-      ? connectionState
-      : null;
+  const runtimeLifecycleState = getRuntimeLifecycleState({
+    hosting,
+    connectionState,
+    groupConnectionState,
+  });
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -685,11 +672,13 @@ function RuntimeLifecycleNotice({
     | null
     | undefined;
   const cloudDisabledReason = repoRemoteKnownMissing(repo) ? CLOUD_REPO_REMOTE_REQUIRED : null;
-  const failed = RUNTIME_FAILURE_STATES.has(connectionState);
+  const failed = isRuntimeLifecycleFailureState(connectionState);
   const providerStatus =
     typeof connection?.providerStatus === "string" ? connection.providerStatus : null;
   const label = failed
-    ? connectionState === "timed_out"
+    ? connectionState === "disconnected"
+      ? "Cloud runtime disconnected"
+      : connectionState === "timed_out"
       ? "Cloud runtime timed out"
       : "Cloud runtime failed"
     : connectionState === "requested"
@@ -702,7 +691,9 @@ function RuntimeLifecycleNotice({
           ? "Waiting for cloud bridge"
           : "Starting cloud runtime";
   const body = failed
-    ? "Trace could not finish starting the cloud runtime."
+    ? connectionState === "disconnected"
+      ? "Trace lost contact with the cloud runtime. Retry reconnects if it is available, or starts a fresh cloud container."
+      : "Trace could not finish starting the cloud runtime."
     : connectionState === "requested"
       ? "Trace sent the recovery request and is waiting for the provider to report progress."
       : connectionState === "connecting"
