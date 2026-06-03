@@ -271,6 +271,10 @@ pnpm dev:web          # Web on http://localhost:3000
 pnpm dev:desktop      # Electron desktop bridge
 ```
 
+Pass `--port <web-port>` to any Trace dev startup command to shift the local
+web port and matching API port together, e.g. `pnpm dev:local -- --port 3001`
+runs web on `3001` and API on `4001`.
+
 <br/>
 
 ## Architecture
@@ -350,6 +354,12 @@ pnpm codegen          # Prisma generate + GraphQL codegen + gql build
 pnpm db:migrate       # Run Prisma migrations
 pnpm db:generate      # Generate Prisma client
 ```
+
+All Trace dev startup commands accept `--port <web-port>`. The prod desktop
+helper starts the local web app before Electron, so
+`pnpm dev:desktop:prod -- --port 3001` opens Electron against the local web app
+on `3001` and production API. Use `pnpm dev:desktop:prod-web` to load the hosted
+production web app directly.
 
 ### CI
 
