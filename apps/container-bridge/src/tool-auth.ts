@@ -7,9 +7,9 @@ import { join } from "path";
 let codexLoginPromise: Promise<void> | null = null;
 let codexLoggedIn = false;
 
-const TOOL_ENV_VARS: Partial<Record<string, string>> = {
+const TOOL_ENV_VARS: Partial<Record<string, string | string[]>> = {
   claude_code: "ANTHROPIC_API_KEY",
-  codex: "OPENAI_API_KEY",
+  codex: ["CODEX_ACCESS_TOKEN", "OPENAI_API_KEY"],
 };
 
 function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
@@ -34,18 +34,21 @@ function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
 
 async function loginCodex(): Promise<void> {
   if (codexLoggedIn) return;
+  const accessToken = process.env.CODEX_ACCESS_TOKEN;
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return;
+  const token = accessToken ?? apiKey;
+  if (!token) return;
   if (codexLoginPromise) return codexLoginPromise;
 
   console.log("[container-bridge] logging in to codex...");
   codexLoginPromise = new Promise<void>((resolve, reject) => {
-    const child = spawn("codex", ["login", "--with-api-key"], {
+    const loginFlag = accessToken ? "--with-access-token" : "--with-api-key";
+    const child = spawn("codex", ["login", loginFlag], {
       env: buildChildProcessEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin?.on("error", () => {});
-    child.stdin?.end(apiKey);
+    child.stdin?.end(token);
 
     const outLines: string[] = [];
     const errLines: string[] = [];
@@ -78,9 +81,15 @@ async function loginCodex(): Promise<void> {
 export async function ensureToolReady(tool: string): Promise<void> {
   // Fail fast with a clear message if the required API key is missing
   const requiredEnv = TOOL_ENV_VARS[tool];
-  if (requiredEnv && !process.env[requiredEnv]) {
+  const requiredEnvs = Array.isArray(requiredEnv) ? requiredEnv : requiredEnv ? [requiredEnv] : [];
+  if (requiredEnvs.length > 0 && !requiredEnvs.some((envVar) => process.env[envVar])) {
+    if (tool === "codex") {
+      throw new Error(
+        "Cannot run codex: Connect a Codex access token in Settings or provide OPENAI_API_KEY in the runtime environment.",
+      );
+    }
     throw new Error(
-      `Cannot run ${tool}: ${requiredEnv} is not set. Add your API key in Settings → API Tokens.`,
+      `Cannot run ${tool}: ${requiredEnvs[0]} is not set. Add your API key in Settings → API Tokens.`,
     );
   }
 
@@ -114,7 +123,8 @@ export async function loginAvailableTools(): Promise<void> {
   const tasks: Promise<void>[] = [];
 
   for (const [tool, envVar] of Object.entries(TOOL_ENV_VARS)) {
-    if (!envVar || !process.env[envVar]) continue;
+    const envVars = Array.isArray(envVar) ? envVar : envVar ? [envVar] : [];
+    if (!envVars.some((name) => process.env[name])) continue;
     tasks.push(ensureToolReady(tool));
   }
 

@@ -209,6 +209,19 @@ async function resolveUserGithubToken(userId: string): Promise<string | undefine
   }
 }
 
+async function resolveUserCodexAccessToken(userId: string): Promise<string | undefined> {
+  try {
+    const tokens = await apiTokenService.getDecryptedTokens(userId);
+    return tokens.codex_access_token;
+  } catch (err) {
+    logAgentEnvironmentTelemetry("user_codex_access_token_lookup_failed", {
+      userId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
+}
+
 function connectionRecord(connection: unknown): Record<string, unknown> | null {
   if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
   return connection as Record<string, unknown>;
@@ -1951,6 +1964,10 @@ export class SessionRouter {
           adapterType === "provisioned"
             ? await resolveUserGithubToken(options.createdById)
             : undefined;
+        const userCodexAccessToken =
+          adapterType === "provisioned" && options.tool === "codex"
+            ? await resolveUserCodexAccessToken(options.createdById)
+            : undefined;
 
         const startResult = await adapter.startSession({
           sessionId: options.sessionId,
@@ -1971,6 +1988,7 @@ export class SessionRouter {
           runtimeToken: options.runtimeToken,
           bridgeUrl: options.bridgeUrl,
           userGithubToken,
+          userCodexAccessToken,
         });
 
         if (startResult.runtimeInstanceId && adapterType !== "provisioned") {
@@ -2292,6 +2310,10 @@ export class SessionRouter {
       const conn = connectionRecord(session.connection);
       const environment = await this.resolveRuntimeEnvironment(conn);
       const userGithubToken = await resolveUserGithubToken(session.createdById);
+      const userCodexAccessToken =
+        session.tool === "codex"
+          ? await resolveUserCodexAccessToken(session.createdById)
+          : undefined;
       const startResult = await adapter.startSession({
         sessionId,
         organizationId: session.organizationId,
@@ -2301,6 +2323,7 @@ export class SessionRouter {
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
         userGithubToken,
+        userCodexAccessToken,
       });
       const runtimeId =
         startResult.runtimeInstanceId ??
