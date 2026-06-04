@@ -195,8 +195,18 @@ function adapterTypeFromHosting(
 }
 
 async function resolveUserGithubToken(userId: string): Promise<string | undefined> {
-  const tokens = await apiTokenService.getDecryptedTokens(userId);
-  return tokens.github;
+  try {
+    const tokens = await apiTokenService.getDecryptedTokens(userId);
+    return tokens.github;
+  } catch (err) {
+    // Fall back to launcher-side App-minting on transient lookup failures
+    // (DB blip, decryption error) instead of aborting the session start.
+    logAgentEnvironmentTelemetry("user_github_token_lookup_failed", {
+      userId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
 }
 
 function connectionRecord(connection: unknown): Record<string, unknown> | null {

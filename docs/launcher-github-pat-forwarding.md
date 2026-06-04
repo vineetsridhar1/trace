@@ -121,7 +121,15 @@ coordinate later:
   GitHub PAT in settings under `apps/web/src/components/settings/ApiTokensSection.tsx`).
   Users who haven't done that get the existing App-minting behavior.
 - No environment flag toggles this; the contract is purely "field present →
-  use PAT, field absent → mint."
+  use PAT, field absent → mint." If a compliance scenario requires forcing
+  the App-mint path org-wide, add an org-level toggle in trace and short-circuit
+  the lookup — don't try to gate it from the launcher side, since the launcher
+  has no concept of org policy.
+- Transient PAT lookup failures on the trace side (DB blip, decryption error)
+  degrade gracefully to the App-mint path: trace logs
+  `user_github_token_lookup_failed` to telemetry and omits `GITHUB_TOKEN` from
+  `bootstrapEnv`. The launcher should see the same behavior as a user with no
+  PAT configured.
 - Safe to deploy the trace side and the launcher side in either order:
   - Trace first + old launcher: launcher ignores the unknown `GITHUB_TOKEN`
     field and continues to mint, so authorship doesn't improve, but nothing

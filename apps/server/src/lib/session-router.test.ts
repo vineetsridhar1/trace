@@ -595,6 +595,133 @@ describe("SessionRouter runtime adapter dispatch", () => {
     );
   });
 
+  it("forwards the session creator's GitHub PAT through transitionRuntime resume", async () => {
+    apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "ghp_resume_pat" });
+    prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+      connection: null,
+      createdById: "creator-user",
+      organizationId: "org-1",
+      tool: "codex",
+      model: null,
+      reasoningEffort: null,
+    });
+
+    const provisionedStart = vi
+      .fn()
+      .mockResolvedValue({ runtimeInstanceId: "runtime-resume-1", status: "connected" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      startSession: provisionedStart,
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+    // Pre-register the runtime so waitForBridge resolves immediately.
+    router.registerRuntime({
+      id: "runtime-resume-1",
+      label: "Resumed runtime",
+      ws: makeWs(),
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+    });
+
+    await router.transitionRuntime("session-resume", "cloud", "resume");
+
+    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledWith("creator-user");
+    expect(provisionedStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-resume",
+        actorId: "creator-user",
+        userGithubToken: "ghp_resume_pat",
+      }),
+    );
+  });
+
+  it("falls back gracefully when the GitHub PAT lookup throws", async () => {
+    apiTokenServiceMock.getDecryptedTokens.mockRejectedValueOnce(new Error("db unavailable"));
+
+    const provisionedStart = vi.fn().mockResolvedValue({ status: "connecting" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      startSession: provisionedStart,
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      runtimeToken: "runtime-token",
+      bridgeUrl: "wss://trace.example/bridge",
+      onFailed: vi.fn(),
+      onWorkspaceReady: vi.fn(),
+    });
+
+    await flushPromises();
+
+    expect(provisionedStart).toHaveBeenCalledWith(
+      expect.objectContaining({ userGithubToken: undefined }),
+    );
+  });
+
   it("emits provisioned lifecycle events only after bridge readiness", async () => {
     const callOrder: string[] = [];
     const provisionedAdapter: RuntimeAdapter = {
