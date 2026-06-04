@@ -27,6 +27,7 @@ export type RuntimeStartInput = {
   runtimeInstanceId?: string;
   runtimeToken?: string;
   bridgeUrl?: string;
+  userGithubToken?: string;
 };
 
 export type RuntimeStartResult = {

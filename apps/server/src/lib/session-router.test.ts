@@ -5,14 +5,24 @@ vi.mock("./db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
+vi.mock("../services/api-token.js", () => ({
+  apiTokenService: {
+    getDecryptedTokens: vi.fn(),
+  },
+}));
+
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
+import { apiTokenService } from "../services/api-token.js";
 import type { createPrismaMock } from "../../test/helpers.js";
 
 const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
+const apiTokenServiceMock = apiTokenService as unknown as {
+  getDecryptedTokens: ReturnType<typeof vi.fn>;
+};
 
 function makeWs() {
   return {
@@ -36,10 +46,12 @@ function fetchMock(): ReturnType<typeof vi.fn> {
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({});
   process.env.TRACE_CLOUD_LAUNCHER_TOKEN = "launcher-secret";
 });
 
@@ -567,7 +579,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onWorkspaceReady: vi.fn(),
     });
 
-    await Promise.resolve();
+    await flushPromises();
 
     expect(provisionedStart).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -580,6 +592,133 @@ describe("SessionRouter runtime adapter dispatch", () => {
         runtimeToken: "runtime-token",
         bridgeUrl: "wss://trace.example/bridge",
       }),
+    );
+  });
+
+  it("forwards the session creator's GitHub PAT through transitionRuntime resume", async () => {
+    apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "ghp_resume_pat" });
+    prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+      connection: null,
+      createdById: "creator-user",
+      organizationId: "org-1",
+      tool: "codex",
+      model: null,
+      reasoningEffort: null,
+    });
+
+    const provisionedStart = vi
+      .fn()
+      .mockResolvedValue({ runtimeInstanceId: "runtime-resume-1", status: "connected" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      startSession: provisionedStart,
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+    // Pre-register the runtime so waitForBridge resolves immediately.
+    router.registerRuntime({
+      id: "runtime-resume-1",
+      label: "Resumed runtime",
+      ws: makeWs(),
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+    });
+
+    await router.transitionRuntime("session-resume", "cloud", "resume");
+
+    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledWith("creator-user");
+    expect(provisionedStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-resume",
+        actorId: "creator-user",
+        userGithubToken: "ghp_resume_pat",
+      }),
+    );
+  });
+
+  it("falls back gracefully when the GitHub PAT lookup throws", async () => {
+    apiTokenServiceMock.getDecryptedTokens.mockRejectedValueOnce(new Error("db unavailable"));
+
+    const provisionedStart = vi.fn().mockResolvedValue({ status: "connecting" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      startSession: provisionedStart,
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      runtimeToken: "runtime-token",
+      bridgeUrl: "wss://trace.example/bridge",
+      onFailed: vi.fn(),
+      onWorkspaceReady: vi.fn(),
+    });
+
+    await flushPromises();
+
+    expect(provisionedStart).toHaveBeenCalledWith(
+      expect.objectContaining({ userGithubToken: undefined }),
     );
   });
 

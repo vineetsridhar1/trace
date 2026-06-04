@@ -609,6 +609,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
+        ...(input.userGithubToken ? { GITHUB_TOKEN: input.userGithubToken } : {}),
       },
       metadata: {
         requestedBy: input.actorId,

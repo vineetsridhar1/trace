@@ -241,6 +241,55 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(body.bootstrapEnv.TRACE_BRIDGE_URL).toBe("wss://trace-tunnel.example/bridge");
   });
 
+  it("forwards a user GitHub PAT into bootstrapEnv as GITHUB_TOKEN", async () => {
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "codex",
+      bridgeUrl: "wss://trace.example/bridge",
+      userGithubToken: "ghp_user_pat_value",
+    });
+
+    const body = JSON.parse(fetchMock().mock.calls[0][1].body as string) as {
+      bootstrapEnv: Record<string, string>;
+    };
+    expect(body.bootstrapEnv.GITHUB_TOKEN).toBe("ghp_user_pat_value");
+  });
+
+  it("omits GITHUB_TOKEN from bootstrapEnv when no user PAT is supplied", async () => {
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "codex",
+      bridgeUrl: "wss://trace.example/bridge",
+    });
+
+    const body = JSON.parse(fetchMock().mock.calls[0][1].body as string) as {
+      bootstrapEnv: Record<string, string>;
+    };
+    expect(body.bootstrapEnv).not.toHaveProperty("GITHUB_TOKEN");
+  });
+
   it("keeps runtime bridge tokens valid beyond the startup window for reconnects", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-30T12:00:00.000Z"));

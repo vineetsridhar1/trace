@@ -30,6 +30,7 @@ import type {
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
+import { apiTokenService } from "../services/api-token.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import {
   RuntimeAdapterRegistry,
@@ -191,6 +192,21 @@ function adapterTypeFromHosting(
   if (hosting === "cloud") return "provisioned";
   if (hosting === "local") return "local";
   return runtimeAdapters.get(hosting).type;
+}
+
+async function resolveUserGithubToken(userId: string): Promise<string | undefined> {
+  try {
+    const tokens = await apiTokenService.getDecryptedTokens(userId);
+    return tokens.github;
+  } catch (err) {
+    // Fall back to launcher-side App-minting on transient lookup failures
+    // (DB blip, decryption error) instead of aborting the session start.
+    logAgentEnvironmentTelemetry("user_github_token_lookup_failed", {
+      userId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
 }
 
 function connectionRecord(connection: unknown): Record<string, unknown> | null {
@@ -1931,6 +1947,11 @@ export class SessionRouter {
           });
         }
 
+        const userGithubToken =
+          adapterType === "provisioned"
+            ? await resolveUserGithubToken(options.createdById)
+            : undefined;
+
         const startResult = await adapter.startSession({
           sessionId: options.sessionId,
           sessionGroupId: options.sessionGroupId,
@@ -1949,6 +1970,7 @@ export class SessionRouter {
           runtimeInstanceId: provisionedRuntimeInstanceId,
           runtimeToken: options.runtimeToken,
           bridgeUrl: options.bridgeUrl,
+          userGithubToken,
         });
 
         if (startResult.runtimeInstanceId && adapterType !== "provisioned") {
@@ -2269,6 +2291,7 @@ export class SessionRouter {
       });
       const conn = connectionRecord(session.connection);
       const environment = await this.resolveRuntimeEnvironment(conn);
+      const userGithubToken = await resolveUserGithubToken(session.createdById);
       const startResult = await adapter.startSession({
         sessionId,
         organizationId: session.organizationId,
@@ -2277,6 +2300,7 @@ export class SessionRouter {
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
+        userGithubToken,
       });
       const runtimeId =
         startResult.runtimeInstanceId ??
