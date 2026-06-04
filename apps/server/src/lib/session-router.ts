@@ -2133,6 +2133,7 @@ export class SessionRouter {
       ) => Promise<void> | void;
       maxStopAttempts?: number;
       skipBridgeDelete?: boolean;
+      skipProviderStop?: boolean;
       skipUnbind?: boolean;
     },
   ): Promise<void> {
@@ -2145,7 +2146,9 @@ export class SessionRouter {
     const environment = await this.resolveRuntimeEnvironment(connection);
     const reason = options?.reason ?? "session_deleted";
     const lifecycleSnapshot = lifecycleSnapshotFromConnection(connection);
-    const skipProviderStop = shouldSkipProvisionedStopForPolicy(adapter, environment, reason);
+    const skipProviderStop =
+      options?.skipProviderStop === true ||
+      shouldSkipProvisionedStopForPolicy(adapter, environment, reason);
 
     if (options?.skipBridgeDelete !== true) {
       const deliveryResult = this.send(sessionId, {
@@ -2165,10 +2168,11 @@ export class SessionRouter {
       if (options?.skipUnbind !== true) {
         this.unbindSession(sessionId);
       }
-      runtimeDebug("skipped provisioned runtime stop due to manual deprovision policy", {
+      runtimeDebug("skipped provisioned runtime stop", {
         sessionId,
         reason,
         environmentId: environment?.id ?? null,
+        requestedByCaller: options?.skipProviderStop === true,
       });
       return;
     }
