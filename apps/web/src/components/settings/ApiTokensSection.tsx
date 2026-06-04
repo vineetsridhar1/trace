@@ -43,7 +43,7 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
-    description: "Used to register and remove repository webhooks",
+    description: "Used for cloud containers, repository files, diffs, and webhooks",
   },
 };
 
