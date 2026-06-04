@@ -5,14 +5,24 @@ vi.mock("./db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
+vi.mock("../services/api-token.js", () => ({
+  apiTokenService: {
+    getDecryptedTokens: vi.fn(),
+  },
+}));
+
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
+import { apiTokenService } from "../services/api-token.js";
 import type { createPrismaMock } from "../../test/helpers.js";
 
 const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
+const apiTokenServiceMock = apiTokenService as unknown as {
+  getDecryptedTokens: ReturnType<typeof vi.fn>;
+};
 
 function makeWs() {
   return {
@@ -36,10 +46,12 @@ function fetchMock(): ReturnType<typeof vi.fn> {
 async function flushPromises() {
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({});
   process.env.TRACE_CLOUD_LAUNCHER_TOKEN = "launcher-secret";
 });
 
@@ -567,7 +579,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onWorkspaceReady: vi.fn(),
     });
 
-    await Promise.resolve();
+    await flushPromises();
 
     expect(provisionedStart).toHaveBeenCalledWith(
       expect.objectContaining({
