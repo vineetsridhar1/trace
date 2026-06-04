@@ -91,6 +91,7 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
           submitLabel="Reply"
           SubmitIcon={Send}
           submitDisabled={!hasAllAnswers}
+          allowEmptySubmit
         />
 
         {total > 1 && (
