@@ -12,6 +12,11 @@ const TOOL_ENV_VARS: Partial<Record<string, string | string[]>> = {
   codex: ["CODEX_ACCESS_TOKEN", "OPENAI_API_KEY"],
 };
 
+function nonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
 function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = execFile(
@@ -34,9 +39,9 @@ function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
 
 async function loginCodex(): Promise<void> {
   if (codexLoggedIn) return;
-  const accessToken = process.env.CODEX_ACCESS_TOKEN;
-  const apiKey = process.env.OPENAI_API_KEY;
-  const token = accessToken ?? apiKey;
+  const accessToken = nonEmptyEnv("CODEX_ACCESS_TOKEN");
+  const apiKey = nonEmptyEnv("OPENAI_API_KEY");
+  const token = accessToken || apiKey;
   if (!token) return;
   if (codexLoginPromise) return codexLoginPromise;
 
@@ -45,21 +50,12 @@ async function loginCodex(): Promise<void> {
     const loginFlag = accessToken ? "--with-access-token" : "--with-api-key";
     const child = spawn("codex", ["login", loginFlag], {
       env: buildChildProcessEnv(),
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["pipe", "ignore", "ignore"],
     });
     child.stdin?.on("error", () => {});
     child.stdin?.end(token);
 
-    const outLines: string[] = [];
-    const errLines: string[] = [];
-    child.stdout?.on("data", (d: Buffer) => outLines.push(d.toString().trim()));
-    child.stderr?.on("data", (d: Buffer) => errLines.push(d.toString().trim()));
-
     child.on("close", (code) => {
-      if (outLines.length)
-        console.log("[container-bridge] codex login stdout:", outLines.join("\n"));
-      if (errLines.length)
-        console.log("[container-bridge] codex login stderr:", errLines.join("\n"));
       if (code === 0) {
         codexLoggedIn = true;
         console.log("[container-bridge] codex login complete");
@@ -79,10 +75,10 @@ async function loginCodex(): Promise<void> {
 }
 
 export async function ensureToolReady(tool: string): Promise<void> {
-  // Fail fast with a clear message if the required API key is missing
+  // Fail fast with a clear message if the required credential is missing.
   const requiredEnv = TOOL_ENV_VARS[tool];
   const requiredEnvs = Array.isArray(requiredEnv) ? requiredEnv : requiredEnv ? [requiredEnv] : [];
-  if (requiredEnvs.length > 0 && !requiredEnvs.some((envVar) => process.env[envVar])) {
+  if (requiredEnvs.length > 0 && !requiredEnvs.some((envVar) => nonEmptyEnv(envVar))) {
     if (tool === "codex") {
       throw new Error(
         "Cannot run codex: Connect a Codex access token in Settings or provide OPENAI_API_KEY in the runtime environment.",
@@ -124,7 +120,7 @@ export async function loginAvailableTools(): Promise<void> {
 
   for (const [tool, envVar] of Object.entries(TOOL_ENV_VARS)) {
     const envVars = Array.isArray(envVar) ? envVar : envVar ? [envVar] : [];
-    if (!envVars.some((name) => process.env[name])) continue;
+    if (!envVars.some((name) => nonEmptyEnv(name))) continue;
     tasks.push(ensureToolReady(tool));
   }
 

@@ -653,6 +653,8 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await flushPromises();
 
+    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledOnce();
+    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledWith("user-1");
     expect(provisionedStart).toHaveBeenCalledWith(
       expect.objectContaining({
         userGithubToken: "ghp_start_pat",
@@ -785,6 +787,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await router.transitionRuntime("session-resume", "cloud", "resume");
 
+    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledOnce();
     expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledWith("creator-user");
     expect(provisionedStart).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -852,6 +855,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     expect(provisionedStart).toHaveBeenCalledWith(
       expect.objectContaining({ userGithubToken: undefined }),
+    );
+    expect(provisionedStart).toHaveBeenCalledWith(
+      expect.objectContaining({ userCodexAccessToken: undefined }),
     );
   });
 

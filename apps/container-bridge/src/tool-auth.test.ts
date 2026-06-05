@@ -59,7 +59,7 @@ describe("tool auth", () => {
     expect(spawnMock).toHaveBeenCalledWith(
       "codex",
       ["login", "--with-access-token"],
-      expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
+      expect.objectContaining({ stdio: ["pipe", "ignore", "ignore"] }),
     );
     expect(child.stdin.end).toHaveBeenCalledWith("codex-access-token");
   });
@@ -74,7 +74,23 @@ describe("tool auth", () => {
     expect(spawnMock).toHaveBeenCalledWith(
       "codex",
       ["login", "--with-api-key"],
-      expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
+      expect.objectContaining({ stdio: ["pipe", "ignore", "ignore"] }),
+    );
+    expect(child.stdin.end).toHaveBeenCalledWith("openai-api-key");
+  });
+
+  it("treats an empty Codex access token as absent and falls back to API-key login", async () => {
+    process.env.CODEX_ACCESS_TOKEN = "";
+    process.env.OPENAI_API_KEY = "openai-api-key";
+    const child = mockCodexLogin();
+    const { ensureToolReady } = await importToolAuth();
+
+    await ensureToolReady("codex");
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "codex",
+      ["login", "--with-api-key"],
+      expect.objectContaining({ stdio: ["pipe", "ignore", "ignore"] }),
     );
     expect(child.stdin.end).toHaveBeenCalledWith("openai-api-key");
   });

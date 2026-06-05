@@ -194,31 +194,27 @@ function adapterTypeFromHosting(
   return runtimeAdapters.get(hosting).type;
 }
 
-async function resolveUserGithubToken(userId: string): Promise<string | undefined> {
+async function resolveUserRuntimeTokens(
+  userId: string,
+  options: { includeCodexAccessToken: boolean },
+): Promise<{ userGithubToken?: string; userCodexAccessToken?: string }> {
   try {
     const tokens = await apiTokenService.getDecryptedTokens(userId);
-    return tokens.github;
+    return {
+      userGithubToken: tokens.github,
+      userCodexAccessToken: options.includeCodexAccessToken
+        ? tokens.codex_access_token
+        : undefined,
+    };
   } catch (err) {
-    // Fall back to launcher-side App-minting on transient lookup failures
+    // Fall back to launcher/runtime-side auth on transient lookup failures
     // (DB blip, decryption error) instead of aborting the session start.
-    logAgentEnvironmentTelemetry("user_github_token_lookup_failed", {
+    logAgentEnvironmentTelemetry("user_runtime_token_lookup_failed", {
       userId,
+      includeCodexAccessToken: options.includeCodexAccessToken,
       message: err instanceof Error ? err.message : String(err),
     });
-    return undefined;
-  }
-}
-
-async function resolveUserCodexAccessToken(userId: string): Promise<string | undefined> {
-  try {
-    const tokens = await apiTokenService.getDecryptedTokens(userId);
-    return tokens.codex_access_token;
-  } catch (err) {
-    logAgentEnvironmentTelemetry("user_codex_access_token_lookup_failed", {
-      userId,
-      message: err instanceof Error ? err.message : String(err),
-    });
-    return undefined;
+    return {};
   }
 }
 
@@ -1960,14 +1956,12 @@ export class SessionRouter {
           });
         }
 
-        const userGithubToken =
+        const userRuntimeTokens =
           adapterType === "provisioned"
-            ? await resolveUserGithubToken(options.createdById)
-            : undefined;
-        const userCodexAccessToken =
-          adapterType === "provisioned" && options.tool === "codex"
-            ? await resolveUserCodexAccessToken(options.createdById)
-            : undefined;
+            ? await resolveUserRuntimeTokens(options.createdById, {
+                includeCodexAccessToken: options.tool === "codex",
+              })
+            : {};
 
         const startResult = await adapter.startSession({
           sessionId: options.sessionId,
@@ -1987,8 +1981,8 @@ export class SessionRouter {
           runtimeInstanceId: provisionedRuntimeInstanceId,
           runtimeToken: options.runtimeToken,
           bridgeUrl: options.bridgeUrl,
-          userGithubToken,
-          userCodexAccessToken,
+          userGithubToken: userRuntimeTokens.userGithubToken,
+          userCodexAccessToken: userRuntimeTokens.userCodexAccessToken,
         });
 
         if (startResult.runtimeInstanceId && adapterType !== "provisioned") {
@@ -2309,11 +2303,9 @@ export class SessionRouter {
       });
       const conn = connectionRecord(session.connection);
       const environment = await this.resolveRuntimeEnvironment(conn);
-      const userGithubToken = await resolveUserGithubToken(session.createdById);
-      const userCodexAccessToken =
-        session.tool === "codex"
-          ? await resolveUserCodexAccessToken(session.createdById)
-          : undefined;
+      const userRuntimeTokens = await resolveUserRuntimeTokens(session.createdById, {
+        includeCodexAccessToken: session.tool === "codex",
+      });
       const startResult = await adapter.startSession({
         sessionId,
         organizationId: session.organizationId,
@@ -2322,8 +2314,8 @@ export class SessionRouter {
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
-        userGithubToken,
-        userCodexAccessToken,
+        userGithubToken: userRuntimeTokens.userGithubToken,
+        userCodexAccessToken: userRuntimeTokens.userCodexAccessToken,
       });
       const runtimeId =
         startResult.runtimeInstanceId ??
