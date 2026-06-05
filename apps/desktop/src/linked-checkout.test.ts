@@ -463,6 +463,36 @@ describe("linked checkout commit-back", () => {
     }
   }, 15_000);
 
+  it("pulls a stale target worktree before syncing when refresh is requested", async () => {
+    const { repoPath, worktreePath, originPath } = await createRepoFixtureWithOrigin();
+    const updaterPath = path.join(path.dirname(repoPath), "updater");
+    seedRepo("repo-1", repoPath);
+
+    await git(path.dirname(repoPath), ["clone", originPath, updaterPath]);
+    await git(updaterPath, ["config", "user.name", "Trace Test"]);
+    await git(updaterPath, ["config", "user.email", "trace@example.com"]);
+    await git(updaterPath, ["checkout", "trace/raccoon"]);
+    fs.writeFileSync(path.join(updaterPath, "app.txt"), "advanced elsewhere\n");
+    await git(updaterPath, ["add", "app.txt"]);
+    await git(updaterPath, ["commit", "-m", "advance trace branch elsewhere"]);
+    const latestSha = await git(updaterPath, ["rev-parse", "HEAD"]);
+    await git(updaterPath, ["push", "origin", "trace/raccoon"]);
+
+    expect(await git(worktreePath, ["rev-parse", "HEAD"])).not.toBe(latestSha);
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      refreshBeforeSync: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status.currentCommitSha).toBe(latestSha);
+    expect(result.status.lastSyncedCommitSha).toBe(latestSha);
+    expect(await git(worktreePath, ["rev-parse", "HEAD"])).toBe(latestSha);
+  }, 15_000);
+
   it("syncs to the fetched remote branch when a stale local branch diverged", async () => {
     const { repoPath, latestRemoteSha, localBranchSha } =
       await createRepoFixtureWithDivergedTargetBranch();

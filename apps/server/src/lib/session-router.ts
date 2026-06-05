@@ -1725,6 +1725,7 @@ export class SessionRouter {
       branch: string;
       commitSha?: string | null;
       autoSyncEnabled?: boolean;
+      refreshBeforeSync?: boolean;
       conflictStrategy?: "discard" | "commit" | "rebase" | "stash";
       commitMessage?: string | null;
     },
@@ -1739,6 +1740,7 @@ export class SessionRouter {
         branch: input.branch,
         commitSha: input.commitSha,
         autoSyncEnabled: input.autoSyncEnabled,
+        refreshBeforeSync: input.refreshBeforeSync,
         conflictStrategy: input.conflictStrategy,
         commitMessage: input.commitMessage,
       },

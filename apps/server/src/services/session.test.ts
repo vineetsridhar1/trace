@@ -7507,6 +7507,140 @@ describe("SessionService", () => {
       );
     });
 
+    it("blocks moving a branch that was never pushed to origin", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          workdir: "/workspaces/gibbon",
+          branch: "trace/gibbon",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Cloud",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({
+          branch: "trace/gibbon",
+          headCommitSha: "commit-local-only",
+          upstreamBranch: null,
+          upstreamCommitSha: null,
+          aheadCount: 0,
+          behindCount: 0,
+          remoteBranch: null,
+          remoteCommitSha: null,
+          remoteAheadCount: 0,
+          remoteBehindCount: 0,
+        }),
+      );
+
+      await expect(
+        service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow(/push this branch to origin/);
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+      expect(sessionRouterMock.transitionRuntime).not.toHaveBeenCalled();
+    });
+
+    it("allows moving a pushed branch that has no local upstream tracking", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          workdir: "/workspaces/gibbon",
+          branch: "trace/gibbon",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Cloud",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          branch: "trace/gibbon",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Laptop B",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      // No upstream tracking, but the authoritative remote lookup resolved the
+      // branch tip from origin and it matches HEAD — the branch is pushed.
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({
+          branch: "trace/gibbon",
+          headCommitSha: "pushed-head",
+          upstreamBranch: null,
+          upstreamCommitSha: null,
+          aheadCount: 0,
+          behindCount: 0,
+          remoteBranch: "origin/trace/gibbon",
+          remoteCommitSha: "pushed-head",
+          remoteAheadCount: 0,
+          remoteBehindCount: 0,
+        }),
+      );
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            branch: "trace/gibbon",
+          }),
+        }),
+      );
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: "trace/gibbon",
+          preserveBranchName: true,
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            type: "runtime_move",
+            sourceGitStatusVerified: true,
+          }),
+        }),
+      );
+    });
+
     it("allows moving from a stale source runtime for recovery", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
@@ -8382,6 +8516,7 @@ describe("SessionService", () => {
           repoId: "repo-1",
           sessionGroupId: "group-1",
           branch: "trace/raccoon",
+          refreshBeforeSync: true,
         }),
       );
     });
@@ -8480,6 +8615,7 @@ describe("SessionService", () => {
         "runtime-home",
         expect.objectContaining({
           branch: "trace/new-raccoon",
+          refreshBeforeSync: false,
         }),
       );
     });
@@ -8561,6 +8697,7 @@ describe("SessionService", () => {
         "runtime-sync-key",
         expect.objectContaining({
           branch: "trace/current-branch",
+          refreshBeforeSync: true,
         }),
       );
     });
@@ -8989,6 +9126,7 @@ describe("SessionService", () => {
         branch: "trace/raccoon",
         commitSha: undefined,
         autoSyncEnabled: undefined,
+        refreshBeforeSync: false,
         conflictStrategy: "commit",
         commitMessage: "Carry local changes",
       });

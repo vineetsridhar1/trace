@@ -208,6 +208,7 @@ export interface BridgeSyncLinkedCheckoutCommand {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
+  refreshBeforeSync?: boolean;
   conflictStrategy?: "discard" | "commit" | "rebase" | "stash" | null;
   commitMessage?: string | null;
 }
