@@ -8382,6 +8382,7 @@ describe("SessionService", () => {
           repoId: "repo-1",
           sessionGroupId: "group-1",
           branch: "trace/raccoon",
+          refreshBeforeSync: true,
         }),
       );
     });
@@ -8480,6 +8481,7 @@ describe("SessionService", () => {
         "runtime-home",
         expect.objectContaining({
           branch: "trace/new-raccoon",
+          refreshBeforeSync: false,
         }),
       );
     });
@@ -8561,6 +8563,7 @@ describe("SessionService", () => {
         "runtime-sync-key",
         expect.objectContaining({
           branch: "trace/current-branch",
+          refreshBeforeSync: true,
         }),
       );
     });
@@ -8989,6 +8992,7 @@ describe("SessionService", () => {
         branch: "trace/raccoon",
         commitSha: undefined,
         autoSyncEnabled: undefined,
+        refreshBeforeSync: false,
         conflictStrategy: "commit",
         commitMessage: "Carry local changes",
       });

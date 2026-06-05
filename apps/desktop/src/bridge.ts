@@ -1408,6 +1408,7 @@ export class BridgeClient implements IBridgeClient {
           branch: cmd.branch,
           commitSha: cmd.commitSha,
           autoSyncEnabled: cmd.autoSyncEnabled,
+          refreshBeforeSync: cmd.refreshBeforeSync,
           conflictStrategy: cmd.conflictStrategy,
           commitMessage: cmd.commitMessage,
         })
