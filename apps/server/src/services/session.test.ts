@@ -7507,6 +7507,91 @@ describe("SessionService", () => {
       );
     });
 
+    it("allows moving a clean cloud branch to local when it has no upstream yet", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          workdir: "/workspaces/gibbon",
+          branch: null,
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Cloud",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          branch: "trace/gibbon",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Laptop B",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({
+          branch: "trace/gibbon",
+          headCommitSha: "commit-local-only",
+          upstreamBranch: null,
+          upstreamCommitSha: null,
+          aheadCount: 0,
+          behindCount: 0,
+          remoteBranch: null,
+          remoteCommitSha: null,
+          remoteAheadCount: 0,
+          remoteBehindCount: 0,
+        }),
+      );
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            branch: "trace/gibbon",
+          }),
+        }),
+      );
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: "trace/gibbon",
+          checkpointSha: "commit-local-only",
+          preserveBranchName: true,
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            type: "runtime_move",
+            sourceGitStatusVerified: true,
+          }),
+        }),
+      );
+    });
+
     it("allows moving from a stale source runtime for recovery", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({

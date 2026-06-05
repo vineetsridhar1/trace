@@ -7084,6 +7084,9 @@ export class SessionService {
     }
 
     if (!status.upstreamBranch || !status.upstreamCommitSha) {
+      if (params.allowUnverifiedSourceGitStatus && status.headCommitSha) {
+        return { status, verified: true, skippedReason: null };
+      }
       throw new Error(
         "Cannot move session: push this branch to origin before moving to another bridge.",
       );
