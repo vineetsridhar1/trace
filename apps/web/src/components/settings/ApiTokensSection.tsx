@@ -45,6 +45,11 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
     placeholder: "ghp_...",
     description: "Used to register and remove repository webhooks",
   },
+  codex_access_token: {
+    label: "Codex",
+    placeholder: "codex access token",
+    description: "Used to authenticate Codex cloud sessions with your ChatGPT workspace access.",
+  },
 };
 
 export function ApiTokensSection() {

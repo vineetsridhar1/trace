@@ -123,6 +123,7 @@ enum ApiTokenProvider {
   anthropic
   openai
   github
+  codex_access_token
   ssh_key
 }
 

@@ -1,16 +1,20 @@
-# Launcher handoff: user GitHub PAT forwarding
+# Launcher handoff: user credential forwarding
 
-Trace now forwards a user-supplied GitHub personal access token into provisioned
-cloud sessions via `bootstrapEnv.GITHUB_TOKEN`. This document describes the
-contract the launcher needs to honor, the trace-side change that delivers it,
-and the cases the launcher must verify.
+Trace now forwards user-supplied credentials into provisioned cloud sessions via
+`bootstrapEnv`:
+
+- GitHub personal access tokens as `GITHUB_TOKEN`.
+- Codex access tokens as `CODEX_ACCESS_TOKEN`.
+
+This document describes the contract the launcher needs to honor, the trace-side
+change that delivers it, and the cases the launcher must verify.
 
 The companion launcher change on `trace-partridge/forward-user-github-token` in
 `opendoor-labs/trace-deployment` already short-circuits `createGitHubTokenEnv`
 when `request.bootstrapEnv.GITHUB_TOKEN` is present. This doc is the matching
 spec from the trace side.
 
-## What trace sends now
+## GitHub: what trace sends now
 
 When a user starts (or resumes) a cloud session and has a `github` token saved
 in their trace settings (`ApiToken` row, `provider = 'github'`), trace decrypts
@@ -127,7 +131,7 @@ coordinate later:
   has no concept of org policy.
 - Transient PAT lookup failures on the trace side (DB blip, decryption error)
   degrade gracefully to the App-mint path: trace logs
-  `user_github_token_lookup_failed` to telemetry and omits `GITHUB_TOKEN` from
+  `user_runtime_token_lookup_failed` to telemetry and omits `GITHUB_TOKEN` from
   `bootstrapEnv`. The launcher should see the same behavior as a user with no
   PAT configured.
 - Safe to deploy the trace side and the launcher side in either order:
@@ -136,3 +140,64 @@ coordinate later:
     breaks.
   - Launcher first + old trace: PAT field is never sent, launcher always takes
     the mint path. Same as today.
+
+## Codex access token handoff
+
+When a user starts or resumes a provisioned cloud session with `tool = "codex"`
+and has a `codex_access_token` saved in trace settings, trace decrypts it and
+adds it to the same `bootstrapEnv` block:
+
+```jsonc
+{
+  "sessionId": "session_...",
+  "runtimeInstanceId": "runtime_...",
+  "runtimeToken": "<jwt>",
+  "bridgeUrl": "wss://.../bridge",
+  "tool": "codex",
+  "bootstrapEnv": {
+    "TRACE_SESSION_ID": "session_...",
+    "TRACE_ORG_ID": "org_...",
+    "TRACE_RUNTIME_INSTANCE_ID": "runtime_...",
+    "TRACE_RUNTIME_TOKEN": "<jwt>",
+    "TRACE_BRIDGE_URL": "wss://.../bridge",
+    "CODEX_ACCESS_TOKEN": "<codex-access-token>"
+  }
+}
+```
+
+Trace omits `CODEX_ACCESS_TOKEN` entirely when the user has no Codex token saved
+or when the selected tool is not Codex. The value is the raw access token exactly
+as the user entered it. It is not a bearer token header value, does not need a
+`Bearer ` prefix, and should not be copied into launcher metadata, logs, status
+events, or connection JSON.
+
+Launcher behavior:
+
+1. Preserve `bootstrapEnv.CODEX_ACCESS_TOKEN` into the runner/container
+   environment when present and non-empty.
+2. Treat an absent or empty `CODEX_ACCESS_TOKEN` as missing, not as an error.
+3. Do not override an existing `OPENAI_API_KEY`; the container bridge will prefer
+   `CODEX_ACCESS_TOKEN` and fall back to `OPENAI_API_KEY`.
+4. Never log `CODEX_ACCESS_TOKEN` or command output that could contain it.
+
+The container bridge authenticates Codex with:
+
+```bash
+codex login --with-access-token
+```
+
+and writes `CODEX_ACCESS_TOKEN` to stdin. If no Codex access token is present but
+`OPENAI_API_KEY` is present, it falls back to:
+
+```bash
+codex login --with-api-key
+```
+
+## Codex launcher test cases
+
+| Case | `bootstrapEnv.CODEX_ACCESS_TOKEN` | Existing `OPENAI_API_KEY` | Expected behavior |
+| --- | --- | --- | --- |
+| User has Codex token saved | `"codex_user_token"` | unset or set | Runner env contains `CODEX_ACCESS_TOKEN=codex_user_token`; token is not logged; bridge uses access-token login. |
+| User has no Codex token | absent | set | Existing API-key path remains available; bridge uses API-key login. |
+| Empty string defensive | `""` | set | Treat as absent; bridge can fall back to API-key login. |
+| Neither credential exists | absent | absent | Launcher can start normally, but bridge reports the Codex auth error. |

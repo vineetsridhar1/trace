@@ -266,6 +266,33 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(body.bootstrapEnv.GITHUB_TOKEN).toBe("ghp_user_pat_value");
   });
 
+  it("forwards a user Codex access token only into bootstrapEnv as CODEX_ACCESS_TOKEN", async () => {
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "codex",
+      bridgeUrl: "wss://trace.example/bridge",
+      userCodexAccessToken: "codex_user_token_value",
+    });
+
+    const body = JSON.parse(fetchMock().mock.calls[0][1].body as string) as {
+      bootstrapEnv: Record<string, string>;
+      metadata: Record<string, unknown>;
+    };
+    expect(body.bootstrapEnv.CODEX_ACCESS_TOKEN).toBe("codex_user_token_value");
+    expect(body.metadata).not.toHaveProperty("CODEX_ACCESS_TOKEN");
+  });
+
   it("omits GITHUB_TOKEN from bootstrapEnv when no user PAT is supplied", async () => {
     fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
     const adapter = new ProvisionedRuntimeAdapter();
@@ -288,6 +315,7 @@ describe("ProvisionedRuntimeAdapter", () => {
       bootstrapEnv: Record<string, string>;
     };
     expect(body.bootstrapEnv).not.toHaveProperty("GITHUB_TOKEN");
+    expect(body.bootstrapEnv).not.toHaveProperty("CODEX_ACCESS_TOKEN");
   });
 
   it("keeps runtime bridge tokens valid beyond the startup window for reconnects", async () => {

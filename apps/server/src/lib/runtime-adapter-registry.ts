@@ -28,6 +28,7 @@ export type RuntimeStartInput = {
   runtimeToken?: string;
   bridgeUrl?: string;
   userGithubToken?: string;
+  userCodexAccessToken?: string;
 };
 
 export type RuntimeStartResult = {
