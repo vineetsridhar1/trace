@@ -7507,12 +7507,60 @@ describe("SessionService", () => {
       );
     });
 
-    it("allows moving a clean cloud branch to local when it has no upstream yet", async () => {
+    it("blocks moving a branch that was never pushed to origin", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           hosting: "cloud",
           workdir: "/workspaces/gibbon",
-          branch: null,
+          branch: "trace/gibbon",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Cloud",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({
+          branch: "trace/gibbon",
+          headCommitSha: "commit-local-only",
+          upstreamBranch: null,
+          upstreamCommitSha: null,
+          aheadCount: 0,
+          behindCount: 0,
+          remoteBranch: null,
+          remoteCommitSha: null,
+          remoteAheadCount: 0,
+          remoteBehindCount: 0,
+        }),
+      );
+
+      await expect(
+        service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow(/push this branch to origin/);
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+      expect(sessionRouterMock.transitionRuntime).not.toHaveBeenCalled();
+    });
+
+    it("allows moving a pushed branch that has no local upstream tracking", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "cloud",
+          workdir: "/workspaces/gibbon",
+          branch: "trace/gibbon",
           connection: {
             state: "connected",
             runtimeInstanceId: "runtime-source",
@@ -7550,16 +7598,18 @@ describe("SessionService", () => {
         boundSessions: new Set<string>(),
         ws: { readyState: 1, OPEN: 1 },
       });
+      // No upstream tracking, but the authoritative remote lookup resolved the
+      // branch tip from origin and it matches HEAD — the branch is pushed.
       sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
         makeGitSyncStatus({
           branch: "trace/gibbon",
-          headCommitSha: "commit-local-only",
+          headCommitSha: "pushed-head",
           upstreamBranch: null,
           upstreamCommitSha: null,
           aheadCount: 0,
           behindCount: 0,
-          remoteBranch: null,
-          remoteCommitSha: null,
+          remoteBranch: "origin/trace/gibbon",
+          remoteCommitSha: "pushed-head",
           remoteAheadCount: 0,
           remoteBehindCount: 0,
         }),
@@ -7577,7 +7627,6 @@ describe("SessionService", () => {
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({
           branch: "trace/gibbon",
-          checkpointSha: "commit-local-only",
           preserveBranchName: true,
         }),
       );
