@@ -298,6 +298,8 @@ type IdleCloudSessionGroupCandidate = {
     hosting: string;
     agentStatus: AgentStatus;
     sessionStatus: SessionStatus;
+    createdAt: Date;
+    lastUserMessageAt: Date | null;
     lastMessageAt: Date | null;
     updatedAt: Date;
     connection?: Prisma.JsonValue | null;
@@ -6258,6 +6260,16 @@ export class SessionService {
       canMove: true,
       autoRetryable: session.hosting !== "cloud",
     };
+    const sameRuntime = runtimeInstanceId ? conn.runtimeInstanceId === runtimeInstanceId : true;
+    if (
+      session.hosting === "cloud" &&
+      session.agentStatus === "done" &&
+      conn.state === "disconnected" &&
+      conn.lastError === reason &&
+      sameRuntime
+    ) {
+      return;
+    }
 
     // Preserve agent/session status — the session may still be running on the
     // local machine even though the bridge WebSocket dropped. Only the
@@ -8746,7 +8758,6 @@ export class SessionService {
     const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
       where: {
         archivedAt: null,
-        updatedAt: { lte: cutoff },
         worktreeDeleted: false,
         sessions: {
           some: { hosting: "cloud" },
@@ -8754,7 +8765,12 @@ export class SessionService {
             OR: [
               { agentStatus: "active" },
               { lastMessageAt: { gt: cutoff } },
-              { lastMessageAt: null, updatedAt: { gt: cutoff } },
+              { lastUserMessageAt: { gt: cutoff } },
+              {
+                lastMessageAt: null,
+                lastUserMessageAt: null,
+                createdAt: { gt: cutoff },
+              },
             ],
           },
         },
@@ -8771,6 +8787,8 @@ export class SessionService {
             hosting: true,
             agentStatus: true,
             sessionStatus: true,
+            createdAt: true,
+            lastUserMessageAt: true,
             lastMessageAt: true,
             updatedAt: true,
             connection: true,
@@ -8785,9 +8803,10 @@ export class SessionService {
     const cleaned: string[] = [];
     for (const group of groups) {
       const latestActivity = group.sessions.reduce<Date>((latest, session) => {
-        const sessionActivity = session.lastMessageAt ?? session.updatedAt;
+        const sessionActivity =
+          session.lastMessageAt ?? session.lastUserMessageAt ?? session.createdAt;
         return sessionActivity > latest ? sessionActivity : latest;
-      }, group.updatedAt);
+      }, new Date(0));
       if (latestActivity > cutoff) continue;
 
       const groupConnection = this.parseConnection(group.connection);
