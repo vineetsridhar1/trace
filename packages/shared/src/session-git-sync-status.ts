@@ -57,6 +57,39 @@ async function countDivergence(
   };
 }
 
+// Authoritatively ask origin for a branch's tip. Unlike the local origin/<branch>
+// tracking ref, this reflects the true remote state even when the checkout never
+// fetched the branch. Returns null when origin has no such branch or on failure.
+async function readRemoteBranchTip(
+  runGit: GitSyncStatusRunner,
+  branch: string,
+): Promise<string | null> {
+  try {
+    const stdout = await runGit(["ls-remote", "--heads", "origin", branch], {
+      maxBuffer: DEFAULT_MAX_BUFFER,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    });
+    const [firstLine = ""] = stdout.trim().split("\n", 1);
+    const [sha = ""] = firstLine.split(/\s+/, 1);
+    return /^[0-9a-f]{40,}$/i.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+function divergenceFromShaComparison(
+  headCommitSha: string | null,
+  remoteCommitSha: string | null,
+): { aheadCount: number; behindCount: number } {
+  if (!headCommitSha || !remoteCommitSha || headCommitSha === remoteCommitSha) {
+    return { aheadCount: 0, behindCount: 0 };
+  }
+  // The remote tip differs from HEAD, but the remote commit may not exist locally
+  // so the direction can't be measured. Treat any difference as divergence so the
+  // move guard requires syncing the branch first.
+  return { aheadCount: 1, behindCount: 1 };
+}
+
 export async function inspectSessionGitSyncStatus(
   runGit: GitSyncStatusRunner,
 ): Promise<BridgeSessionGitSyncStatus> {
@@ -81,25 +114,38 @@ export async function inspectSessionGitSyncStatus(
       maybeReadGitRef(runGit, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
     ]);
 
-  const remoteBranch = branch ? `origin/${branch}` : null;
-  const [upstreamCommitSha, remoteCommitSha] = await Promise.all([
+  const localRemoteBranch = branch ? `origin/${branch}` : null;
+  const headCommitSha = headStdout.trim() || null;
+  const [upstreamCommitSha, localRemoteCommitSha] = await Promise.all([
     upstreamBranch ? maybeReadGitRef(runGit, ["rev-parse", `${upstreamBranch}^{commit}`]) : null,
-    remoteBranch ? maybeReadGitRef(runGit, ["rev-parse", `${remoteBranch}^{commit}`]) : null,
+    localRemoteBranch
+      ? maybeReadGitRef(runGit, ["rev-parse", `${localRemoteBranch}^{commit}`])
+      : null,
   ]);
 
-  const [upstreamDivergence, remoteDivergence] = await Promise.all([
+  // The local origin/<branch> tracking ref can be missing or stale even when the
+  // branch exists on origin (e.g. pushed without -u, or a checkout that never
+  // fetched it). Ask origin directly so a pushed branch is not mistaken for an
+  // unpushed one when guarding a session move.
+  const [upstreamDivergence, remoteTipFromOrigin] = await Promise.all([
     countDivergence(runGit, upstreamBranch),
-    countDivergence(runGit, remoteCommitSha ? remoteBranch : null),
+    branch && !localRemoteCommitSha ? readRemoteBranchTip(runGit, branch) : null,
   ]);
+
+  const remoteResolvedFromOrigin = !localRemoteCommitSha && remoteTipFromOrigin !== null;
+  const remoteCommitSha = localRemoteCommitSha ?? remoteTipFromOrigin;
+  const remoteDivergence = remoteResolvedFromOrigin
+    ? divergenceFromShaComparison(headCommitSha, remoteCommitSha)
+    : await countDivergence(runGit, localRemoteCommitSha ? localRemoteBranch : null);
 
   return {
     branch,
-    headCommitSha: headStdout.trim() || null,
+    headCommitSha,
     upstreamBranch,
     upstreamCommitSha,
     aheadCount: upstreamDivergence.aheadCount,
     behindCount: upstreamDivergence.behindCount,
-    remoteBranch: remoteCommitSha ? remoteBranch : null,
+    remoteBranch: remoteCommitSha ? localRemoteBranch : null,
     remoteCommitSha,
     remoteAheadCount: remoteDivergence.aheadCount,
     remoteBehindCount: remoteDivergence.behindCount,
