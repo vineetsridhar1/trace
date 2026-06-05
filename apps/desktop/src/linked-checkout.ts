@@ -69,6 +69,7 @@ export interface SyncLinkedCheckoutInput {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
+  refreshBeforeSync?: boolean;
   conflictStrategy?: "discard" | "commit" | "rebase" | "stash" | null;
   commitMessage?: string | null;
 }
@@ -561,6 +562,33 @@ export async function fetchTargetBranchIfAvailable(
       `[linked-checkout] target branch fetch failed; using cached refs: ${formatGitError(error)}`,
     );
   }
+}
+
+async function pullTargetWorktreeBranchIfAvailable(
+  repoPath: string,
+  branch: string,
+): Promise<boolean> {
+  assertSafeGitRef(branch);
+  if (branch.includes(":") || branch.startsWith("refs/")) {
+    throw new Error(`Unsafe git ref: ${branch}`);
+  }
+
+  const worktreePath = await findWorktreePathForBranch(repoPath, branch);
+  if (!worktreePath) return false;
+
+  try {
+    await runGit(worktreePath, ["remote", "get-url", "origin"]);
+  } catch {
+    return false;
+  }
+
+  await runGit(worktreePath, ["pull", "--ff-only", "origin", branch]);
+  return true;
+}
+
+async function refreshTargetBranchForSync(repoPath: string, branch: string): Promise<void> {
+  if (await pullTargetWorktreeBranchIfAvailable(repoPath, branch)) return;
+  await fetchTargetBranchIfAvailable(repoPath, branch);
 }
 
 async function listTreePaths(repoPath: string, ref: string): Promise<string[]> {
@@ -1143,6 +1171,9 @@ export function syncLinkedCheckout(
     try {
       const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
       const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
+      if (input.refreshBeforeSync) {
+        await refreshTargetBranchForSync(repoPath, input.branch);
+      }
       let targetCommitSha = await resolveSyncTargetCommitSha(
         repoPath,
         input.branch,

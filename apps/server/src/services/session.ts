@@ -2184,7 +2184,11 @@ export class SessionService {
     organizationId: string,
     userId: string,
     options: { runtimeInstanceId?: string; requireRegisteredRepo?: boolean } = {},
-  ): Promise<{ runtimeId: string; group: LinkedCheckoutRuntimeGroup }> {
+  ): Promise<{
+    runtimeId: string;
+    runtimeInstanceId: string;
+    group: LinkedCheckoutRuntimeGroup;
+  }> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
       select: {
@@ -2246,7 +2250,7 @@ export class SessionService {
       );
     }
 
-    return { runtimeId: runtime.key, group };
+    return { runtimeId: runtime.key, runtimeInstanceId: runtime.id, group };
   }
 
   private async resolveLinkedCheckoutRuntime(
@@ -7681,7 +7685,7 @@ export class SessionService {
     },
   ) {
     await this.assertRepoExists(repoId, organizationId);
-    const { runtimeId, group } = await this.resolveLinkedCheckoutRuntimeContext(
+    const { runtimeId, runtimeInstanceId, group } = await this.resolveLinkedCheckoutRuntimeContext(
       sessionGroupId,
       repoId,
       organizationId,
@@ -7693,12 +7697,15 @@ export class SessionService {
       repoId,
       group,
     });
+    const sessionRuntimeInstanceId = this.getConnectionRuntimeInstanceId(group.connection);
     return sessionRouter.syncLinkedCheckout(runtimeId, {
       repoId,
       sessionGroupId,
       branch: refreshedBranch ?? branch,
       commitSha: options?.commitSha,
       autoSyncEnabled: options?.autoSyncEnabled,
+      refreshBeforeSync:
+        !!sessionRuntimeInstanceId && sessionRuntimeInstanceId !== runtimeInstanceId,
       conflictStrategy: options?.conflictStrategy,
       commitMessage: options?.commitMessage,
     });
