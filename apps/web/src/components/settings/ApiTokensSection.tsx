@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Key, Trash2, Check, Eye, EyeOff } from "lucide-react";
+import { Key, Trash2, Check, Eye, EyeOff, Github } from "lucide-react";
 import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -43,7 +43,7 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
-    description: "Used to register and remove repository webhooks",
+    description: "Used for cloud containers, repository files, diffs, and webhooks",
   },
   codex_access_token: {
     label: "Codex",
@@ -54,11 +54,14 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
 
 export function ApiTokensSection() {
   const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
+  const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [showInput, setShowInput] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [importingGithubToken, setImportingGithubToken] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fetchTokens = useCallback(async () => {
     if (!user) return;
@@ -72,20 +75,60 @@ export function ApiTokensSection() {
     fetchTokens();
   }, [fetchTokens]);
 
-  async function handleSave(provider: string) {
-    if (!inputValue.trim()) return;
-    setSaving(true);
-    await client
-      .mutation(SET_API_TOKEN, {
-        input: { provider, token: provider === "ssh_key" ? inputValue : inputValue.trim() },
-      })
-      .toPromise();
-    setSaving(false);
-    setEditing(null);
+  function startEditing(provider: string) {
+    setEditing(provider);
     setInputValue("");
     setShowInput(false);
-    // Refetch to get the updated state from the server
-    fetchTokens();
+    setErrorMessage(null);
+  }
+
+  async function saveToken(provider: string, tokenValue: string) {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      const result = await client
+        .mutation(SET_API_TOKEN, {
+          input: { provider, token: tokenValue },
+        })
+        .toPromise();
+      if (result.error) throw new Error(result.error.message);
+      setEditing(null);
+      setInputValue("");
+      setShowInput(false);
+      // Refetch to get the updated state from the server
+      fetchTokens();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to save token");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSave(provider: string) {
+    if (!inputValue.trim()) return;
+    await saveToken(provider, provider === "ssh_key" ? inputValue : inputValue.trim());
+  }
+
+  async function handleUseGithubCliToken() {
+    if (importingGithubToken || saving) return;
+
+    if (!window.trace?.getGithubAuthToken) {
+      setErrorMessage("Restart the desktop app to load GitHub CLI token import.");
+      return;
+    }
+
+    setImportingGithubToken(true);
+    setErrorMessage(null);
+    try {
+      const token = await window.trace.getGithubAuthToken();
+      await saveToken("github", token);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to read GitHub CLI token",
+      );
+    } finally {
+      setImportingGithubToken(false);
+    }
   }
 
   async function handleDelete(provider: string) {
@@ -108,6 +151,7 @@ export function ApiTokensSection() {
           const meta = PROVIDER_META[token.provider];
           if (!meta) return null;
           const isEditing = editing === token.provider;
+          const canShowGithubCliImport = token.provider === "github" && isDesktopShell;
 
           return (
             <div
@@ -130,15 +174,23 @@ export function ApiTokensSection() {
                         <Check size={12} />
                         Configured
                       </span>
+                      {canShowGithubCliImport && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUseGithubCliToken}
+                          disabled={saving || importingGithubToken}
+                          className="gap-2"
+                        >
+                          <Github size={14} />
+                          {importingGithubToken ? "Importing..." : "Import from CLI"}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
-                        onClick={() => {
-                          setEditing(token.provider);
-                          setInputValue("");
-                          setShowInput(false);
-                        }}
+                        onClick={() => startEditing(token.provider)}
                       >
                         <Key size={14} />
                       </Button>
@@ -153,20 +205,34 @@ export function ApiTokensSection() {
                     </>
                   )}
                   {!token.isSet && !isEditing && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditing(token.provider);
-                        setInputValue("");
-                        setShowInput(false);
-                      }}
-                    >
-                      Add key
-                    </Button>
+                    <>
+                      {canShowGithubCliImport && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUseGithubCliToken}
+                          disabled={saving || importingGithubToken}
+                          className="gap-2"
+                        >
+                          <Github size={14} />
+                          {importingGithubToken ? "Importing..." : "Import from CLI"}
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startEditing(token.provider)}
+                      >
+                        Add key
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
+
+              {!isEditing && errorMessage && canShowGithubCliImport && (
+                <p className="mt-2 text-xs text-destructive">{errorMessage}</p>
+              )}
 
               {isEditing && (
                 <div className="mt-3 space-y-2">
@@ -181,6 +247,7 @@ export function ApiTokensSection() {
                         if (e.key === "Escape") {
                           setEditing(null);
                           setInputValue("");
+                          setErrorMessage(null);
                         }
                       }}
                       className="font-mono text-xs min-h-[120px]"
@@ -200,6 +267,7 @@ export function ApiTokensSection() {
                           if (e.key === "Escape") {
                             setEditing(null);
                             setInputValue("");
+                            setErrorMessage(null);
                           }
                         }}
                         autoFocus
@@ -213,11 +281,26 @@ export function ApiTokensSection() {
                       </button>
                     </div>
                   )}
+                  {canShowGithubCliImport && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleUseGithubCliToken}
+                      disabled={saving || importingGithubToken}
+                      className="gap-2"
+                    >
+                      <Github size={14} />
+                      {importingGithubToken ? "Importing..." : "Import from GitHub CLI"}
+                    </Button>
+                  )}
+                  {errorMessage && (
+                    <p className="text-xs text-destructive">{errorMessage}</p>
+                  )}
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       onClick={() => handleSave(token.provider)}
-                      disabled={!inputValue.trim() || saving}
+                      disabled={!inputValue.trim() || saving || importingGithubToken}
                     >
                       {saving ? "Saving..." : "Save"}
                     </Button>
@@ -227,6 +310,7 @@ export function ApiTokensSection() {
                       onClick={() => {
                         setEditing(null);
                         setInputValue("");
+                        setErrorMessage(null);
                       }}
                     >
                       Cancel

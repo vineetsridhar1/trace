@@ -116,6 +116,24 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.listFiles(args.sessionGroupId, orgId, ctx.userId);
   },
+  sessionGroupFileTree: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.listFileTree(args.sessionGroupId, orgId, ctx.userId);
+  },
+  sessionGroupDirectoryEntries: (
+    _: unknown,
+    args: { sessionGroupId: string; directoryPath: string; depth?: number | null },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.listDirectoryEntries(
+      args.sessionGroupId,
+      args.directoryPath,
+      args.depth ?? undefined,
+      orgId,
+      ctx.userId,
+    );
+  },
   sessionGroupFileContent: (
     _: unknown,
     args: { sessionGroupId: string; filePath: string },

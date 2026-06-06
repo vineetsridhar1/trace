@@ -152,7 +152,7 @@ export function GroupTabStrip({
 
   return (
     <TooltipProvider delay={300}>
-      <div className="shrink-0 border-b border-border bg-surface-mid">
+      <div className="app-region-drag shrink-0 border-b border-border bg-surface-mid">
         <div className="native-scrollbar overflow-x-auto">
           <div className="flex min-w-max">
             {sessionTabs.map((session) => {

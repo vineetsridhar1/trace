@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FolderClosed, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderClosed, FolderOpen, Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { FileTreeNode } from "./file-explorer-utils";
 import { getFileIcon, getFileColor } from "./file-explorer-utils";
@@ -42,7 +42,13 @@ export function FileTreeItem({
       >
         {node.isDirectory ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {node.isLoading ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : isExpanded ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )}
           </span>
         ) : (
           <span className="h-4 w-4 shrink-0" />
@@ -62,7 +68,15 @@ export function FileTreeItem({
               onFileClick={onFileClick}
             />
           ))}
-          {node.children.length === 0 && (
+          {node.error && (
+            <div
+              className="py-[1px] text-[13px] italic leading-[22px] text-destructive"
+              style={{ paddingLeft: `${(depth + 1) * 8 + 24}px` }}
+            >
+              {node.error}
+            </div>
+          )}
+          {!node.error && node.isLoaded && node.children.length === 0 && (
             <div
               className="py-[1px] text-[13px] italic leading-[22px] text-muted-foreground"
               style={{ paddingLeft: `${(depth + 1) * 8 + 24}px` }}

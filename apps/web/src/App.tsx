@@ -186,8 +186,8 @@ function MainContentFrame({ children }: { children: ReactNode }) {
   } as CSSProperties;
 
   return (
-    <div className="app-region-drag flex w-full flex-1 overflow-hidden" style={style}>
-      <div className="app-region-no-drag flex min-w-0 flex-1 overflow-hidden rounded-tr-lg border border-border/80 bg-background/95">
+    <div className="flex w-full flex-1 overflow-hidden" style={style}>
+      <div className="flex min-w-0 flex-1 overflow-hidden rounded-tr-lg border border-border/80 bg-background/95">
         <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {children}
         </SidebarInset>

@@ -1247,9 +1247,11 @@ export type Query = {
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
+  sessionGroupDirectoryEntries: Array<SessionGroupDirectoryEntry>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
+  sessionGroupFileTree: SessionGroupFileTree;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
@@ -1434,6 +1436,12 @@ export type QuerySessionGroupBranchDiffArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type QuerySessionGroupDirectoryEntriesArgs = {
+  depth?: InputMaybe<Scalars["Int"]["input"]>;
+  directoryPath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type QuerySessionGroupFileAtRefArgs = {
   filePath: Scalars["String"]["input"];
   ref: Scalars["String"]["input"];
@@ -1447,6 +1455,10 @@ export type QuerySessionGroupFileContentArgs = {
 
 export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileTreeArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1674,12 +1686,25 @@ export type SessionGroup = {
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
 
+export type SessionGroupDirectoryEntry = {
+  __typename?: "SessionGroupDirectoryEntry";
+  isDirectory: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+};
+
 export type SessionGroupFileContentResult = {
   __typename?: "SessionGroupFileContentResult";
   content: Scalars["String"]["output"];
   ref: Scalars["String"]["output"];
   requestedRef: Scalars["String"]["output"];
   usedFallback: Scalars["Boolean"]["output"];
+};
+
+export type SessionGroupFileTree = {
+  __typename?: "SessionGroupFileTree";
+  paths: Array<Scalars["String"]["output"]>;
+  truncated: Scalars["Boolean"]["output"];
 };
 
 export type SessionGroupStatus =
@@ -2156,7 +2181,9 @@ export type ResolversTypes = ResolversObject<{
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
+  SessionGroupDirectoryEntry: ResolverTypeWrapper<SessionGroupDirectoryEntry>;
   SessionGroupFileContentResult: ResolverTypeWrapper<SessionGroupFileContentResult>;
+  SessionGroupFileTree: ResolverTypeWrapper<SessionGroupFileTree>;
   SessionGroupStatus: SessionGroupStatus;
   SessionGroupVisibility: SessionGroupVisibility;
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
@@ -2260,7 +2287,9 @@ export type ResolversParentTypes = ResolversObject<{
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
+  SessionGroupDirectoryEntry: SessionGroupDirectoryEntry;
   SessionGroupFileContentResult: SessionGroupFileContentResult;
+  SessionGroupFileTree: SessionGroupFileTree;
   SessionPromptIndexItem: SessionPromptIndexItem;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
@@ -3624,6 +3653,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionGroupBranchDiffArgs, "sessionGroupId">
   >;
+  sessionGroupDirectoryEntries?: Resolver<
+    Array<ResolversTypes["SessionGroupDirectoryEntry"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionGroupDirectoryEntriesArgs, "directoryPath" | "sessionGroupId">
+  >;
   sessionGroupFileAtRef?: Resolver<
     ResolversTypes["String"],
     ParentType,
@@ -3641,6 +3676,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QuerySessionGroupFileContentWithSourceArgs, "filePath" | "sessionGroupId">
+  >;
+  sessionGroupFileTree?: Resolver<
+    ResolversTypes["SessionGroupFileTree"],
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionGroupFileTreeArgs, "sessionGroupId">
   >;
   sessionGroupFiles?: Resolver<
     Array<ResolversTypes["String"]>,
@@ -3851,6 +3892,17 @@ export type SessionGroupResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionGroupDirectoryEntryResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionGroupDirectoryEntry"] =
+    ResolversParentTypes["SessionGroupDirectoryEntry"],
+> = ResolversObject<{
+  isDirectory?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionGroupFileContentResultResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionGroupFileContentResult"] =
@@ -3860,6 +3912,16 @@ export type SessionGroupFileContentResultResolvers<
   ref?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   requestedRef?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   usedFallback?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionGroupFileTreeResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionGroupFileTree"] =
+    ResolversParentTypes["SessionGroupFileTree"],
+> = ResolversObject<{
+  paths?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  truncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4167,7 +4229,9 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
+  SessionGroupDirectoryEntry?: SessionGroupDirectoryEntryResolvers<ContextType>;
   SessionGroupFileContentResult?: SessionGroupFileContentResultResolvers<ContextType>;
+  SessionGroupFileTree?: SessionGroupFileTreeResolvers<ContextType>;
   SessionPromptIndexItem?: SessionPromptIndexItemResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;

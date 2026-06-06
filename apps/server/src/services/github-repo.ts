@@ -12,10 +12,27 @@ export interface GitHubBranchDiffFile {
   deletions: number;
 }
 
+export interface GitHubDirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
+export interface GitHubFileTree {
+  paths: string[];
+  truncated: boolean;
+}
+
 interface GitHubTreeResponse {
   tree?: Array<{ path?: unknown; type?: unknown }>;
   truncated?: unknown;
 }
+
+type GitHubContentsDirectoryResponse = Array<{
+  name?: unknown;
+  path?: unknown;
+  type?: unknown;
+}>;
 
 interface GitHubContentResponse {
   type?: unknown;
@@ -42,7 +59,7 @@ interface GitHubCompareResponse {
 const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_REPO_HOST = "github.com";
 
-class GitHubApiError extends Error {
+export class GitHubApiError extends Error {
   constructor(
     readonly status: number,
     readonly body: string,
@@ -69,6 +86,15 @@ export function parseGitHubRepo(remoteUrl: string): GitHubRepoRef | null {
 
 export class GitHubRepoService {
   async listFiles(repo: GitHubRepoRef, ref: string, token: string): Promise<string[]> {
+    return (await this.listFileTree(repo, ref, token)).paths;
+  }
+
+  /**
+   * Fetch the full recursive blob list in one request. GitHub flags `truncated`
+   * when the repo exceeds its tree limits, signalling callers to fall back to
+   * lazy directory listing instead of relying on this partial result.
+   */
+  async listFileTree(repo: GitHubRepoRef, ref: string, token: string): Promise<GitHubFileTree> {
     const treeRef = await this.resolveTreeRef(repo, ref, token);
     const response = await this.request<GitHubTreeResponse>(
       repo,
@@ -76,14 +102,29 @@ export class GitHubRepoService {
       token,
     );
 
-    if (response.truncated === true) {
-      throw new Error("GitHub file tree is too large to list completely.");
-    }
-
-    return (response.tree ?? [])
+    const paths = (response.tree ?? [])
       .filter((entry) => entry.type === "blob" && typeof entry.path === "string")
       .map((entry) => entry.path as string)
       .sort((a, b) => a.localeCompare(b));
+    return { paths, truncated: response.truncated === true };
+  }
+
+  async listDirectoryEntries(
+    repo: GitHubRepoRef,
+    ref: string,
+    directoryPath: string,
+    token: string,
+    depth = 1,
+  ): Promise<GitHubDirectoryEntry[]> {
+    const entries = await this.listDirectoryLevel(repo, ref, directoryPath, token);
+    if (depth <= 1) return entries;
+
+    const childEntryGroups = await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory)
+        .map((entry) => this.listDirectoryEntries(repo, ref, entry.path, token, depth - 1)),
+    );
+    return [...entries, ...childEntryGroups.flat()];
   }
 
   async readFile(
@@ -175,6 +216,36 @@ export class GitHubRepoService {
     return (await response.json()) as T;
   }
 
+  private async listDirectoryLevel(
+    repo: GitHubRepoRef,
+    ref: string,
+    directoryPath: string,
+    token: string,
+  ): Promise<GitHubDirectoryEntry[]> {
+    const encodedPath = directoryPath
+      ? `/${directoryPath.split("/").map(encodeURIComponent).join("/")}`
+      : "";
+    const response = await this.request<GitHubContentResponse | GitHubContentsDirectoryResponse>(
+      repo,
+      `/contents${encodedPath}?ref=${encodeURIComponent(ref)}`,
+      token,
+    );
+
+    if (!Array.isArray(response)) {
+      throw new Error("GitHub path is not a directory");
+    }
+
+    return response
+      .filter((entry) => typeof entry.name === "string" && typeof entry.path === "string")
+      .filter((entry) => entry.type === "file" || entry.type === "dir")
+      .map((entry) => ({
+        name: entry.name as string,
+        path: entry.path as string,
+        isDirectory: entry.type === "dir",
+      }))
+      .sort(compareDirectoryEntries);
+  }
+
   private comparePaths(baseRef: string, headRef: string): string[] {
     const encodedBasehead = `/compare/${encodeURIComponent(`${baseRef}...${headRef}`)}`;
     const pathBasehead = `/compare/${this.encodePathRef(baseRef)}...${this.encodePathRef(headRef)}`;
@@ -232,6 +303,11 @@ export class GitHubRepoService {
         return "M";
     }
   }
+}
+
+function compareDirectoryEntries(a: GitHubDirectoryEntry, b: GitHubDirectoryEntry): number {
+  if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+  return a.name.localeCompare(b.name);
 }
 
 export const githubRepoService = new GitHubRepoService();

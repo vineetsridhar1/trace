@@ -15,6 +15,7 @@ import { setTimeout } from "node:timers";
 import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
   BridgeClient,
+  getGithubAuthToken,
   getGithubCliStatus,
   type BridgeConnectionStatus,
 } from "./bridge.js";
@@ -307,6 +308,10 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 
 ipcMain.handle("get-github-cli-status", async () => {
   return getGithubCliStatus();
+});
+
+ipcMain.handle("get-github-auth-token", async () => {
+  return getGithubAuthToken();
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());

@@ -1244,9 +1244,11 @@ export type Query = {
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
+  sessionGroupDirectoryEntries: Array<SessionGroupDirectoryEntry>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
+  sessionGroupFileTree: SessionGroupFileTree;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
@@ -1431,6 +1433,12 @@ export type QuerySessionGroupBranchDiffArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type QuerySessionGroupDirectoryEntriesArgs = {
+  depth?: InputMaybe<Scalars["Int"]["input"]>;
+  directoryPath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type QuerySessionGroupFileAtRefArgs = {
   filePath: Scalars["String"]["input"];
   ref: Scalars["String"]["input"];
@@ -1444,6 +1452,10 @@ export type QuerySessionGroupFileContentArgs = {
 
 export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileTreeArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1671,12 +1683,25 @@ export type SessionGroup = {
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
 
+export type SessionGroupDirectoryEntry = {
+  __typename?: "SessionGroupDirectoryEntry";
+  isDirectory: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+};
+
 export type SessionGroupFileContentResult = {
   __typename?: "SessionGroupFileContentResult";
   content: Scalars["String"]["output"];
   ref: Scalars["String"]["output"];
   requestedRef: Scalars["String"]["output"];
   usedFallback: Scalars["Boolean"]["output"];
+};
+
+export type SessionGroupFileTree = {
+  __typename?: "SessionGroupFileTree";
+  paths: Array<Scalars["String"]["output"]>;
+  truncated: Scalars["Boolean"]["output"];
 };
 
 export type SessionGroupStatus =

@@ -598,8 +598,8 @@ describe("linked checkout commit-back", () => {
       {
         path: "app.txt",
         status: "M",
-        additions: 0,
-        deletions: 0,
+        additions: 1,
+        deletions: 1,
         truncated: false,
       },
     ]);
@@ -635,8 +635,8 @@ describe("linked checkout commit-back", () => {
       {
         path: "notes.txt",
         status: "M",
-        additions: 0,
-        deletions: 0,
+        additions: 1,
+        deletions: 1,
         truncated: false,
       },
     ]);
@@ -667,9 +667,34 @@ describe("linked checkout commit-back", () => {
     expect(status.changedFilesTruncated).toBe(true);
     expect(status.changedFiles[0]).toMatchObject({
       status: "A",
-      additions: 0,
+      additions: 1,
       deletions: 0,
       truncated: false,
+    });
+  }, 15_000);
+
+  it("reports multi-line counts and handles paths with spaces in the status list", async () => {
+    const { repoPath } = await createRepoFixture();
+    fs.writeFileSync(path.join(repoPath, "with space.txt"), "one\ntwo\n");
+    await git(repoPath, ["add", "with space.txt"]);
+    await git(repoPath, ["commit", "-m", "add spaced file"]);
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "line1\nline2\nline3\n");
+    fs.writeFileSync(path.join(repoPath, "with space.txt"), "ONE\ntwo\nthree\n");
+
+    const status = await getLinkedCheckoutStatus("repo-1");
+
+    const byPath = new Map(status.changedFiles.map((file) => [file.path, file]));
+    expect(byPath.get("app.txt")).toMatchObject({
+      status: "M",
+      additions: 3,
+      deletions: 1,
+    });
+    expect(byPath.get("with space.txt")).toMatchObject({
+      status: "M",
+      additions: 2,
+      deletions: 1,
     });
   }, 15_000);
 

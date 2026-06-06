@@ -1,29 +1,54 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { TraceLoader } from "../ui/trace-loader";
-import { buildTree, type FileTreeNode } from "./file-explorer-utils";
+import type { FileTreeNode } from "./file-explorer-utils";
 import { FileTreeItem } from "./FileTreeItem";
 
 export function FileExplorer({
-  files,
+  tree,
   loading,
   error,
   onRefresh,
+  onLoadDirectory,
   onFileClick,
 }: {
-  files: string[];
+  tree: FileTreeNode[];
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
+  onLoadDirectory: (directoryPath: string) => Promise<void>;
   onFileClick: (filePath: string) => void;
 }) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
-
-  const tree = useMemo(() => buildTree(files), [files]);
+  const didAutoExpandRef = useRef(false);
+  const loadedDirectoryPaths = useMemo(() => {
+    const paths = new Set<string>();
+    const visit = (node: FileTreeNode) => {
+      if (!node.isDirectory) return;
+      if (node.isLoaded) paths.add(node.path);
+      for (const child of node.children) visit(child);
+    };
+    for (const node of tree) visit(node);
+    return paths;
+  }, [tree]);
+  const loadedItemCount = useMemo(() => {
+    let count = 0;
+    const visit = (node: FileTreeNode) => {
+      count += 1;
+      for (const child of node.children) visit(child);
+    };
+    for (const node of tree) visit(node);
+    return count;
+  }, [tree]);
 
   // Auto-expand first level + single-child directory chains on initial load
   useEffect(() => {
-    if (tree.length === 0) return;
+    if (tree.length === 0) {
+      didAutoExpandRef.current = false;
+      setExpandedPaths(new Set());
+      return;
+    }
+    if (didAutoExpandRef.current) return;
     const autoExpand = new Set<string>();
     for (const node of tree) {
       if (node.isDirectory) {
@@ -36,19 +61,26 @@ export function FileExplorer({
       }
     }
     setExpandedPaths(autoExpand);
+    didAutoExpandRef.current = true;
   }, [tree]);
 
-  const handleToggle = useCallback((path: string) => {
-    setExpandedPaths((prev: Set<string>) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
+  const handleToggle = useCallback(
+    (path: string) => {
+      setExpandedPaths((prev: Set<string>) => {
+        const next = new Set(prev);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+        return next;
+      });
+      if (!loadedDirectoryPaths.has(path)) {
+        void onLoadDirectory(path);
       }
-      return next;
-    });
-  }, []);
+    },
+    [loadedDirectoryPaths, onLoadDirectory],
+  );
 
   if (loading) {
     return (
@@ -73,7 +105,7 @@ export function FileExplorer({
     );
   }
 
-  if (files.length === 0) {
+  if (tree.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-xs text-muted-foreground">No files found</p>
@@ -109,7 +141,7 @@ export function FileExplorer({
       </div>
       <div className="shrink-0 border-t border-[#2d2d2d] px-3 py-1">
         <span className="text-[11px] text-muted-foreground">
-          {files.length} file{files.length !== 1 ? "s" : ""}
+          {loadedItemCount} item{loadedItemCount !== 1 ? "s" : ""} loaded
         </span>
       </div>
     </div>

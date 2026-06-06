@@ -55,7 +55,14 @@ import {
   visibleSessionWhere,
 } from "./access.js";
 import { apiTokenService } from "./api-token.js";
-import { githubRepoService, parseGitHubRepo, type GitHubRepoRef } from "./github-repo.js";
+import {
+  GitHubApiError,
+  githubRepoService,
+  parseGitHubRepo,
+  type GitHubDirectoryEntry,
+  type GitHubFileTree,
+  type GitHubRepoRef,
+} from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
@@ -2051,6 +2058,18 @@ export class SessionService {
       }
     }
     return filePath;
+  }
+
+  private normalizeDirectoryPath(directoryPath: string): string {
+    if (directoryPath === "") return "";
+    if (directoryPath.startsWith("/")) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
+    }
+    const parts = directoryPath.split("/");
+    if (parts.some((part) => part.length === 0 || part === "." || part === "..")) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
+    }
+    return directoryPath;
   }
 
   private async resolveAccessibleSessionGroupRuntime(
@@ -7806,6 +7825,34 @@ export class SessionService {
     return sessionRouter.setLinkedCheckoutAutoSync(runtimeId, repoId, enabled);
   }
 
+  /**
+   * A 404 from GitHub means the requested ref/path does not exist — the signal
+   * to fall back to the default branch. Other failures (auth, rate limit,
+   * transient 5xx) must surface so we don't mask them or waste a retry.
+   */
+  private isMissingRefError(error: unknown): boolean {
+    return error instanceof GitHubApiError && error.status === 404;
+  }
+
+  /**
+   * Run a GitHub read against the session group's branch, falling back to the
+   * repo's default branch when the session branch is unavailable (e.g. never
+   * pushed). Mirrors the fallback behaviour of {@link readFileWithSource}.
+   */
+  private async withDefaultBranchFallback<T>(
+    source: GitHubSessionGroupFileSource,
+    run: (branch: string) => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await run(source.branch);
+    } catch (error) {
+      if (source.branch === source.defaultBranch || !this.isMissingRefError(error)) {
+        throw error;
+      }
+      return run(source.defaultBranch);
+    }
+  }
+
   /** List files in a session group's branch from GitHub. */
   async listFiles(
     sessionGroupId: string,
@@ -7817,7 +7864,56 @@ export class SessionService {
       organizationId,
       userId,
     );
-    return githubRepoService.listFiles(source.repo, source.branch, source.token);
+    return this.withDefaultBranchFallback(source, (branch) =>
+      githubRepoService.listFiles(source.repo, branch, source.token),
+    );
+  }
+
+  /**
+   * Fetch the full recursive file list for a session group's branch, along with
+   * GitHub's `truncated` flag so the client can fall back to lazy directory
+   * loading when the repo is too large to return completely.
+   */
+  async listFileTree(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<GitHubFileTree> {
+    const source = await this.resolveGitHubSessionGroupFileSource(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return this.withDefaultBranchFallback(source, (branch) =>
+      githubRepoService.listFileTree(source.repo, branch, source.token),
+    );
+  }
+
+  /** List one or more directory levels in a session group's branch from GitHub. */
+  async listDirectoryEntries(
+    sessionGroupId: string,
+    directoryPath: string,
+    depth: number | undefined,
+    organizationId: string,
+    userId: string,
+  ): Promise<GitHubDirectoryEntry[]> {
+    const normalizedPath = this.normalizeDirectoryPath(directoryPath);
+    const boundedDepth =
+      typeof depth === "number" && Number.isInteger(depth) ? Math.min(Math.max(depth, 1), 2) : 1;
+    const source = await this.resolveGitHubSessionGroupFileSource(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return this.withDefaultBranchFallback(source, (branch) =>
+      githubRepoService.listDirectoryEntries(
+        source.repo,
+        branch,
+        normalizedPath,
+        source.token,
+        boundedDepth,
+      ),
+    );
   }
 
   /** Read a file's content from a session group's GitHub branch. */
@@ -7858,7 +7954,7 @@ export class SessionService {
         usedFallback: false,
       };
     } catch (error) {
-      if (source.branch === source.defaultBranch) {
+      if (source.branch === source.defaultBranch || !this.isMissingRefError(error)) {
         throw error;
       }
       return {
