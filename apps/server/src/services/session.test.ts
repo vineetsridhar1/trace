@@ -6231,6 +6231,38 @@ describe("SessionService", () => {
     });
   });
 
+  describe("markConnectionLost", () => {
+    it("does not rewrite already-disconnected done cloud sessions for the same runtime", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "cloud",
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          worktreeDeleted: false,
+          connection: {
+            state: "disconnected",
+            runtimeInstanceId: "runtime-1",
+            lastError: "runtime_disconnected",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+
+      await service.markConnectionLost("session-1", "runtime_disconnected", "runtime-1");
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "connection_lost" }),
+        }),
+      );
+    });
+  });
+
   describe("cleanupIdleCloudSessionGroups", () => {
     beforeEach(() => {
       prismaMock.sessionGroup.findMany.mockReset();
@@ -6263,6 +6295,8 @@ describe("SessionService", () => {
               hosting: "cloud",
               agentStatus: "done",
               sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
               lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
               updatedAt: new Date("2026-05-12T11:31:00.000Z"),
             },
@@ -6363,16 +6397,17 @@ describe("SessionService", () => {
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            updatedAt: { lte: new Date("2026-05-12T11:35:00.000Z") },
             sessions: expect.objectContaining({
               some: { hosting: "cloud" },
               none: {
                 OR: [
                   { agentStatus: "active" },
                   { lastMessageAt: { gt: new Date("2026-05-12T11:35:00.000Z") } },
+                  { lastUserMessageAt: { gt: new Date("2026-05-12T11:35:00.000Z") } },
                   {
                     lastMessageAt: null,
-                    updatedAt: { gt: new Date("2026-05-12T11:35:00.000Z") },
+                    lastUserMessageAt: null,
+                    createdAt: { gt: new Date("2026-05-12T11:35:00.000Z") },
                   },
                 ],
               },
@@ -6422,6 +6457,95 @@ describe("SessionService", () => {
       );
     });
 
+    it("unloads stale cloud groups even when connection churn refreshed updatedAt", async () => {
+      const connection = {
+        state: "disconnected",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+        lastError: "runtime_disconnected",
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:44:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:20:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:44:00.000Z"),
+            },
+          ],
+        },
+      ]);
+      const disconnectOnDeprovisionConnection = {
+        ...connection,
+        disconnectOnDeprovision: true,
+        disconnectReason: "idle_session_group_cleanup",
+        version: 1,
+      };
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            workdir: null,
+            connection,
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            workdir: null,
+            connection: disconnectOnDeprovisionConnection,
+          }),
+        );
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            id: "group-1",
+            workdir: "/workspace/group-1",
+            worktreeDeleted: false,
+            sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+          }),
+        )
+        .mockResolvedValueOnce({
+          workdir: "/workspace/group-1",
+          repoId: "repo-1",
+          connection: disconnectOnDeprovisionConnection,
+        });
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: ["group-1"] });
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          connection: disconnectOnDeprovisionConnection,
+        }),
+        expect.objectContaining({ reason: "idle_session_group_cleanup" }),
+      );
+    });
+
     it("keeps active cloud session groups running even without recent messages", async () => {
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
         {
@@ -6436,6 +6560,8 @@ describe("SessionService", () => {
               hosting: "cloud",
               agentStatus: "active",
               sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:10:00.000Z"),
               lastMessageAt: new Date("2026-05-12T11:20:00.000Z"),
               updatedAt: new Date("2026-05-12T11:21:00.000Z"),
             },
@@ -6477,6 +6603,8 @@ describe("SessionService", () => {
               hosting: "cloud",
               agentStatus: "done",
               sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
               lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
               updatedAt: new Date("2026-05-12T11:31:00.000Z"),
               connection,
