@@ -66,16 +66,16 @@ type CachedDecision = {
   decision: ModelRouterDecision;
 };
 
-export const DEFAULT_ROUTER_PROMPT = `Classify the user's coding task for model routing.
+const ROUTER_OUTPUT_CONTRACT = `Classify the user's coding task for model routing.
 Return compact JSON with these fields only:
 complexity: simple | moderate | complex | expert
 risk: low | medium | high
 confidence: low | medium | high
 tier: fast | balanced | high_thinking
 reasonCode: short snake_case reason
-explanation: short user-visible phrase
+explanation: short user-visible phrase`;
 
-Use fast for simple low-risk tasks. Use balanced for moderate code changes and normal repo work. Use high_thinking for broad refactors, debugging unclear failures, architecture, security, migrations, auth, payments, or large-context work.`;
+export const DEFAULT_ROUTER_PROMPT = `Use fast for simple low-risk tasks. Use balanced for moderate code changes and normal repo work. Use high_thinking for broad refactors, debugging unclear failures, architecture, security, migrations, auth, payments, or large-context work.`;
 
 export const DEFAULT_MODEL_ROUTER_SETTINGS: ModelRouterSettings = {
   enabled: true,
@@ -501,7 +501,7 @@ export class ModelRouterService {
         organizationId: input.organizationId,
         userId: input.userId,
         model: routerModel,
-        system: settings.prompt,
+        system: `${ROUTER_OUTPUT_CONTRACT}\n\nRouting guidance:\n${settings.prompt}`,
         maxTokens: 220,
         temperature: 0,
         messages: [

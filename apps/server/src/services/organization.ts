@@ -172,7 +172,7 @@ export class OrganizationService {
     actorId: string,
   ) {
     if (input.prompt !== undefined && input.prompt !== null && !input.prompt.trim()) {
-      throw new Error("Router prompt cannot be empty");
+      throw new Error("Router guidance cannot be empty");
     }
     if (
       input.cacheTtlSeconds !== undefined &&

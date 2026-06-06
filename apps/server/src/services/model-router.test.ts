@@ -42,6 +42,7 @@ describe("ModelRouterService", () => {
       prompt: "Plan a multi-package module boundary change.",
       organizationSettings: {
         modelRouter: {
+          prompt: "Prefer high thinking for cross-package planning.",
           routerModelByTool: { codex: "gpt-5.1-codex-mini" },
           modelTiersByTool: {
             codex: {
@@ -64,6 +65,9 @@ describe("ModelRouterService", () => {
     expect(aiServiceMock.complete).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gpt-5.1-codex-mini",
+        system: expect.stringMatching(
+          /Return compact JSON with these fields only:[\s\S]*Routing guidance:[\s\S]*Prefer high thinking for cross-package planning\./,
+        ),
         messages: [
           expect.objectContaining({
             content: expect.stringContaining('"high_thinking":"gpt-5.5"'),

@@ -153,7 +153,7 @@ export function ModelRouterSection() {
     if (!activeOrgId || !isAdmin) return;
     const trimmedPrompt = nextPrompt.trim();
     if (!trimmedPrompt) {
-      toast.error("Router prompt cannot be empty");
+      toast.error("Router guidance cannot be empty");
       return;
     }
 
@@ -213,7 +213,7 @@ export function ModelRouterSection() {
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">Model Router</h2>
         <p className="text-sm text-muted-foreground">
-          Customize the prompt Auto uses and map each routing tier to a model per tool.
+          Customize the routing guidance Auto uses and map each tier to a model per tool.
         </p>
       </div>
 
@@ -225,7 +225,7 @@ export function ModelRouterSection() {
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <label className="block text-sm font-medium text-foreground">
-                  Router Prompt
+                  Routing Guidance
                 </label>
                 <span className="text-xs text-muted-foreground">
                   Cache TTL: {settings.cacheTtlSeconds}s
