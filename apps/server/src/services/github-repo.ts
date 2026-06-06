@@ -59,7 +59,7 @@ interface GitHubCompareResponse {
 const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_REPO_HOST = "github.com";
 
-class GitHubApiError extends Error {
+export class GitHubApiError extends Error {
   constructor(
     readonly status: number,
     readonly body: string,

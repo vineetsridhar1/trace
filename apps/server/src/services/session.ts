@@ -56,6 +56,7 @@ import {
 } from "./access.js";
 import { apiTokenService } from "./api-token.js";
 import {
+  GitHubApiError,
   githubRepoService,
   parseGitHubRepo,
   type GitHubDirectoryEntry,
@@ -7825,6 +7826,15 @@ export class SessionService {
   }
 
   /**
+   * A 404 from GitHub means the requested ref/path does not exist — the signal
+   * to fall back to the default branch. Other failures (auth, rate limit,
+   * transient 5xx) must surface so we don't mask them or waste a retry.
+   */
+  private isMissingRefError(error: unknown): boolean {
+    return error instanceof GitHubApiError && error.status === 404;
+  }
+
+  /**
    * Run a GitHub read against the session group's branch, falling back to the
    * repo's default branch when the session branch is unavailable (e.g. never
    * pushed). Mirrors the fallback behaviour of {@link readFileWithSource}.
@@ -7836,7 +7846,9 @@ export class SessionService {
     try {
       return await run(source.branch);
     } catch (error) {
-      if (source.branch === source.defaultBranch) throw error;
+      if (source.branch === source.defaultBranch || !this.isMissingRefError(error)) {
+        throw error;
+      }
       return run(source.defaultBranch);
     }
   }
@@ -7942,7 +7954,7 @@ export class SessionService {
         usedFallback: false,
       };
     } catch (error) {
-      if (source.branch === source.defaultBranch) {
+      if (source.branch === source.defaultBranch || !this.isMissingRefError(error)) {
         throw error;
       }
       return {
