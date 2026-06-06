@@ -174,7 +174,7 @@
   user-select: none;
 }
 
-.app-region-no-drag .app-region-drag :is(
+.app-region-drag :is(
     .app-region-no-drag,
     button,
     a,
@@ -188,7 +188,7 @@
     [role="menuitem"],
     [role="textbox"]
   ),
-.app-region-no-drag .app-region-drag :is(
+.app-region-drag :is(
     .app-region-no-drag,
     button,
     a,
@@ -208,8 +208,8 @@
   user-select: auto;
 }
 
-.app-region-no-drag .app-region-drag :is(button:disabled, [aria-disabled="true"]),
-.app-region-no-drag .app-region-drag :is(button:disabled, [aria-disabled="true"]) * {
+.app-region-drag :is(button:disabled, [aria-disabled="true"]),
+.app-region-drag :is(button:disabled, [aria-disabled="true"]) * {
   app-region: drag !important;
   -webkit-app-region: drag !important;
   -webkit-user-select: none;
