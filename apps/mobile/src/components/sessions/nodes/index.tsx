@@ -338,7 +338,7 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
       return payload ? renderSessionOutput(payload, context) : null;
 
     case "model_routing_started":
-      return <SystemBadge text="Selecting model..." />;
+      return <SystemBadge text="Choosing model..." />;
 
     case "model_routing_completed":
       return <SystemBadge text={modelRoutingText(payload)} />;

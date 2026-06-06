@@ -64,7 +64,7 @@ export function ToolModelPicker({
     modelSelectionMode === "auto"
       ? autoSelectedModel
         ? `Auto: ${getModelLabel(autoSelectedModel)}`
-        : "Auto selecting..."
+        : "Choosing model..."
       : model
         ? getModelLabel(model)
         : "Model";

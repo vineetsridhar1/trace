@@ -6,6 +6,7 @@ import type { GitCheckpoint } from "@trace/gql";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
+import { SystemBadge } from "./messages/SystemBadge";
 import type { CollapsedSessionEventsSummary } from "../../hooks/useSessionEvents";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { TraceLoader } from "../ui/trace-loader";
@@ -19,7 +20,8 @@ const BEGINNING_LABEL_HEIGHT = 32;
 
 export type SessionListNode =
   | SessionNode
-  | { kind: "collapsed-events"; id: string; collapsedRanges: CollapsedSessionEventsSummary[] };
+  | { kind: "collapsed-events"; id: string; collapsedRanges: CollapsedSessionEventsSummary[] }
+  | { kind: "model-routing-pending"; id: string };
 
 export interface SessionMessageListProps {
   key?: React.Key;
@@ -43,6 +45,7 @@ export interface SessionMessageListProps {
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
   messageActionsEventIds?: ReadonlySet<string>;
+  showModelRoutingPending?: boolean;
 }
 
 export function SessionMessageList({
@@ -66,6 +69,7 @@ export function SessionMessageList({
   onForkSession,
   canForkSession = false,
   messageActionsEventIds,
+  showModelRoutingPending = false,
 }: SessionMessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -80,8 +84,15 @@ export function SessionMessageList({
   const initialScrollTimeoutsRef = useRef<number[]>([]);
   const initialScrollFramesRef = useRef<number[]>([]);
   const pendingTimelineAnchorRef = useRef<string | null>(null);
-  const nodeCountRef = useRef(nodes.length);
-  nodeCountRef.current = nodes.length;
+  const displayNodes = useMemo<SessionListNode[]>(
+    () =>
+      showModelRoutingPending
+        ? [...nodes, { kind: "model-routing-pending", id: "model-routing-pending" }]
+        : nodes,
+    [nodes, showModelRoutingPending],
+  );
+  const nodeCountRef = useRef(displayNodes.length);
+  nodeCountRef.current = displayNodes.length;
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -98,12 +109,13 @@ export function SessionMessageList({
 
   const getItemKey = useCallback(
     (index: number) => {
-      const node = nodes[index];
+      const node = displayNodes[index];
       if (node.kind === "readglob-group") return `rg:${node.items[0].id}`;
       if (node.kind === "collapsed-events") return node.id;
+      if (node.kind === "model-routing-pending") return node.id;
       return node.id;
     },
-    [nodes],
+    [displayNodes],
   );
 
   const estimateNodeSize = useCallback(
@@ -111,23 +123,24 @@ export function SessionMessageList({
       const cached = sizeCacheRef.current.get(getItemKey(index));
       if (cached != null) return cached;
 
-      const node = nodes[index];
+      const node = displayNodes[index];
       if (!node) return 80;
       if (node.kind === "command-execution") return 34;
       if (node.kind === "readglob-group") return 34;
       if (node.kind === "collapsed-events") return 28;
+      if (node.kind === "model-routing-pending") return 34;
       if (node.kind === "ask-user-question") return 120;
       if (node.kind === "plan-review") return 320;
       return 88;
     },
-    [getItemKey, nodes],
+    [displayNodes, getItemKey],
   );
 
   const topPadding =
     LIST_VERTICAL_PADDING + (!hasOlder && nodes.length > 0 ? BEGINNING_LABEL_HEIGHT : 0);
 
   const virtualizer = useVirtualizer({
-    count: nodes.length,
+    count: displayNodes.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: estimateNodeSize,
     overscan: 24,
@@ -251,15 +264,15 @@ export function SessionMessageList({
       container.scrollTop = snapshot.scrollTop + delta;
     }
     scrollSnapshotRef.current = null;
-  }, [loadingOlder, nodes.length]);
+  }, [loadingOlder, displayNodes.length]);
 
   // Scroll to bottom on initial load — use useLayoutEffect + rAF to ensure
   // the virtualizer has rendered and measured before scrolling
   useLayoutEffect(() => {
-    if (!isInitialLoadRef.current || initialLoading || nodes.length === 0) return;
+    if (!isInitialLoadRef.current || initialLoading || displayNodes.length === 0) return;
 
     isInitialLoadRef.current = false;
-    prevNodeCountRef.current = nodes.length;
+    prevNodeCountRef.current = displayNodes.length;
 
     // First pass: jump immediately (before paint) to avoid flash at top
     const container = scrollContainerRef.current;
@@ -269,26 +282,26 @@ export function SessionMessageList({
     }
 
     scheduleInitialBottomAlignment();
-  }, [initialLoading, nodes.length, scheduleInitialBottomAlignment, virtualizer]);
+  }, [initialLoading, displayNodes.length, scheduleInitialBottomAlignment, virtualizer]);
 
   // Auto-scroll when new messages arrive at the end
   useEffect(() => {
     if (isInitialLoadRef.current) return;
 
     const prevCount = prevNodeCountRef.current;
-    prevNodeCountRef.current = nodes.length;
+    prevNodeCountRef.current = displayNodes.length;
 
-    if (nodes.length <= prevCount) return;
+    if (displayNodes.length <= prevCount) return;
 
     // Only auto-scroll if the user was near the bottom (within 100px).
     // Use rAF so the virtualizer measures the new item before we scroll —
     // without this, scrollToIndex may snap because the target size is unknown.
     if (isNearBottomRef.current) {
       requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(nodes.length - 1, { align: "end", behavior: "smooth" });
+        virtualizer.scrollToIndex(displayNodes.length - 1, { align: "end", behavior: "smooth" });
       });
     }
-  }, [nodes.length, virtualizer]);
+  }, [displayNodes.length, virtualizer]);
 
   // Scroll to a specific event when requested (e.g. from checkpoint panel or prompt timeline)
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
@@ -402,7 +415,7 @@ export function SessionMessageList({
   const lastVirtualItem = virtualItems[virtualItems.length - 1];
   const paddingTop = firstVirtualItem?.start ?? 0;
   const paddingBottom = lastVirtualItem ? Math.max(0, totalSize - lastVirtualItem.end) : 0;
-  const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
+  const showEmptyState = !initialLoading && displayNodes.length === 0 && !loadingOlder;
 
   const emptyState = (
     <motion.div
@@ -464,7 +477,7 @@ export function SessionMessageList({
           <div aria-hidden={paddingTop <= 0} className="relative" style={{ height: paddingTop }}>
             <div ref={sentinelRef} className="h-px w-px" />
 
-            {!hasOlder && nodes.length > 0 && (
+            {!hasOlder && displayNodes.length > 0 && (
               <div
                 className="absolute left-0 right-0 text-center text-xs text-muted-foreground"
                 style={{ top: LIST_VERTICAL_PADDING, height: BEGINNING_LABEL_HEIGHT }}
@@ -475,7 +488,7 @@ export function SessionMessageList({
           </div>
 
           {virtualItems.map((virtualRow: { key: React.Key; index: number }) => {
-            const node = nodes[virtualRow.index];
+            const node = displayNodes[virtualRow.index];
             return (
               <div
                 key={virtualRow.key}
@@ -483,7 +496,9 @@ export function SessionMessageList({
                 data-index={virtualRow.index}
                 className="w-full pb-3"
               >
-                {node.kind === "collapsed-events" ? (
+                {node.kind === "model-routing-pending" ? (
+                  <SystemBadge text="Choosing model..." />
+                ) : node.kind === "collapsed-events" ? (
                   <CollapsedSessionEventsRow
                     sessionId={sessionId}
                     collapsedRanges={node.collapsedRanges}

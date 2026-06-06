@@ -293,7 +293,7 @@ export const SessionMessage = memo(function SessionMessage({
         : null;
 
     case "model_routing_started":
-      return <SystemBadge text="Selecting model..." />;
+      return <SystemBadge text="Choosing model..." />;
 
     case "model_routing_completed":
       return <SystemBadge text={modelRoutingText(payload)} />;

@@ -207,6 +207,13 @@ export function SessionDetailView({
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
     | undefined;
+  const modelSelectionMode = useEntityField("sessions", sessionId, "modelSelectionMode") as
+    | string
+    | undefined;
+  const autoSelectedModel = useEntityField("sessions", sessionId, "autoSelectedModel") as
+    | string
+    | null
+    | undefined;
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -402,6 +409,16 @@ export function SessionDetailView({
     () => findMessageActionsEventIds(eventIds, events),
     [eventIds, events],
   );
+  const showModelRoutingPending = useMemo(() => {
+    if (modelSelectionMode !== "auto" || autoSelectedModel) return false;
+    for (const eventId of eventIds) {
+      const eventType = events[eventId]?.eventType;
+      if (eventType === "model_routing_started" || eventType === "model_routing_completed") {
+        return false;
+      }
+    }
+    return true;
+  }, [autoSelectedModel, eventIds, events, modelSelectionMode]);
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
   const groupConnectionState = getConnectionState(groupConnection);
@@ -553,6 +570,7 @@ export function SessionDetailView({
                 onForkSession={onForkSession}
                 canForkSession={canForkSession}
                 messageActionsEventIds={messageActionsEventIds}
+                showModelRoutingPending={showModelRoutingPending}
               />
             )}
             {initialEventsLoading && (
