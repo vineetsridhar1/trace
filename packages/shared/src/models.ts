@@ -106,9 +106,9 @@ const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
 };
 
 const AUTO_ROUTER_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
-  claude_code: "claude-haiku-4-5",
-  codex: "gpt-5.1-codex-mini",
-  pi: "gpt-5.1-codex-mini",
+  claude_code: "gpt-4o-mini",
+  codex: "gpt-4o-mini",
+  pi: "gpt-4o-mini",
 };
 
 const AUTO_FALLBACK_MODEL_BY_TOOL: Readonly<Record<string, string>> = {

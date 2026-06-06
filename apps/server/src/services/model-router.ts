@@ -73,7 +73,11 @@ risk: low | medium | high
 confidence: low | medium | high
 tier: fast | balanced | high_thinking
 reasonCode: short snake_case reason
-explanation: short user-visible phrase`;
+explanation: short user-visible phrase
+
+Return only a JSON object. Do not use markdown.`;
+
+const FALLBACK_ROUTER_MODELS = ["gpt-4o-mini", "claude-3-5-haiku-latest"] as const;
 
 export const DEFAULT_ROUTER_PROMPT = `Use fast for simple low-risk tasks. Use balanced for moderate code changes and normal repo work. Use high_thinking for broad refactors, debugging unclear failures, architecture, security, migrations, auth, payments, or large-context work.`;
 
@@ -302,6 +306,22 @@ function bestFallback(tool: CodingTool, settings: ModelRouterSettings, allowedMo
   return allowedModels.find((model) => isSupportedModel(tool, model)) ?? null;
 }
 
+function routerModelCandidates(tool: CodingTool, settings: ModelRouterSettings): string[] {
+  const candidates = [
+    settings.routerModelByTool[tool],
+    getAutoRouterModelForTool(tool),
+    ...FALLBACK_ROUTER_MODELS,
+  ];
+  return candidates.filter(
+    (model, index): model is string =>
+      typeof model === "string" && model.trim() !== "" && candidates.indexOf(model) === index,
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown router error";
+}
+
 function tierForClassification(
   complexity: ModelRoutingComplexity,
   risk: ModelRoutingRisk,
@@ -441,6 +461,8 @@ function fallbackDecision(
   settings: ModelRouterSettings,
   allowedModels: string[],
   reasonCode: string,
+  explanation?: string,
+  routerModel?: string | null,
 ): ModelRouterDecision {
   const selected =
     bestFallback(tool, settings, allowedModels) ?? getAutoEligibleModelsForTool(tool)[0]?.value;
@@ -454,8 +476,8 @@ function fallbackDecision(
     risk: "medium",
     confidence: "low",
     reasonCode,
-    explanation: `Fallback to ${getModelLabel(selected)}`,
-    routerModel: settings.routerModelByTool[tool] ?? null,
+    explanation: explanation ?? `Fallback to ${getModelLabel(selected)}`,
+    routerModel: routerModel ?? settings.routerModelByTool[tool] ?? null,
     cacheHit: false,
     fallback: true,
   };
@@ -490,49 +512,78 @@ export class ModelRouterService {
     if (!fallback) {
       return fallbackDecision(input.tool, settings, allowedModels, "fallback");
     }
-    const routerModel =
-      settings.routerModelByTool[input.tool] ?? getAutoRouterModelForTool(input.tool);
-    if (!routerModel) {
+    const routerModels = routerModelCandidates(input.tool, settings);
+    if (routerModels.length === 0) {
       return fallbackDecision(input.tool, settings, allowedModels, "router_model_missing");
     }
 
-    try {
-      const response = await aiService.complete({
-        organizationId: input.organizationId,
-        userId: input.userId,
-        model: routerModel,
-        system: `${ROUTER_OUTPUT_CONTRACT}\n\nRouting guidance:\n${settings.prompt}`,
-        maxTokens: 220,
-        temperature: 0,
-        messages: [
-          {
-            role: "user",
-            content: JSON.stringify({
-              tool: input.tool,
-              tiers: settings.modelTiersByTool[input.tool],
-              fallbackModel: fallback,
-              repo: input.repo,
-              prompt: input.prompt,
-            }),
-          },
-        ],
-      });
-      const text = firstTextBlock(response.content);
-      const parsed = text ? parseRouterJson(text) : null;
-      const decision = parsed
-        ? decisionFromClassifier(parsed, input.tool, settings, allowedModels, fallback, routerModel)
-        : fallbackDecision(input.tool, settings, allowedModels, "fallback");
-
-      if (!decision.fallback && decision.risk !== "high") {
-        decisionCache.set(key, {
-          expiresAt: now + settings.cacheTtlSeconds * 1000,
-          decision,
+    let lastFailure: { reasonCode: string; message: string; routerModel: string } | null = null;
+    for (const routerModel of routerModels) {
+      try {
+        const response = await aiService.complete({
+          organizationId: input.organizationId,
+          userId: input.userId,
+          model: routerModel,
+          system: `${ROUTER_OUTPUT_CONTRACT}\n\nRouting guidance:\n${settings.prompt}`,
+          maxTokens: 220,
+          temperature: 0,
+          messages: [
+            {
+              role: "user",
+              content: JSON.stringify({
+                tool: input.tool,
+                tiers: settings.modelTiersByTool[input.tool],
+                fallbackModel: fallback,
+                repo: input.repo,
+                prompt: input.prompt,
+              }),
+            },
+          ],
         });
+        const text = firstTextBlock(response.content);
+        const parsed = text ? parseRouterJson(text) : null;
+        if (!parsed) {
+          lastFailure = {
+            reasonCode: "router_parse_failed",
+            message: "Router did not return valid JSON",
+            routerModel,
+          };
+          continue;
+        }
+
+        const decision = decisionFromClassifier(
+          parsed,
+          input.tool,
+          settings,
+          allowedModels,
+          fallback,
+          routerModel,
+        );
+
+        if (!decision.fallback && decision.risk !== "high") {
+          decisionCache.set(key, {
+            expiresAt: now + settings.cacheTtlSeconds * 1000,
+            decision,
+          });
+        }
+        return decision;
+      } catch (error) {
+        lastFailure = {
+          reasonCode: "router_error",
+          message: errorMessage(error),
+          routerModel,
+        };
       }
-      return decision;
-    } catch {
-      return fallbackDecision(input.tool, settings, allowedModels, "fallback");
     }
+
+    return fallbackDecision(
+      input.tool,
+      settings,
+      allowedModels,
+      lastFailure?.reasonCode ?? "router_error",
+      lastFailure ? `Router failed: ${lastFailure.message}` : undefined,
+      lastFailure?.routerModel ?? routerModels[0] ?? null,
+    );
   }
 }
 
