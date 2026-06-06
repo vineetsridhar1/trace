@@ -27,6 +27,7 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "recovery_failed",
   "tool_session_recovered",
   "upgrade_workspace",
+  "workspace_ready",
   "session_resumed",
   "session_terminated",
 ] as const;
@@ -35,14 +36,3 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
 export const HIDDEN_SESSION_PAYLOAD_TYPE_SET: ReadonlySet<string> = new Set(
   HIDDEN_SESSION_PAYLOAD_TYPES,
 );
-
-export function isHiddenSessionOutputPayload(payload: unknown): boolean {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
-  const record = payload as Record<string, unknown>;
-  const type = record.type;
-  if (typeof type !== "string") return false;
-  if (type === "workspace_ready") {
-    return !record.warning || typeof record.warning !== "object" || Array.isArray(record.warning);
-  }
-  return HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(type);
-}

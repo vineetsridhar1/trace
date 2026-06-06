@@ -6042,15 +6042,6 @@ export class SessionService {
       setupStatus: setupScript ? "running" : "idle",
       setupError: null,
     });
-    const workspaceWarning = warning
-      ? ({
-          type: warning.type,
-          branch: warning.branch,
-          baseBranch: warning.baseBranch,
-          message: warning.message,
-        } satisfies Prisma.InputJsonObject)
-      : null;
-
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -6061,12 +6052,28 @@ export class SessionService {
         workdir,
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
-        ...(workspaceWarning ? { warning: workspaceWarning } : {}),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "system",
     });
+
+    if (warning) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "workspace_restored_from_base",
+          branch: warning.branch,
+          baseBranch: warning.baseBranch,
+          message: warning.message,
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    }
 
     if (setupScript) {
       const runtimeInstanceId =

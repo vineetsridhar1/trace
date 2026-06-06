@@ -87,7 +87,6 @@ export { createGqlClient } from "./gql/createClient.js";
 export {
   HIDDEN_SESSION_PAYLOAD_TYPES,
   HIDDEN_SESSION_PAYLOAD_TYPE_SET,
-  isHiddenSessionOutputPayload,
 } from "./session/event-filters.js";
 export { buildSessionNodes } from "./session/nodes.js";
 export { isSessionPreparing, isSessionRuntimeStartingUp } from "./session/preparation.js";

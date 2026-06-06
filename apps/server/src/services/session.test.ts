@@ -5672,6 +5672,74 @@ describe("SessionService", () => {
       );
     });
 
+    it("emits a workspace_restored_from_base event when the branch was missing on origin", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ branch: "trace/missing", workdir: "/tmp/trace/missing" }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ branch: "trace/missing", workdir: "/tmp/trace/missing" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/missing", "trace/missing", undefined, {
+        type: "branch_missing_restored_from_base",
+        branch: "trace/missing",
+        baseBranch: "develop",
+        message:
+          "Branch trace/missing did not exist on origin, so Trace created it from develop. " +
+          "Local-only changes from the previous workspace were not restored.",
+      });
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "workspace_restored_from_base",
+            branch: "trace/missing",
+            baseBranch: "develop",
+            message: expect.stringContaining("did not exist on origin"),
+          }),
+        }),
+      );
+      // The workspace_ready event itself must stay free of warning data.
+      const readyCall = eventServiceMock.create.mock.calls.find(
+        ([arg]: [{ payload?: { type?: string } }]) => arg.payload?.type === "workspace_ready",
+      );
+      expect(readyCall?.[0].payload).not.toHaveProperty("warning");
+    });
+
+    it("does not emit a workspace_restored_from_base event when there is no warning", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ branch: "trace/ok", workdir: "/tmp/trace/ok" }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ branch: "trace/ok", workdir: "/tmp/trace/ok" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/ok", "trace/ok");
+
+      const restoredCall = eventServiceMock.create.mock.calls.find(
+        ([arg]: [{ payload?: { type?: string } }]) =>
+          arg.payload?.type === "workspace_restored_from_base",
+      );
+      expect(restoredCall).toBeUndefined();
+    });
+
     it("preserves readOnlyWorkspace for an initial read-only repo checkout", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,

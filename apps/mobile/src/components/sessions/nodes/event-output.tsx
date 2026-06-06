@@ -21,9 +21,8 @@ export function renderSessionOutput(payload: JsonObject, context: NodeRenderCont
     const message = typeof payload.message === "string" ? payload.message : "";
     return <CompletionRow error={message} />;
   }
-  if (type === "workspace_ready") {
-    const warning = asJsonObject(payload.warning);
-    const message = typeof warning?.message === "string" ? warning.message : "";
+  if (type === "workspace_restored_from_base") {
+    const message = typeof payload.message === "string" ? payload.message : "";
     if (message) return <SystemBadge text={message} />;
   }
   return null;

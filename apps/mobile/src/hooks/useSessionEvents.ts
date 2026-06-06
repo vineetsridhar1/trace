@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
+  HIDDEN_SESSION_PAYLOAD_TYPE_SET,
   handleSessionEvent,
-  isHiddenSessionOutputPayload,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
   useEntityStore,
@@ -81,9 +81,9 @@ function isRenderableCompactEvent(event: Event | undefined): event is Event & { 
   const payload = payloadRecord(event);
   if (!payload) return false;
   const type = payload.type;
-  if (isHiddenSessionOutputPayload(payload)) return false;
+  if (typeof type === "string" && HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(type)) return false;
   if (type === "assistant" || type === "user") return hasRenderableContentBlock(payload);
-  return type === "result" || type === "error" || type === "workspace_ready";
+  return type === "result" || type === "error" || type === "workspace_restored_from_base";
 }
 
 function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {
