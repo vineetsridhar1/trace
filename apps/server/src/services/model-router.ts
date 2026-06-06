@@ -120,7 +120,17 @@ export const DEFAULT_MODEL_ROUTER_SETTINGS: ModelRouterSettings = {
     {
       id: "protected_domains",
       description: "Use stronger models for security, auth, payment, and migration work.",
-      match: ["security", "auth", "payment", "billing", "migration", "prisma migrate"],
+      match: [
+        "security",
+        "auth",
+        "login",
+        "oauth",
+        "password",
+        "payment",
+        "billing",
+        "migration",
+        "prisma migrate",
+      ],
       complexity: "complex",
       risk: "high",
       tier: "high_thinking",
@@ -322,6 +332,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown router error";
 }
 
+function isMissingApiKeyError(message: string): boolean {
+  return /No (openai|anthropic) API key configured/i.test(message);
+}
+
 function tierForClassification(
   complexity: ModelRoutingComplexity,
   risk: ModelRoutingRisk,
@@ -391,6 +405,48 @@ function ruleDecision(
     confidence: "high",
     reasonCode: rule.reasonCode,
     explanation: rule.description,
+    routerModel: null,
+    cacheHit: false,
+    fallback: false,
+  };
+}
+
+function heuristicDecision(
+  input: ModelRouterInput,
+  settings: ModelRouterSettings,
+  allowedModels: string[],
+  reasonCode: string,
+  explanation: string,
+): ModelRouterDecision | null {
+  const prompt = input.prompt.toLowerCase();
+  const complexity: ModelRoutingComplexity =
+    prompt.includes("debug") ||
+    prompt.includes("failing") ||
+    prompt.includes("implement") ||
+    prompt.includes("update") ||
+    prompt.includes("build")
+      ? "moderate"
+      : "simple";
+  const risk: ModelRoutingRisk =
+    prompt.includes("auth") ||
+    prompt.includes("login") ||
+    prompt.includes("security") ||
+    prompt.includes("payment") ||
+    prompt.includes("migration")
+      ? "high"
+      : "low";
+  const tier = tierForClassification(complexity, risk);
+  const selected = modelForTier(input.tool, settings, allowedModels, tier);
+  if (!selected) return null;
+
+  return {
+    selectedModel: selected,
+    tier,
+    complexity,
+    risk,
+    confidence: "low",
+    reasonCode,
+    explanation,
     routerModel: null,
     cacheHit: false,
     fallback: false,
@@ -517,7 +573,7 @@ export class ModelRouterService {
       return fallbackDecision(input.tool, settings, allowedModels, "router_model_missing");
     }
 
-    let lastFailure: { reasonCode: string; message: string; routerModel: string } | null = null;
+    const failures: Array<{ reasonCode: string; message: string; routerModel: string }> = [];
     for (const routerModel of routerModels) {
       try {
         const response = await aiService.complete({
@@ -543,11 +599,11 @@ export class ModelRouterService {
         const text = firstTextBlock(response.content);
         const parsed = text ? parseRouterJson(text) : null;
         if (!parsed) {
-          lastFailure = {
+          failures.push({
             reasonCode: "router_parse_failed",
             message: "Router did not return valid JSON",
             routerModel,
-          };
+          });
           continue;
         }
 
@@ -568,14 +624,28 @@ export class ModelRouterService {
         }
         return decision;
       } catch (error) {
-        lastFailure = {
+        failures.push({
           reasonCode: "router_error",
           message: errorMessage(error),
           routerModel,
-        };
+        });
       }
     }
 
+    const missingApiKeys =
+      failures.length > 0 && failures.every((failure) => isMissingApiKeyError(failure.message));
+    if (missingApiKeys) {
+      const heuristic = heuristicDecision(
+        input,
+        settings,
+        allowedModels,
+        "router_api_key_missing",
+        "Router API key missing; selected by local heuristic",
+      );
+      if (heuristic) return heuristic;
+    }
+
+    const lastFailure = failures[failures.length - 1] ?? null;
     return fallbackDecision(
       input.tool,
       settings,

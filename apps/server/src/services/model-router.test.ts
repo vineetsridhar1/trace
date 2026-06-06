@@ -127,7 +127,7 @@ describe("ModelRouterService", () => {
       organizationId: "org-1",
       userId: "user-1",
       tool: "codex",
-      prompt: "Change one label.",
+      prompt: "Change one button label.",
       organizationSettings: {
         modelRouter: {
           routerModelByTool: { codex: "bad-router-model" },
@@ -149,5 +149,39 @@ describe("ModelRouterService", () => {
       reasonCode: "small_change",
     });
     expect(aiServiceMock.complete).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses a local heuristic instead of fallback when router API keys are missing", async () => {
+    aiServiceMock.complete
+      .mockRejectedValueOnce(new Error("No anthropic API key configured"))
+      .mockRejectedValueOnce(new Error("No openai API key configured"))
+      .mockRejectedValueOnce(new Error("No anthropic API key configured"));
+
+    const decision = await modelRouterService.route({
+      organizationId: "org-1",
+      userId: "user-1",
+      tool: "codex",
+      prompt: "Change one label.",
+      organizationSettings: {
+        modelRouter: {
+          routerModelByTool: { codex: "bad-router-model" },
+          modelTiersByTool: {
+            codex: {
+              fast: "gpt-5.1-codex-mini",
+              balanced: "gpt-5.3-codex",
+              high_thinking: "gpt-5.5",
+            },
+          },
+        },
+      },
+    });
+
+    expect(decision).toMatchObject({
+      selectedModel: "gpt-5.1-codex-mini",
+      tier: "fast",
+      fallback: false,
+      reasonCode: "router_api_key_missing",
+      confidence: "low",
+    });
   });
 });
