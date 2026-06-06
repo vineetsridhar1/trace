@@ -49,8 +49,7 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
 
 export function ApiTokensSection() {
   const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
-  const canUseGithubCliToken =
-    typeof window !== "undefined" && typeof window.trace?.getGithubAuthToken === "function";
+  const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -106,7 +105,12 @@ export function ApiTokensSection() {
   }
 
   async function handleUseGithubCliToken() {
-    if (!window.trace?.getGithubAuthToken || importingGithubToken || saving) return;
+    if (importingGithubToken || saving) return;
+
+    if (!window.trace?.getGithubAuthToken) {
+      setErrorMessage("Restart the desktop app to load GitHub CLI token import.");
+      return;
+    }
 
     setImportingGithubToken(true);
     setErrorMessage(null);
@@ -142,6 +146,7 @@ export function ApiTokensSection() {
           const meta = PROVIDER_META[token.provider];
           if (!meta) return null;
           const isEditing = editing === token.provider;
+          const canShowGithubCliImport = token.provider === "github" && isDesktopShell;
 
           return (
             <div
@@ -164,6 +169,18 @@ export function ApiTokensSection() {
                         <Check size={12} />
                         Configured
                       </span>
+                      {canShowGithubCliImport && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUseGithubCliToken}
+                          disabled={saving || importingGithubToken}
+                          className="gap-2"
+                        >
+                          <Github size={14} />
+                          {importingGithubToken ? "Importing..." : "Import from CLI"}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -183,16 +200,34 @@ export function ApiTokensSection() {
                     </>
                   )}
                   {!token.isSet && !isEditing && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => startEditing(token.provider)}
-                    >
-                      Add key
-                    </Button>
+                    <>
+                      {canShowGithubCliImport && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUseGithubCliToken}
+                          disabled={saving || importingGithubToken}
+                          className="gap-2"
+                        >
+                          <Github size={14} />
+                          {importingGithubToken ? "Importing..." : "Import from CLI"}
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startEditing(token.provider)}
+                      >
+                        Add key
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
+
+              {!isEditing && errorMessage && canShowGithubCliImport && (
+                <p className="mt-2 text-xs text-destructive">{errorMessage}</p>
+              )}
 
               {isEditing && (
                 <div className="mt-3 space-y-2">
@@ -241,7 +276,7 @@ export function ApiTokensSection() {
                       </button>
                     </div>
                   )}
-                  {token.provider === "github" && canUseGithubCliToken && (
+                  {canShowGithubCliImport && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -250,7 +285,7 @@ export function ApiTokensSection() {
                       className="gap-2"
                     >
                       <Github size={14} />
-                      {importingGithubToken ? "Importing..." : "Use GitHub CLI"}
+                      {importingGithubToken ? "Importing..." : "Import from GitHub CLI"}
                     </Button>
                   )}
                   {errorMessage && (
