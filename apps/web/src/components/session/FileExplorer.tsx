@@ -31,6 +31,15 @@ export function FileExplorer({
     for (const node of tree) visit(node);
     return paths;
   }, [tree]);
+  const loadedItemCount = useMemo(() => {
+    let count = 0;
+    const visit = (node: FileTreeNode) => {
+      count += 1;
+      for (const child of node.children) visit(child);
+    };
+    for (const node of tree) visit(node);
+    return count;
+  }, [tree]);
 
   // Auto-expand first level + single-child directory chains on initial load
   useEffect(() => {
@@ -132,7 +141,7 @@ export function FileExplorer({
       </div>
       <div className="shrink-0 border-t border-[#2d2d2d] px-3 py-1">
         <span className="text-[11px] text-muted-foreground">
-          {tree.length} item{tree.length !== 1 ? "s" : ""}
+          {loadedItemCount} item{loadedItemCount !== 1 ? "s" : ""} loaded
         </span>
       </div>
     </div>
