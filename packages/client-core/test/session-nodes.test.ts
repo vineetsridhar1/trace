@@ -68,19 +68,15 @@ describe("buildSessionNodes", () => {
     expect(result.nodes).toEqual([]);
   });
 
-  it("keeps workspace_ready events with warnings", () => {
+  it("keeps workspace_restored_from_base warning events", () => {
     const event = makeEvent({
       eventType: "session_output",
       payload: {
-        type: "workspace_ready",
-        workdir: "/tmp/work",
-        warning: {
-          type: "branch_missing_restored_from_base",
-          branch: "trace/missing",
-          baseBranch: "develop",
-          message:
-            "Branch trace/missing did not exist on origin, so Trace created it from develop. Local-only changes from the previous workspace were not restored.",
-        },
+        type: "workspace_restored_from_base",
+        branch: "trace/missing",
+        baseBranch: "develop",
+        message:
+          "Branch trace/missing did not exist on origin, so Trace created it from develop. Local-only changes from the previous workspace were not restored.",
       },
     });
 
