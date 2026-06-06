@@ -210,6 +210,57 @@ function countDiffLines(diff: string): { additions: number; deletions: number } 
   return { additions, deletions };
 }
 
+function parseNumstatLineCounts(output: string): { additions: number; deletions: number } {
+  const [firstLine] = output.trim().split("\n");
+  if (!firstLine) return { additions: 0, deletions: 0 };
+
+  const [additionsRaw, deletionsRaw] = firstLine.split("\t");
+  const additions = Number.parseInt(additionsRaw ?? "", 10);
+  const deletions = Number.parseInt(deletionsRaw ?? "", 10);
+
+  return {
+    additions: Number.isFinite(additions) ? additions : 0,
+    deletions: Number.isFinite(deletions) ? deletions : 0,
+  };
+}
+
+async function readTrackedFileLineCounts(
+  repoPath: string,
+  relativePath: string,
+): Promise<{ additions: number; deletions: number }> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["diff", "--numstat", "HEAD", "--", relativePath],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
+  return parseNumstatLineCounts(stdout);
+}
+
+function countTextLines(content: Buffer): number {
+  if (content.length === 0 || content.includes(0)) return 0;
+
+  const text = content.toString("utf8");
+  const trailingNewline = text.endsWith("\n") ? 1 : 0;
+  return text.split("\n").length - trailingNewline;
+}
+
+function readUntrackedFileLineCounts(
+  repoPath: string,
+  relativePath: string,
+): { additions: number; deletions: number } {
+  const absPath = path.join(repoPath, relativePath);
+  const stat = fs.existsSync(absPath) ? fs.statSync(absPath) : null;
+  if (!stat?.isFile()) return { additions: 0, deletions: 0 };
+
+  return {
+    additions: countTextLines(fs.readFileSync(absPath)),
+    deletions: 0,
+  };
+}
+
 async function readFileDiffPreview(
   repoPath: string,
   relativePath: string,
@@ -378,12 +429,17 @@ async function listChangedFiles(repoPath: string): Promise<{
   const files = await Promise.all(
     changedPaths.slice(0, LINKED_CHECKOUT_STATUS_FILE_LIMIT).map(async (relativePath) => {
       const untracked = untrackedPathSet.has(relativePath);
+      const lineCounts = await Promise.resolve(
+        untracked
+          ? readUntrackedFileLineCounts(repoPath, relativePath)
+          : readTrackedFileLineCounts(repoPath, relativePath),
+      ).catch(() => ({ additions: 0, deletions: 0 }));
 
       return {
         path: relativePath,
         status: untracked ? "A" : await getChangedFileStatus(repoPath, relativePath),
-        additions: 0,
-        deletions: 0,
+        additions: lineCounts.additions,
+        deletions: lineCounts.deletions,
         diff: "",
         truncated: false,
         originalContent: "",

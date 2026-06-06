@@ -598,8 +598,8 @@ describe("linked checkout commit-back", () => {
       {
         path: "app.txt",
         status: "M",
-        additions: 0,
-        deletions: 0,
+        additions: 1,
+        deletions: 1,
         truncated: false,
       },
     ]);
@@ -635,8 +635,8 @@ describe("linked checkout commit-back", () => {
       {
         path: "notes.txt",
         status: "M",
-        additions: 0,
-        deletions: 0,
+        additions: 1,
+        deletions: 1,
         truncated: false,
       },
     ]);
@@ -667,7 +667,7 @@ describe("linked checkout commit-back", () => {
     expect(status.changedFilesTruncated).toBe(true);
     expect(status.changedFiles[0]).toMatchObject({
       status: "A",
-      additions: 0,
+      additions: 1,
       deletions: 0,
       truncated: false,
     });
