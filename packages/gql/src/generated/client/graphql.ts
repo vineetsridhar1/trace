@@ -1255,6 +1255,7 @@ export type Query = {
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
+  sessionGroupDirectoryEntries: Array<SessionGroupDirectoryEntry>;
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
@@ -1439,6 +1440,12 @@ export type QuerySessionGroupArgs = {
 };
 
 export type QuerySessionGroupBranchDiffArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupDirectoryEntriesArgs = {
+  depth?: InputMaybe<Scalars["Int"]["input"]>;
+  directoryPath: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1680,6 +1687,13 @@ export type SessionGroup = {
   visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
+};
+
+export type SessionGroupDirectoryEntry = {
+  __typename?: "SessionGroupDirectoryEntry";
+  isDirectory: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
 };
 
 export type SessionGroupFileContentResult = {
@@ -2530,6 +2544,22 @@ export type SessionGroupDetailQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
+};
+
+export type SessionGroupDirectoryEntriesQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  directoryPath: Scalars["String"]["input"];
+  depth?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type SessionGroupDirectoryEntriesQuery = {
+  __typename?: "Query";
+  sessionGroupDirectoryEntries: Array<{
+    __typename?: "SessionGroupDirectoryEntry";
+    name: string;
+    path: string;
+    isDirectory: boolean;
+  }>;
 };
 
 export type SessionGroupFilesQueryVariables = Exact<{
@@ -5112,6 +5142,76 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
+export const SessionGroupDirectoryEntriesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupDirectoryEntries" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "directoryPath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "depth" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroupDirectoryEntries" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "directoryPath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "directoryPath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "depth" },
+                value: { kind: "Variable", name: { kind: "Name", value: "depth" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "path" } },
+                { kind: "Field", name: { kind: "Name", value: "isDirectory" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionGroupDirectoryEntriesQuery,
+  SessionGroupDirectoryEntriesQueryVariables
+>;
 export const SessionGroupFilesDocument = {
   kind: "Document",
   definitions: [

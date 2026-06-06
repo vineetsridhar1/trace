@@ -783,6 +783,12 @@ type BranchDiffFile {
   deletions: Int!
 }
 
+type SessionGroupDirectoryEntry {
+  name: String!
+  path: String!
+  isDirectory: Boolean!
+}
+
 type SessionGroupFileContentResult {
   content: String!
   ref: String!
@@ -1097,6 +1103,11 @@ type Query {
   bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
+  sessionGroupDirectoryEntries(
+    sessionGroupId: ID!
+    directoryPath: String!
+    depth: Int
+  ): [SessionGroupDirectoryEntry!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
   sessionGroupFileContentWithSource(
     sessionGroupId: ID!

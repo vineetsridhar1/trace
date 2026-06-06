@@ -55,7 +55,12 @@ import {
   visibleSessionWhere,
 } from "./access.js";
 import { apiTokenService } from "./api-token.js";
-import { githubRepoService, parseGitHubRepo, type GitHubRepoRef } from "./github-repo.js";
+import {
+  githubRepoService,
+  parseGitHubRepo,
+  type GitHubDirectoryEntry,
+  type GitHubRepoRef,
+} from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
@@ -2051,6 +2056,18 @@ export class SessionService {
       }
     }
     return filePath;
+  }
+
+  private normalizeDirectoryPath(directoryPath: string): string {
+    if (directoryPath === "") return "";
+    if (directoryPath.startsWith("/")) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
+    }
+    const parts = directoryPath.split("/");
+    if (parts.some((part) => part.length === 0 || part === "." || part === "..")) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
+    }
+    return directoryPath;
   }
 
   private async resolveAccessibleSessionGroupRuntime(
@@ -7818,6 +7835,31 @@ export class SessionService {
       userId,
     );
     return githubRepoService.listFiles(source.repo, source.branch, source.token);
+  }
+
+  /** List one or more directory levels in a session group's branch from GitHub. */
+  async listDirectoryEntries(
+    sessionGroupId: string,
+    directoryPath: string,
+    depth: number | undefined,
+    organizationId: string,
+    userId: string,
+  ): Promise<GitHubDirectoryEntry[]> {
+    const normalizedPath = this.normalizeDirectoryPath(directoryPath);
+    const boundedDepth =
+      typeof depth === "number" && Number.isInteger(depth) ? Math.min(Math.max(depth, 1), 2) : 1;
+    const source = await this.resolveGitHubSessionGroupFileSource(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return githubRepoService.listDirectoryEntries(
+      source.repo,
+      source.branch,
+      normalizedPath,
+      source.token,
+      boundedDepth,
+    );
   }
 
   /** Read a file's content from a session group's GitHub branch. */

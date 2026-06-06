@@ -12,10 +12,22 @@ export interface GitHubBranchDiffFile {
   deletions: number;
 }
 
+export interface GitHubDirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
 interface GitHubTreeResponse {
   tree?: Array<{ path?: unknown; type?: unknown }>;
   truncated?: unknown;
 }
+
+type GitHubContentsDirectoryResponse = Array<{
+  name?: unknown;
+  path?: unknown;
+  type?: unknown;
+}>;
 
 interface GitHubContentResponse {
   type?: unknown;
@@ -80,6 +92,24 @@ export class GitHubRepoService {
       .filter((entry) => entry.type === "blob" && typeof entry.path === "string")
       .map((entry) => entry.path as string)
       .sort((a, b) => a.localeCompare(b));
+  }
+
+  async listDirectoryEntries(
+    repo: GitHubRepoRef,
+    ref: string,
+    directoryPath: string,
+    token: string,
+    depth = 1,
+  ): Promise<GitHubDirectoryEntry[]> {
+    const entries = await this.listDirectoryLevel(repo, ref, directoryPath, token);
+    if (depth <= 1) return entries;
+
+    const childEntryGroups = await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory)
+        .map((entry) => this.listDirectoryEntries(repo, ref, entry.path, token, depth - 1)),
+    );
+    return [...entries, ...childEntryGroups.flat()];
   }
 
   async readFile(
@@ -171,6 +201,36 @@ export class GitHubRepoService {
     return (await response.json()) as T;
   }
 
+  private async listDirectoryLevel(
+    repo: GitHubRepoRef,
+    ref: string,
+    directoryPath: string,
+    token: string,
+  ): Promise<GitHubDirectoryEntry[]> {
+    const encodedPath = directoryPath
+      ? `/${directoryPath.split("/").map(encodeURIComponent).join("/")}`
+      : "";
+    const response = await this.request<GitHubContentResponse | GitHubContentsDirectoryResponse>(
+      repo,
+      `/contents${encodedPath}?ref=${encodeURIComponent(ref)}`,
+      token,
+    );
+
+    if (!Array.isArray(response)) {
+      throw new Error("GitHub path is not a directory");
+    }
+
+    return response
+      .filter((entry) => typeof entry.name === "string" && typeof entry.path === "string")
+      .filter((entry) => entry.type === "file" || entry.type === "dir")
+      .map((entry) => ({
+        name: entry.name as string,
+        path: entry.path as string,
+        isDirectory: entry.type === "dir",
+      }))
+      .sort(compareDirectoryEntries);
+  }
+
   private comparePaths(baseRef: string, headRef: string): string[] {
     const encodedBasehead = `/compare/${encodeURIComponent(`${baseRef}...${headRef}`)}`;
     const pathBasehead = `/compare/${this.encodePathRef(baseRef)}...${this.encodePathRef(headRef)}`;
@@ -228,6 +288,11 @@ export class GitHubRepoService {
         return "M";
     }
   }
+}
+
+function compareDirectoryEntries(a: GitHubDirectoryEntry, b: GitHubDirectoryEntry): number {
+  if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+  return a.name.localeCompare(b.name);
 }
 
 export const githubRepoService = new GitHubRepoService();

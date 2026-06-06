@@ -5,6 +5,7 @@ import { CheckpointPanel } from "./CheckpointPanel";
 import { BranchChangesPanel } from "./BranchChangesPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import type { FileTreeNode } from "./file-explorer-utils";
 
 export type SidebarTab = "files" | "git" | "changes";
 
@@ -12,12 +13,13 @@ interface SidebarPanelProps {
   sessionGroupId: string;
   activeSessionId: string | null;
   activeTab: SidebarTab;
-  files: string[];
+  fileTree: FileTreeNode[];
   filesLoading: boolean;
   filesError: string | null;
   onTabChange: (tab: SidebarTab) => void;
   onFileClick: (filePath: string) => void;
   onRefreshFiles: () => Promise<void>;
+  onLoadDirectory: (directoryPath: string) => Promise<void>;
   onDiffFileClick?: (filePath: string, status: string) => void;
   highlightCheckpointId?: string | null;
   onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
@@ -33,12 +35,13 @@ export function SidebarPanel({
   sessionGroupId,
   activeSessionId,
   activeTab,
-  files,
+  fileTree,
   filesLoading,
   filesError,
   onTabChange,
   onFileClick,
   onRefreshFiles,
+  onLoadDirectory,
   onDiffFileClick,
   highlightCheckpointId,
   onCheckpointClick,
@@ -87,10 +90,11 @@ export function SidebarPanel({
           </div>
         ) : activeTab === "files" ? (
           <FileExplorer
-            files={files}
+            tree={fileTree}
             loading={filesLoading}
             error={filesError}
             onRefresh={onRefreshFiles}
+            onLoadDirectory={onLoadDirectory}
             onFileClick={onFileClick}
           />
         ) : activeTab === "changes" ? (
