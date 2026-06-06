@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { buildTreeFromEntries, type FileTreeEntry, type FileTreeNode } from "./file-explorer-utils";
@@ -52,9 +52,13 @@ export function useSessionGroupDirectoryTree(
   const [directoryErrors, setDirectoryErrors] = useState<Record<string, string | undefined>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const inFlightPathsRef = useRef<Set<string>>(new Set());
 
   const loadDirectoryWithDepth = useCallback(
     async (directoryPath: string, depth: number, reset: boolean) => {
+      if (!reset && inFlightPathsRef.current.has(directoryPath)) return;
+      if (reset) inFlightPathsRef.current.clear();
+      inFlightPathsRef.current.add(directoryPath);
       setLoadingDirectoryPaths((prev) => {
         const next = reset ? new Set<string>() : new Set(prev);
         next.add(directoryPath);
@@ -108,6 +112,7 @@ export function useSessionGroupDirectoryTree(
           setDirectoryErrors((prev) => ({ ...prev, [directoryPath]: message }));
         }
       } finally {
+        inFlightPathsRef.current.delete(directoryPath);
         setLoadingDirectoryPaths((prev) => {
           const next = new Set(prev);
           next.delete(directoryPath);

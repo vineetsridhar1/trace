@@ -260,7 +260,7 @@ export function SessionGroupDetailView({
     loading: sessionGroupFilesLoading,
     error: sessionGroupFilesError,
     refreshFiles,
-  } = useSessionGroupFiles(sessionGroupId);
+  } = useSessionGroupFiles(sessionGroupId, filePaletteOpen);
   const {
     tree: sessionGroupFileTree,
     loading: sessionGroupFileTreeLoading,
