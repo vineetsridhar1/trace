@@ -76,10 +76,6 @@ export class GitHubRepoService {
       token,
     );
 
-    if (response.truncated === true) {
-      throw new Error("GitHub file tree is too large to list completely.");
-    }
-
     return (response.tree ?? [])
       .filter((entry) => entry.type === "blob" && typeof entry.path === "string")
       .map((entry) => entry.path as string)

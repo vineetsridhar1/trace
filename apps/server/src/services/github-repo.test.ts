@@ -60,6 +60,28 @@ describe("GitHubRepoService", () => {
     );
   });
 
+  it("returns GitHub's partial blob paths when a recursive tree is truncated", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: "tree-sha" } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          truncated: true,
+          tree: [
+            { path: "src/index.ts", type: "blob" },
+            { path: "src", type: "tree" },
+            { path: "README.md", type: "blob" },
+          ],
+        }),
+      );
+
+    const service = new GitHubRepoService();
+    await expect(service.listFiles(repo, "main", "gh-token")).resolves.toEqual([
+      "README.md",
+      "src/index.ts",
+    ]);
+  });
+
   it("reads base64 file content", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
