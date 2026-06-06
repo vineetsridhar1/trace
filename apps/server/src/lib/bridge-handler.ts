@@ -5,6 +5,7 @@ import type {
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutChangedFilePreview,
   BridgeLinkedCheckoutActionResultPayload,
+  BridgeWorkspaceWarning,
   GitCheckpointContext,
 } from "@trace/shared";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
@@ -800,6 +801,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             msg.workdir as string,
             msg.branch as string | undefined,
             msg.slug as string | undefined,
+            msg.warning as BridgeWorkspaceWarning | undefined,
           );
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {

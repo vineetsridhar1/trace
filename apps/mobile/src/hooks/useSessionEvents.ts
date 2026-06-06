@@ -83,7 +83,7 @@ function isRenderableCompactEvent(event: Event | undefined): event is Event & { 
   const type = payload.type;
   if (typeof type === "string" && HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(type)) return false;
   if (type === "assistant" || type === "user") return hasRenderableContentBlock(payload);
-  return type === "result" || type === "error";
+  return type === "result" || type === "error" || type === "workspace_restored_from_base";
 }
 
 function pendingFromTimelinePage(value: unknown): PendingFetchedEvents {

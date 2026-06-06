@@ -14,6 +14,7 @@ import {
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
+  type BridgeWorkspaceWarning,
 } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
@@ -5982,7 +5983,13 @@ export class SessionService {
     return true;
   }
 
-  async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
+  async workspaceReady(
+    sessionId: string,
+    workdir: string,
+    branch?: string,
+    slug?: string,
+    warning?: BridgeWorkspaceWarning,
+  ) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
@@ -6035,7 +6042,6 @@ export class SessionService {
       setupStatus: setupScript ? "running" : "idle",
       setupError: null,
     });
-
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -6051,6 +6057,23 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
+    if (warning) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "workspace_restored_from_base",
+          branch: warning.branch,
+          baseBranch: warning.baseBranch,
+          message: warning.message,
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    }
 
     if (setupScript) {
       const runtimeInstanceId =
