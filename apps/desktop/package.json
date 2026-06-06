@@ -1,7 +1,7 @@
 {
   "name": "@trace/desktop",
   "private": true,
-  "version": "0.0.3",
+  "version": "0.0.4",
   "productName": "Trace",
   "main": "dist/main.js",
   "repository": {
