@@ -1257,6 +1257,7 @@ export type Query = {
   sessionGroupFileAtRef: Scalars["String"]["output"];
   sessionGroupFileContent: Scalars["String"]["output"];
   sessionGroupFileContentWithSource: SessionGroupFileContentResult;
+  sessionGroupFileTree: SessionGroupFileTree;
   sessionGroupFiles: Array<Scalars["String"]["output"]>;
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
@@ -1460,6 +1461,10 @@ export type QuerySessionGroupFileContentArgs = {
 
 export type QuerySessionGroupFileContentWithSourceArgs = {
   filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionGroupFileTreeArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1700,6 +1705,12 @@ export type SessionGroupFileContentResult = {
   ref: Scalars["String"]["output"];
   requestedRef: Scalars["String"]["output"];
   usedFallback: Scalars["Boolean"]["output"];
+};
+
+export type SessionGroupFileTree = {
+  __typename?: "SessionGroupFileTree";
+  paths: Array<Scalars["String"]["output"]>;
+  truncated: Scalars["Boolean"]["output"];
 };
 
 export type SessionGroupStatus =

@@ -18,6 +18,11 @@ export interface GitHubDirectoryEntry {
   isDirectory: boolean;
 }
 
+export interface GitHubFileTree {
+  paths: string[];
+  truncated: boolean;
+}
+
 interface GitHubTreeResponse {
   tree?: Array<{ path?: unknown; type?: unknown }>;
   truncated?: unknown;
@@ -81,6 +86,15 @@ export function parseGitHubRepo(remoteUrl: string): GitHubRepoRef | null {
 
 export class GitHubRepoService {
   async listFiles(repo: GitHubRepoRef, ref: string, token: string): Promise<string[]> {
+    return (await this.listFileTree(repo, ref, token)).paths;
+  }
+
+  /**
+   * Fetch the full recursive blob list in one request. GitHub flags `truncated`
+   * when the repo exceeds its tree limits, signalling callers to fall back to
+   * lazy directory listing instead of relying on this partial result.
+   */
+  async listFileTree(repo: GitHubRepoRef, ref: string, token: string): Promise<GitHubFileTree> {
     const treeRef = await this.resolveTreeRef(repo, ref, token);
     const response = await this.request<GitHubTreeResponse>(
       repo,
@@ -88,10 +102,11 @@ export class GitHubRepoService {
       token,
     );
 
-    return (response.tree ?? [])
+    const paths = (response.tree ?? [])
       .filter((entry) => entry.type === "blob" && typeof entry.path === "string")
       .map((entry) => entry.path as string)
       .sort((a, b) => a.localeCompare(b));
+    return { paths, truncated: response.truncated === true };
   }
 
   async listDirectoryEntries(

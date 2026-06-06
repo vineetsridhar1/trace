@@ -3,6 +3,15 @@ import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { buildTreeFromEntries, type FileTreeEntry, type FileTreeNode } from "./file-explorer-utils";
 
+const SESSION_GROUP_FILE_TREE_QUERY = gql`
+  query SessionGroupFileTree($sessionGroupId: ID!) {
+    sessionGroupFileTree(sessionGroupId: $sessionGroupId) {
+      paths
+      truncated
+    }
+  }
+`;
+
 const SESSION_GROUP_DIRECTORY_ENTRIES_QUERY = gql`
   query SessionGroupDirectoryEntries($sessionGroupId: ID!, $directoryPath: String!, $depth: Int) {
     sessionGroupDirectoryEntries(
@@ -41,6 +50,26 @@ function mergeEntries(
     next[entry.path] = entry;
   }
   return next;
+}
+
+/**
+ * Build a fully-loaded tree from a flat recursive path list. Every ancestor
+ * directory is marked loaded so expansion never triggers a follow-up fetch.
+ */
+function entriesFromPaths(paths: string[]): {
+  entriesByPath: Record<string, FileTreeEntry>;
+  directoryPaths: Set<string>;
+} {
+  const entriesByPath: Record<string, FileTreeEntry> = {};
+  const directoryPaths = new Set<string>([""]);
+  for (const path of paths) {
+    const parts = path.split("/");
+    entriesByPath[path] = { name: parts[parts.length - 1], path, isDirectory: false };
+    for (let i = 1; i < parts.length; i++) {
+      directoryPaths.add(parts.slice(0, i).join("/"));
+    }
+  }
+  return { entriesByPath, directoryPaths };
 }
 
 export function useSessionGroupDirectoryTree(
@@ -124,10 +153,38 @@ export function useSessionGroupDirectoryTree(
     [sessionGroupId],
   );
 
-  const refreshTree = useCallback(
-    () => loadDirectoryWithDepth("", 2, true),
-    [loadDirectoryWithDepth],
-  );
+  const refreshTree = useCallback(async () => {
+    inFlightPathsRef.current.clear();
+    setLoading(true);
+    setError(null);
+    setEntriesByPath({});
+    setLoadedDirectoryPaths(new Set());
+    setDirectoryErrors({});
+
+    try {
+      const result = await client
+        .query(SESSION_GROUP_FILE_TREE_QUERY, { sessionGroupId })
+        .toPromise();
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      const fileTree = result.data?.sessionGroupFileTree;
+      // Repo too large for one recursive fetch: fall back to lazy depth-2 loading.
+      if (fileTree?.truncated) {
+        await loadDirectoryWithDepth("", 2, true);
+        return;
+      }
+      const { entriesByPath: entries, directoryPaths } = entriesFromPaths(
+        (fileTree?.paths ?? []) as string[],
+      );
+      setEntriesByPath(entries);
+      setLoadedDirectoryPaths(directoryPaths);
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load files");
+      setLoading(false);
+    }
+  }, [sessionGroupId, loadDirectoryWithDepth]);
 
   const loadDirectory = useCallback(
     (directoryPath: string) => loadDirectoryWithDepth(directoryPath, 1, false),

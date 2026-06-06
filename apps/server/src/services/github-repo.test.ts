@@ -82,6 +82,44 @@ describe("GitHubRepoService", () => {
     ]);
   });
 
+  it("reports the truncated flag from listFileTree", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: "tree-sha" } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          truncated: true,
+          tree: [{ path: "README.md", type: "blob" }],
+        }),
+      );
+
+    const service = new GitHubRepoService();
+    await expect(service.listFileTree(repo, "main", "gh-token")).resolves.toEqual({
+      paths: ["README.md"],
+      truncated: true,
+    });
+  });
+
+  it("reports truncated false when a recursive tree is complete", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: "tree-sha" } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tree: [
+            { path: "src/index.ts", type: "blob" },
+            { path: "README.md", type: "blob" },
+          ],
+        }),
+      );
+
+    const service = new GitHubRepoService();
+    await expect(service.listFileTree(repo, "main", "gh-token")).resolves.toEqual({
+      paths: ["README.md", "src/index.ts"],
+      truncated: false,
+    });
+  });
+
   it("lists directory entries from the contents API", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
