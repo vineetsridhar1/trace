@@ -3,8 +3,14 @@ export type {
   Question,
   QuestionBlock,
   QuestionOption,
+  ClassifyTaskOptions,
 } from "./adapters/coding-tool.js";
-export { hasPlanBlock, hasQuestionBlock, parseQuestion } from "./adapters/coding-tool.js";
+export {
+  hasPlanBlock,
+  hasQuestionBlock,
+  parseQuestion,
+  textFromToolOutput,
+} from "./adapters/coding-tool.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
 export {

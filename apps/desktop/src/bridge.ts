@@ -1119,6 +1119,35 @@ export class BridgeClient implements IBridgeClient {
         });
         break;
       }
+      case "classify_task": {
+        const adapter = this.createAdapter(cmd.tool);
+        if (!adapter.classifyTask) {
+          this.send({
+            type: "task_classification_result",
+            requestId: cmd.requestId,
+            error: "Selected tool does not support task classification",
+          });
+          break;
+        }
+        adapter
+          .classifyTask({
+            prompt: cmd.prompt,
+            cwd: cmd.cwd ?? os.homedir(),
+            model: cmd.model,
+            reasoningEffort: cmd.reasoningEffort,
+          })
+          .then((text) => {
+            this.send({ type: "task_classification_result", requestId: cmd.requestId, text });
+          })
+          .catch((error: unknown) => {
+            this.send({
+              type: "task_classification_result",
+              requestId: cmd.requestId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        break;
+      }
       case "prepare": {
         const {
           sessionId,

@@ -3376,6 +3376,24 @@ export class SessionService {
             select: { settings: true },
           })
         : null;
+    const routingSettings =
+      modelSelectionMode === "auto"
+        ? modelRouterService.resolveSettings(organizationForRouting?.settings ?? null)
+        : null;
+    const routeWithToolClassifier =
+      modelSelectionMode === "auto" && requestedRuntimeInstanceId
+        ? async (classificationPrompt: string) =>
+            sessionRouter.classifyTask(
+              requestedRuntimeInstanceId,
+              input.organizationId,
+              {
+                tool,
+                prompt: classificationPrompt,
+                model: routingSettings?.modelTiersByTool[tool]?.fast,
+              },
+              15_000,
+            )
+        : undefined;
     const routingDecision =
       modelSelectionMode === "auto" && input.prompt
         ? await modelRouterService.route({
@@ -3384,6 +3402,7 @@ export class SessionService {
             tool,
             prompt: input.prompt,
             organizationSettings: organizationForRouting?.settings ?? null,
+            toolClassifier: routeWithToolClassifier,
             repo: resolvedRepo
               ? {
                   id: resolvedRepo.id,
@@ -3396,8 +3415,7 @@ export class SessionService {
     const model =
       routingDecision?.selectedModel ??
       (modelSelectionMode === "auto"
-        ? (modelRouterService.resolveSettings(organizationForRouting?.settings ?? null)
-            .fallbackModelByTool[tool] ?? getDefaultModel(tool))
+        ? (routingSettings?.fallbackModelByTool[tool] ?? getDefaultModel(tool))
         : requestedModelSelection);
     if (model && !isSupportedModel(tool, model)) {
       throw new Error(`Unsupported model "${model}" for tool "${tool}"`);
@@ -5396,12 +5414,27 @@ export class SessionService {
         where: { id: session.organizationId },
         select: { settings: true },
       });
+      const routingSettings = modelRouterService.resolveSettings(organization?.settings ?? null);
       const decision = await modelRouterService.route({
         organizationId: session.organizationId,
         userId: actorId,
         tool: activeTool,
         prompt: text,
         organizationSettings: organization?.settings ?? null,
+        toolClassifier: runtimeBinding.runtimeId
+          ? async (classificationPrompt: string) =>
+              sessionRouter.classifyTask(
+                runtimeBinding.runtimeId!,
+                session.organizationId,
+                {
+                  tool: activeTool,
+                  prompt: classificationPrompt,
+                  cwd: session.workdir ?? undefined,
+                  model: routingSettings.modelTiersByTool[activeTool]?.fast,
+                },
+                15_000,
+              )
+          : undefined,
         repo: session.repo
           ? {
               id: session.repo.id,

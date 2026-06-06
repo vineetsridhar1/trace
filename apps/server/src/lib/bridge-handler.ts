@@ -543,6 +543,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "task_classification_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveTaskClassificationRequest(
+          msg.requestId,
+          typeof msg.text === "string" ? msg.text : undefined,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
       if (msg.type === "session_git_sync_status_result" && typeof msg.requestId === "string") {
         sessionRouter.resolveSessionGitSyncStatusRequest(
           msg.requestId,

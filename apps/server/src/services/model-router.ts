@@ -59,6 +59,7 @@ type ModelRouterInput = {
   prompt: string;
   organizationSettings?: Prisma.JsonValue | null;
   repo?: { id: string; name: string; defaultBranch?: string | null } | null;
+  toolClassifier?: (prompt: string) => Promise<string>;
 };
 
 type CachedDecision = {
@@ -479,6 +480,23 @@ function firstTextBlock(content: unknown): string | null {
   return null;
 }
 
+function classifierPrompt(input: ModelRouterInput, settings: ModelRouterSettings, fallback: string) {
+  return `${ROUTER_OUTPUT_CONTRACT}
+
+Routing guidance:
+${settings.prompt}
+
+Classify this task. Do not modify files or run tools. Return only the JSON object.
+
+${JSON.stringify({
+  tool: input.tool,
+  tiers: settings.modelTiersByTool[input.tool],
+  fallbackModel: fallback,
+  repo: input.repo,
+  prompt: input.prompt,
+})}`;
+}
+
 function decisionFromClassifier(
   raw: Record<string, unknown>,
   tool: CodingTool,
@@ -568,6 +586,26 @@ export class ModelRouterService {
     if (!fallback) {
       return fallbackDecision(input.tool, settings, allowedModels, "fallback");
     }
+
+    if (input.toolClassifier) {
+      try {
+        const text = await input.toolClassifier(classifierPrompt(input, settings, fallback));
+        const parsed = parseRouterJson(text);
+        if (parsed) {
+          return decisionFromClassifier(
+            parsed,
+            input.tool,
+            settings,
+            allowedModels,
+            fallback,
+            "tool_adapter",
+          );
+        }
+      } catch {
+        // Fall through to direct LLM router / heuristic fallback.
+      }
+    }
+
     const routerModels = routerModelCandidates(input.tool, settings);
     if (routerModels.length === 0) {
       return fallbackDecision(input.tool, settings, allowedModels, "router_model_missing");
@@ -586,13 +624,7 @@ export class ModelRouterService {
           messages: [
             {
               role: "user",
-              content: JSON.stringify({
-                tool: input.tool,
-                tiers: settings.modelTiersByTool[input.tool],
-                fallbackModel: fallback,
-                repo: input.repo,
-                prompt: input.prompt,
-              }),
+              content: classifierPrompt(input, settings, fallback),
             },
           ],
         });

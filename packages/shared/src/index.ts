@@ -1,5 +1,6 @@
 export type {
   CodingToolAdapter,
+  ClassifyTaskOptions,
   OutputCallback,
   RunOptions,
   ToolOutput,
@@ -20,6 +21,7 @@ export {
   hasQuestionBlock,
   isMissingToolSessionError,
   parseQuestion,
+  textFromToolOutput,
 } from "./adapters/coding-tool.js";
 export type {
   BridgeClient,
@@ -27,6 +29,7 @@ export type {
   BridgeMessage,
   BridgeRunCommand,
   BridgeSendCommand,
+  BridgeClassifyTaskCommand,
   BridgePrepareCommand,
   BridgeTerminateCommand,
   BridgePauseCommand,
@@ -89,6 +92,7 @@ export type {
   BridgeSessionGitSyncStatus,
   BridgeSessionGitSyncStatusResult,
   BridgeSessionCurrentBranchResult,
+  BridgeTaskClassificationResult,
   BridgePrObservation,
   BridgeSessionPrStatus,
   BridgeLinkedCheckoutActionResultPayload,

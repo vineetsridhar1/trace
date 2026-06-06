@@ -7,6 +7,7 @@ import type {
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgeClassifyTaskCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeWriteFileCommand,
@@ -45,6 +46,7 @@ interface BaseSessionCommand {
     | "pause"
     | "resume"
     | "send"
+    | "classify_task"
     | "prepare"
     | "delete"
     | "list_branches"
@@ -56,6 +58,7 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgeClassifyTaskCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
@@ -386,6 +389,14 @@ export class SessionRouter {
     {
       runtimeId: string;
       resolve: (branch: string | null) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  private pendingTaskClassificationRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (text: string) => void;
       reject: (err: Error) => void;
     }
   >();
@@ -866,6 +877,70 @@ export class SessionRouter {
       return "delivered";
     } catch {
       return "delivery_failed";
+    }
+  }
+
+  classifyTask(
+    runtimeId: string,
+    organizationId: string | null,
+    input: Omit<BridgeClassifyTaskCommand, "type" | "requestId">,
+    timeoutMs = 45_000,
+  ): Promise<string> {
+    const runtime = this.getRuntime(runtimeId, organizationId);
+    if (!runtime) {
+      return Promise.reject(new Error("Runtime not available: no_runtime"));
+    }
+    if (runtime.ws.readyState !== runtime.ws.OPEN) {
+      return Promise.reject(new Error("Runtime not available: runtime_disconnected"));
+    }
+
+    const requestId = randomUUID();
+    const promise = new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingTaskClassificationRequests.delete(requestId);
+        reject(new Error("Task classification request timed out"));
+      }, timeoutMs);
+
+      this.pendingTaskClassificationRequests.set(requestId, {
+        runtimeId: runtime.key,
+        resolve: (text) => {
+          clearTimeout(timer);
+          resolve(text);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+
+    try {
+      runtime.ws.send(JSON.stringify({ type: "classify_task", requestId, ...input }));
+    } catch {
+      const pending = this.pendingTaskClassificationRequests.get(requestId);
+      this.pendingTaskClassificationRequests.delete(requestId);
+      pending?.reject(new Error("Runtime not available: delivery_failed"));
+    }
+
+    return promise;
+  }
+
+  resolveTaskClassificationRequest(
+    requestId: string,
+    text?: string,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingTaskClassificationRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingTaskClassificationRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else if (text?.trim()) {
+      pending.resolve(text.trim());
+    } else {
+      pending.reject(new Error("Task classification returned no text"));
     }
   }
 

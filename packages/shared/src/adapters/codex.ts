@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
+import type { ClassifyTaskOptions, CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
+import { textFromToolOutput } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
@@ -22,6 +23,42 @@ export class CodexAdapter implements CodingToolAdapter {
   private processGeneration = 0;
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
+
+  classifyTask({ prompt, cwd, model, reasoningEffort }: ClassifyTaskOptions): Promise<string> {
+    const adapter = new CodexAdapter();
+    return new Promise<string>((resolve, reject) => {
+      let text = "";
+      let error: string | null = null;
+      const timer = setTimeout(() => {
+        adapter.abort();
+        reject(new Error("Codex classification timed out"));
+      }, 30_000);
+
+      adapter.run({
+        prompt,
+        cwd,
+        model,
+        reasoningEffort,
+        interactionMode: "ask",
+        onOutput: (output) => {
+          if (output.type === "error") {
+            error = output.message;
+            return;
+          }
+          const chunk = textFromToolOutput(output);
+          if (chunk) text = text ? `${text}\n${chunk}` : chunk;
+        },
+        onComplete: () => {
+          clearTimeout(timer);
+          if (text.trim()) {
+            resolve(text.trim());
+            return;
+          }
+          reject(new Error(error ?? "Codex classification returned no text"));
+        },
+      });
+    });
+  }
 
   run({
     prompt,

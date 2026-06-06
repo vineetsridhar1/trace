@@ -35,6 +35,16 @@ export interface BridgeSendCommand {
   imageUrls?: string[];
 }
 
+export interface BridgeClassifyTaskCommand {
+  type: "classify_task";
+  requestId: string;
+  prompt: string;
+  cwd?: string;
+  tool?: string;
+  model?: string;
+  reasoningEffort?: string;
+}
+
 export interface BridgePrepareCommand {
   type: "prepare";
   sessionId: string;
@@ -289,6 +299,7 @@ export interface BridgeTerminalDestroyCommand {
 export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
+  | BridgeClassifyTaskCommand
   | BridgePrepareCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand
@@ -509,6 +520,13 @@ export interface BridgeSessionCurrentBranchResult {
   error?: string;
 }
 
+export interface BridgeTaskClassificationResult {
+  type: "task_classification_result";
+  requestId: string;
+  text?: string;
+  error?: string;
+}
+
 export interface BridgePrObservation {
   url: string;
   state: "OPEN" | "CLOSED" | "MERGED";
@@ -656,6 +674,7 @@ export type BridgeMessage =
   | BridgeLinkedCheckoutActionResult
   | BridgeSessionGitSyncStatusResult
   | BridgeSessionCurrentBranchResult
+  | BridgeTaskClassificationResult
   | BridgeSessionPrStatus
   | BridgeBranchesResult
   | BridgeWorkspaceSlugsResult

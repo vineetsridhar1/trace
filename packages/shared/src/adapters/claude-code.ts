@@ -2,8 +2,14 @@ import { spawn, type ChildProcess } from "child_process";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
-import { parseQuestion } from "./coding-tool.js";
+import type {
+  ClassifyTaskOptions,
+  CodingToolAdapter,
+  RunOptions,
+  ToolOutput,
+  MessageBlock,
+} from "./coding-tool.js";
+import { parseQuestion, textFromToolOutput } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 /** Types we drop entirely — not relevant to the frontend */
@@ -24,6 +30,42 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private resultEmitted = false;
   private lastPlanFilePath: string | null = null;
   private processGeneration = 0;
+
+  classifyTask({ prompt, cwd, model, reasoningEffort }: ClassifyTaskOptions): Promise<string> {
+    const adapter = new ClaudeCodeAdapter();
+    return new Promise<string>((resolve, reject) => {
+      let text = "";
+      let error: string | null = null;
+      const timer = setTimeout(() => {
+        adapter.abort();
+        reject(new Error("Claude Code classification timed out"));
+      }, 30_000);
+
+      adapter.run({
+        prompt,
+        cwd,
+        model,
+        reasoningEffort,
+        interactionMode: "ask",
+        onOutput: (output) => {
+          if (output.type === "error") {
+            error = output.message;
+            return;
+          }
+          const chunk = textFromToolOutput(output);
+          if (chunk) text = text ? `${text}\n${chunk}` : chunk;
+        },
+        onComplete: () => {
+          clearTimeout(timer);
+          if (text.trim()) {
+            resolve(text.trim());
+            return;
+          }
+          reject(new Error(error ?? "Claude Code classification returned no text"));
+        },
+      });
+    });
+  }
 
   run({
     prompt,

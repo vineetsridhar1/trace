@@ -136,6 +136,15 @@ export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 
+export function textFromToolOutput(output: ToolOutput): string {
+  if (output.type !== "assistant" && output.type !== "user") return "";
+  return output.message.content
+    .filter((block): block is ContentBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}
+
 const MISSING_TOOL_SESSION_PATTERNS = [
   /\bno\s+(conversation|session|thread|chat)\s+found\b/i,
   /\b(conversation|session|thread|chat)\b[\s\S]{0,80}\b(not found|does not exist|could not be found)\b/i,
@@ -161,6 +170,13 @@ export interface RunOptions {
   toolSessionId?: string;
 }
 
+export interface ClassifyTaskOptions {
+  prompt: string;
+  cwd: string;
+  model?: string;
+  reasoningEffort?: string;
+}
+
 /**
  * Interface for coding tool adapters (Claude Code, Cursor, etc.).
  * Implementations spawn and manage a coding tool process.
@@ -169,6 +185,7 @@ export interface RunOptions {
  */
 export interface CodingToolAdapter {
   run(options: RunOptions): void;
+  classifyTask?(options: ClassifyTaskOptions): Promise<string>;
   abort(): void;
   /** Return the tool-specific session/thread ID for resume, if available */
   getSessionId?(): string | null;

@@ -77,6 +77,47 @@ describe("ModelRouterService", () => {
     );
   });
 
+  it("uses the tool classifier before direct LLM routing", async () => {
+    const toolClassifier = vi.fn().mockResolvedValue(
+      JSON.stringify({
+        complexity: "moderate",
+        risk: "medium",
+        confidence: "high",
+        tier: "balanced",
+        reasonCode: "tool_classified",
+        explanation: "Tool-backed classification",
+      }),
+    );
+
+    const decision = await modelRouterService.route({
+      organizationId: "org-1",
+      userId: "user-1",
+      tool: "codex",
+      prompt: "Update copy and layout on the settings page.",
+      toolClassifier,
+      organizationSettings: {
+        modelRouter: {
+          modelTiersByTool: {
+            codex: {
+              fast: "gpt-5.1-codex-mini",
+              balanced: "gpt-5.3-codex",
+              high_thinking: "gpt-5.5",
+            },
+          },
+        },
+      },
+    });
+
+    expect(decision).toMatchObject({
+      selectedModel: "gpt-5.3-codex",
+      tier: "balanced",
+      reasonCode: "tool_classified",
+      routerModel: "tool_adapter",
+    });
+    expect(toolClassifier).toHaveBeenCalledTimes(1);
+    expect(aiServiceMock.complete).not.toHaveBeenCalled();
+  });
+
   it("uses the high thinking tier for deterministic protected-domain rules", async () => {
     const decision = await modelRouterService.route({
       organizationId: "org-1",
