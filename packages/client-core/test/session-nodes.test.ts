@@ -53,4 +53,39 @@ describe("buildSessionNodes", () => {
 
     expect(result.nodes).toEqual([]);
   });
+
+  it("hides ordinary workspace_ready events", () => {
+    const event = makeEvent({
+      eventType: "session_output",
+      payload: {
+        type: "workspace_ready",
+        workdir: "/tmp/work",
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([]);
+  });
+
+  it("keeps workspace_ready events with warnings", () => {
+    const event = makeEvent({
+      eventType: "session_output",
+      payload: {
+        type: "workspace_ready",
+        workdir: "/tmp/work",
+        warning: {
+          type: "branch_missing_restored_from_base",
+          branch: "trace/missing",
+          baseBranch: "develop",
+          message:
+            "Branch trace/missing did not exist on origin, so Trace created it from develop. Local-only changes from the previous workspace were not restored.",
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
+  });
 });

@@ -3,6 +3,7 @@ import { asJsonObject, type JsonObject } from "@trace/shared";
 import { AssistantMessage } from "./AssistantMessage";
 import { CompletionRow } from "./CompletionRow";
 import { SubagentRow } from "./SubagentRow";
+import { SystemBadge } from "./SystemBadge";
 import { ToolCallRow } from "./ToolCallRow";
 import { serializeUnknown } from "./utils";
 import type { NodeRenderContext } from "./render-context";
@@ -19,6 +20,11 @@ export function renderSessionOutput(payload: JsonObject, context: NodeRenderCont
   if (type === "error") {
     const message = typeof payload.message === "string" ? payload.message : "";
     return <CompletionRow error={message} />;
+  }
+  if (type === "workspace_ready") {
+    const warning = asJsonObject(payload.warning);
+    const message = typeof warning?.message === "string" ? warning.message : "";
+    if (message) return <SystemBadge text={message} />;
   }
   return null;
 }
