@@ -3009,6 +3009,37 @@ describe("SessionService", () => {
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
     });
 
+    it("falls back to the default branch when the session branch is unavailable", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listFileTree
+        .mockRejectedValueOnce(new Error("GitHub API error (404): Not Found"))
+        .mockResolvedValueOnce({ paths: ["README.md"], truncated: false });
+
+      await expect(service.listFileTree("group-1", "org-1", "user-1")).resolves.toEqual({
+        paths: ["README.md"],
+        truncated: false,
+      });
+      expect(githubRepoServiceMock.listFileTree).toHaveBeenNthCalledWith(
+        1,
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "gh-token",
+      );
+      expect(githubRepoServiceMock.listFileTree).toHaveBeenNthCalledWith(
+        2,
+        { owner: "trace", repo: "trace" },
+        "main",
+        "gh-token",
+      );
+    });
+
     it("saves files through the live session group runtime", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
