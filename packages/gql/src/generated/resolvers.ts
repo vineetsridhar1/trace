@@ -560,6 +560,14 @@ export type Message = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
+export type ModelRouterSettings = {
+  __typename?: "ModelRouterSettings";
+  cacheTtlSeconds: Scalars["Int"]["output"];
+  defaultPrompt: Scalars["String"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  prompt: Scalars["String"]["output"];
+};
+
 export type MoveChannelInput = {
   channelId: Scalars["ID"]["input"];
   groupId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -658,6 +666,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateModelRouterSettings: ModelRouterSettings;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -1112,6 +1121,10 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateModelRouterSettingsArgs = {
+  input: UpdateModelRouterSettingsInput;
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1240,6 +1253,7 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
+  modelRouterSettings: ModelRouterSettings;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
   myConnections: Array<ConnectionsBridge>;
@@ -1372,6 +1386,10 @@ export type QueryLinkedCheckoutStatusArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryModelRouterSettingsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryMySessionsArgs = {
@@ -1955,6 +1973,13 @@ export type UpdateChannelInput = {
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type UpdateModelRouterSettingsInput = {
+  cacheTtlSeconds?: InputMaybe<Scalars["Int"]["input"]>;
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
@@ -2147,6 +2172,7 @@ export type ResolversTypes = ResolversObject<{
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
   Message: ResolverTypeWrapper<Message>;
+  ModelRouterSettings: ResolverTypeWrapper<ModelRouterSettings>;
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
@@ -2203,6 +2229,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateAgentEnvironmentInput: UpdateAgentEnvironmentInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateModelRouterSettingsInput: UpdateModelRouterSettingsInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -2256,6 +2283,7 @@ export type ResolversParentTypes = ResolversObject<{
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   LinkedCheckoutStatus: LinkedCheckoutStatus;
   Message: Message;
+  ModelRouterSettings: ModelRouterSettings;
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
   Notification: Notification;
@@ -2298,6 +2326,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateAgentEnvironmentInput: UpdateAgentEnvironmentInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateModelRouterSettingsInput: UpdateModelRouterSettingsInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -2760,6 +2789,18 @@ export type MessageResolvers<
   text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   threadRepliers?: Resolver<Array<ResolversTypes["Actor"]>, ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ModelRouterSettingsResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ModelRouterSettings"] =
+    ResolversParentTypes["ModelRouterSettings"],
+> = ResolversObject<{
+  cacheTtlSeconds?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  defaultPrompt?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  enabled?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  prompt?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3310,6 +3351,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationUpdateChannelGroupArgs, "id" | "input">
   >;
+  updateModelRouterSettings?: Resolver<
+    ResolversTypes["ModelRouterSettings"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateModelRouterSettingsArgs, "input">
+  >;
   updateOrgMemberRole?: Resolver<
     ResolversTypes["OrgMember"],
     ParentType,
@@ -3551,6 +3598,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryLinkedCheckoutStatusArgs, "repoId" | "sessionGroupId">
+  >;
+  modelRouterSettings?: Resolver<
+    ResolversTypes["ModelRouterSettings"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryModelRouterSettingsArgs, "organizationId">
   >;
   myApiTokens?: Resolver<Array<ResolversTypes["ApiTokenStatus"]>, ParentType, ContextType>;
   myBridgeRuntimes?: Resolver<Array<ResolversTypes["BridgeRuntime"]>, ParentType, ContextType>;
@@ -4176,6 +4229,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
+  ModelRouterSettings?: ModelRouterSettingsResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;

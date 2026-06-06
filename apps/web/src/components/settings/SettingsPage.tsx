@@ -10,11 +10,14 @@ import {
   ServerCog,
   KeyRound,
   Plug,
+  Route,
 } from "lucide-react";
+import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
+import { ModelRouterSection } from "./ModelRouterSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { ApiTokensSection } from "./ApiTokensSection";
 import { MembersSection } from "./MembersSection";
@@ -34,6 +37,7 @@ type SettingsTab =
   | "members"
   | "channels"
   | "connections"
+  | "model-router"
   | "bridge-access"
   | "agent-environments"
   | "org-secrets"
@@ -44,6 +48,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "connections", label: "Connections", icon: Plug },
   { id: "members", label: "Members", icon: Users },
   { id: "session-defaults", label: "Session Defaults", icon: SlidersHorizontal },
+  { id: "model-router", label: "Model Router", icon: Route },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "api-keys", label: "API Keys", icon: Key },
   { id: "bridge-access", label: "Bridge Access", icon: MonitorCog },
@@ -62,14 +67,27 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 export function SettingsPage() {
   const settingsInitialTab = useUIStore((s) => s.settingsInitialTab);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const orgMemberships = useAuthStore(
+    (s: { orgMemberships: Array<{ organizationId: string; role: string }> }) => s.orgMemberships,
+  );
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
+  const isActiveOrgAdmin = useMemo(
+    () =>
+      orgMemberships.some(
+        (membership) =>
+          membership.organizationId === activeOrgId && membership.role === "admin",
+      ),
+    [activeOrgId, orgMemberships],
+  );
   const visibleTabs = useMemo(
     () =>
       TABS.filter((tab) => {
         if (tab.id === "api-keys") return !isLocalMode;
+        if (tab.id === "model-router") return isActiveOrgAdmin;
         return true;
       }),
-    [],
+    [isActiveOrgAdmin],
   );
 
   useEffect(() => {
@@ -95,6 +113,7 @@ export function SettingsPage() {
     activeTab === "channels" ||
     activeTab === "bridge-access" ||
     activeTab === "agent-environments" ||
+    activeTab === "model-router" ||
     activeTab === "org-secrets" ||
     activeTab === "integrations"
       ? "mx-auto max-w-5xl"
@@ -134,6 +153,7 @@ export function SettingsPage() {
             {activeTab === "connections" && <ConnectionsSection />}
             {activeTab === "members" && <MembersSection />}
             {activeTab === "session-defaults" && <SessionDefaultsSection />}
+            {activeTab === "model-router" && <ModelRouterSection />}
             {activeTab === "notifications" && <NotificationsSection />}
             {activeTab === "api-keys" && <ApiTokensSection />}
             {activeTab === "bridge-access" && <BridgeAccessSection />}

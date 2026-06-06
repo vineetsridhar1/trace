@@ -59,7 +59,7 @@ type CachedDecision = {
   decision: ModelRouterDecision;
 };
 
-const DEFAULT_ROUTER_PROMPT = `Classify the user's coding task for model routing.
+export const DEFAULT_ROUTER_PROMPT = `Classify the user's coding task for model routing.
 Return compact JSON with these fields only:
 complexity: simple | moderate | complex | expert
 risk: low | medium | high

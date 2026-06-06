@@ -5,13 +5,19 @@ import type {
   CreateProjectInput,
   EntityType,
   ActorType,
+  UpdateModelRouterSettingsInput,
 } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
-import { assertActorOrgAccess } from "./actor-auth.js";
+import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import { createChannelInTransaction } from "./channel-create.js";
+import {
+  DEFAULT_MODEL_ROUTER_SETTINGS,
+  DEFAULT_ROUTER_PROMPT,
+  modelRouterService,
+} from "./model-router.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -19,6 +25,16 @@ const PROJECT_INCLUDE = {
   sessions: { include: { session: true } },
   tickets: { include: { ticket: true } },
 } as const;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {
+  return value as Prisma.InputJsonObject;
+}
 
 export class OrganizationService {
   async getOrganization(id: string, userId: string) {
@@ -88,6 +104,81 @@ export class OrganizationService {
     return prisma.organization.findUniqueOrThrow({
       where: { id: organizationId },
       select: { id: true, name: true },
+    });
+  }
+
+  async getModelRouterSettings(
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAdmin(tx, organizationId, actorType, actorId),
+    );
+    const organization = await prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { settings: true },
+    });
+    const settings = modelRouterService.resolveSettings(organization.settings);
+    return {
+      enabled: settings.enabled,
+      prompt: settings.prompt,
+      defaultPrompt: DEFAULT_ROUTER_PROMPT,
+      cacheTtlSeconds: settings.cacheTtlSeconds,
+    };
+  }
+
+  async updateModelRouterSettings(
+    input: UpdateModelRouterSettingsInput,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    if (input.prompt !== undefined && input.prompt !== null && !input.prompt.trim()) {
+      throw new Error("Router prompt cannot be empty");
+    }
+    if (
+      input.cacheTtlSeconds !== undefined &&
+      input.cacheTtlSeconds !== null &&
+      input.cacheTtlSeconds <= 0
+    ) {
+      throw new Error("Cache TTL must be greater than zero");
+    }
+
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAdmin(tx, input.organizationId, actorType, actorId);
+      const organization = await tx.organization.findUniqueOrThrow({
+        where: { id: input.organizationId },
+        select: { settings: true },
+      });
+      const currentRoot = asRecord(organization.settings);
+      const currentRouter = asRecord(currentRoot.modelRouter);
+      const nextRouter: Record<string, unknown> = {
+        ...DEFAULT_MODEL_ROUTER_SETTINGS,
+        ...currentRouter,
+        ...(input.enabled !== undefined && input.enabled !== null ? { enabled: input.enabled } : {}),
+        ...(input.prompt !== undefined && input.prompt !== null
+          ? { prompt: input.prompt.trim() }
+          : {}),
+        ...(input.cacheTtlSeconds !== undefined && input.cacheTtlSeconds !== null
+          ? { cacheTtlSeconds: Math.min(input.cacheTtlSeconds, 24 * 60 * 60) }
+          : {}),
+      };
+      const nextRoot = toInputJsonObject({
+        ...currentRoot,
+        modelRouter: nextRouter,
+      });
+      const updated = await tx.organization.update({
+        where: { id: input.organizationId },
+        data: { settings: nextRoot },
+        select: { settings: true },
+      });
+      const settings = modelRouterService.resolveSettings(updated.settings);
+      return {
+        enabled: settings.enabled,
+        prompt: settings.prompt,
+        defaultPrompt: DEFAULT_ROUTER_PROMPT,
+        cacheTtlSeconds: settings.cacheTtlSeconds,
+      };
     });
   }
 

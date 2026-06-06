@@ -293,6 +293,13 @@ type Organization {
   agentEnvironments: [AgentEnvironment!]!
 }
 
+type ModelRouterSettings {
+  enabled: Boolean!
+  prompt: String!
+  defaultPrompt: String!
+  cacheTtlSeconds: Int!
+}
+
 type AgentEnvironment {
   id: ID!
   orgId: ID!
@@ -1036,11 +1043,19 @@ input CreateOrganizationInput {
   name: String!
 }
 
+input UpdateModelRouterSettingsInput {
+  organizationId: ID!
+  enabled: Boolean
+  prompt: String
+  cacheTtlSeconds: Int
+}
+
 # --- Queries ---
 
 type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
+  modelRouterSettings(organizationId: ID!): ModelRouterSettings!
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
   orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
@@ -1324,6 +1339,7 @@ type Mutation {
   unlinkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createOrganization(input: CreateOrganizationInput!): OrgMember!
+  updateModelRouterSettings(input: UpdateModelRouterSettingsInput!): ModelRouterSettings!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!

@@ -16,6 +16,7 @@ vi.mock("./event.js", () => ({
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
+import { DEFAULT_ROUTER_PROMPT } from "./model-router.js";
 import { OrganizationService } from "./organization.js";
 
 const prismaMock = prisma as any;
@@ -496,5 +497,108 @@ describe("OrganizationService", () => {
 
     await expect(service.searchUsers("a", "org-1")).resolves.toEqual([]);
     expect(prismaMock.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns model router settings for organization admins only", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      role: "admin",
+    });
+    prismaMock.organization.findUniqueOrThrow.mockResolvedValueOnce({
+      settings: {
+        modelRouter: {
+          enabled: true,
+          prompt: "Custom router prompt",
+          cacheTtlSeconds: 120,
+        },
+      },
+    });
+
+    const service = new OrganizationService();
+    const settings = await service.getModelRouterSettings("org-1", "user", "user-1");
+
+    expect(settings).toEqual({
+      enabled: true,
+      prompt: "Custom router prompt",
+      defaultPrompt: DEFAULT_ROUTER_PROMPT,
+      cacheTtlSeconds: 120,
+    });
+    expect(prismaMock.orgMember.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: {
+          userId: "user-1",
+          organizationId: "org-1",
+        },
+      },
+      select: { userId: true, role: true },
+    });
+  });
+
+  it("rejects model router settings updates from non-admin users", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      role: "member",
+    });
+
+    const service = new OrganizationService();
+
+    await expect(
+      service.updateModelRouterSettings(
+        { organizationId: "org-1", prompt: "Updated prompt" },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Only admins can perform this action");
+    expect(prismaMock.organization.update).not.toHaveBeenCalled();
+  });
+
+  it("updates model router prompt for organization admins", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      role: "admin",
+    });
+    prismaMock.organization.findUniqueOrThrow.mockResolvedValueOnce({
+      settings: {
+        theme: "dark",
+        modelRouter: {
+          enabled: true,
+          prompt: "Old prompt",
+          cacheTtlSeconds: 60,
+        },
+      },
+    });
+    prismaMock.organization.update.mockResolvedValueOnce({
+      settings: {
+        theme: "dark",
+        modelRouter: {
+          enabled: true,
+          prompt: "Updated prompt",
+          cacheTtlSeconds: 60,
+        },
+      },
+    });
+
+    const service = new OrganizationService();
+    const settings = await service.updateModelRouterSettings(
+      { organizationId: "org-1", prompt: " Updated prompt " },
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.organization.update).toHaveBeenCalledWith({
+      where: { id: "org-1" },
+      data: {
+        settings: expect.objectContaining({
+          theme: "dark",
+          modelRouter: expect.objectContaining({
+            enabled: true,
+            prompt: "Updated prompt",
+            cacheTtlSeconds: 60,
+          }),
+        }),
+      },
+      select: { settings: true },
+    });
+    expect(settings.prompt).toBe("Updated prompt");
   });
 });

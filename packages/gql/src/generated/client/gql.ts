@@ -42,6 +42,8 @@ type Documents = {
   "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n": typeof types.RemoveOrgMemberDocument;
   "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": typeof types.UpdateOrgMemberRoleDocument;
   "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": typeof types.SearchUsersDocument;
+  "\n  query ModelRouterSettings($organizationId: ID!) {\n    modelRouterSettings(organizationId: $organizationId) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n": typeof types.ModelRouterSettingsDocument;
+  "\n  mutation UpdateModelRouterSettings($input: UpdateModelRouterSettingsInput!) {\n    updateModelRouterSettings(input: $input) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n": typeof types.UpdateModelRouterSettingsDocument;
   "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.SettingsReposDocument;
   "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n": typeof types.AgentEnvironmentsSettingsDocument;
   "\n  query OrgSecrets($orgId: ID!) {\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.OrgSecretsDocument;
@@ -141,6 +143,10 @@ const documents: Documents = {
     types.UpdateOrgMemberRoleDocument,
   "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n":
     types.SearchUsersDocument,
+  "\n  query ModelRouterSettings($organizationId: ID!) {\n    modelRouterSettings(organizationId: $organizationId) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n":
+    types.ModelRouterSettingsDocument,
+  "\n  mutation UpdateModelRouterSettings($input: UpdateModelRouterSettingsInput!) {\n    updateModelRouterSettings(input: $input) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n":
+    types.UpdateModelRouterSettingsDocument,
   "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n":
     types.SettingsReposDocument,
   "\n  query AgentEnvironmentsSettings($orgId: ID!, $organizationId: ID!) {\n    agentEnvironments(orgId: $orgId) {\n      id\n      orgId\n      name\n      adapterType\n      config\n      enabled\n      isDefault\n      createdAt\n      updatedAt\n    }\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n    orgSecrets(orgId: $orgId) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n    myConnections {\n      bridge {\n        id\n        instanceId\n        label\n        hostingMode\n        connected\n      }\n      repos {\n        repo {\n          id\n          name\n        }\n      }\n    }\n  }\n":
@@ -407,6 +413,18 @@ export function graphql(
 export function graphql(
   source: "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n",
 ): (typeof documents)["\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query ModelRouterSettings($organizationId: ID!) {\n    modelRouterSettings(organizationId: $organizationId) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n",
+): (typeof documents)["\n  query ModelRouterSettings($organizationId: ID!) {\n    modelRouterSettings(organizationId: $organizationId) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation UpdateModelRouterSettings($input: UpdateModelRouterSettingsInput!) {\n    updateModelRouterSettings(input: $input) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n",
+): (typeof documents)["\n  mutation UpdateModelRouterSettings($input: UpdateModelRouterSettingsInput!) {\n    updateModelRouterSettings(input: $input) {\n      enabled\n      prompt\n      defaultPrompt\n      cacheTtlSeconds\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -559,6 +559,14 @@ export type Message = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
+export type ModelRouterSettings = {
+  __typename?: "ModelRouterSettings";
+  cacheTtlSeconds: Scalars["Int"]["output"];
+  defaultPrompt: Scalars["String"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  prompt: Scalars["String"]["output"];
+};
+
 export type MoveChannelInput = {
   channelId: Scalars["ID"]["input"];
   groupId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -657,6 +665,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateModelRouterSettings: ModelRouterSettings;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -1111,6 +1120,10 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateModelRouterSettingsArgs = {
+  input: UpdateModelRouterSettingsInput;
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1239,6 +1252,7 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
+  modelRouterSettings: ModelRouterSettings;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
   myConnections: Array<ConnectionsBridge>;
@@ -1371,6 +1385,10 @@ export type QueryLinkedCheckoutStatusArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryModelRouterSettingsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryMySessionsArgs = {
@@ -1952,6 +1970,13 @@ export type UpdateChannelInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
   runScripts?: InputMaybe<Scalars["JSON"]["input"]>;
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateModelRouterSettingsInput = {
+  cacheTtlSeconds?: InputMaybe<Scalars["Int"]["input"]>;
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateRepoInput = {
@@ -2640,6 +2665,36 @@ export type SearchUsersQuery = {
     email: string;
     avatarUrl?: string | null;
   }>;
+};
+
+export type ModelRouterSettingsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type ModelRouterSettingsQuery = {
+  __typename?: "Query";
+  modelRouterSettings: {
+    __typename?: "ModelRouterSettings";
+    enabled: boolean;
+    prompt: string;
+    defaultPrompt: string;
+    cacheTtlSeconds: number;
+  };
+};
+
+export type UpdateModelRouterSettingsMutationVariables = Exact<{
+  input: UpdateModelRouterSettingsInput;
+}>;
+
+export type UpdateModelRouterSettingsMutation = {
+  __typename?: "Mutation";
+  updateModelRouterSettings: {
+    __typename?: "ModelRouterSettings";
+    enabled: boolean;
+    prompt: string;
+    defaultPrompt: string;
+    cacheTtlSeconds: number;
+  };
 };
 
 export type SettingsReposQueryVariables = Exact<{
@@ -5527,6 +5582,102 @@ export const SearchUsersDocument = {
     },
   ],
 } as unknown as DocumentNode<SearchUsersQuery, SearchUsersQueryVariables>;
+export const ModelRouterSettingsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ModelRouterSettings" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "modelRouterSettings" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "enabled" } },
+                { kind: "Field", name: { kind: "Name", value: "prompt" } },
+                { kind: "Field", name: { kind: "Name", value: "defaultPrompt" } },
+                { kind: "Field", name: { kind: "Name", value: "cacheTtlSeconds" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ModelRouterSettingsQuery, ModelRouterSettingsQueryVariables>;
+export const UpdateModelRouterSettingsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdateModelRouterSettings" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "UpdateModelRouterSettingsInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateModelRouterSettings" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "enabled" } },
+                { kind: "Field", name: { kind: "Name", value: "prompt" } },
+                { kind: "Field", name: { kind: "Name", value: "defaultPrompt" } },
+                { kind: "Field", name: { kind: "Name", value: "cacheTtlSeconds" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpdateModelRouterSettingsMutation,
+  UpdateModelRouterSettingsMutationVariables
+>;
 export const SettingsReposDocument = {
   kind: "Document",
   definitions: [

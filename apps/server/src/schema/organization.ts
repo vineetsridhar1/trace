@@ -5,6 +5,7 @@ import type {
   UpdateRepoInput,
   CreateProjectInput,
   EntityType,
+  UpdateModelRouterSettingsInput,
   UserRole,
 } from "@trace/gql";
 import { organizationService } from "../services/organization.js";
@@ -44,6 +45,13 @@ export const organizationQueries = {
   project: (_: unknown, args: { id: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return organizationService.getProject(args.id, orgId);
+  },
+  modelRouterSettings: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    return organizationService.getModelRouterSettings(
+      args.organizationId,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
 };
 
@@ -122,6 +130,13 @@ export const organizationMutations = {
       userId: args.userId,
       role: args.role,
     });
+  },
+  updateModelRouterSettings: (
+    _: unknown,
+    args: { input: UpdateModelRouterSettingsInput },
+    ctx: Context,
+  ) => {
+    return organizationService.updateModelRouterSettings(args.input, ctx.actorType, ctx.userId);
   },
 };
 

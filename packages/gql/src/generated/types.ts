@@ -557,6 +557,14 @@ export type Message = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
+export type ModelRouterSettings = {
+  __typename?: "ModelRouterSettings";
+  cacheTtlSeconds: Scalars["Int"]["output"];
+  defaultPrompt: Scalars["String"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  prompt: Scalars["String"]["output"];
+};
+
 export type MoveChannelInput = {
   channelId: Scalars["ID"]["input"];
   groupId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -655,6 +663,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateModelRouterSettings: ModelRouterSettings;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -1109,6 +1118,10 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateModelRouterSettingsArgs = {
+  input: UpdateModelRouterSettingsInput;
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1237,6 +1250,7 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
+  modelRouterSettings: ModelRouterSettings;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
   myConnections: Array<ConnectionsBridge>;
@@ -1369,6 +1383,10 @@ export type QueryLinkedCheckoutStatusArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryModelRouterSettingsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryMySessionsArgs = {
@@ -1950,6 +1968,13 @@ export type UpdateChannelInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
   runScripts?: InputMaybe<Scalars["JSON"]["input"]>;
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateModelRouterSettingsInput = {
+  cacheTtlSeconds?: InputMaybe<Scalars["Int"]["input"]>;
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  organizationId: Scalars["ID"]["input"];
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateRepoInput = {
