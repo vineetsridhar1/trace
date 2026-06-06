@@ -82,6 +82,60 @@ describe("GitHubRepoService", () => {
     ]);
   });
 
+  it("lists directory entries from the contents API", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        { name: "src", path: "src", type: "dir" },
+        { name: "README.md", path: "README.md", type: "file" },
+        { name: "package.json", path: "package.json", type: "file" },
+      ]),
+    );
+
+    const service = new GitHubRepoService();
+    await expect(service.listDirectoryEntries(repo, "main", "", "gh-token")).resolves.toEqual([
+      { name: "src", path: "src", isDirectory: true },
+      { name: "package.json", path: "package.json", isDirectory: false },
+      { name: "README.md", path: "README.md", isDirectory: false },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.github.com/repos/acme/trace/contents?ref=main",
+      expect.any(Object),
+    );
+  });
+
+  it("loads child directory entries when depth is greater than one", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse([
+          { name: "src", path: "src", type: "dir" },
+          { name: "README.md", path: "README.md", type: "file" },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          { name: "index.ts", path: "src/index.ts", type: "file" },
+          { name: "components", path: "src/components", type: "dir" },
+        ]),
+      );
+
+    const service = new GitHubRepoService();
+    await expect(service.listDirectoryEntries(repo, "main", "", "gh-token", 2)).resolves.toEqual([
+      { name: "src", path: "src", isDirectory: true },
+      { name: "README.md", path: "README.md", isDirectory: false },
+      { name: "components", path: "src/components", isDirectory: true },
+      { name: "index.ts", path: "src/index.ts", isDirectory: false },
+    ]);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.github.com/repos/acme/trace/contents/src?ref=main",
+      expect.any(Object),
+    );
+  });
+
   it("reads base64 file content", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(

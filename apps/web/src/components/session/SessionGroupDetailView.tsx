@@ -31,6 +31,7 @@ import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
+import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
@@ -260,6 +261,13 @@ export function SessionGroupDetailView({
     error: sessionGroupFilesError,
     refreshFiles,
   } = useSessionGroupFiles(sessionGroupId);
+  const {
+    tree: sessionGroupFileTree,
+    loading: sessionGroupFileTreeLoading,
+    error: sessionGroupFileTreeError,
+    refreshTree,
+    loadDirectory,
+  } = useSessionGroupDirectoryTree(sessionGroupId);
 
   const {
     openFiles,
@@ -719,12 +727,13 @@ export function SessionGroupDetailView({
                       sessionGroupId={sessionGroupId}
                       activeSessionId={selectedSession?.id ?? null}
                       activeTab={sidebarTab}
-                      files={sessionGroupFiles}
-                      filesLoading={sessionGroupFilesLoading}
-                      filesError={sessionGroupFilesError}
+                      fileTree={sessionGroupFileTree}
+                      filesLoading={sessionGroupFileTreeLoading}
+                      filesError={sessionGroupFileTreeError}
                       onTabChange={handleSidebarTabChange}
                       onFileClick={handleFileClick}
-                      onRefreshFiles={refreshFiles}
+                      onRefreshFiles={refreshTree}
+                      onLoadDirectory={loadDirectory}
                       onDiffFileClick={handleDiffFileClick}
                       highlightCheckpointId={highlightCheckpointId}
                       onCheckpointClick={handleCheckpointClick}

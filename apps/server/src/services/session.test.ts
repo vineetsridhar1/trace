@@ -122,6 +122,7 @@ vi.mock("./org-secret.js", () => ({
 vi.mock("./github-repo.js", () => ({
   githubRepoService: {
     listFiles: vi.fn().mockResolvedValue([]),
+    listDirectoryEntries: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue("file contents"),
     branchDiff: vi.fn().mockResolvedValue([]),
   },
@@ -334,6 +335,7 @@ describe("SessionService", () => {
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
     orgSecretServiceMock.getDecryptedValueByName.mockResolvedValue(null);
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
+    githubRepoServiceMock.listDirectoryEntries.mockResolvedValue([]);
     githubRepoServiceMock.readFile.mockResolvedValue("file contents");
     githubRepoServiceMock.branchDiff.mockResolvedValue([]);
     parseGitHubRepoMock.mockReturnValue({ owner: "trace", repo: "trace" });
@@ -2940,6 +2942,43 @@ describe("SessionService", () => {
         "gh-token",
       );
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("lists directory entries through GitHub", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listDirectoryEntries.mockResolvedValueOnce([
+        { name: "src", path: "src", isDirectory: true },
+        { name: "README.md", path: "README.md", isDirectory: false },
+      ]);
+
+      await expect(
+        service.listDirectoryEntries("group-1", "", 2, "org-1", "user-1"),
+      ).resolves.toEqual([
+        { name: "src", path: "src", isDirectory: true },
+        { name: "README.md", path: "README.md", isDirectory: false },
+      ]);
+      expect(githubRepoServiceMock.listDirectoryEntries).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "",
+        "gh-token",
+        2,
+      );
+      expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("rejects directory listing for invalid relative paths", async () => {
+      await expect(
+        service.listDirectoryEntries("group-1", "src/../secrets", 1, "org-1", "user-1"),
+      ).rejects.toThrow("Invalid file path");
+      expect(githubRepoServiceMock.listDirectoryEntries).not.toHaveBeenCalled();
     });
 
     it("saves files through the live session group runtime", async () => {
