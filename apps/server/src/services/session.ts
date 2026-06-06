@@ -1142,6 +1142,7 @@ function routingEventPayload(
     autoSelectedModel: decision.selectedModel,
     previousModel: previousModel ?? null,
     selectedModelLabel: getModelLabel(decision.selectedModel),
+    tier: decision.tier,
     complexity: decision.complexity,
     risk: decision.risk,
     confidence: decision.confidence,

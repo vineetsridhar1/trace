@@ -17,6 +17,9 @@ export interface ReasoningEffortOption {
 
 export const AUTO_MODEL_VALUE = "auto";
 export const AUTO_MODEL_OPTION: ModelOption = { value: AUTO_MODEL_VALUE, label: "Auto" };
+export const MODEL_ROUTING_TIERS = ["fast", "balanced", "high_thinking"] as const;
+export type ModelRoutingTier = (typeof MODEL_ROUTING_TIERS)[number];
+export type ModelRoutingTierModels = Record<ModelRoutingTier, string>;
 
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
@@ -114,6 +117,24 @@ const AUTO_FALLBACK_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   pi: "openai/gpt-5.4",
 };
 
+const AUTO_MODEL_TIERS_BY_TOOL: Readonly<Record<string, ModelRoutingTierModels>> = {
+  claude_code: {
+    fast: "claude-haiku-4-5",
+    balanced: "claude-sonnet-4-6",
+    high_thinking: "claude-opus-4-8[1m]",
+  },
+  codex: {
+    fast: "gpt-5.1-codex-mini",
+    balanced: "gpt-5.3-codex",
+    high_thinking: "gpt-5.5",
+  },
+  pi: {
+    fast: "openai/gpt-5.4",
+    balanced: "anthropic/claude-sonnet-4-6",
+    high_thinking: "anthropic/claude-opus-4-7",
+  },
+};
+
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "auto",
   codex: "medium",
@@ -170,6 +191,10 @@ export function getAutoFallbackModelForTool(tool: string): string | undefined {
 
 export function getAutoEligibleModelsForTool(tool: string): readonly ModelOption[] {
   return getModelsForTool(tool);
+}
+
+export function getAutoModelTiersForTool(tool: string): ModelRoutingTierModels | undefined {
+  return AUTO_MODEL_TIERS_BY_TOOL[tool];
 }
 
 export function isAutoModelSelection(model: string | null | undefined): boolean {

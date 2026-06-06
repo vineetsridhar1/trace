@@ -563,9 +563,26 @@ export type Message = {
 export type ModelRouterSettings = {
   __typename?: "ModelRouterSettings";
   cacheTtlSeconds: Scalars["Int"]["output"];
+  defaultModelTiers: Array<ModelRouterToolTiers>;
   defaultPrompt: Scalars["String"]["output"];
   enabled: Scalars["Boolean"]["output"];
+  modelTiers: Array<ModelRouterToolTiers>;
   prompt: Scalars["String"]["output"];
+};
+
+export type ModelRouterToolTiers = {
+  __typename?: "ModelRouterToolTiers";
+  balanced: Scalars["String"]["output"];
+  fast: Scalars["String"]["output"];
+  highThinking: Scalars["String"]["output"];
+  tool: Scalars["String"]["output"];
+};
+
+export type ModelRouterToolTiersInput = {
+  balanced: Scalars["String"]["input"];
+  fast: Scalars["String"]["input"];
+  highThinking: Scalars["String"]["input"];
+  tool: Scalars["String"]["input"];
 };
 
 export type MoveChannelInput = {
@@ -1976,6 +1993,7 @@ export type UpdateChannelInput = {
 export type UpdateModelRouterSettingsInput = {
   cacheTtlSeconds?: InputMaybe<Scalars["Int"]["input"]>;
   enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  modelTiers?: InputMaybe<Array<ModelRouterToolTiersInput>>;
   organizationId: Scalars["ID"]["input"];
   prompt?: InputMaybe<Scalars["String"]["input"]>;
 };
@@ -2173,6 +2191,8 @@ export type ResolversTypes = ResolversObject<{
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
   Message: ResolverTypeWrapper<Message>;
   ModelRouterSettings: ResolverTypeWrapper<ModelRouterSettings>;
+  ModelRouterToolTiers: ResolverTypeWrapper<ModelRouterToolTiers>;
+  ModelRouterToolTiersInput: ModelRouterToolTiersInput;
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
@@ -2284,6 +2304,8 @@ export type ResolversParentTypes = ResolversObject<{
   LinkedCheckoutStatus: LinkedCheckoutStatus;
   Message: Message;
   ModelRouterSettings: ModelRouterSettings;
+  ModelRouterToolTiers: ModelRouterToolTiers;
+  ModelRouterToolTiersInput: ModelRouterToolTiersInput;
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
   Notification: Notification;
@@ -2798,9 +2820,27 @@ export type ModelRouterSettingsResolvers<
     ResolversParentTypes["ModelRouterSettings"],
 > = ResolversObject<{
   cacheTtlSeconds?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  defaultModelTiers?: Resolver<
+    Array<ResolversTypes["ModelRouterToolTiers"]>,
+    ParentType,
+    ContextType
+  >;
   defaultPrompt?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   enabled?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  modelTiers?: Resolver<Array<ResolversTypes["ModelRouterToolTiers"]>, ParentType, ContextType>;
   prompt?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ModelRouterToolTiersResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ModelRouterToolTiers"] =
+    ResolversParentTypes["ModelRouterToolTiers"],
+> = ResolversObject<{
+  balanced?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  fast?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  highThinking?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  tool?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4230,6 +4270,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   ModelRouterSettings?: ModelRouterSettingsResolvers<ContextType>;
+  ModelRouterToolTiers?: ModelRouterToolTiersResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;

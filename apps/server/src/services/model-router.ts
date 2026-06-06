@@ -3,9 +3,13 @@ import type { CodingTool, Prisma } from "@prisma/client";
 import {
   getAutoEligibleModelsForTool,
   getAutoFallbackModelForTool,
+  getAutoModelTiersForTool,
   getAutoRouterModelForTool,
   getModelLabel,
   isSupportedModel,
+  MODEL_ROUTING_TIERS,
+  type ModelRoutingTier,
+  type ModelRoutingTierModels,
 } from "@trace/shared";
 import { aiService } from "./ai.js";
 
@@ -19,6 +23,7 @@ export type ModelRouterRule = {
   match: string[];
   complexity?: ModelRoutingComplexity;
   risk?: ModelRoutingRisk;
+  tier?: ModelRoutingTier;
   selectedModel?: string;
   reasonCode: string;
 };
@@ -26,6 +31,7 @@ export type ModelRouterRule = {
 export type ModelRouterSettings = {
   enabled: boolean;
   routerModelByTool: Record<string, string>;
+  modelTiersByTool: Record<string, ModelRoutingTierModels>;
   fallbackModelByTool: Record<string, string>;
   allowedModelsByTool: Record<string, string[]>;
   prompt: string;
@@ -35,6 +41,7 @@ export type ModelRouterSettings = {
 
 export type ModelRouterDecision = {
   selectedModel: string;
+  tier: ModelRoutingTier;
   complexity: ModelRoutingComplexity;
   risk: ModelRoutingRisk;
   confidence: ModelRoutingConfidence;
@@ -64,11 +71,11 @@ Return compact JSON with these fields only:
 complexity: simple | moderate | complex | expert
 risk: low | medium | high
 confidence: low | medium | high
+tier: fast | balanced | high_thinking
 reasonCode: short snake_case reason
 explanation: short user-visible phrase
-selectedModel: one of the allowed model ids or null
 
-Prefer cheaper models for simple, low-risk tasks. Use stronger models for broad refactors, debugging unclear failures, architecture, security, migrations, auth, payments, or large-context work.`;
+Use fast for simple low-risk tasks. Use balanced for moderate code changes and normal repo work. Use high_thinking for broad refactors, debugging unclear failures, architecture, security, migrations, auth, payments, or large-context work.`;
 
 export const DEFAULT_MODEL_ROUTER_SETTINGS: ModelRouterSettings = {
   enabled: true,
@@ -81,6 +88,23 @@ export const DEFAULT_MODEL_ROUTER_SETTINGS: ModelRouterSettings = {
     claude_code: getAutoFallbackModelForTool("claude_code") ?? "claude-haiku-4-5",
     codex: getAutoFallbackModelForTool("codex") ?? "gpt-5.1-codex-mini",
     pi: getAutoFallbackModelForTool("pi") ?? "openai/gpt-5.4",
+  },
+  modelTiersByTool: {
+    claude_code: getAutoModelTiersForTool("claude_code") ?? {
+      fast: "claude-haiku-4-5",
+      balanced: "claude-sonnet-4-6",
+      high_thinking: "claude-opus-4-8[1m]",
+    },
+    codex: getAutoModelTiersForTool("codex") ?? {
+      fast: "gpt-5.1-codex-mini",
+      balanced: "gpt-5.3-codex",
+      high_thinking: "gpt-5.5",
+    },
+    pi: getAutoModelTiersForTool("pi") ?? {
+      fast: "openai/gpt-5.4",
+      balanced: "anthropic/claude-sonnet-4-6",
+      high_thinking: "anthropic/claude-opus-4-7",
+    },
   },
   allowedModelsByTool: {
     claude_code: getAutoEligibleModelsForTool("claude_code").map((model) => model.value),
@@ -95,6 +119,7 @@ export const DEFAULT_MODEL_ROUTER_SETTINGS: ModelRouterSettings = {
       match: ["security", "auth", "payment", "billing", "migration", "prisma migrate"],
       complexity: "complex",
       risk: "high",
+      tier: "high_thinking",
       reasonCode: "protected_domain",
     },
     {
@@ -103,6 +128,7 @@ export const DEFAULT_MODEL_ROUTER_SETTINGS: ModelRouterSettings = {
       match: ["refactor", "architecture", "redesign", "rewrite", "debug failing tests"],
       complexity: "complex",
       risk: "medium",
+      tier: "high_thinking",
       reasonCode: "large_code_change",
     },
   ],
@@ -139,6 +165,39 @@ function stringArrayRecord(value: unknown): Record<string, string[]> {
   return result;
 }
 
+function parseTier(value: unknown): ModelRoutingTier | undefined {
+  return typeof value === "string" &&
+    (MODEL_ROUTING_TIERS as readonly string[]).includes(value)
+    ? (value as ModelRoutingTier)
+    : undefined;
+}
+
+function parseTierModels(value: unknown): ModelRoutingTierModels | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const fast = typeof record.fast === "string" ? record.fast : null;
+  const balanced = typeof record.balanced === "string" ? record.balanced : null;
+  const highThinking =
+    typeof record.high_thinking === "string"
+      ? record.high_thinking
+      : typeof record.highThinking === "string"
+        ? record.highThinking
+        : null;
+  if (!fast || !balanced || !highThinking) return null;
+  return { fast, balanced, high_thinking: highThinking };
+}
+
+function tierModelsRecord(value: unknown): Record<string, ModelRoutingTierModels> {
+  const record = asRecord(value);
+  if (!record) return {};
+  const result: Record<string, ModelRoutingTierModels> = {};
+  for (const [tool, raw] of Object.entries(record)) {
+    const tiers = parseTierModels(raw);
+    if (tiers) result[tool] = tiers;
+  }
+  return result;
+}
+
 function parseRule(value: unknown): ModelRouterRule | null {
   const rule = asRecord(value);
   if (!rule || typeof rule.id !== "string" || typeof rule.reasonCode !== "string") return null;
@@ -152,6 +211,7 @@ function parseRule(value: unknown): ModelRouterRule | null {
     match,
     complexity: parseComplexity(rule.complexity),
     risk: parseRisk(rule.risk),
+    tier: parseTier(rule.tier),
     selectedModel: typeof rule.selectedModel === "string" ? rule.selectedModel : undefined,
     reasonCode: rule.reasonCode,
   };
@@ -172,6 +232,10 @@ function mergeSettings(settings: Prisma.JsonValue | null | undefined): ModelRout
     routerModelByTool: {
       ...DEFAULT_MODEL_ROUTER_SETTINGS.routerModelByTool,
       ...stringRecord(router.routerModelByTool),
+    },
+    modelTiersByTool: {
+      ...DEFAULT_MODEL_ROUTER_SETTINGS.modelTiersByTool,
+      ...tierModelsRecord(router.modelTiersByTool),
     },
     fallbackModelByTool: {
       ...DEFAULT_MODEL_ROUTER_SETTINGS.fallbackModelByTool,
@@ -220,6 +284,7 @@ function cacheKey(input: ModelRouterInput, settings: ModelRouterSettings, allowe
       prompt: settings.prompt,
       rules: settings.rules,
       fallbackModel: settings.fallbackModelByTool[input.tool],
+      modelTiers: settings.modelTiersByTool[input.tool],
       routerModel: settings.routerModelByTool[input.tool],
       allowedModels,
     },
@@ -237,9 +302,42 @@ function bestFallback(tool: CodingTool, settings: ModelRouterSettings, allowedMo
   return allowedModels.find((model) => isSupportedModel(tool, model)) ?? null;
 }
 
-function strongestAllowedModel(tool: CodingTool, allowedModels: string[]): string | null {
-  const supported = getAutoEligibleModelsForTool(tool).map((model) => model.value);
-  return supported.find((model) => allowedModels.includes(model)) ?? null;
+function tierForClassification(
+  complexity: ModelRoutingComplexity,
+  risk: ModelRoutingRisk,
+): ModelRoutingTier {
+  if (risk === "high" || complexity === "complex" || complexity === "expert") {
+    return "high_thinking";
+  }
+  if (risk === "low" && complexity === "simple") return "fast";
+  return "balanced";
+}
+
+function modelForTier(
+  tool: CodingTool,
+  settings: ModelRouterSettings,
+  allowedModels: string[],
+  tier: ModelRoutingTier,
+): string | null {
+  const configured = settings.modelTiersByTool[tool]?.[tier];
+  if (configured && allowedModels.includes(configured) && isSupportedModel(tool, configured)) {
+    return configured;
+  }
+  const defaultConfigured = getAutoModelTiersForTool(tool)?.[tier];
+  if (
+    defaultConfigured &&
+    allowedModels.includes(defaultConfigured) &&
+    isSupportedModel(tool, defaultConfigured)
+  ) {
+    return defaultConfigured;
+  }
+  if (tier !== "balanced") {
+    const balanced = settings.modelTiersByTool[tool]?.balanced;
+    if (balanced && allowedModels.includes(balanced) && isSupportedModel(tool, balanced)) {
+      return balanced;
+    }
+  }
+  return bestFallback(tool, settings, allowedModels);
 }
 
 function ruleDecision(
@@ -254,19 +352,20 @@ function ruleDecision(
   if (!rule) return null;
 
   const fallback = bestFallback(input.tool, settings, allowedModels);
-  const strong = strongestAllowedModel(input.tool, allowedModels);
+  const tier =
+    rule.tier ??
+    tierForClassification(rule.complexity ?? "moderate", rule.risk ?? "medium");
   const selected =
     rule.selectedModel &&
     allowedModels.includes(rule.selectedModel) &&
     isSupportedModel(input.tool, rule.selectedModel)
       ? rule.selectedModel
-      : rule.risk === "high" || rule.complexity === "complex" || rule.complexity === "expert"
-        ? (strong ?? fallback)
-        : fallback;
+      : (modelForTier(input.tool, settings, allowedModels, tier) ?? fallback);
   if (!selected) return null;
 
   return {
     selectedModel: selected,
+    tier,
     complexity: rule.complexity ?? "moderate",
     risk: rule.risk ?? "medium",
     confidence: "high",
@@ -307,18 +406,15 @@ function firstTextBlock(content: unknown): string | null {
 function decisionFromClassifier(
   raw: Record<string, unknown>,
   tool: CodingTool,
+  settings: ModelRouterSettings,
   allowedModels: string[],
   fallback: string,
   routerModel: string,
 ): ModelRouterDecision {
-  const selected =
-    typeof raw.selectedModel === "string" &&
-    allowedModels.includes(raw.selectedModel) &&
-    isSupportedModel(tool, raw.selectedModel)
-      ? raw.selectedModel
-      : fallback;
   const complexity = parseComplexity(raw.complexity) ?? "moderate";
   const risk = parseRisk(raw.risk) ?? "medium";
+  const tier = parseTier(raw.tier) ?? tierForClassification(complexity, risk);
+  const selected = modelForTier(tool, settings, allowedModels, tier) ?? fallback;
   const confidence = parseConfidence(raw.confidence) ?? "medium";
   const reasonCode = typeof raw.reasonCode === "string" ? raw.reasonCode : "router_classified";
   const explanation =
@@ -328,6 +424,7 @@ function decisionFromClassifier(
 
   return {
     selectedModel: selected,
+    tier,
     complexity,
     risk,
     confidence,
@@ -352,6 +449,7 @@ function fallbackDecision(
   }
   return {
     selectedModel: selected,
+    tier: "fast",
     complexity: "moderate",
     risk: "medium",
     confidence: "low",
@@ -411,7 +509,7 @@ export class ModelRouterService {
             role: "user",
             content: JSON.stringify({
               tool: input.tool,
-              allowedModels,
+              tiers: settings.modelTiersByTool[input.tool],
               fallbackModel: fallback,
               repo: input.repo,
               prompt: input.prompt,
@@ -422,7 +520,7 @@ export class ModelRouterService {
       const text = firstTextBlock(response.content);
       const parsed = text ? parseRouterJson(text) : null;
       const decision = parsed
-        ? decisionFromClassifier(parsed, input.tool, allowedModels, fallback, routerModel)
+        ? decisionFromClassifier(parsed, input.tool, settings, allowedModels, fallback, routerModel)
         : fallbackDecision(input.tool, settings, allowedModels, "fallback");
 
       if (!decision.fallback && decision.risk !== "high") {

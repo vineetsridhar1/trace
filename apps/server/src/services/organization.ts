@@ -8,6 +8,7 @@ import type {
   UpdateModelRouterSettingsInput,
 } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
+import { isSupportedModel, type ModelRoutingTierModels } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
@@ -34,6 +35,41 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function toInputJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {
   return value as Prisma.InputJsonObject;
+}
+
+function modelTiersToGraphql(modelTiersByTool: Record<string, ModelRoutingTierModels>) {
+  return Object.entries(modelTiersByTool).map(([tool, tiers]) => ({
+    tool,
+    fast: tiers.fast,
+    balanced: tiers.balanced,
+    highThinking: tiers.high_thinking,
+  }));
+}
+
+function modelTiersFromInput(
+  modelTiers: NonNullable<UpdateModelRouterSettingsInput["modelTiers"]>,
+): Record<string, ModelRoutingTierModels> {
+  const result: Record<string, ModelRoutingTierModels> = {};
+  for (const tiers of modelTiers) {
+    if (!tiers.tool.trim()) throw new Error("Tool is required for model router tiers");
+    const tool = tiers.tool.trim();
+    const fast = tiers.fast.trim();
+    const balanced = tiers.balanced.trim();
+    const highThinking = tiers.highThinking.trim();
+    if (
+      !isSupportedModel(tool, fast) ||
+      !isSupportedModel(tool, balanced) ||
+      !isSupportedModel(tool, highThinking)
+    ) {
+      throw new Error(`Invalid model tier configuration for ${tool}`);
+    }
+    result[tool] = {
+      fast,
+      balanced,
+      high_thinking: highThinking,
+    };
+  }
+  return result;
 }
 
 export class OrganizationService {
@@ -124,6 +160,8 @@ export class OrganizationService {
       enabled: settings.enabled,
       prompt: settings.prompt,
       defaultPrompt: DEFAULT_ROUTER_PROMPT,
+      modelTiers: modelTiersToGraphql(settings.modelTiersByTool),
+      defaultModelTiers: modelTiersToGraphql(DEFAULT_MODEL_ROUTER_SETTINGS.modelTiersByTool),
       cacheTtlSeconds: settings.cacheTtlSeconds,
     };
   }
@@ -159,6 +197,9 @@ export class OrganizationService {
         ...(input.prompt !== undefined && input.prompt !== null
           ? { prompt: input.prompt.trim() }
           : {}),
+        ...(input.modelTiers !== undefined && input.modelTiers !== null
+          ? { modelTiersByTool: modelTiersFromInput(input.modelTiers) }
+          : {}),
         ...(input.cacheTtlSeconds !== undefined && input.cacheTtlSeconds !== null
           ? { cacheTtlSeconds: Math.min(input.cacheTtlSeconds, 24 * 60 * 60) }
           : {}),
@@ -177,6 +218,8 @@ export class OrganizationService {
         enabled: settings.enabled,
         prompt: settings.prompt,
         defaultPrompt: DEFAULT_ROUTER_PROMPT,
+        modelTiers: modelTiersToGraphql(settings.modelTiersByTool),
+        defaultModelTiers: modelTiersToGraphql(DEFAULT_MODEL_ROUTER_SETTINGS.modelTiersByTool),
         cacheTtlSeconds: settings.cacheTtlSeconds,
       };
     });

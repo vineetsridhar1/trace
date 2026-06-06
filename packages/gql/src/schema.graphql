@@ -297,7 +297,16 @@ type ModelRouterSettings {
   enabled: Boolean!
   prompt: String!
   defaultPrompt: String!
+  modelTiers: [ModelRouterToolTiers!]!
+  defaultModelTiers: [ModelRouterToolTiers!]!
   cacheTtlSeconds: Int!
+}
+
+type ModelRouterToolTiers {
+  tool: String!
+  fast: String!
+  balanced: String!
+  highThinking: String!
 }
 
 type AgentEnvironment {
@@ -1047,7 +1056,15 @@ input UpdateModelRouterSettingsInput {
   organizationId: ID!
   enabled: Boolean
   prompt: String
+  modelTiers: [ModelRouterToolTiersInput!]
   cacheTtlSeconds: Int
+}
+
+input ModelRouterToolTiersInput {
+  tool: String!
+  fast: String!
+  balanced: String!
+  highThinking: String!
 }
 
 # --- Queries ---

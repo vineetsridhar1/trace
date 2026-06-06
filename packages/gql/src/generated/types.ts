@@ -560,9 +560,26 @@ export type Message = {
 export type ModelRouterSettings = {
   __typename?: "ModelRouterSettings";
   cacheTtlSeconds: Scalars["Int"]["output"];
+  defaultModelTiers: Array<ModelRouterToolTiers>;
   defaultPrompt: Scalars["String"]["output"];
   enabled: Scalars["Boolean"]["output"];
+  modelTiers: Array<ModelRouterToolTiers>;
   prompt: Scalars["String"]["output"];
+};
+
+export type ModelRouterToolTiers = {
+  __typename?: "ModelRouterToolTiers";
+  balanced: Scalars["String"]["output"];
+  fast: Scalars["String"]["output"];
+  highThinking: Scalars["String"]["output"];
+  tool: Scalars["String"]["output"];
+};
+
+export type ModelRouterToolTiersInput = {
+  balanced: Scalars["String"]["input"];
+  fast: Scalars["String"]["input"];
+  highThinking: Scalars["String"]["input"];
+  tool: Scalars["String"]["input"];
 };
 
 export type MoveChannelInput = {
@@ -1973,6 +1990,7 @@ export type UpdateChannelInput = {
 export type UpdateModelRouterSettingsInput = {
   cacheTtlSeconds?: InputMaybe<Scalars["Int"]["input"]>;
   enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  modelTiers?: InputMaybe<Array<ModelRouterToolTiersInput>>;
   organizationId: Scalars["ID"]["input"];
   prompt?: InputMaybe<Scalars["String"]["input"]>;
 };

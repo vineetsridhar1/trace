@@ -3,7 +3,9 @@ import { gql } from "@urql/core";
 import { useAuthStore } from "@trace/client-core";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
+import { getModelLabel, getModelsForTool } from "../session/modelOptions";
 import { Button } from "../ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 
 const MODEL_ROUTER_SETTINGS_QUERY = gql`
@@ -12,6 +14,18 @@ const MODEL_ROUTER_SETTINGS_QUERY = gql`
       enabled
       prompt
       defaultPrompt
+      modelTiers {
+        tool
+        fast
+        balanced
+        highThinking
+      }
+      defaultModelTiers {
+        tool
+        fast
+        balanced
+        highThinking
+      }
       cacheTtlSeconds
     }
   }
@@ -23,17 +37,56 @@ const UPDATE_MODEL_ROUTER_SETTINGS_MUTATION = gql`
       enabled
       prompt
       defaultPrompt
+      modelTiers {
+        tool
+        fast
+        balanced
+        highThinking
+      }
+      defaultModelTiers {
+        tool
+        fast
+        balanced
+        highThinking
+      }
       cacheTtlSeconds
     }
   }
 `;
 
+type ToolTiers = {
+  tool: string;
+  fast: string;
+  balanced: string;
+  highThinking: string;
+};
+
 type RouterSettings = {
   enabled: boolean;
   prompt: string;
   defaultPrompt: string;
+  modelTiers: ToolTiers[];
+  defaultModelTiers: ToolTiers[];
   cacheTtlSeconds: number;
 };
+
+const TOOL_LABELS: Record<string, string> = {
+  claude_code: "Claude Code",
+  codex: "Codex",
+  pi: "Pi",
+};
+
+const TIER_LABELS: Array<{ key: keyof Omit<ToolTiers, "tool">; label: string }> = [
+  { key: "fast", label: "Fast" },
+  { key: "balanced", label: "Balanced" },
+  { key: "highThinking", label: "High Thinking" },
+];
+
+function serializeTiers(tiers: ToolTiers[]) {
+  return JSON.stringify(
+    [...tiers].sort((a, b) => a.tool.localeCompare(b.tool)),
+  );
+}
 
 export function ModelRouterSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
@@ -49,6 +102,7 @@ export function ModelRouterSection() {
   );
   const [settings, setSettings] = useState<RouterSettings | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [modelTiers, setModelTiers] = useState<ToolTiers[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +110,7 @@ export function ModelRouterSection() {
     if (!activeOrgId || !isAdmin) {
       setSettings(null);
       setPrompt("");
+      setModelTiers([]);
       setLoading(false);
       return;
     }
@@ -74,6 +129,7 @@ export function ModelRouterSection() {
       if (nextSettings) {
         setSettings(nextSettings);
         setPrompt(nextSettings.prompt);
+        setModelTiers(nextSettings.modelTiers);
       }
     } catch (error) {
       toast.error("Failed to load model router settings", {
@@ -88,9 +144,12 @@ export function ModelRouterSection() {
     void fetchSettings();
   }, [fetchSettings]);
 
-  const hasChanges = settings ? prompt.trim() !== settings.prompt : false;
+  const hasChanges = settings
+    ? prompt.trim() !== settings.prompt ||
+      serializeTiers(modelTiers) !== serializeTiers(settings.modelTiers)
+    : false;
 
-  const savePrompt = async (nextPrompt: string) => {
+  const saveSettings = async (nextPrompt: string, nextModelTiers: ToolTiers[]) => {
     if (!activeOrgId || !isAdmin) return;
     const trimmedPrompt = nextPrompt.trim();
     if (!trimmedPrompt) {
@@ -102,7 +161,11 @@ export function ModelRouterSection() {
     try {
       const result = await client
         .mutation(UPDATE_MODEL_ROUTER_SETTINGS_MUTATION, {
-          input: { organizationId: activeOrgId, prompt: trimmedPrompt },
+          input: {
+            organizationId: activeOrgId,
+            prompt: trimmedPrompt,
+            modelTiers: nextModelTiers,
+          },
         })
         .toPromise();
       if (result.error) throw result.error;
@@ -110,15 +173,26 @@ export function ModelRouterSection() {
       if (nextSettings) {
         setSettings(nextSettings);
         setPrompt(nextSettings.prompt);
+        setModelTiers(nextSettings.modelTiers);
       }
-      toast.success("Model router prompt updated");
+      toast.success("Model router settings updated");
     } catch (error) {
-      toast.error("Failed to update model router prompt", {
+      toast.error("Failed to update model router settings", {
         description: error instanceof Error ? error.message : undefined,
       });
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateTierModel = (
+    tool: string,
+    tier: keyof Omit<ToolTiers, "tool">,
+    model: string,
+  ) => {
+    setModelTiers((current) =>
+      current.map((entry) => (entry.tool === tool ? { ...entry, [tier]: model } : entry)),
+    );
   };
 
   if (!isAdmin) {
@@ -139,7 +213,7 @@ export function ModelRouterSection() {
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">Model Router</h2>
         <p className="text-sm text-muted-foreground">
-          Customize the prompt Auto uses before choosing a model for new sessions.
+          Customize the prompt Auto uses and map each routing tier to a model per tool.
         </p>
       </div>
 
@@ -165,6 +239,57 @@ export function ModelRouterSection() {
               />
             </div>
 
+            <div className="space-y-3 border-t border-border pt-4">
+              <div>
+                <h3 className="text-sm font-medium text-foreground">Tier Models</h3>
+                <p className="text-xs text-muted-foreground">
+                  The router picks a tier, then Trace uses the matching model for the selected tool.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {modelTiers.map((toolTiers) => {
+                  const options = getModelsForTool(toolTiers.tool);
+                  return (
+                    <div
+                      key={toolTiers.tool}
+                      className="grid grid-cols-1 gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0 lg:grid-cols-[140px_1fr_1fr_1fr]"
+                    >
+                      <div className="text-sm font-medium text-foreground">
+                        {TOOL_LABELS[toolTiers.tool] ?? toolTiers.tool}
+                      </div>
+                      {TIER_LABELS.map((tier) => (
+                        <div key={tier.key}>
+                          <label className="mb-1.5 block text-xs text-muted-foreground">
+                            {tier.label}
+                          </label>
+                          <Select
+                            value={toolTiers[tier.key]}
+                            onValueChange={(value) => {
+                              if (value) updateTierModel(toolTiers.tool, tier.key, value);
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {getModelLabel(toolTiers[tier.key])}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {options.map((model) => (
+                                <SelectItem key={model.value} value={model.value}>
+                                  {model.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
                 Changes apply to future Auto routing decisions.
@@ -173,15 +298,22 @@ export function ModelRouterSection() {
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={saving || prompt === settings.defaultPrompt}
-                  onClick={() => setPrompt(settings.defaultPrompt)}
+                  disabled={
+                    saving ||
+                    (prompt === settings.defaultPrompt &&
+                      serializeTiers(modelTiers) === serializeTiers(settings.defaultModelTiers))
+                  }
+                  onClick={() => {
+                    setPrompt(settings.defaultPrompt);
+                    setModelTiers(settings.defaultModelTiers);
+                  }}
                 >
                   Reset to default
                 </Button>
                 <Button
                   type="button"
                   disabled={saving || !hasChanges}
-                  onClick={() => void savePrompt(prompt)}
+                  onClick={() => void saveSettings(prompt, modelTiers)}
                 >
                   {saving ? "Saving..." : "Save"}
                 </Button>

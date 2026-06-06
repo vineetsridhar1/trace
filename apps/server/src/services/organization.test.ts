@@ -517,12 +517,22 @@ describe("OrganizationService", () => {
     const service = new OrganizationService();
     const settings = await service.getModelRouterSettings("org-1", "user", "user-1");
 
-    expect(settings).toEqual({
+    expect(settings).toEqual(expect.objectContaining({
       enabled: true,
       prompt: "Custom router prompt",
       defaultPrompt: DEFAULT_ROUTER_PROMPT,
       cacheTtlSeconds: 120,
-    });
+    }));
+    expect(settings.modelTiers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: "claude_code",
+          fast: "claude-haiku-4-5",
+          balanced: "claude-sonnet-4-6",
+          highThinking: "claude-opus-4-8[1m]",
+        }),
+      ]),
+    );
     expect(prismaMock.orgMember.findUniqueOrThrow).toHaveBeenCalledWith({
       where: {
         userId_organizationId: {
@@ -593,6 +603,7 @@ describe("OrganizationService", () => {
           modelRouter: expect.objectContaining({
             enabled: true,
             prompt: "Updated prompt",
+            modelTiersByTool: expect.any(Object),
             cacheTtlSeconds: 60,
           }),
         }),

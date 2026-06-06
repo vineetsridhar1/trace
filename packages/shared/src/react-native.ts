@@ -12,8 +12,16 @@ export {
   hasAttachmentKeys,
   hasVisibleUserSessionContent,
 } from "./session-content.js";
-export type { ModelOption, ModelProviderGroup, ReasoningEffortOption } from "./models.js";
+export type {
+  ModelOption,
+  ModelProviderGroup,
+  ModelRoutingTier,
+  ModelRoutingTierModels,
+  ReasoningEffortOption,
+} from "./models.js";
 export {
+  MODEL_ROUTING_TIERS,
+  getAutoModelTiersForTool,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,

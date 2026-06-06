@@ -178,12 +178,20 @@ export type {
   LLMRequestOptions,
   LLMAdapter,
 } from "./adapters/llm.js";
-export type { ModelOption, ModelProviderGroup, ReasoningEffortOption } from "./models.js";
+export type {
+  ModelOption,
+  ModelProviderGroup,
+  ModelRoutingTier,
+  ModelRoutingTierModels,
+  ReasoningEffortOption,
+} from "./models.js";
 export {
   AUTO_MODEL_OPTION,
   AUTO_MODEL_VALUE,
+  MODEL_ROUTING_TIERS,
   getAutoEligibleModelsForTool,
   getAutoFallbackModelForTool,
+  getAutoModelTiersForTool,
   getAutoRouterModelForTool,
   getModelsForTool,
   getModelSelectionOptionsForTool,
