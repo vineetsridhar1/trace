@@ -119,16 +119,20 @@ vi.mock("./org-secret.js", () => ({
   },
 }));
 
-vi.mock("./github-repo.js", () => ({
-  githubRepoService: {
-    listFiles: vi.fn().mockResolvedValue([]),
-    listFileTree: vi.fn().mockResolvedValue({ paths: [], truncated: false }),
-    listDirectoryEntries: vi.fn().mockResolvedValue([]),
-    readFile: vi.fn().mockResolvedValue("file contents"),
-    branchDiff: vi.fn().mockResolvedValue([]),
-  },
-  parseGitHubRepo: vi.fn().mockReturnValue({ owner: "trace", repo: "trace" }),
-}));
+vi.mock("./github-repo.js", async () => {
+  const actual = await vi.importActual<typeof import("./github-repo.js")>("./github-repo.js");
+  return {
+    GitHubApiError: actual.GitHubApiError,
+    githubRepoService: {
+      listFiles: vi.fn().mockResolvedValue([]),
+      listFileTree: vi.fn().mockResolvedValue({ paths: [], truncated: false }),
+      listDirectoryEntries: vi.fn().mockResolvedValue([]),
+      readFile: vi.fn().mockResolvedValue("file contents"),
+      branchDiff: vi.fn().mockResolvedValue([]),
+    },
+    parseGitHubRepo: vi.fn().mockReturnValue({ owner: "trace", repo: "trace" }),
+  };
+});
 
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
@@ -137,7 +141,7 @@ import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
-import { githubRepoService, parseGitHubRepo } from "./github-repo.js";
+import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 import {
   getDefaultModel,
@@ -2850,7 +2854,7 @@ describe("SessionService", () => {
         repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
       });
       githubRepoServiceMock.readFile
-        .mockRejectedValueOnce(new Error("GitHub API error (404): Not Found"))
+        .mockRejectedValueOnce(new GitHubApiError(404, "Not Found"))
         .mockResolvedValueOnce("default branch contents");
 
       await expect(
@@ -3019,7 +3023,7 @@ describe("SessionService", () => {
         repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
       });
       githubRepoServiceMock.listFileTree
-        .mockRejectedValueOnce(new Error("GitHub API error (404): Not Found"))
+        .mockRejectedValueOnce(new GitHubApiError(404, "Not Found"))
         .mockResolvedValueOnce({ paths: ["README.md"], truncated: false });
 
       await expect(service.listFileTree("group-1", "org-1", "user-1")).resolves.toEqual({
@@ -3038,6 +3042,25 @@ describe("SessionService", () => {
         "main",
         "gh-token",
       );
+    });
+
+    it("does not fall back to the default branch on non-404 GitHub errors", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listFileTree.mockRejectedValueOnce(
+        new GitHubApiError(403, "rate limit exceeded"),
+      );
+
+      await expect(service.listFileTree("group-1", "org-1", "user-1")).rejects.toThrow(
+        "rate limit exceeded",
+      );
+      expect(githubRepoServiceMock.listFileTree).toHaveBeenCalledTimes(1);
     });
 
     it("saves files through the live session group runtime", async () => {
