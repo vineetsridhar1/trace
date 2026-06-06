@@ -122,6 +122,7 @@ vi.mock("./org-secret.js", () => ({
 vi.mock("./github-repo.js", () => ({
   githubRepoService: {
     listFiles: vi.fn().mockResolvedValue([]),
+    listFileTree: vi.fn().mockResolvedValue({ paths: [], truncated: false }),
     listDirectoryEntries: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue("file contents"),
     branchDiff: vi.fn().mockResolvedValue([]),
@@ -335,6 +336,7 @@ describe("SessionService", () => {
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
     orgSecretServiceMock.getDecryptedValueByName.mockResolvedValue(null);
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
+    githubRepoServiceMock.listFileTree.mockResolvedValue({ paths: [], truncated: false });
     githubRepoServiceMock.listDirectoryEntries.mockResolvedValue([]);
     githubRepoServiceMock.readFile.mockResolvedValue("file contents");
     githubRepoServiceMock.branchDiff.mockResolvedValue([]);
@@ -2979,6 +2981,32 @@ describe("SessionService", () => {
         service.listDirectoryEntries("group-1", "src/../secrets", 1, "org-1", "user-1"),
       ).rejects.toThrow("Invalid file path");
       expect(githubRepoServiceMock.listDirectoryEntries).not.toHaveBeenCalled();
+    });
+
+    it("returns the recursive file tree with the truncated flag", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "trace/test",
+        workdir: "/tmp/trace",
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+      });
+      githubRepoServiceMock.listFileTree.mockResolvedValueOnce({
+        paths: ["README.md", "src/index.ts"],
+        truncated: true,
+      });
+
+      await expect(service.listFileTree("group-1", "org-1", "user-1")).resolves.toEqual({
+        paths: ["README.md", "src/index.ts"],
+        truncated: true,
+      });
+      expect(githubRepoServiceMock.listFileTree).toHaveBeenCalledWith(
+        { owner: "trace", repo: "trace" },
+        "trace/test",
+        "gh-token",
+      );
+      expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
     });
 
     it("saves files through the live session group runtime", async () => {

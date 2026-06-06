@@ -59,6 +59,7 @@ import {
   githubRepoService,
   parseGitHubRepo,
   type GitHubDirectoryEntry,
+  type GitHubFileTree,
   type GitHubRepoRef,
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
@@ -7835,6 +7836,24 @@ export class SessionService {
       userId,
     );
     return githubRepoService.listFiles(source.repo, source.branch, source.token);
+  }
+
+  /**
+   * Fetch the full recursive file list for a session group's branch, along with
+   * GitHub's `truncated` flag so the client can fall back to lazy directory
+   * loading when the repo is too large to return completely.
+   */
+  async listFileTree(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<GitHubFileTree> {
+    const source = await this.resolveGitHubSessionGroupFileSource(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return githubRepoService.listFileTree(source.repo, source.branch, source.token);
   }
 
   /** List one or more directory levels in a session group's branch from GitHub. */
