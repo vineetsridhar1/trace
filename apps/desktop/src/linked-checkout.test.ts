@@ -673,6 +673,31 @@ describe("linked checkout commit-back", () => {
     });
   }, 15_000);
 
+  it("reports multi-line counts and handles paths with spaces in the status list", async () => {
+    const { repoPath } = await createRepoFixture();
+    fs.writeFileSync(path.join(repoPath, "with space.txt"), "one\ntwo\n");
+    await git(repoPath, ["add", "with space.txt"]);
+    await git(repoPath, ["commit", "-m", "add spaced file"]);
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "line1\nline2\nline3\n");
+    fs.writeFileSync(path.join(repoPath, "with space.txt"), "ONE\ntwo\nthree\n");
+
+    const status = await getLinkedCheckoutStatus("repo-1");
+
+    const byPath = new Map(status.changedFiles.map((file) => [file.path, file]));
+    expect(byPath.get("app.txt")).toMatchObject({
+      status: "M",
+      additions: 3,
+      deletions: 1,
+    });
+    expect(byPath.get("with space.txt")).toMatchObject({
+      status: "M",
+      additions: 2,
+      deletions: 1,
+    });
+  }, 15_000);
+
   it("does not pause the attachment when sync stops for conflict resolution", async () => {
     const { repoPath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);
