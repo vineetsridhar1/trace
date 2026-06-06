@@ -7824,6 +7824,23 @@ export class SessionService {
     return sessionRouter.setLinkedCheckoutAutoSync(runtimeId, repoId, enabled);
   }
 
+  /**
+   * Run a GitHub read against the session group's branch, falling back to the
+   * repo's default branch when the session branch is unavailable (e.g. never
+   * pushed). Mirrors the fallback behaviour of {@link readFileWithSource}.
+   */
+  private async withDefaultBranchFallback<T>(
+    source: GitHubSessionGroupFileSource,
+    run: (branch: string) => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await run(source.branch);
+    } catch (error) {
+      if (source.branch === source.defaultBranch) throw error;
+      return run(source.defaultBranch);
+    }
+  }
+
   /** List files in a session group's branch from GitHub. */
   async listFiles(
     sessionGroupId: string,
@@ -7835,7 +7852,9 @@ export class SessionService {
       organizationId,
       userId,
     );
-    return githubRepoService.listFiles(source.repo, source.branch, source.token);
+    return this.withDefaultBranchFallback(source, (branch) =>
+      githubRepoService.listFiles(source.repo, branch, source.token),
+    );
   }
 
   /**
@@ -7853,7 +7872,9 @@ export class SessionService {
       organizationId,
       userId,
     );
-    return githubRepoService.listFileTree(source.repo, source.branch, source.token);
+    return this.withDefaultBranchFallback(source, (branch) =>
+      githubRepoService.listFileTree(source.repo, branch, source.token),
+    );
   }
 
   /** List one or more directory levels in a session group's branch from GitHub. */
@@ -7872,12 +7893,14 @@ export class SessionService {
       organizationId,
       userId,
     );
-    return githubRepoService.listDirectoryEntries(
-      source.repo,
-      source.branch,
-      normalizedPath,
-      source.token,
-      boundedDepth,
+    return this.withDefaultBranchFallback(source, (branch) =>
+      githubRepoService.listDirectoryEntries(
+        source.repo,
+        branch,
+        normalizedPath,
+        source.token,
+        boundedDepth,
+      ),
     );
   }
 
