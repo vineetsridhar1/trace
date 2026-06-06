@@ -52,9 +52,7 @@ function getStoredSessionSidebarWidth(): number {
   if (!stored) return DEFAULT_SESSION_SIDEBAR_WIDTH;
 
   const parsed = parseInt(stored, 10);
-  return Number.isFinite(parsed)
-    ? clampSessionSidebarWidth(parsed)
-    : DEFAULT_SESSION_SIDEBAR_WIDTH;
+  return Number.isFinite(parsed) ? clampSessionSidebarWidth(parsed) : DEFAULT_SESSION_SIDEBAR_WIDTH;
 }
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -117,6 +115,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         sessionStatus
         tool
         model
+        modelSelectionMode
+        autoSelectedModel
         reasoningEffort
         hosting
         branch
@@ -562,7 +562,10 @@ export function SessionGroupDetailView({
       .mutation(START_SESSION_MUTATION, {
         input: {
           tool: selectedSession.tool,
-          model: selectedSession.model ?? undefined,
+          model:
+            selectedSession.modelSelectionMode === "auto"
+              ? "auto"
+              : (selectedSession.model ?? undefined),
           reasoningEffort: selectedSession.reasoningEffort ?? undefined,
           hosting: selectedHosting,
           channelId: resolvedChannelId ?? undefined,
@@ -588,7 +591,7 @@ export function SessionGroupDetailView({
       id: newSessionId,
       sessionGroupId,
       tool: selectedSession.tool,
-      model: selectedSession.model,
+      model: selectedSession.modelSelectionMode === "auto" ? "auto" : selectedSession.model,
       reasoningEffort: selectedSession.reasoningEffort,
       hosting: selectedHosting ?? selectedSession.hosting,
       channel: resolvedChannelId ? { id: resolvedChannelId } : null,

@@ -638,6 +638,8 @@ export const UPDATE_SESSION_CONFIG_MUTATION = gql`
       id
       tool
       model
+      modelSelectionMode
+      autoSelectedModel
       reasoningEffort
       hosting
       connection {

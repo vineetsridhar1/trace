@@ -180,11 +180,18 @@ export type {
 } from "./adapters/llm.js";
 export type { ModelOption, ModelProviderGroup, ReasoningEffortOption } from "./models.js";
 export {
+  AUTO_MODEL_OPTION,
+  AUTO_MODEL_VALUE,
+  getAutoEligibleModelsForTool,
+  getAutoFallbackModelForTool,
+  getAutoRouterModelForTool,
   getModelsForTool,
+  getModelSelectionOptionsForTool,
   getDefaultModel,
   getModelLabel,
   getModelProviderForModel,
   getModelProviderGroupsForTool,
+  isAutoModelSelection,
   isSupportedModel,
   getReasoningEffortsForTool,
   getDefaultReasoningEffort,
@@ -198,10 +205,7 @@ export {
   hasAttachmentKeys,
   hasVisibleUserSessionContent,
 } from "./session-content.js";
-export {
-  PROVISIONED_RUNTIME_PREFIX,
-  isProvisionedRuntimeId,
-} from "./runtime-ids.js";
+export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export {
   branchNameFromGitRef,
   branchNamesFromGitRefsOutput,

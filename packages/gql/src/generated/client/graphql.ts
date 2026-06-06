@@ -408,6 +408,9 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "model_override_applied"
+  | "model_routing_completed"
+  | "model_routing_started"
   | "organization_created"
   | "queued_message_added"
   | "queued_message_removed"
@@ -1562,6 +1565,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  autoSelectedModel?: Maybe<Scalars["String"]["output"]>;
   branch?: Maybe<Scalars["String"]["output"]>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1574,6 +1578,7 @@ export type Session = {
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
+  modelSelectionMode: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   projects: Array<Project>;
@@ -2065,6 +2070,8 @@ export type SessionGroupsQuery = {
       sessionStatus: SessionStatus;
       tool: CodingTool;
       model?: string | null;
+      modelSelectionMode: string;
+      autoSelectedModel?: string | null;
       reasoningEffort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
@@ -2126,6 +2133,8 @@ export type FilteredSessionGroupsQuery = {
       sessionStatus: SessionStatus;
       tool: CodingTool;
       model?: string | null;
+      modelSelectionMode: string;
+      autoSelectedModel?: string | null;
       reasoningEffort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
@@ -2353,6 +2362,8 @@ export type SessionDetailQuery = {
     sessionStatus: SessionStatus;
     tool: CodingTool;
     model?: string | null;
+    modelSelectionMode: string;
+    autoSelectedModel?: string | null;
     reasoningEffort?: string | null;
     hosting: HostingMode;
     branch?: string | null;
@@ -2504,6 +2515,8 @@ export type SessionGroupDetailQuery = {
       sessionStatus: SessionStatus;
       tool: CodingTool;
       model?: string | null;
+      modelSelectionMode: string;
+      autoSelectedModel?: string | null;
       reasoningEffort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
@@ -3407,6 +3420,8 @@ export type SidebarSessionGroupsQuery = {
       sessionStatus: SessionStatus;
       tool: CodingTool;
       model?: string | null;
+      modelSelectionMode: string;
+      autoSelectedModel?: string | null;
       reasoningEffort?: string | null;
       hosting: HostingMode;
       branch?: string | null;
@@ -3713,6 +3728,8 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "modelSelectionMode" } },
+                      { kind: "Field", name: { kind: "Name", value: "autoSelectedModel" } },
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
@@ -3881,6 +3898,8 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "modelSelectionMode" } },
+                      { kind: "Field", name: { kind: "Name", value: "autoSelectedModel" } },
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
@@ -4734,6 +4753,8 @@ export const SessionDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                 { kind: "Field", name: { kind: "Name", value: "tool" } },
                 { kind: "Field", name: { kind: "Name", value: "model" } },
+                { kind: "Field", name: { kind: "Name", value: "modelSelectionMode" } },
+                { kind: "Field", name: { kind: "Name", value: "autoSelectedModel" } },
                 { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                 { kind: "Field", name: { kind: "Name", value: "hosting" } },
                 {
@@ -5042,6 +5063,8 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "modelSelectionMode" } },
+                      { kind: "Field", name: { kind: "Name", value: "autoSelectedModel" } },
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },
@@ -8051,6 +8074,8 @@ export const SidebarSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
+                      { kind: "Field", name: { kind: "Name", value: "modelSelectionMode" } },
+                      { kind: "Field", name: { kind: "Name", value: "autoSelectedModel" } },
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
                       { kind: "Field", name: { kind: "Name", value: "hosting" } },
                       { kind: "Field", name: { kind: "Name", value: "branch" } },

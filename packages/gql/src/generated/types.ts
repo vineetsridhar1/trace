@@ -406,6 +406,9 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "model_override_applied"
+  | "model_routing_completed"
+  | "model_routing_started"
   | "organization_created"
   | "queued_message_added"
   | "queued_message_removed"
@@ -1560,6 +1563,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  autoSelectedModel?: Maybe<Scalars["String"]["output"]>;
   branch?: Maybe<Scalars["String"]["output"]>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1572,6 +1576,7 @@ export type Session = {
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
+  modelSelectionMode: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   projects: Array<Project>;

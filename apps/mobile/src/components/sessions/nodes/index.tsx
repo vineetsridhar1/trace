@@ -73,6 +73,27 @@ interface EventNodeProps {
 const COLLAPSED_PAGE_SIZE = 100;
 const COLLAPSED_EXPANDED_EXCLUDE_PAYLOAD_TYPES = [...HIDDEN_SESSION_PAYLOAD_TYPES, "result"];
 
+function asStr(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function modelRoutingText(payload: JsonObject | undefined): string {
+  const selectedLabel =
+    asStr(payload?.selectedModelLabel) || asStr(payload?.selectedModel) || "model";
+  const explanation = asStr(payload?.explanation);
+  return explanation
+    ? `Auto selected ${selectedLabel}: ${explanation}`
+    : `Auto selected ${selectedLabel}`;
+}
+
+function modelOverrideText(payload: JsonObject | undefined): string {
+  const previous = asStr(payload?.previousModelLabel) || asStr(payload?.previousModel);
+  const selected = asStr(payload?.selectedModelLabel) || asStr(payload?.selectedModel);
+  if (previous && selected) return `Model changed from ${previous} to ${selected}`;
+  if (selected) return `Model changed to ${selected}`;
+  return "Model changed";
+}
+
 function CollapsedEventsNode({
   collapsed,
   context,
@@ -315,6 +336,15 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
 
     case "session_output":
       return payload ? renderSessionOutput(payload, context) : null;
+
+    case "model_routing_started":
+      return <SystemBadge text="Selecting model..." />;
+
+    case "model_routing_completed":
+      return <SystemBadge text={modelRoutingText(payload)} />;
+
+    case "model_override_applied":
+      return <SystemBadge text={modelOverrideText(payload)} />;
 
     case "session_pr_opened":
       return <PRCard kind="opened" prUrl={prUrlFrom(payload)} />;

@@ -116,6 +116,13 @@ export function SessionInputOptions({
 }: SessionInputOptionsProps) {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const modelSelectionMode = useEntityField("sessions", sessionId, "modelSelectionMode") as
+    | string
+    | undefined;
+  const autoSelectedModel = useEntityField("sessions", sessionId, "autoSelectedModel") as
+    | string
+    | null
+    | undefined;
   const reasoningEffort = useEntityField("sessions", sessionId, "reasoningEffort") as
     | string
     | undefined;
@@ -186,6 +193,8 @@ export function SessionInputOptions({
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         tool: newTool,
         model: newDefault ?? null,
+        modelSelectionMode: "manual",
+        autoSelectedModel: null,
         reasoningEffort: newDefaultReasoningEffort ?? null,
       });
       try {
@@ -207,7 +216,11 @@ export function SessionInputOptions({
   const handleModelChange = useCallback(
     async (newModel: string) => {
       if (isOptimistic) return;
-      const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        ...(newModel === "auto" ? {} : { model: newModel }),
+        modelSelectionMode: newModel === "auto" ? "auto" : "manual",
+        autoSelectedModel: null,
+      });
       try {
         const result = await client
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
@@ -403,6 +416,8 @@ export function SessionInputOptions({
       <ToolModelPicker
         tool={currentTool}
         model={currentModel}
+        modelSelectionMode={modelSelectionMode}
+        autoSelectedModel={autoSelectedModel}
         disabled={isActive || isOptimistic}
         onToolChange={handleToolChange}
         onModelChange={handleModelChange}

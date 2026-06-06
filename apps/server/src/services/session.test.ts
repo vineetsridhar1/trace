@@ -99,6 +99,13 @@ vi.mock("@trace/shared", () => {
   return {
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
     getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
+    getAutoEligibleModelsForTool: vi
+      .fn()
+      .mockReturnValue([{ value: "claude-sonnet-4-20250514", label: "Sonnet" }]),
+    getAutoFallbackModelForTool: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
+    getAutoRouterModelForTool: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
+    getModelLabel: vi.fn((model: string) => model),
+    isAutoModelSelection: vi.fn((model: string | null | undefined) => model === "auto"),
     isSupportedModel: vi.fn().mockReturnValue(true),
     isSupportedReasoningEffort: vi.fn().mockReturnValue(true),
     hasQuestionBlock: vi.fn().mockReturnValue(false),

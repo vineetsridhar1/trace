@@ -222,6 +222,9 @@ enum EventType {
   session_resumed
   session_terminated
   session_deleted
+  model_routing_started
+  model_routing_completed
+  model_override_applied
   session_output
   ticket_created
   ticket_updated
@@ -417,6 +420,8 @@ type Session {
   sessionStatus: SessionStatus!
   tool: CodingTool!
   model: String
+  modelSelectionMode: String!
+  autoSelectedModel: String
   reasoningEffort: String
   hosting: HostingMode!
   createdBy: User!

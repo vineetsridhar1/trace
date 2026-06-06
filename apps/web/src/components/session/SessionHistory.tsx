@@ -71,7 +71,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           .mutation(START_SESSION_MUTATION, {
             input: {
               tool: source.tool,
-              model: source.model ?? undefined,
+              model: source.modelSelectionMode === "auto" ? "auto" : (source.model ?? undefined),
               reasoningEffort: source.reasoningEffort ?? undefined,
               hosting: resolveSupportedHostingForRepo(source.hosting, sourceRepo),
               channelId: getSessionChannelId(source) ?? undefined,

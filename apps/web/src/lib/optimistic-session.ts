@@ -30,6 +30,8 @@ export function optimisticallyInsertSession(params: {
   sessionGroupId: string;
   tool: string;
   model?: string | null;
+  modelSelectionMode?: string | null;
+  autoSelectedModel?: string | null;
   reasoningEffort?: string | null;
   hosting: string;
   channel?: { id: string } | null;
@@ -46,6 +48,8 @@ export function optimisticallyInsertSession(params: {
     sessionStatus: "in_progress",
     tool: params.tool,
     model: params.model ?? null,
+    modelSelectionMode: params.modelSelectionMode ?? "manual",
+    autoSelectedModel: params.autoSelectedModel ?? null,
     reasoningEffort: params.reasoningEffort ?? null,
     hosting: params.hosting,
     channel: params.channel ?? null,

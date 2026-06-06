@@ -59,6 +59,8 @@ const MY_SESSIONS_QUERY = gql`
       sessionStatus
       tool
       model
+      modelSelectionMode
+      autoSelectedModel
       reasoningEffort
       hosting
       createdBy {
@@ -152,9 +154,7 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
   const client = getClient();
 
   const [channelsResult, groupsResult, sessionsResult] = await Promise.all([
-    client
-      .query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true })
-      .toPromise(),
+    client.query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true }).toPromise(),
     client.query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId }).toPromise(),
     client
       .query(MY_SESSIONS_QUERY, {

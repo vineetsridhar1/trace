@@ -7,6 +7,7 @@ import {
   getModelProviderForModel,
   getModelProviderGroupsForTool,
   getModelsForTool,
+  getModelSelectionOptionsForTool,
 } from "./modelOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
@@ -23,6 +24,8 @@ import { ModelLayer } from "./picker/ModelLayer";
 interface ToolModelPickerProps {
   tool: ToolOptionValue;
   model?: string | null;
+  modelSelectionMode?: string | null;
+  autoSelectedModel?: string | null;
   disabled?: boolean;
   onToolChange: (tool: ToolOptionValue) => Promise<void> | void;
   onModelChange: (model: string) => Promise<void> | void;
@@ -31,6 +34,8 @@ interface ToolModelPickerProps {
 export function ToolModelPicker({
   tool,
   model,
+  modelSelectionMode,
+  autoSelectedModel,
   disabled,
   onToolChange,
   onModelChange,
@@ -42,13 +47,27 @@ export function ToolModelPicker({
   const [pending, setPending] = useState(false);
 
   const activeModel =
-    pickerTool === tool ? (model ?? getDefaultModel(pickerTool)) : getDefaultModel(pickerTool);
+    pickerTool === tool
+      ? modelSelectionMode === "auto"
+        ? "auto"
+        : (model ?? getDefaultModel(pickerTool))
+      : getDefaultModel(pickerTool);
   const providerGroups = getModelProviderGroupsForTool(pickerTool);
   const activeProvider =
     providerGroups.find((group) => group.value === pickerProvider) ??
     getModelProviderForModel(pickerTool, activeModel) ??
     providerGroups[0];
-  const modelOptions = activeProvider?.models ?? getModelsForTool(pickerTool);
+  const modelOptions = activeProvider
+    ? [{ value: "auto", label: "Auto" }, ...activeProvider.models]
+    : getModelSelectionOptionsForTool(pickerTool);
+  const modelLabel =
+    modelSelectionMode === "auto"
+      ? autoSelectedModel
+        ? `Auto: ${getModelLabel(autoSelectedModel)}`
+        : "Auto selecting..."
+      : model
+        ? getModelLabel(model)
+        : "Model";
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -121,7 +140,7 @@ export function ToolModelPicker({
         {getModelsForTool(tool).length > 0 ? (
           <>
             <span className="text-muted-foreground/60">/</span>
-            <span className="truncate">{model ? getModelLabel(model) : "Model"}</span>
+            <span className="truncate">{modelLabel}</span>
           </>
         ) : null}
         <ChevronDown className="size-3.5 shrink-0" />

@@ -1,17 +1,13 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import {
-  UPDATE_SESSION_DEFAULTS_MUTATION,
-  useAuthStore,
-  type AuthState,
-} from "@trace/client-core";
+import { UPDATE_SESSION_DEFAULTS_MUTATION, useAuthStore, type AuthState } from "@trace/client-core";
 import type { CodingTool, User } from "@trace/gql";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,
-  getModelsForTool,
+  getModelSelectionOptionsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
 } from "@trace/shared";
@@ -83,7 +79,10 @@ export function SessionDefaultsSheetContent() {
   const effectiveTool = selectedTool ?? "claude_code";
   const [pending, setPending] = useState(false);
 
-  const modelOptions = useMemo(() => getModelsForTool(effectiveTool), [effectiveTool]);
+  const modelOptions = useMemo(
+    () => getModelSelectionOptionsForTool(effectiveTool),
+    [effectiveTool],
+  );
   const reasoningEffortOptions = useMemo(
     () => getReasoningEffortsForTool(effectiveTool),
     [effectiveTool],
@@ -212,7 +211,11 @@ export function formatSessionDefaultsSummary(user: {
   const toolLabel =
     TOOL_OPTIONS.find((option) => option.value === user.defaultSessionTool)?.label ??
     user.defaultSessionTool;
-  const modelLabel = user.defaultSessionModel ? getModelLabel(user.defaultSessionModel) : "Model";
+  const modelLabel = user.defaultSessionModel
+    ? user.defaultSessionModel === "auto"
+      ? "Auto"
+      : getModelLabel(user.defaultSessionModel)
+    : "Model";
   const effortLabel = user.defaultSessionReasoningEffort
     ? getReasoningEffortLabel(user.defaultSessionReasoningEffort)
     : "Effort";

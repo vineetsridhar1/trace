@@ -141,6 +141,8 @@ const SIDEBAR_SESSION_GROUPS_QUERY = gql`
         sessionStatus
         tool
         model
+        modelSelectionMode
+        autoSelectedModel
         reasoningEffort
         hosting
         branch

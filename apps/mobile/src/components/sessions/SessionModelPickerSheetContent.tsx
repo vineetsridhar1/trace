@@ -47,6 +47,14 @@ export function SessionModelPickerSheetContent({
 
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
+  const modelSelectionMode = useEntityField("sessions", sessionId, "modelSelectionMode") as
+    | string
+    | null
+    | undefined;
+  const autoSelectedModel = useEntityField("sessions", sessionId, "autoSelectedModel") as
+    | string
+    | null
+    | undefined;
   const reasoningEffort = useEntityField("sessions", sessionId, "reasoningEffort") as
     | string
     | null
@@ -94,6 +102,8 @@ export function SessionModelPickerSheetContent({
     isNotStarted: agentStatus === "not_started",
     isOptimistic,
     model,
+    modelSelectionMode,
+    autoSelectedModel,
     reasoningEffort,
     sessionId,
     tool,

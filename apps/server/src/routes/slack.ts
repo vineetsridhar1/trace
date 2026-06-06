@@ -9,6 +9,7 @@ import {
   getModelsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
+  isAutoModelSelection,
   isSupportedModel,
   isSupportedReasoningEffort,
 } from "@trace/shared";
@@ -17,7 +18,11 @@ import { encryptSecret } from "../lib/encryption.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
 import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
 import { verifySlackSignature } from "../lib/slack/signature.js";
-import { getMissingSlackConfig, isSlackConfigured, slackSessionHosting } from "../lib/slack/config.js";
+import {
+  getMissingSlackConfig,
+  isSlackConfigured,
+  slackSessionHosting,
+} from "../lib/slack/config.js";
 import { getSlackBotToken, getSlackClient, invalidateSlackClient } from "../lib/slack/client.js";
 import {
   postLinkPrompt,
@@ -26,10 +31,7 @@ import {
   verifySlackLinkState,
 } from "../lib/slack/user-resolver.js";
 import { buildTraceSessionLink, slackEventBridge } from "../lib/slack/event-bridge.js";
-import {
-  startSlackSession,
-  type SlackSessionSettings,
-} from "../lib/slack/session-orchestrator.js";
+import { startSlackSession, type SlackSessionSettings } from "../lib/slack/session-orchestrator.js";
 import { sessionService } from "../services/session.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { storage } from "../lib/storage/index.js";
@@ -133,11 +135,9 @@ function verifyInstallState(token: string): InstallStatePayload | null {
 }
 
 function signBindState(payload: Omit<BindStatePayload, "tokenType">): string {
-  return jwt.sign(
-    { ...payload, tokenType: "slack_bind" } satisfies BindStatePayload,
-    JWT_SECRET,
-    { expiresIn: BIND_STATE_TTL_SECONDS },
-  );
+  return jwt.sign({ ...payload, tokenType: "slack_bind" } satisfies BindStatePayload, JWT_SECRET, {
+    expiresIn: BIND_STATE_TTL_SECONDS,
+  });
 }
 
 function verifyBindState(token: string): BindStatePayload | null {
@@ -168,12 +168,14 @@ async function readAuthenticatedUserId(req: Request): Promise<string | null> {
 
 function renderSlackNotConfigured(res: Response): void {
   const missing = getMissingSlackConfig();
-  res.status(503).send(
-    renderHtml(
-      "Slack not configured",
-      `<h1>Slack not configured</h1><p>Set ${escapeHtml(missing.join(", "))} to enable Slack.</p>`,
-    ),
-  );
+  res
+    .status(503)
+    .send(
+      renderHtml(
+        "Slack not configured",
+        `<h1>Slack not configured</h1><p>Set ${escapeHtml(missing.join(", "))} to enable Slack.</p>`,
+      ),
+    );
 }
 
 function isSupportedTool(value: string): value is CodingTool {
@@ -242,7 +244,7 @@ function validateSlackSessionConfig(input: {
     ? normalizeReasoningAlias(input.reasoningEffort)
     : null;
 
-  if (model && !isSupportedModel(input.tool, model)) {
+  if (model && !isAutoModelSelection(model) && !isSupportedModel(input.tool, model)) {
     throw new Error(`Unsupported model "${model}" for ${input.tool}`);
   }
   if (reasoningEffort && !isSupportedReasoningEffort(input.tool, reasoningEffort)) {
@@ -291,13 +293,27 @@ router.get("/install", async (req: Request, res: Response) => {
 
   const orgQuery = typeof req.query.org === "string" ? req.query.org : "";
   if (!orgQuery) {
-    res.status(400).send(renderHtml("Slack install", "<h1>Missing org</h1><p>Pass <code>?org=&lt;organizationId&gt;</code>.</p>"));
+    res
+      .status(400)
+      .send(
+        renderHtml(
+          "Slack install",
+          "<h1>Missing org</h1><p>Pass <code>?org=&lt;organizationId&gt;</code>.</p>",
+        ),
+      );
     return;
   }
 
   const userId = await readAuthenticatedUserId(req);
   if (!userId) {
-    res.status(401).send(renderHtml("Slack install", "<h1>Not signed in</h1><p>Sign in to Trace, then re-open this link.</p>"));
+    res
+      .status(401)
+      .send(
+        renderHtml(
+          "Slack install",
+          "<h1>Not signed in</h1><p>Sign in to Trace, then re-open this link.</p>",
+        ),
+      );
     return;
   }
 
@@ -306,11 +322,25 @@ router.get("/install", async (req: Request, res: Response) => {
     select: { role: true },
   });
   if (!membership) {
-    res.status(403).send(renderHtml("Slack install", "<h1>Not a member</h1><p>You aren't a member of this organization.</p>"));
+    res
+      .status(403)
+      .send(
+        renderHtml(
+          "Slack install",
+          "<h1>Not a member</h1><p>You aren't a member of this organization.</p>",
+        ),
+      );
     return;
   }
   if (membership.role !== "admin") {
-    res.status(403).send(renderHtml("Slack install", "<h1>Admin required</h1><p>Only admins can install Slack apps.</p>"));
+    res
+      .status(403)
+      .send(
+        renderHtml(
+          "Slack install",
+          "<h1>Admin required</h1><p>Only admins can install Slack apps.</p>",
+        ),
+      );
     return;
   }
 
@@ -335,12 +365,21 @@ router.get("/oauth/callback", async (req: Request, res: Response) => {
   const code = typeof req.query.code === "string" ? req.query.code : "";
   const stateRaw = typeof req.query.state === "string" ? req.query.state : "";
   if (!code || !stateRaw) {
-    res.status(400).send(renderHtml("Slack install", "<h1>Invalid callback</h1><p>Missing code or state.</p>"));
+    res
+      .status(400)
+      .send(renderHtml("Slack install", "<h1>Invalid callback</h1><p>Missing code or state.</p>"));
     return;
   }
   const state = verifyInstallState(stateRaw);
   if (!state) {
-    res.status(400).send(renderHtml("Slack install", "<h1>Invalid state</h1><p>The install link expired or is invalid. Restart from /slack/install.</p>"));
+    res
+      .status(400)
+      .send(
+        renderHtml(
+          "Slack install",
+          "<h1>Invalid state</h1><p>The install link expired or is invalid. Restart from /slack/install.</p>",
+        ),
+      );
     return;
   }
   const membership = await prisma.orgMember.findUnique({
@@ -353,7 +392,14 @@ router.get("/oauth/callback", async (req: Request, res: Response) => {
     select: { role: true },
   });
   if (!membership || membership.role !== "admin") {
-    res.status(403).send(renderHtml("Slack install", "<h1>Admin required</h1><p>Only current org admins can complete Slack installs.</p>"));
+    res
+      .status(403)
+      .send(
+        renderHtml(
+          "Slack install",
+          "<h1>Admin required</h1><p>Only current org admins can complete Slack installs.</p>",
+        ),
+      );
     return;
   }
 
@@ -361,8 +407,21 @@ router.get("/oauth/callback", async (req: Request, res: Response) => {
     console.error("[slack] oauth exchange failed:", (err as Error).message);
     return null;
   });
-  if (!oauthResult || !oauthResult.ok || !oauthResult.access_token || !oauthResult.team?.id || !oauthResult.bot_user_id) {
-    res.status(400).send(renderHtml("Slack install", `<h1>OAuth failed</h1><p>${escapeHtml(oauthResult?.error ?? "Could not complete Slack install.")}</p>`));
+  if (
+    !oauthResult ||
+    !oauthResult.ok ||
+    !oauthResult.access_token ||
+    !oauthResult.team?.id ||
+    !oauthResult.bot_user_id
+  ) {
+    res
+      .status(400)
+      .send(
+        renderHtml(
+          "Slack install",
+          `<h1>OAuth failed</h1><p>${escapeHtml(oauthResult?.error ?? "Could not complete Slack install.")}</p>`,
+        ),
+      );
     return;
   }
 
@@ -390,12 +449,14 @@ router.get("/oauth/callback", async (req: Request, res: Response) => {
   });
   invalidateSlackClient(oauthResult.team.id);
 
-  res.status(200).send(
-    renderHtml(
-      "Slack install",
-      `<h1>Installed</h1><p>Trace is connected to <b>${escapeHtml(oauthResult.team.name ?? oauthResult.team.id)}</b>.</p><p>Add Trace to a Slack channel, then bind that Slack channel to a Trace channel.</p>`,
-    ),
-  );
+  res
+    .status(200)
+    .send(
+      renderHtml(
+        "Slack install",
+        `<h1>Installed</h1><p>Trace is connected to <b>${escapeHtml(oauthResult.team.name ?? oauthResult.team.id)}</b>.</p><p>Add Trace to a Slack channel, then bind that Slack channel to a Trace channel.</p>`,
+      ),
+    );
 });
 
 router.get("/link", async (req: Request, res: Response) => {
@@ -410,7 +471,14 @@ router.get("/link", async (req: Request, res: Response) => {
 
   const state = verifySlackLinkState(stateRaw);
   if (!state || state.slackTeamId !== team || state.slackUserId !== user) {
-    res.status(400).send(renderHtml("Link Slack", "<h1>Invalid link</h1><p>This link is invalid or has expired. Mention <code>@trace</code> in Slack to get a fresh one.</p>"));
+    res
+      .status(400)
+      .send(
+        renderHtml(
+          "Link Slack",
+          "<h1>Invalid link</h1><p>This link is invalid or has expired. Mention <code>@trace</code> in Slack to get a fresh one.</p>",
+        ),
+      );
     return;
   }
 
@@ -418,12 +486,14 @@ router.get("/link", async (req: Request, res: Response) => {
   if (!userId) {
     const webUrl = process.env.TRACE_WEB_URL?.replace(/\/$/, "") ?? "";
     const target = `${webUrl}/slack/link?team=${encodeURIComponent(team)}&user=${encodeURIComponent(user)}&state=${encodeURIComponent(stateRaw)}`;
-    res.status(401).send(
-      renderHtml(
-        "Link Slack",
-        `<h1>Sign in to Trace</h1><p>Sign in, then return to this page.</p><p><a class="button" href="${escapeHtml(webUrl || "/")}">Open Trace</a></p><p style="font-size:12px;color:#666">Return URL: <code>${escapeHtml(target)}</code></p>`,
-      ),
-    );
+    res
+      .status(401)
+      .send(
+        renderHtml(
+          "Link Slack",
+          `<h1>Sign in to Trace</h1><p>Sign in, then return to this page.</p><p><a class="button" href="${escapeHtml(webUrl || "/")}">Open Trace</a></p><p style="font-size:12px;color:#666">Return URL: <code>${escapeHtml(target)}</code></p>`,
+        ),
+      );
     return;
   }
 
@@ -433,12 +503,14 @@ router.get("/link", async (req: Request, res: Response) => {
   });
   const teamName = install?.slackTeamName ?? team;
 
-  res.status(200).send(
-    renderHtml(
-      "Link Slack",
-      `<h1>Link Slack account</h1><p>Link your Trace account to <b>${escapeHtml(teamName)}</b>. Session settings are chosen when you start a session from Slack.</p><form method="POST" action="/slack/link/complete"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}"><button type="submit">Link account</button></form>`,
-    ),
-  );
+  res
+    .status(200)
+    .send(
+      renderHtml(
+        "Link Slack",
+        `<h1>Link Slack account</h1><p>Link your Trace account to <b>${escapeHtml(teamName)}</b>. Session settings are chosen when you start a session from Slack.</p><form method="POST" action="/slack/link/complete"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="user" value="${escapeHtml(user)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}"><button type="submit">Link account</button></form>`,
+      ),
+    );
 });
 
 router.post(
@@ -457,13 +529,22 @@ router.post(
 
     const state = verifySlackLinkState(stateRaw);
     if (!state || state.slackTeamId !== team || state.slackUserId !== user) {
-      res.status(400).send(renderHtml("Link Slack", "<h1>Invalid link</h1><p>This link is invalid or has expired.</p>"));
+      res
+        .status(400)
+        .send(
+          renderHtml(
+            "Link Slack",
+            "<h1>Invalid link</h1><p>This link is invalid or has expired.</p>",
+          ),
+        );
       return;
     }
 
     const userId = await readAuthenticatedUserId(req);
     if (!userId) {
-      res.status(401).send(renderHtml("Link Slack", "<h1>Sign in</h1><p>Sign in to Trace and try again.</p>"));
+      res
+        .status(401)
+        .send(renderHtml("Link Slack", "<h1>Sign in</h1><p>Sign in to Trace and try again.</p>"));
       return;
     }
 
@@ -491,12 +572,14 @@ router.post(
         });
     }
 
-    res.status(200).send(
-      renderHtml(
-        "Link Slack",
-        "<h1>Linked</h1><p>Your Trace account is now linked to Slack. You can close this tab.</p>",
-      ),
-    );
+    res
+      .status(200)
+      .send(
+        renderHtml(
+          "Link Slack",
+          "<h1>Linked</h1><p>Your Trace account is now linked to Slack. You can close this tab.</p>",
+        ),
+      );
   },
 );
 
@@ -506,27 +589,35 @@ router.get("/preferences", async (req: Request, res: Response) => {
     return;
   }
 
-  res.status(200).send(
-    renderHtml(
-      "Slack settings",
-      "<h1>No Slack defaults</h1><p>Choose tool, model, thinking, and hosting when you start each Trace session from Slack.</p>",
-    ),
-  );
+  res
+    .status(200)
+    .send(
+      renderHtml(
+        "Slack settings",
+        "<h1>No Slack defaults</h1><p>Choose tool, model, thinking, and hosting when you start each Trace session from Slack.</p>",
+      ),
+    );
 });
 
-router.post("/preferences", express.urlencoded({ extended: false }), async (req: Request, res: Response) => {
-  if (!isSlackConfigured()) {
-    renderSlackNotConfigured(res);
-    return;
-  }
+router.post(
+  "/preferences",
+  express.urlencoded({ extended: false }),
+  async (req: Request, res: Response) => {
+    if (!isSlackConfigured()) {
+      renderSlackNotConfigured(res);
+      return;
+    }
 
-  res.status(410).send(
-    renderHtml(
-      "Slack settings",
-      "<h1>No Slack defaults</h1><p>Slack session settings are chosen when each session starts.</p>",
-    ),
-  );
-});
+    res
+      .status(410)
+      .send(
+        renderHtml(
+          "Slack settings",
+          "<h1>No Slack defaults</h1><p>Slack session settings are chosen when each session starts.</p>",
+        ),
+      );
+  },
+);
 
 router.get("/bind-channel", async (req: Request, res: Response) => {
   if (!isSlackConfigured()) {
@@ -539,14 +630,28 @@ router.get("/bind-channel", async (req: Request, res: Response) => {
   const stateRaw = typeof req.query.state === "string" ? req.query.state : "";
   const state = verifyBindState(stateRaw);
   if (!state || state.slackTeamId !== team || state.slackChannelId !== channel) {
-    res.status(400).send(renderHtml("Bind Slack channel", "<h1>Invalid link</h1><p>This binding link is invalid or expired.</p>"));
+    res
+      .status(400)
+      .send(
+        renderHtml(
+          "Bind Slack channel",
+          "<h1>Invalid link</h1><p>This binding link is invalid or expired.</p>",
+        ),
+      );
     return;
   }
 
   const userId = await readAuthenticatedUserId(req);
   if (!userId) {
     const webUrl = process.env.TRACE_WEB_URL?.replace(/\/$/, "") ?? "/";
-    res.status(401).send(renderHtml("Bind Slack channel", `<h1>Sign in to Trace</h1><p>Sign in, then return to this page.</p><p><a class="button" href="${escapeHtml(webUrl)}">Open Trace</a></p>`));
+    res
+      .status(401)
+      .send(
+        renderHtml(
+          "Bind Slack channel",
+          `<h1>Sign in to Trace</h1><p>Sign in, then return to this page.</p><p><a class="button" href="${escapeHtml(webUrl)}">Open Trace</a></p>`,
+        ),
+      );
     return;
   }
 
@@ -555,7 +660,14 @@ router.get("/bind-channel", async (req: Request, res: Response) => {
     select: { organizationId: true, slackTeamName: true },
   });
   if (!install) {
-    res.status(404).send(renderHtml("Bind Slack channel", "<h1>Slack not installed</h1><p>Install Slack for this Trace org first.</p>"));
+    res
+      .status(404)
+      .send(
+        renderHtml(
+          "Bind Slack channel",
+          "<h1>Slack not installed</h1><p>Install Slack for this Trace org first.</p>",
+        ),
+      );
     return;
   }
 
@@ -564,7 +676,14 @@ router.get("/bind-channel", async (req: Request, res: Response) => {
     select: { userId: true },
   });
   if (!membership) {
-    res.status(403).send(renderHtml("Bind Slack channel", "<h1>Not a member</h1><p>Your Trace account is not in this workspace's org.</p>"));
+    res
+      .status(403)
+      .send(
+        renderHtml(
+          "Bind Slack channel",
+          "<h1>Not a member</h1><p>Your Trace account is not in this workspace's org.</p>",
+        ),
+      );
     return;
   }
   if (state.slackUserId) {
@@ -584,7 +703,14 @@ router.get("/bind-channel", async (req: Request, res: Response) => {
     take: 100,
   });
   if (channels.length === 0) {
-    res.status(403).send(renderHtml("Bind Slack channel", "<h1>No Trace channels</h1><p>Join or create a Trace channel first.</p>"));
+    res
+      .status(403)
+      .send(
+        renderHtml(
+          "Bind Slack channel",
+          "<h1>No Trace channels</h1><p>Join or create a Trace channel first.</p>",
+        ),
+      );
     return;
   }
 
@@ -594,68 +720,102 @@ router.get("/bind-channel", async (req: Request, res: Response) => {
     label: `${traceChannel.name} (${traceChannel.type})`,
   }));
 
-  res.status(200).send(
-    renderHtml(
-      "Bind Slack channel",
-      `<h1>Bind Slack channel</h1><p>Choose the Trace channel that sessions from this Slack channel should use.</p><form method="POST" action="/slack/bind-channel"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="channel" value="${escapeHtml(channel)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("traceChannelId", "Trace channel", existing?.traceChannelId ?? channels[0]!.id, options)}<button type="submit">Bind channel</button></form>`,
-    ),
-  );
+  res
+    .status(200)
+    .send(
+      renderHtml(
+        "Bind Slack channel",
+        `<h1>Bind Slack channel</h1><p>Choose the Trace channel that sessions from this Slack channel should use.</p><form method="POST" action="/slack/bind-channel"><input type="hidden" name="team" value="${escapeHtml(team)}"><input type="hidden" name="channel" value="${escapeHtml(channel)}"><input type="hidden" name="state" value="${escapeHtml(stateRaw)}">${formSelect("traceChannelId", "Trace channel", existing?.traceChannelId ?? channels[0]!.id, options)}<button type="submit">Bind channel</button></form>`,
+      ),
+    );
 });
 
-router.post("/bind-channel", express.urlencoded({ extended: false }), async (req: Request, res: Response) => {
-  if (!isSlackConfigured()) {
-    renderSlackNotConfigured(res);
-    return;
-  }
-
-  const body = req.body as Record<string, unknown>;
-  const team = typeof body.team === "string" ? body.team : "";
-  const channel = typeof body.channel === "string" ? body.channel : "";
-  const stateRaw = typeof body.state === "string" ? body.state : "";
-  const traceChannelId = typeof body.traceChannelId === "string" ? body.traceChannelId : "";
-  const state = verifyBindState(stateRaw);
-  if (!state || state.slackTeamId !== team || state.slackChannelId !== channel) {
-    res.status(400).send(renderHtml("Bind Slack channel", "<h1>Invalid link</h1><p>This binding link is invalid or expired.</p>"));
-    return;
-  }
-
-  const userId = await readAuthenticatedUserId(req);
-  if (!userId) {
-    res.status(401).send(renderHtml("Bind Slack channel", "<h1>Sign in</h1><p>Sign in to Trace and try again.</p>"));
-    return;
-  }
-  if (state.slackUserId) {
-    const account = await resolveSlackAccount(team, state.slackUserId);
-    if (!account || account.userId !== userId) {
-      res.status(403).send(renderBindRequiresLinkedAccount(team, state.slackUserId));
+router.post(
+  "/bind-channel",
+  express.urlencoded({ extended: false }),
+  async (req: Request, res: Response) => {
+    if (!isSlackConfigured()) {
+      renderSlackNotConfigured(res);
       return;
     }
-  }
 
-  try {
-    await bindSlackChannel({
-      slackTeamId: team,
-      slackChannelId: channel,
-      traceChannelId,
-      boundById: userId,
-    });
-  } catch (err: unknown) {
-    res.status(400).send(renderHtml("Bind Slack channel", `<h1>Could not bind channel</h1><p>${escapeHtml(errorMessage(err))}</p>`));
-    return;
-  }
+    const body = req.body as Record<string, unknown>;
+    const team = typeof body.team === "string" ? body.team : "";
+    const channel = typeof body.channel === "string" ? body.channel : "";
+    const stateRaw = typeof body.state === "string" ? body.state : "";
+    const traceChannelId = typeof body.traceChannelId === "string" ? body.traceChannelId : "";
+    const state = verifyBindState(stateRaw);
+    if (!state || state.slackTeamId !== team || state.slackChannelId !== channel) {
+      res
+        .status(400)
+        .send(
+          renderHtml(
+            "Bind Slack channel",
+            "<h1>Invalid link</h1><p>This binding link is invalid or expired.</p>",
+          ),
+        );
+      return;
+    }
 
-  const client = await getSlackClient(team);
-  if (client) {
-    await client.chat
-      .postMessage({
-        channel,
-        text: "This Slack channel is now bound to a Trace channel.",
-      })
-      .catch(() => {});
-  }
+    const userId = await readAuthenticatedUserId(req);
+    if (!userId) {
+      res
+        .status(401)
+        .send(
+          renderHtml(
+            "Bind Slack channel",
+            "<h1>Sign in</h1><p>Sign in to Trace and try again.</p>",
+          ),
+        );
+      return;
+    }
+    if (state.slackUserId) {
+      const account = await resolveSlackAccount(team, state.slackUserId);
+      if (!account || account.userId !== userId) {
+        res.status(403).send(renderBindRequiresLinkedAccount(team, state.slackUserId));
+        return;
+      }
+    }
 
-  res.status(200).send(renderHtml("Bind Slack channel", "<h1>Bound</h1><p>This Slack channel is now bound to Trace.</p>"));
-});
+    try {
+      await bindSlackChannel({
+        slackTeamId: team,
+        slackChannelId: channel,
+        traceChannelId,
+        boundById: userId,
+      });
+    } catch (err: unknown) {
+      res
+        .status(400)
+        .send(
+          renderHtml(
+            "Bind Slack channel",
+            `<h1>Could not bind channel</h1><p>${escapeHtml(errorMessage(err))}</p>`,
+          ),
+        );
+      return;
+    }
+
+    const client = await getSlackClient(team);
+    if (client) {
+      await client.chat
+        .postMessage({
+          channel,
+          text: "This Slack channel is now bound to a Trace channel.",
+        })
+        .catch(() => {});
+    }
+
+    res
+      .status(200)
+      .send(
+        renderHtml(
+          "Bind Slack channel",
+          "<h1>Bound</h1><p>This Slack channel is now bound to Trace.</p>",
+        ),
+      );
+  },
+);
 
 router.get("/settings", async (req: Request, res: Response) => {
   const organizationId = typeof req.query.org === "string" ? req.query.org : "";
@@ -816,7 +976,10 @@ type SlackInteractionPayload = {
     callback_id?: string;
     private_metadata?: string;
     state?: {
-      values?: Record<string, Record<string, { value?: string; selected_option?: { value?: string } }>>;
+      values?: Record<
+        string,
+        Record<string, { value?: string; selected_option?: { value?: string } }>
+      >;
     };
   };
 };
@@ -1011,7 +1174,12 @@ function parseSlackPrompt(text: string): ParsedSlackPrompt {
       if (value) result.model = normalizeModelAlias(value);
       continue;
     }
-    if (token === "--think" || token === "--thinking" || token.startsWith("--think=") || token.startsWith("--thinking=")) {
+    if (
+      token === "--think" ||
+      token === "--thinking" ||
+      token.startsWith("--think=") ||
+      token.startsWith("--thinking=")
+    ) {
       const value = readValue();
       if (value) result.reasoningEffort = normalizeReasoningAlias(value);
       continue;
@@ -1136,16 +1304,12 @@ async function loadSlackThreadContext(input: {
   });
 }
 
-function promptWithSlackThreadContext(input: {
-  prompt: string;
-  threadContext: string;
-}): string {
+function promptWithSlackThreadContext(input: { prompt: string; threadContext: string }): string {
   const context = input.threadContext.trim();
   if (!context) return input.prompt;
 
   const request =
-    input.prompt.trim() ||
-    "Use the Slack thread context above to investigate and fix the issue.";
+    input.prompt.trim() || "Use the Slack thread context above to investigate and fix the issue.";
   return [
     "Slack thread context before this @trace mention:",
     context,
@@ -1188,7 +1352,9 @@ async function bindSlackChannel(input: {
   if (!install) throw new Error("Slack is not installed for this workspace");
 
   const membership = await prisma.orgMember.findUnique({
-    where: { userId_organizationId: { userId: input.boundById, organizationId: install.organizationId } },
+    where: {
+      userId_organizationId: { userId: input.boundById, organizationId: install.organizationId },
+    },
     select: { role: true },
   });
   if (!membership) throw new Error("Your Trace account is not in this workspace's org");
@@ -1498,7 +1664,9 @@ async function postBindPrompt(input: {
       text,
       blocks,
     })
-    .catch((err: unknown) => console.warn("[slack] failed to post bind prompt:", errorMessage(err)));
+    .catch((err: unknown) =>
+      console.warn("[slack] failed to post bind prompt:", errorMessage(err)),
+    );
 }
 
 async function postSessionAccessRequestPrompt(input: {
@@ -1640,7 +1808,8 @@ async function postDraftUnavailableOrOwnerFeedback(input: {
   const text =
     draft && draft.slackUserId !== input.slackUserId
       ? "Only the person who created this Trace start prompt can use this button."
-      : input.unavailableText ?? "This Trace start prompt is no longer available. Mention `@trace` again.";
+      : (input.unavailableText ??
+        "This Trace start prompt is no longer available. Mention `@trace` again.");
   await postDraftActionFeedback({
     slackTeamId: input.slackTeamId,
     slackChannelId: input.slackChannelId,
@@ -1739,6 +1908,7 @@ async function getTraceDefaults(userId: string): Promise<{
 }
 
 function resolveStoredModelForToolForSlack(tool: CodingTool, model?: string | null): string | null {
+  if (isAutoModelSelection(model)) return "auto";
   return model && isSupportedModel(tool, model) ? model : null;
 }
 
@@ -1878,8 +2048,9 @@ async function openAdvancedStartModal(input: {
   const initialReasoning =
     reasoningOptions.find((option) => option.value === selectedReasoning) ?? reasoningOptions[0];
   const initialChannel =
-    channelOptions.find((option) => option.value === (draft?.traceChannelId ?? binding.traceChannelId)) ??
-    channelOptions[0]!;
+    channelOptions.find(
+      (option) => option.value === (draft?.traceChannelId ?? binding.traceChannelId),
+    ) ?? channelOptions[0]!;
   const initialPrompt = draft?.prompt ?? "";
   const attachmentText =
     fileRefs.length > 0
@@ -1984,7 +2155,10 @@ async function openAdvancedStartModal(input: {
               type: "static_select",
               action_id: "value",
               initial_option: {
-                text: { type: "plain_text", text: slackSessionHosting() === "local" ? "Local" : "Cloud" },
+                text: {
+                  type: "plain_text",
+                  text: slackSessionHosting() === "local" ? "Local" : "Cloud",
+                },
                 value: slackSessionHosting(),
               },
               options: slackSelectOptions([
@@ -2049,17 +2223,20 @@ function claimMentionEvent(teamId: string, channel: string, threadTs: string): b
   return true;
 }
 
-async function handleAppMention(input: {
-  teamId: string;
-  event: SlackEventBody;
-}): Promise<void> {
+async function handleAppMention(input: { teamId: string; event: SlackEventBody }): Promise<void> {
   const { teamId, event } = input;
   const slackUserId = event.user;
   const channel = event.channel;
   const ts = event.ts;
   const threadTs = event.thread_ts ?? event.ts;
   if (!slackUserId || !channel || !ts || !threadTs) {
-    console.warn("[slack] app_mention missing required fields", { teamId, slackUserId, channel, ts, threadTs });
+    console.warn("[slack] app_mention missing required fields", {
+      teamId,
+      slackUserId,
+      channel,
+      ts,
+      threadTs,
+    });
     return;
   }
   if (!claimMentionEvent(teamId, channel, threadTs)) {
@@ -2109,7 +2286,12 @@ async function handleAppMention(input: {
 
   const account = await resolveSlackAccount(teamId, slackUserId);
   if (!account) {
-    console.info("[slack] prompting unlinked Slack user", { teamId, slackUserId, channel, threadTs });
+    console.info("[slack] prompting unlinked Slack user", {
+      teamId,
+      slackUserId,
+      channel,
+      threadTs,
+    });
     await postLinkPrompt({
       slackTeamId: teamId,
       slackUserId,
@@ -2121,7 +2303,9 @@ async function handleAppMention(input: {
   const traceUserId = account.userId;
 
   const membership = await prisma.orgMember.findUnique({
-    where: { userId_organizationId: { userId: traceUserId, organizationId: install.organizationId } },
+    where: {
+      userId_organizationId: { userId: traceUserId, organizationId: install.organizationId },
+    },
     select: { userId: true },
   });
   if (!membership) {
@@ -2227,7 +2411,8 @@ async function startSlackSessionFromDraft(input: {
   promptOverride?: string | null;
 }): Promise<void> {
   const draft = await loadSlackSessionDraft(input.draftId, input.slackUserId);
-  if (!draft) throw new Error("This Slack session draft is no longer available. Mention `@trace` again.");
+  if (!draft)
+    throw new Error("This Slack session draft is no longer available. Mention `@trace` again.");
 
   const account = await resolveSlackAccount(draft.slackTeamId, draft.slackUserId);
   if (!account) throw new Error("Link your Trace account before starting a session");
@@ -2253,7 +2438,8 @@ async function startSlackSessionFromDraft(input: {
 
   const fileRefs = parseSlackFileRefs(draft.fileRefs);
   const imageKeys = imageKeysFromFileRefs(fileRefs);
-  const prompt = (input.promptOverride ?? draft.prompt).trim() || fallbackPromptForImages(imageKeys);
+  const prompt =
+    (input.promptOverride ?? draft.prompt).trim() || fallbackPromptForImages(imageKeys);
   try {
     await startSlackSession({
       slackTeamId: draft.slackTeamId,
@@ -2292,9 +2478,13 @@ async function startSlackSessionFromDraft(input: {
   }
 }
 
-async function recommendedSettingsForDraft(draftId: string, slackUserId: string): Promise<SlackSessionSettings> {
+async function recommendedSettingsForDraft(
+  draftId: string,
+  slackUserId: string,
+): Promise<SlackSessionSettings> {
   const draft = await loadSlackSessionDraft(draftId, slackUserId);
-  if (!draft) throw new Error("This Slack session draft is no longer available. Mention `@trace` again.");
+  if (!draft)
+    throw new Error("This Slack session draft is no longer available. Mention `@trace` again.");
 
   const account = await resolveSlackAccount(draft.slackTeamId, draft.slackUserId);
   if (!account) throw new Error("Link your Trace account before starting a session");
@@ -2371,10 +2561,9 @@ async function recommendedSettingsSummaryForDraft(
         : null;
       lines.push(`- *Environment:* ${environment?.name ?? "Default cloud environment"}`);
     } else {
-      const runtime =
-        settings.runtimeInstanceId
-          ? sessionRouter.getRuntime(settings.runtimeInstanceId, draft.organizationId)
-          : null;
+      const runtime = settings.runtimeInstanceId
+        ? sessionRouter.getRuntime(settings.runtimeInstanceId, draft.organizationId)
+        : null;
       lines.push(`- *Bridge:* ${runtime?.label ?? "Auto-select local bridge"}`);
     }
 
@@ -2443,7 +2632,9 @@ async function handleThreadMessage(input: {
   }
 
   const membership = await prisma.orgMember.findUnique({
-    where: { userId_organizationId: { userId: traceUserId, organizationId: thread.organizationId } },
+    where: {
+      userId_organizationId: { userId: traceUserId, organizationId: thread.organizationId },
+    },
     select: { userId: true },
   });
   if (!membership) return;
@@ -2526,7 +2717,10 @@ async function handleThreadMessage(input: {
   }
 }
 
-async function handleBotJoinedChannel(input: { teamId: string; event: SlackEventBody }): Promise<void> {
+async function handleBotJoinedChannel(input: {
+  teamId: string;
+  event: SlackEventBody;
+}): Promise<void> {
   const { teamId, event } = input;
   const channel = event.channel;
   const user = event.user;
@@ -2570,7 +2764,9 @@ async function startSlackSessionFromModal(input: {
   if (!install) throw new Error("Slack is not installed for this workspace");
 
   const membership = await prisma.orgMember.findUnique({
-    where: { userId_organizationId: { userId: account.userId, organizationId: install.organizationId } },
+    where: {
+      userId_organizationId: { userId: account.userId, organizationId: install.organizationId },
+    },
     select: { userId: true },
   });
   if (!membership) throw new Error("Your Trace account is not in this workspace's org");
@@ -2758,10 +2954,12 @@ async function handleSessionAccessRequestAction(payload: SlackInteractionPayload
   const requesterLabel = requester?.name?.trim() || requester?.email?.trim() || "A Trace user";
   const traceLink = await buildTraceSessionLink(thread.sessionId);
 
-  const dm = await client.conversations.open({ users: ownerAccount.slackUserId }).catch((err: unknown) => {
-    console.warn("[slack] failed to open bridge owner DM:", errorMessage(err));
-    return null;
-  });
+  const dm = await client.conversations
+    .open({ users: ownerAccount.slackUserId })
+    .catch((err: unknown) => {
+      console.warn("[slack] failed to open bridge owner DM:", errorMessage(err));
+      return null;
+    });
   const dmChannel = dm?.channel?.id;
   if (!dmChannel) {
     await postSessionAccessRequestFeedback({
@@ -2886,10 +3084,7 @@ async function handleDirectMessage(input: {
   });
 }
 
-async function handleMessage(input: {
-  teamId: string;
-  event: SlackEventBody;
-}): Promise<void> {
+async function handleMessage(input: { teamId: string; event: SlackEventBody }): Promise<void> {
   const { teamId, event } = input;
   if (isBotMessageCandidate(event)) {
     await handleBotMessageCandidate({ teamId, event });
@@ -3016,7 +3211,12 @@ router.post(
     const subcommand = command.text?.trim().split(/\s+/)[0]?.toLowerCase() || "help";
 
     if (!teamId || !channelId || !userId) {
-      res.status(200).json({ response_type: "ephemeral", text: "Slack command payload was missing required fields." });
+      res
+        .status(200)
+        .json({
+          response_type: "ephemeral",
+          text: "Slack command payload was missing required fields.",
+        });
       return;
     }
 
@@ -3027,8 +3227,21 @@ router.post(
           response_type: "ephemeral",
           text: "Link your Trace account before starting a session.",
           blocks: [
-            { type: "section", text: { type: "mrkdwn", text: "Link your Trace account before starting a session." } },
-            { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Link account" }, url: buildAccountLinkUrl(teamId, userId), action_id: "link_account" }] },
+            {
+              type: "section",
+              text: { type: "mrkdwn", text: "Link your Trace account before starting a session." },
+            },
+            {
+              type: "actions",
+              elements: [
+                {
+                  type: "button",
+                  text: { type: "plain_text", text: "Link account" },
+                  url: buildAccountLinkUrl(teamId, userId),
+                  action_id: "link_account",
+                },
+              ],
+            },
           ],
         });
         return;
@@ -3039,8 +3252,24 @@ router.post(
           response_type: "ephemeral",
           text: "Bind this Slack channel to a Trace channel before starting sessions.",
           blocks: [
-            { type: "section", text: { type: "mrkdwn", text: "Bind this Slack channel to a Trace channel before starting sessions." } },
-            { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Bind channel" }, url: buildBindUrl(teamId, channelId, userId), action_id: "bind_channel" }] },
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: "Bind this Slack channel to a Trace channel before starting sessions.",
+              },
+            },
+            {
+              type: "actions",
+              elements: [
+                {
+                  type: "button",
+                  text: { type: "plain_text", text: "Bind channel" },
+                  url: buildBindUrl(teamId, channelId, userId),
+                  action_id: "bind_channel",
+                },
+              ],
+            },
           ],
         });
         return;
@@ -3068,8 +3297,21 @@ router.post(
         response_type: "ephemeral",
         text: "Bind this Slack channel to Trace.",
         blocks: [
-          { type: "section", text: { type: "mrkdwn", text: "Bind this Slack channel to a Trace channel." } },
-          { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Bind channel" }, url: buildBindUrl(teamId, channelId, userId), action_id: "bind_channel" }] },
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: "Bind this Slack channel to a Trace channel." },
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "Bind channel" },
+                url: buildBindUrl(teamId, channelId, userId),
+                action_id: "bind_channel",
+              },
+            ],
+          },
         ],
       });
       return;
@@ -3177,7 +3419,13 @@ router.post(
     if (payload.type === "block_actions" && actionId === "trace_configure_draft") {
       res.status(200).json({});
       const draftId = payload.actions?.[0]?.value;
-      if (draftId && payload.team?.id && payload.channel?.id && payload.user?.id && payload.trigger_id) {
+      if (
+        draftId &&
+        payload.team?.id &&
+        payload.channel?.id &&
+        payload.user?.id &&
+        payload.trigger_id
+      ) {
         void openAdvancedStartModal({
           slackTeamId: payload.team.id,
           slackChannelId: payload.channel.id,
@@ -3234,13 +3482,18 @@ router.post(
       return;
     }
 
-    if (payload.type === "view_submission" && payload.view?.callback_id === "trace_advanced_start") {
+    if (
+      payload.type === "view_submission" &&
+      payload.view?.callback_id === "trace_advanced_start"
+    ) {
       const prompt = getViewValue(payload, "prompt", "value")?.trim() ?? "";
       let metadata: AdvancedStartMetadata;
       try {
         metadata = JSON.parse(payload.view.private_metadata ?? "{}") as AdvancedStartMetadata;
       } catch {
-        res.status(200).json({ response_action: "errors", errors: { prompt: "Invalid session metadata." } });
+        res
+          .status(200)
+          .json({ response_action: "errors", errors: { prompt: "Invalid session metadata." } });
         return;
       }
       if (payload.user?.id !== metadata.slackUserId || payload.team?.id !== metadata.slackTeamId) {

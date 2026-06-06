@@ -6,7 +6,7 @@ import {
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,
-  getModelsForTool,
+  getModelSelectionOptionsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
 } from "@trace/shared";
@@ -21,6 +21,8 @@ interface UseSessionComposerConfigOptions {
   isNotStarted: boolean;
   isOptimistic: unknown;
   model: string | null | undefined;
+  modelSelectionMode?: string | null | undefined;
+  autoSelectedModel?: string | null | undefined;
   reasoningEffort?: string | null | undefined;
   sessionId: string;
   tool: string | null | undefined;
@@ -33,6 +35,8 @@ export function useSessionComposerConfig({
   isNotStarted,
   isOptimistic,
   model,
+  modelSelectionMode,
+  autoSelectedModel,
   reasoningEffort,
   sessionId,
   tool,
@@ -45,6 +49,8 @@ export function useSessionComposerConfig({
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         tool: newTool,
         model: newDefault,
+        modelSelectionMode: "manual",
+        autoSelectedModel: null,
         reasoningEffort: newDefaultReasoningEffort,
       });
       try {
@@ -70,8 +76,12 @@ export function useSessionComposerConfig({
 
   const handleModelChange = useCallback(
     async (newModel: string) => {
-      if (model === newModel) return true;
-      const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
+      if (model === newModel && modelSelectionMode !== "auto") return true;
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        ...(newModel === "auto" ? {} : { model: newModel }),
+        modelSelectionMode: newModel === "auto" ? "auto" : "manual",
+        autoSelectedModel: null,
+      });
       try {
         const result = await getClient()
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
@@ -85,7 +95,7 @@ export function useSessionComposerConfig({
         return false;
       }
     },
-    [model, sessionId],
+    [model, modelSelectionMode, sessionId],
   );
 
   const handleReasoningEffortChange = useCallback(
@@ -115,8 +125,15 @@ export function useSessionComposerConfig({
 
   const canChangeBridge = isNotStarted && !isOptimistic;
 
-  const modelLabel = model ? getModelLabel(model) : "Model";
-  const modelOptions = useMemo(() => getModelsForTool(currentTool), [currentTool]);
+  const modelLabel =
+    modelSelectionMode === "auto"
+      ? autoSelectedModel
+        ? `Auto: ${getModelLabel(autoSelectedModel)}`
+        : "Auto selecting..."
+      : model
+        ? getModelLabel(model)
+        : "Model";
+  const modelOptions = useMemo(() => getModelSelectionOptionsForTool(currentTool), [currentTool]);
   const reasoningEffortOptions = useMemo(
     () => getReasoningEffortsForTool(currentTool),
     [currentTool],
@@ -150,7 +167,7 @@ export function useSessionComposerConfig({
     handleReasoningEffortChange,
     handleToolChange,
     currentTool,
-    model,
+    model: modelSelectionMode === "auto" ? "auto" : model,
     reasoningEffort: effectiveReasoningEffort,
   };
 }

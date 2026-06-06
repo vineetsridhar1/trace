@@ -25,6 +25,8 @@ const SESSION_DETAIL_QUERY = gql`
       sessionStatus
       tool
       model
+      modelSelectionMode
+      autoSelectedModel
       reasoningEffort
       hosting
       branch

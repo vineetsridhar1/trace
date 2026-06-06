@@ -15,6 +15,9 @@ export interface ReasoningEffortOption {
   label: string;
 }
 
+export const AUTO_MODEL_VALUE = "auto";
+export const AUTO_MODEL_OPTION: ModelOption = { value: AUTO_MODEL_VALUE, label: "Auto" };
+
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { value: "claude-opus-4-8", label: "Opus 4.8" },
@@ -99,6 +102,18 @@ const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   pi: "openai/gpt-5.5",
 };
 
+const AUTO_ROUTER_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
+  claude_code: "claude-haiku-4-5",
+  codex: "gpt-5.1-codex-mini",
+  pi: "gpt-5.1-codex-mini",
+};
+
+const AUTO_FALLBACK_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
+  claude_code: "claude-haiku-4-5",
+  codex: "gpt-5.1-codex-mini",
+  pi: "openai/gpt-5.4",
+};
+
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "auto",
   codex: "medium",
@@ -121,6 +136,11 @@ export function getModelsForTool(tool: string): readonly ModelOption[] {
   return MODEL_OPTIONS_BY_TOOL[tool] ?? [];
 }
 
+export function getModelSelectionOptionsForTool(tool: string): readonly ModelOption[] {
+  const models = getModelsForTool(tool);
+  return models.length > 0 ? [AUTO_MODEL_OPTION, ...models] : models;
+}
+
 export function getModelProviderGroupsForTool(tool: string): readonly ModelProviderGroup[] {
   return tool === "pi" ? PI_MODEL_PROVIDER_GROUPS : [];
 }
@@ -137,6 +157,23 @@ export function getModelProviderForModel(
 
 export function getDefaultModel(tool: string): string | undefined {
   return DEFAULT_MODEL_BY_TOOL[tool];
+}
+
+export function getAutoRouterModelForTool(tool: string): string | undefined {
+  return AUTO_ROUTER_MODEL_BY_TOOL[tool];
+}
+
+export function getAutoFallbackModelForTool(tool: string): string | undefined {
+  const fallback = AUTO_FALLBACK_MODEL_BY_TOOL[tool] ?? getDefaultModel(tool);
+  return fallback && isSupportedModel(tool, fallback) ? fallback : getDefaultModel(tool);
+}
+
+export function getAutoEligibleModelsForTool(tool: string): readonly ModelOption[] {
+  return getModelsForTool(tool);
+}
+
+export function isAutoModelSelection(model: string | null | undefined): boolean {
+  return model?.trim() === AUTO_MODEL_VALUE;
 }
 
 export function getReasoningEffortsForTool(tool: string): readonly ReasoningEffortOption[] {

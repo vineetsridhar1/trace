@@ -101,7 +101,10 @@ export async function createAgentTab(
       .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
         input: {
           tool: sourceSession.tool as CodingTool,
-          model: sourceSession.model ?? undefined,
+          model:
+            sourceSession.modelSelectionMode === "auto"
+              ? "auto"
+              : (sourceSession.model ?? undefined),
           reasoningEffort: sourceSession.reasoningEffort ?? undefined,
           hosting: sourceSession.hosting,
           channelId,
@@ -175,7 +178,10 @@ export async function startPlanImplementationSession(
       .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
         input: {
           tool: sourceSession.tool as CodingTool,
-          model: sourceSession.model ?? undefined,
+          model:
+            sourceSession.modelSelectionMode === "auto"
+              ? "auto"
+              : (sourceSession.model ?? undefined),
           reasoningEffort: sourceSession.reasoningEffort ?? undefined,
           hosting: sourceSession.hosting,
           channelId,

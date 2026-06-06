@@ -409,6 +409,9 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "model_override_applied"
+  | "model_routing_completed"
+  | "model_routing_started"
   | "organization_created"
   | "queued_message_added"
   | "queued_message_removed"
@@ -1563,6 +1566,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  autoSelectedModel?: Maybe<Scalars["String"]["output"]>;
   branch?: Maybe<Scalars["String"]["output"]>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1575,6 +1579,7 @@ export type Session = {
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
+  modelSelectionMode: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   projects: Array<Project>;
@@ -3767,6 +3772,7 @@ export type SessionResolvers<
   ParentType extends ResolversParentTypes["Session"] = ResolversParentTypes["Session"],
 > = ResolversObject<{
   agentStatus?: Resolver<ResolversTypes["AgentStatus"], ParentType, ContextType>;
+  autoSelectedModel?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes["Channel"]>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes["SessionConnection"]>, ParentType, ContextType>;
@@ -3779,6 +3785,7 @@ export type SessionResolvers<
   lastMessageAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   lastUserMessageAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  modelSelectionMode?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes["Project"]>, ParentType, ContextType>;

@@ -6,8 +6,10 @@ import { randomUUID } from "crypto";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
+  getModelLabel,
   hasQuestionBlock,
   hasPlanBlock,
+  isAutoModelSelection,
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
@@ -57,6 +59,7 @@ import {
 import { apiTokenService } from "./api-token.js";
 import { githubRepoService, parseGitHubRepo, type GitHubRepoRef } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
+import { modelRouterService, type ModelRouterDecision } from "./model-router.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -625,6 +628,8 @@ function serializeSession(session: {
   sessionStatus: SessionStatus;
   tool: string;
   model: string | null;
+  modelSelectionMode: string;
+  autoSelectedModel: string | null;
   reasoningEffort: string | null;
   hosting: string;
   createdBy: unknown;
@@ -649,6 +654,8 @@ function serializeSession(session: {
     sessionStatus: session.sessionStatus,
     tool: session.tool,
     model: session.model,
+    modelSelectionMode: session.modelSelectionMode,
+    autoSelectedModel: session.autoSelectedModel,
     reasoningEffort: session.reasoningEffort,
     hosting: session.hosting,
     createdBy: session.createdBy,
@@ -1091,6 +1098,12 @@ function validateModelForTool(tool: string, model: string): string {
   return trimmed;
 }
 
+function validateModelSelectionForTool(tool: string, model: string): string {
+  const trimmed = model.trim();
+  if (isAutoModelSelection(trimmed)) return trimmed;
+  return validateModelForTool(tool, trimmed);
+}
+
 function validateReasoningEffortForTool(tool: string, effort: string): string {
   const trimmed = effort.trim();
   if (!trimmed) {
@@ -1107,9 +1120,50 @@ function resolveStoredModelForTool(tool: CodingTool, model: string | null | unde
   return trimmed && isSupportedModel(tool, trimmed) ? trimmed : undefined;
 }
 
+function resolveStoredModelSelectionForTool(tool: CodingTool, model: string | null | undefined) {
+  const trimmed = model?.trim();
+  if (!trimmed) return undefined;
+  if (isAutoModelSelection(trimmed)) return trimmed;
+  return isSupportedModel(tool, trimmed) ? trimmed : undefined;
+}
+
 function resolveStoredReasoningEffortForTool(tool: CodingTool, effort: string | null | undefined) {
   const trimmed = effort?.trim();
   return trimmed && isSupportedReasoningEffort(tool, trimmed) ? trimmed : undefined;
+}
+
+function routingEventPayload(
+  decision: ModelRouterDecision,
+  previousModel: string | null | undefined,
+): Prisma.InputJsonValue {
+  return {
+    modelSelectionMode: "auto",
+    selectedModel: decision.selectedModel,
+    autoSelectedModel: decision.selectedModel,
+    previousModel: previousModel ?? null,
+    selectedModelLabel: getModelLabel(decision.selectedModel),
+    complexity: decision.complexity,
+    risk: decision.risk,
+    confidence: decision.confidence,
+    reasonCode: decision.reasonCode,
+    explanation: decision.explanation,
+    routerModel: decision.routerModel,
+    cacheHit: decision.cacheHit,
+    fallback: decision.fallback,
+  };
+}
+
+function modelOverrideEventPayload(
+  previousModel: string | null | undefined,
+  selectedModel: string | null | undefined,
+): Prisma.InputJsonValue {
+  return {
+    modelSelectionMode: "manual",
+    previousModel: previousModel ?? null,
+    selectedModel: selectedModel ?? null,
+    previousModelLabel: previousModel ? getModelLabel(previousModel) : null,
+    selectedModelLabel: selectedModel ? getModelLabel(selectedModel) : null,
+  };
 }
 
 function selectRuntimeSupportedTool(
@@ -2953,7 +3007,7 @@ export class SessionService {
     const resolvedRepo = resolvedRepoId
       ? await prisma.repo.findFirst({
           where: { id: resolvedRepoId, organizationId: input.organizationId },
-          select: { id: true, remoteUrl: true },
+          select: { id: true, name: true, remoteUrl: true, defaultBranch: true },
         })
       : null;
     if (resolvedRepoId && !resolvedRepo) {
@@ -3309,10 +3363,44 @@ export class SessionService {
       runtimeInstanceId: requestedRuntimeInstanceId,
     });
 
-    const model = input.model
-      ? validateModelForTool(tool, input.model)
-      : (resolveStoredModelForTool(tool, userDefaults?.defaultSessionModel) ??
+    const requestedModelSelection = input.model
+      ? validateModelSelectionForTool(tool, input.model)
+      : (resolveStoredModelSelectionForTool(tool, userDefaults?.defaultSessionModel) ??
         getDefaultModel(tool));
+    const modelSelectionMode = isAutoModelSelection(requestedModelSelection) ? "auto" : "manual";
+    const organizationForRouting =
+      modelSelectionMode === "auto"
+        ? await prisma.organization.findUnique({
+            where: { id: input.organizationId },
+            select: { settings: true },
+          })
+        : null;
+    const routingDecision =
+      modelSelectionMode === "auto" && input.prompt
+        ? await modelRouterService.route({
+            organizationId: input.organizationId,
+            userId: input.createdById,
+            tool,
+            prompt: input.prompt,
+            organizationSettings: organizationForRouting?.settings ?? null,
+            repo: resolvedRepo
+              ? {
+                  id: resolvedRepo.id,
+                  name: resolvedRepo.name,
+                  defaultBranch: resolvedRepo.defaultBranch,
+                }
+              : null,
+          })
+        : null;
+    const model =
+      routingDecision?.selectedModel ??
+      (modelSelectionMode === "auto"
+        ? (modelRouterService.resolveSettings(organizationForRouting?.settings ?? null)
+            .fallbackModelByTool[tool] ?? getDefaultModel(tool))
+        : requestedModelSelection);
+    if (model && !isSupportedModel(tool, model)) {
+      throw new Error(`Unsupported model "${model}" for tool "${tool}"`);
+    }
     const reasoningEffort = input.reasoningEffort
       ? validateReasoningEffortForTool(tool, input.reasoningEffort)
       : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
@@ -3398,6 +3486,8 @@ export class SessionService {
           sessionStatus: initialSessionStatus,
           tool,
           model: model ?? undefined,
+          modelSelectionMode,
+          autoSelectedModel: routingDecision?.selectedModel ?? undefined,
           reasoningEffort: reasoningEffort ?? undefined,
           hosting,
           organizationId: input.organizationId,
@@ -3488,6 +3578,21 @@ export class SessionService {
         },
         tx,
       );
+
+      if (routingDecision) {
+        await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "session",
+            scopeId: session.id,
+            eventType: "model_routing_completed",
+            payload: routingEventPayload(routingDecision, null),
+            actorType: "system",
+            actorId: input.createdById,
+          },
+          tx,
+        );
+      }
 
       if (input.afterCreate) {
         await input.afterCreate({
@@ -4483,6 +4588,8 @@ export class SessionService {
         id: true,
         tool: true,
         model: true,
+        modelSelectionMode: true,
+        autoSelectedModel: true,
         reasoningEffort: true,
         agentStatus: true,
         hosting: true,
@@ -4504,9 +4611,54 @@ export class SessionService {
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
     const nextTool = config.tool ?? prev.tool;
-    const nextModel =
-      config.model != null
-        ? validateModelForTool(nextTool, config.model)
+    const nextModelSelection =
+      config.model != null ? validateModelSelectionForTool(nextTool, config.model) : undefined;
+    const autoModelSelected =
+      nextModelSelection != null && isAutoModelSelection(nextModelSelection);
+    let routingDecision: ModelRouterDecision | null = null;
+    if (autoModelSelected) {
+      const promptEvent = await prisma.event.findFirst({
+        where: {
+          organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: { in: ["message_sent", "session_started"] },
+        },
+        orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      });
+      const promptPayload =
+        promptEvent?.payload &&
+        typeof promptEvent.payload === "object" &&
+        !Array.isArray(promptEvent.payload)
+          ? (promptEvent.payload as Record<string, unknown>)
+          : null;
+      const prompt =
+        promptEvent?.eventType === "message_sent"
+          ? promptPayload?.text
+          : promptEvent?.eventType === "session_started"
+            ? promptPayload?.prompt
+            : null;
+      if (typeof prompt === "string" && prompt.trim()) {
+        const organization = await prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { settings: true },
+        });
+        routingDecision = await modelRouterService.route({
+          organizationId,
+          userId: actorId,
+          tool: nextTool,
+          prompt,
+          organizationSettings: organization?.settings ?? null,
+          repo: prev.repo
+            ? { id: prev.repo.id, name: prev.repo.name, defaultBranch: prev.repo.defaultBranch }
+            : null,
+        });
+      }
+    }
+    const nextModel = autoModelSelected
+      ? (routingDecision?.selectedModel ?? prev.model ?? getDefaultModel(nextTool) ?? null)
+      : nextModelSelection != null
+        ? nextModelSelection
         : toolChanged
           ? (getDefaultModel(nextTool) ?? null)
           : undefined;
@@ -4520,6 +4672,16 @@ export class SessionService {
     const data: Record<string, unknown> = {};
     if (config.tool != null) data.tool = config.tool;
     if (nextModel !== undefined) data.model = nextModel;
+    if (autoModelSelected) {
+      data.modelSelectionMode = "auto";
+      data.autoSelectedModel = routingDecision?.selectedModel ?? null;
+    } else if (nextModelSelection != null) {
+      data.modelSelectionMode = "manual";
+      data.autoSelectedModel = null;
+    } else if (toolChanged) {
+      data.modelSelectionMode = "manual";
+      data.autoSelectedModel = null;
+    }
     if (nextReasoningEffort !== undefined) data.reasoningEffort = nextReasoningEffort;
     if (toolChanged) {
       data.toolChangedAt = new Date();
@@ -4648,6 +4810,8 @@ export class SessionService {
         type: "config_changed",
         tool: config.tool ?? session.tool,
         model: nextModel !== undefined ? nextModel : session.model,
+        modelSelectionMode: session.modelSelectionMode,
+        autoSelectedModel: session.autoSelectedModel,
         reasoningEffort:
           nextReasoningEffort !== undefined ? nextReasoningEffort : session.reasoningEffort,
         toolChanged,
@@ -4656,6 +4820,28 @@ export class SessionService {
       actorType,
       actorId,
     });
+
+    if (routingDecision) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "model_routing_completed",
+        payload: routingEventPayload(routingDecision, prev.model),
+        actorType: "system",
+        actorId,
+      });
+    } else if (nextModelSelection != null && !autoModelSelected) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "model_override_applied",
+        payload: modelOverrideEventPayload(prev.model, session.model),
+        actorType,
+        actorId,
+      });
+    }
 
     if (shouldProvisionPendingRun) {
       const conn = this.parseConnection(session.connection);
@@ -4692,7 +4878,7 @@ export class SessionService {
       const tool = input.tool ?? null;
       const model = tool
         ? input.model
-          ? validateModelForTool(tool, input.model)
+          ? validateModelSelectionForTool(tool, input.model)
           : (getDefaultModel(tool) ?? null)
         : null;
       const reasoningEffort = tool
@@ -5116,6 +5302,8 @@ export class SessionService {
         createdById: true,
         tool: true,
         model: true,
+        modelSelectionMode: true,
+        autoSelectedModel: true,
         reasoningEffort: true,
         toolChangedAt: true,
         workdir: true,
@@ -5159,7 +5347,7 @@ export class SessionService {
             runtimeLabel: conn.runtimeLabel ?? null,
           };
     const activeTool = runtimeBinding.fallbackTool ?? session.tool;
-    const activeModel =
+    let activeModel =
       activeTool !== session.tool
         ? (resolveStoredModelForTool(activeTool, session.model) ??
           getDefaultModel(activeTool) ??
@@ -5177,6 +5365,8 @@ export class SessionService {
         data: {
           tool: activeTool,
           model: activeModel,
+          modelSelectionMode: session.modelSelectionMode,
+          autoSelectedModel: session.autoSelectedModel,
           reasoningEffort: activeReasoningEffort,
           toolSessionId: null,
         },
@@ -5190,10 +5380,51 @@ export class SessionService {
           type: "config_changed",
           tool: activeTool,
           model: activeModel,
+          modelSelectionMode: session.modelSelectionMode,
+          autoSelectedModel: session.autoSelectedModel,
           reasoningEffort: activeReasoningEffort,
           toolChanged: false,
         },
         actorType,
+        actorId,
+      });
+    }
+
+    if (session.modelSelectionMode === "auto" && !session.autoSelectedModel && text.trim()) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: session.organizationId },
+        select: { settings: true },
+      });
+      const decision = await modelRouterService.route({
+        organizationId: session.organizationId,
+        userId: actorId,
+        tool: activeTool,
+        prompt: text,
+        organizationSettings: organization?.settings ?? null,
+        repo: session.repo
+          ? {
+              id: session.repo.id,
+              name: session.repo.name,
+              defaultBranch: session.repo.defaultBranch,
+            }
+          : null,
+      });
+      activeModel = decision.selectedModel;
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: {
+          model: decision.selectedModel,
+          modelSelectionMode: "auto",
+          autoSelectedModel: decision.selectedModel,
+        },
+      });
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "model_routing_completed",
+        payload: routingEventPayload(decision, session.model),
+        actorType: "system",
         actorId,
       });
     }
@@ -7191,11 +7422,9 @@ export class SessionService {
       const runtimeConnection = this.parseConnection(sourceCloudRuntimeSession.connection);
       const sessionConnection = this.parseConnection(session.connection);
       const runtimeHasBinding =
-        !!runtimeConnection.runtimeInstanceId ||
-        !!runtimeConnection.providerRuntimeId;
+        !!runtimeConnection.runtimeInstanceId || !!runtimeConnection.providerRuntimeId;
       const sessionHasBinding =
-        !!sessionConnection.runtimeInstanceId ||
-        !!sessionConnection.providerRuntimeId;
+        !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
       if (!runtimeHasBinding && sessionHasBinding) {
         sourceCloudRuntimeSession = {
           ...sourceCloudRuntimeSession,
@@ -8849,16 +9078,13 @@ export class SessionService {
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
-          return (
-            !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId
-          );
+          return !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         }) ?? cloudSessions[0];
       if (!cloudSession) continue;
       if (!groupHasRuntimeBinding) {
         const sessionConnection = this.parseConnection(cloudSession.connection);
         const sessionHasRuntimeBinding =
-          !!sessionConnection.runtimeInstanceId ||
-          !!sessionConnection.providerRuntimeId;
+          !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
 

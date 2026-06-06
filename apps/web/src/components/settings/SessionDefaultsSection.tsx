@@ -7,7 +7,7 @@ import {
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,
-  getModelsForTool,
+  getModelSelectionOptionsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
 } from "../session/modelOptions";
@@ -59,7 +59,7 @@ export function SessionDefaultsSection() {
   const defaultReasoningEffort = user?.defaultSessionReasoningEffort ?? null;
   const autoArchiveMergedSessions = user?.autoArchiveMergedSessions ?? true;
   const effectiveTool = defaultTool ?? "claude_code";
-  const modelOptions = getModelsForTool(effectiveTool);
+  const modelOptions = getModelSelectionOptionsForTool(effectiveTool);
   const reasoningEffortOptions = getReasoningEffortsForTool(effectiveTool);
 
   const handleToolChange = async (value: string | null) => {
@@ -163,7 +163,9 @@ export function SessionDefaultsSection() {
               <SelectTrigger className="w-full">
                 <SelectValue>
                   {defaultModel
-                    ? getModelLabel(defaultModel)
+                    ? defaultModel === "auto"
+                      ? "Auto"
+                      : getModelLabel(defaultModel)
                     : defaultTool
                       ? "None"
                       : "Choose tool"}

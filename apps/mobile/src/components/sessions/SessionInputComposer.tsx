@@ -92,6 +92,14 @@ export function SessionInputComposer({
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted");
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
+  const modelSelectionMode = useEntityField("sessions", sessionId, "modelSelectionMode") as
+    | string
+    | null
+    | undefined;
+  const autoSelectedModel = useEntityField("sessions", sessionId, "autoSelectedModel") as
+    | string
+    | null
+    | undefined;
   const reasoningEffort = useEntityField("sessions", sessionId, "reasoningEffort") as
     | string
     | null
@@ -252,6 +260,8 @@ export function SessionInputComposer({
     isNotStarted,
     isOptimistic,
     model,
+    modelSelectionMode,
+    autoSelectedModel,
     reasoningEffort,
     sessionId,
     tool,

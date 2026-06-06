@@ -8,6 +8,8 @@ import {
 export interface OptimisticSessionShape {
   tool: string;
   model?: string | null;
+  modelSelectionMode?: string | null;
+  autoSelectedModel?: string | null;
   reasoningEffort?: string | null;
   hosting: string;
   channelId: string;
@@ -62,6 +64,8 @@ function buildSessionEntity(params: {
   sessionGroupId: string;
   tool: string;
   model: string | null;
+  modelSelectionMode?: string | null;
+  autoSelectedModel?: string | null;
   reasoningEffort: string | null;
   hosting: string;
   channelId: string;
@@ -77,6 +81,8 @@ function buildSessionEntity(params: {
     sessionStatus: "in_progress",
     tool: params.tool,
     model: params.model,
+    modelSelectionMode: params.modelSelectionMode ?? "manual",
+    autoSelectedModel: params.autoSelectedModel ?? null,
     reasoningEffort: params.reasoningEffort,
     hosting: params.hosting,
     channel: { id: params.channelId },
@@ -119,6 +125,8 @@ export function insertOptimisticSessionPair(params: InsertOptimisticSessionPairP
       sessionGroupId: params.tempGroupId,
       tool: params.tool,
       model: params.model ?? null,
+      modelSelectionMode: params.modelSelectionMode ?? "manual",
+      autoSelectedModel: params.autoSelectedModel ?? null,
       reasoningEffort: params.reasoningEffort ?? null,
       hosting: params.hosting,
       channelId: params.channelId,
@@ -151,6 +159,8 @@ export function reconcileOptimisticSessionPair(params: ReconcileOptimisticSessio
     sessionGroupId: params.realGroupId,
     tool: params.tool,
     model: params.model ?? null,
+    modelSelectionMode: params.modelSelectionMode ?? "manual",
+    autoSelectedModel: params.autoSelectedModel ?? null,
     reasoningEffort: params.reasoningEffort ?? null,
     hosting: params.hosting,
     channelId: params.channelId,

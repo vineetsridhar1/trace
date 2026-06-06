@@ -66,6 +66,9 @@ const COMPACT_CANDIDATE_EVENT_TYPES = [
   "session_started",
   "message_sent",
   "session_terminated",
+  "model_routing_started",
+  "model_routing_completed",
+  "model_override_applied",
   "session_pr_opened",
   "session_pr_merged",
   "session_pr_closed",
@@ -233,6 +236,16 @@ function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
     }
 
     if (isPrLifecycleEvent(event)) {
+      flushAssistant();
+      visibleIds.add(event.id);
+      continue;
+    }
+
+    if (
+      event.eventType === "model_routing_started" ||
+      event.eventType === "model_routing_completed" ||
+      event.eventType === "model_override_applied"
+    ) {
       flushAssistant();
       visibleIds.add(event.id);
       continue;

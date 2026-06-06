@@ -207,6 +207,28 @@ function runtimeMoveText(payload: JsonObject): string {
   return `${target}; source git sync was not verified (${reason})`;
 }
 
+function modelRoutingText(payload: JsonObject | null | undefined): string {
+  const selectedLabel =
+    str(payload?.selectedModelLabel) ||
+    (typeof payload?.selectedModel === "string" ? payload.selectedModel : "model");
+  const explanation = str(payload?.explanation);
+  return explanation
+    ? `Auto selected ${selectedLabel}: ${explanation}`
+    : `Auto selected ${selectedLabel}`;
+}
+
+function modelOverrideText(payload: JsonObject | null | undefined): string {
+  const previous =
+    str(payload?.previousModelLabel) ||
+    (typeof payload?.previousModel === "string" ? payload.previousModel : "");
+  const selected =
+    str(payload?.selectedModelLabel) ||
+    (typeof payload?.selectedModel === "string" ? payload.selectedModel : "");
+  if (previous && selected) return `Model changed from ${previous} to ${selected}`;
+  if (selected) return `Model changed to ${selected}`;
+  return "Model changed";
+}
+
 export const SessionMessage = memo(function SessionMessage({
   id,
   gitCheckpointsByPromptEventId,
@@ -269,6 +291,15 @@ export const SessionMessage = memo(function SessionMessage({
             showActions,
           )
         : null;
+
+    case "model_routing_started":
+      return <SystemBadge text="Selecting model..." />;
+
+    case "model_routing_completed":
+      return <SystemBadge text={modelRoutingText(payload)} />;
+
+    case "model_override_applied":
+      return <SystemBadge text={modelOverrideText(payload)} />;
 
     case "message_sent":
       return (

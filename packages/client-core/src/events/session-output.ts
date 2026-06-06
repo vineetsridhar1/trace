@@ -50,6 +50,12 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
       ...(typeof payload.model === "string" || payload.model === null
         ? { model: payload.model }
         : {}),
+      ...(typeof payload.modelSelectionMode === "string"
+        ? { modelSelectionMode: payload.modelSelectionMode }
+        : {}),
+      ...(typeof payload.autoSelectedModel === "string" || payload.autoSelectedModel === null
+        ? { autoSelectedModel: payload.autoSelectedModel }
+        : {}),
       ...(typeof payload.reasoningEffort === "string" || payload.reasoningEffort === null
         ? { reasoningEffort: payload.reasoningEffort }
         : {}),

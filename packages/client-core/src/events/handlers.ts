@@ -55,6 +55,11 @@ const SESSION_RUNTIME_EVENTS: Set<EventType> = new Set([
 const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
+const SESSION_MODEL_EVENTS: Set<EventType> = new Set([
+  "model_routing_started",
+  "model_routing_completed",
+  "model_override_applied",
+]);
 
 function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
   const environments = payload.agentEnvironments;
@@ -595,6 +600,23 @@ export function handleOrgEvent(event: Event): void {
       ...(agentStatus ? { agentStatus } : {}),
       ...(sessionStatus ? { sessionStatus } : {}),
     };
+    batch.patch("sessions", event.scopeId, sessionPatch);
+  }
+
+  if (
+    SESSION_MODEL_EVENTS.has(event.eventType) &&
+    event.scopeType === ("session" satisfies ScopeType)
+  ) {
+    const sessionPatch: Partial<SessionEntity> = { updatedAt: event.timestamp };
+    if (typeof payload.modelSelectionMode === "string") {
+      sessionPatch.modelSelectionMode = payload.modelSelectionMode;
+    }
+    if (typeof payload.selectedModel === "string" || payload.selectedModel === null) {
+      sessionPatch.model = payload.selectedModel;
+    }
+    if (typeof payload.autoSelectedModel === "string" || payload.autoSelectedModel === null) {
+      sessionPatch.autoSelectedModel = payload.autoSelectedModel;
+    }
     batch.patch("sessions", event.scopeId, sessionPatch);
   }
 

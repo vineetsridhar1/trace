@@ -106,7 +106,10 @@ export function CheckpointPanel({
           .mutation(START_SESSION_MUTATION, {
             input: {
               tool: restoreSession.tool,
-              model: restoreSession.model ?? undefined,
+              model:
+                restoreSession.modelSelectionMode === "auto"
+                  ? "auto"
+                  : (restoreSession.model ?? undefined),
               reasoningEffort: restoreSession.reasoningEffort ?? undefined,
               hosting: resolveSupportedHostingForRepo(restoreSession.hosting, restoreRepo),
               channelId: channelId ?? undefined,

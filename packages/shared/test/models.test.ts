@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUTO_MODEL_VALUE,
+  getAutoEligibleModelsForTool,
+  getAutoFallbackModelForTool,
+  getAutoRouterModelForTool,
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelProviderForModel,
   getModelProviderGroupsForTool,
+  getModelSelectionOptionsForTool,
   getModelsForTool,
+  isAutoModelSelection,
   isSupportedModel,
   isSupportedReasoningEffort,
 } from "../src/models.js";
@@ -79,8 +85,19 @@ describe("model catalog", () => {
         ],
       }),
     ]);
-    expect(getModelProviderForModel("pi", "openai-codex/gpt-5.5")?.value).toBe(
-      "openai-codex",
-    );
+    expect(getModelProviderForModel("pi", "openai-codex/gpt-5.5")?.value).toBe("openai-codex");
+  });
+
+  it("treats Auto as a selection mode, not an execution model", () => {
+    expect(AUTO_MODEL_VALUE).toBe("auto");
+    expect(isAutoModelSelection("auto")).toBe(true);
+    expect(isSupportedModel("claude_code", "auto")).toBe(false);
+    expect(getModelSelectionOptionsForTool("claude_code")[0]).toEqual({
+      value: "auto",
+      label: "Auto",
+    });
+    expect(getAutoEligibleModelsForTool("codex")).toEqual(getModelsForTool("codex"));
+    expect(getAutoRouterModelForTool("codex")).toBe("gpt-5.1-codex-mini");
+    expect(getAutoFallbackModelForTool("codex")).toBe("gpt-5.1-codex-mini");
   });
 });

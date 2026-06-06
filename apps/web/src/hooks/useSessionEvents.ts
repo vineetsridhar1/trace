@@ -232,6 +232,14 @@ function isPrLifecycleEvent(event: Event): boolean {
   );
 }
 
+function isModelLifecycleEvent(event: Event): boolean {
+  return (
+    event.eventType === "model_routing_started" ||
+    event.eventType === "model_routing_completed" ||
+    event.eventType === "model_override_applied"
+  );
+}
+
 function hasRenderableContentBlock(payload: Record<string, unknown>): boolean {
   const message = asRecord(payload.message);
   const content = message?.content;
@@ -253,6 +261,7 @@ function isRenderableCompactEvent(event: Event | undefined): event is Event & { 
   if (event.eventType === "session_started" || event.eventType === "message_sent") {
     return hasVisibleUserSessionContent(event.eventType, event.payload);
   }
+  if (isModelLifecycleEvent(event)) return true;
   if (isPrLifecycleEvent(event)) return true;
   if (event.eventType !== "session_output") return false;
 
