@@ -6,7 +6,7 @@ import {
   type JsonObject,
   type Question,
 } from "@trace/shared";
-import { HIDDEN_SESSION_PAYLOAD_TYPE_SET } from "./event-filters.js";
+import { HIDDEN_SESSION_PAYLOAD_TYPE_SET, isHiddenSessionOutputPayload } from "./event-filters.js";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
 const AGENT_NAMES = new Set(["agent", "task"]);
@@ -317,7 +317,7 @@ export function buildSessionNodes(
       }
 
       const payloadType = payload?.type;
-      if (typeof payloadType === "string" && HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(payloadType)) {
+      if (isHiddenSessionOutputPayload(payload)) {
         continue;
       }
       if (typeof payloadType === "string" && BUCKET_TRANSPARENT_TYPES.has(payloadType)) {

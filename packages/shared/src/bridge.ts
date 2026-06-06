@@ -367,8 +367,16 @@ export interface BridgeWorkspaceReady {
   sessionId: string;
   workdir: string;
   branch?: string;
+  warning?: BridgeWorkspaceWarning;
   /** Animal slug used for this worktree (reported back so the server can store it). */
   slug?: string;
+}
+
+export interface BridgeWorkspaceWarning {
+  type: "branch_missing_restored_from_base";
+  branch: string;
+  baseBranch: string;
+  message: string;
 }
 
 export interface BridgeWorkspaceFailed {

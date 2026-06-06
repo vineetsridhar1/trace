@@ -180,6 +180,12 @@ function renderSessionOutput(
     return <SystemBadge text={error || "Workspace preparation failed"} />;
   }
 
+  if (type === "workspace_ready") {
+    const warning = asJsonObject(payload.warning);
+    const message = str(warning?.message);
+    if (message) return <SystemBadge text={message} />;
+  }
+
   return null;
 }
 

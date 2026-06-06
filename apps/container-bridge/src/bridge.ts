@@ -365,7 +365,7 @@ export class ContainerBridge implements IBridgeClient {
 
         (async () => {
           try {
-            await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
+            const repoResult = await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
             this.send({ type: "repo_linked", repoId });
 
             if (readOnly) {
@@ -375,7 +375,12 @@ export class ContainerBridge implements IBridgeClient {
               this.sessionWorkdirs.set(sessionId, workdir);
               this.readOnlySessions.add(sessionId);
               this.send({ type: "register_session", sessionId });
-              this.send({ type: "workspace_ready", sessionId, workdir });
+              this.send({
+                type: "workspace_ready",
+                sessionId,
+                workdir,
+                warning: repoResult.warning,
+              });
             } else {
               // Coalesce concurrent createWorktree calls for the same group
               const worktreeKey = slug ?? sessionGroupId ?? sessionId;
@@ -405,6 +410,7 @@ export class ContainerBridge implements IBridgeClient {
                 workdir,
                 branch: worktreeBranch,
                 slug: worktreeSlug,
+                warning: repoResult.warning,
               });
             }
           } catch (err) {
@@ -450,7 +456,7 @@ export class ContainerBridge implements IBridgeClient {
 
         (async () => {
           try {
-            await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
+            const repoResult = await ensureRepo(repoId, repoRemoteUrl, branch, defaultBranch);
             this.send({ type: "repo_linked", repoId });
             const {
               workdir,
@@ -473,6 +479,7 @@ export class ContainerBridge implements IBridgeClient {
               workdir,
               branch: worktreeBranch,
               slug: worktreeSlug,
+              warning: repoResult.warning,
             });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);

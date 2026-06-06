@@ -9,11 +9,17 @@ import {
   resolveGeneratedTraceWorktreeBranch,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "@trace/shared";
+import type { BridgeWorkspaceWarning } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = "/workspaces";
+
+type EnsureRepoResult = {
+  repoPath: string;
+  warning?: BridgeWorkspaceWarning;
+};
 
 /** Get the local path for a repo by ID. Returns undefined if not cloned yet. */
 export function getRepoPath(repoId: string): string | undefined {
@@ -39,7 +45,7 @@ export async function ensureRepo(
   remoteUrl: string | null,
   branch: string | undefined,
   defaultBranch: string,
-): Promise<string> {
+): Promise<EnsureRepoResult> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
   if (!remoteUrl) {
     throw new Error("Cloud workspaces require a repo remote URL.");
@@ -58,33 +64,92 @@ export async function ensureRepo(
 
   if (fs.existsSync(repoPath)) {
     console.log(`[workspace] fetching ${cloneBranch} for repo ${repoId}`);
+    let warning: BridgeWorkspaceWarning | undefined;
     try {
       await fetchBranch(repoPath, cloneBranch);
     } catch (error) {
-      console.warn(
-        `[workspace] branch fetch failed for repo ${repoId}, falling back to fetch --all: ${getErrorMessage(error)}`,
-      );
-      await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+      if (branch && branch !== defaultBranch && isRemoteBranchMissingError(error, cloneBranch)) {
+        console.warn(
+          `[workspace] branch ${cloneBranch} was missing on origin; fetching ${defaultBranch} and creating it from base`,
+        );
+        await fetchBranch(repoPath, defaultBranch);
+        await createAndPushMissingBranch(repoPath, cloneBranch, defaultBranch);
+        warning = branchMissingWarning(cloneBranch, defaultBranch);
+      } else {
+        console.warn(
+          `[workspace] branch fetch failed for repo ${repoId}, falling back to fetch --all: ${getErrorMessage(error)}`,
+        );
+        await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+      }
     }
     await detachRepoHead(repoPath);
-    return repoPath;
+    return { repoPath, warning };
   }
 
   fs.mkdirSync(REPOS_DIR, { recursive: true });
   console.log(`[workspace] cloning ${remoteUrl} into ${repoPath}`);
+  try {
+    await cloneRepo(repoId, authUrl, repoPath, cloneBranch);
+  } catch (error) {
+    if (!branch || branch === defaultBranch || !isRemoteBranchMissingError(error, cloneBranch)) {
+      throw error;
+    }
+
+    console.warn(
+      `[workspace] branch ${cloneBranch} was missing on origin; cloning ${defaultBranch} and creating it from base`,
+    );
+    fs.rmSync(repoPath, { recursive: true, force: true });
+    await cloneRepo(repoId, authUrl, repoPath, defaultBranch);
+    await createAndPushMissingBranch(repoPath, cloneBranch, defaultBranch);
+    await detachRepoHead(repoPath);
+    return {
+      repoPath,
+      warning: branchMissingWarning(cloneBranch, defaultBranch),
+    };
+  }
+  await detachRepoHead(repoPath);
+  return { repoPath };
+}
+
+async function cloneRepo(
+  repoId: string,
+  authUrl: string,
+  repoPath: string,
+  branch: string,
+): Promise<void> {
   await execFileAsync("git", [
     "clone",
     "--filter=blob:none",
     "--no-tags",
     "--single-branch",
     "--branch",
-    cloneBranch,
+    branch,
     ...repoCacheReferenceArgs(repoId),
     authUrl,
     repoPath,
   ]);
-  await detachRepoHead(repoPath);
-  return repoPath;
+}
+
+async function createAndPushMissingBranch(
+  repoPath: string,
+  branch: string,
+  defaultBranch: string,
+): Promise<void> {
+  await execFileAsync("git", ["checkout", "-B", branch, `origin/${defaultBranch}`], {
+    cwd: repoPath,
+  });
+  await execFileAsync("git", ["push", "-u", "origin", `HEAD:${branch}`], { cwd: repoPath });
+}
+
+function branchMissingWarning(branch: string, baseBranch: string): BridgeWorkspaceWarning {
+  return {
+    type: "branch_missing_restored_from_base",
+    branch,
+    baseBranch,
+    message:
+      `Branch ${branch} did not exist on origin, so Trace created it from ${baseBranch}. ` +
+      "Local-only changes from the previous workspace were not restored.",
+  };
 }
 
 async function detachRepoHead(repoPath: string): Promise<void> {
@@ -330,6 +395,24 @@ async function isUsableWorktree(worktreePath: string): Promise<boolean> {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getErrorOutput(error: unknown): string {
+  const message = getErrorMessage(error);
+  if (!error || typeof error !== "object") return message;
+  const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
+  const stdout = "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
+  return `${message}\n${stderr}\n${stdout}`;
+}
+
+function isRemoteBranchMissingError(error: unknown, branch: string): boolean {
+  const output = getErrorOutput(error);
+  return (
+    output.includes(`Remote branch ${branch} not found`) ||
+    output.includes(`Could not find remote branch ${branch} to clone`) ||
+    output.includes(`couldn't find remote ref refs/heads/${branch}`) ||
+    output.includes(`couldn't find remote ref ${branch}`)
+  );
 }
 
 async function addWorktree(repoPath: string, worktreePath: string, args: string[]): Promise<void> {

@@ -40,6 +40,7 @@ export type {
   BridgeSessionOutput,
   BridgeSessionComplete,
   BridgeWorkspaceReady,
+  BridgeWorkspaceWarning,
   BridgeWorkspaceFailed,
   BridgeToolSessionId,
   BridgeToolSessionMissing,

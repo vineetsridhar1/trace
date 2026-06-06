@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
   readdirSync: vi.fn(),
+  rmSync: vi.fn(),
 }));
 
 vi.mock("child_process", () => ({
@@ -19,6 +20,7 @@ vi.mock("fs", () => ({
     existsSync: mocks.existsSync,
     mkdirSync: mocks.mkdirSync,
     readdirSync: mocks.readdirSync,
+    rmSync: mocks.rmSync,
   },
 }));
 
@@ -68,7 +70,7 @@ describe("workspace repo setup", () => {
 
     await expect(
       ensureRepo("repo-1", "https://github.com/acme/project.git", "feature/work", "main"),
-    ).resolves.toBe("/repos/repo-1");
+    ).resolves.toEqual({ repoPath: "/repos/repo-1" });
 
     expect(gitArgsAt(0)).toEqual([
       "clone",
@@ -145,6 +147,59 @@ describe("workspace repo setup", () => {
     expect(gitArgsAt(1)).toEqual(["checkout", "--detach"]);
   });
 
+  it("creates the requested branch from the default branch for existing repos when fetch reports it missing", async () => {
+    mocks.existsSync.mockImplementation((path: unknown) => path === "/repos/repo-1");
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      const callback = callbackFrom(args);
+      if (
+        Array.isArray(gitArgs) &&
+        gitArgs[0] === "fetch" &&
+        String(gitArgs[4]).includes("feature/work")
+      ) {
+        callback(
+          new Error("fatal: couldn't find remote ref refs/heads/feature/work"),
+          "",
+          "fatal: couldn't find remote ref refs/heads/feature/work",
+        );
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await expect(
+      ensureRepo("repo-1", "https://github.com/acme/project.git", "feature/work", "main"),
+    ).resolves.toEqual({
+      repoPath: "/repos/repo-1",
+      warning: {
+        type: "branch_missing_restored_from_base",
+        branch: "feature/work",
+        baseBranch: "main",
+        message:
+          "Branch feature/work did not exist on origin, so Trace created it from main. " +
+          "Local-only changes from the previous workspace were not restored.",
+      },
+    });
+
+    expect(gitArgsAt(0)).toEqual([
+      "fetch",
+      "--filter=blob:none",
+      "--no-tags",
+      "origin",
+      "+refs/heads/feature/work:refs/remotes/origin/feature/work",
+    ]);
+    expect(gitArgsAt(1)).toEqual([
+      "fetch",
+      "--filter=blob:none",
+      "--no-tags",
+      "origin",
+      "+refs/heads/main:refs/remotes/origin/main",
+    ]);
+    expect(gitArgsAt(2)).toEqual(["checkout", "-B", "feature/work", "origin/main"]);
+    expect(gitArgsAt(3)).toEqual(["push", "-u", "origin", "HEAD:feature/work"]);
+    expect(gitArgsAt(4)).toEqual(["checkout", "--detach"]);
+  });
+
   it("keeps read-only repo paths usable after cloning", async () => {
     let cloned = false;
     mocks.existsSync.mockImplementation((path: unknown) => path === "/repos/repo-1" && cloned);
@@ -154,15 +209,75 @@ describe("workspace repo setup", () => {
       callbackFrom(args)(null, "", "");
     });
 
-    const repoPath = await ensureRepo(
+    const result = await ensureRepo(
       "repo-1",
       "https://github.com/acme/project.git",
       undefined,
       "main",
     );
 
-    expect(repoPath).toBe("/repos/repo-1");
+    expect(result).toEqual({ repoPath: "/repos/repo-1" });
     expect(getRepoPath("repo-1")).toBe("/repos/repo-1");
     expect(gitArgsAt(0)).not.toContain("--no-checkout");
+  });
+
+  it("creates the requested branch from the default branch when clone reports it missing", async () => {
+    mocks.existsSync.mockReturnValue(false);
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      const callback = callbackFrom(args);
+      if (Array.isArray(gitArgs) && gitArgs[0] === "clone" && gitArgs.includes("feature/work")) {
+        const error = new Error(
+          "Command failed: git clone --branch feature/work https://github.com/acme/project.git /repos/repo-1\n" +
+            "warning: Could not find remote branch feature/work to clone.\n" +
+            "fatal: Remote branch feature/work not found in upstream origin\n",
+        );
+        callback(error, "", "warning: Could not find remote branch feature/work to clone.");
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await expect(
+      ensureRepo("repo-1", "https://github.com/acme/project.git", "feature/work", "main"),
+    ).resolves.toEqual({
+      repoPath: "/repos/repo-1",
+      warning: {
+        type: "branch_missing_restored_from_base",
+        branch: "feature/work",
+        baseBranch: "main",
+        message:
+          "Branch feature/work did not exist on origin, so Trace created it from main. " +
+          "Local-only changes from the previous workspace were not restored.",
+      },
+    });
+
+    expect(gitArgsAt(0)).toEqual([
+      "clone",
+      "--filter=blob:none",
+      "--no-tags",
+      "--single-branch",
+      "--branch",
+      "feature/work",
+      "https://github.com/acme/project.git",
+      "/repos/repo-1",
+    ]);
+    expect(gitArgsAt(1)).toEqual([
+      "clone",
+      "--filter=blob:none",
+      "--no-tags",
+      "--single-branch",
+      "--branch",
+      "main",
+      "https://github.com/acme/project.git",
+      "/repos/repo-1",
+    ]);
+    expect(gitArgsAt(2)).toEqual(["checkout", "-B", "feature/work", "origin/main"]);
+    expect(gitArgsAt(3)).toEqual(["push", "-u", "origin", "HEAD:feature/work"]);
+    expect(gitArgsAt(4)).toEqual(["checkout", "--detach"]);
+    expect(mocks.rmSync).toHaveBeenCalledWith("/repos/repo-1", {
+      recursive: true,
+      force: true,
+    });
   });
 });
