@@ -14,6 +14,7 @@ import { repoApplicationConfigService } from "./repo-application-config.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
 
 type Tx = Prisma.TransactionClient;
+const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
 
 type ManagedSessionGroup = {
   id: string;
@@ -552,14 +553,17 @@ export class SessionApplicationService {
     result: { exitCode: number; output?: string; error?: string },
   ) {
     const output = result.output ?? "";
-    const outputPreview = output.length > 65_536 ? output.slice(0, 65_536) : output || null;
+    const outputPreview =
+      output.length > SETUP_OUTPUT_PREVIEW_LIMIT
+        ? output.slice(0, SETUP_OUTPUT_PREVIEW_LIMIT)
+        : output || null;
     const run = await prisma.sessionSetupScriptRun.update({
       where: { id: runId },
       data: {
         status: result.exitCode === 0 && !result.error ? "completed" : "failed",
         exitCode: result.exitCode,
         outputPreview,
-        outputTruncated: output.length > 65_536,
+        outputTruncated: output.length > SETUP_OUTPUT_PREVIEW_LIMIT,
         lastError: result.error ?? (result.exitCode === 0 ? null : `Exited with ${result.exitCode}`),
         completedAt: new Date(),
       },
@@ -591,6 +595,32 @@ export class SessionApplicationService {
       actorId: "bridge",
     });
     return run;
+  }
+
+  async appendSetupScriptOutput(runId: string, data: string) {
+    if (!data) return null;
+    const run = await prisma.sessionSetupScriptRun.findUnique({
+      where: { id: runId },
+      select: {
+        id: true,
+        status: true,
+        outputPreview: true,
+        outputTruncated: true,
+      },
+    });
+    if (!run || run.status !== "running") return run;
+
+    const next = `${run.outputPreview ?? ""}${data}`;
+    return prisma.sessionSetupScriptRun.update({
+      where: { id: runId },
+      data: {
+        outputPreview:
+          next.length > SETUP_OUTPUT_PREVIEW_LIMIT
+            ? next.slice(0, SETUP_OUTPUT_PREVIEW_LIMIT)
+            : next,
+        outputTruncated: run.outputTruncated || next.length > SETUP_OUTPUT_PREVIEW_LIMIT,
+      },
+    });
   }
 
   async markProcessExited(processId: string, exitCode: number | null, error?: string | null) {

@@ -190,8 +190,8 @@ export class ManagedProcessManager {
       let bytes = 0;
       const collect = (stream: "stdout" | "stderr", chunk: Buffer) => {
         this.send({
-          type: "app_process_log",
-          processInstanceId: options.requestId,
+          type: "setup_script_log",
+          requestId: options.requestId,
           stream,
           data: capChunk(chunk),
         });
