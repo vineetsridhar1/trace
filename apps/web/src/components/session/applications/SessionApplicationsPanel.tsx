@@ -158,14 +158,6 @@ const DISABLE_ENDPOINT_MUTATION = gql`
   }
 `;
 
-const ROTATE_ENDPOINT_MUTATION = gql`
-  mutation RotateSessionEndpoint($endpointId: ID!) {
-    rotateSessionEndpoint(endpointId: $endpointId) {
-      id
-    }
-  }
-`;
-
 export function SessionApplicationsPanel({
   sessionGroupId,
   onOpenTraffic,
@@ -228,7 +220,7 @@ export function SessionApplicationsPanel({
 
   const loadProcessLogs = useCallback(async (processId: string) => {
     const result = await client
-      .query(PROCESS_LOGS_QUERY, { processId, limit: 8 })
+      .query(PROCESS_LOGS_QUERY, { processId, limit: 50 })
       .toPromise();
     setProcessLogsById((current) => ({
       ...current,
@@ -246,15 +238,26 @@ export function SessionApplicationsPanel({
 
   useEffect(() => {
     for (const process of processes) {
-      if (
-        process.status === "exited" ||
-        process.status === "failed" ||
-        process.lastError
-      ) {
-        void loadProcessLogs(process.id);
-      }
+      void loadProcessLogs(process.id);
     }
   }, [loadProcessLogs, processes]);
+
+  useEffect(() => {
+    const activeProcesses = processes.filter(
+      (process) =>
+        process.status === "starting" ||
+        process.status === "running" ||
+        process.status === "stopping",
+    );
+    if (activeProcesses.length === 0) return;
+    const interval = window.setInterval(() => {
+      void refresh();
+      for (const process of activeProcesses) {
+        void loadProcessLogs(process.id);
+      }
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [loadProcessLogs, processes, refresh]);
 
   const endpoints = useMemo(
     () =>
@@ -427,6 +430,7 @@ export function SessionApplicationsPanel({
               {application.processes.map((processConfig) => {
                 const process = processesByKey.get(`${application.id}:${processConfig.id}`);
                 const processEndpoints = endpointsByProcess.get(`${application.id}:${processConfig.id}`) ?? [];
+                const processLogEntries = process ? (processLogsById[process.id] ?? []) : [];
                 const running = process?.status === "running";
                 const active = running || process?.status === "starting" || process?.status === "stopping";
                 return (
@@ -472,43 +476,51 @@ export function SessionApplicationsPanel({
                         {active ? <Square size={14} /> : <Play size={14} />}
                       </Button>
                     </div>
-                    {process &&
-                      (process.status === "exited" || process.status === "failed" || process.lastError) && (
-                        <div className="space-y-1 rounded bg-surface-deep/60 px-2 py-1.5">
-                          <div className="flex items-center justify-between gap-2 text-[11px]">
-                            <span className="truncate text-muted-foreground">
-                              {process.lastError ?? `Exited${process.exitCode != null ? ` ${process.exitCode}` : ""}`}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              title={`Refresh ${processConfig.name} output`}
-                              aria-label={`Refresh ${processConfig.name} output`}
-                              onClick={() => void loadProcessLogs(process.id)}
-                            >
-                              <RotateCw size={12} />
-                            </Button>
-                          </div>
-                          {(processLogsById[process.id] ?? []).slice(-4).map((entry) => (
-                            <div
-                              key={entry.id}
-                              className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 text-[11px] leading-4"
-                            >
-                              <span
-                                className={cn(
-                                  "font-mono",
-                                  entry.stream === "stderr" ? "text-destructive" : "text-muted-foreground",
-                                )}
-                              >
-                                {entry.stream}
-                              </span>
-                              <span className="whitespace-pre-wrap break-words font-mono text-foreground">
-                                {entry.data.trim() || "(empty)"}
-                              </span>
-                            </div>
-                          ))}
+                    {process && (
+                      <div className="space-y-1 rounded bg-surface-deep/60 px-2 py-1.5">
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="truncate text-muted-foreground">
+                            {process.lastError ??
+                              (process.exitCode != null
+                                ? `Exited ${process.exitCode}`
+                                : `${process.status} logs`)}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            title={`Refresh ${processConfig.name} logs`}
+                            aria-label={`Refresh ${processConfig.name} logs`}
+                            onClick={() => void loadProcessLogs(process.id)}
+                          >
+                            <RotateCw size={12} />
+                          </Button>
                         </div>
-                      )}
+                        <div className="max-h-44 space-y-1 overflow-auto">
+                          {processLogEntries.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground">No logs yet.</p>
+                          ) : (
+                            processLogEntries.slice(-16).map((entry) => (
+                              <div
+                                key={entry.id}
+                                className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 text-[11px] leading-4"
+                              >
+                                <span
+                                  className={cn(
+                                    "font-mono",
+                                    entry.stream === "stderr" ? "text-destructive" : "text-muted-foreground",
+                                  )}
+                                >
+                                  {entry.stream}
+                                </span>
+                                <span className="whitespace-pre-wrap break-words font-mono text-foreground">
+                                  {entry.data.trim() || "(empty)"}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
                     {processEndpoints.map((endpoint) => {
                       const endpointUrl = typeof endpoint.url === "string" ? endpoint.url : "";
                       const endpointEnabled = endpoint.status === "enabled";
@@ -597,19 +609,6 @@ export function SessionApplicationsPanel({
                               onClick={() => void copyEndpointUrl(endpointUrl)}
                             >
                               <Copy size={14} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              title={`Rotate ${endpoint.label} URL`}
-                              aria-label={`Rotate ${endpoint.label} URL`}
-                              onClick={() =>
-                                void run(`rotate:${endpoint.id}`, () =>
-                                  client.mutation(ROTATE_ENDPOINT_MUTATION, { endpointId: endpoint.id }).toPromise(),
-                                )
-                              }
-                            >
-                              <RotateCw size={14} />
                             </Button>
                             <Button
                               variant="ghost"
