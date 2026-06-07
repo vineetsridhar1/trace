@@ -128,12 +128,8 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     | undefined;
   const config = groupRepo?.applicationConfig;
   const upsertMany = useEntityStore((s) => s.upsertMany);
-  const processes = useEntityStore((s) =>
-    Object.values(s.sessionApplicationProcesses).filter((process) => process.sessionGroupId === sessionGroupId),
-  );
-  const endpoints = useEntityStore((s) =>
-    Object.values(s.sessionEndpoints).filter((endpoint) => endpoint.sessionGroupId === sessionGroupId),
-  );
+  const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
+  const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
   const [pending, setPending] = useState<string | null>(null);
@@ -166,6 +162,22 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
         setTrafficEntries((result.data?.endpointTraffic as EndpointTrafficEntry[] | undefined) ?? []);
       });
   }, [trafficEndpointId]);
+
+  const processes = useMemo(
+    () =>
+      Object.values(processTable).filter(
+        (process) => process.sessionGroupId === sessionGroupId,
+      ),
+    [processTable, sessionGroupId],
+  );
+
+  const endpoints = useMemo(
+    () =>
+      Object.values(endpointTable).filter(
+        (endpoint) => endpoint.sessionGroupId === sessionGroupId,
+      ),
+    [endpointTable, sessionGroupId],
+  );
 
   const processesByKey = useMemo(() => {
     const map = new Map<string, SessionApplicationProcess>();
