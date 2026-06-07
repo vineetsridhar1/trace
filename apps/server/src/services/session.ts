@@ -9003,6 +9003,8 @@ export class SessionService {
         runtimeSession,
         this.destroyRuntimeOptions(cloudSession.id, "idle_session_group_cleanup"),
       );
+      // Destroying the runtime kills any forwarded application processes; reflect that.
+      await sessionApplicationService.markSessionGroupRuntimeStopped(group.id, session.organizationId);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

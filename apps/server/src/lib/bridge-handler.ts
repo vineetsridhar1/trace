@@ -483,6 +483,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      // Registration cannot succeed without bridge auth, so the runtime's
+      // organization is known from here on. Scope every runtime-driven mutation
+      // to it so a compromised runtime can't touch another tenant's rows.
+      if (!bridgeAuth) return;
+
       if (msg.type === "repo_linked") {
         const repoId = typeof msg.repoId === "string" ? msg.repoId.trim() : "";
         if (!repoId) {
@@ -509,7 +514,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "setup_script_result" && typeof msg.requestId === "string") {
         void sessionApplicationService
-          .completeSetupScriptRun(msg.requestId, {
+          .completeSetupScriptRun(msg.requestId, bridgeAuth.organizationId, {
             exitCode: typeof msg.exitCode === "number" ? msg.exitCode : 1,
             output: typeof msg.output === "string" ? msg.output : undefined,
             error: typeof msg.error === "string" ? msg.error : undefined,
@@ -523,7 +528,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       if (msg.type === "setup_script_log" && typeof msg.requestId === "string") {
         if (typeof msg.data === "string" && (msg.stream === "stdout" || msg.stream === "stderr")) {
           void sessionApplicationService
-            .appendSetupScriptOutput(msg.requestId, msg.data)
+            .appendSetupScriptOutput(msg.requestId, bridgeAuth.organizationId, msg.data)
             .catch((err: unknown) => {
               console.error("[bridge] error appending setup script output:", err);
             });
@@ -535,6 +540,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         void sessionApplicationService
           .markProcessRunning(
             msg.processInstanceId,
+            bridgeAuth.organizationId,
             typeof msg.bridgeProcessId === "string" ? msg.bridgeProcessId : msg.processInstanceId,
           )
           .catch((err: unknown) => {
@@ -546,7 +552,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       if (msg.type === "app_process_log" && typeof msg.processInstanceId === "string") {
         if (typeof msg.data === "string" && (msg.stream === "stdout" || msg.stream === "stderr")) {
           void sessionApplicationService
-            .appendProcessLog(msg.processInstanceId, msg.stream, msg.data)
+            .appendProcessLog(msg.processInstanceId, bridgeAuth.organizationId, msg.stream, msg.data)
             .catch((err: unknown) => {
               console.error("[bridge] error appending app process log:", err);
             });
@@ -558,6 +564,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         void sessionApplicationService
           .markProcessExited(
             msg.processInstanceId,
+            bridgeAuth.organizationId,
             typeof msg.exitCode === "number" ? msg.exitCode : null,
           )
           .catch((err: unknown) => {
@@ -573,6 +580,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           void sessionApplicationService
             .markProcessExited(
               processInstanceId,
+              bridgeAuth.organizationId,
               null,
               typeof msg.error === "string" ? msg.error : "Process failed",
             )

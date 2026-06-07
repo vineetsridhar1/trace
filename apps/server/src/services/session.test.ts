@@ -329,6 +329,10 @@ describe("SessionService", () => {
       isOwner: true,
     });
     prismaMock.agentEnvironment.findFirst.mockResolvedValue(makeAgentEnvironment());
+    // Runtime teardown (archive/idle) reflects killed app processes; default to
+    // none so tests that don't exercise forwarding stay unaffected.
+    prismaMock.sessionApplicationProcess.findMany.mockResolvedValue([]);
+    prismaMock.sessionEndpoint.findMany.mockResolvedValue([]);
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);

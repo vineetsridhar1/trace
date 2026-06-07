@@ -216,10 +216,11 @@ describe("SessionApplicationService", () => {
   });
 
   it("ignores stale bridge logs for missing process rows", async () => {
-    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce(null);
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce(null);
 
     const entry = await new SessionApplicationService().appendProcessLog(
       "missing-process",
+      "org-1",
       "stdout",
       "late log",
     );
@@ -230,7 +231,7 @@ describe("SessionApplicationService", () => {
   });
 
   it("truncates noisy app process log chunks before storing them", async () => {
-    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce({
       id: "process-1",
       organizationId: "org-1",
       sessionGroupId: "group-1",
@@ -244,6 +245,7 @@ describe("SessionApplicationService", () => {
 
     const entry = await new SessionApplicationService().appendProcessLog(
       "process-1",
+      "org-1",
       "stdout",
       "x".repeat(PROCESS_LOG_ENTRY_MAX_CHARS + 1024),
     );
@@ -262,7 +264,7 @@ describe("SessionApplicationService", () => {
   });
 
   it("prunes old app process logs as a rolling tail", async () => {
-    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce({
       id: "process-1",
       organizationId: "org-1",
       sessionGroupId: "group-1",
@@ -278,7 +280,7 @@ describe("SessionApplicationService", () => {
       { id: "stale-2" },
     ]);
 
-    await new SessionApplicationService().appendProcessLog("process-1", "stderr", "line\n");
+    await new SessionApplicationService().appendProcessLog("process-1", "org-1", "stderr", "line\n");
 
     expect(prismaMock.sessionApplicationLogEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -357,16 +359,29 @@ describe("SessionApplicationService", () => {
   });
 
   it("ignores stale bridge lifecycle callbacks for missing process rows", async () => {
-    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValue(null);
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue(null);
 
     await expect(
-      new SessionApplicationService().markProcessRunning("missing-process", "bridge-process"),
+      new SessionApplicationService().markProcessRunning("missing-process", "org-1", "bridge-process"),
     ).resolves.toBeNull();
     await expect(
-      new SessionApplicationService().markProcessExited("missing-process", 0),
+      new SessionApplicationService().markProcessExited("missing-process", "org-1", 0),
     ).resolves.toBeNull();
 
     expect(prismaMock.sessionApplicationProcess.update).not.toHaveBeenCalled();
     expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("scopes bridge-driven process updates to the reporting runtime's org", async () => {
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue(null);
+
+    await new SessionApplicationService().markProcessRunning("process-1", "org-1", "bridge-1");
+    await new SessionApplicationService().markProcessExited("process-1", "org-1", 0);
+
+    expect(prismaMock.sessionApplicationProcess.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "process-1", organizationId: "org-1" } }),
+    );
+    // A foreign org never matches, so the row is never updated.
+    expect(prismaMock.sessionApplicationProcess.update).not.toHaveBeenCalled();
   });
 });
