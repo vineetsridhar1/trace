@@ -65,10 +65,8 @@ function normalizeWorkingDirectory(value: unknown): string {
 }
 
 function normalizeEnv(value: unknown): RepoEnvVar[] {
-  // Legacy configs stored env as a plaintext { KEY: value } object. Those values
-  // can't be carried forward as secret references, so drop them and let the user
-  // re-add variables through the secret picker.
-  if (value == null || !Array.isArray(value)) return [];
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new ValidationError("Environment variables must be a list");
   const seen = new Set<string>();
   return value.map((entry) => {
     const input = record(entry);
