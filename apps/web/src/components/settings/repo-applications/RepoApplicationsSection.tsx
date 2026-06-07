@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Settings2 } from "lucide-react";
-import { useEntityField, useEntityStore } from "@trace/client-core";
-import type { RepoApplicationConfig } from "@trace/gql";
+import { useAuthStore, useEntityField, useEntityStore } from "@trace/client-core";
+import type { OrgSecret, RepoApplicationConfig } from "@trace/gql";
 import { UPDATE_REPO_MUTATION } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { Button } from "../../ui/button";
+import { ORG_SECRETS_QUERY } from "../agent-environment-queries";
 import { ApplicationConfigDialog } from "./ApplicationConfigDialog";
 
 const EMPTY_CONFIG: RepoApplicationConfig = { setupScripts: [], applications: [] };
@@ -14,9 +15,27 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
     | RepoApplicationConfig
     | undefined;
   const config = applicationConfig ?? EMPTY_CONFIG;
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [secretNames, setSecretNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open || !activeOrgId) return;
+    let cancelled = false;
+    void client
+      .query(ORG_SECRETS_QUERY, { orgId: activeOrgId }, { requestPolicy: "network-only" })
+      .toPromise()
+      .then((result) => {
+        if (cancelled || result.error) return;
+        const secrets = (result.data?.orgSecrets as OrgSecret[] | undefined) ?? [];
+        setSecretNames(secrets.map((secret) => secret.name));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeOrgId]);
 
   const processCount = config.applications.reduce(
     (count, application) => count + application.processes.length,
@@ -67,6 +86,7 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
       <ApplicationConfigDialog
         open={open}
         config={config}
+        secretNames={secretNames}
         saving={saving}
         error={error}
         onOpenChange={setOpen}

@@ -23,7 +23,10 @@ const REPOS_QUERY = gql`
           name
           command
           workingDirectory
-          env
+          env {
+            key
+            secretName
+          }
         }
         applications {
           id
@@ -33,7 +36,10 @@ const REPOS_QUERY = gql`
             name
             command
             workingDirectory
-            env
+            env {
+              key
+              secretName
+            }
             required
             ports {
               id

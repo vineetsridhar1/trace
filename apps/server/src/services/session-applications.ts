@@ -10,8 +10,11 @@ import { sessionRouter } from "../lib/session-router.js";
 import { AuthenticationError, AuthorizationError, ValidationError } from "../lib/errors.js";
 import { canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
+import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
+
+import type { RepoEnvVar } from "@trace/gql";
 
 type Tx = Prisma.TransactionClient;
 const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
@@ -204,6 +207,7 @@ export class SessionApplicationService {
       actorType: "user",
       actorId: userId,
     });
+    const env = await this.resolveEnv(organizationId, script.env);
     const delivery = sessionRouter.sendToRuntime(runtimeId, {
       type: "setup_script_run",
       requestId: run.id,
@@ -211,7 +215,7 @@ export class SessionApplicationService {
       sessionId,
       command: script.command,
       cwd: script.workingDirectory ?? ".",
-      env: script.env ?? undefined,
+      env,
     }, organizationId);
     if (delivery !== "delivered") {
       await prisma.sessionSetupScriptRun.update({
@@ -264,6 +268,8 @@ export class SessionApplicationService {
     const app = this.getApplication(group, appConfigId);
     const processConfig = app.processes.find((candidate) => candidate.id === processConfigId);
     if (!processConfig) throw new ValidationError("Process not found");
+
+    const env = await this.resolveEnv(organizationId, processConfig.env);
 
     const process = await prisma.$transaction(async (tx) => {
       const process = await tx.sessionApplicationProcess.upsert({
@@ -324,7 +330,7 @@ export class SessionApplicationService {
         processConfigId,
         command: processConfig.command,
         cwd: processConfig.workingDirectory ?? ".",
-        env: processConfig.env ?? undefined,
+        env,
         ports: processConfig.ports.map((port) => ({
           portConfigId: port.id,
           port: port.port,
@@ -857,6 +863,30 @@ export class SessionApplicationService {
       if (!existing) return key;
     }
     throw new Error("Could not generate unique endpoint key");
+  }
+
+  // Env vars in the repo config reference org secrets by name; the plaintext
+  // value is never stored in the config. Resolve to actual values here, right
+  // before handing the process off to the runtime.
+  private async resolveEnv(
+    organizationId: string,
+    env: RepoEnvVar[] | null | undefined,
+  ): Promise<Record<string, string> | undefined> {
+    if (!env || env.length === 0) return undefined;
+    const resolved: Record<string, string> = {};
+    const missing = new Set<string>();
+    for (const entry of env) {
+      const value = await orgSecretService.getDecryptedValueByName(organizationId, entry.secretName);
+      if (value == null) {
+        missing.add(entry.secretName);
+        continue;
+      }
+      resolved[entry.key] = value;
+    }
+    if (missing.size > 0) {
+      throw new ValidationError(`Missing org secrets: ${[...missing].join(", ")}`);
+    }
+    return resolved;
   }
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {

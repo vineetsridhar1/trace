@@ -27,7 +27,10 @@ const APPLICATIONS_STATE_QUERY = gql`
             name
             command
             workingDirectory
-            env
+            env {
+              key
+              secretName
+            }
           }
           applications {
             id
@@ -37,7 +40,10 @@ const APPLICATIONS_STATE_QUERY = gql`
               name
               command
               workingDirectory
-              env
+              env {
+                key
+                secretName
+              }
               required
               ports {
                 id

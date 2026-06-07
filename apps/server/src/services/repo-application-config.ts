@@ -3,6 +3,7 @@ import type {
   RepoApplicationConfig,
   RepoApplicationConfigInput,
   RepoApplicationDefinition,
+  RepoEnvVar,
   RepoPortDefinition,
   RepoProcessDefinition,
   RepoSetupScript,
@@ -17,6 +18,7 @@ const EMPTY_APPLICATION_CONFIG: RepoApplicationConfig = {
 };
 
 const ID_RE = /^[a-z0-9_-]+$/;
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HTTP_PROTOCOLS = new Set(["http"]);
 
 function record(value: unknown): JsonRecord | null {
@@ -62,19 +64,28 @@ function normalizeWorkingDirectory(value: unknown): string {
   return workingDirectory;
 }
 
-function normalizeEnv(value: unknown): Record<string, string> | null {
-  if (value == null) return null;
-  const env = record(value);
-  if (!env) throw new ValidationError("Environment must be an object");
-  const normalized: Record<string, string> = {};
-  for (const [key, envValue] of Object.entries(env)) {
-    if (!key.trim()) throw new ValidationError("Environment keys must be non-empty");
-    if (typeof envValue !== "string") {
-      throw new ValidationError("Environment values must be strings");
+function normalizeEnv(value: unknown): RepoEnvVar[] {
+  // Legacy configs stored env as a plaintext { KEY: value } object. Those values
+  // can't be carried forward as secret references, so drop them and let the user
+  // re-add variables through the secret picker.
+  if (value == null || !Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.map((entry) => {
+    const input = record(entry);
+    if (!input) throw new ValidationError("Environment variable must be an object");
+    const key = requiredString(input.key, "Environment variable name");
+    if (!ENV_KEY_RE.test(key)) {
+      throw new ValidationError(
+        "Environment variable names must start with a letter or underscore and contain only letters, numbers, or underscores",
+      );
     }
-    normalized[key] = envValue;
-  }
-  return normalized;
+    if (seen.has(key)) throw new ValidationError("Environment variable names must be unique");
+    seen.add(key);
+    return {
+      key,
+      secretName: requiredString(input.secretName, "Environment variable secret"),
+    };
+  });
 }
 
 function assertUnique(ids: string[], label: string): void {

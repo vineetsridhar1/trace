@@ -1728,6 +1728,17 @@ export type RepoApplicationDefinitionInput = {
   processes: Array<RepoProcessDefinitionInput>;
 };
 
+export type RepoEnvVar = {
+  __typename?: "RepoEnvVar";
+  key: Scalars["String"]["output"];
+  secretName: Scalars["String"]["output"];
+};
+
+export type RepoEnvVarInput = {
+  key: Scalars["String"]["input"];
+  secretName: Scalars["String"]["input"];
+};
+
 export type RepoPortDefinition = {
   __typename?: "RepoPortDefinition";
   defaultForwardingEnabled: Scalars["Boolean"]["output"];
@@ -1750,7 +1761,7 @@ export type RepoPortDefinitionInput = {
 export type RepoProcessDefinition = {
   __typename?: "RepoProcessDefinition";
   command: Scalars["String"]["output"];
-  env?: Maybe<Scalars["JSON"]["output"]>;
+  env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   ports: Array<RepoPortDefinition>;
@@ -1760,7 +1771,7 @@ export type RepoProcessDefinition = {
 
 export type RepoProcessDefinitionInput = {
   command: Scalars["String"]["input"];
-  env?: InputMaybe<Scalars["JSON"]["input"]>;
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
   ports?: InputMaybe<Array<RepoPortDefinitionInput>>;
@@ -1771,7 +1782,7 @@ export type RepoProcessDefinitionInput = {
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
   command: Scalars["String"]["output"];
-  env?: Maybe<Scalars["JSON"]["output"]>;
+  env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   workingDirectory?: Maybe<Scalars["String"]["output"]>;
@@ -1779,7 +1790,7 @@ export type RepoSetupScript = {
 
 export type RepoSetupScriptInput = {
   command: Scalars["String"]["input"];
-  env?: InputMaybe<Scalars["JSON"]["input"]>;
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
