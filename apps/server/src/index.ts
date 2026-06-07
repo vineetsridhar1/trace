@@ -42,6 +42,7 @@ import {
 } from "./lib/cors.js";
 import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.js";
 import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
+import { endpointProxyService } from "./services/endpoint-proxy.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -150,6 +151,19 @@ async function main() {
     }),
   );
   app.use(cookieParser());
+
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const endpointKey = endpointProxyService.extractKey(req.headers.host);
+    if (!endpointKey) {
+      next();
+      return;
+    }
+    void endpointProxyService.handleHttpRequest(req, res, endpointKey).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!res.headersSent) res.status(500);
+      res.end(message);
+    });
+  });
 
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
@@ -346,6 +360,11 @@ async function main() {
 
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    if (endpointProxyService.isEndpointHost(req.headers.host)) {
+      endpointProxyService.handleWebSocketUpgrade(req, socket as import("net").Socket, head);
+      return;
+    }
+
     const { pathname } = new URL(req.url ?? "", "http://localhost");
     const rejectUpgrade = (statusCode: number, message: string): void => {
       socket.write(`HTTP/1.1 ${statusCode} ${message}\r\n\r\n`);

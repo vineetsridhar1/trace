@@ -1,0 +1,801 @@
+import type {
+  EndpointTrafficCaptureMode,
+  SessionEndpointAccessMode,
+  SessionApplicationProcess as PrismaSessionApplicationProcess,
+  Prisma,
+} from "@prisma/client";
+import { randomUUID } from "crypto";
+import { prisma } from "../lib/db.js";
+import { sessionRouter } from "../lib/session-router.js";
+import { AuthenticationError, AuthorizationError, ValidationError } from "../lib/errors.js";
+import { canViewSessionGroup } from "./access.js";
+import { eventService } from "./event.js";
+import { repoApplicationConfigService } from "./repo-application-config.js";
+import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
+
+type Tx = Prisma.TransactionClient;
+
+type ManagedSessionGroup = {
+  id: string;
+  organizationId: string;
+  ownerUserId: string;
+  visibility: string;
+  repoId: string | null;
+  workdir: string | null;
+  sessions: Array<{
+    id: string;
+    workdir: string | null;
+    connection: Prisma.JsonValue;
+  }>;
+  repo: {
+    id: string;
+    setupConfig: Prisma.JsonValue;
+  } | null;
+};
+
+function connectionRecord(connection: Prisma.JsonValue): Record<string, unknown> {
+  return connection && typeof connection === "object" && !Array.isArray(connection)
+    ? (connection as Record<string, unknown>)
+    : {};
+}
+
+function connectionRuntimeInstanceId(connection: Prisma.JsonValue): string | null {
+  const runtimeInstanceId = connectionRecord(connection).runtimeInstanceId;
+  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+    ? runtimeInstanceId
+    : null;
+}
+
+function publicProcess(process: PrismaSessionApplicationProcess) {
+  return {
+    id: process.id,
+    sessionGroupId: process.sessionGroupId,
+    appConfigId: process.appConfigId,
+    processConfigId: process.processConfigId,
+    label: process.label,
+    status: process.status,
+    runtimeInstanceId: process.runtimeInstanceId,
+    startedAt: process.startedAt?.toISOString() ?? null,
+    stoppedAt: process.stoppedAt?.toISOString() ?? null,
+    exitCode: process.exitCode,
+    lastError: process.lastError,
+  };
+}
+
+function publicEndpoint(endpoint: {
+  id: string;
+  key: string;
+  sessionGroupId: string;
+  appConfigId: string;
+  processConfigId: string;
+  portConfigId: string;
+  label: string;
+  targetPort: number;
+  status: string;
+  accessMode: string;
+  trafficCaptureMode: string;
+  enabledAt: Date | null;
+  disabledAt: Date | null;
+  revokedAt: Date | null;
+}) {
+  return {
+    id: endpoint.id,
+    key: endpoint.key,
+    url: buildEndpointUrl(endpoint.key),
+    sessionGroupId: endpoint.sessionGroupId,
+    appConfigId: endpoint.appConfigId,
+    processConfigId: endpoint.processConfigId,
+    portConfigId: endpoint.portConfigId,
+    label: endpoint.label,
+    targetPort: endpoint.targetPort,
+    status: endpoint.status,
+    accessMode: endpoint.accessMode,
+    trafficCaptureMode: endpoint.trafficCaptureMode,
+    enabledAt: endpoint.enabledAt?.toISOString() ?? null,
+    disabledAt: endpoint.disabledAt?.toISOString() ?? null,
+    revokedAt: endpoint.revokedAt?.toISOString() ?? null,
+  };
+}
+
+export class SessionApplicationService {
+  async listSetupScriptRuns(sessionGroupId: string, organizationId: string, userId: string) {
+    await this.assertCanView(sessionGroupId, organizationId, userId);
+    return prisma.sessionSetupScriptRun.findMany({
+      where: { sessionGroupId, organizationId },
+      orderBy: { startedAt: "desc" },
+      take: 50,
+    });
+  }
+
+  async listProcesses(sessionGroupId: string, organizationId: string, userId: string) {
+    await this.assertCanView(sessionGroupId, organizationId, userId);
+    return prisma.sessionApplicationProcess.findMany({
+      where: { sessionGroupId, organizationId },
+      orderBy: [{ appConfigId: "asc" }, { processConfigId: "asc" }],
+    });
+  }
+
+  async listLogs(
+    processId: string,
+    organizationId: string,
+    userId: string,
+    options?: { limit?: number | null; beforeSequence?: number | null },
+  ) {
+    const process = await prisma.sessionApplicationProcess.findFirstOrThrow({
+      where: { id: processId, organizationId },
+      select: { sessionGroupId: true },
+    });
+    await this.assertCanView(process.sessionGroupId, organizationId, userId);
+    return prisma.sessionApplicationLogEntry.findMany({
+      where: {
+        processId,
+        ...(options?.beforeSequence != null ? { sequence: { lt: options.beforeSequence } } : {}),
+      },
+      orderBy: { sequence: "desc" },
+      take: Math.min(Math.max(options?.limit ?? 200, 1), 1000),
+    });
+  }
+
+  async listEndpoints(sessionGroupId: string, organizationId: string, userId: string) {
+    await this.assertCanView(sessionGroupId, organizationId, userId);
+    return prisma.sessionEndpoint.findMany({
+      where: { sessionGroupId, organizationId },
+      orderBy: [{ appConfigId: "asc" }, { processConfigId: "asc" }, { portConfigId: "asc" }],
+    });
+  }
+
+  async listTraffic(
+    endpointId: string,
+    organizationId: string,
+    userId: string,
+    options?: { limit?: number | null; before?: Date | null },
+  ) {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+      select: { sessionGroupId: true },
+    });
+    await this.assertCanView(endpoint.sessionGroupId, organizationId, userId);
+    return prisma.endpointTrafficEntry.findMany({
+      where: {
+        endpointId,
+        ...(options?.before ? { startedAt: { lt: options.before } } : {}),
+      },
+      orderBy: { startedAt: "desc" },
+      take: Math.min(Math.max(options?.limit ?? 100, 1), 500),
+    });
+  }
+
+  async runSetupScript(sessionGroupId: string, scriptId: string, organizationId: string, userId: string) {
+    const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      "manage",
+    );
+    const config = repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
+    if (!script) throw new ValidationError("Setup script not found");
+    const run = await prisma.sessionSetupScriptRun.create({
+      data: {
+        organizationId,
+        sessionGroupId,
+        repoId: group.repoId ?? "",
+        scriptConfigId: script.id,
+        label: script.name,
+        command: script.command,
+        workingDirectory: script.workingDirectory ?? ".",
+        startedByUserId: userId,
+      },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_setup_script_started",
+      payload: { setupScriptRun: run },
+      actorType: "user",
+      actorId: userId,
+    });
+    const delivery = sessionRouter.sendToRuntime(runtimeId, {
+      type: "setup_script_run",
+      requestId: run.id,
+      sessionGroupId,
+      sessionId,
+      command: script.command,
+      cwd: script.workingDirectory ?? ".",
+      env: script.env ?? undefined,
+    }, organizationId);
+    if (delivery !== "delivered") {
+      await prisma.sessionSetupScriptRun.update({
+        where: { id: run.id },
+        data: {
+          status: "failed",
+          completedAt: new Date(),
+          lastError: `Runtime not available: ${delivery}`,
+        },
+      });
+      throw new Error(`Runtime not available: ${delivery}`);
+    }
+    return true;
+  }
+
+  async startApplication(sessionGroupId: string, appConfigId: string, organizationId: string, userId: string) {
+    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId, "manage");
+    const app = this.getApplication(group, appConfigId);
+    return Promise.all(
+      app.processes
+        .filter((process) => process.required)
+        .map((process) =>
+          this.startProcess(sessionGroupId, appConfigId, process.id, organizationId, userId),
+        ),
+    );
+  }
+
+  async stopApplication(sessionGroupId: string, appConfigId: string, organizationId: string, userId: string) {
+    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId, "manage");
+    const app = this.getApplication(group, appConfigId);
+    return Promise.all(
+      app.processes.map((process) =>
+        this.stopProcess(sessionGroupId, appConfigId, process.id, organizationId, userId),
+      ),
+    );
+  }
+
+  async startProcess(
+    sessionGroupId: string,
+    appConfigId: string,
+    processConfigId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      "manage",
+    );
+    const app = this.getApplication(group, appConfigId);
+    const processConfig = app.processes.find((candidate) => candidate.id === processConfigId);
+    if (!processConfig) throw new ValidationError("Process not found");
+
+    const process = await prisma.$transaction(async (tx) => {
+      const process = await tx.sessionApplicationProcess.upsert({
+        where: { sessionGroupId_appConfigId_processConfigId: { sessionGroupId, appConfigId, processConfigId } },
+        create: {
+          organizationId,
+          sessionGroupId,
+          repoId: group.repoId ?? "",
+          appConfigId,
+          processConfigId,
+          label: processConfig.name,
+          command: processConfig.command,
+          workingDirectory: processConfig.workingDirectory ?? ".",
+          status: "starting",
+          runtimeInstanceId: runtimeId,
+          startedByUserId: userId,
+          startedAt: new Date(),
+          stoppedAt: null,
+          exitCode: null,
+          lastError: null,
+        },
+        update: {
+          label: processConfig.name,
+          command: processConfig.command,
+          workingDirectory: processConfig.workingDirectory ?? ".",
+          status: "starting",
+          runtimeInstanceId: runtimeId,
+          startedByUserId: userId,
+          startedAt: new Date(),
+          stoppedAt: null,
+          exitCode: null,
+          lastError: null,
+        },
+      });
+      await this.ensureEndpoints(tx, group, appConfigId, processConfigId, processConfig.ports);
+      return process;
+    });
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_application_process_started",
+      payload: { process: publicProcess(process) },
+      actorType: "user",
+      actorId: userId,
+    });
+
+    const delivery = sessionRouter.sendToRuntime(
+      runtimeId,
+      {
+        type: "app_process_start",
+        requestId: randomUUID(),
+        processInstanceId: process.id,
+        sessionGroupId,
+        sessionId,
+        appConfigId,
+        processConfigId,
+        command: processConfig.command,
+        cwd: processConfig.workingDirectory ?? ".",
+        env: processConfig.env ?? undefined,
+        ports: processConfig.ports.map((port) => ({
+          portConfigId: port.id,
+          port: port.port,
+          protocol: "http",
+        })),
+      },
+      organizationId,
+    );
+    if (delivery !== "delivered") {
+      await this.markProcessFailed(process.id, organizationId, sessionId, userId, `Runtime not available: ${delivery}`);
+      throw new Error(`Runtime not available: ${delivery}`);
+    }
+
+    for (const port of processConfig.ports) {
+      if (!port.defaultForwardingEnabled) continue;
+      const endpoint = await prisma.sessionEndpoint.findUnique({
+        where: {
+          sessionGroupId_appConfigId_processConfigId_portConfigId: {
+            sessionGroupId,
+            appConfigId,
+            processConfigId,
+            portConfigId: port.id,
+          },
+        },
+      });
+      if (endpoint) {
+        await this.enableEndpoint(endpoint.id, organizationId, userId);
+      }
+    }
+
+    return process;
+  }
+
+  async stopProcess(
+    sessionGroupId: string,
+    appConfigId: string,
+    processConfigId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    const { sessionId, runtimeId } = await this.resolveCloudRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      "manage",
+    );
+    const process = await prisma.sessionApplicationProcess.findUniqueOrThrow({
+      where: { sessionGroupId_appConfigId_processConfigId: { sessionGroupId, appConfigId, processConfigId } },
+    });
+    const delivery = sessionRouter.sendToRuntime(runtimeId, {
+      type: "app_process_stop",
+      requestId: randomUUID(),
+      processInstanceId: process.id,
+    }, organizationId);
+    if (delivery !== "delivered" && process.runtimeInstanceId) {
+      throw new Error(`Runtime not available: ${delivery}`);
+    }
+
+    const stopped = await prisma.$transaction(async (tx) => {
+      const stopped = await tx.sessionApplicationProcess.update({
+        where: { id: process.id },
+        data: { status: "stopped", stoppedAt: new Date(), runtimeInstanceId: null, bridgeProcessId: null },
+      });
+      await tx.sessionEndpoint.updateMany({
+        where: { sessionGroupId, appConfigId, processConfigId, status: "enabled" },
+        data: { status: "disabled", disabledAt: new Date(), currentRuntimeInstanceId: null },
+      });
+      return stopped;
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_application_process_stopped",
+      payload: { process: publicProcess(stopped) },
+      actorType: "user",
+      actorId: userId,
+    });
+    return stopped;
+  }
+
+  async restartProcess(
+    sessionGroupId: string,
+    appConfigId: string,
+    processConfigId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    await this.stopProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId);
+    return this.startProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId);
+  }
+
+  async enableEndpoint(endpointId: string, organizationId: string, userId: string, accessMode?: SessionEndpointAccessMode | null) {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+    });
+    await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
+    const process = await prisma.sessionApplicationProcess.findUnique({
+      where: {
+        sessionGroupId_appConfigId_processConfigId: {
+          sessionGroupId: endpoint.sessionGroupId,
+          appConfigId: endpoint.appConfigId,
+          processConfigId: endpoint.processConfigId,
+        },
+      },
+    });
+    if (!process || process.status !== "running") {
+      throw new ValidationError("Start the process first");
+    }
+    const updated = await prisma.sessionEndpoint.update({
+      where: { id: endpoint.id },
+      data: {
+        status: "enabled",
+        accessMode: accessMode ?? endpoint.accessMode,
+        enabledByUserId: userId,
+        enabledAt: new Date(),
+        disabledAt: null,
+        currentRuntimeInstanceId: process.runtimeInstanceId,
+      },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: endpoint.sessionGroupId,
+      eventType: "session_endpoint_forwarding_enabled",
+      payload: { endpoint: publicEndpoint(updated) },
+      actorType: "user",
+      actorId: userId,
+    });
+    return updated;
+  }
+
+  async disableEndpoint(endpointId: string, organizationId: string, userId: string) {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+    });
+    await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
+    const updated = await prisma.sessionEndpoint.update({
+      where: { id: endpoint.id },
+      data: { status: "disabled", disabledAt: new Date(), currentRuntimeInstanceId: null },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: endpoint.sessionGroupId,
+      eventType: "session_endpoint_forwarding_disabled",
+      payload: { endpoint: publicEndpoint(updated) },
+      actorType: "user",
+      actorId: userId,
+    });
+    return updated;
+  }
+
+  async rotateEndpoint(endpointId: string, organizationId: string, userId: string) {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+    });
+    await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
+    const key = await this.createEndpointKey();
+    const updated = await prisma.sessionEndpoint.update({
+      where: { id: endpoint.id },
+      data: { key },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: endpoint.sessionGroupId,
+      eventType: "session_endpoint_rotated",
+      payload: { endpoint: publicEndpoint(updated) },
+      actorType: "user",
+      actorId: userId,
+    });
+    return updated;
+  }
+
+  async updateTrafficCapture(endpointId: string, mode: EndpointTrafficCaptureMode, organizationId: string, userId: string) {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+    });
+    await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
+    const updated = await prisma.sessionEndpoint.update({
+      where: { id: endpoint.id },
+      data: { trafficCaptureMode: mode },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: endpoint.sessionGroupId,
+      eventType: "session_endpoint_traffic_capture_updated",
+      payload: { endpoint: publicEndpoint(updated) },
+      actorType: "user",
+      actorId: userId,
+    });
+    return updated;
+  }
+
+  async clearTraffic(endpointId: string, organizationId: string, userId: string) {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+      select: { id: true, sessionGroupId: true },
+    });
+    await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
+    await prisma.endpointTrafficEntry.deleteMany({ where: { endpointId: endpoint.id } });
+    return true;
+  }
+
+  async markProcessRunning(processId: string, bridgeProcessId: string) {
+    const process = await prisma.sessionApplicationProcess.update({
+      where: { id: processId },
+      data: { status: "running", bridgeProcessId, lastHeartbeatAt: new Date() },
+    });
+    await eventService.create({
+      organizationId: process.organizationId,
+      scopeType: "session",
+      scopeId: process.sessionGroupId,
+      eventType: "session_application_process_started",
+      payload: { process: publicProcess(process) },
+      actorType: "system",
+      actorId: "bridge",
+    });
+    return process;
+  }
+
+  async completeSetupScriptRun(
+    runId: string,
+    result: { exitCode: number; output?: string; error?: string },
+  ) {
+    const output = result.output ?? "";
+    const outputPreview = output.length > 65_536 ? output.slice(0, 65_536) : output || null;
+    const run = await prisma.sessionSetupScriptRun.update({
+      where: { id: runId },
+      data: {
+        status: result.exitCode === 0 && !result.error ? "completed" : "failed",
+        exitCode: result.exitCode,
+        outputPreview,
+        outputTruncated: output.length > 65_536,
+        lastError: result.error ?? (result.exitCode === 0 ? null : `Exited with ${result.exitCode}`),
+        completedAt: new Date(),
+      },
+    });
+    await eventService.create({
+      organizationId: run.organizationId,
+      scopeType: "session",
+      scopeId: run.sessionGroupId,
+      eventType:
+        run.status === "completed" ? "session_setup_script_completed" : "session_setup_script_failed",
+      payload: {
+        setupScriptRun: {
+          id: run.id,
+          sessionGroupId: run.sessionGroupId,
+          scriptConfigId: run.scriptConfigId,
+          label: run.label,
+          command: run.command,
+          workingDirectory: run.workingDirectory,
+          status: run.status,
+          exitCode: run.exitCode,
+          outputPreview: run.outputPreview,
+          outputTruncated: run.outputTruncated,
+          lastError: run.lastError,
+          startedAt: run.startedAt.toISOString(),
+          completedAt: run.completedAt?.toISOString() ?? null,
+        },
+      },
+      actorType: "system",
+      actorId: "bridge",
+    });
+    return run;
+  }
+
+  async markProcessExited(processId: string, exitCode: number | null, error?: string | null) {
+    const process = await prisma.sessionApplicationProcess.update({
+      where: { id: processId },
+      data: {
+        status: error ? "failed" : "exited",
+        exitCode,
+        lastError: error,
+        stoppedAt: new Date(),
+        runtimeInstanceId: null,
+        bridgeProcessId: null,
+      },
+    });
+    await prisma.sessionEndpoint.updateMany({
+      where: { sessionGroupId: process.sessionGroupId, appConfigId: process.appConfigId, processConfigId: process.processConfigId, status: "enabled" },
+      data: { status: "disabled", disabledAt: new Date(), currentRuntimeInstanceId: null },
+    });
+    await eventService.create({
+      organizationId: process.organizationId,
+      scopeType: "session",
+      scopeId: process.sessionGroupId,
+      eventType: error ? "session_application_process_failed" : "session_application_process_stopped",
+      payload: { process: publicProcess(process) },
+      actorType: "system",
+      actorId: "bridge",
+    });
+    return process;
+  }
+
+  async appendProcessLog(processId: string, stream: "stdout" | "stderr", data: string) {
+    const process = await prisma.sessionApplicationProcess.findUniqueOrThrow({
+      where: { id: processId },
+      select: { id: true, organizationId: true, sessionGroupId: true },
+    });
+    const last = await prisma.sessionApplicationLogEntry.findFirst({
+      where: { processId },
+      orderBy: { sequence: "desc" },
+      select: { sequence: true },
+    });
+    const entry = await prisma.sessionApplicationLogEntry.create({
+      data: {
+        organizationId: process.organizationId,
+        processId,
+        stream,
+        data,
+        sequence: (last?.sequence ?? 0) + 1,
+      },
+    });
+    await eventService.create({
+      organizationId: process.organizationId,
+      scopeType: "session",
+      scopeId: process.sessionGroupId,
+      eventType: "session_application_log_appended",
+      payload: { logEntry: entry },
+      actorType: "system",
+      actorId: "bridge",
+    });
+    return entry;
+  }
+
+  private async markProcessFailed(processId: string, organizationId: string, sessionId: string, userId: string, error: string) {
+    const process = await prisma.sessionApplicationProcess.update({
+      where: { id: processId },
+      data: { status: "failed", lastError: error, stoppedAt: new Date(), runtimeInstanceId: null },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_application_process_failed",
+      payload: { process: publicProcess(process) },
+      actorType: "user",
+      actorId: userId,
+    });
+  }
+
+  private async ensureEndpoints(
+    tx: Tx,
+    group: ManagedSessionGroup,
+    appConfigId: string,
+    processConfigId: string,
+    ports: Array<{ id: string; label: string; port: number; protocol: string }>,
+  ) {
+    for (const port of ports) {
+      const existing = await tx.sessionEndpoint.findUnique({
+        where: {
+          sessionGroupId_appConfigId_processConfigId_portConfigId: {
+            sessionGroupId: group.id,
+            appConfigId,
+            processConfigId,
+            portConfigId: port.id,
+          },
+        },
+      });
+      if (existing) continue;
+      const endpoint = await tx.sessionEndpoint.create({
+        data: {
+          key: await this.createEndpointKey(tx),
+          organizationId: group.organizationId,
+          sessionGroupId: group.id,
+          repoId: group.repoId ?? "",
+          appConfigId,
+          processConfigId,
+          portConfigId: port.id,
+          label: port.label,
+          targetPort: port.port,
+          protocol: port.protocol,
+        },
+      });
+      await eventService.create(
+        {
+          organizationId: group.organizationId,
+          scopeType: "session",
+          scopeId: group.id,
+          eventType: "session_endpoint_created",
+          payload: { endpoint: publicEndpoint(endpoint) },
+          actorType: "system",
+          actorId: "session-application-service",
+        },
+        tx,
+      );
+    }
+  }
+
+  private async createEndpointKey(tx: Pick<Tx, "sessionEndpoint"> | typeof prisma = prisma) {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const key = generateEndpointKey();
+      const existing = await tx.sessionEndpoint.findUnique({ where: { key }, select: { id: true } });
+      if (!existing) return key;
+    }
+    throw new Error("Could not generate unique endpoint key");
+  }
+
+  private getApplication(group: ManagedSessionGroup, appConfigId: string) {
+    const config = repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const app = config.applications.find((candidate) => candidate.id === appConfigId);
+    if (!app) throw new ValidationError("Application not found");
+    return app;
+  }
+
+  private async resolveCloudRuntime(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string | null | undefined,
+    access: "view" | "manage",
+  ) {
+    if (!userId) throw new AuthenticationError();
+    const group = await prisma.sessionGroup.findFirstOrThrow({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        id: true,
+        organizationId: true,
+        ownerUserId: true,
+        visibility: true,
+        repoId: true,
+        workdir: true,
+        repo: { select: { id: true, setupConfig: true } },
+        sessions: {
+          select: { id: true, workdir: true, connection: true },
+          orderBy: { updatedAt: "desc" },
+          take: 5,
+        },
+      },
+    });
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
+    if (access === "manage") {
+      await this.assertCanManage(group.id, organizationId, userId, group);
+    }
+    if (!group.repoId || !group.repo) throw new ValidationError("Session group does not have a repo");
+    const session = group.sessions.find((candidate) => connectionRuntimeInstanceId(candidate.connection));
+    if (!session) throw new ValidationError("Session group does not have a connected runtime");
+    const runtimeId = connectionRuntimeInstanceId(session.connection);
+    if (!runtimeId) throw new ValidationError("Session group does not have a connected runtime");
+    const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
+      throw new ValidationError("Session group runtime is not connected");
+    }
+    if (runtime.hostingMode !== "cloud") {
+      throw new ValidationError("Application forwarding is currently only available for cloud sessions");
+    }
+    return { group: group as ManagedSessionGroup, sessionId: session.id, runtimeId: runtime.key };
+  }
+
+  private async assertCanView(sessionGroupId: string, organizationId: string, userId: string | null | undefined) {
+    await this.resolveCloudRuntime(sessionGroupId, organizationId, userId, "view");
+  }
+
+  private async assertCanManage(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+    preloaded?: { ownerUserId: string },
+  ) {
+    const group =
+      preloaded ??
+      (await prisma.sessionGroup.findFirstOrThrow({
+        where: { id: sessionGroupId, organizationId },
+        select: { ownerUserId: true },
+      }));
+    if (group.ownerUserId === userId) return;
+    const member = await prisma.orgMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId } },
+      select: { role: true },
+    });
+    if (member?.role !== "admin") {
+      throw new AuthorizationError("Only the session owner or an org admin can manage applications");
+    }
+  }
+}
+
+export const sessionApplicationService = new SessionApplicationService();

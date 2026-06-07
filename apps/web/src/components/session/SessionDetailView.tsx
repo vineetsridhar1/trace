@@ -31,6 +31,7 @@ import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -121,6 +122,35 @@ const SESSION_DETAIL_QUERY = gql`
           id
           name
           remoteUrl
+          applicationConfig {
+            setupScripts {
+              id
+              name
+              command
+              workingDirectory
+              env
+            }
+            applications {
+              id
+              name
+              processes {
+                id
+                name
+                command
+                workingDirectory
+                env
+                required
+                ports {
+                  id
+                  label
+                  port
+                  protocol
+                  defaultForwardingEnabled
+                  healthPath
+                }
+              }
+            }
+          }
         }
         connection {
           state
@@ -600,6 +630,10 @@ export function SessionDetailView({
                 {retryingSetup ? "Retrying..." : "Retry"}
               </button>
             </div>
+          )}
+
+          {!hideHeader && sessionGroupId && hosting === "cloud" && (
+            <SessionApplicationsPanel sessionGroupId={sessionGroupId} />
           )}
 
           {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
