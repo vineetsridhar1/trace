@@ -249,7 +249,8 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
               {application.processes.map((processConfig) => {
                 const process = processesByKey.get(`${application.id}:${processConfig.id}`);
                 const processEndpoints = endpointsByProcess.get(`${application.id}:${processConfig.id}`) ?? [];
-                const running = process?.status === "running" || process?.status === "starting";
+                const running = process?.status === "running";
+                const active = running || process?.status === "starting" || process?.status === "stopping";
                 return (
                   <div key={processConfig.id} className="space-y-2">
                     <div className="flex items-center justify-between gap-3 text-sm">
@@ -258,13 +259,13 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                         <p className="text-xs text-muted-foreground">{process?.status ?? "stopped"}</p>
                       </div>
                       <Button
-                        variant={running ? "ghost" : "outline"}
+                        variant={active ? "ghost" : "outline"}
                         size="sm"
                         disabled={pending === `${application.id}:${processConfig.id}`}
                         onClick={() =>
                           void run(`${application.id}:${processConfig.id}`, () =>
                             client
-                              .mutation(running ? STOP_PROCESS_MUTATION : START_PROCESS_MUTATION, {
+                              .mutation(active ? STOP_PROCESS_MUTATION : START_PROCESS_MUTATION, {
                                 sessionGroupId,
                                 appConfigId: application.id,
                                 processConfigId: processConfig.id,
@@ -273,8 +274,8 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                           )
                         }
                       >
-                        {running ? <Square size={14} /> : <Play size={14} />}
-                        {running ? "Stop" : "Start"}
+                        {active ? <Square size={14} /> : <Play size={14} />}
+                        {active ? "Stop" : "Start"}
                       </Button>
                     </div>
                     {processEndpoints.map((endpoint) => (
@@ -285,6 +286,10 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                         <Button
                           variant="ghost"
                           size="sm"
+                          disabled={
+                            pending === endpoint.id ||
+                            (endpoint.status !== "enabled" && !running)
+                          }
                           onClick={() =>
                             void run(endpoint.id, () =>
                               client
