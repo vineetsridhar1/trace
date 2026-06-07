@@ -9,6 +9,7 @@ import {
 import { formatGitError, getCurrentBranch, isSafeGitRef, runGit } from "./git-utils.js";
 import {
   pauseExistingAttachment,
+  refreshTargetBranchForSync,
   resolveSyncTargetCommitSha,
   withRepoLock,
 } from "./linked-checkout.js";
@@ -52,6 +53,7 @@ export interface LinkedCheckoutAutoSyncDeps {
   switchDetached: (repoPath: string, sha: string) => Promise<void>;
   getCurrentBranch: (repoPath: string) => Promise<string | null>;
   hasInProgressOperation: (repoPath: string) => Promise<boolean>;
+  refreshTargetBranch: (repoPath: string, branch: string) => Promise<void>;
   now: () => string;
 }
 
@@ -66,6 +68,7 @@ const defaultDeps: LinkedCheckoutAutoSyncDeps = {
   },
   getCurrentBranch,
   hasInProgressOperation: hasInProgressGitOperation,
+  refreshTargetBranch: refreshTargetBranchForSync,
   now: () => new Date().toISOString(),
 };
 
@@ -226,6 +229,18 @@ export class LinkedCheckoutAutoSyncManager {
 
       if (currentBranch !== null) {
         await this.pause(repoId, "Branch changed externally");
+        return;
+      }
+
+      try {
+        await this.deps.refreshTargetBranch(repoPath, targetBranch);
+      } catch (error) {
+        this.logTick("failed refreshing target branch", {
+          repoId,
+          targetBranch,
+          error: formatGitError(error),
+        });
+        await this.pause(repoId, formatGitError(error));
         return;
       }
 
