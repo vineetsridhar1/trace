@@ -47,6 +47,10 @@ describe("ManagedProcessManager", () => {
       cwd: ".",
     });
 
+    await waitFor(
+      messages,
+      (message) => message.type === "setup_script_log" && message.data.includes("setup-ok"),
+    );
     const result = await waitFor(
       messages,
       (message) => message.type === "setup_script_result",

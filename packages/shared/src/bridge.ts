@@ -718,6 +718,13 @@ export interface BridgeSetupScriptResult {
   error?: string;
 }
 
+export interface BridgeSetupScriptLog {
+  type: "setup_script_log";
+  requestId: string;
+  stream: "stdout" | "stderr";
+  data: string;
+}
+
 export interface BridgeAppProcessStarted {
   type: "app_process_started";
   requestId: string;
@@ -812,6 +819,7 @@ export type BridgeMessage =
   | BridgeTerminalExit
   | BridgeTerminalError
   | BridgeSetupScriptResult
+  | BridgeSetupScriptLog
   | BridgeAppProcessStarted
   | BridgeAppProcessLog
   | BridgeAppProcessExited

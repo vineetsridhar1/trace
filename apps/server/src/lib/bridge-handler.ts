@@ -520,6 +520,17 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "setup_script_log" && typeof msg.requestId === "string") {
+        if (typeof msg.data === "string" && (msg.stream === "stdout" || msg.stream === "stderr")) {
+          void sessionApplicationService
+            .appendSetupScriptOutput(msg.requestId, msg.data)
+            .catch((err: unknown) => {
+              console.error("[bridge] error appending setup script output:", err);
+            });
+        }
+        return;
+      }
+
       if (msg.type === "app_process_started" && typeof msg.processInstanceId === "string") {
         void sessionApplicationService
           .markProcessRunning(
