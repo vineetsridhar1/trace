@@ -525,6 +525,12 @@ export class SessionApplicationService {
   }
 
   async markProcessRunning(processId: string, bridgeProcessId: string) {
+    const existing = await prisma.sessionApplicationProcess.findUnique({
+      where: { id: processId },
+      select: { id: true },
+    });
+    if (!existing) return null;
+
     const process = await prisma.sessionApplicationProcess.update({
       where: { id: processId },
       data: { status: "running", bridgeProcessId, lastHeartbeatAt: new Date() },
@@ -588,6 +594,12 @@ export class SessionApplicationService {
   }
 
   async markProcessExited(processId: string, exitCode: number | null, error?: string | null) {
+    const existing = await prisma.sessionApplicationProcess.findUnique({
+      where: { id: processId },
+      select: { id: true },
+    });
+    if (!existing) return null;
+
     const process = await prisma.sessionApplicationProcess.update({
       where: { id: processId },
       data: {
@@ -616,10 +628,12 @@ export class SessionApplicationService {
   }
 
   async appendProcessLog(processId: string, stream: "stdout" | "stderr", data: string) {
-    const process = await prisma.sessionApplicationProcess.findUniqueOrThrow({
+    const process = await prisma.sessionApplicationProcess.findUnique({
       where: { id: processId },
       select: { id: true, organizationId: true, sessionGroupId: true },
     });
+    if (!process) return null;
+
     const last = await prisma.sessionApplicationLogEntry.findFirst({
       where: { processId },
       orderBy: { sequence: "desc" },

@@ -210,4 +210,32 @@ describe("SessionApplicationService", () => {
       new SessionApplicationService().enableEndpoint("endpoint-1", "org-1", "user-1"),
     ).rejects.toThrow("Start the process first (current status: stopped)");
   });
+
+  it("ignores stale bridge logs for missing process rows", async () => {
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce(null);
+
+    const entry = await new SessionApplicationService().appendProcessLog(
+      "missing-process",
+      "stdout",
+      "late log",
+    );
+
+    expect(entry).toBeNull();
+    expect(prismaMock.sessionApplicationLogEntry.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale bridge lifecycle callbacks for missing process rows", async () => {
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValue(null);
+
+    await expect(
+      new SessionApplicationService().markProcessRunning("missing-process", "bridge-process"),
+    ).resolves.toBeNull();
+    await expect(
+      new SessionApplicationService().markProcessExited("missing-process", 0),
+    ).resolves.toBeNull();
+
+    expect(prismaMock.sessionApplicationProcess.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
 });
