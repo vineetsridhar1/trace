@@ -21,7 +21,11 @@ vi.mock("./event.js", () => ({
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { eventService } from "./event.js";
-import { SessionApplicationService } from "./session-applications.js";
+import {
+  PROCESS_LOG_ENTRY_MAX_CHARS,
+  PROCESS_LOG_RETAINED_ROWS,
+  SessionApplicationService,
+} from "./session-applications.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
@@ -223,6 +227,68 @@ describe("SessionApplicationService", () => {
     expect(entry).toBeNull();
     expect(prismaMock.sessionApplicationLogEntry.create).not.toHaveBeenCalled();
     expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("truncates noisy app process log chunks before storing them", async () => {
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+    });
+    prismaMock.sessionApplicationLogEntry.findFirst.mockResolvedValueOnce({ sequence: 4 });
+    prismaMock.sessionApplicationLogEntry.create.mockImplementationOnce(async ({ data }) => ({
+      id: "log-1",
+      timestamp: new Date("2026-06-07T00:00:00.000Z"),
+      ...data,
+    }));
+
+    const entry = await new SessionApplicationService().appendProcessLog(
+      "process-1",
+      "stdout",
+      "x".repeat(PROCESS_LOG_ENTRY_MAX_CHARS + 1024),
+    );
+
+    expect(entry?.data.length).toBe(PROCESS_LOG_ENTRY_MAX_CHARS);
+    expect(entry?.data).toContain("[trace] log chunk truncated");
+    expect(prismaMock.sessionApplicationLogEntry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          data: expect.stringContaining("[trace] log chunk truncated"),
+          sequence: 5,
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("prunes old app process logs as a rolling tail", async () => {
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+    });
+    prismaMock.sessionApplicationLogEntry.findFirst.mockResolvedValueOnce({ sequence: 49 });
+    prismaMock.sessionApplicationLogEntry.create.mockImplementationOnce(async ({ data }) => ({
+      id: "log-50",
+      timestamp: new Date("2026-06-07T00:00:00.000Z"),
+      ...data,
+    }));
+    prismaMock.sessionApplicationLogEntry.findMany.mockResolvedValueOnce([
+      { id: "stale-1" },
+      { id: "stale-2" },
+    ]);
+
+    await new SessionApplicationService().appendProcessLog("process-1", "stderr", "line\n");
+
+    expect(prismaMock.sessionApplicationLogEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { processId: "process-1" },
+        skip: PROCESS_LOG_RETAINED_ROWS,
+      }),
+    );
+    expect(prismaMock.sessionApplicationLogEntry.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ["stale-1", "stale-2"] } },
+    });
   });
 
   it("ignores stale bridge lifecycle callbacks for missing process rows", async () => {
