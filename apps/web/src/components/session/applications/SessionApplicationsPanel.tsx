@@ -526,38 +526,43 @@ export function SessionApplicationsPanel({
                       </Button>
                     </div>
                     {process && (
-                      <div className="space-y-1 rounded bg-surface-deep/60 px-2 py-1.5">
-                        <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="truncate text-muted-foreground">
-                            {process.lastError ??
-                              (process.exitCode != null
-                                ? `Exited ${process.exitCode}`
-                                : `${process.status} logs`)}
-                          </span>
+                      <div className="overflow-hidden rounded bg-surface-deep/60">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center justify-between gap-2 px-2 py-1.5 text-left text-[11px] text-muted-foreground transition-colors hover:bg-background/40 hover:text-foreground"
+                            onClick={() => toggleProcessLogs(process.id)}
+                          >
+                            <span className="truncate">
+                              {process.lastError ??
+                                (process.exitCode != null
+                                  ? `Exited ${process.exitCode}`
+                                  : processLogsOpen
+                                    ? "Hide logs"
+                                    : "View logs")}
+                            </span>
+                            <ChevronDown
+                              size={12}
+                              className={cn(
+                                "shrink-0 transition-transform duration-200",
+                                processLogsOpen ? "rotate-180" : undefined,
+                              )}
+                            />
+                          </button>
                           <Button
                             variant="ghost"
                             size="icon-xs"
                             title={`Refresh ${processConfig.name} logs`}
                             aria-label={`Refresh ${processConfig.name} logs`}
-                            onClick={() => void loadProcessLogs(process.id)}
+                            className="mr-1 shrink-0"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void loadProcessLogs(process.id);
+                            }}
                           >
                             <RotateCw size={12} />
                           </Button>
                         </div>
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-background/40 hover:text-foreground"
-                          onClick={() => toggleProcessLogs(process.id)}
-                        >
-                          <span>{processLogsOpen ? "Hide logs" : "View logs"}</span>
-                          <ChevronDown
-                            size={12}
-                            className={cn(
-                              "transition-transform duration-200",
-                              processLogsOpen ? "rotate-180" : undefined,
-                            )}
-                          />
-                        </button>
                         <div
                           className={cn(
                             "grid transition-[grid-template-rows] duration-200 ease-out",
@@ -565,7 +570,7 @@ export function SessionApplicationsPanel({
                           )}
                         >
                           <div className="min-h-0 overflow-hidden">
-                            <div className="max-h-44 space-y-1 overflow-auto rounded bg-background/40 px-2 py-1.5">
+                            <div className="max-h-44 space-y-1 overflow-auto border-t border-border/60 bg-background/40 px-2 py-1.5">
                               {processLogEntries.length === 0 ? (
                                 <p className="text-[11px] text-muted-foreground">No logs yet.</p>
                               ) : (
