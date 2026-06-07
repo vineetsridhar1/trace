@@ -174,7 +174,10 @@ export function GroupTabStrip({
               );
               const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
               const isActive =
-                !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
+                !activeTerminalId &&
+                !activeFilePath &&
+                !trafficTabActive &&
+                selectedSessionId === session.id;
               const hasDoneBadge = !!sessionDoneBadges[session.id];
               return (
                 <div
