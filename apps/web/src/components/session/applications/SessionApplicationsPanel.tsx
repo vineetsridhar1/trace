@@ -133,6 +133,7 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
   const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -198,9 +199,19 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setPending(key);
+    setError(null);
     try {
-      await fn();
+      const result = await fn();
+      const operationError =
+        result && typeof result === "object" && "error" in result
+          ? (result.error as { message?: string } | undefined)
+          : undefined;
+      if (operationError) {
+        throw new Error(operationError.message ?? "Application action failed");
+      }
       await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setPending(null);
     }
@@ -219,6 +230,11 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
           Refresh
         </Button>
       </div>
+      {error && (
+        <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </p>
+      )}
       {config.setupScripts.length > 0 && (
         <div className="mb-3 space-y-1">
           {config.setupScripts.map((script) => (
@@ -291,16 +307,19 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                             (endpoint.status !== "enabled" && !running)
                           }
                           onClick={() =>
-                            void run(endpoint.id, () =>
-                              client
+                            void run(endpoint.id, async () => {
+                              if (endpoint.status !== "enabled") {
+                                await refresh();
+                              }
+                              return client
                                 .mutation(
                                   endpoint.status === "enabled"
                                     ? DISABLE_ENDPOINT_MUTATION
                                     : ENABLE_ENDPOINT_MUTATION,
                                   { endpointId: endpoint.id },
                                 )
-                                .toPromise(),
-                            )
+                                .toPromise();
+                            })
                           }
                         >
                           {endpoint.status === "enabled" ? "Disable" : "Enable"}
