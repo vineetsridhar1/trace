@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import { ExternalLink, Play, RotateCw, Square, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, Play, RotateCw, Square, Trash2 } from "lucide-react";
 import type {
   EndpointTrafficEntry,
   RepoApplicationConfig,
@@ -8,8 +8,9 @@ import type {
   SessionEndpoint,
 } from "@trace/gql";
 import { useEntityField, useEntityStore } from "@trace/client-core";
+import { cn } from "@/lib/utils";
 import { client } from "../../../lib/urql";
-import { Button } from "../../ui/button";
+import { Button, buttonVariants } from "../../ui/button";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
@@ -217,6 +218,15 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     }
   };
 
+  const copyEndpointUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setError(null);
+    } catch {
+      setError(url);
+    }
+  };
+
   if (!config || (config.setupScripts.length === 0 && config.applications.length === 0)) {
     return null;
   }
@@ -294,56 +304,88 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                         {active ? "Stop" : "Start"}
                       </Button>
                     </div>
-                    {processEndpoints.map((endpoint) => (
-                      <div key={endpoint.id} className="flex flex-wrap items-center gap-2 pl-3 text-xs">
-                        <span className="text-muted-foreground">
-                          {endpoint.label} :{endpoint.targetPort} {endpoint.status}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={
-                            pending === endpoint.id ||
-                            (endpoint.status !== "enabled" && !running)
-                          }
-                          onClick={() =>
-                            void run(endpoint.id, async () => {
-                              if (endpoint.status !== "enabled") {
-                                await refresh();
-                              }
-                              return client
-                                .mutation(
-                                  endpoint.status === "enabled"
-                                    ? DISABLE_ENDPOINT_MUTATION
-                                    : ENABLE_ENDPOINT_MUTATION,
-                                  { endpointId: endpoint.id },
-                                )
-                                .toPromise();
-                            })
-                          }
-                        >
-                          {endpoint.status === "enabled" ? "Disable" : "Enable"}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => window.open(endpoint.url, "_blank")}>
-                          <ExternalLink size={14} />
-                          Open
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            void run(`rotate:${endpoint.id}`, () =>
-                              client.mutation(ROTATE_ENDPOINT_MUTATION, { endpointId: endpoint.id }).toPromise(),
-                            )
-                          }
-                        >
-                          Rotate
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setTrafficEndpointId(endpoint.id)}>
-                          Traffic
-                        </Button>
-                      </div>
-                    ))}
+                    {processEndpoints.map((endpoint) => {
+                      const endpointUrl = typeof endpoint.url === "string" ? endpoint.url : "";
+                      return (
+                        <div key={endpoint.id} className="flex flex-wrap items-center gap-2 pl-3 text-xs">
+                          <span className="text-muted-foreground">
+                            {endpoint.label} :{endpoint.targetPort} {endpoint.status}
+                          </span>
+                          {endpoint.status === "enabled" && endpointUrl && (
+                            <a
+                              href={endpointUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="max-w-full truncate text-primary underline-offset-4 hover:underline sm:max-w-[22rem]"
+                              title={endpointUrl}
+                            >
+                              {endpointUrl}
+                            </a>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={
+                              pending === endpoint.id ||
+                              (endpoint.status !== "enabled" && !running)
+                            }
+                            onClick={() =>
+                              void run(endpoint.id, async () => {
+                                if (endpoint.status !== "enabled") {
+                                  await refresh();
+                                }
+                                return client
+                                  .mutation(
+                                    endpoint.status === "enabled"
+                                      ? DISABLE_ENDPOINT_MUTATION
+                                      : ENABLE_ENDPOINT_MUTATION,
+                                    { endpointId: endpoint.id },
+                                  )
+                                  .toPromise();
+                              })
+                            }
+                          >
+                            {endpoint.status === "enabled" ? "Disable" : "Enable"}
+                          </Button>
+                          <a
+                            className={cn(
+                              buttonVariants({ variant: "ghost", size: "sm" }),
+                              !endpointUrl && "pointer-events-none opacity-50",
+                            )}
+                            href={endpointUrl || undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-disabled={!endpointUrl}
+                          >
+                            <ExternalLink size={14} />
+                            Open
+                          </a>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={!endpointUrl}
+                            onClick={() => void copyEndpointUrl(endpointUrl)}
+                          >
+                            <Copy size={14} />
+                            Copy
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              void run(`rotate:${endpoint.id}`, () =>
+                                client.mutation(ROTATE_ENDPOINT_MUTATION, { endpointId: endpoint.id }).toPromise(),
+                              )
+                            }
+                          >
+                            Rotate
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setTrafficEndpointId(endpoint.id)}>
+                            Traffic
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
