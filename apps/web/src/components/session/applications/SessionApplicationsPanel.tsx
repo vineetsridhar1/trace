@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import { Activity, Copy, ExternalLink, Play, Power, RotateCw, Square } from "lucide-react";
+import { Activity, ChevronDown, Copy, ExternalLink, Play, Power, RotateCw, Square } from "lucide-react";
 import type {
   Repo,
   RepoApplicationConfig,
@@ -13,6 +13,7 @@ import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/
 import { cn } from "@/lib/utils";
 import { client } from "../../../lib/urql";
 import { Button, buttonVariants } from "../../ui/button";
+import { TraceLoader } from "../../ui/trace-loader";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
@@ -179,6 +180,7 @@ export function SessionApplicationsPanel({
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
+  const [openSetupLogIds, setOpenSetupLogIds] = useState<Record<string, boolean>>({});
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -332,6 +334,10 @@ export function SessionApplicationsPanel({
     }
   };
 
+  const toggleSetupLogs = (scriptId: string) => {
+    setOpenSetupLogIds((current) => ({ ...current, [scriptId]: !current[scriptId] }));
+  };
+
   if (!config || (config.setupScripts.length === 0 && config.applications.length === 0)) {
     return null;
   }
@@ -362,6 +368,7 @@ export function SessionApplicationsPanel({
           {config.setupScripts.map((script) => {
             const latestRun = latestSetupRunByScript.get(script.id);
             const runOutput = latestRun?.lastError ?? latestRun?.outputPreview;
+            const logsOpen = !!openSetupLogIds[script.id];
             return (
               <div
                 key={script.id}
@@ -391,16 +398,18 @@ export function SessionApplicationsPanel({
                   <div className="space-y-1 rounded bg-surface-deep/60 px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2 text-[11px]">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full",
-                            latestRun.status === "completed"
-                              ? "bg-emerald-500"
-                              : latestRun.status === "running"
-                                ? "bg-amber-500"
+                        {latestRun.status === "running" ? (
+                          <TraceLoader size={12} showLabel={false} className="shrink-0" />
+                        ) : (
+                          <span
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              latestRun.status === "completed"
+                                ? "bg-emerald-500"
                                 : "bg-destructive",
-                          )}
-                        />
+                            )}
+                          />
+                        )}
                         <span className="truncate text-muted-foreground">
                           {latestRun.status}
                           {latestRun.exitCode != null ? ` ${latestRun.exitCode}` : ""}
@@ -408,11 +417,37 @@ export function SessionApplicationsPanel({
                       </div>
                       {latestRun.outputTruncated && <span className="shrink-0 text-muted-foreground">truncated</span>}
                     </div>
-                    {runOutput && (
-                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-4 text-foreground">
-                        {runOutput.trim()}
-                      </pre>
-                    )}
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-background/40 hover:text-foreground"
+                      onClick={() => toggleSetupLogs(script.id)}
+                    >
+                      <span>{logsOpen ? "Hide logs" : "View logs"}</span>
+                      <ChevronDown
+                        size={12}
+                        className={cn(
+                          "transition-transform duration-200",
+                          logsOpen ? "rotate-180" : undefined,
+                        )}
+                      />
+                    </button>
+                    <div
+                      className={cn(
+                        "grid transition-[grid-template-rows] duration-200 ease-out",
+                        logsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                      )}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <pre
+                          className={cn(
+                            "max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background/40 px-2 py-1.5 font-mono text-[11px] leading-4 text-foreground",
+                            !runOutput && "text-muted-foreground",
+                          )}
+                        >
+                          {(runOutput || "No logs yet.").trim()}
+                        </pre>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
