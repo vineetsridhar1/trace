@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import { Activity, Copy, ExternalLink, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
+import { Activity, Copy, ExternalLink, Play, Power, RotateCw, Square } from "lucide-react";
 import type {
-  EndpointTrafficEntry,
   Repo,
   RepoApplicationConfig,
   SessionApplicationLogEntry,
@@ -100,21 +99,6 @@ const APPLICATIONS_STATE_QUERY = gql`
   }
 `;
 
-const TRAFFIC_QUERY = gql`
-  query EndpointTrafficPanel($endpointId: ID!, $limit: Int) {
-    endpointTraffic(endpointId: $endpointId, limit: $limit) {
-      id
-      endpointId
-      startedAt
-      durationMs
-      requestMethod
-      requestPath
-      responseStatus
-      error
-    }
-  }
-`;
-
 const PROCESS_LOGS_QUERY = gql`
   query SessionApplicationProcessLogs($processId: ID!, $limit: Int) {
     sessionApplicationLogs(processId: $processId, limit: $limit) {
@@ -182,13 +166,13 @@ const ROTATE_ENDPOINT_MUTATION = gql`
   }
 `;
 
-const CLEAR_TRAFFIC_MUTATION = gql`
-  mutation ClearEndpointTraffic($endpointId: ID!) {
-    clearEndpointTraffic(endpointId: $endpointId)
-  }
-`;
-
-export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: string }) {
+export function SessionApplicationsPanel({
+  sessionGroupId,
+  onOpenTraffic,
+}: {
+  sessionGroupId: string;
+  onOpenTraffic: (endpointId: string) => void;
+}) {
   const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
     | { id: string; applicationConfig?: RepoApplicationConfig | null }
     | null
@@ -201,9 +185,6 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
-  const [activeTab, setActiveTab] = useState<"applications" | "traffic">("applications");
-  const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
-  const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
   const [pending, setPending] = useState<string | null>(null);
@@ -255,16 +236,6 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     }));
   }, []);
 
-  useEffect(() => {
-    if (!trafficEndpointId) return;
-    void client
-      .query(TRAFFIC_QUERY, { endpointId: trafficEndpointId, limit: 50 })
-      .toPromise()
-      .then((result) => {
-        setTrafficEntries((result.data?.endpointTraffic as EndpointTrafficEntry[] | undefined) ?? []);
-      });
-  }, [trafficEndpointId]);
-
   const processes = useMemo(
     () =>
       Object.values(processTable).filter(
@@ -291,11 +262,6 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
         (endpoint) => endpoint.sessionGroupId === sessionGroupId,
       ),
     [endpointTable, sessionGroupId],
-  );
-
-  const selectedTrafficEndpoint = useMemo(
-    () => endpoints.find((endpoint) => endpoint.id === trafficEndpointId) ?? null,
-    [endpoints, trafficEndpointId],
   );
 
   const processesByKey = useMemo(() => {
@@ -334,24 +300,6 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     return () => window.clearInterval(interval);
   }, [refresh, setupRuns]);
 
-  useEffect(() => {
-    if (activeTab !== "traffic" || trafficEndpointId || endpoints.length === 0) return;
-    setTrafficEndpointId(endpoints[0]?.id ?? null);
-  }, [activeTab, endpoints, trafficEndpointId]);
-
-  useEffect(() => {
-    if (activeTab !== "traffic" || !trafficEndpointId) return;
-    const interval = window.setInterval(() => {
-      void client
-        .query(TRAFFIC_QUERY, { endpointId: trafficEndpointId, limit: 50 })
-        .toPromise()
-        .then((result) => {
-          setTrafficEntries((result.data?.endpointTraffic as EndpointTrafficEntry[] | undefined) ?? []);
-        });
-    }, 2000);
-    return () => window.clearInterval(interval);
-  }, [activeTab, trafficEndpointId]);
-
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setPending(key);
     setError(null);
@@ -381,56 +329,23 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     }
   };
 
-  const showEndpointTraffic = (endpointId: string) => {
-    setTrafficEndpointId(endpointId);
-    setActiveTab("traffic");
-  };
-
   if (!config || (config.setupScripts.length === 0 && config.applications.length === 0)) {
     return null;
   }
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
-      <div className="shrink-0 border-b border-border px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-foreground">Applications</p>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Refresh applications"
-            aria-label="Refresh applications"
-            onClick={() => void refresh()}
-          >
-            <RotateCw size={14} />
-          </Button>
-        </div>
-        <div className="mt-2 grid grid-cols-2 rounded-md border border-border bg-background/30 p-0.5">
-          <button
-            type="button"
-            className={cn(
-              "rounded px-2 py-1 text-xs font-medium transition-colors",
-              activeTab === "applications"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            onClick={() => setActiveTab("applications")}
-          >
-            Apps
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded px-2 py-1 text-xs font-medium transition-colors",
-              activeTab === "traffic"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            onClick={() => setActiveTab("traffic")}
-          >
-            Traffic
-          </button>
-        </div>
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+        <p className="text-sm font-semibold text-foreground">Applications</p>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Refresh applications"
+          aria-label="Refresh applications"
+          onClick={() => void refresh()}
+        >
+          <RotateCw size={14} />
+        </Button>
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-3 py-3">
       {error && (
@@ -438,8 +353,6 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
           {error}
         </p>
       )}
-      {activeTab === "applications" ? (
-      <>
       {config.setupScripts.length > 0 && (
         <section className="space-y-1.5">
           <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Setup</p>
@@ -699,11 +612,11 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                               <RotateCw size={14} />
                             </Button>
                             <Button
-                              variant={trafficEndpointId === endpoint.id ? "outline" : "ghost"}
+                              variant="ghost"
                               size="icon-sm"
                               title={`Show ${endpoint.label} traffic`}
                               aria-label={`Show ${endpoint.label} traffic`}
-                              onClick={() => showEndpointTraffic(endpoint.id)}
+                              onClick={() => onOpenTraffic(endpoint.id)}
                             >
                               <Activity size={14} />
                             </Button>
@@ -718,141 +631,6 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
           </section>
         ))}
       </div>
-      </>
-      ) : (
-        <section className="space-y-3">
-          <div className="space-y-1.5">
-            <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Endpoints</p>
-            {endpoints.length === 0 ? (
-              <p className="rounded-md border border-border/70 bg-background/35 px-3 py-2 text-xs text-muted-foreground">
-                No endpoints configured.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {endpoints.map((endpoint) => {
-                  const endpointUrl = typeof endpoint.url === "string" ? endpoint.url : "";
-                  return (
-                    <button
-                      key={endpoint.id}
-                      type="button"
-                      className={cn(
-                        "w-full rounded-md border px-2.5 py-2 text-left transition-colors",
-                        selectedTrafficEndpoint?.id === endpoint.id
-                          ? "border-primary/50 bg-primary/10"
-                          : "border-border/70 bg-background/35 hover:bg-background/60",
-                      )}
-                      onClick={() => setTrafficEndpointId(endpoint.id)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-medium text-foreground">
-                          {endpoint.label}
-                          <span className="ml-1 font-normal text-muted-foreground">:{endpoint.targetPort}</span>
-                        </span>
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize",
-                            endpoint.status === "enabled"
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              : "bg-muted text-muted-foreground",
-                          )}
-                        >
-                          {endpoint.status}
-                        </span>
-                      </div>
-                      <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
-                        {endpointUrl || "No URL"}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="overflow-hidden rounded-md border border-border/70 bg-background/35">
-            <div className="flex items-center justify-between border-b border-border/70 px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-foreground">
-                  {selectedTrafficEndpoint?.label ?? "Traffic"}
-                </p>
-                <p className="truncate text-[11px] text-muted-foreground">
-                  {selectedTrafficEndpoint?.url ?? "Select an endpoint to inspect requests"}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                title="Clear traffic"
-                aria-label="Clear traffic"
-                disabled={!trafficEndpointId}
-                onClick={() =>
-                  trafficEndpointId
-                    ? void run(`clear:${trafficEndpointId}`, () =>
-                        client.mutation(CLEAR_TRAFFIC_MUTATION, { endpointId: trafficEndpointId }).toPromise(),
-                      ).then(() => setTrafficEntries([]))
-                    : undefined
-                }
-              >
-                <Trash2 size={14} />
-              </Button>
-            </div>
-            <div className="grid grid-cols-[4.5rem_3.5rem_minmax(0,1fr)_3.25rem_3.5rem] gap-2 border-b border-border/70 bg-surface-deep/70 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              <span>Time</span>
-              <span>Method</span>
-              <span>Path</span>
-              <span>Status</span>
-              <span className="text-right">Latency</span>
-            </div>
-            <div className="max-h-[26rem] overflow-auto">
-              {trafficEntries.length === 0 ? (
-                <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  No traffic captured yet.
-                </p>
-              ) : (
-                trafficEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="grid grid-cols-[4.5rem_3.5rem_minmax(0,1fr)_3.25rem_3.5rem] gap-2 border-b border-border/40 px-3 py-2 text-[11px] last:border-b-0"
-                  >
-                    <span className="font-mono text-muted-foreground">
-                      {new Date(entry.startedAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </span>
-                    <span className="font-mono font-medium text-foreground">{entry.requestMethod}</span>
-                    <span className="truncate font-mono text-muted-foreground" title={entry.requestPath}>
-                      {entry.requestPath}
-                    </span>
-                    <span
-                      className={cn(
-                        "font-mono font-medium",
-                        entry.error
-                          ? "text-destructive"
-                          : entry.responseStatus != null && entry.responseStatus >= 500
-                            ? "text-destructive"
-                            : entry.responseStatus != null && entry.responseStatus >= 400
-                              ? "text-amber-600 dark:text-amber-400"
-                              : "text-emerald-600 dark:text-emerald-400",
-                      )}
-                    >
-                      {entry.responseStatus ?? (entry.error ? "ERR" : "...")}
-                    </span>
-                    <span className="text-right font-mono text-muted-foreground">
-                      {entry.durationMs != null ? `${entry.durationMs}ms` : "-"}
-                    </span>
-                    {entry.error && (
-                      <span className="col-span-5 truncate font-mono text-[10px] text-destructive">
-                        {entry.error}
-                      </span>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
-      )}
       </div>
     </div>
   );
