@@ -392,6 +392,7 @@ export function SessionGroupDetailView({
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
+  const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
   const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
   useEffect(() => {
@@ -399,6 +400,12 @@ export function SessionGroupDetailView({
       setShowSidebar(false);
     }
   }, [selectedSessionIsOptimistic, showSidebar]);
+
+  useEffect(() => {
+    if (!showApplicationsSidebarTab && sidebarTab === "apps") {
+      setSidebarTab("files");
+    }
+  }, [showApplicationsSidebarTab, sidebarTab]);
 
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(
@@ -739,6 +746,7 @@ export function SessionGroupDetailView({
                       onCheckpointClick={handleCheckpointClick}
                       bridgeAccess={bridgeAccess}
                       onBridgeAccessRequested={refreshBridgeAccess}
+                      showApplicationsTab={showApplicationsSidebarTab}
                     />
                   </div>
                 )}

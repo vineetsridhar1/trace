@@ -232,7 +232,7 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
   }
 
   return (
-    <div className="max-h-[38vh] overflow-auto border-t border-border bg-surface-deep px-4 py-3">
+    <div className="h-full overflow-auto bg-surface-deep px-4 py-3">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-medium text-foreground">Applications</p>
         <Button variant="ghost" size="sm" onClick={() => void refresh()}>

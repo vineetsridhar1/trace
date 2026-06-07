@@ -1,4 +1,4 @@
-import { Files, GitCommitHorizontal, GitCompareArrows } from "lucide-react";
+import { AppWindow, Files, GitCommitHorizontal, GitCompareArrows } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { FileExplorer } from "./FileExplorer";
 import { CheckpointPanel } from "./CheckpointPanel";
@@ -6,8 +6,9 @@ import { BranchChangesPanel } from "./BranchChangesPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 import type { FileTreeNode } from "./file-explorer-utils";
+import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 
-export type SidebarTab = "files" | "git" | "changes";
+export type SidebarTab = "files" | "git" | "changes" | "apps";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
@@ -25,6 +26,7 @@ interface SidebarPanelProps {
   onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
   bridgeAccess?: BridgeRuntimeAccessInfo | null;
   onBridgeAccessRequested?: () => void | Promise<void>;
+  showApplicationsTab?: boolean;
 }
 
 const tabClass = "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium transition-colors";
@@ -47,8 +49,10 @@ export function SidebarPanel({
   onCheckpointClick,
   bridgeAccess,
   onBridgeAccessRequested,
+  showApplicationsTab = false,
 }: SidebarPanelProps) {
   const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
+  const selectedTab = activeTab === "apps" && !showApplicationsTab ? "files" : activeTab;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -56,7 +60,7 @@ export function SidebarPanel({
         <button
           type="button"
           onClick={() => onTabChange("files")}
-          className={cn(tabClass, activeTab === "files" ? tabActive : tabInactive)}
+          className={cn(tabClass, selectedTab === "files" ? tabActive : tabInactive)}
         >
           <Files size={12} />
           Files
@@ -64,7 +68,7 @@ export function SidebarPanel({
         <button
           type="button"
           onClick={() => onTabChange("git")}
-          className={cn(tabClass, activeTab === "git" ? tabActive : tabInactive)}
+          className={cn(tabClass, selectedTab === "git" ? tabActive : tabInactive)}
         >
           <GitCommitHorizontal size={12} />
           Checkpoints
@@ -72,15 +76,25 @@ export function SidebarPanel({
         <button
           type="button"
           onClick={() => onTabChange("changes")}
-          className={cn(tabClass, activeTab === "changes" ? tabActive : tabInactive)}
+          className={cn(tabClass, selectedTab === "changes" ? tabActive : tabInactive)}
         >
           <GitCompareArrows size={12} />
           Changes
         </button>
+        {showApplicationsTab && (
+          <button
+            type="button"
+            onClick={() => onTabChange("apps")}
+            className={cn(tabClass, selectedTab === "apps" ? tabActive : tabInactive)}
+          >
+            <AppWindow size={12} />
+            Apps
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {!bridgeInteractionAllowed && activeTab !== "git" ? (
+        {!bridgeInteractionAllowed && selectedTab !== "git" ? (
           <div className="p-3">
             <BridgeAccessNotice
               access={bridgeAccess ?? null}
@@ -88,7 +102,7 @@ export function SidebarPanel({
               onRequested={onBridgeAccessRequested}
             />
           </div>
-        ) : activeTab === "files" ? (
+        ) : selectedTab === "files" ? (
           <FileExplorer
             tree={fileTree}
             loading={filesLoading}
@@ -97,11 +111,13 @@ export function SidebarPanel({
             onLoadDirectory={onLoadDirectory}
             onFileClick={onFileClick}
           />
-        ) : activeTab === "changes" ? (
+        ) : selectedTab === "changes" ? (
           <BranchChangesPanel
             sessionGroupId={sessionGroupId}
             onFileClick={onDiffFileClick ?? (() => {})}
           />
+        ) : selectedTab === "apps" ? (
+          <SessionApplicationsPanel sessionGroupId={sessionGroupId} />
         ) : (
           <CheckpointPanel
             sessionGroupId={sessionGroupId}

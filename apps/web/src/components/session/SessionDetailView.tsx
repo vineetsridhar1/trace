@@ -31,7 +31,6 @@ import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
-import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -630,10 +629,6 @@ export function SessionDetailView({
                 {retryingSetup ? "Retrying..." : "Retry"}
               </button>
             </div>
-          )}
-
-          {sessionGroupId && hosting === "cloud" && (
-            <SessionApplicationsPanel sessionGroupId={sessionGroupId} />
           )}
 
           {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
