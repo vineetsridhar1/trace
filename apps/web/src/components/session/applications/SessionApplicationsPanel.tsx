@@ -113,6 +113,10 @@ const PROCESS_LOGS_QUERY = gql`
   }
 `;
 
+function displayStatus(status: string): string {
+  return status.length > 0 ? `${status[0]?.toUpperCase()}${status.slice(1)}` : status;
+}
+
 const RUN_SETUP_MUTATION = gql`
   mutation RunSessionGroupSetupScript($sessionGroupId: ID!, $scriptId: ID!) {
     runSessionGroupSetupScript(sessionGroupId: $sessionGroupId, scriptId: $scriptId)
@@ -411,8 +415,10 @@ export function SessionApplicationsPanel({
                           />
                         )}
                         <span className="truncate text-muted-foreground">
-                          {latestRun.status}
-                          {latestRun.exitCode != null ? ` ${latestRun.exitCode}` : ""}
+                          {displayStatus(latestRun.status)}
+                          {latestRun.exitCode != null && latestRun.exitCode !== 0
+                            ? ` ${latestRun.exitCode}`
+                            : ""}
                         </span>
                       </div>
                       {latestRun.outputTruncated && <span className="shrink-0 text-muted-foreground">truncated</span>}
@@ -487,7 +493,9 @@ export function SessionApplicationsPanel({
                                   : "bg-muted-foreground/40",
                             )}
                           />
-                          <span className="text-[11px] text-muted-foreground">{process?.status ?? "stopped"}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {displayStatus(process?.status ?? "stopped")}
+                          </span>
                         </div>
                       </div>
                       <Button
@@ -590,7 +598,7 @@ export function SessionApplicationsPanel({
                                   : "bg-muted text-muted-foreground",
                               )}
                             >
-                              {endpoint.status}
+                              {displayStatus(endpoint.status)}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
