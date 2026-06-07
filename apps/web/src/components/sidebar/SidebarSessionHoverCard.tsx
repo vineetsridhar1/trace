@@ -1,6 +1,7 @@
-import type { ReactElement } from "react";
-import { Calendar, GitBranch, Laptop } from "lucide-react";
-import { useEntityField } from "@trace/client-core";
+import { useMemo, type ReactElement } from "react";
+import { AppWindow, Calendar, GitBranch, Laptop } from "lucide-react";
+import { useEntityField, useEntityStore } from "@trace/client-core";
+import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useAttachedCheckoutsForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
 import { cn } from "../../lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
@@ -32,6 +33,21 @@ type SpotlightDetail = {
   isOtherBridge: boolean;
 };
 
+type ApplicationDetail = {
+  id: string;
+  label: string;
+  status: string;
+  runtimeInstanceId: string | null;
+  startedAt: string | null;
+  endpoints: Array<{
+    id: string;
+    label: string;
+    targetPort: number;
+    status: string;
+    url: string | null;
+  }>;
+};
+
 export function SidebarSessionHoverCard({
   sessionGroupId,
   sessionId,
@@ -59,6 +75,8 @@ export function SidebarSessionHoverCard({
     | string
     | null
     | undefined;
+  const processTable = useEntityStore((state) => state.sessionApplicationProcesses);
+  const endpointTable = useEntityStore((state) => state.sessionEndpoints);
   const attachedCheckouts = useAttachedCheckoutsForGroup(sessionGroupId);
   const desktopBridgeInfo = useDesktopBridgeInfo();
   const spotlightDetails = attachedCheckouts.map((attached): SpotlightDetail => ({
@@ -69,6 +87,10 @@ export function SidebarSessionHoverCard({
     isCurrentBridge: desktopBridgeInfo?.instanceId === attached.bridgeInstanceId,
     isOtherBridge: !!desktopBridgeInfo && desktopBridgeInfo.instanceId !== attached.bridgeInstanceId,
   }));
+  const applicationDetails = useMemo(
+    () => buildApplicationDetails(sessionGroupId, processTable, endpointTable),
+    [endpointTable, processTable, sessionGroupId],
+  );
 
   return (
     <HoverCard>
@@ -86,6 +108,7 @@ export function SidebarSessionHoverCard({
           lastMessageAt={lastMessageAt ?? groupUpdatedAt}
           sessionGroupName={sessionGroupName ?? sessionGroup?.name ?? null}
           spotlightDetails={spotlightDetails}
+          applicationDetails={applicationDetails}
         />
       </HoverCardContent>
     </HoverCard>
@@ -98,12 +121,14 @@ function SidebarSessionHoverContent({
   lastMessageAt,
   sessionGroupName,
   spotlightDetails,
+  applicationDetails,
 }: {
   branch: string | null;
   createdBy: SidebarUserRef | undefined;
   lastMessageAt: string | null | undefined;
   sessionGroupName: string | null;
   spotlightDetails: SpotlightDetail[];
+  applicationDetails: ApplicationDetail[];
 }) {
   const ownerName = formatOwnerName(createdBy);
   const ownerEmail = createdBy?.email && createdBy.email !== ownerName ? createdBy.email : null;
@@ -169,6 +194,54 @@ function SidebarSessionHoverContent({
         </div>
       )}
 
+      {applicationDetails.length > 0 && (
+        <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/85">
+            <AppWindow size={12} className="shrink-0 text-sky-400" />
+            <span>Applications</span>
+          </div>
+          <div className="mt-1.5 space-y-2">
+            {applicationDetails.map((application) => (
+              <div key={application.id} className="min-w-0 text-xs text-foreground/65">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full",
+                      application.status === "running"
+                        ? "bg-emerald-500"
+                        : application.status === "starting" || application.status === "stopping"
+                          ? "bg-amber-500"
+                          : "bg-muted-foreground/50",
+                    )}
+                  />
+                  <p className="min-w-0 flex-1 truncate font-medium text-foreground/80">
+                    {application.label}
+                  </p>
+                  <span className="shrink-0 text-[11px] text-foreground/50">
+                    {displayStatus(application.status)}
+                  </span>
+                </div>
+                {application.startedAt && (
+                  <p className="mt-0.5 truncate pl-3 text-[11px]">
+                    Started {formatLastMessage(application.startedAt)}
+                  </p>
+                )}
+                {application.endpoints.length > 0 && (
+                  <div className="mt-1 space-y-0.5 pl-3">
+                    {application.endpoints.map((endpoint) => (
+                      <p key={endpoint.id} className="truncate text-[11px]">
+                        {endpoint.label}:{endpoint.targetPort} · {displayStatus(endpoint.status)}
+                        {endpoint.url ? ` · ${endpoint.url}` : ""}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 flex items-center gap-3 border-t border-white/10 pt-3">
         <UserAvatar user={createdBy} />
         <div className="min-w-0">
@@ -217,4 +290,50 @@ function formatLastMessage(timestamp: string | null | undefined): string {
 
 function shortSha(sha: string | null): string | null {
   return sha ? sha.slice(0, 7) : null;
+}
+
+function buildApplicationDetails(
+  sessionGroupId: string,
+  processTable: Record<string, SessionApplicationProcess>,
+  endpointTable: Record<string, SessionEndpoint>,
+): ApplicationDetail[] {
+  const endpointsByProcessKey = new Map<string, SessionEndpoint[]>();
+  for (const endpoint of Object.values(endpointTable)) {
+    if (endpoint.sessionGroupId !== sessionGroupId) continue;
+    const key = `${endpoint.appConfigId}:${endpoint.processConfigId}`;
+    endpointsByProcessKey.set(key, [...(endpointsByProcessKey.get(key) ?? []), endpoint]);
+  }
+
+  return Object.values(processTable)
+    .filter(
+      (process) =>
+        process.sessionGroupId === sessionGroupId &&
+        (process.status === "starting" ||
+          process.status === "running" ||
+          process.status === "stopping"),
+    )
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .map((process) => {
+      const endpoints = endpointsByProcessKey.get(`${process.appConfigId}:${process.processConfigId}`) ?? [];
+      return {
+        id: process.id,
+        label: process.label,
+        status: process.status,
+        runtimeInstanceId: process.runtimeInstanceId ?? null,
+        startedAt: process.startedAt ?? null,
+        endpoints: endpoints
+          .sort((a, b) => a.targetPort - b.targetPort)
+          .map((endpoint) => ({
+            id: endpoint.id,
+            label: endpoint.label,
+            targetPort: endpoint.targetPort,
+            status: endpoint.status,
+            url: typeof endpoint.url === "string" ? endpoint.url : null,
+          })),
+      };
+    });
+}
+
+function displayStatus(status: string): string {
+  return status.length > 0 ? `${status[0]?.toUpperCase()}${status.slice(1)}` : status;
 }
