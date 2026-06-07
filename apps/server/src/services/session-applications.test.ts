@@ -291,6 +291,71 @@ describe("SessionApplicationService", () => {
     });
   });
 
+  it("marks live processes stopped and disables endpoints when the runtime is torn down", async () => {
+    prismaMock.sessionApplicationProcess.findMany.mockResolvedValueOnce([
+      {
+        id: "process-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        appConfigId: "web",
+        processConfigId: "dev",
+        status: "running",
+      },
+    ]);
+    prismaMock.sessionApplicationProcess.update.mockImplementationOnce(async ({ data }) => ({
+      id: "process-1",
+      sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      label: "Dev",
+      runtimeInstanceId: null,
+      startedAt: null,
+      stoppedAt: new Date("2026-06-07T00:00:00.000Z"),
+      exitCode: null,
+      lastError: null,
+      ...data,
+    }));
+    prismaMock.sessionEndpoint.findMany.mockResolvedValueOnce([{ id: "endpoint-1", status: "enabled" }]);
+    prismaMock.sessionEndpoint.update.mockImplementationOnce(async ({ data }) => ({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: null,
+      disabledAt: new Date("2026-06-07T00:00:00.000Z"),
+      revokedAt: null,
+      ...data,
+    }));
+
+    await new SessionApplicationService().markSessionGroupRuntimeStopped("group-1", "org-1");
+
+    expect(prismaMock.sessionApplicationProcess.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "process-1" },
+        data: expect.objectContaining({ status: "stopped", runtimeInstanceId: null, bridgeProcessId: null }),
+      }),
+    );
+    expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "endpoint-1" },
+        data: expect.objectContaining({ status: "disabled", currentRuntimeInstanceId: null }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "session_application_process_stopped" }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "session_endpoint_forwarding_disabled" }),
+    );
+  });
+
   it("ignores stale bridge lifecycle callbacks for missing process rows", async () => {
     prismaMock.sessionApplicationProcess.findUnique.mockResolvedValue(null);
 
