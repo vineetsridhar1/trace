@@ -183,6 +183,7 @@ export function SessionApplicationsPanel({
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
+  const [refreshingProcessLogIds, setRefreshingProcessLogIds] = useState<Record<string, boolean>>({});
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
   const [openSetupLogIds, setOpenSetupLogIds] = useState<Record<string, boolean>>({});
   const [openProcessLogIds, setOpenProcessLogIds] = useState<Record<string, boolean>>({});
@@ -191,7 +192,7 @@ export function SessionApplicationsPanel({
 
   const refresh = useCallback(async () => {
     const result = await client
-      .query(APPLICATIONS_STATE_QUERY, { sessionGroupId })
+      .query(APPLICATIONS_STATE_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
       .toPromise();
     const group = result.data?.sessionGroup as
       | ({ id: string; repo?: { id?: string } | null } & Partial<SessionGroupEntity>)
@@ -227,13 +228,28 @@ export function SessionApplicationsPanel({
 
   const loadProcessLogs = useCallback(async (processId: string) => {
     const result = await client
-      .query(PROCESS_LOGS_QUERY, { processId, limit: 50 })
+      .query(PROCESS_LOGS_QUERY, { processId, limit: 50 }, { requestPolicy: "network-only" })
       .toPromise();
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
     setProcessLogsById((current) => ({
       ...current,
       [processId]: (result.data?.sessionApplicationLogs as SessionApplicationLogEntry[] | undefined) ?? [],
     }));
   }, []);
+
+  const refreshProcessLogs = useCallback(async (processId: string) => {
+    setRefreshingProcessLogIds((current) => ({ ...current, [processId]: true }));
+    setError(null);
+    try {
+      await loadProcessLogs(processId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRefreshingProcessLogIds((current) => ({ ...current, [processId]: false }));
+    }
+  }, [loadProcessLogs]);
 
   const processes = useMemo(
     () =>
@@ -245,7 +261,7 @@ export function SessionApplicationsPanel({
 
   useEffect(() => {
     for (const process of processes) {
-      void loadProcessLogs(process.id);
+      void loadProcessLogs(process.id).catch(() => undefined);
     }
   }, [loadProcessLogs, processes]);
 
@@ -260,7 +276,7 @@ export function SessionApplicationsPanel({
     const interval = window.setInterval(() => {
       void refresh();
       for (const process of activeProcesses) {
-        void loadProcessLogs(process.id);
+        void loadProcessLogs(process.id).catch(() => undefined);
       }
     }, 1500);
     return () => window.clearInterval(interval);
@@ -478,6 +494,7 @@ export function SessionApplicationsPanel({
                 const processEndpoints = endpointsByProcess.get(`${application.id}:${processConfig.id}`) ?? [];
                 const processLogEntries = process ? (processLogsById[process.id] ?? []) : [];
                 const processLogsOpen = process ? !!openProcessLogIds[process.id] : false;
+                const processLogsRefreshing = process ? !!refreshingProcessLogIds[process.id] : false;
                 const running = process?.status === "running";
                 const active = running || process?.status === "starting" || process?.status === "stopping";
                 return (
@@ -555,12 +572,16 @@ export function SessionApplicationsPanel({
                             title={`Refresh ${processConfig.name} logs`}
                             aria-label={`Refresh ${processConfig.name} logs`}
                             className="mr-1 shrink-0"
+                            disabled={processLogsRefreshing}
                             onClick={(event) => {
                               event.stopPropagation();
-                              void loadProcessLogs(process.id);
+                              void refreshProcessLogs(process.id);
                             }}
                           >
-                            <RotateCw size={12} />
+                            <RotateCw
+                              size={12}
+                              className={cn(processLogsRefreshing && "animate-spin")}
+                            />
                           </Button>
                         </div>
                         <div
