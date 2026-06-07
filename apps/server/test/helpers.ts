@@ -230,6 +230,7 @@ export function createPrismaMock() {
     },
     sessionApplicationLogEntry: {
       create: vi.fn(),
+      deleteMany: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
     },

@@ -15,6 +15,11 @@ import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
 
 type Tx = Prisma.TransactionClient;
 const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
+export const PROCESS_LOG_ENTRY_MAX_CHARS = 8_192;
+export const PROCESS_LOG_RETAINED_ROWS = 500;
+const PROCESS_LOG_PRUNE_INTERVAL = 50;
+const PROCESS_LOG_PRUNE_BATCH = 200;
+const PROCESS_LOG_TRUNCATION_SUFFIX = "\n[trace] log chunk truncated";
 
 type ManagedSessionGroup = {
   id: string;
@@ -659,34 +664,33 @@ export class SessionApplicationService {
   }
 
   async appendProcessLog(processId: string, stream: "stdout" | "stderr", data: string) {
+    if (!data) return null;
     const process = await prisma.sessionApplicationProcess.findUnique({
       where: { id: processId },
       select: { id: true, organizationId: true, sessionGroupId: true },
     });
     if (!process) return null;
 
-    const last = await prisma.sessionApplicationLogEntry.findFirst({
-      where: { processId },
-      orderBy: { sequence: "desc" },
-      select: { sequence: true },
-    });
-    const entry = await prisma.sessionApplicationLogEntry.create({
-      data: {
-        organizationId: process.organizationId,
-        processId,
-        stream,
-        data,
-        sequence: (last?.sequence ?? 0) + 1,
-      },
-    });
-    await eventService.create({
-      organizationId: process.organizationId,
-      scopeType: "session",
-      scopeId: process.sessionGroupId,
-      eventType: "session_application_log_appended",
-      payload: { logEntry: entry },
-      actorType: "system",
-      actorId: "bridge",
+    const entry = await prisma.$transaction(async (tx) => {
+      const last = await tx.sessionApplicationLogEntry.findFirst({
+        where: { processId },
+        orderBy: { sequence: "desc" },
+        select: { sequence: true },
+      });
+      const sequence = (last?.sequence ?? 0) + 1;
+      const created = await tx.sessionApplicationLogEntry.create({
+        data: {
+          organizationId: process.organizationId,
+          processId,
+          stream,
+          data: truncateProcessLogData(data),
+          sequence,
+        },
+      });
+      if (sequence % PROCESS_LOG_PRUNE_INTERVAL === 0) {
+        await pruneProcessLogs(tx, processId);
+      }
+      return created;
     });
     return entry;
   }
@@ -844,3 +848,26 @@ export class SessionApplicationService {
 }
 
 export const sessionApplicationService = new SessionApplicationService();
+
+function truncateProcessLogData(data: string): string {
+  if (data.length <= PROCESS_LOG_ENTRY_MAX_CHARS) return data;
+  const prefixLength = Math.max(
+    PROCESS_LOG_ENTRY_MAX_CHARS - PROCESS_LOG_TRUNCATION_SUFFIX.length,
+    0,
+  );
+  return `${data.slice(0, prefixLength)}${PROCESS_LOG_TRUNCATION_SUFFIX}`;
+}
+
+async function pruneProcessLogs(tx: Tx, processId: string): Promise<void> {
+  const staleEntries = await tx.sessionApplicationLogEntry.findMany({
+    where: { processId },
+    orderBy: { sequence: "desc" },
+    skip: PROCESS_LOG_RETAINED_ROWS,
+    take: PROCESS_LOG_PRUNE_BATCH,
+    select: { id: true },
+  });
+  if (staleEntries.length === 0) return;
+  await tx.sessionApplicationLogEntry.deleteMany({
+    where: { id: { in: staleEntries.map((entry) => entry.id) } },
+  });
+}
