@@ -3,6 +3,7 @@ import { timeAgo } from "../../lib/utils";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import { PrivateSessionLock } from "../session/PrivateSessionLock";
+import { SessionApplicationRunningIndicator } from "../session/SessionApplicationRunningIndicator";
 import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { getSessionBranch, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
@@ -50,6 +51,7 @@ export function SessionCompactSummaryCell({
             <Laptop className="h-3.5 w-3.5 text-emerald-500" />
           </span>
         )}
+        <SessionApplicationRunningIndicator sessionGroupId={row.id} />
         {row.visibility === "private" && (
           <PrivateSessionLock
             className="h-3.5 w-3.5 text-muted-foreground"
