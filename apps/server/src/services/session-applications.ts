@@ -104,6 +104,8 @@ function publicEndpoint(endpoint: {
 }
 
 export class SessionApplicationService {
+  private logAppendChains = new Map<string, Promise<unknown>>();
+
   async listSetupScriptRuns(sessionGroupId: string, organizationId: string, userId: string) {
     await this.assertCanView(sessionGroupId, organizationId, userId);
     return prisma.sessionSetupScriptRun.findMany({
@@ -583,9 +585,9 @@ export class SessionApplicationService {
     return result.count;
   }
 
-  async markProcessRunning(processId: string, bridgeProcessId: string) {
-    const existing = await prisma.sessionApplicationProcess.findUnique({
-      where: { id: processId },
+  async markProcessRunning(processId: string, organizationId: string, bridgeProcessId: string) {
+    const existing = await prisma.sessionApplicationProcess.findFirst({
+      where: { id: processId, organizationId },
       select: { id: true },
     });
     if (!existing) return null;
@@ -608,8 +610,14 @@ export class SessionApplicationService {
 
   async completeSetupScriptRun(
     runId: string,
+    organizationId: string,
     result: { exitCode: number; output?: string; error?: string },
   ) {
+    const existing = await prisma.sessionSetupScriptRun.findFirst({
+      where: { id: runId, organizationId },
+      select: { id: true },
+    });
+    if (!existing) return null;
     const output = result.output ?? "";
     const outputPreview =
       output.length > SETUP_OUTPUT_PREVIEW_LIMIT
@@ -655,10 +663,10 @@ export class SessionApplicationService {
     return run;
   }
 
-  async appendSetupScriptOutput(runId: string, data: string) {
+  async appendSetupScriptOutput(runId: string, organizationId: string, data: string) {
     if (!data) return null;
-    const run = await prisma.sessionSetupScriptRun.findUnique({
-      where: { id: runId },
+    const run = await prisma.sessionSetupScriptRun.findFirst({
+      where: { id: runId, organizationId },
       select: {
         id: true,
         status: true,
@@ -681,9 +689,14 @@ export class SessionApplicationService {
     });
   }
 
-  async markProcessExited(processId: string, exitCode: number | null, error?: string | null) {
-    const existing = await prisma.sessionApplicationProcess.findUnique({
-      where: { id: processId },
+  async markProcessExited(
+    processId: string,
+    organizationId: string,
+    exitCode: number | null,
+    error?: string | null,
+  ) {
+    const existing = await prisma.sessionApplicationProcess.findFirst({
+      where: { id: processId, organizationId },
       select: { id: true },
     });
     if (!existing) return null;
@@ -715,10 +728,36 @@ export class SessionApplicationService {
     return process;
   }
 
-  async appendProcessLog(processId: string, stream: "stdout" | "stderr", data: string) {
+  // Log chunks for one process arrive concurrently (stdout + stderr) over a
+  // single runtime connection bound to this server instance. Serialize the
+  // read-then-write sequence assignment per process so concurrent chunks can't
+  // collide on the same sequence number and corrupt pagination.
+  async appendProcessLog(
+    processId: string,
+    organizationId: string,
+    stream: "stdout" | "stderr",
+    data: string,
+  ) {
     if (!data) return null;
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: { id: processId },
+    const prior = this.logAppendChains.get(processId) ?? Promise.resolve();
+    const next = prior
+      .catch(() => undefined)
+      .then(() => this.writeProcessLog(processId, organizationId, stream, data));
+    this.logAppendChains.set(processId, next);
+    void next.finally(() => {
+      if (this.logAppendChains.get(processId) === next) this.logAppendChains.delete(processId);
+    });
+    return next;
+  }
+
+  private async writeProcessLog(
+    processId: string,
+    organizationId: string,
+    stream: "stdout" | "stderr",
+    data: string,
+  ) {
+    const process = await prisma.sessionApplicationProcess.findFirst({
+      where: { id: processId, organizationId },
       select: { id: true, organizationId: true, sessionGroupId: true },
     });
     if (!process) return null;
@@ -846,7 +885,6 @@ export class SessionApplicationService {
         sessions: {
           select: { id: true, workdir: true, connection: true },
           orderBy: { updatedAt: "desc" },
-          take: 5,
         },
       },
     });

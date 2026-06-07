@@ -402,7 +402,12 @@ type RepoSetupScript {
   name: String!
   command: String!
   workingDirectory: String
-  env: JSON
+  env: [RepoEnvVar!]!
+}
+
+type RepoEnvVar {
+  key: String!
+  secretName: String!
 }
 
 type RepoApplicationDefinition {
@@ -416,7 +421,7 @@ type RepoProcessDefinition {
   name: String!
   command: String!
   workingDirectory: String
-  env: JSON
+  env: [RepoEnvVar!]!
   required: Boolean!
   ports: [RepoPortDefinition!]!
 }
@@ -1154,7 +1159,12 @@ input RepoSetupScriptInput {
   name: String!
   command: String!
   workingDirectory: String
-  env: JSON
+  env: [RepoEnvVarInput!]
+}
+
+input RepoEnvVarInput {
+  key: String!
+  secretName: String!
 }
 
 input RepoApplicationDefinitionInput {
@@ -1168,7 +1178,7 @@ input RepoProcessDefinitionInput {
   name: String!
   command: String!
   workingDirectory: String
-  env: JSON
+  env: [RepoEnvVarInput!]
   required: Boolean
   ports: [RepoPortDefinitionInput!]
 }

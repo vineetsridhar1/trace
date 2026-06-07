@@ -21,6 +21,7 @@ import {
 type PendingHttp = {
   endpointId: string;
   trafficEntryId: string;
+  trafficWrite: Promise<unknown>;
   startedAt: number;
   response: ServerResponse;
   timer: ReturnType<typeof setTimeout>;
@@ -144,38 +145,55 @@ export class EndpointProxyService {
     const requestHeaders = shouldCaptureHeaders(endpoint.trafficCaptureMode)
       ? sanitizeHeaders(req.headers)
       : undefined;
-    const trafficEntry = await prisma.endpointTrafficEntry.create({
-      data: {
-        organizationId: endpoint.organizationId,
-        endpointId: endpoint.id,
-        requestMethod: req.method ?? "GET",
-        requestPath: path,
-        requestQuery: query,
-        requestHeaders,
-        requestBodyPreview: shouldCaptureBodies(endpoint.trafficCaptureMode)
-          ? requestBodyCapture.preview
-          : undefined,
-        requestBodyBytes: requestBody.byteLength,
-        requestTruncated: requestBodyCapture.truncated,
-      },
-    });
+    // Record the request off the forwarding hot path: a missing/slow traffic row
+    // must never add latency to (or block) the proxied request. Response updates
+    // chain off this write so they never race ahead of the insert.
+    const trafficEntryId = randomUUID();
+    const trafficWrite = prisma.endpointTrafficEntry
+      .create({
+        data: {
+          id: trafficEntryId,
+          organizationId: endpoint.organizationId,
+          endpointId: endpoint.id,
+          requestMethod: req.method ?? "GET",
+          requestPath: path,
+          requestQuery: query,
+          requestHeaders,
+          requestBodyPreview: shouldCaptureBodies(endpoint.trafficCaptureMode)
+            ? requestBodyCapture.preview
+            : undefined,
+          requestBodyBytes: requestBody.byteLength,
+          requestTruncated: requestBodyCapture.truncated,
+        },
+      })
+      .catch((err: unknown) => {
+        console.error("[endpoint-proxy] failed to record traffic entry:", err);
+        return null;
+      });
     const startedAt = Date.now();
     const timer = setTimeout(() => {
       this.pendingHttp.delete(requestId);
       if (!res.headersSent) res.writeHead(504);
       res.end("Endpoint proxy timed out");
-      void prisma.endpointTrafficEntry.update({
-        where: { id: trafficEntry.id },
-        data: {
-          completedAt: new Date(),
-          durationMs: Date.now() - startedAt,
-          error: "Proxy request timed out",
-        },
-      });
+      void trafficWrite
+        .then((entry) =>
+          entry
+            ? prisma.endpointTrafficEntry.update({
+                where: { id: trafficEntryId },
+                data: {
+                  completedAt: new Date(),
+                  durationMs: Date.now() - startedAt,
+                  error: "Proxy request timed out",
+                },
+              })
+            : null,
+        )
+        .catch(() => {});
     }, endpointProxyRequestTimeoutMs());
     const pending: PendingHttp = {
       endpointId: endpoint.id,
-      trafficEntryId: trafficEntry.id,
+      trafficEntryId,
+      trafficWrite,
       startedAt,
       response: res,
       timer,
@@ -215,18 +233,24 @@ export class EndpointProxyService {
     });
     pending.response.end(body);
     const capture = bodyPreview(body);
-    void prisma.endpointTrafficEntry.update({
-      where: { id: pending.trafficEntryId },
-      data: {
-        completedAt: new Date(),
-        durationMs: Date.now() - pending.startedAt,
-        responseStatus: response.status,
-        responseHeaders: sanitizeHeaders(response.headers),
-        responseBodyPreview: capture.preview,
-        responseBodyBytes: body.byteLength,
-        responseTruncated: capture.truncated,
-      },
-    });
+    void pending.trafficWrite
+      .then((entry) =>
+        entry
+          ? prisma.endpointTrafficEntry.update({
+              where: { id: pending.trafficEntryId },
+              data: {
+                completedAt: new Date(),
+                durationMs: Date.now() - pending.startedAt,
+                responseStatus: response.status,
+                responseHeaders: sanitizeHeaders(response.headers),
+                responseBodyPreview: capture.preview,
+                responseBodyBytes: body.byteLength,
+                responseTruncated: capture.truncated,
+              },
+            })
+          : null,
+      )
+      .catch(() => {});
   }
 
   resolveHttpError(requestId: string, error: string) {
@@ -235,14 +259,20 @@ export class EndpointProxyService {
     this.pendingHttp.delete(requestId);
     clearTimeout(pending.timer);
     pending.response.writeHead(502).end(error);
-    void prisma.endpointTrafficEntry.update({
-      where: { id: pending.trafficEntryId },
-      data: {
-        completedAt: new Date(),
-        durationMs: Date.now() - pending.startedAt,
-        error,
-      },
-    });
+    void pending.trafficWrite
+      .then((entry) =>
+        entry
+          ? prisma.endpointTrafficEntry.update({
+              where: { id: pending.trafficEntryId },
+              data: {
+                completedAt: new Date(),
+                durationMs: Date.now() - pending.startedAt,
+                error,
+              },
+            })
+          : null,
+      )
+      .catch(() => {});
   }
 
   handleWebSocketUpgrade(req: IncomingMessage, socket: Socket, head: Buffer) {
