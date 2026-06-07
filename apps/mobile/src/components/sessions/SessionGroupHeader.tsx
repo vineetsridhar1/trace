@@ -9,8 +9,9 @@ import {
   useEntityField,
   useEntityStore,
 } from "@trace/client-core";
-import type { SessionConnection } from "@trace/gql";
+import type { SessionConnection, SessionEndpoints } from "@trace/gql";
 import { haptic } from "@/lib/haptics";
+import { buildRunScriptsCommand, isRunScriptArray } from "@/lib/runScripts";
 import { getClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
@@ -25,30 +26,6 @@ const CREATE_PR_PROMPT =
   "Create a pull request for this session branch. Push any required commits, open the PR against the repository's normal merge target, and report the PR link.";
 const MERGE_PR_PROMPT =
   "Merge the pull request for this session branch. Verify it is ready to merge, merge it using the repository's normal strategy, and report the result.";
-
-interface RunScript {
-  name: string;
-  command: string;
-}
-
-function isRunScriptArray(value: unknown): value is RunScript[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (item) =>
-        item != null &&
-        typeof item === "object" &&
-        typeof (item as { name?: unknown }).name === "string" &&
-        typeof (item as { command?: unknown }).command === "string",
-    )
-  );
-}
-
-function buildRunScriptsCommand(scripts: RunScript[]): string {
-  return scripts
-    .map((script) => `printf '\\n\\033[1m${script.name.replaceAll("'", "'\\''")}\\033[0m\\n'\n${script.command}`)
-    .join("\n");
-}
 
 interface SessionGroupHeaderProps {
   groupId: string;
@@ -112,6 +89,10 @@ export function SessionGroupHeader({
     | undefined;
   const sessionConnection = useEntityField("sessions", sessionId ?? "", "connection") as
     | SessionConnection
+    | null
+    | undefined;
+  const sessionEndpoints = useEntityField("sessions", sessionId ?? "", "endpoints") as
+    | SessionEndpoints
     | null
     | undefined;
   const linkedCheckout = useLinkedCheckout(groupId);
@@ -257,6 +238,11 @@ export function SessionGroupHeader({
     if (sessionId) params.set("sessionId", sessionId);
     router.push(`/sheets/workspace?${params.toString()}`);
   }, [groupId, router, sessionId]);
+  const handleOpenApplications = useCallback(() => {
+    if (!sessionId) return;
+    const params = new URLSearchParams({ groupId, sessionId });
+    router.push(`/sheets/applications?${params.toString()}`);
+  }, [groupId, router, sessionId]);
 
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
@@ -272,6 +258,14 @@ export function SessionGroupHeader({
       systemIcon: "folder",
       onPress: handleOpenWorkspace,
     });
+    if (sessionId && !sessionOptimistic) {
+      const count = sessionEndpoints?.ports?.length ?? 0;
+      items.push({
+        title: count > 0 ? `Applications (${count})` : "Applications",
+        systemIcon: "network",
+        onPress: handleOpenApplications,
+      });
+    }
     if (linkedCheckout.available && linkedCheckout.repoLinked) {
       items.push({
         title: "Spotlight",
@@ -331,6 +325,7 @@ export function SessionGroupHeader({
     handleArchive,
     handleGitHubAction,
     handleOpenMoveSheet,
+    handleOpenApplications,
     handleOpenWorkspace,
     handleOpenTabSwitcher,
     handleRunScripts,
@@ -342,6 +337,7 @@ export function SessionGroupHeader({
     prUrl,
     canRunGitHubAction,
     sessionId,
+    sessionEndpoints?.ports?.length,
     sessionOptimistic,
     status,
   ]);
