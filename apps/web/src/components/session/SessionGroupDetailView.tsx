@@ -235,6 +235,8 @@ export function SessionGroupDetailView({
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidebarWidth, setSidebarWidth] = useState(() => getStoredSessionSidebarWidth());
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
@@ -253,7 +255,11 @@ export function SessionGroupDetailView({
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
     useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId);
 
-  const { handleOpenTerminal, handleCloseTerminal, handleSelectTerminal } = useTerminalActions({
+  const {
+    handleOpenTerminal,
+    handleCloseTerminal,
+    handleSelectTerminal: selectTerminal,
+  } = useTerminalActions({
     sessionGroupId,
     terminals,
   });
@@ -501,6 +507,44 @@ export function SessionGroupDetailView({
     if (tab !== "git") setHighlightCheckpointId(null);
   }, []);
 
+  const handleOpenTrafficTab = useCallback(
+    (endpointId: string) => {
+      setTrafficEndpointId(endpointId);
+      setActiveWorkflowTab("traffic");
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [setActiveFilePath, setActiveTerminalId],
+  );
+
+  const handleSelectTrafficTab = useCallback(() => {
+    if (!trafficEndpointId) return;
+    setActiveWorkflowTab("traffic");
+    setActiveTerminalId(null);
+    setActiveFilePath(null);
+  }, [setActiveFilePath, setActiveTerminalId, trafficEndpointId]);
+
+  const handleCloseTrafficTab = useCallback(() => {
+    setTrafficEndpointId(null);
+    setActiveWorkflowTab("session");
+  }, []);
+
+  const handleSelectTerminalTab = useCallback(
+    (sessionId: string | null, terminalId: string) => {
+      setActiveWorkflowTab("session");
+      selectTerminal(sessionId, terminalId);
+    },
+    [selectTerminal],
+  );
+
+  const handleSelectFileTab = useCallback(
+    (filePath: string) => {
+      setActiveWorkflowTab("session");
+      handleSelectFile(filePath);
+    },
+    [handleSelectFile],
+  );
+
   const handleToggleSidebar = useCallback(() => {
     setShowSidebar((prev: boolean) => {
       if (prev) setHighlightCheckpointId(null);
@@ -644,6 +688,7 @@ export function SessionGroupDetailView({
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {
+      setActiveWorkflowTab("session");
       setActiveSessionId(sessionId);
       setActiveTerminalId(null);
       setActiveFilePath(null);
@@ -703,16 +748,23 @@ export function SessionGroupDetailView({
                 activeTerminalId={activeTerminalId}
                 openFiles={openFiles}
                 activeFilePath={activeFilePath}
+                trafficTabOpen={trafficEndpointId !== null}
+                trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
                 onSelectSession={handleSelectSession}
                 onCloseSession={handleCloseSession}
                 canCloseSessions={false}
-                onSelectTerminal={handleSelectTerminal}
+                onSelectTerminal={handleSelectTerminalTab}
                 onCloseTerminal={handleCloseTerminal}
                 onRenameTerminal={renameTerminal}
-                onSelectFile={handleSelectFile}
+                onSelectFile={handleSelectFileTab}
                 onCloseFile={handleCloseFile}
+                onSelectTraffic={handleSelectTrafficTab}
+                onCloseTraffic={handleCloseTrafficTab}
                 onNewChat={handleNewChat}
-                onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
+                onOpenTerminal={() => {
+                  setActiveWorkflowTab("session");
+                  void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+                }}
                 onOpenFilePalette={handleOpenFilePalette}
                 canNewChat={
                   !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
@@ -727,6 +779,9 @@ export function SessionGroupDetailView({
                     activeFilePath={activeFilePath}
                     openFiles={openFiles}
                     activeTerminalId={activeTerminal?.id ?? null}
+                    activeTrafficEndpointId={
+                      activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                    }
                     selectedSession={selectedSession}
                     sessionsByRecency={sessionsByRecency}
                     canStartNewChat={
@@ -754,7 +809,10 @@ export function SessionGroupDetailView({
                       className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
                     />
                     {showApplicationsSidebar ? (
-                      <SessionApplicationsPanel sessionGroupId={sessionGroupId} />
+                      <SessionApplicationsPanel
+                        sessionGroupId={sessionGroupId}
+                        onOpenTraffic={handleOpenTrafficTab}
+                      />
                     ) : (
                       <SidebarPanel
                         sessionGroupId={sessionGroupId}
