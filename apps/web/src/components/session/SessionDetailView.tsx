@@ -632,7 +632,7 @@ export function SessionDetailView({
             </div>
           )}
 
-          {!hideHeader && sessionGroupId && hosting === "cloud" && (
+          {sessionGroupId && hosting === "cloud" && (
             <SessionApplicationsPanel sessionGroupId={sessionGroupId} />
           )}
 
