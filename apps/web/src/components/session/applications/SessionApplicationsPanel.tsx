@@ -5,6 +5,7 @@ import type {
   EndpointTrafficEntry,
   Repo,
   RepoApplicationConfig,
+  SessionApplicationLogEntry,
   SessionApplicationProcess,
   SessionEndpoint,
 } from "@trace/gql";
@@ -98,6 +99,19 @@ const TRAFFIC_QUERY = gql`
   }
 `;
 
+const PROCESS_LOGS_QUERY = gql`
+  query SessionApplicationProcessLogs($processId: ID!, $limit: Int) {
+    sessionApplicationLogs(processId: $processId, limit: $limit) {
+      id
+      processId
+      stream
+      data
+      sequence
+      timestamp
+    }
+  }
+`;
+
 const RUN_SETUP_MUTATION = gql`
   mutation RunSessionGroupSetupScript($sessionGroupId: ID!, $scriptId: ID!) {
     runSessionGroupSetupScript(sessionGroupId: $sessionGroupId, scriptId: $scriptId)
@@ -173,6 +187,7 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
+  const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,6 +226,16 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     void refresh();
   }, [refresh]);
 
+  const loadProcessLogs = useCallback(async (processId: string) => {
+    const result = await client
+      .query(PROCESS_LOGS_QUERY, { processId, limit: 8 })
+      .toPromise();
+    setProcessLogsById((current) => ({
+      ...current,
+      [processId]: (result.data?.sessionApplicationLogs as SessionApplicationLogEntry[] | undefined) ?? [],
+    }));
+  }, []);
+
   useEffect(() => {
     if (!trafficEndpointId) return;
     void client
@@ -228,6 +253,18 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
       ),
     [processTable, sessionGroupId],
   );
+
+  useEffect(() => {
+    for (const process of processes) {
+      if (
+        process.status === "exited" ||
+        process.status === "failed" ||
+        process.lastError
+      ) {
+        void loadProcessLogs(process.id);
+      }
+    }
+  }, [loadProcessLogs, processes]);
 
   const endpoints = useMemo(
     () =>
@@ -392,6 +429,43 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                         {active ? <Square size={14} /> : <Play size={14} />}
                       </Button>
                     </div>
+                    {process &&
+                      (process.status === "exited" || process.status === "failed" || process.lastError) && (
+                        <div className="space-y-1 rounded bg-surface-deep/60 px-2 py-1.5">
+                          <div className="flex items-center justify-between gap-2 text-[11px]">
+                            <span className="truncate text-muted-foreground">
+                              {process.lastError ?? `Exited${process.exitCode != null ? ` ${process.exitCode}` : ""}`}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              title={`Refresh ${processConfig.name} output`}
+                              aria-label={`Refresh ${processConfig.name} output`}
+                              onClick={() => void loadProcessLogs(process.id)}
+                            >
+                              <RotateCw size={12} />
+                            </Button>
+                          </div>
+                          {(processLogsById[process.id] ?? []).slice(-4).map((entry) => (
+                            <div
+                              key={entry.id}
+                              className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 text-[11px] leading-4"
+                            >
+                              <span
+                                className={cn(
+                                  "font-mono",
+                                  entry.stream === "stderr" ? "text-destructive" : "text-muted-foreground",
+                                )}
+                              >
+                                {entry.stream}
+                              </span>
+                              <span className="whitespace-pre-wrap break-words font-mono text-foreground">
+                                {entry.data.trim() || "(empty)"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     {processEndpoints.map((endpoint) => {
                       const endpointUrl = typeof endpoint.url === "string" ? endpoint.url : "";
                       const endpointEnabled = endpoint.status === "enabled";
