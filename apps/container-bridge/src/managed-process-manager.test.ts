@@ -19,6 +19,51 @@ function waitFor(messages: BridgeMessage[], predicate: (message: BridgeMessage) 
   });
 }
 
+async function getFreePort(): Promise<number> {
+  const server = http.createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Missing free port");
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return address.port;
+}
+
+async function waitForHttp(port: number): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 3000) {
+    const ok = await new Promise<boolean>((resolve) => {
+      const req = http.get({ host: "127.0.0.1", port, path: "/" }, (res) => {
+        res.resume();
+        resolve(true);
+      });
+      req.on("error", () => resolve(false));
+      req.setTimeout(100, () => {
+        req.destroy();
+        resolve(false);
+      });
+    });
+    if (ok) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Timed out waiting for port ${port}`);
+}
+
+async function waitForPortAvailable(port: number): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 5000) {
+    const available = await new Promise<boolean>((resolve) => {
+      const server = http.createServer();
+      server.once("error", () => resolve(false));
+      server.listen(port, "127.0.0.1", () => {
+        server.close(() => resolve(true));
+      });
+    });
+    if (available) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for port ${port} to be available`);
+}
+
 describe("ManagedProcessManager", () => {
   const servers: http.Server[] = [];
 
@@ -88,6 +133,29 @@ describe("ManagedProcessManager", () => {
     );
     const exit = await waitFor(messages, (message) => message.type === "app_process_exited");
     expect(exit).toMatchObject({ type: "app_process_exited", processInstanceId: "process-1" });
+  });
+
+  it("stops the full process tree so ports can be reused", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    const port = await getFreePort();
+
+    manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: `node -e "require('http').createServer((req,res)=>res.end('ok')).listen(${port}, '127.0.0.1')"`,
+      cwd: ".",
+    });
+
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+    await waitForPortAvailable(port);
   });
 
   it("proxies HTTP requests to localhost ports", async () => {

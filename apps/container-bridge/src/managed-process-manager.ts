@@ -44,6 +44,16 @@ function capChunk(data: Buffer): string {
     : data.toString("utf8");
 }
 
+function signalProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  const pid = child.pid;
+  if (!pid) return;
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
 export class ManagedProcessManager {
   private processes = new Map<string, ManagedProcess>();
   private sockets = new Map<string, WebSocket>();
@@ -79,7 +89,7 @@ export class ManagedProcessManager {
         cwd,
         env: childEnv(options.env),
         shell: true,
-        detached: false,
+        detached: true,
       });
       const bridgeProcessId = `${options.processInstanceId}:${child.pid ?? Date.now()}`;
       this.processes.set(options.processInstanceId, {
@@ -141,10 +151,10 @@ export class ManagedProcessManager {
   stop(processInstanceId: string): void {
     const managed = this.processes.get(processInstanceId);
     if (!managed) return;
-    managed.child.kill("SIGTERM");
+    signalProcessTree(managed.child, "SIGTERM");
     setTimeout(() => {
       if (this.processes.has(processInstanceId)) {
-        managed.child.kill("SIGKILL");
+        signalProcessTree(managed.child, "SIGKILL");
       }
     }, 5_000).unref();
   }
