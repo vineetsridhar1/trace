@@ -185,6 +185,7 @@ export class SessionApplicationService {
         label: script.name,
         command: script.command,
         workingDirectory: script.workingDirectory ?? ".",
+        outputPreview: `[trace] Queued setup script: ${script.command}\n`,
         startedByUserId: userId,
       },
     });
