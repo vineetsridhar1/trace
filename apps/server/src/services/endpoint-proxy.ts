@@ -8,8 +8,11 @@ import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
 import {
   bodyPreview,
+  endpointProxyMaxRequestBodyBytes,
   endpointProxyRequestTimeoutMs,
   extractEndpointKey,
+  forwardableRequestHeaders,
+  forwardableResponseHeaders,
   sanitizeHeaders,
   shouldCaptureBodies,
   shouldCaptureHeaders,
@@ -40,10 +43,19 @@ function authenticatedUserId(req: IncomingMessage): string | null {
   return cookieToken ? verifyToken(cookieToken) : null;
 }
 
-async function readRequestBody(req: IncomingMessage): Promise<Buffer> {
+class RequestBodyTooLargeError extends Error {}
+
+async function readRequestBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
+  let total = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.byteLength;
+    if (total > maxBytes) {
+      req.destroy();
+      throw new RequestBodyTooLargeError();
+    }
+    chunks.push(buffer);
   }
   return Buffer.concat(chunks);
 }
@@ -117,7 +129,17 @@ export class EndpointProxyService {
 
     const requestId = randomUUID();
     const { path, query } = requestPath(req);
-    const requestBody = await readRequestBody(req);
+    let requestBody: Buffer;
+    try {
+      requestBody = await readRequestBody(req, endpointProxyMaxRequestBodyBytes());
+    } catch (err) {
+      if (err instanceof RequestBodyTooLargeError) {
+        if (!res.headersSent) res.writeHead(413);
+        res.end("Request body too large");
+        return;
+      }
+      throw err;
+    }
     const requestBodyCapture = bodyPreview(requestBody);
     const requestHeaders = shouldCaptureHeaders(endpoint.trafficCaptureMode)
       ? sanitizeHeaders(req.headers)
@@ -137,6 +159,7 @@ export class EndpointProxyService {
         requestTruncated: requestBodyCapture.truncated,
       },
     });
+    const startedAt = Date.now();
     const timer = setTimeout(() => {
       this.pendingHttp.delete(requestId);
       if (!res.headersSent) res.writeHead(504);
@@ -145,7 +168,7 @@ export class EndpointProxyService {
         where: { id: trafficEntry.id },
         data: {
           completedAt: new Date(),
-          durationMs: Date.now() - pending.startedAt,
+          durationMs: Date.now() - startedAt,
           error: "Proxy request timed out",
         },
       });
@@ -153,7 +176,7 @@ export class EndpointProxyService {
     const pending: PendingHttp = {
       endpointId: endpoint.id,
       trafficEntryId: trafficEntry.id,
-      startedAt: Date.now(),
+      startedAt,
       response: res,
       timer,
     };
@@ -168,7 +191,7 @@ export class EndpointProxyService {
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
-        headers: req.headers,
+        headers: forwardableRequestHeaders(req.headers),
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
       endpoint.organizationId,
@@ -187,7 +210,7 @@ export class EndpointProxyService {
     clearTimeout(pending.timer);
     const body = response.bodyBase64 ? Buffer.from(response.bodyBase64, "base64") : Buffer.alloc(0);
     pending.response.writeHead(response.status, {
-      ...response.headers,
+      ...forwardableResponseHeaders(response.headers),
       "X-Trace-Endpoint-Id": pending.endpointId,
     });
     pending.response.end(body);
@@ -308,7 +331,7 @@ export class EndpointProxyService {
         endpointId: endpoint.id,
         port: endpoint.targetPort,
         path: `${path}${query ? `?${query}` : ""}`,
-        headers: req.headers,
+        headers: forwardableRequestHeaders(req.headers, { websocket: true }),
       },
       endpoint.organizationId,
     );

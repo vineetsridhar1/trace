@@ -176,7 +176,6 @@ export class SessionApplicationService {
       sessionGroupId,
       organizationId,
       userId,
-      "manage",
     );
     const config = repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
@@ -227,7 +226,7 @@ export class SessionApplicationService {
   }
 
   async startApplication(sessionGroupId: string, appConfigId: string, organizationId: string, userId: string) {
-    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId, "manage");
+    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
     const app = this.getApplication(group, appConfigId);
     return Promise.all(
       app.processes
@@ -239,7 +238,7 @@ export class SessionApplicationService {
   }
 
   async stopApplication(sessionGroupId: string, appConfigId: string, organizationId: string, userId: string) {
-    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId, "manage");
+    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
     const app = this.getApplication(group, appConfigId);
     return Promise.all(
       app.processes.map((process) =>
@@ -259,7 +258,6 @@ export class SessionApplicationService {
       sessionGroupId,
       organizationId,
       userId,
-      "manage",
     );
     const app = this.getApplication(group, appConfigId);
     const processConfig = app.processes.find((candidate) => candidate.id === processConfigId);
@@ -369,7 +367,6 @@ export class SessionApplicationService {
       sessionGroupId,
       organizationId,
       userId,
-      "manage",
     );
     const process = await prisma.sessionApplicationProcess.findUniqueOrThrow({
       where: { sessionGroupId_appConfigId_processConfigId: { sessionGroupId, appConfigId, processConfigId } },
@@ -529,6 +526,14 @@ export class SessionApplicationService {
     await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
     await prisma.endpointTrafficEntry.deleteMany({ where: { endpointId: endpoint.id } });
     return true;
+  }
+
+  async deleteExpiredTraffic(retentionHours: number) {
+    const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000);
+    const result = await prisma.endpointTrafficEntry.deleteMany({
+      where: { startedAt: { lt: cutoff } },
+    });
+    return result.count;
   }
 
   async markProcessRunning(processId: string, bridgeProcessId: string) {
@@ -779,7 +784,6 @@ export class SessionApplicationService {
     sessionGroupId: string,
     organizationId: string,
     userId: string | null | undefined,
-    access: "view" | "manage",
   ) {
     if (!userId) throw new AuthenticationError();
     const group = await prisma.sessionGroup.findFirstOrThrow({
@@ -799,12 +803,7 @@ export class SessionApplicationService {
         },
       },
     });
-    if (!canViewSessionGroup(group, userId)) {
-      throw new AuthorizationError("Not authorized for this session group");
-    }
-    if (access === "manage") {
-      await this.assertCanManage(group.id, organizationId, userId, group);
-    }
+    await this.assertCanManage(group.id, organizationId, userId, group);
     if (!group.repoId || !group.repo) throw new ValidationError("Session group does not have a repo");
     const session = group.sessions.find((candidate) => connectionRuntimeInstanceId(candidate.connection));
     if (!session) throw new ValidationError("Session group does not have a connected runtime");
@@ -821,7 +820,14 @@ export class SessionApplicationService {
   }
 
   private async assertCanView(sessionGroupId: string, organizationId: string, userId: string | null | undefined) {
-    await this.resolveCloudRuntime(sessionGroupId, organizationId, userId, "view");
+    if (!userId) throw new AuthenticationError();
+    const group = await prisma.sessionGroup.findFirstOrThrow({
+      where: { id: sessionGroupId, organizationId },
+      select: { visibility: true, ownerUserId: true },
+    });
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
   }
 
   private async assertCanManage(
