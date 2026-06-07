@@ -4,6 +4,8 @@ import {
   buildEndpointUrl,
   endpointPreviewBaseHost,
   extractEndpointKey,
+  forwardableRequestHeaders,
+  forwardableResponseHeaders,
   generateEndpointKey,
   sanitizeHeaders,
 } from "./endpoint-utils.js";
@@ -55,6 +57,51 @@ describe("endpoint utils", () => {
       "x-custom": "ok",
       "x-api-key": "[redacted]",
     });
+  });
+
+  it("strips the Trace session cookie and auth headers before forwarding", () => {
+    expect(
+      forwardableRequestHeaders({
+        authorization: "Bearer trace-secret",
+        "proxy-authorization": "Basic x",
+        cookie: "trace_token=secret; app_sid=keep",
+        connection: "keep-alive",
+        "content-type": "application/json",
+        host: "abc.preview.localhost",
+      }),
+    ).toEqual({
+      cookie: "app_sid=keep",
+      "content-type": "application/json",
+      host: "abc.preview.localhost",
+    });
+  });
+
+  it("drops the cookie header entirely when only the Trace token is present", () => {
+    expect(forwardableRequestHeaders({ cookie: "trace_token=secret" })).toEqual({});
+  });
+
+  it("drops websocket handshake headers when forwarding upgrades", () => {
+    expect(
+      forwardableRequestHeaders(
+        {
+          host: "abc.preview.localhost",
+          upgrade: "websocket",
+          "sec-websocket-key": "abc",
+          "x-app": "ok",
+        },
+        { websocket: true },
+      ),
+    ).toEqual({ "x-app": "ok" });
+  });
+
+  it("strips hop-by-hop headers from upstream responses", () => {
+    expect(
+      forwardableResponseHeaders({
+        "content-type": "text/html",
+        connection: "close",
+        "transfer-encoding": "chunked",
+      }),
+    ).toEqual({ "content-type": "text/html" });
   });
 
   it("truncates body previews", () => {
