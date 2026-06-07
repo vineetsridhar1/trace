@@ -92,6 +92,9 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const [status, setStatus] = useState<TerminalViewStatus>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
+  const queuedInitialCommand = useMobileUIStore(
+    (state) => state.pendingTerminalInitialCommands[sessionId] ?? null,
+  );
 
   const terminalHtml = useMemo(
     () =>
@@ -318,6 +321,14 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
     pendingWritesRef.current = [];
     inject("window.__traceFit && window.__traceFit();");
   }, [inject, webReady]);
+
+  useEffect(() => {
+    if (status !== "active" || !queuedInitialCommand) return;
+    const command = useMobileUIStore.getState().consumeTerminalInitialCommand(sessionId);
+    if (command) {
+      socketRef.current?.write(command);
+    }
+  }, [queuedInitialCommand, sessionId, status]);
 
   const handleSurfaceLayout = useCallback(
     (event: LayoutChangeEvent) => {

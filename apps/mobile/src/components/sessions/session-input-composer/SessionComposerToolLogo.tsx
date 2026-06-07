@@ -29,6 +29,19 @@ export function SessionComposerToolLogo({ tool, size }: SessionComposerToolLogoP
     );
   }
 
+  if (tool === "antigravity") {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 64 64">
+        <Path
+          fill={theme.colors.foreground}
+          d="M32 6 58 52H45.5L32 28.2 18.5 52H6Z"
+        />
+        <Path fill={theme.colors.background} d="M32 28.2 24.4 41.6H39.6Z" />
+        <Path fill={theme.colors.foreground} d="M24.4 41.6 18.5 52H45.5L39.6 41.6Z" />
+      </Svg>
+    );
+  }
+
   return (
     <Image
       source={tool === "codex" ? CODEX_LOGO : CLAUDE_LOGO}

@@ -16,7 +16,7 @@ interface LinkedCheckoutPanelSectionProps {
 }
 
 const ACTION_ALERT_TITLE: Record<LinkedCheckoutAction, string> = {
-  sync: "Sync failed",
+  sync: "Spotlight failed",
   commit: "Commit failed",
   restore: "Restore failed",
   "toggle-auto-sync": "Couldn't update auto-sync",
@@ -199,12 +199,12 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
 
   const subtitle =
     isAttachedToThisGroup && branch
-      ? `Main worktree following ${branch}${
+      ? `Local checkout spotlighting ${branch}${
           syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
         }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}${
           hasUncommittedChanges ? " (has live changes)" : ""
         }`
-      : "Sync this workspace into your main worktree.";
+      : "Spotlight this workspace in your local checkout.";
 
   return (
     <View style={styles.container}>
@@ -263,7 +263,7 @@ function ActionRow({
     <View style={[styles.actionRow, { gap: theme.spacing.sm }]}>
       <ActionButton
         theme={theme}
-        label="Sync"
+        label="Spotlight"
         symbol="arrow.triangle.2.circlepath"
         accent={isAttachedToThisGroup}
         loading={pendingAction === "sync"}
