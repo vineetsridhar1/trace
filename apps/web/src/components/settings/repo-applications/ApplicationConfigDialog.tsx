@@ -399,7 +399,7 @@ export function ApplicationConfigDialog({
                         </Button>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
-                        <div className="space-y-1">
+                        <div className="space-y-1 md:col-span-2">
                           <FieldLabel>Name</FieldLabel>
                           <Input
                             value={script.name}
@@ -408,20 +408,6 @@ export function ApplicationConfigDialog({
                                 ...current,
                                 setupScripts: current.setupScripts.map((item, index) =>
                                   index === scriptIndex ? { ...item, name: event.target.value } : item,
-                                ),
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <FieldLabel>ID</FieldLabel>
-                          <Input
-                            value={script.id}
-                            onChange={(event) =>
-                              setDraft((current) => ({
-                                ...current,
-                                setupScripts: current.setupScripts.map((item, index) =>
-                                  index === scriptIndex ? { ...item, id: event.target.value } : item,
                                 ),
                               }))
                             }
@@ -569,15 +555,9 @@ function ApplicationEditor({
           <Trash2 size={14} />
         </Button>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1">
-          <FieldLabel>Name</FieldLabel>
-          <Input value={application.name} onChange={(event) => onChange({ ...application, name: event.target.value })} />
-        </div>
-        <div className="space-y-1">
-          <FieldLabel>ID</FieldLabel>
-          <Input value={application.id} onChange={(event) => onChange({ ...application, id: event.target.value })} />
-        </div>
+      <div className="space-y-1">
+        <FieldLabel>Name</FieldLabel>
+        <Input value={application.name} onChange={(event) => onChange({ ...application, name: event.target.value })} />
       </div>
       <div className="mt-3 space-y-2">
         <div className="flex items-center justify-between">
@@ -649,13 +629,9 @@ function ProcessEditor({
         </Button>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1">
+        <div className="space-y-1 md:col-span-2">
           <FieldLabel>Name</FieldLabel>
           <Input value={process.name} onChange={(event) => onChange({ ...process, name: event.target.value })} />
-        </div>
-        <div className="space-y-1">
-          <FieldLabel>ID</FieldLabel>
-          <Input value={process.id} onChange={(event) => onChange({ ...process, id: event.target.value })} />
         </div>
         <div className="space-y-1 md:col-span-2">
           <FieldLabel>Command</FieldLabel>
