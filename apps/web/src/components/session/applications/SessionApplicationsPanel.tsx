@@ -185,6 +185,7 @@ export function SessionApplicationsPanel({
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
   const [openSetupLogIds, setOpenSetupLogIds] = useState<Record<string, boolean>>({});
+  const [openProcessLogIds, setOpenProcessLogIds] = useState<Record<string, boolean>>({});
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -342,6 +343,10 @@ export function SessionApplicationsPanel({
     setOpenSetupLogIds((current) => ({ ...current, [scriptId]: !current[scriptId] }));
   };
 
+  const toggleProcessLogs = (processId: string) => {
+    setOpenProcessLogIds((current) => ({ ...current, [processId]: !current[processId] }));
+  };
+
   if (!config || (config.setupScripts.length === 0 && config.applications.length === 0)) {
     return null;
   }
@@ -472,6 +477,7 @@ export function SessionApplicationsPanel({
                 const process = processesByKey.get(`${application.id}:${processConfig.id}`);
                 const processEndpoints = endpointsByProcess.get(`${application.id}:${processConfig.id}`) ?? [];
                 const processLogEntries = process ? (processLogsById[process.id] ?? []) : [];
+                const processLogsOpen = process ? !!openProcessLogIds[process.id] : false;
                 const running = process?.status === "running";
                 const active = running || process?.status === "starting" || process?.status === "stopping";
                 return (
@@ -538,29 +544,52 @@ export function SessionApplicationsPanel({
                             <RotateCw size={12} />
                           </Button>
                         </div>
-                        <div className="max-h-44 space-y-1 overflow-auto">
-                          {processLogEntries.length === 0 ? (
-                            <p className="text-[11px] text-muted-foreground">No logs yet.</p>
-                          ) : (
-                            processLogEntries.slice(-16).map((entry) => (
-                              <div
-                                key={entry.id}
-                                className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 text-[11px] leading-4"
-                              >
-                                <span
-                                  className={cn(
-                                    "font-mono",
-                                    entry.stream === "stderr" ? "text-destructive" : "text-muted-foreground",
-                                  )}
-                                >
-                                  {entry.stream}
-                                </span>
-                                <span className="whitespace-pre-wrap break-words font-mono text-foreground">
-                                  {entry.data.trim() || "(empty)"}
-                                </span>
-                              </div>
-                            ))
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-background/40 hover:text-foreground"
+                          onClick={() => toggleProcessLogs(process.id)}
+                        >
+                          <span>{processLogsOpen ? "Hide logs" : "View logs"}</span>
+                          <ChevronDown
+                            size={12}
+                            className={cn(
+                              "transition-transform duration-200",
+                              processLogsOpen ? "rotate-180" : undefined,
+                            )}
+                          />
+                        </button>
+                        <div
+                          className={cn(
+                            "grid transition-[grid-template-rows] duration-200 ease-out",
+                            processLogsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
                           )}
+                        >
+                          <div className="min-h-0 overflow-hidden">
+                            <div className="max-h-44 space-y-1 overflow-auto rounded bg-background/40 px-2 py-1.5">
+                              {processLogEntries.length === 0 ? (
+                                <p className="text-[11px] text-muted-foreground">No logs yet.</p>
+                              ) : (
+                                processLogEntries.slice(-16).map((entry) => (
+                                  <div
+                                    key={entry.id}
+                                    className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 text-[11px] leading-4"
+                                  >
+                                    <span
+                                      className={cn(
+                                        "font-mono",
+                                        entry.stream === "stderr" ? "text-destructive" : "text-muted-foreground",
+                                      )}
+                                    >
+                                      {entry.stream}
+                                    </span>
+                                    <span className="whitespace-pre-wrap break-words font-mono text-foreground">
+                                      {entry.data.trim() || "(empty)"}
+                                    </span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
