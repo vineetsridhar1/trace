@@ -1,7 +1,8 @@
 import type { ReactElement } from "react";
 import { Calendar, GitBranch, Laptop } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
-import { useAttachedCheckoutsForGroup } from "../../stores/bridges";
+import { useAttachedCheckoutsForGroup, useDesktopBridgeInfo } from "../../stores/bridges";
+import { cn } from "../../lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 
 type SidebarUserRef = {
@@ -21,6 +22,15 @@ type SidebarSessionGroupInfo = {
   repo?: SidebarRepoRef;
   branch?: string | null;
 } | null;
+
+type SpotlightDetail = {
+  bridgeLabel: string;
+  repoName: string | null;
+  branch: string | null;
+  currentCommitSha: string | null;
+  isCurrentBridge: boolean;
+  isOtherBridge: boolean;
+};
 
 export function SidebarSessionHoverCard({
   sessionGroupId,
@@ -50,7 +60,15 @@ export function SidebarSessionHoverCard({
     | null
     | undefined;
   const attachedCheckouts = useAttachedCheckoutsForGroup(sessionGroupId);
-  const syncedBridgeLabels = attachedCheckouts.map((attached) => attached.bridgeLabel);
+  const desktopBridgeInfo = useDesktopBridgeInfo();
+  const spotlightDetails = attachedCheckouts.map((attached): SpotlightDetail => ({
+    bridgeLabel: attached.bridgeLabel,
+    repoName: attached.checkout.repo?.name ?? null,
+    branch: attached.checkout.branch ?? null,
+    currentCommitSha: attached.checkout.currentCommitSha ?? null,
+    isCurrentBridge: desktopBridgeInfo?.instanceId === attached.bridgeInstanceId,
+    isOtherBridge: !!desktopBridgeInfo && desktopBridgeInfo.instanceId !== attached.bridgeInstanceId,
+  }));
 
   return (
     <HoverCard>
@@ -67,7 +85,7 @@ export function SidebarSessionHoverCard({
           createdBy={createdBy}
           lastMessageAt={lastMessageAt ?? groupUpdatedAt}
           sessionGroupName={sessionGroupName ?? sessionGroup?.name ?? null}
-          syncedBridgeLabels={syncedBridgeLabels}
+          spotlightDetails={spotlightDetails}
         />
       </HoverCardContent>
     </HoverCard>
@@ -79,17 +97,16 @@ function SidebarSessionHoverContent({
   createdBy,
   lastMessageAt,
   sessionGroupName,
-  syncedBridgeLabels,
+  spotlightDetails,
 }: {
   branch: string | null;
   createdBy: SidebarUserRef | undefined;
   lastMessageAt: string | null | undefined;
   sessionGroupName: string | null;
-  syncedBridgeLabels: string[];
+  spotlightDetails: SpotlightDetail[];
 }) {
   const ownerName = formatOwnerName(createdBy);
   const ownerEmail = createdBy?.email && createdBy.email !== ownerName ? createdBy.email : null;
-  const syncedLabel = formatBridgeList(syncedBridgeLabels);
 
   return (
     <div className="min-w-0">
@@ -110,10 +127,45 @@ function SidebarSessionHoverContent({
         )}
       </div>
 
-      {syncedLabel && (
-        <div className="mt-3 flex min-w-0 items-center gap-1.5 text-xs text-emerald-400">
-          <Laptop size={12} className="shrink-0" />
-          <span className="min-w-0 truncate">Synced on {syncedLabel}</span>
+      {spotlightDetails.length > 0 && (
+        <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/85">
+            <Laptop size={12} className="shrink-0" />
+            <span>Spotlighted checkout</span>
+          </div>
+          <div className="mt-1.5 space-y-1">
+            {spotlightDetails.map((detail) => (
+              <div
+                key={`${detail.bridgeLabel}:${detail.repoName ?? ""}:${detail.branch ?? ""}`}
+                className="min-w-0 text-xs text-foreground/65"
+              >
+                <p
+                  className={cn(
+                    "truncate font-medium",
+                    detail.isCurrentBridge
+                      ? "text-emerald-400"
+                      : detail.isOtherBridge
+                        ? "text-amber-400"
+                        : "text-foreground/80",
+                  )}
+                >
+                  {detail.isCurrentBridge
+                    ? "This bridge"
+                    : detail.isOtherBridge
+                      ? "Another bridge"
+                      : "Bridge"}
+                  {`: ${detail.bridgeLabel}`}
+                </p>
+                {(detail.repoName || detail.branch || detail.currentCommitSha) && (
+                  <p className="truncate">
+                    {[detail.repoName, detail.branch, shortSha(detail.currentCommitSha)]
+                      .filter((part): part is string => !!part)
+                      .join(" / ")}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -163,11 +215,6 @@ function formatLastMessage(timestamp: string | null | undefined): string {
   });
 }
 
-function formatBridgeList(labels: string[]): string | null {
-  const uniqueLabels = [...new Set(labels.map((label) => label.trim()).filter(Boolean))];
-  if (uniqueLabels.length === 0) return null;
-  if (uniqueLabels.length === 1) return uniqueLabels[0];
-  if (uniqueLabels.length === 2) return `${uniqueLabels[0]} and ${uniqueLabels[1]}`;
-
-  return `${uniqueLabels.slice(0, -1).join(", ")}, and ${uniqueLabels[uniqueLabels.length - 1]}`;
+function shortSha(sha: string | null): string | null {
+  return sha ? sha.slice(0, 7) : null;
 }

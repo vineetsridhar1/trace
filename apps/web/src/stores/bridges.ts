@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { create } from "zustand";
 import type { MyBridgeSummary, SyncedCheckoutSummary } from "../hooks/useMyBridges";
 
@@ -9,6 +10,7 @@ export interface AttachedCheckoutInfo {
 
 export interface BridgesState {
   bridges: MyBridgeSummary[];
+  desktopBridgeInfo: DesktopBridgeInfo | null | undefined;
   /**
    * Linked-checkout attachments keyed by `sessionGroupId`. O(1) lookup for
    * "is this session group currently synced to one of my bridges?"
@@ -16,12 +18,19 @@ export interface BridgesState {
   attachedByGroupId: Record<string, AttachedCheckoutInfo>;
   attachedListByGroupId: Record<string, AttachedCheckoutInfo[]>;
   setBridges: (bridges: MyBridgeSummary[]) => void;
+  loadDesktopBridgeInfo: () => Promise<void>;
 }
 
 const EMPTY_ATTACHED_CHECKOUTS: AttachedCheckoutInfo[] = [];
+let desktopBridgeInfoLoad: Promise<void> | null = null;
+
+function canReadDesktopBridgeInfo(): boolean {
+  return typeof window !== "undefined" && typeof window.trace?.getBridgeInfo === "function";
+}
 
 export const useBridgesStore = create<BridgesState>((set) => ({
   bridges: [],
+  desktopBridgeInfo: undefined,
   attachedByGroupId: {},
   attachedListByGroupId: {},
   setBridges: (bridges: MyBridgeSummary[]) => {
@@ -49,6 +58,24 @@ export const useBridgesStore = create<BridgesState>((set) => ({
     }
     set({ bridges, attachedByGroupId, attachedListByGroupId });
   },
+  loadDesktopBridgeInfo: () => {
+    if (!canReadDesktopBridgeInfo()) {
+      set({ desktopBridgeInfo: null });
+      return Promise.resolve();
+    }
+    if (desktopBridgeInfoLoad) return desktopBridgeInfoLoad;
+    desktopBridgeInfoLoad = window.trace!.getBridgeInfo()
+      .then((info) => {
+        set({ desktopBridgeInfo: info ?? null });
+      })
+      .catch(() => {
+        set({ desktopBridgeInfo: null });
+      })
+      .finally(() => {
+        desktopBridgeInfoLoad = null;
+      });
+    return desktopBridgeInfoLoad;
+  },
 }));
 
 /**
@@ -72,4 +99,16 @@ export function useAttachedCheckoutsForGroup(
       ? (s.attachedListByGroupId[sessionGroupId] ?? EMPTY_ATTACHED_CHECKOUTS)
       : EMPTY_ATTACHED_CHECKOUTS,
   );
+}
+
+export function useDesktopBridgeInfo(): DesktopBridgeInfo | null | undefined {
+  const desktopBridgeInfo = useBridgesStore((s: BridgesState) => s.desktopBridgeInfo);
+  const loadDesktopBridgeInfo = useBridgesStore((s: BridgesState) => s.loadDesktopBridgeInfo);
+
+  useEffect(() => {
+    if (desktopBridgeInfo !== undefined) return;
+    void loadDesktopBridgeInfo();
+  }, [desktopBridgeInfo, loadDesktopBridgeInfo]);
+
+  return desktopBridgeInfo;
 }
