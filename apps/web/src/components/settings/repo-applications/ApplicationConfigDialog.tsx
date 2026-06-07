@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import type {
   RepoApplicationConfig,
@@ -206,14 +206,6 @@ export function ApplicationConfigDialog({
     }
   }, [config, open]);
 
-  const preview = useMemo(() => {
-    try {
-      return JSON.stringify(toConfig(draft), null, 2);
-    } catch {
-      return "";
-    }
-  }, [draft]);
-
   const save = async () => {
     setLocalError(null);
     try {
@@ -266,7 +258,7 @@ export function ApplicationConfigDialog({
             <div>
               <DialogTitle>Application configuration</DialogTitle>
               <DialogDescription>
-                Configure setup scripts, managed processes, and preview ports for cloud sessions.
+                Configure setup scripts, managed processes, and forwarded ports for cloud sessions.
               </DialogDescription>
             </div>
             <Button variant="outline" size="sm" onClick={() => setDraft(exampleConfig())}>
@@ -275,7 +267,7 @@ export function ApplicationConfigDialog({
           </div>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <div className="min-h-0 space-y-5 overflow-auto px-5 py-4">
             <section className="space-y-2">
               <div className="flex items-center justify-between">
@@ -428,21 +420,6 @@ export function ApplicationConfigDialog({
               )}
             </section>
           </div>
-
-          <aside className="hidden min-h-0 border-l border-border bg-surface-deep/60 p-4 lg:block">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium text-foreground">Preview</p>
-              <span className="text-[11px] text-muted-foreground">
-                {draft.applications.length} apps / {draft.setupScripts.length} setup
-              </span>
-            </div>
-            <Textarea
-              value={preview}
-              readOnly
-              className="h-[calc(88dvh-12rem)] min-h-0 resize-none font-mono text-[11px]"
-              spellCheck={false}
-            />
-          </aside>
         </div>
 
         {formError && <p className="border-t border-border px-5 py-2 text-xs text-destructive">{formError}</p>}
