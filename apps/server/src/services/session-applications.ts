@@ -528,6 +528,53 @@ export class SessionApplicationService {
     return true;
   }
 
+  // Reflect a destroyed runtime (archive, idle cleanup, container loss): mark
+  // every live process for the group stopped and disable its endpoints, emitting
+  // the same per-entity events the UI already consumes.
+  async markSessionGroupRuntimeStopped(sessionGroupId: string, organizationId: string) {
+    const processes = await prisma.sessionApplicationProcess.findMany({
+      where: {
+        sessionGroupId,
+        organizationId,
+        status: { in: ["starting", "running", "stopping"] },
+      },
+    });
+    for (const existing of processes) {
+      const process = await prisma.sessionApplicationProcess.update({
+        where: { id: existing.id },
+        data: { status: "stopped", stoppedAt: new Date(), runtimeInstanceId: null, bridgeProcessId: null },
+      });
+      await eventService.create({
+        organizationId,
+        scopeType: "session",
+        scopeId: sessionGroupId,
+        eventType: "session_application_process_stopped",
+        payload: { process: publicProcess(process) },
+        actorType: "system",
+        actorId: "session-application-service",
+      });
+    }
+
+    const endpoints = await prisma.sessionEndpoint.findMany({
+      where: { sessionGroupId, organizationId, status: "enabled" },
+    });
+    for (const existing of endpoints) {
+      const endpoint = await prisma.sessionEndpoint.update({
+        where: { id: existing.id },
+        data: { status: "disabled", disabledAt: new Date(), currentRuntimeInstanceId: null },
+      });
+      await eventService.create({
+        organizationId,
+        scopeType: "session",
+        scopeId: sessionGroupId,
+        eventType: "session_endpoint_forwarding_disabled",
+        payload: { endpoint: publicEndpoint(endpoint) },
+        actorType: "system",
+        actorId: "session-application-service",
+      });
+    }
+  }
+
   async deleteExpiredTraffic(retentionHours: number) {
     const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000);
     const result = await prisma.endpointTrafficEntry.deleteMany({

@@ -20,6 +20,7 @@ import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
+import { sessionApplicationService } from "./session-applications.js";
 import {
   sessionRouter,
   type DeliveryResult,
@@ -9396,6 +9397,9 @@ export class SessionService {
         worktreeDeleted: true,
       });
     }
+
+    // Destroying the runtime kills any forwarded application processes; reflect that.
+    await sessionApplicationService.markSessionGroupRuntimeStopped(groupId, organizationId);
 
     const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
 
