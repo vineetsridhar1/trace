@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
+import { getModelProviderGroupsForTool } from "@trace/shared";
 import { ListRow, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
@@ -70,7 +71,9 @@ export function SessionModelPickerSheetContent({
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
 
   const currentTool: CodingTool =
-    tool === "codex" || tool === "pi" ? (tool as CodingTool) : "claude_code";
+    tool === "codex" || tool === "pi" || tool === "antigravity"
+      ? (tool as CodingTool)
+      : "claude_code";
   const isTerminal =
     (worktreeDeleted === true || sessionStatus === "merged") && worktreeDeleted !== false;
   const isDisconnected = connection?.state === "disconnected";
@@ -98,6 +101,7 @@ export function SessionModelPickerSheetContent({
     sessionId,
     tool,
   });
+  const providerGroups = getModelProviderGroupsForTool(selectedTool);
 
   const handleSelectModel = useCallback(
     async (nextModel: string) => {
@@ -169,43 +173,68 @@ export function SessionModelPickerSheetContent({
         ))}
       </Section>
 
-      <Section title="Model">
-        {modelOptions.map((option, index) => (
-          <ListRow
-            key={option.value}
-            title={option.label}
-            trailing={
-              displayedModel === option.value ? (
-                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
-              ) : undefined
-            }
-            separator={index < modelOptions.length - 1}
-            onPress={!canSelectModel ? undefined : () => void handleSelectModel(option.value)}
-            haptic={displayedModel === option.value ? "none" : "selection"}
-            style={!canSelectModel ? styles.disabledRow : undefined}
-          />
-        ))}
-      </Section>
+      {providerGroups.length > 0 ? (
+        providerGroups.map((group) => (
+          <Section key={group.value} title={group.label}>
+            {group.models.map((option, index) => (
+              <ListRow
+                key={option.value}
+                title={option.label}
+                subtitle={group.description}
+                trailing={
+                  displayedModel === option.value ? (
+                    <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                  ) : undefined
+                }
+                separator={index < group.models.length - 1}
+                onPress={!canSelectModel ? undefined : () => void handleSelectModel(option.value)}
+                haptic={displayedModel === option.value ? "none" : "selection"}
+                style={!canSelectModel ? styles.disabledRow : undefined}
+              />
+            ))}
+          </Section>
+        ))
+      ) : modelOptions.length > 0 ? (
+        <Section title="Model">
+          {modelOptions.map((option, index) => (
+            <ListRow
+              key={option.value}
+              title={option.label}
+              trailing={
+                displayedModel === option.value ? (
+                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                ) : undefined
+              }
+              separator={index < modelOptions.length - 1}
+              onPress={!canSelectModel ? undefined : () => void handleSelectModel(option.value)}
+              haptic={displayedModel === option.value ? "none" : "selection"}
+              style={!canSelectModel ? styles.disabledRow : undefined}
+            />
+          ))}
+        </Section>
+      ) : null}
 
-      <Section title="Effort">
-        {reasoningEffortOptions.map((option, index) => (
-          <ListRow
-            key={option.value}
-            title={option.label}
-            trailing={
-              displayedReasoningEffort === option.value ? (
-                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
-              ) : undefined
-            }
-            separator={index < reasoningEffortOptions.length - 1}
-            onPress={
-              !canSelectModel ? undefined : () => void handleSelectReasoningEffort(option.value)
-            }
-            haptic={displayedReasoningEffort === option.value ? "none" : "selection"}
-            style={!canSelectModel ? styles.disabledRow : undefined}
-          />
-        ))}
-      </Section>
+      {reasoningEffortOptions.length > 0 ? (
+        <Section title="Effort">
+          {reasoningEffortOptions.map((option, index) => (
+            <ListRow
+              key={option.value}
+              title={option.label}
+              trailing={
+                displayedReasoningEffort === option.value ? (
+                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                ) : undefined
+              }
+              separator={index < reasoningEffortOptions.length - 1}
+              onPress={
+                !canSelectModel ? undefined : () => void handleSelectReasoningEffort(option.value)
+              }
+              haptic={displayedReasoningEffort === option.value ? "none" : "selection"}
+              style={!canSelectModel ? styles.disabledRow : undefined}
+            />
+          ))}
+        </Section>
+      ) : null}
     </ScrollView>
   );
 }

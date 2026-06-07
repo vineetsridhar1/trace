@@ -125,14 +125,15 @@ export function useSessionComposerConfig({
   const reasoningEffortLabel = effectiveReasoningEffort
     ? getReasoningEffortLabel(effectiveReasoningEffort)
     : "Effort";
-  const toolOptions = useMemo(
-    () => [
-      { value: "claude_code" as const, label: "Claude Code" },
-      { value: "codex" as const, label: "Codex" },
-      { value: "pi" as const, label: "Pi" },
-    ],
-    [],
-  );
+	  const toolOptions = useMemo(
+	    () => [
+	      { value: "claude_code" as const, label: "Claude Code" },
+	      { value: "codex" as const, label: "Codex" },
+	      { value: "pi" as const, label: "Pi" },
+	      { value: "antigravity" as const, label: "Antigravity" },
+	    ],
+	    [],
+	  );
 
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
   const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");

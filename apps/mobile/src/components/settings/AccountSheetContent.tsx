@@ -33,6 +33,10 @@ export function AccountSheetContent() {
     router.replace("/sheets/session-defaults");
   }
 
+  function openApiTokens() {
+    router.replace("/sheets/api-tokens");
+  }
+
   function confirmSignOut() {
     Alert.alert("Sign out", "You will need to sign in again on this device.", [
       { text: "Cancel", style: "cancel" },
@@ -97,6 +101,13 @@ export function AccountSheetContent() {
           subtitle={user ? formatSessionDefaultsSummary(user) : "Choose tool, model, and effort"}
           disclosureIndicator
           onPress={openSessionDefaults}
+          separator
+        />
+        <ListRow
+          title="API keys"
+          subtitle="GitHub and Codex tokens"
+          disclosureIndicator
+          onPress={openApiTokens}
           separator={__DEV__}
         />
         {__DEV__ ? (

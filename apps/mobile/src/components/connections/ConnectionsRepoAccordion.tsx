@@ -64,7 +64,7 @@ export function ConnectionsRepoAccordion({
           {group ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Open synced session ${group.name}${branch ? ` on ${branch}` : ""}`}
+              accessibilityLabel={`Open spotlighted session ${group.name}${branch ? ` on ${branch}` : ""}`}
               onPress={() => router.push(`/sessions/${group.id}`)}
               style={({ pressed }) => [styles.syncedRow, { opacity: pressed ? 0.7 : 1 }]}
             >
@@ -74,14 +74,14 @@ export function ConnectionsRepoAccordion({
                   {group.name}
                 </Text>
                 <Text variant="caption1" color="mutedForeground" numberOfLines={1}>
-                  {branch ?? "Synced session"}
+                  {branch ?? "Spotlighted session"}
                   {commit ? ` - ${commit.slice(0, 7)}` : ""}
                 </Text>
               </View>
             </Pressable>
           ) : (
             <Text variant="footnote" color="mutedForeground">
-              No synced session
+              No spotlighted session
             </Text>
           )}
           {checkout?.isAttached && checkout.attachedSessionGroupId ? (

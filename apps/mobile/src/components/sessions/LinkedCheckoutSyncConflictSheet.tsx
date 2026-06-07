@@ -53,10 +53,10 @@ export function LinkedCheckoutSyncConflictSheet({
         contentContainerStyle={[styles.content, { paddingBottom: theme.spacing.md }]}
       >
         <View style={styles.header}>
-          <Text variant="headline">Resolve Sync Conflict</Text>
+          <Text variant="headline">Resolve Spotlight Conflict</Text>
           <Text variant="footnote" color="mutedForeground">
-            Sync stopped because the main worktree has local changes. Choose how Trace should
-            resolve them before syncing this workspace.
+            Spotlight stopped because the main worktree has local changes. Choose how Trace should
+            resolve them before spotlighting this workspace.
           </Text>
         </View>
 
@@ -98,7 +98,7 @@ export function LinkedCheckoutSyncConflictSheet({
           </View>
           <Text variant="footnote" color="mutedForeground">
             Import the current main-worktree changes into the session branch, create a commit, then
-            sync to that new commit. Trace also pushes the commit to origin when configured.
+            spotlight that new commit. Trace also pushes the commit to origin when configured.
           </Text>
 
           {selectedCommit ? (
@@ -119,7 +119,7 @@ export function LinkedCheckoutSyncConflictSheet({
                 ]}
               />
               <Button
-                title="Commit And Sync"
+                title="Commit And Spotlight"
                 size="sm"
                 disabled={commitDisabled}
                 loading={pending}
@@ -145,11 +145,11 @@ export function LinkedCheckoutSyncConflictSheet({
               <Text variant="subheadline">Stash changes</Text>
             </View>
             <Text variant="footnote" color="mutedForeground">
-              Save the main-worktree edits to the git stash, then sync cleanly.
+              Save the main-worktree edits to the git stash, then spotlight cleanly.
             </Text>
             <View style={styles.buttonSlot}>
               <Button
-                title="Stash And Sync"
+                title="Stash And Spotlight"
                 variant="secondary"
                 size="sm"
                 disabled={pending}
@@ -165,11 +165,11 @@ export function LinkedCheckoutSyncConflictSheet({
               <Text variant="subheadline">Discard all changes</Text>
             </View>
             <Text variant="footnote" color="mutedForeground">
-              Reset the main worktree to HEAD, remove untracked files, then sync cleanly.
+              Reset the main worktree to HEAD, remove untracked files, then spotlight cleanly.
             </Text>
             <View style={styles.buttonSlot}>
               <Button
-                title="Discard And Sync"
+                title="Discard And Spotlight"
                 variant="destructive"
                 size="sm"
                 disabled={pending}
@@ -194,7 +194,7 @@ export function LinkedCheckoutSyncConflictSheet({
             </Text>
             <View style={styles.buttonSlot}>
               <Button
-                title="Replay And Sync"
+                title="Replay And Spotlight"
                 variant="secondary"
                 size="sm"
                 disabled={pending}
