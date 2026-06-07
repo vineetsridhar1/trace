@@ -26,6 +26,7 @@ import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./Attachme
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
+import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
@@ -230,6 +231,7 @@ export function SessionGroupDetailView({
   const terminals = useSessionGroupTerminals(sessionGroupId);
 
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showApplicationsSidebar, setShowApplicationsSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidebarWidth, setSidebarWidth] = useState(() => getStoredSessionSidebarWidth());
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -399,13 +401,16 @@ export function SessionGroupDetailView({
     if (selectedSessionIsOptimistic && showSidebar) {
       setShowSidebar(false);
     }
-  }, [selectedSessionIsOptimistic, showSidebar]);
+    if (selectedSessionIsOptimistic && showApplicationsSidebar) {
+      setShowApplicationsSidebar(false);
+    }
+  }, [selectedSessionIsOptimistic, showApplicationsSidebar, showSidebar]);
 
   useEffect(() => {
-    if (!showApplicationsSidebarTab && sidebarTab === "apps") {
-      setSidebarTab("files");
+    if (!showApplicationsSidebarTab && showApplicationsSidebar) {
+      setShowApplicationsSidebar(false);
     }
-  }, [showApplicationsSidebarTab, sidebarTab]);
+  }, [showApplicationsSidebar, showApplicationsSidebarTab]);
 
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(
@@ -499,7 +504,20 @@ export function SessionGroupDetailView({
   const handleToggleSidebar = useCallback(() => {
     setShowSidebar((prev: boolean) => {
       if (prev) setHighlightCheckpointId(null);
-      return !prev;
+      const next = !prev;
+      if (next) setShowApplicationsSidebar(false);
+      return next;
+    });
+  }, []);
+
+  const handleToggleApplicationsSidebar = useCallback(() => {
+    setShowApplicationsSidebar((prev: boolean) => {
+      const next = !prev;
+      if (next) {
+        setShowSidebar(false);
+        setHighlightCheckpointId(null);
+      }
+      return next;
     });
   }, []);
 
@@ -668,8 +686,13 @@ export function SessionGroupDetailView({
                 panelMode={panelMode}
                 isFullscreen={isFullscreen}
                 showSidebar={showSidebar}
+                showApplicationsSidebar={showApplicationsSidebar}
+                canShowApplications={showApplicationsSidebarTab}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+                onToggleApplicationsSidebar={
+                  selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
+                }
               />
 
               <GroupTabStrip
@@ -719,7 +742,7 @@ export function SessionGroupDetailView({
                     canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                   />
                 </div>
-                {showSidebar && !selectedSessionIsOptimistic && (
+                {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
                   <div
                     className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
                       isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
@@ -730,24 +753,27 @@ export function SessionGroupDetailView({
                       onMouseDown={handleSidebarResizeStart}
                       className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
                     />
-                    <SidebarPanel
-                      sessionGroupId={sessionGroupId}
-                      activeSessionId={selectedSession?.id ?? null}
-                      activeTab={sidebarTab}
-                      fileTree={sessionGroupFileTree}
-                      filesLoading={sessionGroupFileTreeLoading}
-                      filesError={sessionGroupFileTreeError}
-                      onTabChange={handleSidebarTabChange}
-                      onFileClick={handleFileClick}
-                      onRefreshFiles={refreshTree}
-                      onLoadDirectory={loadDirectory}
-                      onDiffFileClick={handleDiffFileClick}
-                      highlightCheckpointId={highlightCheckpointId}
-                      onCheckpointClick={handleCheckpointClick}
-                      bridgeAccess={bridgeAccess}
-                      onBridgeAccessRequested={refreshBridgeAccess}
-                      showApplicationsTab={showApplicationsSidebarTab}
-                    />
+                    {showApplicationsSidebar ? (
+                      <SessionApplicationsPanel sessionGroupId={sessionGroupId} />
+                    ) : (
+                      <SidebarPanel
+                        sessionGroupId={sessionGroupId}
+                        activeSessionId={selectedSession?.id ?? null}
+                        activeTab={sidebarTab}
+                        fileTree={sessionGroupFileTree}
+                        filesLoading={sessionGroupFileTreeLoading}
+                        filesError={sessionGroupFileTreeError}
+                        onTabChange={handleSidebarTabChange}
+                        onFileClick={handleFileClick}
+                        onRefreshFiles={refreshTree}
+                        onLoadDirectory={loadDirectory}
+                        onDiffFileClick={handleDiffFileClick}
+                        highlightCheckpointId={highlightCheckpointId}
+                        onCheckpointClick={handleCheckpointClick}
+                        bridgeAccess={bridgeAccess}
+                        onBridgeAccessRequested={refreshBridgeAccess}
+                      />
+                    )}
                   </div>
                 )}
               </div>
