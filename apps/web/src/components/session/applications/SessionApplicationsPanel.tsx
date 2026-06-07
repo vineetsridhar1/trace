@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import { Copy, ExternalLink, Play, RotateCw, Square, Trash2 } from "lucide-react";
+import { Activity, Copy, ExternalLink, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import type {
   EndpointTrafficEntry,
   Repo,
@@ -288,27 +288,42 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
   }
 
   return (
-    <div className="h-full overflow-auto bg-surface-deep px-4 py-3">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">Applications</p>
-        <Button variant="ghost" size="sm" onClick={() => void refresh()}>
+    <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+        <p className="text-sm font-semibold text-foreground">Applications</p>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Refresh applications"
+          aria-label="Refresh applications"
+          onClick={() => void refresh()}
+        >
           <RotateCw size={14} />
-          Refresh
         </Button>
       </div>
+      <div className="min-h-0 flex-1 space-y-4 overflow-auto px-3 py-3">
       {error && (
-        <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
         </p>
       )}
       {config.setupScripts.length > 0 && (
-        <div className="mb-3 space-y-1">
+        <section className="space-y-1.5">
+          <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Setup</p>
           {config.setupScripts.map((script) => (
-            <div key={script.id} className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate text-muted-foreground">{script.name}</span>
+            <div
+              key={script.id}
+              className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-background/35 px-2.5 py-2"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{script.name}</p>
+                <p className="truncate text-[11px] text-muted-foreground">{script.command}</p>
+              </div>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon-sm"
+                title={`Run ${script.name}`}
+                aria-label={`Run ${script.name}`}
                 disabled={pending === script.id}
                 onClick={() =>
                   void run(script.id, () =>
@@ -317,16 +332,17 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                 }
               >
                 <Play size={14} />
-                Run
               </Button>
             </div>
           ))}
-        </div>
+        </section>
       )}
-      <div className="space-y-3">
+      <div className="space-y-4">
         {config.applications.map((application) => (
-          <div key={application.id} className="rounded-md border border-border bg-background/40 p-3">
-            <p className="mb-2 text-sm font-medium text-foreground">{application.name}</p>
+          <section key={application.id} className="space-y-2">
+            <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {application.name}
+            </p>
             <div className="space-y-2">
               {application.processes.map((processConfig) => {
                 const process = processesByKey.get(`${application.id}:${processConfig.id}`);
@@ -334,15 +350,32 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                 const running = process?.status === "running";
                 const active = running || process?.status === "starting" || process?.status === "stopping";
                 return (
-                  <div key={processConfig.id} className="space-y-2">
-                    <div className="flex items-center justify-between gap-3 text-sm">
+                  <div
+                    key={processConfig.id}
+                    className="space-y-2 rounded-md border border-border/70 bg-background/35 px-2.5 py-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-foreground">{processConfig.name}</p>
-                        <p className="text-xs text-muted-foreground">{process?.status ?? "stopped"}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{processConfig.name}</p>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              running
+                                ? "bg-emerald-500"
+                                : process?.status === "starting" || process?.status === "stopping"
+                                  ? "bg-amber-500"
+                                  : "bg-muted-foreground/40",
+                            )}
+                          />
+                          <span className="text-[11px] text-muted-foreground">{process?.status ?? "stopped"}</span>
+                        </div>
                       </div>
                       <Button
                         variant={active ? "ghost" : "outline"}
-                        size="sm"
+                        size="icon-sm"
+                        title={active ? `Stop ${processConfig.name}` : `Start ${processConfig.name}`}
+                        aria-label={active ? `Stop ${processConfig.name}` : `Start ${processConfig.name}`}
                         disabled={pending === `${application.id}:${processConfig.id}`}
                         onClick={() =>
                           void run(`${application.id}:${processConfig.id}`, () =>
@@ -357,88 +390,120 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                         }
                       >
                         {active ? <Square size={14} /> : <Play size={14} />}
-                        {active ? "Stop" : "Start"}
                       </Button>
                     </div>
                     {processEndpoints.map((endpoint) => {
                       const endpointUrl = typeof endpoint.url === "string" ? endpoint.url : "";
+                      const endpointEnabled = endpoint.status === "enabled";
+                      const canOpen = endpointEnabled && endpointUrl.length > 0;
                       return (
-                        <div key={endpoint.id} className="flex flex-wrap items-center gap-2 pl-3 text-xs">
-                          <span className="text-muted-foreground">
-                            {endpoint.label} :{endpoint.targetPort} {endpoint.status}
-                          </span>
-                          {endpoint.status === "enabled" && endpointUrl && (
+                        <div key={endpoint.id} className="space-y-2 border-t border-border/70 pt-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-medium text-foreground">
+                                {endpoint.label}
+                                <span className="ml-1 font-normal text-muted-foreground">:{endpoint.targetPort}</span>
+                              </p>
+                              {endpointEnabled && endpointUrl ? (
+                                <a
+                                  href={endpointUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block truncate text-[11px] text-primary underline-offset-4 hover:underline"
+                                  title={endpointUrl}
+                                >
+                                  {endpointUrl}
+                                </a>
+                              ) : (
+                                <p className="text-[11px] text-muted-foreground">Forwarding disabled</p>
+                              )}
+                            </div>
+                            <span
+                              className={cn(
+                                "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize",
+                                endpointEnabled
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {endpoint.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant={endpointEnabled ? "ghost" : "outline"}
+                              size="icon-sm"
+                              title={endpointEnabled ? `Disable ${endpoint.label}` : `Enable ${endpoint.label}`}
+                              aria-label={endpointEnabled ? `Disable ${endpoint.label}` : `Enable ${endpoint.label}`}
+                              disabled={
+                                pending === endpoint.id ||
+                                (!endpointEnabled && !running)
+                              }
+                              onClick={() =>
+                                void run(endpoint.id, async () => {
+                                  if (!endpointEnabled) {
+                                    await refresh();
+                                  }
+                                  return client
+                                    .mutation(
+                                      endpointEnabled
+                                        ? DISABLE_ENDPOINT_MUTATION
+                                        : ENABLE_ENDPOINT_MUTATION,
+                                      { endpointId: endpoint.id },
+                                    )
+                                    .toPromise();
+                                })
+                              }
+                            >
+                              {endpointEnabled ? <Square size={14} /> : <Power size={14} />}
+                            </Button>
                             <a
-                              href={endpointUrl}
+                              className={cn(
+                                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                                !canOpen && "pointer-events-none opacity-50",
+                              )}
+                              href={canOpen ? endpointUrl : undefined}
                               target="_blank"
                               rel="noreferrer"
-                              className="max-w-full truncate text-primary underline-offset-4 hover:underline sm:max-w-[22rem]"
-                              title={endpointUrl}
+                              title={`Open ${endpoint.label}`}
+                              aria-disabled={!canOpen}
+                              aria-label={`Open ${endpoint.label}`}
                             >
-                              {endpointUrl}
+                              <ExternalLink size={14} />
                             </a>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={
-                              pending === endpoint.id ||
-                              (endpoint.status !== "enabled" && !running)
-                            }
-                            onClick={() =>
-                              void run(endpoint.id, async () => {
-                                if (endpoint.status !== "enabled") {
-                                  await refresh();
-                                }
-                                return client
-                                  .mutation(
-                                    endpoint.status === "enabled"
-                                      ? DISABLE_ENDPOINT_MUTATION
-                                      : ENABLE_ENDPOINT_MUTATION,
-                                    { endpointId: endpoint.id },
-                                  )
-                                  .toPromise();
-                              })
-                            }
-                          >
-                            {endpoint.status === "enabled" ? "Disable" : "Enable"}
-                          </Button>
-                          <a
-                            className={cn(
-                              buttonVariants({ variant: "ghost", size: "sm" }),
-                              !endpointUrl && "pointer-events-none opacity-50",
-                            )}
-                            href={endpointUrl || undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-disabled={!endpointUrl}
-                          >
-                            <ExternalLink size={14} />
-                            Open
-                          </a>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={!endpointUrl}
-                            onClick={() => void copyEndpointUrl(endpointUrl)}
-                          >
-                            <Copy size={14} />
-                            Copy
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              void run(`rotate:${endpoint.id}`, () =>
-                                client.mutation(ROTATE_ENDPOINT_MUTATION, { endpointId: endpoint.id }).toPromise(),
-                              )
-                            }
-                          >
-                            Rotate
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setTrafficEndpointId(endpoint.id)}>
-                            Traffic
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title={`Copy ${endpoint.label} URL`}
+                              aria-label={`Copy ${endpoint.label} URL`}
+                              disabled={!endpointUrl}
+                              onClick={() => void copyEndpointUrl(endpointUrl)}
+                            >
+                              <Copy size={14} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title={`Rotate ${endpoint.label} URL`}
+                              aria-label={`Rotate ${endpoint.label} URL`}
+                              onClick={() =>
+                                void run(`rotate:${endpoint.id}`, () =>
+                                  client.mutation(ROTATE_ENDPOINT_MUTATION, { endpointId: endpoint.id }).toPromise(),
+                                )
+                              }
+                            >
+                              <RotateCw size={14} />
+                            </Button>
+                            <Button
+                              variant={trafficEndpointId === endpoint.id ? "outline" : "ghost"}
+                              size="icon-sm"
+                              title={`Show ${endpoint.label} traffic`}
+                              aria-label={`Show ${endpoint.label} traffic`}
+                              onClick={() => setTrafficEndpointId(endpoint.id)}
+                            >
+                              <Activity size={14} />
+                            </Button>
+                          </div>
                         </div>
                       );
                     })}
@@ -446,16 +511,18 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
                 );
               })}
             </div>
-          </div>
+          </section>
         ))}
       </div>
       {trafficEndpointId && (
-        <div className="mt-3 rounded-md border border-border bg-background/40 p-3">
-          <div className="mb-2 flex items-center justify-between">
+        <section className="space-y-2 rounded-md border border-border/70 bg-background/35 px-2.5 py-2">
+          <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-foreground">Traffic</p>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
+              title="Clear traffic"
+              aria-label="Clear traffic"
               onClick={() =>
                 void run(`clear:${trafficEndpointId}`, () =>
                   client.mutation(CLEAR_TRAFFIC_MUTATION, { endpointId: trafficEndpointId }).toPromise(),
@@ -463,7 +530,6 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
               }
             >
               <Trash2 size={14} />
-              Clear
             </Button>
           </div>
           <div className="space-y-1">
@@ -471,17 +537,23 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
               <p className="text-xs text-muted-foreground">No traffic captured yet.</p>
             ) : (
               trafficEntries.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-mono text-foreground">{entry.requestMethod}</span>
+                <div
+                  key={entry.id}
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded bg-surface-deep/60 px-2 py-1 text-[11px] text-muted-foreground"
+                >
+                  <span className="font-mono font-medium text-foreground">{entry.requestMethod}</span>
                   <span className="truncate">{entry.requestPath}</span>
-                  <span>{entry.responseStatus ?? entry.error ?? "pending"}</span>
-                  {entry.durationMs != null && <span>{entry.durationMs}ms</span>}
+                  <span className="font-mono text-foreground">{entry.responseStatus ?? entry.error ?? "pending"}</span>
+                  {entry.durationMs != null && (
+                    <span className="col-start-2 truncate text-[10px] text-muted-foreground">{entry.durationMs}ms</span>
+                  )}
                 </div>
               ))
             )}
           </div>
-        </div>
+        </section>
       )}
+      </div>
     </div>
   );
 }
