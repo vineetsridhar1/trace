@@ -1,9 +1,10 @@
-import { Laptop, TerminalSquare } from "lucide-react";
+import { TerminalSquare } from "lucide-react";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { PrivateSessionLock } from "../session/PrivateSessionLock";
 import { SessionApplicationRunningIndicator } from "../session/SessionApplicationRunningIndicator";
+import { SpotlightBridgeIndicator } from "../session/SpotlightBridgeIndicator";
 import type { SessionGroupRenameContext } from "./session-group-rename-context";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { SessionGroupNameInlineEditor } from "./SessionGroupNameInlineEditor";
@@ -38,15 +39,7 @@ export function SessionNameCell({
           {row.name}
         </span>
       )}
-      {attached && (
-        <span
-          title={`Synced to ${attached.bridgeLabel}`}
-          className="inline-flex shrink-0"
-          aria-label={`Synced to ${attached.bridgeLabel}`}
-        >
-          <Laptop className="h-3.5 w-3.5 text-emerald-500" />
-        </span>
-      )}
+      {attached && <SpotlightBridgeIndicator attached={attached} />}
       <SessionApplicationRunningIndicator sessionGroupId={row.id} />
       {row.visibility === "private" && (
         <PrivateSessionLock
