@@ -8,6 +8,7 @@ import type {
   SessionApplicationLogEntry,
   SessionApplicationProcess,
   SessionEndpoint,
+  SessionSetupScriptRun,
 } from "@trace/gql";
 import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,21 @@ const APPLICATIONS_STATE_QUERY = gql`
       stoppedAt
       exitCode
       lastError
+    }
+    sessionSetupScriptRuns(sessionGroupId: $sessionGroupId) {
+      id
+      sessionGroupId
+      scriptConfigId
+      label
+      command
+      workingDirectory
+      status
+      exitCode
+      outputPreview
+      outputTruncated
+      lastError
+      startedAt
+      completedAt
     }
     sessionEndpoints(sessionGroupId: $sessionGroupId) {
       id
@@ -188,6 +204,7 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
+  const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -217,6 +234,7 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
         result.data.sessionApplicationProcesses as Array<SessionApplicationProcess & { id: string }>,
       );
     }
+    setSetupRuns((result.data?.sessionSetupScriptRuns as SessionSetupScriptRun[] | undefined) ?? []);
     if (result.data?.sessionEndpoints) {
       upsertMany("sessionEndpoints", result.data.sessionEndpoints as Array<SessionEndpoint & { id: string }>);
     }
@@ -291,6 +309,25 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     return map;
   }, [endpoints]);
 
+  const latestSetupRunByScript = useMemo(() => {
+    const map = new Map<string, SessionSetupScriptRun>();
+    for (const run of setupRuns) {
+      const existing = map.get(run.scriptConfigId);
+      if (!existing || run.startedAt > existing.startedAt) {
+        map.set(run.scriptConfigId, run);
+      }
+    }
+    return map;
+  }, [setupRuns]);
+
+  useEffect(() => {
+    if (!setupRuns.some((run) => run.status === "running")) return;
+    const interval = window.setInterval(() => {
+      void refresh();
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [refresh, setupRuns]);
+
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setPending(key);
     setError(null);
@@ -347,31 +384,65 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
       {config.setupScripts.length > 0 && (
         <section className="space-y-1.5">
           <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Setup</p>
-          {config.setupScripts.map((script) => (
-            <div
-              key={script.id}
-              className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-background/35 px-2.5 py-2"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{script.name}</p>
-                <p className="truncate text-[11px] text-muted-foreground">{script.command}</p>
-              </div>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                title={`Run ${script.name}`}
-                aria-label={`Run ${script.name}`}
-                disabled={pending === script.id}
-                onClick={() =>
-                  void run(script.id, () =>
-                    client.mutation(RUN_SETUP_MUTATION, { sessionGroupId, scriptId: script.id }).toPromise(),
-                  )
-                }
+          {config.setupScripts.map((script) => {
+            const latestRun = latestSetupRunByScript.get(script.id);
+            const runOutput = latestRun?.lastError ?? latestRun?.outputPreview;
+            return (
+              <div
+                key={script.id}
+                className="space-y-2 rounded-md border border-border/70 bg-background/35 px-2.5 py-2"
               >
-                <Play size={14} />
-              </Button>
-            </div>
-          ))}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">{script.name}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{script.command}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    title={`Run ${script.name}`}
+                    aria-label={`Run ${script.name}`}
+                    disabled={pending === script.id || latestRun?.status === "running"}
+                    onClick={() =>
+                      void run(script.id, () =>
+                        client.mutation(RUN_SETUP_MUTATION, { sessionGroupId, scriptId: script.id }).toPromise(),
+                      )
+                    }
+                  >
+                    <Play size={14} />
+                  </Button>
+                </div>
+                {latestRun && (
+                  <div className="space-y-1 rounded bg-surface-deep/60 px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            latestRun.status === "completed"
+                              ? "bg-emerald-500"
+                              : latestRun.status === "running"
+                                ? "bg-amber-500"
+                                : "bg-destructive",
+                          )}
+                        />
+                        <span className="truncate text-muted-foreground">
+                          {latestRun.status}
+                          {latestRun.exitCode != null ? ` ${latestRun.exitCode}` : ""}
+                        </span>
+                      </div>
+                      {latestRun.outputTruncated && <span className="shrink-0 text-muted-foreground">truncated</span>}
+                    </div>
+                    {runOutput && (
+                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-4 text-foreground">
+                        {runOutput.trim()}
+                      </pre>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
       <div className="space-y-4">
