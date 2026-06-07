@@ -59,8 +59,11 @@ describe("ManagedProcessManager", () => {
       type: "setup_script_result",
       requestId: "setup-1",
       exitCode: 0,
-      output: "setup-ok",
     });
+    expect(result.type === "setup_script_result" ? result.output : "").toContain(
+      "[trace] Running setup script",
+    );
+    expect(result.type === "setup_script_result" ? result.output : "").toContain("setup-ok");
   });
 
   it("starts a managed process, captures logs, and reports exit", async () => {

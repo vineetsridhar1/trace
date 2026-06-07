@@ -188,6 +188,12 @@ export class ManagedProcessManager {
       });
       const chunks: Buffer[] = [];
       let bytes = 0;
+      const appendOutput = (chunk: Buffer) => {
+        if (bytes >= MAX_SETUP_OUTPUT_BYTES) return;
+        const remaining = MAX_SETUP_OUTPUT_BYTES - bytes;
+        chunks.push(chunk.subarray(0, remaining));
+        bytes += Math.min(chunk.byteLength, remaining);
+      };
       const collect = (stream: "stdout" | "stderr", chunk: Buffer) => {
         this.send({
           type: "setup_script_log",
@@ -195,11 +201,16 @@ export class ManagedProcessManager {
           stream,
           data: capChunk(chunk),
         });
-        if (bytes >= MAX_SETUP_OUTPUT_BYTES) return;
-        const remaining = MAX_SETUP_OUTPUT_BYTES - bytes;
-        chunks.push(chunk.subarray(0, remaining));
-        bytes += Math.min(chunk.byteLength, remaining);
+        appendOutput(chunk);
       };
+      const prelude = Buffer.from(`[trace] Running setup script in ${cwd}\n$ ${options.command}\n`, "utf8");
+      this.send({
+        type: "setup_script_log",
+        requestId: options.requestId,
+        stream: "stdout",
+        data: prelude.toString("utf8"),
+      });
+      appendOutput(prelude);
       child.stdout.on("data", (chunk: Buffer) => collect("stdout", chunk));
       child.stderr.on("data", (chunk: Buffer) => collect("stderr", chunk));
       child.on("error", (error) => {
