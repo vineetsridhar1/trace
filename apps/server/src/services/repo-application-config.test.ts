@@ -85,7 +85,59 @@ describe("repoApplicationConfigService", () => {
     ).toThrow("Setup script IDs must be unique");
   });
 
-  it("rejects invalid ports and non-string env values", () => {
+  it("normalizes env vars into key/secret pairs", () => {
+    const config = repoApplicationConfigService.normalize({
+      applications: [
+        {
+          id: "web",
+          name: "Web",
+          processes: [
+            {
+              id: "dev",
+              name: "Dev",
+              command: "pnpm dev",
+              env: [{ key: "DATABASE_URL", secretName: "prod-db-url" }],
+              ports: [{ id: "web", label: "Web", port: 3000 }],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(config.applications[0].processes[0].env).toEqual([
+      { key: "DATABASE_URL", secretName: "prod-db-url" },
+    ]);
+  });
+
+  it("rejects invalid env keys and incomplete env entries", () => {
+    expect(() =>
+      repoApplicationConfigService.normalize({
+        setupScripts: [
+          {
+            id: "install",
+            name: "Install",
+            command: "pnpm install",
+            env: [{ key: "1BAD", secretName: "token" }],
+          },
+        ],
+      }),
+    ).toThrow(ValidationError);
+
+    expect(() =>
+      repoApplicationConfigService.normalize({
+        setupScripts: [
+          {
+            id: "install",
+            name: "Install",
+            command: "pnpm install",
+            env: [{ key: "TOKEN", secretName: "" }],
+          },
+        ],
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it("rejects invalid ports", () => {
     expect(() =>
       repoApplicationConfigService.normalize({
         applications: [
@@ -97,7 +149,6 @@ describe("repoApplicationConfigService", () => {
                 id: "dev",
                 name: "Dev",
                 command: "pnpm dev",
-                env: { PORT: 3000 },
                 ports: [{ id: "web", label: "Web", port: 70000 }],
               },
             ],

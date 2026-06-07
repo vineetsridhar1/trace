@@ -1731,6 +1731,17 @@ export type RepoApplicationDefinitionInput = {
   processes: Array<RepoProcessDefinitionInput>;
 };
 
+export type RepoEnvVar = {
+  __typename?: "RepoEnvVar";
+  key: Scalars["String"]["output"];
+  secretName: Scalars["String"]["output"];
+};
+
+export type RepoEnvVarInput = {
+  key: Scalars["String"]["input"];
+  secretName: Scalars["String"]["input"];
+};
+
 export type RepoPortDefinition = {
   __typename?: "RepoPortDefinition";
   defaultForwardingEnabled: Scalars["Boolean"]["output"];
@@ -1753,7 +1764,7 @@ export type RepoPortDefinitionInput = {
 export type RepoProcessDefinition = {
   __typename?: "RepoProcessDefinition";
   command: Scalars["String"]["output"];
-  env?: Maybe<Scalars["JSON"]["output"]>;
+  env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   ports: Array<RepoPortDefinition>;
@@ -1763,7 +1774,7 @@ export type RepoProcessDefinition = {
 
 export type RepoProcessDefinitionInput = {
   command: Scalars["String"]["input"];
-  env?: InputMaybe<Scalars["JSON"]["input"]>;
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
   ports?: InputMaybe<Array<RepoPortDefinitionInput>>;
@@ -1774,7 +1785,7 @@ export type RepoProcessDefinitionInput = {
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
   command: Scalars["String"]["output"];
-  env?: Maybe<Scalars["JSON"]["output"]>;
+  env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   workingDirectory?: Maybe<Scalars["String"]["output"]>;
@@ -1782,7 +1793,7 @@ export type RepoSetupScript = {
 
 export type RepoSetupScriptInput = {
   command: Scalars["String"]["input"];
-  env?: InputMaybe<Scalars["JSON"]["input"]>;
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
@@ -2482,6 +2493,8 @@ export type ResolversTypes = ResolversObject<{
   RepoApplicationConfigInput: RepoApplicationConfigInput;
   RepoApplicationDefinition: ResolverTypeWrapper<RepoApplicationDefinition>;
   RepoApplicationDefinitionInput: RepoApplicationDefinitionInput;
+  RepoEnvVar: ResolverTypeWrapper<RepoEnvVar>;
+  RepoEnvVarInput: RepoEnvVarInput;
   RepoPortDefinition: ResolverTypeWrapper<RepoPortDefinition>;
   RepoPortDefinitionInput: RepoPortDefinitionInput;
   RepoProcessDefinition: ResolverTypeWrapper<RepoProcessDefinition>;
@@ -2609,6 +2622,8 @@ export type ResolversParentTypes = ResolversObject<{
   RepoApplicationConfigInput: RepoApplicationConfigInput;
   RepoApplicationDefinition: RepoApplicationDefinition;
   RepoApplicationDefinitionInput: RepoApplicationDefinitionInput;
+  RepoEnvVar: RepoEnvVar;
+  RepoEnvVarInput: RepoEnvVarInput;
   RepoPortDefinition: RepoPortDefinition;
   RepoPortDefinitionInput: RepoPortDefinitionInput;
   RepoProcessDefinition: RepoProcessDefinition;
@@ -4287,6 +4302,15 @@ export type RepoApplicationDefinitionResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type RepoEnvVarResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoEnvVar"] = ResolversParentTypes["RepoEnvVar"],
+> = ResolversObject<{
+  key?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  secretName?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type RepoPortDefinitionResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["RepoPortDefinition"] =
@@ -4307,7 +4331,7 @@ export type RepoProcessDefinitionResolvers<
     ResolversParentTypes["RepoProcessDefinition"],
 > = ResolversObject<{
   command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  env?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  env?: Resolver<Array<ResolversTypes["RepoEnvVar"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   ports?: Resolver<Array<ResolversTypes["RepoPortDefinition"]>, ParentType, ContextType>;
@@ -4322,7 +4346,7 @@ export type RepoSetupScriptResolvers<
     ResolversParentTypes["RepoSetupScript"],
 > = ResolversObject<{
   command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  env?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  env?: Resolver<Array<ResolversTypes["RepoEnvVar"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   workingDirectory?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
@@ -4853,6 +4877,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Repo?: RepoResolvers<ContextType>;
   RepoApplicationConfig?: RepoApplicationConfigResolvers<ContextType>;
   RepoApplicationDefinition?: RepoApplicationDefinitionResolvers<ContextType>;
+  RepoEnvVar?: RepoEnvVarResolvers<ContextType>;
   RepoPortDefinition?: RepoPortDefinitionResolvers<ContextType>;
   RepoProcessDefinition?: RepoProcessDefinitionResolvers<ContextType>;
   RepoSetupScript?: RepoSetupScriptResolvers<ContextType>;

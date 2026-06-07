@@ -127,7 +127,10 @@ const SESSION_DETAIL_QUERY = gql`
               name
               command
               workingDirectory
-              env
+              env {
+                key
+                secretName
+              }
             }
             applications {
               id
@@ -137,7 +140,10 @@ const SESSION_DETAIL_QUERY = gql`
                 name
                 command
                 workingDirectory
-                env
+                env {
+                  key
+                  secretName
+                }
                 required
                 ports {
                   id

@@ -3,6 +3,7 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import type {
   RepoApplicationConfig,
   RepoApplicationDefinition,
+  RepoEnvVar,
   RepoPortDefinition,
   RepoProcessDefinition,
   RepoSetupScript,
@@ -18,12 +19,19 @@ import {
   DialogTitle,
 } from "../../ui/dialog";
 import { Input } from "../../ui/input";
-import { Textarea } from "../../ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select";
 
-type DraftSetupScript = Omit<RepoSetupScript, "__typename" | "env"> & { envText: string };
+type DraftEnvVar = Omit<RepoEnvVar, "__typename">;
+type DraftSetupScript = Omit<RepoSetupScript, "__typename" | "env"> & { env: DraftEnvVar[] };
 type DraftPort = Omit<RepoPortDefinition, "__typename">;
 type DraftProcess = Omit<RepoProcessDefinition, "__typename" | "env" | "ports"> & {
-  envText: string;
+  env: DraftEnvVar[];
   ports: DraftPort[];
 };
 type DraftApplication = Omit<RepoApplicationDefinition, "__typename" | "processes"> & {
@@ -33,20 +41,17 @@ type DraftConfig = {
   setupScripts: DraftSetupScript[];
   applications: DraftApplication[];
 };
-type EnvValue = NonNullable<RepoSetupScript["env"]>;
 
 const EMPTY_CONFIG: RepoApplicationConfig = { setupScripts: [], applications: [] };
 
-function envText(env: RepoSetupScript["env"] | RepoProcessDefinition["env"]): string {
-  return JSON.stringify(env ?? {}, null, 2);
+function envVars(env: RepoSetupScript["env"] | RepoProcessDefinition["env"]): DraftEnvVar[] {
+  return (env ?? []).map((entry) => ({ key: entry.key, secretName: entry.secretName }));
 }
 
-function parseEnv(value: string, label: string): EnvValue {
-  const parsed = JSON.parse(value.trim() || "{}") as unknown;
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${label} environment must be a JSON object`);
-  }
-  return parsed as EnvValue;
+function toEnv(env: DraftEnvVar[]): DraftEnvVar[] {
+  return env
+    .map((entry) => ({ key: entry.key.trim(), secretName: entry.secretName }))
+    .filter((entry) => entry.key && entry.secretName);
 }
 
 function slug(value: string, fallback: string): string {
@@ -70,7 +75,7 @@ function normalizeConfig(config: RepoApplicationConfig | undefined): DraftConfig
       name: script.name,
       command: script.command,
       workingDirectory: script.workingDirectory ?? ".",
-      envText: envText(script.env),
+      env: envVars(script.env),
     })),
     applications: source.applications.map((application) => ({
       id: application.id,
@@ -81,7 +86,7 @@ function normalizeConfig(config: RepoApplicationConfig | undefined): DraftConfig
         command: process.command,
         workingDirectory: process.workingDirectory ?? ".",
         required: process.required,
-        envText: envText(process.env),
+        env: envVars(process.env),
         ports: process.ports.map((port) => ({
           id: port.id,
           label: port.label,
@@ -102,7 +107,7 @@ function toConfig(draft: DraftConfig): RepoApplicationConfig {
       name: script.name.trim(),
       command: script.command.trim(),
       workingDirectory: script.workingDirectory?.trim() || ".",
-      env: parseEnv(script.envText, script.name || script.id),
+      env: toEnv(script.env),
     })),
     applications: draft.applications.map((application) => ({
       id: slug(application.id, slug(application.name, "app")),
@@ -113,7 +118,7 @@ function toConfig(draft: DraftConfig): RepoApplicationConfig {
         command: process.command.trim(),
         workingDirectory: process.workingDirectory?.trim() || ".",
         required: process.required,
-        env: parseEnv(process.envText, process.name || process.id),
+        env: toEnv(process.env),
         ports: process.ports.map((port) => ({
           id: slug(port.id, slug(port.label, "port")),
           label: port.label.trim(),
@@ -147,7 +152,7 @@ function validate(config: RepoApplicationConfig) {
 function exampleConfig(): DraftConfig {
   return normalizeConfig({
     setupScripts: [
-      { id: "install", name: "Install", command: "pnpm install", workingDirectory: ".", env: {} },
+      { id: "install", name: "Install", command: "pnpm install", workingDirectory: ".", env: [] },
     ],
     applications: [
       {
@@ -159,7 +164,7 @@ function exampleConfig(): DraftConfig {
             name: "Dev server",
             command: "pnpm dev --host 0.0.0.0 --port 3000",
             workingDirectory: ".",
-            env: {},
+            env: [],
             required: true,
             ports: [
               {
@@ -181,9 +186,96 @@ function FieldLabel({ children }: { children: string }) {
   return <label className="text-[11px] font-medium text-muted-foreground">{children}</label>;
 }
 
+function EnvVarsEditor({
+  env,
+  secretNames,
+  onChange,
+}: {
+  env: DraftEnvVar[];
+  secretNames: string[];
+  onChange: (env: DraftEnvVar[]) => void;
+}) {
+  const addVar = () => onChange([...env, { key: "", secretName: secretNames[0] ?? "" }]);
+  const updateVar = (index: number, patch: Partial<DraftEnvVar>) =>
+    onChange(env.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const removeVar = (index: number) => onChange(env.filter((_, i) => i !== index));
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <FieldLabel>Environment variables</FieldLabel>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addVar}
+          disabled={secretNames.length === 0}
+          title={secretNames.length === 0 ? "Add org secrets first" : undefined}
+        >
+          <Plus size={14} />
+          Add variable
+        </Button>
+      </div>
+      {secretNames.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          Add org secrets in organization settings to reference them here.
+        </p>
+      ) : env.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">No environment variables.</p>
+      ) : (
+        <div className="space-y-2">
+          {env.map((entry, index) => {
+            const missing = entry.secretName !== "" && !secretNames.includes(entry.secretName);
+            return (
+              <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  value={entry.key}
+                  placeholder="VARIABLE_NAME"
+                  className="font-mono text-xs"
+                  spellCheck={false}
+                  onChange={(event) => updateVar(index, { key: event.target.value })}
+                />
+                <Select
+                  value={entry.secretName || undefined}
+                  onValueChange={(value) => updateVar(index, { secretName: value ?? "" })}
+                >
+                  <SelectTrigger className={cn("text-xs", missing && "border-destructive")}>
+                    <SelectValue placeholder="Select secret" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {missing && (
+                      <SelectItem value={entry.secretName} className="text-destructive">
+                        {entry.secretName} (missing)
+                      </SelectItem>
+                    )}
+                    {secretNames.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  title="Remove variable"
+                  aria-label="Remove variable"
+                  onClick={() => removeVar(index)}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ApplicationConfigDialog({
   open,
   config,
+  secretNames,
   saving,
   error,
   onOpenChange,
@@ -191,6 +283,7 @@ export function ApplicationConfigDialog({
 }: {
   open: boolean;
   config: RepoApplicationConfig | undefined;
+  secretNames: string[];
   saving: boolean;
   error: string | null;
   onOpenChange: (open: boolean) => void;
@@ -228,7 +321,7 @@ export function ApplicationConfigDialog({
           name: "Setup script",
           command: "",
           workingDirectory: ".",
-          envText: "{}",
+          env: [],
         },
       ],
     }));
@@ -362,20 +455,18 @@ export function ApplicationConfigDialog({
                             }
                           />
                         </div>
-                        <div className="space-y-1">
-                          <FieldLabel>Environment JSON</FieldLabel>
-                          <Textarea
-                            value={script.envText}
-                            onChange={(event) =>
+                        <div className="space-y-1 md:col-span-2">
+                          <EnvVarsEditor
+                            env={script.env}
+                            secretNames={secretNames}
+                            onChange={(nextEnv) =>
                               setDraft((current) => ({
                                 ...current,
                                 setupScripts: current.setupScripts.map((item, index) =>
-                                  index === scriptIndex ? { ...item, envText: event.target.value } : item,
+                                  index === scriptIndex ? { ...item, env: nextEnv } : item,
                                 ),
                               }))
                             }
-                            className="min-h-8 font-mono text-xs"
-                            spellCheck={false}
                           />
                         </div>
                       </div>
@@ -403,6 +494,7 @@ export function ApplicationConfigDialog({
                     <ApplicationEditor
                       key={application.id}
                       application={application}
+                      secretNames={secretNames}
                       onChange={(nextApplication) =>
                         setDraft((current) => ({
                           ...current,
@@ -442,10 +534,12 @@ export function ApplicationConfigDialog({
 
 function ApplicationEditor({
   application,
+  secretNames,
   onChange,
   onRemove,
 }: {
   application: DraftApplication;
+  secretNames: string[];
   onChange: (application: DraftApplication) => void;
   onRemove: () => void;
 }) {
@@ -459,7 +553,7 @@ function ApplicationEditor({
           name: "Process",
           command: "",
           workingDirectory: ".",
-          envText: "{}",
+          env: [],
           required: false,
           ports: [],
         },
@@ -497,6 +591,7 @@ function ApplicationEditor({
           <ProcessEditor
             key={process.id}
             process={process}
+            secretNames={secretNames}
             onChange={(nextProcess) =>
               onChange({
                 ...application,
@@ -520,10 +615,12 @@ function ApplicationEditor({
 
 function ProcessEditor({
   process,
+  secretNames,
   onChange,
   onRemove,
 }: {
   process: DraftProcess;
+  secretNames: string[];
   onChange: (process: DraftProcess) => void;
   onRemove: () => void;
 }) {
@@ -581,12 +678,10 @@ function ProcessEditor({
           Required
         </label>
         <div className="space-y-1 md:col-span-2">
-          <FieldLabel>Environment JSON</FieldLabel>
-          <Textarea
-            value={process.envText}
-            onChange={(event) => onChange({ ...process, envText: event.target.value })}
-            className="min-h-8 font-mono text-xs"
-            spellCheck={false}
+          <EnvVarsEditor
+            env={process.env}
+            secretNames={secretNames}
+            onChange={(nextEnv) => onChange({ ...process, env: nextEnv })}
           />
         </div>
       </div>
