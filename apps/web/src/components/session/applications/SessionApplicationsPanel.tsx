@@ -3,17 +3,53 @@ import { gql } from "@urql/core";
 import { Copy, ExternalLink, Play, RotateCw, Square, Trash2 } from "lucide-react";
 import type {
   EndpointTrafficEntry,
+  Repo,
   RepoApplicationConfig,
   SessionApplicationProcess,
   SessionEndpoint,
 } from "@trace/gql";
-import { useEntityField, useEntityStore } from "@trace/client-core";
+import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "@/lib/utils";
 import { client } from "../../../lib/urql";
 import { Button, buttonVariants } from "../../ui/button";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
+    sessionGroup(id: $sessionGroupId) {
+      id
+      repo {
+        id
+        applicationConfig {
+          setupScripts {
+            id
+            name
+            command
+            workingDirectory
+            env
+          }
+          applications {
+            id
+            name
+            processes {
+              id
+              name
+              command
+              workingDirectory
+              env
+              required
+              ports {
+                id
+                label
+                port
+                protocol
+                defaultForwardingEnabled
+                healthPath
+              }
+            }
+          }
+        }
+      }
+    }
     sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {
       id
       sessionGroupId
@@ -127,7 +163,11 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     | { id: string; applicationConfig?: RepoApplicationConfig | null }
     | null
     | undefined;
-  const config = groupRepo?.applicationConfig;
+  const repoApplicationConfig = useEntityStore((s) =>
+    groupRepo?.id ? (s.repos[groupRepo.id]?.applicationConfig as RepoApplicationConfig | null | undefined) : undefined,
+  );
+  const config = groupRepo?.applicationConfig ?? repoApplicationConfig;
+  const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
@@ -140,6 +180,22 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     const result = await client
       .query(APPLICATIONS_STATE_QUERY, { sessionGroupId })
       .toPromise();
+    const group = result.data?.sessionGroup as
+      | ({ id: string; repo?: { id?: string } | null } & Partial<SessionGroupEntity>)
+      | undefined;
+    if (group?.id) {
+      const existing = useEntityStore.getState().sessionGroups[group.id];
+      upsert(
+        "sessionGroups",
+        group.id,
+        (existing ? { ...existing, ...group } : group) as SessionGroupEntity,
+      );
+    }
+    const repo = group?.repo;
+    if (repo?.id) {
+      const existing = useEntityStore.getState().repos[repo.id];
+      upsert("repos", repo.id, (existing ? { ...existing, ...repo } : repo) as Repo);
+    }
     if (result.data?.sessionApplicationProcesses) {
       upsertMany(
         "sessionApplicationProcesses",
@@ -149,7 +205,7 @@ export function SessionApplicationsPanel({ sessionGroupId }: { sessionGroupId: s
     if (result.data?.sessionEndpoints) {
       upsertMany("sessionEndpoints", result.data.sessionEndpoints as Array<SessionEndpoint & { id: string }>);
     }
-  }, [sessionGroupId, upsertMany]);
+  }, [sessionGroupId, upsert, upsertMany]);
 
   useEffect(() => {
     void refresh();
