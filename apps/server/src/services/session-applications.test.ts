@@ -208,6 +208,6 @@ describe("SessionApplicationService", () => {
 
     await expect(
       new SessionApplicationService().enableEndpoint("endpoint-1", "org-1", "user-1"),
-    ).rejects.toThrow("Start the process first");
+    ).rejects.toThrow("Start the process first (current status: stopped)");
   });
 });

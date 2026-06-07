@@ -425,7 +425,7 @@ export class SessionApplicationService {
       },
     });
     if (!process || process.status !== "running") {
-      throw new ValidationError("Start the process first");
+      throw new ValidationError(`Start the process first (current status: ${process?.status ?? "missing"})`);
     }
     const updated = await prisma.sessionEndpoint.update({
       where: { id: endpoint.id },
