@@ -43,6 +43,19 @@ const SESSION_DETAIL_QUERY = gql`
         canMove
         autoRetryable
       }
+      endpoints {
+        terminals {
+          id
+          wsUrl
+          status
+        }
+        ports {
+          port
+          url
+          label
+          status
+        }
+      }
       gitCheckpoints {
         id
         sessionId

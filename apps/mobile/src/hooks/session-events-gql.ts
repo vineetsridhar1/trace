@@ -129,3 +129,21 @@ export const SESSION_STATUS_SUBSCRIPTION = gql`
     }
   }
 `;
+
+export const SESSION_PORTS_SUBSCRIPTION = gql`
+  subscription MobileSessionPortsChanged($sessionId: ID!, $organizationId: ID!) {
+    sessionPortsChanged(sessionId: $sessionId, organizationId: $organizationId) {
+      terminals {
+        id
+        wsUrl
+        status
+      }
+      ports {
+        port
+        url
+        label
+        status
+      }
+    }
+  }
+`;

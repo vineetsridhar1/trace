@@ -22,6 +22,7 @@ import {
   useEnsureSessionGroupDetail,
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
+import { useSessionPorts } from "@/hooks/useSessionPorts";
 
 type SessionPaneMode = "session" | "terminal" | "browser";
 
@@ -127,6 +128,7 @@ export default function SessionStreamScreen() {
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
+  useSessionPorts(sessionId, browserEnabled);
 
   useEffect(() => {
     if (!sessionId) return;
