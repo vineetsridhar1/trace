@@ -30,6 +30,7 @@ import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
 import { PrivateSessionLock } from "../session/PrivateSessionLock";
+import { SessionApplicationRunningIndicator } from "../session/SessionApplicationRunningIndicator";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -302,6 +303,7 @@ function OwnedSessionGroupItem({
             <Laptop className="h-3.5 w-3.5 text-emerald-500" />
           </span>
         )}
+        <SessionApplicationRunningIndicator sessionGroupId={record.id} />
         <span className="shrink-0 text-[11px] text-foreground group-hover/session-row:hidden group-focus-within/session-row:hidden">
           {activityLabel}
         </span>
