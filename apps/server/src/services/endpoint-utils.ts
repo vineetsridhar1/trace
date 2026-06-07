@@ -42,7 +42,7 @@ export function generateEndpointKey(length = 12): string {
 export function extractEndpointKey(hostHeader: string | undefined | null): string | null {
   if (!hostHeader) return null;
   const host = hostHeader.split(":")[0]?.toLowerCase();
-  const baseHost = endpointPreviewBaseHost().toLowerCase();
+  const baseHost = endpointPreviewBaseHost().toLowerCase().split(":")[0];
   if (!host || host === baseHost || !host.endsWith(`.${baseHost}`)) return null;
   const key = host.slice(0, -1 * (`.${baseHost}`).length).split(".").at(-1);
   return key && /^[a-z0-9-]+$/.test(key) ? key : null;

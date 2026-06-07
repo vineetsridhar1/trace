@@ -21,6 +21,14 @@ describe("endpoint utils", () => {
     expect(buildEndpointUrl("abc123")).toBe("https://abc123.preview.example.test");
   });
 
+  it("supports local preview hosts with explicit ports", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost:4000");
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME", "http");
+
+    expect(buildEndpointUrl("abc123")).toBe("http://abc123.preview.localhost:4000");
+    expect(extractEndpointKey("abc123.preview.localhost:4000")).toBe("abc123");
+  });
+
   it("extracts opaque endpoint keys from wildcard hosts", () => {
     vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
 
