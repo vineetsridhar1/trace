@@ -109,6 +109,18 @@ TRACE_RUNTIME_SETUP_COMMANDS='npm install -g @acme/experimental-cli'
 Do not use it for tools needed by every session. Those should go into a derived Docker image so
 installs happen once at build time instead of on every runtime start.
 
+Setup commands are logged verbatim to the runtime's container logs. Do not put secrets inline in
+the command string — reference them through environment variables that the launcher injects
+separately:
+
+```bash
+# Good — token comes from env, the logged command is safe
+TRACE_RUNTIME_SETUP_COMMANDS='npm config set //registry.acme.com/:_authToken=$ACME_NPM_TOKEN && npm install -g @acme/internal-cli'
+
+# Bad — secret ends up in container logs and any log aggregator
+TRACE_RUNTIME_SETUP_COMMANDS='npm config set //registry.acme.com/:_authToken=abc123secret && npm install -g @acme/internal-cli'
+```
+
 ## Operational Notes
 
 - Make the GHCR base image package public if external launchers need to pull it.

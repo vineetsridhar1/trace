@@ -7,14 +7,6 @@ on:
       - main
     tags:
       - "runtime-v*"
-    paths:
-      - ".github/workflows/publish-runtime-image.yml"
-      - "apps/container-bridge/**"
-      - "packages/shared/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.base.json"
 
 permissions:
   contents: read
