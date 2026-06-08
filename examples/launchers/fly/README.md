@@ -69,6 +69,19 @@ These commands run as the runtime user. The default Trace runtime image configur
 npm global prefix, so `npm install -g ...` works for CLI additions. Use a custom runtime image for
 system packages that require root.
 
+For stable runtime additions, build a derived image from the published Trace base image and point
+`TRACE_RUNTIME_IMAGE` at it:
+
+```dockerfile
+FROM ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends jq
+
+USER coder
+RUN npm install -g @acme/internal-cli
+```
+
 ## Trace Agent Environment
 
 Create a Trace Agent Environment with:
