@@ -42,6 +42,9 @@ import {
 } from "./lib/cors.js";
 import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.js";
 import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
+import { endpointProxyService } from "./services/endpoint-proxy.js";
+import { sessionApplicationService } from "./services/session-applications.js";
+import { endpointTrafficRetentionHours } from "./services/endpoint-utils.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -49,6 +52,8 @@ const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
+const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
+const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -150,6 +155,19 @@ async function main() {
     }),
   );
   app.use(cookieParser());
+
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const endpointKey = endpointProxyService.extractKey(req.headers.host);
+    if (!endpointKey) {
+      next();
+      return;
+    }
+    void endpointProxyService.handleHttpRequest(req, res, endpointKey).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!res.headersSent) res.status(500);
+      res.end(message);
+    });
+  });
 
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
@@ -344,8 +362,36 @@ async function main() {
         }, cloudIdleCleanupIntervalMs)
       : null;
 
+  const endpointTrafficCleanup = setInterval(() => {
+    const startedAt = Date.now();
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY,
+      ttlMs: ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS * 2,
+      run: () => sessionApplicationService.deleteExpiredTraffic(endpointTrafficRetentionHours()),
+    })
+      .then((deleted) => {
+        if (deleted && deleted > 0) {
+          console.log(`[endpoint-traffic-cleanup] deleted ${deleted} expired traffic entries`);
+        }
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[endpoint-traffic-cleanup] iteration failed: ${message}`);
+        logAgentEnvironmentTelemetry("endpoint_traffic_cleanup.iteration_failed", {
+          durationMs: Date.now() - startedAt,
+          error: message,
+        });
+      });
+  }, ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS);
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    if (endpointProxyService.isEndpointHost(req.headers.host)) {
+      endpointProxyService.handleWebSocketUpgrade(req, socket as import("net").Socket, head);
+      return;
+    }
+
     const { pathname } = new URL(req.url ?? "", "http://localhost");
     const rejectUpgrade = (statusCode: number, message: string): void => {
       socket.write(`HTTP/1.1 ${statusCode} ${message}\r\n\r\n`);
@@ -431,6 +477,7 @@ async function main() {
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
+              clearInterval(endpointTrafficCleanup);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();

@@ -11,6 +11,7 @@ import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { createChannelInTransaction } from "./channel-create.js";
+import { repoApplicationConfigService } from "./repo-application-config.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -211,9 +212,9 @@ export class OrganizationService {
   ) {
     const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Verify repo belongs to caller's org before updating
-      await tx.repo.findFirstOrThrow({
+      const existing = await tx.repo.findFirstOrThrow({
         where: { id, organizationId },
-        select: { id: true },
+        select: { id: true, setupConfig: true },
       });
 
       const repo = await tx.repo.update({
@@ -221,16 +222,26 @@ export class OrganizationService {
         data: {
           ...(input.name != null && { name: input.name }),
           ...(input.defaultBranch != null && { defaultBranch: input.defaultBranch }),
+          ...(input.applicationConfig != null && {
+            setupConfig: repoApplicationConfigService.mergeIntoSetupConfig(
+              existing.setupConfig,
+              input.applicationConfig,
+            ),
+          }),
         },
         include: { projects: true, sessions: true },
       });
+
+      const applicationConfig = repoApplicationConfigService.parseApplicationConfig(
+        repo.setupConfig,
+      );
 
       const event = await eventService.create(
         {
           organizationId: repo.organizationId,
           scopeType: "system",
           scopeId: repo.id,
-          eventType: "repo_updated",
+          eventType: input.applicationConfig != null ? "application_config_updated" : "repo_updated",
           payload: {
             repo: {
               id: repo.id,
@@ -238,6 +249,7 @@ export class OrganizationService {
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
               webhookActive: !!repo.webhookId,
+              applicationConfig,
             },
           },
           actorType,

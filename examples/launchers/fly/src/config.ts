@@ -13,6 +13,8 @@ export type ControllerConfig = {
 };
 
 const DEFAULT_PORT = 8787;
+const DEFAULT_MACHINE_CPUS = 2;
+const DEFAULT_MACHINE_MEMORY_MB = 2048;
 
 export function loadConfig(env: NodeJS.ProcessEnv): ControllerConfig {
   const required = [
@@ -37,10 +39,14 @@ export function loadConfig(env: NodeJS.ProcessEnv): ControllerConfig {
     flyRegion: requireEnv(env, "FLY_REGION"),
     traceRuntimeImage: requireEnv(env, "TRACE_RUNTIME_IMAGE"),
     flyMachineCpuKind: env.FLY_MACHINE_CPU_KIND ?? "shared",
-    flyMachineCpus: parsePositiveInteger(env.FLY_MACHINE_CPUS, 1, "FLY_MACHINE_CPUS"),
+    flyMachineCpus: parsePositiveInteger(
+      env.FLY_MACHINE_CPUS,
+      DEFAULT_MACHINE_CPUS,
+      "FLY_MACHINE_CPUS",
+    ),
     flyMachineMemoryMb: parsePositiveInteger(
       env.FLY_MACHINE_MEMORY_MB,
-      1024,
+      DEFAULT_MACHINE_MEMORY_MB,
       "FLY_MACHINE_MEMORY_MB",
     ),
     deleteAfterStop: env.FLY_DELETE_AFTER_STOP !== "false",

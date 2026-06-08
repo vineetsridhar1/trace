@@ -121,6 +121,41 @@ const SESSION_DETAIL_QUERY = gql`
           id
           name
           remoteUrl
+          applicationConfig {
+            setupScripts {
+              id
+              name
+              command
+              workingDirectory
+              env {
+                key
+                secretName
+              }
+            }
+            applications {
+              id
+              name
+              processes {
+                id
+                name
+                command
+                workingDirectory
+                env {
+                  key
+                  secretName
+                }
+                required
+                ports {
+                  id
+                  label
+                  port
+                  protocol
+                  defaultForwardingEnabled
+                  healthPath
+                }
+              }
+            }
+          }
         }
         connection {
           state

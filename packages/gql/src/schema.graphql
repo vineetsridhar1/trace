@@ -120,6 +120,39 @@ enum BridgeAccessCapability {
   terminal
 }
 
+enum ApplicationProcessStatus {
+  stopped
+  starting
+  running
+  stopping
+  exited
+  failed
+}
+
+enum SetupScriptRunStatus {
+  running
+  completed
+  failed
+}
+
+enum SessionEndpointStatus {
+  disabled
+  enabled
+  unavailable
+  revoked
+}
+
+enum SessionEndpointAccessMode {
+  private
+  public
+}
+
+enum EndpointTrafficCaptureMode {
+  metadata
+  headers
+  full
+}
+
 type SlashCommand {
   name: String!
   description: String!
@@ -277,6 +310,20 @@ enum EventType {
   session_runtime_disconnected
   session_runtime_reconnected
   session_group_visibility_updated
+  application_config_updated
+  session_setup_script_started
+  session_setup_script_completed
+  session_setup_script_failed
+  session_application_process_started
+  session_application_process_stopped
+  session_application_process_failed
+  session_application_log_appended
+  session_endpoint_created
+  session_endpoint_forwarding_enabled
+  session_endpoint_forwarding_disabled
+  session_endpoint_rotated
+  session_endpoint_access_updated
+  session_endpoint_traffic_capture_updated
 }
 
 # --- Core Types ---
@@ -341,8 +388,52 @@ type Repo {
   remoteUrl: String
   defaultBranch: String!
   webhookActive: Boolean!
+  applicationConfig: RepoApplicationConfig!
   projects: [Project!]!
   sessions: [Session!]!
+}
+
+type RepoApplicationConfig {
+  setupScripts: [RepoSetupScript!]!
+  applications: [RepoApplicationDefinition!]!
+}
+
+type RepoSetupScript {
+  id: ID!
+  name: String!
+  command: String!
+  workingDirectory: String
+  env: [RepoEnvVar!]!
+}
+
+type RepoEnvVar {
+  key: String!
+  secretName: String!
+}
+
+type RepoApplicationDefinition {
+  id: ID!
+  name: String!
+  processes: [RepoProcessDefinition!]!
+}
+
+type RepoProcessDefinition {
+  id: ID!
+  name: String!
+  command: String!
+  workingDirectory: String
+  env: [RepoEnvVar!]!
+  required: Boolean!
+  ports: [RepoPortDefinition!]!
+}
+
+type RepoPortDefinition {
+  id: ID!
+  label: String!
+  port: Int!
+  protocol: String!
+  defaultForwardingEnabled: Boolean!
+  healthPath: String
 }
 
 type Project {
@@ -643,6 +734,85 @@ type PortEndpoint {
 type SessionEndpoints {
   terminals: [TerminalEndpoint!]!
   ports: [PortEndpoint!]!
+}
+
+type SessionSetupScriptRun {
+  id: ID!
+  sessionGroupId: ID!
+  scriptConfigId: String!
+  label: String!
+  command: String!
+  workingDirectory: String!
+  status: SetupScriptRunStatus!
+  exitCode: Int
+  outputPreview: String
+  outputTruncated: Boolean!
+  lastError: String
+  startedAt: DateTime!
+  completedAt: DateTime
+}
+
+type SessionApplicationProcess {
+  id: ID!
+  sessionGroupId: ID!
+  appConfigId: String!
+  processConfigId: String!
+  label: String!
+  status: ApplicationProcessStatus!
+  runtimeInstanceId: String
+  startedAt: DateTime
+  stoppedAt: DateTime
+  exitCode: Int
+  lastError: String
+  endpoints: [SessionEndpoint!]!
+}
+
+type SessionApplicationLogEntry {
+  id: ID!
+  processId: ID!
+  stream: String!
+  data: String!
+  sequence: Int!
+  timestamp: DateTime!
+}
+
+type SessionEndpoint {
+  id: ID!
+  key: String!
+  url: String!
+  sessionGroupId: ID!
+  appConfigId: String!
+  processConfigId: String!
+  portConfigId: String!
+  label: String!
+  targetPort: Int!
+  status: SessionEndpointStatus!
+  accessMode: SessionEndpointAccessMode!
+  trafficCaptureMode: EndpointTrafficCaptureMode!
+  enabledAt: DateTime
+  disabledAt: DateTime
+  revokedAt: DateTime
+}
+
+type EndpointTrafficEntry {
+  id: ID!
+  endpointId: ID!
+  startedAt: DateTime!
+  completedAt: DateTime
+  durationMs: Int
+  requestMethod: String!
+  requestPath: String!
+  requestQuery: String
+  requestHeaders: JSON
+  requestBodyPreview: String
+  requestBodyBytes: Int
+  requestTruncated: Boolean!
+  responseStatus: Int
+  responseHeaders: JSON
+  responseBodyPreview: String
+  responseBodyBytes: Int
+  responseTruncated: Boolean!
+  error: String
 }
 
 type SessionConnection {
@@ -977,6 +1147,50 @@ input CreateRepoInput {
 input UpdateRepoInput {
   name: String
   defaultBranch: String
+  applicationConfig: RepoApplicationConfigInput
+}
+
+input RepoApplicationConfigInput {
+  setupScripts: [RepoSetupScriptInput!]
+  applications: [RepoApplicationDefinitionInput!]
+}
+
+input RepoSetupScriptInput {
+  id: ID!
+  name: String!
+  command: String!
+  workingDirectory: String
+  env: [RepoEnvVarInput!]
+}
+
+input RepoEnvVarInput {
+  key: String!
+  secretName: String!
+}
+
+input RepoApplicationDefinitionInput {
+  id: ID!
+  name: String!
+  processes: [RepoProcessDefinitionInput!]!
+}
+
+input RepoProcessDefinitionInput {
+  id: ID!
+  name: String!
+  command: String!
+  workingDirectory: String
+  env: [RepoEnvVarInput!]
+  required: Boolean
+  ports: [RepoPortDefinitionInput!]
+}
+
+input RepoPortDefinitionInput {
+  id: ID!
+  label: String!
+  port: Int!
+  protocol: String
+  defaultForwardingEnabled: Boolean
+  healthPath: String
 }
 
 input CreateProjectInput {
@@ -1142,6 +1356,11 @@ type Query {
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
+  sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
+  sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
+  sessionApplicationLogs(processId: ID!, limit: Int, beforeSequence: Int): [SessionApplicationLogEntry!]!
+  sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
+  endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
   aiConversations(organizationId: ID!, visibility: AiConversationVisibility): [AiConversation!]!
   aiConversation(id: ID!): AiConversation
   branch(id: ID!): Branch
@@ -1343,6 +1562,17 @@ type Mutation {
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
   createChannelTerminal(channelId: ID!, bridgeRuntimeId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
+  runSessionGroupSetupScript(sessionGroupId: ID!, scriptId: ID!): Boolean!
+  startSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
+  stopSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
+  startSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
+  stopSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
+  restartSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
+  enableSessionEndpointForwarding(endpointId: ID!, accessMode: SessionEndpointAccessMode): SessionEndpoint!
+  disableSessionEndpointForwarding(endpointId: ID!): SessionEndpoint!
+  rotateSessionEndpoint(endpointId: ID!): SessionEndpoint!
+  updateSessionEndpointTrafficCapture(endpointId: ID!, mode: EndpointTrafficCaptureMode!): SessionEndpoint!
+  clearEndpointTraffic(endpointId: ID!): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

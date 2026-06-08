@@ -98,6 +98,14 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type ApplicationProcessStatus =
+  | "exited"
+  | "failed"
+  | "running"
+  | "starting"
+  | "stopped"
+  | "stopping";
+
 export type Branch = {
   __typename?: "Branch";
   childBranches: Array<Branch>;
@@ -361,6 +369,30 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
+
+export type EndpointTrafficEntry = {
+  __typename?: "EndpointTrafficEntry";
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  durationMs?: Maybe<Scalars["Int"]["output"]>;
+  endpointId: Scalars["ID"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  requestBodyBytes?: Maybe<Scalars["Int"]["output"]>;
+  requestBodyPreview?: Maybe<Scalars["String"]["output"]>;
+  requestHeaders?: Maybe<Scalars["JSON"]["output"]>;
+  requestMethod: Scalars["String"]["output"];
+  requestPath: Scalars["String"]["output"];
+  requestQuery?: Maybe<Scalars["String"]["output"]>;
+  requestTruncated: Scalars["Boolean"]["output"];
+  responseBodyBytes?: Maybe<Scalars["Int"]["output"]>;
+  responseBodyPreview?: Maybe<Scalars["String"]["output"]>;
+  responseHeaders?: Maybe<Scalars["JSON"]["output"]>;
+  responseStatus?: Maybe<Scalars["Int"]["output"]>;
+  responseTruncated: Scalars["Boolean"]["output"];
+  startedAt: Scalars["DateTime"]["output"];
+};
+
 export type EntityType = "channel" | "chat" | "message" | "session" | "ticket";
 
 export type Event = {
@@ -380,6 +412,7 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -413,7 +446,17 @@ export type EventType =
   | "queued_messages_reordered"
   | "repo_created"
   | "repo_updated"
+  | "session_application_log_appended"
+  | "session_application_process_failed"
+  | "session_application_process_started"
+  | "session_application_process_stopped"
   | "session_deleted"
+  | "session_endpoint_access_updated"
+  | "session_endpoint_created"
+  | "session_endpoint_forwarding_disabled"
+  | "session_endpoint_forwarding_enabled"
+  | "session_endpoint_rotated"
+  | "session_endpoint_traffic_capture_updated"
   | "session_group_archived"
   | "session_group_renamed"
   | "session_group_visibility_updated"
@@ -434,6 +477,9 @@ export type EventType =
   | "session_runtime_start_timed_out"
   | "session_runtime_stopped"
   | "session_runtime_stopping"
+  | "session_setup_script_completed"
+  | "session_setup_script_failed"
+  | "session_setup_script_started"
   | "session_started"
   | "session_terminated"
   | "ticket_assigned"
@@ -566,6 +612,7 @@ export type Mutation = {
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
+  clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
@@ -591,10 +638,12 @@ export type Mutation = {
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
   destroyTerminal: Scalars["Boolean"]["output"];
+  disableSessionEndpointForwarding: SessionEndpoint;
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
   joinChannel: Channel;
   leaveChannel: Channel;
@@ -617,12 +666,15 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
+  rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
+  runSessionGroupSetupScript: Scalars["Boolean"]["output"];
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -633,7 +685,11 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  startSessionApplication: Array<SessionApplicationProcess>;
+  startSessionProcess: SessionApplicationProcess;
   steerQueuedMessage: Event;
+  stopSessionApplication: Array<SessionApplicationProcess>;
+  stopSessionProcess: SessionApplicationProcess;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -654,6 +710,7 @@ export type Mutation = {
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateSessionDefaults: User;
+  updateSessionEndpointTrafficCapture: SessionEndpoint;
   updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
 };
@@ -687,6 +744,10 @@ export type MutationArchiveSessionGroupArgs = {
 export type MutationAssignTicketArgs = {
   ticketId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationClearEndpointTrafficArgs = {
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationClearQueuedMessagesArgs = {
@@ -801,6 +862,10 @@ export type MutationDestroyTerminalArgs = {
   terminalId: Scalars["ID"]["input"];
 };
 
+export type MutationDisableSessionEndpointForwardingArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationDismissInboxItemArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -817,6 +882,11 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars["String"]["input"];
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationEnableSessionEndpointForwardingArgs = {
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationForkSessionArgs = {
@@ -929,6 +999,12 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationRestartSessionProcessArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -952,10 +1028,19 @@ export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
 
+export type MutationRotateSessionEndpointArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationRunSessionGroupSetupScriptArgs = {
+  scriptId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationSaveSessionGroupFileArgs = {
@@ -1018,8 +1103,30 @@ export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
 
+export type MutationStartSessionApplicationArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationStartSessionProcessArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationSteerQueuedMessageArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationStopSessionApplicationArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationStopSessionProcessArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationSubscribeArgs = {
@@ -1128,6 +1235,11 @@ export type MutationUpdateSessionDefaultsArgs = {
   input: UpdateSessionDefaultsInput;
 };
 
+export type MutationUpdateSessionEndpointTrafficCaptureArgs = {
+  endpointId: Scalars["ID"]["input"];
+  mode: EndpointTrafficCaptureMode;
+};
+
 export type MutationUpdateSessionGroupVisibilityArgs = {
   id: Scalars["ID"]["input"];
   visibility: SessionGroupVisibility;
@@ -1223,6 +1335,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
@@ -1243,6 +1356,9 @@ export type Query = {
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
+  sessionApplicationLogs: Array<SessionApplicationLogEntry>;
+  sessionApplicationProcesses: Array<SessionApplicationProcess>;
+  sessionEndpoints: Array<SessionEndpoint>;
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -1255,6 +1371,7 @@ export type Query = {
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
+  sessionSetupScriptRuns: Array<SessionSetupScriptRun>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
@@ -1330,6 +1447,12 @@ export type QueryChatMessagesArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryEndpointTrafficArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  endpointId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
@@ -1419,6 +1542,20 @@ export type QuerySessionArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type QuerySessionApplicationLogsArgs = {
+  beforeSequence?: InputMaybe<Scalars["Int"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  processId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionApplicationProcessesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionEndpointsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type QuerySessionEventsAroundEventArgs = {
   eventId: Scalars["ID"]["input"];
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -1479,6 +1616,10 @@ export type QuerySessionGroupsArgs = {
 export type QuerySessionPromptIndexArgs = {
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionSetupScriptRunsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionSlashCommandsArgs = {
@@ -1546,6 +1687,7 @@ export type ReorderChannelsInput = {
 
 export type Repo = {
   __typename?: "Repo";
+  applicationConfig: RepoApplicationConfig;
   defaultBranch: Scalars["String"]["output"];
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1553,6 +1695,98 @@ export type Repo = {
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
+};
+
+export type RepoApplicationConfig = {
+  __typename?: "RepoApplicationConfig";
+  applications: Array<RepoApplicationDefinition>;
+  setupScripts: Array<RepoSetupScript>;
+};
+
+export type RepoApplicationConfigInput = {
+  applications?: InputMaybe<Array<RepoApplicationDefinitionInput>>;
+  setupScripts?: InputMaybe<Array<RepoSetupScriptInput>>;
+};
+
+export type RepoApplicationDefinition = {
+  __typename?: "RepoApplicationDefinition";
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  processes: Array<RepoProcessDefinition>;
+};
+
+export type RepoApplicationDefinitionInput = {
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+  processes: Array<RepoProcessDefinitionInput>;
+};
+
+export type RepoEnvVar = {
+  __typename?: "RepoEnvVar";
+  key: Scalars["String"]["output"];
+  secretName: Scalars["String"]["output"];
+};
+
+export type RepoEnvVarInput = {
+  key: Scalars["String"]["input"];
+  secretName: Scalars["String"]["input"];
+};
+
+export type RepoPortDefinition = {
+  __typename?: "RepoPortDefinition";
+  defaultForwardingEnabled: Scalars["Boolean"]["output"];
+  healthPath?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  label: Scalars["String"]["output"];
+  port: Scalars["Int"]["output"];
+  protocol: Scalars["String"]["output"];
+};
+
+export type RepoPortDefinitionInput = {
+  defaultForwardingEnabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  healthPath?: InputMaybe<Scalars["String"]["input"]>;
+  id: Scalars["ID"]["input"];
+  label: Scalars["String"]["input"];
+  port: Scalars["Int"]["input"];
+  protocol?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type RepoProcessDefinition = {
+  __typename?: "RepoProcessDefinition";
+  command: Scalars["String"]["output"];
+  env: Array<RepoEnvVar>;
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  ports: Array<RepoPortDefinition>;
+  required: Scalars["Boolean"]["output"];
+  workingDirectory?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type RepoProcessDefinitionInput = {
+  command: Scalars["String"]["input"];
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+  ports?: InputMaybe<Array<RepoPortDefinitionInput>>;
+  required?: InputMaybe<Scalars["Boolean"]["input"]>;
+  workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type RepoSetupScript = {
+  __typename?: "RepoSetupScript";
+  command: Scalars["String"]["output"];
+  env: Array<RepoEnvVar>;
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  workingDirectory?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type RepoSetupScriptInput = {
+  command: Scalars["String"]["input"];
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+  workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type ScopeInput = {
@@ -1592,6 +1826,32 @@ export type Session = {
   updatedAt: Scalars["DateTime"]["output"];
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
+};
+
+export type SessionApplicationLogEntry = {
+  __typename?: "SessionApplicationLogEntry";
+  data: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  processId: Scalars["ID"]["output"];
+  sequence: Scalars["Int"]["output"];
+  stream: Scalars["String"]["output"];
+  timestamp: Scalars["DateTime"]["output"];
+};
+
+export type SessionApplicationProcess = {
+  __typename?: "SessionApplicationProcess";
+  appConfigId: Scalars["String"]["output"];
+  endpoints: Array<SessionEndpoint>;
+  exitCode?: Maybe<Scalars["Int"]["output"]>;
+  id: Scalars["ID"]["output"];
+  label: Scalars["String"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  processConfigId: Scalars["String"]["output"];
+  runtimeInstanceId?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ApplicationProcessStatus;
+  stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
 export type SessionConnection = {
@@ -1642,6 +1902,29 @@ export type SessionConnectionState =
   | "stopped"
   | "stopping"
   | "timed_out";
+
+export type SessionEndpoint = {
+  __typename?: "SessionEndpoint";
+  accessMode: SessionEndpointAccessMode;
+  appConfigId: Scalars["String"]["output"];
+  disabledAt?: Maybe<Scalars["DateTime"]["output"]>;
+  enabledAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  key: Scalars["String"]["output"];
+  label: Scalars["String"]["output"];
+  portConfigId: Scalars["String"]["output"];
+  processConfigId: Scalars["String"]["output"];
+  revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  status: SessionEndpointStatus;
+  targetPort: Scalars["Int"]["output"];
+  trafficCaptureMode: EndpointTrafficCaptureMode;
+  url: Scalars["String"]["output"];
+};
+
+export type SessionEndpointAccessMode = "private" | "public";
+
+export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
   __typename?: "SessionEndpoints";
@@ -1744,6 +2027,23 @@ export type SessionSearchResults = {
   sessions: Array<Session>;
 };
 
+export type SessionSetupScriptRun = {
+  __typename?: "SessionSetupScriptRun";
+  command: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  exitCode?: Maybe<Scalars["Int"]["output"]>;
+  id: Scalars["ID"]["output"];
+  label: Scalars["String"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  outputPreview?: Maybe<Scalars["String"]["output"]>;
+  outputTruncated: Scalars["Boolean"]["output"];
+  scriptConfigId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  startedAt: Scalars["DateTime"]["output"];
+  status: SetupScriptRunStatus;
+  workingDirectory: Scalars["String"]["output"];
+};
+
 export type SessionStatus = "in_progress" | "in_review" | "merged" | "needs_input";
 
 export type SessionTimelineItem = {
@@ -1775,6 +2075,8 @@ export type SetOrgSecretInput = {
   orgId: Scalars["ID"]["input"];
   value: Scalars["String"]["input"];
 };
+
+export type SetupScriptRunStatus = "completed" | "failed" | "running";
 
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
 
@@ -1966,6 +2268,7 @@ export type UpdateChannelInput = {
 };
 
 export type UpdateRepoInput = {
+  applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
@@ -2418,7 +2721,46 @@ export type SessionDetailQuery = {
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
-      repo?: { __typename?: "Repo"; id: string; name: string; remoteUrl?: string | null } | null;
+      repo?: {
+        __typename?: "Repo";
+        id: string;
+        name: string;
+        remoteUrl?: string | null;
+        applicationConfig: {
+          __typename?: "RepoApplicationConfig";
+          setupScripts: Array<{
+            __typename?: "RepoSetupScript";
+            id: string;
+            name: string;
+            command: string;
+            workingDirectory?: string | null;
+            env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+          }>;
+          applications: Array<{
+            __typename?: "RepoApplicationDefinition";
+            id: string;
+            name: string;
+            processes: Array<{
+              __typename?: "RepoProcessDefinition";
+              id: string;
+              name: string;
+              command: string;
+              workingDirectory?: string | null;
+              required: boolean;
+              env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+              ports: Array<{
+                __typename?: "RepoPortDefinition";
+                id: string;
+                label: string;
+                port: number;
+                protocol: string;
+                defaultForwardingEnabled: boolean;
+                healthPath?: string | null;
+              }>;
+            }>;
+          }>;
+        };
+      } | null;
       connection?: {
         __typename?: "SessionConnection";
         state: SessionConnectionState;
@@ -2548,6 +2890,240 @@ export type SessionGroupDetailQuery = {
   } | null;
 };
 
+export type SessionApplicationsStateQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionApplicationsStateQuery = {
+  __typename?: "Query";
+  sessionGroup?: {
+    __typename?: "SessionGroup";
+    id: string;
+    repo?: {
+      __typename?: "Repo";
+      id: string;
+      applicationConfig: {
+        __typename?: "RepoApplicationConfig";
+        setupScripts: Array<{
+          __typename?: "RepoSetupScript";
+          id: string;
+          name: string;
+          command: string;
+          workingDirectory?: string | null;
+          env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+        }>;
+        applications: Array<{
+          __typename?: "RepoApplicationDefinition";
+          id: string;
+          name: string;
+          processes: Array<{
+            __typename?: "RepoProcessDefinition";
+            id: string;
+            name: string;
+            command: string;
+            workingDirectory?: string | null;
+            required: boolean;
+            env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+            ports: Array<{
+              __typename?: "RepoPortDefinition";
+              id: string;
+              label: string;
+              port: number;
+              protocol: string;
+              defaultForwardingEnabled: boolean;
+              healthPath?: string | null;
+            }>;
+          }>;
+        }>;
+      };
+    } | null;
+  } | null;
+  sessionApplicationProcesses: Array<{
+    __typename?: "SessionApplicationProcess";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    label: string;
+    status: ApplicationProcessStatus;
+    runtimeInstanceId?: string | null;
+    startedAt?: string | null;
+    stoppedAt?: string | null;
+    exitCode?: number | null;
+    lastError?: string | null;
+  }>;
+  sessionSetupScriptRuns: Array<{
+    __typename?: "SessionSetupScriptRun";
+    id: string;
+    sessionGroupId: string;
+    scriptConfigId: string;
+    label: string;
+    command: string;
+    workingDirectory: string;
+    status: SetupScriptRunStatus;
+    exitCode?: number | null;
+    outputPreview?: string | null;
+    outputTruncated: boolean;
+    lastError?: string | null;
+    startedAt: string;
+    completedAt?: string | null;
+  }>;
+  sessionEndpoints: Array<{
+    __typename?: "SessionEndpoint";
+    id: string;
+    key: string;
+    url: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    portConfigId: string;
+    label: string;
+    targetPort: number;
+    status: SessionEndpointStatus;
+    accessMode: SessionEndpointAccessMode;
+    trafficCaptureMode: EndpointTrafficCaptureMode;
+    enabledAt?: string | null;
+    disabledAt?: string | null;
+    revokedAt?: string | null;
+  }>;
+};
+
+export type SessionApplicationProcessLogsQueryVariables = Exact<{
+  processId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type SessionApplicationProcessLogsQuery = {
+  __typename?: "Query";
+  sessionApplicationLogs: Array<{
+    __typename?: "SessionApplicationLogEntry";
+    id: string;
+    processId: string;
+    stream: string;
+    data: string;
+    sequence: number;
+    timestamp: string;
+  }>;
+};
+
+export type RunSessionGroupSetupScriptMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  scriptId: Scalars["ID"]["input"];
+}>;
+
+export type RunSessionGroupSetupScriptMutation = {
+  __typename?: "Mutation";
+  runSessionGroupSetupScript: boolean;
+};
+
+export type StartSessionProcessMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+}>;
+
+export type StartSessionProcessMutation = {
+  __typename?: "Mutation";
+  startSessionProcess: { __typename?: "SessionApplicationProcess"; id: string };
+};
+
+export type StopSessionProcessMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+}>;
+
+export type StopSessionProcessMutation = {
+  __typename?: "Mutation";
+  stopSessionProcess: { __typename?: "SessionApplicationProcess"; id: string };
+};
+
+export type EnableSessionEndpointForwardingMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type EnableSessionEndpointForwardingMutation = {
+  __typename?: "Mutation";
+  enableSessionEndpointForwarding: { __typename?: "SessionEndpoint"; id: string };
+};
+
+export type DisableSessionEndpointForwardingMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type DisableSessionEndpointForwardingMutation = {
+  __typename?: "Mutation";
+  disableSessionEndpointForwarding: { __typename?: "SessionEndpoint"; id: string };
+};
+
+export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionEndpointTrafficEndpointsQuery = {
+  __typename?: "Query";
+  sessionEndpoints: Array<{
+    __typename?: "SessionEndpoint";
+    id: string;
+    key: string;
+    url: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    portConfigId: string;
+    label: string;
+    targetPort: number;
+    status: SessionEndpointStatus;
+    accessMode: SessionEndpointAccessMode;
+    trafficCaptureMode: EndpointTrafficCaptureMode;
+    enabledAt?: string | null;
+    disabledAt?: string | null;
+    revokedAt?: string | null;
+  }>;
+};
+
+export type EndpointTrafficTabQueryVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type EndpointTrafficTabQuery = {
+  __typename?: "Query";
+  endpointTraffic: Array<{
+    __typename?: "EndpointTrafficEntry";
+    id: string;
+    endpointId: string;
+    startedAt: string;
+    durationMs?: number | null;
+    requestMethod: string;
+    requestPath: string;
+    responseStatus?: number | null;
+    error?: string | null;
+  }>;
+};
+
+export type ClearEndpointTrafficTabMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type ClearEndpointTrafficTabMutation = {
+  __typename?: "Mutation";
+  clearEndpointTraffic: boolean;
+};
+
+export type SessionGroupFileTreeQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionGroupFileTreeQuery = {
+  __typename?: "Query";
+  sessionGroupFileTree: {
+    __typename?: "SessionGroupFileTree";
+    paths: Array<string>;
+    truncated: boolean;
+  };
+};
+
 export type SessionGroupDirectoryEntriesQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
   directoryPath: Scalars["String"]["input"];
@@ -2674,6 +3250,40 @@ export type SettingsReposQuery = {
     remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
+    applicationConfig: {
+      __typename?: "RepoApplicationConfig";
+      setupScripts: Array<{
+        __typename?: "RepoSetupScript";
+        id: string;
+        name: string;
+        command: string;
+        workingDirectory?: string | null;
+        env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+      }>;
+      applications: Array<{
+        __typename?: "RepoApplicationDefinition";
+        id: string;
+        name: string;
+        processes: Array<{
+          __typename?: "RepoProcessDefinition";
+          id: string;
+          name: string;
+          command: string;
+          workingDirectory?: string | null;
+          required: boolean;
+          env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+          ports: Array<{
+            __typename?: "RepoPortDefinition";
+            id: string;
+            label: string;
+            port: number;
+            protocol: string;
+            defaultForwardingEnabled: boolean;
+            healthPath?: string | null;
+          }>;
+        }>;
+      }>;
+    };
   }>;
 };
 
@@ -4863,6 +5473,141 @@ export const SessionDetailDocument = {
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
                             { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "applicationConfig" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "setupScripts" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "id" } },
+                                        { kind: "Field", name: { kind: "Name", value: "name" } },
+                                        { kind: "Field", name: { kind: "Name", value: "command" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "workingDirectory" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "env" },
+                                          selectionSet: {
+                                            kind: "SelectionSet",
+                                            selections: [
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "key" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "secretName" },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "applications" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "id" } },
+                                        { kind: "Field", name: { kind: "Name", value: "name" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "processes" },
+                                          selectionSet: {
+                                            kind: "SelectionSet",
+                                            selections: [
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "id" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "name" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "command" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "workingDirectory" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "env" },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: { kind: "Name", value: "key" },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: { kind: "Name", value: "secretName" },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "required" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "ports" },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: { kind: "Name", value: "id" },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: { kind: "Name", value: "label" },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: { kind: "Name", value: "port" },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: { kind: "Name", value: "protocol" },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "defaultForwardingEnabled",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: { kind: "Name", value: "healthPath" },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
                           ],
                         },
                       },
@@ -5144,6 +5889,803 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
+export const SessionApplicationsStateDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionApplicationsState" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroup" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "applicationConfig" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "setupScripts" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  { kind: "Field", name: { kind: "Name", value: "command" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "workingDirectory" },
+                                  },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "env" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "key" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "secretName" },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "applications" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "processes" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "id" } },
+                                        { kind: "Field", name: { kind: "Name", value: "name" } },
+                                        { kind: "Field", name: { kind: "Name", value: "command" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "workingDirectory" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "env" },
+                                          selectionSet: {
+                                            kind: "SelectionSet",
+                                            selections: [
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "key" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "secretName" },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "required" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "ports" },
+                                          selectionSet: {
+                                            kind: "SelectionSet",
+                                            selections: [
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "id" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "label" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "port" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "protocol" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: {
+                                                  kind: "Name",
+                                                  value: "defaultForwardingEnabled",
+                                                },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "healthPath" },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionApplicationProcesses" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "stoppedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionSetupScriptRuns" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "scriptConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "command" } },
+                { kind: "Field", name: { kind: "Name", value: "workingDirectory" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
+                { kind: "Field", name: { kind: "Name", value: "outputPreview" } },
+                { kind: "Field", name: { kind: "Name", value: "outputTruncated" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEndpoints" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "key" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
+                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionApplicationsStateQuery, SessionApplicationsStateQueryVariables>;
+export const SessionApplicationProcessLogsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionApplicationProcessLogs" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "processId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionApplicationLogs" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "processId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "processId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "processId" } },
+                { kind: "Field", name: { kind: "Name", value: "stream" } },
+                { kind: "Field", name: { kind: "Name", value: "data" } },
+                { kind: "Field", name: { kind: "Name", value: "sequence" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionApplicationProcessLogsQuery,
+  SessionApplicationProcessLogsQueryVariables
+>;
+export const RunSessionGroupSetupScriptDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RunSessionGroupSetupScript" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "scriptId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "runSessionGroupSetupScript" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "scriptId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "scriptId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  RunSessionGroupSetupScriptMutation,
+  RunSessionGroupSetupScriptMutationVariables
+>;
+export const StartSessionProcessDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "StartSessionProcess" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "processConfigId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "startSessionProcess" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "appConfigId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "processConfigId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "processConfigId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<StartSessionProcessMutation, StartSessionProcessMutationVariables>;
+export const StopSessionProcessDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "StopSessionProcess" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "processConfigId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "stopSessionProcess" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "appConfigId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "processConfigId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "processConfigId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<StopSessionProcessMutation, StopSessionProcessMutationVariables>;
+export const EnableSessionEndpointForwardingDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "EnableSessionEndpointForwarding" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "enableSessionEndpointForwarding" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "accessMode" },
+                value: { kind: "EnumValue", value: "public" },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  EnableSessionEndpointForwardingMutation,
+  EnableSessionEndpointForwardingMutationVariables
+>;
+export const DisableSessionEndpointForwardingDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DisableSessionEndpointForwarding" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "disableSessionEndpointForwarding" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DisableSessionEndpointForwardingMutation,
+  DisableSessionEndpointForwardingMutationVariables
+>;
+export const SessionEndpointTrafficEndpointsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionEndpointTrafficEndpoints" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEndpoints" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "key" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
+                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionEndpointTrafficEndpointsQuery,
+  SessionEndpointTrafficEndpointsQueryVariables
+>;
+export const EndpointTrafficTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "EndpointTrafficTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "endpointTraffic" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "endpointId" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "durationMs" } },
+                { kind: "Field", name: { kind: "Name", value: "requestMethod" } },
+                { kind: "Field", name: { kind: "Name", value: "requestPath" } },
+                { kind: "Field", name: { kind: "Name", value: "responseStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "error" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<EndpointTrafficTabQuery, EndpointTrafficTabQueryVariables>;
+export const ClearEndpointTrafficTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ClearEndpointTrafficTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "clearEndpointTraffic" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ClearEndpointTrafficTabMutation,
+  ClearEndpointTrafficTabMutationVariables
+>;
+export const SessionGroupFileTreeDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupFileTree" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroupFileTree" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "paths" } },
+                { kind: "Field", name: { kind: "Name", value: "truncated" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionGroupFileTreeQuery, SessionGroupFileTreeQueryVariables>;
 export const SessionGroupDirectoryEntriesDocument = {
   kind: "Document",
   definitions: [
@@ -5644,6 +7186,105 @@ export const SettingsReposDocument = {
                 { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "applicationConfig" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "setupScripts" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "command" } },
+                            { kind: "Field", name: { kind: "Name", value: "workingDirectory" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "env" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "key" } },
+                                  { kind: "Field", name: { kind: "Name", value: "secretName" } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "applications" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "processes" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  { kind: "Field", name: { kind: "Name", value: "command" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "workingDirectory" },
+                                  },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "env" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "key" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "secretName" },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                  { kind: "Field", name: { kind: "Name", value: "required" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "ports" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "id" } },
+                                        { kind: "Field", name: { kind: "Name", value: "label" } },
+                                        { kind: "Field", name: { kind: "Name", value: "port" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "protocol" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "defaultForwardingEnabled" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "healthPath" },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
               ],
             },
           },

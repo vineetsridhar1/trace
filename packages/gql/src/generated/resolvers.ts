@@ -99,6 +99,14 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type ApplicationProcessStatus =
+  | "exited"
+  | "failed"
+  | "running"
+  | "starting"
+  | "stopped"
+  | "stopping";
+
 export type Branch = {
   __typename?: "Branch";
   childBranches: Array<Branch>;
@@ -362,6 +370,30 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
+
+export type EndpointTrafficEntry = {
+  __typename?: "EndpointTrafficEntry";
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  durationMs?: Maybe<Scalars["Int"]["output"]>;
+  endpointId: Scalars["ID"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  requestBodyBytes?: Maybe<Scalars["Int"]["output"]>;
+  requestBodyPreview?: Maybe<Scalars["String"]["output"]>;
+  requestHeaders?: Maybe<Scalars["JSON"]["output"]>;
+  requestMethod: Scalars["String"]["output"];
+  requestPath: Scalars["String"]["output"];
+  requestQuery?: Maybe<Scalars["String"]["output"]>;
+  requestTruncated: Scalars["Boolean"]["output"];
+  responseBodyBytes?: Maybe<Scalars["Int"]["output"]>;
+  responseBodyPreview?: Maybe<Scalars["String"]["output"]>;
+  responseHeaders?: Maybe<Scalars["JSON"]["output"]>;
+  responseStatus?: Maybe<Scalars["Int"]["output"]>;
+  responseTruncated: Scalars["Boolean"]["output"];
+  startedAt: Scalars["DateTime"]["output"];
+};
+
 export type EntityType = "channel" | "chat" | "message" | "session" | "ticket";
 
 export type Event = {
@@ -381,6 +413,7 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -414,7 +447,17 @@ export type EventType =
   | "queued_messages_reordered"
   | "repo_created"
   | "repo_updated"
+  | "session_application_log_appended"
+  | "session_application_process_failed"
+  | "session_application_process_started"
+  | "session_application_process_stopped"
   | "session_deleted"
+  | "session_endpoint_access_updated"
+  | "session_endpoint_created"
+  | "session_endpoint_forwarding_disabled"
+  | "session_endpoint_forwarding_enabled"
+  | "session_endpoint_rotated"
+  | "session_endpoint_traffic_capture_updated"
   | "session_group_archived"
   | "session_group_renamed"
   | "session_group_visibility_updated"
@@ -435,6 +478,9 @@ export type EventType =
   | "session_runtime_start_timed_out"
   | "session_runtime_stopped"
   | "session_runtime_stopping"
+  | "session_setup_script_completed"
+  | "session_setup_script_failed"
+  | "session_setup_script_started"
   | "session_started"
   | "session_terminated"
   | "ticket_assigned"
@@ -567,6 +613,7 @@ export type Mutation = {
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
+  clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
@@ -592,10 +639,12 @@ export type Mutation = {
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
   destroyTerminal: Scalars["Boolean"]["output"];
+  disableSessionEndpointForwarding: SessionEndpoint;
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
   joinChannel: Channel;
   leaveChannel: Channel;
@@ -618,12 +667,15 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
+  rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
+  runSessionGroupSetupScript: Scalars["Boolean"]["output"];
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -634,7 +686,11 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  startSessionApplication: Array<SessionApplicationProcess>;
+  startSessionProcess: SessionApplicationProcess;
   steerQueuedMessage: Event;
+  stopSessionApplication: Array<SessionApplicationProcess>;
+  stopSessionProcess: SessionApplicationProcess;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -655,6 +711,7 @@ export type Mutation = {
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateSessionDefaults: User;
+  updateSessionEndpointTrafficCapture: SessionEndpoint;
   updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
 };
@@ -688,6 +745,10 @@ export type MutationArchiveSessionGroupArgs = {
 export type MutationAssignTicketArgs = {
   ticketId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationClearEndpointTrafficArgs = {
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationClearQueuedMessagesArgs = {
@@ -802,6 +863,10 @@ export type MutationDestroyTerminalArgs = {
   terminalId: Scalars["ID"]["input"];
 };
 
+export type MutationDisableSessionEndpointForwardingArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationDismissInboxItemArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -818,6 +883,11 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars["String"]["input"];
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationEnableSessionEndpointForwardingArgs = {
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationForkSessionArgs = {
@@ -930,6 +1000,12 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationRestartSessionProcessArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -953,10 +1029,19 @@ export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
 
+export type MutationRotateSessionEndpointArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationRunSessionGroupSetupScriptArgs = {
+  scriptId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationSaveSessionGroupFileArgs = {
@@ -1019,8 +1104,30 @@ export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
 
+export type MutationStartSessionApplicationArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationStartSessionProcessArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationSteerQueuedMessageArgs = {
   id: Scalars["ID"]["input"];
+};
+
+export type MutationStopSessionApplicationArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationStopSessionProcessArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  processConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationSubscribeArgs = {
@@ -1129,6 +1236,11 @@ export type MutationUpdateSessionDefaultsArgs = {
   input: UpdateSessionDefaultsInput;
 };
 
+export type MutationUpdateSessionEndpointTrafficCaptureArgs = {
+  endpointId: Scalars["ID"]["input"];
+  mode: EndpointTrafficCaptureMode;
+};
+
 export type MutationUpdateSessionGroupVisibilityArgs = {
   id: Scalars["ID"]["input"];
   visibility: SessionGroupVisibility;
@@ -1224,6 +1336,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
@@ -1244,6 +1357,9 @@ export type Query = {
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
+  sessionApplicationLogs: Array<SessionApplicationLogEntry>;
+  sessionApplicationProcesses: Array<SessionApplicationProcess>;
+  sessionEndpoints: Array<SessionEndpoint>;
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -1256,6 +1372,7 @@ export type Query = {
   sessionGroupWorktreeChanges: WorktreeChangesResult;
   sessionGroups: Array<SessionGroup>;
   sessionPromptIndex: Array<SessionPromptIndexItem>;
+  sessionSetupScriptRuns: Array<SessionSetupScriptRun>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
@@ -1331,6 +1448,12 @@ export type QueryChatMessagesArgs = {
   after?: InputMaybe<Scalars["DateTime"]["input"]>;
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryEndpointTrafficArgs = {
+  before?: InputMaybe<Scalars["DateTime"]["input"]>;
+  endpointId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
@@ -1420,6 +1543,20 @@ export type QuerySessionArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type QuerySessionApplicationLogsArgs = {
+  beforeSequence?: InputMaybe<Scalars["Int"]["input"]>;
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  processId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionApplicationProcessesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionEndpointsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type QuerySessionEventsAroundEventArgs = {
   eventId: Scalars["ID"]["input"];
   excludePayloadTypes?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -1480,6 +1617,10 @@ export type QuerySessionGroupsArgs = {
 export type QuerySessionPromptIndexArgs = {
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionSetupScriptRunsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QuerySessionSlashCommandsArgs = {
@@ -1547,6 +1688,7 @@ export type ReorderChannelsInput = {
 
 export type Repo = {
   __typename?: "Repo";
+  applicationConfig: RepoApplicationConfig;
   defaultBranch: Scalars["String"]["output"];
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1554,6 +1696,98 @@ export type Repo = {
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
+};
+
+export type RepoApplicationConfig = {
+  __typename?: "RepoApplicationConfig";
+  applications: Array<RepoApplicationDefinition>;
+  setupScripts: Array<RepoSetupScript>;
+};
+
+export type RepoApplicationConfigInput = {
+  applications?: InputMaybe<Array<RepoApplicationDefinitionInput>>;
+  setupScripts?: InputMaybe<Array<RepoSetupScriptInput>>;
+};
+
+export type RepoApplicationDefinition = {
+  __typename?: "RepoApplicationDefinition";
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  processes: Array<RepoProcessDefinition>;
+};
+
+export type RepoApplicationDefinitionInput = {
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+  processes: Array<RepoProcessDefinitionInput>;
+};
+
+export type RepoEnvVar = {
+  __typename?: "RepoEnvVar";
+  key: Scalars["String"]["output"];
+  secretName: Scalars["String"]["output"];
+};
+
+export type RepoEnvVarInput = {
+  key: Scalars["String"]["input"];
+  secretName: Scalars["String"]["input"];
+};
+
+export type RepoPortDefinition = {
+  __typename?: "RepoPortDefinition";
+  defaultForwardingEnabled: Scalars["Boolean"]["output"];
+  healthPath?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  label: Scalars["String"]["output"];
+  port: Scalars["Int"]["output"];
+  protocol: Scalars["String"]["output"];
+};
+
+export type RepoPortDefinitionInput = {
+  defaultForwardingEnabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  healthPath?: InputMaybe<Scalars["String"]["input"]>;
+  id: Scalars["ID"]["input"];
+  label: Scalars["String"]["input"];
+  port: Scalars["Int"]["input"];
+  protocol?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type RepoProcessDefinition = {
+  __typename?: "RepoProcessDefinition";
+  command: Scalars["String"]["output"];
+  env: Array<RepoEnvVar>;
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  ports: Array<RepoPortDefinition>;
+  required: Scalars["Boolean"]["output"];
+  workingDirectory?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type RepoProcessDefinitionInput = {
+  command: Scalars["String"]["input"];
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+  ports?: InputMaybe<Array<RepoPortDefinitionInput>>;
+  required?: InputMaybe<Scalars["Boolean"]["input"]>;
+  workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type RepoSetupScript = {
+  __typename?: "RepoSetupScript";
+  command: Scalars["String"]["output"];
+  env: Array<RepoEnvVar>;
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  workingDirectory?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type RepoSetupScriptInput = {
+  command: Scalars["String"]["input"];
+  env?: InputMaybe<Array<RepoEnvVarInput>>;
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+  workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type ScopeInput = {
@@ -1593,6 +1827,32 @@ export type Session = {
   updatedAt: Scalars["DateTime"]["output"];
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
+};
+
+export type SessionApplicationLogEntry = {
+  __typename?: "SessionApplicationLogEntry";
+  data: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  processId: Scalars["ID"]["output"];
+  sequence: Scalars["Int"]["output"];
+  stream: Scalars["String"]["output"];
+  timestamp: Scalars["DateTime"]["output"];
+};
+
+export type SessionApplicationProcess = {
+  __typename?: "SessionApplicationProcess";
+  appConfigId: Scalars["String"]["output"];
+  endpoints: Array<SessionEndpoint>;
+  exitCode?: Maybe<Scalars["Int"]["output"]>;
+  id: Scalars["ID"]["output"];
+  label: Scalars["String"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  processConfigId: Scalars["String"]["output"];
+  runtimeInstanceId?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ApplicationProcessStatus;
+  stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
 export type SessionConnection = {
@@ -1643,6 +1903,29 @@ export type SessionConnectionState =
   | "stopped"
   | "stopping"
   | "timed_out";
+
+export type SessionEndpoint = {
+  __typename?: "SessionEndpoint";
+  accessMode: SessionEndpointAccessMode;
+  appConfigId: Scalars["String"]["output"];
+  disabledAt?: Maybe<Scalars["DateTime"]["output"]>;
+  enabledAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  key: Scalars["String"]["output"];
+  label: Scalars["String"]["output"];
+  portConfigId: Scalars["String"]["output"];
+  processConfigId: Scalars["String"]["output"];
+  revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  status: SessionEndpointStatus;
+  targetPort: Scalars["Int"]["output"];
+  trafficCaptureMode: EndpointTrafficCaptureMode;
+  url: Scalars["String"]["output"];
+};
+
+export type SessionEndpointAccessMode = "private" | "public";
+
+export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
   __typename?: "SessionEndpoints";
@@ -1745,6 +2028,23 @@ export type SessionSearchResults = {
   sessions: Array<Session>;
 };
 
+export type SessionSetupScriptRun = {
+  __typename?: "SessionSetupScriptRun";
+  command: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  exitCode?: Maybe<Scalars["Int"]["output"]>;
+  id: Scalars["ID"]["output"];
+  label: Scalars["String"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  outputPreview?: Maybe<Scalars["String"]["output"]>;
+  outputTruncated: Scalars["Boolean"]["output"];
+  scriptConfigId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  startedAt: Scalars["DateTime"]["output"];
+  status: SetupScriptRunStatus;
+  workingDirectory: Scalars["String"]["output"];
+};
+
 export type SessionStatus = "in_progress" | "in_review" | "merged" | "needs_input";
 
 export type SessionTimelineItem = {
@@ -1776,6 +2076,8 @@ export type SetOrgSecretInput = {
   orgId: Scalars["ID"]["input"];
   value: Scalars["String"]["input"];
 };
+
+export type SetupScriptRunStatus = "completed" | "failed" | "running";
 
 export type SetupStatus = "completed" | "failed" | "idle" | "running";
 
@@ -1967,6 +2269,7 @@ export type UpdateChannelInput = {
 };
 
 export type UpdateRepoInput = {
+  applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
@@ -2108,6 +2411,7 @@ export type ResolversTypes = ResolversObject<{
   AiConversationVisibility: AiConversationVisibility;
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
+  ApplicationProcessStatus: ApplicationProcessStatus;
   Boolean: ResolverTypeWrapper<Scalars["Boolean"]["output"]>;
   Branch: ResolverTypeWrapper<Branch>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
@@ -2140,6 +2444,8 @@ export type ResolversTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
+  EndpointTrafficCaptureMode: EndpointTrafficCaptureMode;
+  EndpointTrafficEntry: ResolverTypeWrapper<EndpointTrafficEntry>;
   EntityType: EntityType;
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
@@ -2173,11 +2479,28 @@ export type ResolversTypes = ResolversObject<{
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: ResolverTypeWrapper<Repo>;
+  RepoApplicationConfig: ResolverTypeWrapper<RepoApplicationConfig>;
+  RepoApplicationConfigInput: RepoApplicationConfigInput;
+  RepoApplicationDefinition: ResolverTypeWrapper<RepoApplicationDefinition>;
+  RepoApplicationDefinitionInput: RepoApplicationDefinitionInput;
+  RepoEnvVar: ResolverTypeWrapper<RepoEnvVar>;
+  RepoEnvVarInput: RepoEnvVarInput;
+  RepoPortDefinition: ResolverTypeWrapper<RepoPortDefinition>;
+  RepoPortDefinitionInput: RepoPortDefinitionInput;
+  RepoProcessDefinition: ResolverTypeWrapper<RepoProcessDefinition>;
+  RepoProcessDefinitionInput: RepoProcessDefinitionInput;
+  RepoSetupScript: ResolverTypeWrapper<RepoSetupScript>;
+  RepoSetupScriptInput: RepoSetupScriptInput;
   ScopeInput: ScopeInput;
   ScopeType: ScopeType;
   Session: ResolverTypeWrapper<Session>;
+  SessionApplicationLogEntry: ResolverTypeWrapper<SessionApplicationLogEntry>;
+  SessionApplicationProcess: ResolverTypeWrapper<SessionApplicationProcess>;
   SessionConnection: ResolverTypeWrapper<SessionConnection>;
   SessionConnectionState: SessionConnectionState;
+  SessionEndpoint: ResolverTypeWrapper<SessionEndpoint>;
+  SessionEndpointAccessMode: SessionEndpointAccessMode;
+  SessionEndpointStatus: SessionEndpointStatus;
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
@@ -2189,6 +2512,7 @@ export type ResolversTypes = ResolversObject<{
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
+  SessionSetupScriptRun: ResolverTypeWrapper<SessionSetupScriptRun>;
   SessionStatus: SessionStatus;
   SessionTimelineItem: ResolverTypeWrapper<SessionTimelineItem>;
   SessionTimelineItemKind: SessionTimelineItemKind;
@@ -2196,6 +2520,7 @@ export type ResolversTypes = ResolversObject<{
   SessionTimelinePage: ResolverTypeWrapper<SessionTimelinePage>;
   SetApiTokenInput: SetApiTokenInput;
   SetOrgSecretInput: SetOrgSecretInput;
+  SetupScriptRunStatus: SetupScriptRunStatus;
   SetupStatus: SetupStatus;
   SlashCommand: ResolverTypeWrapper<SlashCommand>;
   SlashCommandCategory: SlashCommandCategory;
@@ -2257,6 +2582,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
+  EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
   GitCheckpoint: GitCheckpoint;
   ID: Scalars["ID"]["output"];
@@ -2281,9 +2607,24 @@ export type ResolversParentTypes = ResolversObject<{
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: Repo;
+  RepoApplicationConfig: RepoApplicationConfig;
+  RepoApplicationConfigInput: RepoApplicationConfigInput;
+  RepoApplicationDefinition: RepoApplicationDefinition;
+  RepoApplicationDefinitionInput: RepoApplicationDefinitionInput;
+  RepoEnvVar: RepoEnvVar;
+  RepoEnvVarInput: RepoEnvVarInput;
+  RepoPortDefinition: RepoPortDefinition;
+  RepoPortDefinitionInput: RepoPortDefinitionInput;
+  RepoProcessDefinition: RepoProcessDefinition;
+  RepoProcessDefinitionInput: RepoProcessDefinitionInput;
+  RepoSetupScript: RepoSetupScript;
+  RepoSetupScriptInput: RepoSetupScriptInput;
   ScopeInput: ScopeInput;
   Session: Session;
+  SessionApplicationLogEntry: SessionApplicationLogEntry;
+  SessionApplicationProcess: SessionApplicationProcess;
   SessionConnection: SessionConnection;
+  SessionEndpoint: SessionEndpoint;
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
@@ -2293,6 +2634,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionPromptIndexItem: SessionPromptIndexItem;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SessionSearchResults: SessionSearchResults;
+  SessionSetupScriptRun: SessionSetupScriptRun;
   SessionTimelineItem: SessionTimelineItem;
   SessionTimelinePage: SessionTimelinePage;
   SetApiTokenInput: SetApiTokenInput;
@@ -2633,6 +2975,32 @@ export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<
   name: "DateTime";
 }
 
+export type EndpointTrafficEntryResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["EndpointTrafficEntry"] =
+    ResolversParentTypes["EndpointTrafficEntry"],
+> = ResolversObject<{
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  durationMs?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  endpointId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  error?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  requestBodyBytes?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  requestBodyPreview?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  requestHeaders?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  requestMethod?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  requestPath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  requestQuery?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  requestTruncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  responseBodyBytes?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  responseBodyPreview?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  responseHeaders?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  responseStatus?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  responseTruncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  startedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type EventResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Event"] = ResolversParentTypes["Event"],
@@ -2816,6 +3184,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationAssignTicketArgs, "ticketId" | "userId">
   >;
+  clearEndpointTraffic?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationClearEndpointTrafficArgs, "endpointId">
+  >;
   clearQueuedMessages?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -2969,6 +3343,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationDestroyTerminalArgs, "terminalId">
   >;
+  disableSessionEndpointForwarding?: Resolver<
+    ResolversTypes["SessionEndpoint"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDisableSessionEndpointForwardingArgs, "endpointId">
+  >;
   dismissInboxItem?: Resolver<
     ResolversTypes["InboxItem"],
     ParentType,
@@ -2992,6 +3372,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationEditChatMessageArgs, "html" | "messageId">
+  >;
+  enableSessionEndpointForwarding?: Resolver<
+    ResolversTypes["SessionEndpoint"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationEnableSessionEndpointForwardingArgs, "endpointId">
   >;
   forkSession?: Resolver<
     ResolversTypes["Session"],
@@ -3125,6 +3511,15 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRequestBridgeAccessArgs, "runtimeInstanceId" | "scopeType">
   >;
+  restartSessionProcess?: Resolver<
+    ResolversTypes["SessionApplicationProcess"],
+    ParentType,
+    ContextType,
+    RequireFields<
+      MutationRestartSessionProcessArgs,
+      "appConfigId" | "processConfigId" | "sessionGroupId"
+    >
+  >;
   restoreLinkedCheckout?: Resolver<
     ResolversTypes["LinkedCheckoutActionResult"],
     ParentType,
@@ -3155,11 +3550,23 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRevokeBridgeAccessGrantArgs, "grantId">
   >;
+  rotateSessionEndpoint?: Resolver<
+    ResolversTypes["SessionEndpoint"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRotateSessionEndpointArgs, "endpointId">
+  >;
   runSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
     ContextType,
     RequireFields<MutationRunSessionArgs, "id">
+  >;
+  runSessionGroupSetupScript?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRunSessionGroupSetupScriptArgs, "scriptId" | "sessionGroupId">
   >;
   saveSessionGroupFile?: Resolver<
     ResolversTypes["Boolean"],
@@ -3221,11 +3628,41 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationStartSessionArgs, "input">
   >;
+  startSessionApplication?: Resolver<
+    Array<ResolversTypes["SessionApplicationProcess"]>,
+    ParentType,
+    ContextType,
+    RequireFields<MutationStartSessionApplicationArgs, "appConfigId" | "sessionGroupId">
+  >;
+  startSessionProcess?: Resolver<
+    ResolversTypes["SessionApplicationProcess"],
+    ParentType,
+    ContextType,
+    RequireFields<
+      MutationStartSessionProcessArgs,
+      "appConfigId" | "processConfigId" | "sessionGroupId"
+    >
+  >;
   steerQueuedMessage?: Resolver<
     ResolversTypes["Event"],
     ParentType,
     ContextType,
     RequireFields<MutationSteerQueuedMessageArgs, "id">
+  >;
+  stopSessionApplication?: Resolver<
+    Array<ResolversTypes["SessionApplicationProcess"]>,
+    ParentType,
+    ContextType,
+    RequireFields<MutationStopSessionApplicationArgs, "appConfigId" | "sessionGroupId">
+  >;
+  stopSessionProcess?: Resolver<
+    ResolversTypes["SessionApplicationProcess"],
+    ParentType,
+    ContextType,
+    RequireFields<
+      MutationStopSessionProcessArgs,
+      "appConfigId" | "processConfigId" | "sessionGroupId"
+    >
   >;
   subscribe?: Resolver<
     ResolversTypes["Participant"],
@@ -3346,6 +3783,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUpdateSessionDefaultsArgs, "input">
+  >;
+  updateSessionEndpointTrafficCapture?: Resolver<
+    ResolversTypes["SessionEndpoint"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateSessionEndpointTrafficCaptureArgs, "endpointId" | "mode">
   >;
   updateSessionGroupVisibility?: Resolver<
     ResolversTypes["SessionGroup"],
@@ -3535,6 +3978,12 @@ export type QueryResolvers<
     RequireFields<QueryChatMessagesArgs, "chatId">
   >;
   chats?: Resolver<Array<ResolversTypes["Chat"]>, ParentType, ContextType>;
+  endpointTraffic?: Resolver<
+    Array<ResolversTypes["EndpointTrafficEntry"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryEndpointTrafficArgs, "endpointId">
+  >;
   events?: Resolver<
     Array<ResolversTypes["Event"]>,
     ParentType,
@@ -3635,6 +4084,24 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionArgs, "id">
   >;
+  sessionApplicationLogs?: Resolver<
+    Array<ResolversTypes["SessionApplicationLogEntry"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionApplicationLogsArgs, "processId">
+  >;
+  sessionApplicationProcesses?: Resolver<
+    Array<ResolversTypes["SessionApplicationProcess"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionApplicationProcessesArgs, "sessionGroupId">
+  >;
+  sessionEndpoints?: Resolver<
+    Array<ResolversTypes["SessionEndpoint"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionEndpointsArgs, "sessionGroupId">
+  >;
   sessionEventsAroundEvent?: Resolver<
     Array<ResolversTypes["Event"]>,
     ParentType,
@@ -3707,6 +4174,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionPromptIndexArgs, "organizationId" | "sessionId">
   >;
+  sessionSetupScriptRuns?: Resolver<
+    Array<ResolversTypes["SessionSetupScriptRun"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionSetupScriptRunsArgs, "sessionGroupId">
+  >;
   sessionSlashCommands?: Resolver<
     Array<ResolversTypes["SlashCommand"]>,
     ParentType,
@@ -3776,6 +4249,7 @@ export type RepoResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Repo"] = ResolversParentTypes["Repo"],
 > = ResolversObject<{
+  applicationConfig?: Resolver<ResolversTypes["RepoApplicationConfig"], ParentType, ContextType>;
   defaultBranch?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
@@ -3783,6 +4257,82 @@ export type RepoResolvers<
   remoteUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   webhookActive?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type RepoApplicationConfigResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoApplicationConfig"] =
+    ResolversParentTypes["RepoApplicationConfig"],
+> = ResolversObject<{
+  applications?: Resolver<
+    Array<ResolversTypes["RepoApplicationDefinition"]>,
+    ParentType,
+    ContextType
+  >;
+  setupScripts?: Resolver<Array<ResolversTypes["RepoSetupScript"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type RepoApplicationDefinitionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoApplicationDefinition"] =
+    ResolversParentTypes["RepoApplicationDefinition"],
+> = ResolversObject<{
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  processes?: Resolver<Array<ResolversTypes["RepoProcessDefinition"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type RepoEnvVarResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoEnvVar"] = ResolversParentTypes["RepoEnvVar"],
+> = ResolversObject<{
+  key?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  secretName?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type RepoPortDefinitionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoPortDefinition"] =
+    ResolversParentTypes["RepoPortDefinition"],
+> = ResolversObject<{
+  defaultForwardingEnabled?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  healthPath?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  port?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  protocol?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type RepoProcessDefinitionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoProcessDefinition"] =
+    ResolversParentTypes["RepoProcessDefinition"],
+> = ResolversObject<{
+  command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  env?: Resolver<Array<ResolversTypes["RepoEnvVar"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  ports?: Resolver<Array<ResolversTypes["RepoPortDefinition"]>, ParentType, ContextType>;
+  required?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  workingDirectory?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type RepoSetupScriptResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoSetupScript"] =
+    ResolversParentTypes["RepoSetupScript"],
+> = ResolversObject<{
+  command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  env?: Resolver<Array<ResolversTypes["RepoEnvVar"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  workingDirectory?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3821,6 +4371,40 @@ export type SessionResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionApplicationLogEntryResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionApplicationLogEntry"] =
+    ResolversParentTypes["SessionApplicationLogEntry"],
+> = ResolversObject<{
+  data?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  processId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sequence?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  stream?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  timestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionApplicationProcessResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionApplicationProcess"] =
+    ResolversParentTypes["SessionApplicationProcess"],
+> = ResolversObject<{
+  appConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  endpoints?: Resolver<Array<ResolversTypes["SessionEndpoint"]>, ParentType, ContextType>;
+  exitCode?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  processConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  runtimeInstanceId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["ApplicationProcessStatus"], ParentType, ContextType>;
+  stoppedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionConnectionResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionConnection"] =
@@ -3850,6 +4434,33 @@ export type SessionConnectionResolvers<
   stoppedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   stoppingAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   timedOutAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionEndpointResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionEndpoint"] =
+    ResolversParentTypes["SessionEndpoint"],
+> = ResolversObject<{
+  accessMode?: Resolver<ResolversTypes["SessionEndpointAccessMode"], ParentType, ContextType>;
+  appConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  disabledAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  enabledAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  key?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  portConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  processConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  revokedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["SessionEndpointStatus"], ParentType, ContextType>;
+  targetPort?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  trafficCaptureMode?: Resolver<
+    ResolversTypes["EndpointTrafficCaptureMode"],
+    ParentType,
+    ContextType
+  >;
+  url?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3961,6 +4572,27 @@ export type SessionSearchResultsResolvers<
 > = ResolversObject<{
   sessionGroups?: Resolver<Array<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionSetupScriptRunResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionSetupScriptRun"] =
+    ResolversParentTypes["SessionSetupScriptRun"],
+> = ResolversObject<{
+  command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  exitCode?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  outputPreview?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  outputTruncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  scriptConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["SetupScriptRunStatus"], ParentType, ContextType>;
+  workingDirectory?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4206,6 +4838,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
+  EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
@@ -4225,8 +4858,17 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Query?: QueryResolvers<ContextType>;
   QueuedMessage?: QueuedMessageResolvers<ContextType>;
   Repo?: RepoResolvers<ContextType>;
+  RepoApplicationConfig?: RepoApplicationConfigResolvers<ContextType>;
+  RepoApplicationDefinition?: RepoApplicationDefinitionResolvers<ContextType>;
+  RepoEnvVar?: RepoEnvVarResolvers<ContextType>;
+  RepoPortDefinition?: RepoPortDefinitionResolvers<ContextType>;
+  RepoProcessDefinition?: RepoProcessDefinitionResolvers<ContextType>;
+  RepoSetupScript?: RepoSetupScriptResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
+  SessionApplicationLogEntry?: SessionApplicationLogEntryResolvers<ContextType>;
+  SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
+  SessionEndpoint?: SessionEndpointResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionGroupDirectoryEntry?: SessionGroupDirectoryEntryResolvers<ContextType>;
@@ -4235,6 +4877,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionPromptIndexItem?: SessionPromptIndexItemResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;
+  SessionSetupScriptRun?: SessionSetupScriptRunResolvers<ContextType>;
   SessionTimelineItem?: SessionTimelineItemResolvers<ContextType>;
   SessionTimelinePage?: SessionTimelinePageResolvers<ContextType>;
   SlashCommand?: SlashCommandResolvers<ContextType>;

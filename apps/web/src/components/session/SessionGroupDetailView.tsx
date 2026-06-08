@@ -26,6 +26,7 @@ import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./Attachme
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
+import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
@@ -230,9 +231,12 @@ export function SessionGroupDetailView({
   const terminals = useSessionGroupTerminals(sessionGroupId);
 
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showApplicationsSidebar, setShowApplicationsSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [sidebarWidth, setSidebarWidth] = useState(() => getStoredSessionSidebarWidth());
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
@@ -251,7 +255,11 @@ export function SessionGroupDetailView({
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
     useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId);
 
-  const { handleOpenTerminal, handleCloseTerminal, handleSelectTerminal } = useTerminalActions({
+  const {
+    handleOpenTerminal,
+    handleCloseTerminal,
+    handleSelectTerminal: selectTerminal,
+  } = useTerminalActions({
     sessionGroupId,
     terminals,
   });
@@ -392,13 +400,23 @@ export function SessionGroupDetailView({
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
+  const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
   const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
   useEffect(() => {
     if (selectedSessionIsOptimistic && showSidebar) {
       setShowSidebar(false);
     }
-  }, [selectedSessionIsOptimistic, showSidebar]);
+    if (selectedSessionIsOptimistic && showApplicationsSidebar) {
+      setShowApplicationsSidebar(false);
+    }
+  }, [selectedSessionIsOptimistic, showApplicationsSidebar, showSidebar]);
+
+  useEffect(() => {
+    if (!showApplicationsSidebarTab && showApplicationsSidebar) {
+      setShowApplicationsSidebar(false);
+    }
+  }, [showApplicationsSidebar, showApplicationsSidebarTab]);
 
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(
@@ -489,10 +507,61 @@ export function SessionGroupDetailView({
     if (tab !== "git") setHighlightCheckpointId(null);
   }, []);
 
+  const handleOpenTrafficTab = useCallback(
+    (endpointId: string) => {
+      setTrafficEndpointId(endpointId);
+      setActiveWorkflowTab("traffic");
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [setActiveFilePath, setActiveTerminalId],
+  );
+
+  const handleSelectTrafficTab = useCallback(() => {
+    if (!trafficEndpointId) return;
+    setActiveWorkflowTab("traffic");
+    setActiveTerminalId(null);
+    setActiveFilePath(null);
+  }, [setActiveFilePath, setActiveTerminalId, trafficEndpointId]);
+
+  const handleCloseTrafficTab = useCallback(() => {
+    setTrafficEndpointId(null);
+    setActiveWorkflowTab("session");
+  }, []);
+
+  const handleSelectTerminalTab = useCallback(
+    (sessionId: string | null, terminalId: string) => {
+      setActiveWorkflowTab("session");
+      selectTerminal(sessionId, terminalId);
+    },
+    [selectTerminal],
+  );
+
+  const handleSelectFileTab = useCallback(
+    (filePath: string) => {
+      setActiveWorkflowTab("session");
+      handleSelectFile(filePath);
+    },
+    [handleSelectFile],
+  );
+
   const handleToggleSidebar = useCallback(() => {
     setShowSidebar((prev: boolean) => {
       if (prev) setHighlightCheckpointId(null);
-      return !prev;
+      const next = !prev;
+      if (next) setShowApplicationsSidebar(false);
+      return next;
+    });
+  }, []);
+
+  const handleToggleApplicationsSidebar = useCallback(() => {
+    setShowApplicationsSidebar((prev: boolean) => {
+      const next = !prev;
+      if (next) {
+        setShowSidebar(false);
+        setHighlightCheckpointId(null);
+      }
+      return next;
     });
   }, []);
 
@@ -619,6 +688,7 @@ export function SessionGroupDetailView({
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {
+      setActiveWorkflowTab("session");
       setActiveSessionId(sessionId);
       setActiveTerminalId(null);
       setActiveFilePath(null);
@@ -661,8 +731,13 @@ export function SessionGroupDetailView({
                 panelMode={panelMode}
                 isFullscreen={isFullscreen}
                 showSidebar={showSidebar}
+                showApplicationsSidebar={showApplicationsSidebar}
+                canShowApplications={showApplicationsSidebarTab}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+                onToggleApplicationsSidebar={
+                  selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
+                }
               />
 
               <GroupTabStrip
@@ -673,16 +748,23 @@ export function SessionGroupDetailView({
                 activeTerminalId={activeTerminalId}
                 openFiles={openFiles}
                 activeFilePath={activeFilePath}
+                trafficTabOpen={trafficEndpointId !== null}
+                trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
                 onSelectSession={handleSelectSession}
                 onCloseSession={handleCloseSession}
                 canCloseSessions={false}
-                onSelectTerminal={handleSelectTerminal}
+                onSelectTerminal={handleSelectTerminalTab}
                 onCloseTerminal={handleCloseTerminal}
                 onRenameTerminal={renameTerminal}
-                onSelectFile={handleSelectFile}
+                onSelectFile={handleSelectFileTab}
                 onCloseFile={handleCloseFile}
+                onSelectTraffic={handleSelectTrafficTab}
+                onCloseTraffic={handleCloseTrafficTab}
                 onNewChat={handleNewChat}
-                onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
+                onOpenTerminal={() => {
+                  setActiveWorkflowTab("session");
+                  void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+                }}
                 onOpenFilePalette={handleOpenFilePalette}
                 canNewChat={
                   !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
@@ -697,6 +779,9 @@ export function SessionGroupDetailView({
                     activeFilePath={activeFilePath}
                     openFiles={openFiles}
                     activeTerminalId={activeTerminal?.id ?? null}
+                    activeTrafficEndpointId={
+                      activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                    }
                     selectedSession={selectedSession}
                     sessionsByRecency={sessionsByRecency}
                     canStartNewChat={
@@ -712,7 +797,7 @@ export function SessionGroupDetailView({
                     canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                   />
                 </div>
-                {showSidebar && !selectedSessionIsOptimistic && (
+                {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
                   <div
                     className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
                       isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
@@ -723,23 +808,30 @@ export function SessionGroupDetailView({
                       onMouseDown={handleSidebarResizeStart}
                       className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
                     />
-                    <SidebarPanel
-                      sessionGroupId={sessionGroupId}
-                      activeSessionId={selectedSession?.id ?? null}
-                      activeTab={sidebarTab}
-                      fileTree={sessionGroupFileTree}
-                      filesLoading={sessionGroupFileTreeLoading}
-                      filesError={sessionGroupFileTreeError}
-                      onTabChange={handleSidebarTabChange}
-                      onFileClick={handleFileClick}
-                      onRefreshFiles={refreshTree}
-                      onLoadDirectory={loadDirectory}
-                      onDiffFileClick={handleDiffFileClick}
-                      highlightCheckpointId={highlightCheckpointId}
-                      onCheckpointClick={handleCheckpointClick}
-                      bridgeAccess={bridgeAccess}
-                      onBridgeAccessRequested={refreshBridgeAccess}
-                    />
+                    {showApplicationsSidebar ? (
+                      <SessionApplicationsPanel
+                        sessionGroupId={sessionGroupId}
+                        onOpenTraffic={handleOpenTrafficTab}
+                      />
+                    ) : (
+                      <SidebarPanel
+                        sessionGroupId={sessionGroupId}
+                        activeSessionId={selectedSession?.id ?? null}
+                        activeTab={sidebarTab}
+                        fileTree={sessionGroupFileTree}
+                        filesLoading={sessionGroupFileTreeLoading}
+                        filesError={sessionGroupFileTreeError}
+                        onTabChange={handleSidebarTabChange}
+                        onFileClick={handleFileClick}
+                        onRefreshFiles={refreshTree}
+                        onLoadDirectory={loadDirectory}
+                        onDiffFileClick={handleDiffFileClick}
+                        highlightCheckpointId={highlightCheckpointId}
+                        onCheckpointClick={handleCheckpointClick}
+                        bridgeAccess={bridgeAccess}
+                        onBridgeAccessRequested={refreshBridgeAccess}
+                      />
+                    )}
                   </div>
                 )}
               </div>

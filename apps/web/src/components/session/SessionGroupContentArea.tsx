@@ -3,6 +3,7 @@ import type { SessionEntity } from "@trace/client-core";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import { FileScopedAiInput } from "./FileScopedAiInput";
+import { SessionEndpointTrafficPanel } from "./applications/SessionEndpointTrafficPanel";
 import type { OpenFileTab } from "./GroupTabStrip";
 import type { FileEditorBuffer } from "./file-editor-buffer";
 
@@ -24,6 +25,7 @@ interface SessionGroupContentAreaProps {
   activeFilePath: string | null;
   openFiles: OpenFileTab[];
   activeTerminalId: string | null;
+  activeTrafficEndpointId: string | null;
   selectedSession: { id: string; _optimistic?: boolean } | null;
   sessionsByRecency: SessionEntity[];
   canStartNewChat: boolean;
@@ -42,6 +44,7 @@ export function SessionGroupContentArea({
   activeFilePath,
   openFiles,
   activeTerminalId,
+  activeTrafficEndpointId,
   selectedSession,
   sessionsByRecency,
   canStartNewChat,
@@ -148,6 +151,15 @@ export function SessionGroupContentArea({
       <div className="h-full bg-[#0a0a0a]">
         <TerminalInstance terminalId={activeTerminalId} visible />
       </div>
+    );
+  }
+
+  if (activeTrafficEndpointId) {
+    return (
+      <SessionEndpointTrafficPanel
+        sessionGroupId={sessionGroupId}
+        initialEndpointId={activeTrafficEndpointId}
+      />
     );
   }
 

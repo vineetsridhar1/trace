@@ -6,7 +6,6 @@ import {
   Copy,
   ExternalLink,
   GitPullRequest,
-  Laptop,
   Link2,
   Lock,
   Mail,
@@ -30,6 +29,8 @@ import { sidebarNestedFullWidthRowClass } from "./sidebarItemStyles";
 import { SidebarSessionHoverCard } from "./SidebarSessionHoverCard";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
 import { PrivateSessionLock } from "../session/PrivateSessionLock";
+import { SessionApplicationRunningIndicator } from "../session/SessionApplicationRunningIndicator";
+import { SpotlightBridgeIndicator } from "../session/SpotlightBridgeIndicator";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -293,15 +294,8 @@ function OwnedSessionGroupItem({
             size={11}
           />
         )}
-        {attached && (
-          <span
-            title={`Synced to ${attached.bridgeLabel}`}
-            className="inline-flex shrink-0"
-            aria-label={`Synced to ${attached.bridgeLabel}`}
-          >
-            <Laptop className="h-3.5 w-3.5 text-emerald-500" />
-          </span>
-        )}
+        {attached && <SpotlightBridgeIndicator attached={attached} />}
+        <SessionApplicationRunningIndicator sessionGroupId={record.id} />
         <span className="shrink-0 text-[11px] text-foreground group-hover/session-row:hidden group-focus-within/session-row:hidden">
           {activityLabel}
         </span>

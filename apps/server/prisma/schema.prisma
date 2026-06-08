@@ -218,6 +218,53 @@ enum EventType {
   session_runtime_disconnected
   session_runtime_reconnected
   session_group_visibility_updated
+  application_config_updated
+  session_setup_script_started
+  session_setup_script_completed
+  session_setup_script_failed
+  session_application_process_started
+  session_application_process_stopped
+  session_application_process_failed
+  session_application_log_appended
+  session_endpoint_created
+  session_endpoint_forwarding_enabled
+  session_endpoint_forwarding_disabled
+  session_endpoint_rotated
+  session_endpoint_access_updated
+  session_endpoint_traffic_capture_updated
+}
+
+enum SessionApplicationProcessStatus {
+  stopped
+  starting
+  running
+  stopping
+  exited
+  failed
+}
+
+enum SessionSetupScriptRunStatus {
+  running
+  completed
+  failed
+}
+
+enum SessionEndpointStatus {
+  disabled
+  enabled
+  unavailable
+  revoked
+}
+
+enum SessionEndpointAccessMode {
+  private
+  public
+}
+
+enum EndpointTrafficCaptureMode {
+  metadata
+  headers
+  full
 }
 
 model Organization {
@@ -239,6 +286,9 @@ model Organization {
   tickets  Ticket[]
   events        Event[]
   inboxItems    InboxItem[]
+  sessionSetupScriptRuns SessionSetupScriptRun[]
+  sessionApplicationProcesses SessionApplicationProcess[]
+  sessionEndpoints SessionEndpoint[]
   agentEnvironments AgentEnvironment[]
   orgSecrets    OrgSecret[]
   aiConversations  AiConversation[]
@@ -349,6 +399,9 @@ model Repo {
   sessionGroups SessionGroup[]
   channels Channel[]
   gitCheckpoints GitCheckpoint[]
+  sessionSetupScriptRuns SessionSetupScriptRun[]
+  sessionApplicationProcesses SessionApplicationProcess[]
+  sessionEndpoints SessionEndpoint[]
 
   webhookId     String?
   webhookSecret String?
@@ -478,6 +531,9 @@ model SessionGroup {
   gitCheckpoints GitCheckpoint[]
   bridgeAccessGrants BridgeAccessGrant[]
   bridgeAccessRequests BridgeAccessRequest[]
+  setupScriptRuns SessionSetupScriptRun[]
+  applicationProcesses SessionApplicationProcess[]
+  endpoints SessionEndpoint[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -532,6 +588,152 @@ model Session {
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
+}
+
+model SessionSetupScriptRun {
+  id               String                      @id @default(uuid())
+  organizationId   String
+  organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId   String
+  sessionGroup     SessionGroup                @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId           String
+  repo             Repo                        @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  scriptConfigId   String
+  label            String
+  command          String
+  workingDirectory String
+  status           SessionSetupScriptRunStatus @default(running)
+  exitCode         Int?
+  outputPreview    String?
+  outputTruncated  Boolean                     @default(false)
+  lastError        String?
+
+  startedByUserId  String?
+  startedAt        DateTime                    @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+
+  @@index([organizationId, sessionGroupId])
+  @@index([sessionGroupId, scriptConfigId, startedAt])
+}
+
+model SessionApplicationProcess {
+  id                 String                          @id @default(uuid())
+  organizationId     String
+  organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId     String
+  sessionGroup       SessionGroup                    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId             String
+  repo               Repo                            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  appConfigId        String
+  processConfigId    String
+  label              String
+  command            String
+  workingDirectory   String
+  status             SessionApplicationProcessStatus @default(stopped)
+  runtimeInstanceId  String?
+  bridgeProcessId    String?
+  exitCode           Int?
+  lastError          String?
+
+  startedByUserId    String?
+  startedAt          DateTime?
+  stoppedAt          DateTime?
+  lastHeartbeatAt    DateTime?
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+
+  logEntries         SessionApplicationLogEntry[]
+
+  @@unique([sessionGroupId, appConfigId, processConfigId])
+  @@index([organizationId, sessionGroupId])
+  @@index([runtimeInstanceId])
+}
+
+model SessionApplicationLogEntry {
+  id             String                    @id @default(uuid())
+  organizationId String
+  processId      String
+  process        SessionApplicationProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
+
+  stream         String
+  data           String
+  sequence       Int
+  timestamp      DateTime                  @default(now())
+
+  @@index([processId, sequence])
+  @@index([organizationId, timestamp])
+}
+
+model SessionEndpoint {
+  id                       String                     @id @default(uuid())
+  key                      String                     @unique
+  organizationId           String
+  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId           String
+  sessionGroup             SessionGroup               @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId                   String
+  repo                     Repo                       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  appConfigId              String
+  processConfigId          String
+  portConfigId             String
+  label                    String
+  targetPort               Int
+  protocol                 String                     @default("http")
+
+  status                   SessionEndpointStatus      @default(disabled)
+  accessMode               SessionEndpointAccessMode  @default(private)
+  trafficCaptureMode       EndpointTrafficCaptureMode @default(metadata)
+
+  currentRuntimeInstanceId String?
+  enabledByUserId          String?
+  enabledAt                DateTime?
+  disabledAt               DateTime?
+  revokedAt                DateTime?
+  expiresAt                DateTime?
+
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+
+  trafficEntries           EndpointTrafficEntry[]
+
+  @@unique([sessionGroupId, appConfigId, processConfigId, portConfigId])
+  @@index([organizationId, sessionGroupId])
+  @@index([status])
+}
+
+model EndpointTrafficEntry {
+  id                    String          @id @default(uuid())
+  organizationId        String
+  endpointId            String
+  endpoint              SessionEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  startedAt             DateTime        @default(now())
+  completedAt           DateTime?
+  durationMs            Int?
+
+  requestMethod         String
+  requestPath           String
+  requestQuery          String?
+  requestHeaders        Json?
+  requestBodyPreview    String?
+  requestBodyBytes      Int?
+  requestTruncated      Boolean         @default(false)
+
+  responseStatus        Int?
+  responseHeaders       Json?
+  responseBodyPreview   String?
+  responseBodyBytes     Int?
+  responseTruncated     Boolean         @default(false)
+
+  error                 String?
+
+  @@index([endpointId, startedAt])
+  @@index([organizationId, startedAt])
 }
 
 model QueuedMessage {

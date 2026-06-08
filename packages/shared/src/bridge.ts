@@ -286,6 +286,70 @@ export interface BridgeTerminalDestroyCommand {
   terminalId: string;
 }
 
+export interface BridgeSetupScriptRunCommand {
+  type: "setup_script_run";
+  requestId: string;
+  sessionGroupId: string;
+  sessionId: string;
+  command: string;
+  cwd: string;
+  env?: Record<string, string>;
+}
+
+export interface BridgeAppProcessStartCommand {
+  type: "app_process_start";
+  requestId: string;
+  processInstanceId: string;
+  sessionGroupId: string;
+  sessionId: string;
+  appConfigId: string;
+  processConfigId: string;
+  command: string;
+  cwd: string;
+  env?: Record<string, string>;
+  ports: Array<{ portConfigId: string; port: number; protocol: "http" }>;
+}
+
+export interface BridgeAppProcessStopCommand {
+  type: "app_process_stop";
+  requestId: string;
+  processInstanceId: string;
+}
+
+export interface BridgeEndpointHttpRequestCommand {
+  type: "endpoint_http_request";
+  requestId: string;
+  endpointId: string;
+  processInstanceId?: string;
+  port: number;
+  method: string;
+  path: string;
+  headers: Record<string, string | string[]>;
+  bodyBase64?: string;
+}
+
+export interface BridgeEndpointWebSocketOpenCommand {
+  type: "endpoint_ws_open";
+  requestId: string;
+  endpointId: string;
+  port: number;
+  path: string;
+  headers: Record<string, string | string[]>;
+}
+
+export interface BridgeEndpointWebSocketDataCommand {
+  type: "endpoint_ws_data";
+  requestId: string;
+  dataBase64: string;
+}
+
+export interface BridgeEndpointWebSocketCloseCommand {
+  type: "endpoint_ws_close";
+  requestId: string;
+  code?: number;
+  reason?: string;
+}
+
 export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
@@ -319,7 +383,14 @@ export type BridgeCommand =
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
-  | BridgeTerminalDestroyCommand;
+  | BridgeTerminalDestroyCommand
+  | BridgeSetupScriptRunCommand
+  | BridgeAppProcessStartCommand
+  | BridgeAppProcessStopCommand
+  | BridgeEndpointHttpRequestCommand
+  | BridgeEndpointWebSocketOpenCommand
+  | BridgeEndpointWebSocketDataCommand
+  | BridgeEndpointWebSocketCloseCommand;
 
 // --- Bridge → Server messages ---
 
@@ -639,6 +710,81 @@ export interface BridgeTerminalError {
   error: string;
 }
 
+export interface BridgeSetupScriptResult {
+  type: "setup_script_result";
+  requestId: string;
+  exitCode: number;
+  output?: string;
+  error?: string;
+}
+
+export interface BridgeSetupScriptLog {
+  type: "setup_script_log";
+  requestId: string;
+  stream: "stdout" | "stderr";
+  data: string;
+}
+
+export interface BridgeAppProcessStarted {
+  type: "app_process_started";
+  requestId: string;
+  processInstanceId: string;
+  bridgeProcessId: string;
+}
+
+export interface BridgeAppProcessLog {
+  type: "app_process_log";
+  processInstanceId: string;
+  stream: "stdout" | "stderr";
+  data: string;
+}
+
+export interface BridgeAppProcessExited {
+  type: "app_process_exited";
+  processInstanceId: string;
+  exitCode: number | null;
+  signal?: string;
+}
+
+export interface BridgeAppProcessError {
+  type: "app_process_error";
+  requestId?: string;
+  processInstanceId?: string;
+  error: string;
+}
+
+export interface BridgeEndpointHttpResponse {
+  type: "endpoint_http_response";
+  requestId: string;
+  status: number;
+  headers: Record<string, string | string[]>;
+  bodyBase64?: string;
+}
+
+export interface BridgeEndpointHttpError {
+  type: "endpoint_http_error";
+  requestId: string;
+  error: string;
+}
+
+export interface BridgeEndpointWebSocketOpened {
+  type: "endpoint_ws_opened";
+  requestId: string;
+}
+
+export interface BridgeEndpointWebSocketData {
+  type: "endpoint_ws_data";
+  requestId: string;
+  dataBase64: string;
+}
+
+export interface BridgeEndpointWebSocketClosed {
+  type: "endpoint_ws_closed";
+  requestId: string;
+  code?: number;
+  reason?: string;
+}
+
 export type BridgeMessage =
   | BridgeRuntimeHello
   | BridgeRuntimeHeartbeat
@@ -671,7 +817,18 @@ export type BridgeMessage =
   | BridgeTerminalReady
   | BridgeTerminalOutput
   | BridgeTerminalExit
-  | BridgeTerminalError;
+  | BridgeTerminalError
+  | BridgeSetupScriptResult
+  | BridgeSetupScriptLog
+  | BridgeAppProcessStarted
+  | BridgeAppProcessLog
+  | BridgeAppProcessExited
+  | BridgeAppProcessError
+  | BridgeEndpointHttpResponse
+  | BridgeEndpointHttpError
+  | BridgeEndpointWebSocketOpened
+  | BridgeEndpointWebSocketData
+  | BridgeEndpointWebSocketClosed;
 
 // --- Utilities ---
 

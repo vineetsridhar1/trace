@@ -679,7 +679,7 @@ async function pullTargetWorktreeBranchIfAvailable(
   return true;
 }
 
-async function refreshTargetBranchForSync(repoPath: string, branch: string): Promise<void> {
+export async function refreshTargetBranchForSync(repoPath: string, branch: string): Promise<void> {
   if (await pullTargetWorktreeBranchIfAvailable(repoPath, branch)) return;
   await fetchTargetBranchIfAvailable(repoPath, branch);
 }

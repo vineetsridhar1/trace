@@ -41,6 +41,11 @@ import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
 import { orgSecretMutations, orgSecretQueries, orgSecretTypeResolvers } from "./org-secret.js";
 import { pushTokenMutations } from "./push-token.js";
 import { terminalQueries, terminalMutations } from "./terminal.js";
+import {
+  sessionApplicationMutations,
+  sessionApplicationQueries,
+  sessionApplicationTypeResolvers,
+} from "./session-applications.js";
 import { connectionsQueries } from "./connections.js";
 import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from "./chat.js";
 import {
@@ -71,6 +76,7 @@ export const resolvers = {
   ...participantTypeResolvers,
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
+  ...sessionApplicationTypeResolvers,
   ...bridgeAccessTypeResolvers,
   ...aiConversationTypeResolvers,
 
@@ -101,6 +107,7 @@ export const resolvers = {
     ...inboxQueries,
     ...apiTokenQueries,
     ...terminalQueries,
+    ...sessionApplicationQueries,
     ...connectionsQueries,
     ...chatQueries,
     ...participantQueries,
@@ -121,6 +128,7 @@ export const resolvers = {
     ...apiTokenMutations,
     ...pushTokenMutations,
     ...terminalMutations,
+    ...sessionApplicationMutations,
     ...chatMutations,
     ...participantMutations,
     ...aiConversationMutations,

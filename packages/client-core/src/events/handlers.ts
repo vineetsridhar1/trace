@@ -12,6 +12,8 @@ import type {
   QueuedMessage,
   Repo,
   ScopeType,
+  SessionApplicationProcess,
+  SessionEndpoint,
   SessionStatus,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
@@ -170,7 +172,11 @@ export function handleOrgEvent(event: Event): void {
   }
 
   // Repo created or updated — upsert directly from payload
-  if (event.eventType === "repo_created" || event.eventType === "repo_updated") {
+  if (
+    event.eventType === "repo_created" ||
+    event.eventType === "repo_updated" ||
+    event.eventType === "application_config_updated"
+  ) {
     const repo = asJsonObject(payload.repo);
     if (repo && typeof repo.id === "string") {
       const existing = batch.get("repos", repo.id);
@@ -178,6 +184,43 @@ export function handleOrgEvent(event: Event): void {
         "repos",
         repo.id,
         (existing ? { ...existing, ...repo } : repo) as unknown as Repo,
+      );
+    }
+  }
+
+  const processEventTypes = new Set<EventType>([
+    "session_application_process_started",
+    "session_application_process_stopped",
+    "session_application_process_failed",
+  ]);
+  if (processEventTypes.has(event.eventType)) {
+    const process = asJsonObject(payload.process);
+    if (process && typeof process.id === "string") {
+      const existing = batch.get("sessionApplicationProcesses", process.id);
+      batch.upsert(
+        "sessionApplicationProcesses",
+        process.id,
+        (existing ? { ...existing, ...process } : process) as unknown as SessionApplicationProcess,
+      );
+    }
+  }
+
+  const endpointEventTypes = new Set<EventType>([
+    "session_endpoint_created",
+    "session_endpoint_forwarding_enabled",
+    "session_endpoint_forwarding_disabled",
+    "session_endpoint_rotated",
+    "session_endpoint_access_updated",
+    "session_endpoint_traffic_capture_updated",
+  ]);
+  if (endpointEventTypes.has(event.eventType)) {
+    const endpoint = asJsonObject(payload.endpoint);
+    if (endpoint && typeof endpoint.id === "string") {
+      const existing = batch.get("sessionEndpoints", endpoint.id);
+      batch.upsert(
+        "sessionEndpoints",
+        endpoint.id,
+        (existing ? { ...existing, ...endpoint } : endpoint) as unknown as SessionEndpoint,
       );
     }
   }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Circle,
+  Activity,
   FilePlus2,
   FileCode,
   GitCompareArrows,
@@ -50,6 +51,8 @@ interface GroupTabStripProps {
   activeTerminalId: string | null;
   openFiles: OpenFileTab[];
   activeFilePath: string | null;
+  trafficTabOpen: boolean;
+  trafficTabActive: boolean;
   onSelectSession: (sessionId: string) => void;
   onCloseSession?: (sessionId: string) => void;
   canCloseSessions?: boolean;
@@ -58,6 +61,8 @@ interface GroupTabStripProps {
   onRenameTerminal: (terminalId: string, name: string) => void;
   onSelectFile: (filePath: string) => void;
   onCloseFile: (filePath: string) => void;
+  onSelectTraffic: () => void;
+  onCloseTraffic: () => void;
   onNewChat: () => void;
   onOpenTerminal: () => void;
   onOpenFilePalette: () => void;
@@ -80,6 +85,8 @@ export function GroupTabStrip({
   activeTerminalId,
   openFiles,
   activeFilePath,
+  trafficTabOpen,
+  trafficTabActive,
   onSelectSession,
   onCloseSession,
   canCloseSessions,
@@ -88,6 +95,8 @@ export function GroupTabStrip({
   onRenameTerminal,
   onSelectFile,
   onCloseFile,
+  onSelectTraffic,
+  onCloseTraffic,
   onNewChat,
   onOpenTerminal,
   onOpenFilePalette,
@@ -109,7 +118,7 @@ export function GroupTabStrip({
   }, []);
 
   // Scroll the active tab into view when selection changes
-  const activeKey = activeFilePath ?? activeTerminalId ?? selectedSessionId;
+  const activeKey = activeFilePath ?? activeTerminalId ?? (trafficTabActive ? "traffic" : selectedSessionId);
   useEffect(() => {
     if (!activeKey) return;
     const el = tabRefs.current.get(activeKey);
@@ -165,7 +174,10 @@ export function GroupTabStrip({
               );
               const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
               const isActive =
-                !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
+                !activeTerminalId &&
+                !activeFilePath &&
+                !trafficTabActive &&
+                selectedSessionId === session.id;
               const hasDoneBadge = !!sessionDoneBadges[session.id];
               return (
                 <div
@@ -293,6 +305,34 @@ export function GroupTabStrip({
                 </div>
               );
             })}
+
+            {trafficTabOpen && (
+              <div
+                ref={(el: HTMLElement | null) => setTabRef("traffic", el)}
+                className={cn(
+                  tabBase,
+                  "max-w-[260px] gap-0 p-0",
+                  trafficTabActive ? tabActive : tabInactive,
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={onSelectTraffic}
+                  className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                >
+                  <Activity size={12} className="shrink-0" />
+                  <span className="truncate">Traffic</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onCloseTraffic}
+                  className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
+                  title="Close traffic tab"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
 
             {openFiles.map((file) => {
               const isActive = activeFilePath === file.filePath;

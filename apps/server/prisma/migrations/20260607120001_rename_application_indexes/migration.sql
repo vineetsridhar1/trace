@@ -1,0 +1,8 @@
+-- RenameIndex
+ALTER INDEX "SessionApplicationProcess_sessionGroupId_appConfigId_processCon" RENAME TO "SessionApplicationProcess_sessionGroupId_appConfigId_proces_key";
+
+-- RenameIndex
+ALTER INDEX "SessionEndpoint_sessionGroupId_appConfigId_processConfigId_port" RENAME TO "SessionEndpoint_sessionGroupId_appConfigId_processConfigId__key";
+
+-- RenameIndex
+ALTER INDEX "SessionSetupScriptRun_sessionGroupId_scriptConfigId_startedAt_i" RENAME TO "SessionSetupScriptRun_sessionGroupId_scriptConfigId_started_idx";

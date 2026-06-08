@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AppWindow,
   Circle,
   PanelRight,
   History,
@@ -38,8 +39,11 @@ interface GroupHeaderProps {
   panelMode?: boolean;
   isFullscreen: boolean;
   showSidebar: boolean;
+  showApplicationsSidebar: boolean;
+  canShowApplications: boolean;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
+  onToggleApplicationsSidebar: () => void;
 }
 
 const headerIconButtonClass =
@@ -65,8 +69,11 @@ export function GroupHeader({
   panelMode,
   isFullscreen,
   showSidebar,
+  showApplicationsSidebar,
+  canShowApplications,
   onToggleFullscreen,
   onToggleSidebar,
+  onToggleApplicationsSidebar,
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -181,6 +188,22 @@ export function GroupHeader({
             aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+        </ActionTooltip>
+      )}
+
+      {canShowApplications && (
+        <ActionTooltip label={showApplicationsSidebar ? "Hide applications" : "Applications"}>
+          <button
+            onClick={onToggleApplicationsSidebar}
+            className={cn(
+              headerIconButtonClass,
+              "hidden sm:flex",
+              showApplicationsSidebar ? "bg-surface-hover text-foreground" : undefined,
+            )}
+            aria-label={showApplicationsSidebar ? "Hide applications" : "Applications"}
+          >
+            <AppWindow size={13} />
           </button>
         </ActionTooltip>
       )}

@@ -42,6 +42,7 @@ vi.mock("./linked-checkout.js", () => ({
     if (branch === "main") return "a".repeat(40);
     throw new Error(`Branch not found: ${branch}`);
   }),
+  refreshTargetBranchForSync: vi.fn(async () => undefined),
   resolveSyncTargetCommitSha: vi.fn(async (_repoPath: string, branch: string) => {
     if (branch === "main") return "a".repeat(40);
     throw new Error(`Branch not found: ${branch}`);
@@ -73,6 +74,7 @@ const configMock = config as unknown as {
 
 const linkedCheckoutMock = linkedCheckout as unknown as {
   pauseExistingAttachment: ReturnType<typeof vi.fn>;
+  refreshTargetBranchForSync: ReturnType<typeof vi.fn>;
   resolveTargetCommitSha: ReturnType<typeof vi.fn>;
   resolveSyncTargetCommitSha: ReturnType<typeof vi.fn>;
 };
@@ -108,6 +110,7 @@ function makeDeps(overrides: Partial<LinkedCheckoutAutoSyncDeps> = {}): LinkedCh
     switchDetached: vi.fn(async () => undefined),
     getCurrentBranch: vi.fn(async () => null),
     hasInProgressOperation: vi.fn(async () => false),
+    refreshTargetBranch: vi.fn(async () => undefined),
     now: () => "2026-04-18T00:00:00.000Z",
     ...overrides,
   };
@@ -131,6 +134,7 @@ beforeEach(() => {
   configMock.__reset();
   configMock.setRepoLinkedCheckout.mockClear();
   linkedCheckoutMock.pauseExistingAttachment.mockClear();
+  linkedCheckoutMock.refreshTargetBranchForSync.mockClear();
   linkedCheckoutMock.resolveTargetCommitSha.mockClear();
   linkedCheckoutMock.resolveSyncTargetCommitSha.mockClear();
   runtimeDebugMock.mockClear();
@@ -163,6 +167,31 @@ describe("LinkedCheckoutAutoSyncManager", () => {
       lastSyncError: null,
       lastSyncAt: "2026-04-18T00:00:00.000Z",
     });
+  });
+
+  it("refreshes the target branch before resolving the sync target", async () => {
+    seedAttachment("repo-1", {
+      targetBranch: "trace/rhino",
+      lastSyncedCommitSha: "e".repeat(40),
+    });
+    const refreshTargetBranch = vi.fn(async () => undefined);
+    const deps = makeDeps({
+      revParseHead: vi.fn(async () => "e".repeat(40)),
+      refreshTargetBranch,
+    });
+    linkedCheckoutMock.resolveSyncTargetCommitSha.mockResolvedValueOnce("2".repeat(40));
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    await manager.reconcileAll();
+
+    expect(refreshTargetBranch).toHaveBeenCalledWith(
+      "/tmp/repo-repo-1",
+      "trace/rhino",
+    );
+    expect(refreshTargetBranch.mock.invocationCallOrder[0]).toBeLessThan(
+      linkedCheckoutMock.resolveSyncTargetCommitSha.mock.invocationCallOrder[0],
+    );
+    expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "2".repeat(40));
   });
 
   it("no-op when HEAD already matches the target branch and no prior error", async () => {

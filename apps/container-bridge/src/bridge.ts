@@ -53,6 +53,7 @@ import {
 } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
+import { ManagedProcessManager } from "./managed-process-manager.js";
 
 const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 1;
@@ -132,6 +133,7 @@ export class ContainerBridge implements IBridgeClient {
   private activeRuns = new Map<string, number>();
   private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
+  private managedProcessManager: ManagedProcessManager;
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
       execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
@@ -153,6 +155,9 @@ export class ContainerBridge implements IBridgeClient {
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
+    this.managedProcessManager = new ManagedProcessManager(this.sessionWorkdirs, (message) =>
+      this.send(message),
+    );
   }
 
   connect(): void {
@@ -209,6 +214,7 @@ export class ContainerBridge implements IBridgeClient {
   disconnect(): void {
     this.stopHeartbeat();
     this.terminalManager.destroyAll();
+    this.managedProcessManager.destroyAll();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -539,6 +545,67 @@ export class ContainerBridge implements IBridgeClient {
             );
           });
         }
+        break;
+      }
+
+      case "setup_script_run": {
+        this.managedProcessManager.runSetupScript({
+          requestId: cmd.requestId,
+          sessionId: cmd.sessionId,
+          command: cmd.command,
+          cwd: cmd.cwd,
+          env: cmd.env,
+        });
+        break;
+      }
+
+      case "app_process_start": {
+        this.managedProcessManager.start({
+          requestId: cmd.requestId,
+          processInstanceId: cmd.processInstanceId,
+          sessionGroupId: cmd.sessionGroupId,
+          sessionId: cmd.sessionId,
+          command: cmd.command,
+          cwd: cmd.cwd,
+          env: cmd.env,
+        });
+        break;
+      }
+
+      case "app_process_stop": {
+        this.managedProcessManager.stop(cmd.processInstanceId);
+        break;
+      }
+
+      case "endpoint_http_request": {
+        this.managedProcessManager.proxyHttp({
+          requestId: cmd.requestId,
+          port: cmd.port,
+          method: cmd.method,
+          path: cmd.path,
+          headers: cmd.headers,
+          bodyBase64: cmd.bodyBase64,
+        });
+        break;
+      }
+
+      case "endpoint_ws_open": {
+        this.managedProcessManager.openWebSocket({
+          requestId: cmd.requestId,
+          port: cmd.port,
+          path: cmd.path,
+          headers: cmd.headers,
+        });
+        break;
+      }
+
+      case "endpoint_ws_data": {
+        this.managedProcessManager.sendWebSocketData(cmd.requestId, cmd.dataBase64);
+        break;
+      }
+
+      case "endpoint_ws_close": {
+        this.managedProcessManager.closeWebSocket(cmd.requestId, cmd.code, cmd.reason);
         break;
       }
 

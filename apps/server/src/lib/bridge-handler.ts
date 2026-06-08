@@ -14,6 +14,8 @@ import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
+import { sessionApplicationService } from "../services/session-applications.js";
+import { endpointProxyService } from "../services/endpoint-proxy.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
 
@@ -481,6 +483,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      // Registration cannot succeed without bridge auth, so the runtime's
+      // organization is known from here on. Scope every runtime-driven mutation
+      // to it so a compromised runtime can't touch another tenant's rows.
+      if (!bridgeAuth) return;
+
       if (msg.type === "repo_linked") {
         const repoId = typeof msg.repoId === "string" ? msg.repoId.trim() : "";
         if (!repoId) {
@@ -502,6 +509,122 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         // Warm the linked-checkout cache for the freshly-linked repo (no-op
         // if no checkout is configured for it).
         sessionRouter.getLinkedCheckoutStatus(runtimeKey, repoId).catch(() => {});
+        return;
+      }
+
+      if (msg.type === "setup_script_result" && typeof msg.requestId === "string") {
+        void sessionApplicationService
+          .completeSetupScriptRun(msg.requestId, bridgeAuth.organizationId, {
+            exitCode: typeof msg.exitCode === "number" ? msg.exitCode : 1,
+            output: typeof msg.output === "string" ? msg.output : undefined,
+            error: typeof msg.error === "string" ? msg.error : undefined,
+          })
+          .catch((err: unknown) => {
+            console.error("[bridge] error completing setup script run:", err);
+          });
+        return;
+      }
+
+      if (msg.type === "setup_script_log" && typeof msg.requestId === "string") {
+        if (typeof msg.data === "string" && (msg.stream === "stdout" || msg.stream === "stderr")) {
+          void sessionApplicationService
+            .appendSetupScriptOutput(msg.requestId, bridgeAuth.organizationId, msg.data)
+            .catch((err: unknown) => {
+              console.error("[bridge] error appending setup script output:", err);
+            });
+        }
+        return;
+      }
+
+      if (msg.type === "app_process_started" && typeof msg.processInstanceId === "string") {
+        void sessionApplicationService
+          .markProcessRunning(
+            msg.processInstanceId,
+            bridgeAuth.organizationId,
+            typeof msg.bridgeProcessId === "string" ? msg.bridgeProcessId : msg.processInstanceId,
+          )
+          .catch((err: unknown) => {
+            console.error("[bridge] error marking app process running:", err);
+          });
+        return;
+      }
+
+      if (msg.type === "app_process_log" && typeof msg.processInstanceId === "string") {
+        if (typeof msg.data === "string" && (msg.stream === "stdout" || msg.stream === "stderr")) {
+          void sessionApplicationService
+            .appendProcessLog(msg.processInstanceId, bridgeAuth.organizationId, msg.stream, msg.data)
+            .catch((err: unknown) => {
+              console.error("[bridge] error appending app process log:", err);
+            });
+        }
+        return;
+      }
+
+      if (msg.type === "app_process_exited" && typeof msg.processInstanceId === "string") {
+        void sessionApplicationService
+          .markProcessExited(
+            msg.processInstanceId,
+            bridgeAuth.organizationId,
+            typeof msg.exitCode === "number" ? msg.exitCode : null,
+          )
+          .catch((err: unknown) => {
+            console.error("[bridge] error marking app process exited:", err);
+          });
+        return;
+      }
+
+      if (msg.type === "app_process_error") {
+        const processInstanceId =
+          typeof msg.processInstanceId === "string" ? msg.processInstanceId : null;
+        if (processInstanceId) {
+          void sessionApplicationService
+            .markProcessExited(
+              processInstanceId,
+              bridgeAuth.organizationId,
+              null,
+              typeof msg.error === "string" ? msg.error : "Process failed",
+            )
+            .catch((err: unknown) => {
+              console.error("[bridge] error marking app process failed:", err);
+            });
+        }
+        return;
+      }
+
+      if (msg.type === "endpoint_http_response" && typeof msg.requestId === "string") {
+        endpointProxyService.resolveHttpResponse(msg.requestId, {
+          status: typeof msg.status === "number" ? msg.status : 502,
+          headers:
+            msg.headers && typeof msg.headers === "object" && !Array.isArray(msg.headers)
+              ? (msg.headers as Record<string, string | string[]>)
+              : {},
+          bodyBase64: typeof msg.bodyBase64 === "string" ? msg.bodyBase64 : undefined,
+        });
+        return;
+      }
+
+      if (msg.type === "endpoint_http_error" && typeof msg.requestId === "string") {
+        endpointProxyService.resolveHttpError(
+          msg.requestId,
+          typeof msg.error === "string" ? msg.error : "Endpoint proxy failed",
+        );
+        return;
+      }
+
+      if (msg.type === "endpoint_ws_opened" && typeof msg.requestId === "string") {
+        endpointProxyService.resolveWebSocketOpened(msg.requestId);
+        return;
+      }
+
+      if (msg.type === "endpoint_ws_data" && typeof msg.requestId === "string") {
+        if (typeof msg.dataBase64 === "string") {
+          endpointProxyService.resolveWebSocketData(msg.requestId, msg.dataBase64);
+        }
+        return;
+      }
+
+      if (msg.type === "endpoint_ws_closed" && typeof msg.requestId === "string") {
+        endpointProxyService.resolveWebSocketClosed(msg.requestId);
         return;
       }
 

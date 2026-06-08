@@ -11,6 +11,7 @@ import { agentEnvironmentService } from "../services/agent-environment.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
+import { repoApplicationConfigService } from "../services/repo-application-config.js";
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
@@ -151,5 +152,7 @@ export const organizationTypeResolvers = {
 export const repoResolvers = {
   Repo: {
     webhookActive: (repo: { webhookId?: string | null }) => !!repo.webhookId,
+    applicationConfig: (repo: { setupConfig?: unknown }) =>
+      repoApplicationConfigService.parseApplicationConfig(repo.setupConfig),
   },
 };

@@ -13,6 +13,7 @@ import { RepoDesktopSection } from "./RepoDesktopSection";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
 import { isLocalMode } from "../../lib/runtime-mode";
+import { RepoApplicationsSection } from "./repo-applications/RepoApplicationsSection";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 const LOCAL_MODE_WEBHOOK_DISABLED = "Local mode does not support GitHub webhooks.";
@@ -164,6 +165,7 @@ export function RepoCard({
           {webhookError && <p className="mt-2 text-xs text-destructive">{webhookError}</p>}
 
           {isElectron && <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />}
+          <RepoApplicationsSection repoId={id} />
         </div>
       </div>
     </div>
