@@ -29,8 +29,10 @@ COPY apps/container-bridge/dist/ ./dist/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root
 RUN useradd -m -s /bin/bash coder && \
-    mkdir -p /workspace /repos /workspaces && \
-    chown -R coder:coder /workspace /repos /workspaces /app
+    mkdir -p /workspace /repos /workspaces /home/coder/.npm-global && \
+    chown -R coder:coder /workspace /repos /workspaces /app /home/coder/.npm-global
+ENV NPM_CONFIG_PREFIX=/home/coder/.npm-global
+ENV PATH=/home/coder/.npm-global/bin:$PATH
 USER coder
 RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 
