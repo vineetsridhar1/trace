@@ -46,6 +46,8 @@ Then configure the launcher to start the derived image:
 TRACE_RUNTIME_IMAGE=registry.acme.com/trace-runtime:platform-tools
 ```
 
+For a launcher-owner handoff, see [Launcher Runtime Image Handoff](./launcher-runtime-image-handoff.md).
+
 ## When To Use Runtime Setup Commands
 
 Use Docker image builds for tools that should always exist. Use `TRACE_RUNTIME_SETUP_COMMANDS` only
