@@ -1175,6 +1175,10 @@ model SlackAccount {
   preferredTool            CodingTool?
   preferredModel           String?
   preferredReasoningEffort String?
+  preferredHosting         HostingMode?
+  preferredEnvironmentId   String?
+  preferredRuntimeInstanceId String?
+  preferredTraceChannelId  String?
   createdAt                DateTime    @default(now())
 
   @@unique([slackUserId, slackTeamId])

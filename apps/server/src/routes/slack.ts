@@ -43,6 +43,7 @@ const SLACK_MAX_FILE_COUNT = 4;
 const SLACK_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const SLACK_THREAD_CONTEXT_MAX_MESSAGES = 30;
 const SLACK_THREAD_CONTEXT_MAX_CHARS = 12_000;
+const SLACK_FIRST_RUN_CONFIG_MESSAGE = "Choose Configure to select session settings.";
 const recentMentionKeys = new Map<string, number>();
 const SLACK_SCOPES = [
   "app_mentions:read",
@@ -839,6 +840,16 @@ type SlackBridgeAccessApproveValue = SlackBridgeAccessRequestValue & {
   requestId: string;
 };
 
+type SlackAccountSessionPreferences = {
+  tool: CodingTool;
+  model: string | null;
+  reasoningEffort: string | null;
+  hosting: "cloud" | "local";
+  environmentId: string | null;
+  runtimeInstanceId: string | null;
+  traceChannelId: string | null;
+};
+
 function stripBotMention(text: string, botUserId: string): string {
   return text.replace(new RegExp(`<@${botUserId}>`, "g"), "").trim();
 }
@@ -1159,6 +1170,59 @@ async function resolveSlackAccount(slackTeamId: string, slackUserId: string) {
     where: { slackUserId_slackTeamId: { slackUserId, slackTeamId } },
     select: {
       userId: true,
+    },
+  });
+}
+
+async function loadSlackAccountSessionPreferences(
+  slackTeamId: string,
+  slackUserId: string,
+): Promise<SlackAccountSessionPreferences | null> {
+  const account = await prisma.slackAccount.findUnique({
+    where: { slackUserId_slackTeamId: { slackUserId, slackTeamId } },
+    select: {
+      preferredTool: true,
+      preferredModel: true,
+      preferredReasoningEffort: true,
+      preferredHosting: true,
+      preferredEnvironmentId: true,
+      preferredRuntimeInstanceId: true,
+      preferredTraceChannelId: true,
+    },
+  });
+  if (!account?.preferredTool || !account.preferredHosting) return null;
+  if (account.preferredHosting !== "cloud" && account.preferredHosting !== "local") return null;
+  return {
+    tool: account.preferredTool,
+    model: account.preferredModel,
+    reasoningEffort: account.preferredReasoningEffort,
+    hosting: account.preferredHosting,
+    environmentId: account.preferredEnvironmentId,
+    runtimeInstanceId: account.preferredRuntimeInstanceId,
+    traceChannelId: account.preferredTraceChannelId,
+  };
+}
+
+async function saveSlackAccountSessionPreferences(input: {
+  slackTeamId: string;
+  slackUserId: string;
+  preferences: SlackAccountSessionPreferences;
+}): Promise<void> {
+  await prisma.slackAccount.update({
+    where: {
+      slackUserId_slackTeamId: {
+        slackUserId: input.slackUserId,
+        slackTeamId: input.slackTeamId,
+      },
+    },
+    data: {
+      preferredTool: input.preferences.tool,
+      preferredModel: input.preferences.model,
+      preferredReasoningEffort: input.preferences.reasoningEffort,
+      preferredHosting: input.preferences.hosting,
+      preferredEnvironmentId: input.preferences.environmentId,
+      preferredRuntimeInstanceId: input.preferences.runtimeInstanceId,
+      preferredTraceChannelId: input.preferences.traceChannelId,
     },
   });
 }
@@ -1764,6 +1828,15 @@ function reasoningLabelForSlack(reasoningEffort: string | null): string {
   return reasoningEffort ? getReasoningEffortLabel(reasoningEffort) : "Default";
 }
 
+async function traceChannelLabelForSlack(traceChannelId: string | null | undefined): Promise<string> {
+  if (!traceChannelId) return "Bound Slack channel";
+  const channel = await prisma.channel.findUnique({
+    where: { id: traceChannelId },
+    select: { name: true, type: true },
+  });
+  return channel ? `${channel.name} (${channel.type})` : "Saved Trace channel";
+}
+
 async function listOrgTraceChannels(input: {
   organizationId: string;
 }): Promise<Array<{ id: string; name: string; type: string }>> {
@@ -1803,6 +1876,85 @@ async function listAccessibleLocalRuntimeOptions(input: {
     .map((runtime) => ({ id: runtime.id, label: runtime.label }));
 }
 
+async function resolveSavedSlackSessionConfig(input: {
+  organizationId: string;
+  userId: string;
+  slackTeamId: string;
+  slackUserId: string;
+}): Promise<{
+  settings: SlackSessionSettings;
+  traceChannelId: string | null;
+} | null> {
+  const preferences = await loadSlackAccountSessionPreferences(
+    input.slackTeamId,
+    input.slackUserId,
+  );
+  if (!preferences) return null;
+
+  const settings = validateSlackSessionConfig({
+    tool: preferences.tool,
+    model: preferences.model,
+    reasoningEffort: preferences.reasoningEffort,
+  });
+
+  if (preferences.traceChannelId) {
+    const channel = await prisma.channel.findFirst({
+      where: { id: preferences.traceChannelId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!channel) {
+      throw new Error("Saved Trace channel is no longer available. Choose Configure to update it.");
+    }
+  }
+
+  if (preferences.hosting === "cloud") {
+    if (preferences.environmentId) {
+      const cloudEnvironments = await listCloudEnvironmentOptions(input.organizationId);
+      if (!cloudEnvironments.some((environment) => environment.id === preferences.environmentId)) {
+        throw new Error("Saved cloud environment is no longer available. Choose Configure to update it.");
+      }
+    }
+    return {
+      traceChannelId: preferences.traceChannelId,
+      settings: {
+        ...settings,
+        hosting: "cloud",
+        environmentId: preferences.environmentId,
+      },
+    };
+  }
+
+  const localRuntimes = await listAccessibleLocalRuntimeOptions({
+    organizationId: input.organizationId,
+    userId: input.userId,
+    tool: settings.tool,
+  });
+  if (preferences.runtimeInstanceId) {
+    if (!localRuntimes.some((runtime) => runtime.id === preferences.runtimeInstanceId)) {
+      throw new Error("Saved local bridge is no longer available. Choose Configure to update it.");
+    }
+    return {
+      traceChannelId: preferences.traceChannelId,
+      settings: {
+        ...settings,
+        hosting: "local",
+        runtimeInstanceId: preferences.runtimeInstanceId,
+      },
+    };
+  }
+  if (localRuntimes.length === 1) {
+    return {
+      traceChannelId: preferences.traceChannelId,
+      settings: {
+        ...settings,
+        hosting: "local",
+        runtimeInstanceId: localRuntimes[0]!.id,
+      },
+    };
+  }
+  throw new Error("Choose Configure to select a local bridge.");
+}
+
 async function openAdvancedStartModal(input: {
   slackTeamId: string;
   slackChannelId: string;
@@ -1836,9 +1988,22 @@ async function openAdvancedStartModal(input: {
     : null;
   if (input.draftId && !draft) return false;
   const defaults = await getTraceDefaults(account.userId);
-  const selectedTool = defaults.tool;
-  const selectedModel = defaults.model;
-  const selectedReasoning = defaults.reasoningEffort;
+  const preferences = await loadSlackAccountSessionPreferences(
+    input.slackTeamId,
+    input.slackUserId,
+  );
+  const selectedTool = preferences?.tool ?? defaults.tool;
+  const selectedModel =
+    resolveStoredModelForToolForSlack(selectedTool, preferences?.model) ??
+    resolveStoredModelForToolForSlack(selectedTool, defaults.model) ??
+    getDefaultModel(selectedTool) ??
+    "";
+  const selectedReasoning =
+    resolveStoredReasoningForToolForSlack(selectedTool, preferences?.reasoningEffort) ??
+    resolveStoredReasoningForToolForSlack(selectedTool, defaults.reasoningEffort) ??
+    getDefaultReasoningEffort(selectedTool) ??
+    "";
+  const selectedHosting = preferences?.hosting ?? slackSessionHosting();
   const fileRefs = parseSlackFileRefs(draft?.fileRefs ?? []);
   const cloudEnvironments = await listCloudEnvironmentOptions(install.organizationId);
   const localRuntimes = await listAccessibleLocalRuntimeOptions({
@@ -1878,8 +2043,17 @@ async function openAdvancedStartModal(input: {
   const initialReasoning =
     reasoningOptions.find((option) => option.value === selectedReasoning) ?? reasoningOptions[0];
   const initialChannel =
-    channelOptions.find((option) => option.value === (draft?.traceChannelId ?? binding.traceChannelId)) ??
+    channelOptions.find(
+      (option) =>
+        option.value ===
+        (preferences?.traceChannelId ?? draft?.traceChannelId ?? binding.traceChannelId),
+    ) ??
     channelOptions[0]!;
+  const initialCloudEnvironment =
+    cloudOptions.find((option) => option.value === preferences?.environmentId) ?? cloudOptions[0]!;
+  const initialRuntime =
+    runtimeOptions.find((option) => option.value === preferences?.runtimeInstanceId) ??
+    runtimeOptions[0]!;
   const initialPrompt = draft?.prompt ?? "";
   const attachmentText =
     fileRefs.length > 0
@@ -1984,8 +2158,8 @@ async function openAdvancedStartModal(input: {
               type: "static_select",
               action_id: "value",
               initial_option: {
-                text: { type: "plain_text", text: slackSessionHosting() === "local" ? "Local" : "Cloud" },
-                value: slackSessionHosting(),
+                text: { type: "plain_text", text: selectedHosting === "local" ? "Local" : "Cloud" },
+                value: selectedHosting,
               },
               options: slackSelectOptions([
                 { value: "cloud", label: "Cloud" },
@@ -2002,8 +2176,8 @@ async function openAdvancedStartModal(input: {
               type: "static_select",
               action_id: "value",
               initial_option: {
-                text: { type: "plain_text", text: cloudOptions[0]!.label },
-                value: cloudOptions[0]!.value,
+                text: { type: "plain_text", text: initialCloudEnvironment.label },
+                value: initialCloudEnvironment.value,
               },
               options: slackSelectOptions(cloudOptions),
             },
@@ -2017,8 +2191,8 @@ async function openAdvancedStartModal(input: {
               type: "static_select",
               action_id: "value",
               initial_option: {
-                text: { type: "plain_text", text: runtimeOptions[0]!.label },
-                value: runtimeOptions[0]!.value,
+                text: { type: "plain_text", text: initialRuntime.label },
+                value: initialRuntime.value,
               },
               options: slackSelectOptions(runtimeOptions),
             },
@@ -2292,53 +2466,25 @@ async function startSlackSessionFromDraft(input: {
   }
 }
 
-async function recommendedSettingsForDraft(draftId: string, slackUserId: string): Promise<SlackSessionSettings> {
+async function recommendedSettingsForDraft(
+  draftId: string,
+  slackUserId: string,
+): Promise<{ settings: SlackSessionSettings; traceChannelId: string | null }> {
   const draft = await loadSlackSessionDraft(draftId, slackUserId);
   if (!draft) throw new Error("This Slack session draft is no longer available. Mention `@trace` again.");
 
   const account = await resolveSlackAccount(draft.slackTeamId, draft.slackUserId);
   if (!account) throw new Error("Link your Trace account before starting a session");
-  const defaults = await getTraceDefaults(account.userId);
-  const localRuntimes = await listAccessibleLocalRuntimeOptions({
+  const savedConfig = await resolveSavedSlackSessionConfig({
     organizationId: draft.organizationId,
     userId: account.userId,
-    tool: defaults.tool,
+    slackTeamId: draft.slackTeamId,
+    slackUserId: draft.slackUserId,
   });
-  if (slackSessionHosting() === "local") {
-    if (localRuntimes.length === 1) {
-      return {
-        tool: defaults.tool,
-        model: defaults.model,
-        reasoningEffort: defaults.reasoningEffort,
-        hosting: "local",
-        runtimeInstanceId: localRuntimes[0]!.id,
-      };
-    }
-    throw new Error("Choose Configure to select a local bridge.");
+  if (!savedConfig) {
+    throw new Error(SLACK_FIRST_RUN_CONFIG_MESSAGE);
   }
-
-  const cloudEnvironments = await listCloudEnvironmentOptions(draft.organizationId);
-  if (cloudEnvironments.length > 0) {
-    return {
-      tool: null,
-      model: null,
-      reasoningEffort: null,
-      hosting: "cloud",
-      environmentId: cloudEnvironments[0]?.id ?? null,
-    };
-  }
-
-  if (localRuntimes.length === 1) {
-    return {
-      tool: defaults.tool,
-      model: defaults.model,
-      reasoningEffort: defaults.reasoningEffort,
-      hosting: "local",
-      runtimeInstanceId: localRuntimes[0]!.id,
-    };
-  }
-
-  throw new Error("Choose Configure to select cloud or a local bridge.");
+  return savedConfig;
 }
 
 async function recommendedSettingsSummaryForDraft(
@@ -2352,12 +2498,14 @@ async function recommendedSettingsSummaryForDraft(
 
   const defaults = await getTraceDefaults(account.userId);
   try {
-    const settings = await recommendedSettingsForDraft(draftId, slackUserId);
+    const savedConfig = await recommendedSettingsForDraft(draftId, slackUserId);
+    const { settings } = savedConfig;
     const tool = settings.tool ?? defaults.tool;
     const model = settings.model ?? defaults.model;
     const reasoningEffort = settings.reasoningEffort ?? defaults.reasoningEffort;
     const lines = [
       "*Will use:*",
+      `- *Trace channel:* ${await traceChannelLabelForSlack(savedConfig.traceChannelId ?? draft.traceChannelId)}`,
       `- *Hosting:* ${settings.hosting === "local" ? "Local bridge" : "Cloud"}`,
       `- *Tool:* ${toolLabelForSlack(tool)}`,
       `- *Model:* ${modelLabelForSlack(tool, model)}`,
@@ -2600,6 +2748,17 @@ async function startSlackSessionFromModal(input: {
     tool: settings.tool,
     model: settings.model,
     reasoningEffort: settings.reasoningEffort,
+  });
+  await saveSlackAccountSessionPreferences({
+    slackTeamId: metadata.slackTeamId,
+    slackUserId: metadata.slackUserId,
+    preferences: {
+      ...settings,
+      hosting: input.hosting,
+      environmentId: input.hosting === "cloud" ? (input.environmentId ?? null) : null,
+      runtimeInstanceId: input.hosting === "local" ? (input.runtimeInstanceId ?? null) : null,
+      traceChannelId: input.traceChannelId,
+    },
   });
 
   await startSlackSession({
@@ -3131,11 +3290,12 @@ router.post(
       const slackUserId = payload.user?.id;
       if (draftId && slackUserId) {
         void recommendedSettingsForDraft(draftId, slackUserId)
-          .then((settings) =>
+          .then((savedConfig) =>
             startSlackSessionFromDraft({
               draftId,
               slackUserId,
-              settings,
+              settings: savedConfig.settings,
+              traceChannelId: savedConfig.traceChannelId,
             }),
           )
           .catch(async (err: unknown) => {
@@ -3161,6 +3321,16 @@ router.post(
                 });
               }
               return;
+            }
+            if (errorMessage(err) === SLACK_FIRST_RUN_CONFIG_MESSAGE && payload.trigger_id) {
+              const opened = await openAdvancedStartModal({
+                slackTeamId: draft.slackTeamId,
+                slackChannelId: draft.slackChannelId,
+                slackUserId,
+                triggerId: payload.trigger_id,
+                draftId,
+              });
+              if (opened) return;
             }
             await postSessionAccessRequestFeedback({
               slackTeamId: draft.slackTeamId,

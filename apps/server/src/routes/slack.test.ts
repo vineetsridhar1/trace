@@ -30,6 +30,7 @@ vi.mock("../lib/db.js", async () => {
       slackAccount: {
         findUnique: vi.fn(),
         findFirst: vi.fn(),
+        update: vi.fn(),
         upsert: vi.fn(),
         deleteMany: vi.fn(),
       },
@@ -119,6 +120,7 @@ vi.mock("../lib/slack/event-bridge.js", () => ({
 }));
 
 import { prisma } from "../lib/db.js";
+import { startSlackSession } from "../lib/slack/session-orchestrator.js";
 import { sessionService } from "../services/session.js";
 import { slackRouter } from "./slack.js";
 
@@ -134,6 +136,7 @@ type PrismaMock = BasePrismaMock & {
   slackAccount: {
     findUnique: ReturnType<typeof vi.fn>;
     findFirst: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
     upsert: ReturnType<typeof vi.fn>;
     deleteMany: ReturnType<typeof vi.fn>;
   };
@@ -164,7 +167,9 @@ type PrismaMock = BasePrismaMock & {
 const prismaMock = prisma as unknown as PrismaMock;
 const sessionServiceMock = sessionService as unknown as {
   sendMessage: ReturnType<typeof vi.fn>;
+  updateDefaults: ReturnType<typeof vi.fn>;
 };
+const startSlackSessionMock = startSlackSession as unknown as ReturnType<typeof vi.fn>;
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const SLACK_SIGNING_SECRET = "test-slack-signing-secret";
 
@@ -202,6 +207,8 @@ describe("Slack routes", () => {
     slackMocks.replies.mockResolvedValue({ messages: [] });
     slackMocks.update.mockResolvedValue({});
     slackMocks.viewsOpen.mockResolvedValue({});
+    startSlackSessionMock.mockResolvedValue({});
+    prismaMock.slackSessionDraft.delete.mockResolvedValue({});
 
     const app = express();
     app.use(cookieParser());
@@ -407,6 +414,213 @@ describe("Slack routes", () => {
         channel: "C1",
         thread_ts: "1710000200.000100",
         text: "Start Trace session",
+      }),
+    );
+  });
+
+  it("opens configuration when starting a Slack draft without saved preferences", async () => {
+    prismaMock.slackSessionDraft.findUnique.mockResolvedValue({
+      id: "draft-1",
+      slackTeamId: "T1",
+      slackChannelId: "C1",
+      slackThreadTs: "1710000200.000100",
+      slackUserId: "U1",
+      organizationId: "org-1",
+      traceChannelId: "channel-1",
+      prompt: "fix it",
+      fileRefs: [],
+    });
+    prismaMock.slackAccount.findUnique.mockImplementation(async (args: { select?: Record<string, unknown> }) => {
+      if (args.select?.preferredTool) {
+        return {
+          preferredTool: null,
+          preferredModel: null,
+          preferredReasoningEffort: null,
+          preferredHosting: null,
+          preferredEnvironmentId: null,
+          preferredRuntimeInstanceId: null,
+          preferredTraceChannelId: null,
+        };
+      }
+      return { userId: "user-1" };
+    });
+    prismaMock.slackInstall.findUnique.mockResolvedValue({ organizationId: "org-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.slackChannelBinding.findUnique.mockResolvedValue({
+      traceChannelId: "channel-1",
+      organizationId: "org-1",
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      defaultSessionTool: "claude_code",
+      defaultSessionModel: null,
+      defaultSessionReasoningEffort: null,
+    });
+    prismaMock.channel.findMany.mockResolvedValue([{ id: "channel-1", name: "dev", type: "coding" }]);
+    prismaMock.agentEnvironment.findMany.mockResolvedValue([
+      { id: "env-1", name: "Cloud", isDefault: true },
+    ]);
+
+    const rawBody = new URLSearchParams({
+      payload: JSON.stringify({
+        type: "block_actions",
+        user: { id: "U1" },
+        team: { id: "T1" },
+        channel: { id: "C1" },
+        trigger_id: "TRIGGER1",
+        actions: [{ action_id: "trace_start_draft", value: "draft-1" }],
+      }),
+    }).toString();
+
+    const response = await fetch(`${baseUrl}/slack/interactions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(startSlackSessionMock).not.toHaveBeenCalled();
+    expect(slackMocks.viewsOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger_id: "TRIGGER1",
+      }),
+    );
+  });
+
+  it("starts Slack drafts with saved preferences", async () => {
+    prismaMock.slackSessionDraft.findUnique.mockResolvedValue({
+      id: "draft-1",
+      slackTeamId: "T1",
+      slackChannelId: "C1",
+      slackThreadTs: "1710000200.000100",
+      slackUserId: "U1",
+      organizationId: "org-1",
+      traceChannelId: "channel-1",
+      prompt: "fix it",
+      fileRefs: [],
+    });
+    prismaMock.slackAccount.findUnique.mockImplementation(async (args: { select?: Record<string, unknown> }) => {
+      if (args.select?.preferredTool) {
+        return {
+          preferredTool: "codex",
+          preferredModel: "gpt-5.1-codex-max",
+          preferredReasoningEffort: "high",
+          preferredHosting: "cloud",
+          preferredEnvironmentId: "env-1",
+          preferredRuntimeInstanceId: null,
+          preferredTraceChannelId: "saved-channel",
+        };
+      }
+      return { userId: "user-1" };
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.channel.findFirst.mockResolvedValue({ id: "saved-channel" });
+    prismaMock.agentEnvironment.findMany.mockResolvedValue([
+      { id: "env-1", name: "Cloud", isDefault: true },
+    ]);
+
+    const rawBody = new URLSearchParams({
+      payload: JSON.stringify({
+        type: "block_actions",
+        user: { id: "U1" },
+        team: { id: "T1" },
+        channel: { id: "C1" },
+        trigger_id: "TRIGGER1",
+        actions: [{ action_id: "trace_start_draft", value: "draft-1" }],
+      }),
+    }).toString();
+
+    const response = await fetch(`${baseUrl}/slack/interactions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(slackMocks.viewsOpen).not.toHaveBeenCalled();
+    expect(startSlackSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        traceChannelId: "saved-channel",
+        settings: expect.objectContaining({
+          tool: "codex",
+          model: "gpt-5.1-codex-max",
+          reasoningEffort: "high",
+          hosting: "cloud",
+          environmentId: "env-1",
+        }),
+      }),
+    );
+  });
+
+  it("saves Slack preferences from advanced start submissions", async () => {
+    prismaMock.slackAccount.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.slackInstall.findUnique.mockResolvedValue({ organizationId: "org-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.channel.findFirst.mockResolvedValue({ id: "channel-1" });
+
+    const rawBody = new URLSearchParams({
+      payload: JSON.stringify({
+        type: "view_submission",
+        user: { id: "U1" },
+        team: { id: "T1" },
+        channel: { id: "C1" },
+        view: {
+          callback_id: "trace_advanced_start",
+          private_metadata: JSON.stringify({
+            slackTeamId: "T1",
+            slackChannelId: "C1",
+            slackUserId: "U1",
+          }),
+          state: {
+            values: {
+              prompt: { value: { value: "fix it" } },
+              channel: { value: { selected_option: { value: "channel-1" } } },
+              tool: { value: { selected_option: { value: "codex" } } },
+              model: { value: { selected_option: { value: "gpt-5.1-codex-max" } } },
+              reasoning: { value: { selected_option: { value: "high" } } },
+              hosting: { value: { selected_option: { value: "local" } } },
+              environment: { value: { selected_option: { value: "env-1" } } },
+              runtime: { value: { selected_option: { value: "runtime-1" } } },
+            },
+          },
+        },
+      }),
+    }).toString();
+
+    const response = await fetch(`${baseUrl}/slack/interactions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(sessionServiceMock.updateDefaults).toHaveBeenCalledWith("user-1", {
+      tool: "codex",
+      model: "gpt-5.1-codex-max",
+      reasoningEffort: "high",
+    });
+    expect(prismaMock.slackAccount.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          preferredTool: "codex",
+          preferredModel: "gpt-5.1-codex-max",
+          preferredReasoningEffort: "high",
+          preferredHosting: "local",
+          preferredEnvironmentId: null,
+          preferredRuntimeInstanceId: "runtime-1",
+          preferredTraceChannelId: "channel-1",
+        }),
       }),
     );
   });
