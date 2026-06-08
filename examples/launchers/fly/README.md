@@ -39,6 +39,7 @@ FLY_MACHINE_CPUS=2
 FLY_MACHINE_MEMORY_MB=2048
 FLY_DELETE_AFTER_STOP=true
 TRACE_RUNTIME_PASSTHROUGH_ENV=GITHUB_TOKEN,OPENAI_API_KEY,ANTHROPIC_API_KEY,SSH_PRIVATE_KEY
+TRACE_RUNTIME_SETUP_COMMANDS=
 ```
 
 Do not hardcode secrets. Fly API calls use `Authorization: Bearer $FLY_API_TOKEN`.
@@ -54,6 +55,32 @@ SSH_PRIVATE_KEY=<base64-encoded SSH private key>
 ```
 
 The controller injects only the named variables that are present in its environment.
+
+To let the launcher install additional runtime tools without rebuilding the base Trace runtime
+image, set `TRACE_RUNTIME_SETUP_COMMANDS` to newline-separated shell commands. The Fly launcher
+passes them to the runtime, and `trace-agent-runtime` runs them before connecting to Trace:
+
+```bash
+TRACE_RUNTIME_SETUP_COMMANDS='npm install -g @acme/custom-agent
+npm install -g @acme/internal-cli'
+```
+
+These commands run as the runtime user. The default Trace runtime image configures a user-writable
+npm global prefix, so `npm install -g ...` works for CLI additions. Use a custom runtime image for
+system packages that require root.
+
+For stable runtime additions, build a derived image from the published Trace base image and point
+`TRACE_RUNTIME_IMAGE` at it:
+
+```dockerfile
+FROM ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends jq
+
+USER coder
+RUN npm install -g @acme/internal-cli
+```
 
 ## Trace Agent Environment
 

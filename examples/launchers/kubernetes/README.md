@@ -12,8 +12,24 @@ Expose the generic Trace lifecycle endpoints:
 - `POST /trace/stop-session` deletes or terminates the Job
 - `POST /trace/session-status` reads the Job and Pod status
 
-The Job container should run `trace-agent-runtime`. After the Pod starts, the runtime connects back
-to Trace using `TRACE_BRIDGE_URL` and `TRACE_RUNTIME_TOKEN`.
+The Job container should run the Trace runtime image, for example
+`ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3`, or an organization-derived image built
+from it. After the Pod starts, the runtime connects back to Trace using `TRACE_BRIDGE_URL` and
+`TRACE_RUNTIME_TOKEN`.
+
+For stable organization tools, bake a derived runtime image and use that image in the Job template:
+
+```dockerfile
+FROM ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3
+
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends jq ripgrep \
+  && rm -rf /var/lib/apt/lists/*
+
+USER coder
+RUN npm install -g @acme/internal-cli
+```
 
 ## Start Mapping
 

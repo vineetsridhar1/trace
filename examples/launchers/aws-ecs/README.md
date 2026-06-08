@@ -13,8 +13,10 @@ Balancer:
 - `POST /trace/stop-session` calls `ecs:StopTask`
 - `POST /trace/session-status` calls `ecs:DescribeTasks`
 
-The ECS task image should run `trace-agent-runtime`. The launcher only starts infrastructure; after
-the task boots, the runtime connects to Trace over `TRACE_BRIDGE_URL`.
+The ECS task image should run the Trace runtime image, for example
+`ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3`, or an organization-derived image built
+from it. The launcher only starts infrastructure; after the task boots, the runtime connects to
+Trace over `TRACE_BRIDGE_URL`.
 
 ## Agent Environment Config
 
@@ -45,6 +47,21 @@ value out-of-band (e.g., from its own env or secret store).
 
 The launcher may also read cluster, task definition, subnet, and security group settings from its own
 environment instead of trusting request metadata.
+
+For stable organization tools, bake a derived runtime image and use that image in the ECS task
+definition:
+
+```dockerfile
+FROM ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3
+
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends jq ripgrep \
+  && rm -rf /var/lib/apt/lists/*
+
+USER coder
+RUN npm install -g @acme/internal-cli
+```
 
 ## Start Mapping
 

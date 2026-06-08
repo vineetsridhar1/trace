@@ -7,6 +7,7 @@ import { Input } from "../ui/input";
 import { TraceLoader } from "../ui/trace-loader";
 import { client } from "../../lib/urql";
 import { DELETE_ORG_SECRET_MUTATION, SET_ORG_SECRET_MUTATION } from "./agent-environment-queries";
+import { ImportEnvSecretsForm } from "./ImportEnvSecretsForm";
 
 type Props = {
   organizationId: string;
@@ -104,6 +105,7 @@ export function AgentEnvironmentSecretsPanel({ organizationId, orgSecrets, onSav
           ))}
         </div>
       ) : null}
+      <ImportEnvSecretsForm organizationId={organizationId} onImported={onSaved} />
     </section>
   );
 }

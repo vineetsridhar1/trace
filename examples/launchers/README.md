@@ -33,6 +33,23 @@ TRACE_RUNTIME_TOKEN
 TRACE_BRIDGE_URL
 ```
 
+Launchers may also inject `TRACE_RUNTIME_SETUP_COMMANDS` when using the default
+`trace-agent-runtime` image. The value can be a JSON array of shell commands or newline-separated
+commands. The runtime executes them before connecting to Trace, which lets a launcher add
+organization-specific CLIs or user-space packages without changing Trace's base runner image.
+
+For tools that should always be present, prefer a derived Docker image:
+
+```dockerfile
+FROM ghcr.io/<trace-owner>/trace-agent-runtime:runtime-v1.2.3
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends jq
+
+USER coder
+RUN npm install -g @acme/internal-cli
+```
+
 Stop requests include:
 
 ```json
