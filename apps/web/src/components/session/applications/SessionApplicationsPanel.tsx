@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import { Activity, ChevronDown, Copy, ExternalLink, Play, Power, RotateCw, Square } from "lucide-react";
+import {
+  Activity,
+  ChevronDown,
+  Copy,
+  ExternalLink,
+  Play,
+  Power,
+  RotateCw,
+  Settings,
+  Square,
+} from "lucide-react";
 import type {
   Repo,
   RepoApplicationConfig,
@@ -12,6 +22,7 @@ import type {
 import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "@/lib/utils";
 import { client } from "../../../lib/urql";
+import { useUIStore } from "../../../stores/ui";
 import { Button, buttonVariants } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
 
@@ -188,6 +199,8 @@ export function SessionApplicationsPanel({
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
+  const setActivePage = useUIStore((s) => s.setActivePage);
+  const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
   const [refreshingProcessLogIds, setRefreshingProcessLogIds] = useState<Record<string, boolean>>({});
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
@@ -370,7 +383,34 @@ export function SessionApplicationsPanel({
   };
 
   if (!config || (config.setupScripts.length === 0 && config.applications.length === 0)) {
-    return null;
+    return (
+      <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+          <p className="text-sm font-semibold text-foreground">Applications</p>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6">
+          <div className="max-w-64 text-center">
+            <Settings size={22} className="mx-auto mb-3 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">No applications configured</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Configure repository setup scripts, processes, and ports in settings.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              className="mt-4"
+              onClick={() => {
+                setSettingsInitialTab("repositories");
+                setActivePage("settings");
+              }}
+            >
+              <Settings size={14} className="mr-1.5" />
+              Configure in settings
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
