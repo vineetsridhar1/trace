@@ -2,6 +2,7 @@ import fs from "fs";
 import { execFileSync } from "child_process";
 import { ContainerBridge } from "./bridge.js";
 import { loginAvailableTools } from "./tool-auth.js";
+import { parseRuntimeSetupCommands, runRuntimeSetupCommands } from "./runtime-setup.js";
 
 /**
  * If an SSH private key was injected (base64-encoded), decode it to ~/.ssh/id_rsa
@@ -60,6 +61,10 @@ async function main(): Promise<void> {
 
   // Set up SSH key before any git operations
   setupSshKey();
+
+  await runRuntimeSetupCommands(
+    parseRuntimeSetupCommands(process.env.TRACE_RUNTIME_SETUP_COMMANDS),
+  );
 
   // Pre-authenticate whatever tools we have credentials for.
   await loginAvailableTools();

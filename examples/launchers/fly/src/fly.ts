@@ -34,7 +34,11 @@ export class FlyMachinesClient {
       skip_service_registration: true,
       config: {
         image: this.config.traceRuntimeImage,
-        env: buildMachineEnv(request, this.config.runtimePassthroughEnv),
+        env: buildMachineEnv(
+          request,
+          this.config.runtimePassthroughEnv,
+          this.config.runtimeSetupCommands,
+        ),
         guest: {
           cpu_kind: this.config.flyMachineCpuKind,
           cpus: this.config.flyMachineCpus,
@@ -136,6 +140,7 @@ export function buildMachineName(sessionId: string, runtimeInstanceId: string): 
 export function buildMachineEnv(
   request: StartSessionRequest,
   passthroughEnv: Record<string, string> = {},
+  setupCommands: string[] = [],
 ): Record<string, string> {
   return {
     ...passthroughEnv,
@@ -143,6 +148,9 @@ export function buildMachineEnv(
     CODING_TOOL: request.tool,
     TRACE_TOOL: request.tool,
     TRACE_WORKSPACE_ISOLATION: "per_session_runtime",
+    ...(setupCommands.length
+      ? { TRACE_RUNTIME_SETUP_COMMANDS: JSON.stringify(setupCommands) }
+      : {}),
     ...(request.model ? { TRACE_MODEL: request.model } : {}),
     ...(request.reasoningEffort ? { TRACE_REASONING_EFFORT: request.reasoningEffort } : {}),
     ...(request.repo?.remoteUrl

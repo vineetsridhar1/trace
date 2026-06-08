@@ -32,6 +32,17 @@ describe("Fly machine helpers", () => {
       TRACE_REPO_BRANCH: "feature/test",
     });
   });
+
+  it("injects launcher runtime setup commands", () => {
+    expect(
+      buildMachineEnv(startRequest(), {}, ["npm install -g @acme/tool", "pipx install acme-cli"]),
+    ).toMatchObject({
+      TRACE_RUNTIME_SETUP_COMMANDS: JSON.stringify([
+        "npm install -g @acme/tool",
+        "pipx install acme-cli",
+      ]),
+    });
+  });
 });
 
 function startRequest(): StartSessionRequest {
