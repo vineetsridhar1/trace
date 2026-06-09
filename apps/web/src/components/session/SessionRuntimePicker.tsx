@@ -22,29 +22,16 @@ interface RuntimeInstance {
   connected: boolean;
   sessionCount: number;
   registeredRepoIds: string[];
-  access?: {
-    allowed?: boolean;
-    isOwner?: boolean;
-    hostingMode?: string | null;
-  } | null;
 }
 
 export function SessionRuntimePicker({
   sessionId,
   onClose,
   className,
-  title = "Move to another instance",
-  showCancel = true,
-  includeCloud = true,
-  excludeCurrent = true,
 }: {
   sessionId: string;
   onClose: () => void;
   className?: string;
-  title?: string;
-  showCancel?: boolean;
-  includeCloud?: boolean;
-  excludeCurrent?: boolean;
 }) {
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,19 +134,16 @@ export function SessionRuntimePicker({
   }, [cloudDisabledReason, cloudEnvironmentAvailable, onClose, sessionId]);
 
   const localRuntimes = runtimes.filter(
-    (rt: RuntimeInstance) =>
-      rt.hostingMode === "local" && (!excludeCurrent || rt.id !== currentRuntimeInstanceId),
+    (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,
   );
 
   return (
     <div className={cn("mt-2 rounded-lg border border-border bg-surface p-3", className)}>
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-foreground">{title}</h3>
-        {showCancel && (
-          <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">
-            Cancel
-          </button>
-        )}
+        <h3 className="text-xs font-semibold text-foreground">Move to another instance</h3>
+        <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">
+          Cancel
+        </button>
       </div>
 
       {loading ? (
@@ -168,7 +152,7 @@ export function SessionRuntimePicker({
         </div>
       ) : (
         <div className="space-y-1">
-          {includeCloud && cloudEnvironmentAvailable ? (
+          {cloudEnvironmentAvailable ? (
             <DisabledTooltip message={cloudDisabledReason} fullWidth>
               <button
                 onClick={handleMoveToCloud}
@@ -190,12 +174,8 @@ export function SessionRuntimePicker({
           {localRuntimes.map((rt: RuntimeInstance) => {
             const lacksRepo =
               !!repoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(repoId);
-            const lacksAccess =
-              rt.hostingMode === "local" && !(rt.access?.allowed || rt.access?.isOwner);
             const disabledReason = lacksRepo
               ? "This local runtime does not have this repo linked."
-              : lacksAccess
-                ? "You do not have access to this bridge."
               : !rt.connected
                 ? "This local runtime is offline."
                 : null;
@@ -204,7 +184,7 @@ export function SessionRuntimePicker({
               <DisabledTooltip key={rt.id} message={disabledReason} fullWidth>
                 <button
                   onClick={() => handleMove(rt.id)}
-                  disabled={!rt.connected || lacksRepo || lacksAccess || moving !== null}
+                  disabled={!rt.connected || lacksRepo || moving !== null}
                   className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
                 >
                   <Monitor size={14} className="shrink-0 text-green-400" />
@@ -223,13 +203,7 @@ export function SessionRuntimePicker({
                       repo not linked
                     </span>
                   )}
-                  {!lacksRepo && lacksAccess && (
-                    <span className="flex items-center gap-1 text-xs text-amber-500">
-                      <AlertTriangle size={10} />
-                      access required
-                    </span>
-                  )}
-                  {!lacksRepo && !lacksAccess && !rt.connected && (
+                  {!lacksRepo && !rt.connected && (
                     <span className="text-xs text-muted-foreground">offline</span>
                   )}
                 </button>

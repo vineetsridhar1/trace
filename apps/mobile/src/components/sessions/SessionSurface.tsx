@@ -91,6 +91,10 @@ export function SessionSurface({
     | null
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
+    | string
+    | null
+    | undefined;
   const sessionConnection = useEntityField("sessions", sessionId, "connection") as
     | { runtimeInstanceId?: string | null; state?: string | null }
     | null
@@ -112,7 +116,10 @@ export function SessionSurface({
     hosting,
     connection: sessionConnection ?? groupConnection,
   });
-  const bridgeLocked = !runtimeLifecycleState && !isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeLocked =
+    agentStatus !== "not_started" &&
+    !runtimeLifecycleState &&
+    !isBridgeInteractionAllowed(bridgeAccess);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
