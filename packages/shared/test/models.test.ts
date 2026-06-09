@@ -10,18 +10,18 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
-  it("exposes Claude 4.8 as an option while defaulting Claude Code to 4.7", () => {
-    expect(getDefaultModel("claude_code")).toBe("claude-opus-4-7[1m]");
+  it("exposes Fable 5 as an option while defaulting Claude Code to Opus 4.8 (1M)", () => {
+    expect(getDefaultModel("claude_code")).toBe("claude-opus-4-8[1m]");
     expect(getModelsForTool("claude_code")).toEqual([
+      { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
       { value: "claude-opus-4-8", label: "Opus 4.8" },
       { value: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)" },
-      { value: "claude-opus-4-7", label: "Opus 4.7" },
-      { value: "claude-opus-4-7[1m]", label: "Opus 4.7 (1M)" },
       { value: "claude-haiku-4-5", label: "Haiku 4.5" },
     ]);
-    expect(isSupportedModel("claude_code", "claude-opus-4-8")).toBe(true);
+    expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-4-8[1m]")).toBe(true);
+    expect(isSupportedModel("claude_code", "claude-opus-4-7")).toBe(false);
   });
 
   it("exposes Pi-backed API and subscription models and defaults to API OpenAI", () => {
@@ -50,7 +50,7 @@ describe("model catalog", () => {
     expect(getModelsForTool("pi")).toHaveLength(6);
     expect(isSupportedModel("pi", "openai-codex/gpt-5.4-mini")).toBe(false);
     expect(isSupportedModel("pi", "openai/gpt-5.5")).toBe(true);
-    expect(isSupportedModel("pi", "anthropic/claude-opus-4-7")).toBe(true);
+    expect(isSupportedModel("pi", "anthropic/claude-fable-5")).toBe(true);
     expect(isSupportedReasoningEffort("pi", "high")).toBe(true);
     expect(getModelProviderGroupsForTool("pi")).toEqual([
       expect.objectContaining({
@@ -75,7 +75,7 @@ describe("model catalog", () => {
         description: "Uses a Claude subscription",
         models: [
           { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-          { value: "anthropic/claude-opus-4-7", label: "Claude Opus 4.7" },
+          { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
         ],
       }),
     ]);
