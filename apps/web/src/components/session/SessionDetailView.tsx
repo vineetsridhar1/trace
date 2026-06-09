@@ -270,10 +270,6 @@ export function SessionDetailView({
     sessionGroupId ?? null,
   );
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
-  const shouldShowInitialRuntimePicker =
-    agentStatus === "not_started" &&
-    hosting === "local" &&
-    (!runtimeInstanceId || !bridgeInteractionAllowed);
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
@@ -658,18 +654,6 @@ export function SessionDetailView({
             connection={connection}
             connectionState={runtimeLifecycleState}
           />
-        ) : shouldShowInitialRuntimePicker ? (
-          <div className="border-t p-4">
-            <SessionRuntimePicker
-              sessionId={sessionId}
-              onClose={() => {}}
-              title="Select a bridge"
-              showCancel={false}
-              includeCloud={false}
-              excludeCurrent={false}
-              className="m-0"
-            />
-          </div>
         ) : !bridgeInteractionAllowed ? (
           <div className="border-t p-4">
             <BridgeAccessNotice
