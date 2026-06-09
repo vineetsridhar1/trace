@@ -16,11 +16,10 @@ export interface ReasoningEffortOption {
 }
 
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
+  { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { value: "claude-opus-4-8", label: "Opus 4.8" },
   { value: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)" },
-  { value: "claude-opus-4-7", label: "Opus 4.7" },
-  { value: "claude-opus-4-7[1m]", label: "Opus 4.7 (1M)" },
   { value: "claude-haiku-4-5", label: "Haiku 4.5" },
 ];
 
@@ -40,7 +39,7 @@ const PI_MODELS: readonly ModelOption[] = [
   { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5 (ChatGPT)" },
   { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 (ChatGPT)" },
   { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "anthropic/claude-opus-4-7", label: "Claude Opus 4.7" },
+  { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
 ];
 
 const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
@@ -94,7 +93,7 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
   };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
-  claude_code: "claude-opus-4-7[1m]",
+  claude_code: "claude-opus-4-8[1m]",
   codex: "gpt-5.5",
   pi: "openai/gpt-5.5",
 };
