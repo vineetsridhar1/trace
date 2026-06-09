@@ -802,7 +802,7 @@ Do this ONCE at the start of your very first response to capture the overall goa
 
 /** Instruction appended to repo-based sessions so the AI reports branch name changes. */
 const BRANCH_INSTRUCTION = `\n\n<system-instruction>
-On the first response in a repo-based session, if the current git branch is still the default trace/<slug> branch, rename it to trace/<slug>/<descriptive-name>. Keep the descriptive name short, lowercase, and hyphenated. If the branch is already descriptive or differs from trace/<slug>, do not rename it.
+On the first response in a repo-based session, if the current git branch is still the default trace-<slug> branch, rename it to trace-<slug>-<descriptive-name>. Keep the descriptive name short, lowercase, hyphenated, and slash-free. Do not use "/" in AI-generated branch names. If the branch is already descriptive or differs from trace-<slug>, do not rename it.
 When you create or rename a git branch, output the full branch name wrapped in XML tags: <trace-branch>branch-name</trace-branch>.
 This lets the system track which branch this session is working on. The tag will be stripped and not shown to the user.
 </system-instruction>`;
