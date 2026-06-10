@@ -166,7 +166,7 @@ export function SessionModelPickerSheetContent({
     [canSelectModel, handleReasoningEffortChange, selectedReasoningEffort],
   );
 
-  const displayedTool = pendingTool ?? selectedTool;
+  const displayedTool = effectiveTool;
   const displayedModel = pendingModel ?? selectedModel;
   const displayedReasoningEffort = pendingReasoningEffort ?? selectedReasoningEffort;
 
