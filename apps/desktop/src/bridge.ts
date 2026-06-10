@@ -94,7 +94,7 @@ const detectedExecutables = new Set<string>();
 function hasExecutable(command: string): boolean {
   if (detectedExecutables.has(command)) return true;
   try {
-    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 10_000 });
+    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 5_000 });
     detectedExecutables.add(command);
     return true;
   } catch {
