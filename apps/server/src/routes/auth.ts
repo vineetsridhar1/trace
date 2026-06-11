@@ -37,6 +37,7 @@ const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a pa
 const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
 const RATE_LIMIT_KEY_PREFIX = "auth:rate";
 const localRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+const localGitHubDeviceAuthRecords = new Map<string, GitHubDeviceAuth>();
 
 type GitHubDeviceAuth = {
   deviceCode: string;
@@ -147,7 +148,10 @@ function rateLimitClientKey(req: Request): string {
   return forwardedClient || req.ip || req.socket.remoteAddress || "unknown";
 }
 
-function applyLocalRateLimit(key: string, config: RateLimitConfig): { limited: boolean; retryAfter: number } {
+function applyLocalRateLimit(
+  key: string,
+  config: RateLimitConfig,
+): { limited: boolean; retryAfter: number } {
   const now = Date.now();
   const existing = localRateLimitBuckets.get(key);
   const bucket =
@@ -490,6 +494,20 @@ function gitHubDeviceAuthTtlSeconds(record: GitHubDeviceAuth, now = Date.now()):
   return Math.max(1, Math.ceil((record.expiresAt - now) / 1000));
 }
 
+function saveLocalGitHubDeviceAuth(deviceAuthId: string, record: GitHubDeviceAuth): void {
+  localGitHubDeviceAuthRecords.set(deviceAuthId, record);
+}
+
+function readLocalGitHubDeviceAuth(deviceAuthId: string): GitHubDeviceAuth | null {
+  const record = localGitHubDeviceAuthRecords.get(deviceAuthId);
+  if (!record) return null;
+  if (record.expiresAt <= Date.now()) {
+    localGitHubDeviceAuthRecords.delete(deviceAuthId);
+    return null;
+  }
+  return record;
+}
+
 function parseGitHubDeviceAuth(raw: string | null): GitHubDeviceAuth | null {
   if (!raw) return null;
   try {
@@ -512,32 +530,68 @@ function parseGitHubDeviceAuth(raw: string | null): GitHubDeviceAuth | null {
 }
 
 async function saveGitHubDeviceAuth(deviceAuthId: string, record: GitHubDeviceAuth): Promise<void> {
-  await redis.set(
-    githubDeviceAuthKey(deviceAuthId),
-    JSON.stringify(record),
-    "EX",
-    gitHubDeviceAuthTtlSeconds(record),
-  );
+  saveLocalGitHubDeviceAuth(deviceAuthId, record);
+  try {
+    await redis.set(
+      githubDeviceAuthKey(deviceAuthId),
+      JSON.stringify(record),
+      "EX",
+      gitHubDeviceAuthTtlSeconds(record),
+    );
+  } catch (error) {
+    console.warn(
+      "[auth] falling back to local GitHub device auth storage:",
+      (error as Error).message,
+    );
+  }
 }
 
 async function readGitHubDeviceAuth(deviceAuthId: string): Promise<GitHubDeviceAuth | null> {
   const key = githubDeviceAuthKey(deviceAuthId);
-  const record = parseGitHubDeviceAuth(await redis.get(key));
+  let record: GitHubDeviceAuth | null = null;
+  try {
+    record = parseGitHubDeviceAuth(await redis.get(key));
+  } catch (error) {
+    console.warn("[auth] reading local GitHub device auth storage:", (error as Error).message);
+  }
+  record ??= readLocalGitHubDeviceAuth(deviceAuthId);
   if (!record) return null;
   if (record.expiresAt <= Date.now()) {
-    await redis.del(key);
+    localGitHubDeviceAuthRecords.delete(deviceAuthId);
+    await redis.del(key).catch(() => undefined);
     return null;
   }
   return record;
 }
 
 async function deleteGitHubDeviceAuth(deviceAuthId: string): Promise<void> {
-  await redis.del(githubDeviceAuthKey(deviceAuthId));
+  localGitHubDeviceAuthRecords.delete(deviceAuthId);
+  await redis.del(githubDeviceAuthKey(deviceAuthId)).catch(() => undefined);
 }
 
 function readDeviceAuthId(req: Request): string {
   const value = req.body?.deviceAuthId;
   return typeof value === "string" ? value.trim() : "";
+}
+
+async function readJsonResponse(response: globalThis.Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function isGitHubDeviceCodeResponse(value: unknown): value is {
+  device_code?: string;
+  user_code?: string;
+  verification_uri?: string;
+  expires_in?: number;
+  interval?: number;
+  error?: string;
+  error_description?: string;
+} {
+  return Boolean(value && typeof value === "object");
 }
 
 router.post("/auth/github/device/start", async (req: Request, res: Response) => {
@@ -548,26 +602,26 @@ router.post("/auth/github/device/start", async (req: Request, res: Response) => 
     return;
   }
 
-  const response = await fetch("https://github.com/login/device/code", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
-      scope: "",
-    }),
-  });
-  const payload = (await response.json()) as {
-    device_code?: string;
-    user_code?: string;
-    verification_uri?: string;
-    expires_in?: number;
-    interval?: number;
-    error?: string;
-    error_description?: string;
-  };
+  let response: globalThis.Response;
+  try {
+    response = await fetch("https://github.com/login/device/code", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: GITHUB_CLIENT_ID,
+        scope: "",
+      }),
+    });
+  } catch (error) {
+    console.error("[auth] GitHub device code request failed:", (error as Error).message);
+    return res.status(502).json({ error: "Could not reach GitHub login. Try again." });
+  }
+
+  const rawPayload = await readJsonResponse(response);
+  const payload = isGitHubDeviceCodeResponse(rawPayload) ? rawPayload : {};
 
   if (
     !response.ok ||

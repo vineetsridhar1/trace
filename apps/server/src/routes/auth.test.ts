@@ -1126,6 +1126,53 @@ describe("github device oauth", () => {
     expect(body).not.toHaveProperty("deviceCode");
   });
 
+  it("starts and polls device login when Redis device storage is out of memory", async () => {
+    redisMock.set.mockRejectedValueOnce(
+      new Error("OOM command not allowed when used memory > 'maxmemory'."),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          expect(init?.body?.toString()).toContain("device_code=secret-device-code");
+          return new Response(JSON.stringify({ error: "authorization_pending" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    expect(startRes.status).toBe(200);
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(200);
+    await expect(pollRes.json()).resolves.toEqual({ status: "pending", interval: 5 });
+  });
+
   it("polls GitHub and creates a Trace session cookie after approval", async () => {
     vi.stubGlobal(
       "fetch",
