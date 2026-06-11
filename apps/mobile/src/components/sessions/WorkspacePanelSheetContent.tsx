@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text as RNText,
+  TextInput,
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
@@ -105,6 +106,10 @@ type FileTreeNode = {
   isDirectory: boolean;
   children: FileTreeNode[];
 };
+type FileSearchResult = {
+  path: string;
+  score: number;
+};
 
 type VisibleFileTreeNode = FileTreeNode & { depth: number };
 type VisibleBranchChangeTreeNode = VisibleFileTreeNode & { file?: BranchDiffFile };
@@ -128,6 +133,7 @@ type HighlightPart = { text: string; kind: HighlightKind };
 
 const HEADER_BLUR_INTENSITY = 3;
 const HEADER_FADE_EXTRA_HEIGHT = 56;
+const MAX_FILE_SEARCH_RESULTS = 80;
 const MONOSPACE_FONT_FAMILY = Platform.select({
   ios: "Menlo",
   android: "monospace",
@@ -253,6 +259,74 @@ function directoryPathsFromTree(tree: FileTreeNode[]): Set<string> {
 
   for (const node of tree) visit(node);
   return paths;
+}
+
+function scoreToken(path: string, token: string, basenameStart: number): number {
+  let searchIndex = 0;
+  let firstMatch = -1;
+  let previousMatch = -1;
+  let contiguous = 0;
+  let boundaryMatches = 0;
+
+  for (let tokenIndex = 0; tokenIndex < token.length; tokenIndex++) {
+    const char = token[tokenIndex];
+    const matchIndex = path.indexOf(char, searchIndex);
+    if (matchIndex === -1) return 0;
+    if (firstMatch === -1) firstMatch = matchIndex;
+    if (matchIndex === previousMatch + 1) contiguous += 1;
+    if (matchIndex === 0 || "/._-".includes(path[matchIndex - 1] ?? "")) boundaryMatches += 1;
+    previousMatch = matchIndex;
+    searchIndex = matchIndex + 1;
+  }
+
+  const exactIndex = path.indexOf(token);
+  const basename = path.slice(basenameStart);
+  const basenameExactIndex = basename.indexOf(token);
+  const compactness = token.length / Math.max(1, previousMatch - firstMatch + 1);
+  let score = 0.2 + compactness * 0.25 + contiguous * 0.035 + boundaryMatches * 0.08;
+
+  if (exactIndex !== -1) score += 0.25;
+  if (path.startsWith(token)) score += 0.25;
+  if (basename.startsWith(token)) score += 0.35;
+  if (basenameExactIndex !== -1) score += 0.18;
+  score += Math.max(0, 0.12 - firstMatch / 600);
+
+  return Math.min(score, 1);
+}
+
+function scoreFilePath(path: string, query: string): number {
+  const normalizedQuery = query.trim().toLowerCase().replace(/\\/g, "/");
+  if (!normalizedQuery) return 1;
+
+  const normalizedPath = path.toLowerCase().replace(/\\/g, "/");
+  const basenameStart = normalizedPath.lastIndexOf("/") + 1;
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return 1;
+
+  let score = 0;
+  for (const token of tokens) {
+    const tokenScore = scoreToken(normalizedPath, token, basenameStart);
+    if (tokenScore === 0) return 0;
+    score += tokenScore;
+  }
+
+  return score / tokens.length;
+}
+
+function searchFilePaths(files: string[], query: string, limit: number): FileSearchResult[] {
+  const results: FileSearchResult[] = [];
+
+  for (const path of files) {
+    const score = scoreFilePath(path, query);
+    if (score > 0) results.push({ path, score });
+  }
+
+  results.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.path.localeCompare(b.path);
+  });
+
+  return results.slice(0, limit);
 }
 
 function fileSymbol(path: string): SFSymbol {
@@ -482,10 +556,16 @@ export function WorkspacePanelSheetContent({
   sessionId?: string | null;
 }) {
   const theme = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<WorkspaceTab>("files");
   const showingFiles = tab === "files";
   const topInset = insets.top + theme.spacing.sm;
+  const openSearch = useCallback(() => {
+    const params = new URLSearchParams({ groupId });
+    router.push(`/sheets/workspace-search?${params.toString()}`);
+  }, [groupId, router]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.workspaceBody}>
@@ -512,6 +592,7 @@ export function WorkspacePanelSheetContent({
         style={[styles.topFade, { height: topInset + HEADER_FADE_EXTRA_HEIGHT }]}
       />
       <WorkspaceModeFab mode={tab} bottomInset={insets.bottom} onChange={setTab} />
+      <WorkspaceSearchFab bottomInset={insets.bottom} onPress={openSearch} />
     </View>
   );
 }
@@ -553,6 +634,45 @@ function WorkspaceModeFab({
           />
           <Text variant="footnote" color="foreground">
             {label}
+          </Text>
+        </Pressable>
+      </Glass>
+    </View>
+  );
+}
+
+function WorkspaceSearchFab({
+  bottomInset,
+  onPress,
+}: {
+  bottomInset: number;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <View
+      style={[styles.fabWrap, { left: theme.spacing.lg, bottom: bottomInset + theme.spacing.lg }]}
+    >
+      <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.fabGlass}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Search files"
+          onPress={() => {
+            void haptic.selection();
+            onPress();
+          }}
+          style={({ pressed }) => [styles.fabButton, { opacity: pressed ? 0.72 : 1 }]}
+        >
+          <SymbolView
+            name="magnifyingglass"
+            size={16}
+            tintColor={theme.colors.foreground}
+            resizeMode="scaleAspectFit"
+            style={styles.fabIcon}
+          />
+          <Text variant="footnote" color="foreground">
+            Search
           </Text>
         </Pressable>
       </Glass>
@@ -657,6 +777,164 @@ function FilesTab({ groupId, topInset }: { groupId: string; topInset: number }) 
         />
       </View>
     </View>
+  );
+}
+
+export function WorkspaceFileSearchContent({ groupId }: { groupId: string }) {
+  const theme = useTheme();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topInset = insets.top + theme.spacing.sm;
+  const [files, setFiles] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const results = useMemo(
+    () => searchFilePaths(files, query, MAX_FILE_SEARCH_RESULTS),
+    [files, query],
+  );
+
+  const loadFiles = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getClient()
+        .query<FilesData>(SESSION_GROUP_FILES_QUERY, { sessionGroupId: groupId })
+        .toPromise();
+      if (result.error) throw result.error;
+      setFiles(result.data?.sessionGroupFiles ?? []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load files.");
+    } finally {
+      setLoading(false);
+    }
+  }, [groupId]);
+
+  useEffect(() => {
+    void loadFiles();
+  }, [loadFiles]);
+
+  const openFile = useCallback(
+    (filePath: string) => {
+      const params = new URLSearchParams({ groupId, filePath });
+      router.push(`/sheets/workspace-file?${params.toString()}`);
+    },
+    [groupId, router],
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.searchHeader, { paddingTop: topInset }]}>
+        <ListRow
+          title="Search files"
+          subtitle={`${files.length} files`}
+          leading={
+            <SymbolView name="chevron.left" size={16} tintColor={theme.colors.mutedForeground} />
+          }
+          onPress={() => router.back()}
+        />
+        <View
+          style={[
+            styles.searchFieldShell,
+            {
+              backgroundColor: theme.colors.surfaceElevated,
+              borderColor: theme.colors.borderMuted,
+              borderRadius: theme.radius.lg,
+            },
+          ]}
+        >
+          <SymbolView
+            name="magnifyingglass"
+            size={16}
+            tintColor={theme.colors.mutedForeground}
+            resizeMode="scaleAspectFit"
+            style={styles.searchFieldIcon}
+          />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="File name or path"
+            placeholderTextColor={theme.colors.mutedForeground}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+            selectionColor={theme.colors.accent}
+            style={[styles.searchField, { color: theme.colors.foreground }]}
+          />
+        </View>
+      </View>
+      {loading ? (
+        <LoadingState label="Loading files..." />
+      ) : error ? (
+        <ErrorState message={error} onRetry={loadFiles} />
+      ) : query.trim().length === 0 ? (
+        <EmptyState label="Start typing to search files" />
+      ) : results.length === 0 ? (
+        <EmptyState label="No matching files" />
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(result) => result.path}
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={24}
+          maxToRenderPerBatch={24}
+          windowSize={8}
+          removeClippedSubviews
+          contentContainerStyle={styles.searchResults}
+          ItemSeparatorComponent={() => (
+            <View style={[styles.fileTreeSeparator, { backgroundColor: theme.colors.border }]} />
+          )}
+          renderItem={({ item }) => <FileSearchResultRow result={item} onOpen={openFile} />}
+        />
+      )}
+    </View>
+  );
+}
+
+function FileSearchResultRow({
+  result,
+  onOpen,
+}: {
+  result: FileSearchResult;
+  onOpen: (path: string) => void;
+}) {
+  const theme = useTheme();
+  const name = result.path.split("/").pop() ?? result.path;
+  const directory = result.path.split("/").slice(0, -1).join("/");
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={result.path}
+      onPress={() => onOpen(result.path)}
+      style={({ pressed }) => [
+        styles.searchResultRow,
+        { backgroundColor: pressed ? alpha(theme.colors.accent, 0.08) : "transparent" },
+      ]}
+    >
+      <View style={styles.fileTreeIconSlot}>
+        <FileTypeIcon path={result.path} size={17} fallbackColor={theme.colors.mutedForeground} />
+      </View>
+      <View style={styles.fileTreeText}>
+        <Text variant="body" color="foreground" numberOfLines={1} style={styles.fileTreeName}>
+          {name}
+        </Text>
+        {directory ? (
+          <Text variant="caption2" color="dimForeground" numberOfLines={1}>
+            {directory}
+          </Text>
+        ) : null}
+      </View>
+      <SymbolView
+        name="chevron.right"
+        size={12}
+        tintColor={theme.colors.dimForeground}
+        resizeMode="scaleAspectFit"
+      />
+    </Pressable>
   );
 }
 
@@ -1347,6 +1625,39 @@ const styles = StyleSheet.create({
   },
   fileTreeName: {
     lineHeight: 21,
+  },
+  searchHeader: {
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  searchFieldShell: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+  },
+  searchFieldIcon: {
+    width: 16,
+    height: 16,
+  },
+  searchField: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 0,
+    fontSize: 17,
+  },
+  searchResults: {
+    paddingBottom: 96,
+  },
+  searchResultRow: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
   },
   changeStats: {
     flexDirection: "row",
