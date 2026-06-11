@@ -63,7 +63,8 @@ type FileTreeNode = {
 
 type VisibleFileTreeNode = FileTreeNode & { depth: number };
 
-const TOP_FADE_EXTRA_HEIGHT = 36;
+const HEADER_BLUR_INTENSITY = 3;
+const HEADER_FADE_EXTRA_HEIGHT = 56;
 
 function buildFileTree(files: string[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
@@ -162,18 +163,18 @@ export function WorkspacePanelSheetContent({
       <BlurView
         pointerEvents="none"
         tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
-        intensity={48}
-        style={[styles.topBlur, { height: topInset }]}
+        intensity={HEADER_BLUR_INTENSITY}
+        style={[styles.topBlur, { height: topInset - 8 }]}
       />
       <LinearGradient
         pointerEvents="none"
         colors={[
           alpha(theme.colors.background, 1),
-          alpha(theme.colors.background, 0.5),
+          alpha(theme.colors.background, 0.48),
           alpha(theme.colors.background, 0),
         ]}
         locations={[0, 0.68, 1]}
-        style={[styles.topFade, { height: topInset + TOP_FADE_EXTRA_HEIGHT }]}
+        style={[styles.topFade, { height: topInset + HEADER_FADE_EXTRA_HEIGHT }]}
       />
       <WorkspaceModeFab mode={tab} bottomInset={insets.bottom} onChange={setTab} />
     </View>
@@ -565,19 +566,19 @@ const styles = StyleSheet.create({
   workspaceBody: {
     flex: 1,
   },
-  topBlur: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 5,
-  },
   topFade: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 6,
+    zIndex: 9,
+  },
+  topBlur: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 8,
   },
   panel: {
     flex: 1,
