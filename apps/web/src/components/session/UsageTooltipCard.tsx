@@ -1,7 +1,7 @@
 import { formatCostUsd, formatSessionUsageDateRange, formatTokens } from "./usage-format";
 
 export const usageTooltipContentClassName =
-  "!block w-[260px] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-white/10 !bg-zinc-900/75 px-0 py-0 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl [&>div:last-child]:!bg-zinc-900/75 [&>div:last-child]:!fill-zinc-900/75";
+  "!block w-[260px] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-white/10 bg-zinc-900/75 px-0 py-0 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl [&>div:last-child]:bg-zinc-900/75 [&>div:last-child]:fill-zinc-900/75";
 
 interface UsageTooltipCardProps {
   title: string;
