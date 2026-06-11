@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { gql } from "@urql/core";
-import { useRouter } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
-import { START_SESSION_MUTATION, useEntityField, useEntityStore } from "@trace/client-core";
-import type { GitCheckpoint, HostingMode, Repo } from "@trace/gql";
-import { shortSha } from "@trace/shared";
-import { Button, ListRow, SegmentedControl, Text, TraceLoader } from "@/components/design-system";
+import { Glass, ListRow, Text, TraceLoader } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -39,7 +35,7 @@ const SESSION_GROUP_BRANCH_DIFF_QUERY = gql`
   }
 `;
 
-type WorkspaceTab = "files" | "changes" | "checkpoints";
+type WorkspaceTab = "files" | "changes";
 type FilesData = { sessionGroupFiles?: string[] | null };
 type FileContentData = {
   sessionGroupFileContentWithSource?: {
@@ -55,8 +51,6 @@ type BranchDiffFile = {
   deletions: number;
 };
 type DiffData = { sessionGroupBranchDiff?: BranchDiffFile[] | null };
-type StartSessionData = { startSession?: { id: string; sessionGroupId: string } | null };
-
 type FileTreeNode = {
   name: string;
   path: string;
@@ -65,9 +59,6 @@ type FileTreeNode = {
 };
 
 type VisibleFileTreeNode = FileTreeNode & { depth: number };
-
-const TABS: WorkspaceTab[] = ["files", "changes", "checkpoints"];
-const TAB_LABELS = ["Files", "Changes", "Checkpoints"];
 
 function buildFileTree(files: string[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
@@ -151,43 +142,66 @@ function fileSymbol(path: string): SFSymbol {
   return "doc";
 }
 
-function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export function WorkspacePanelSheetContent({
   groupId,
-  sessionId,
 }: {
   groupId: string;
   sessionId?: string | null;
 }) {
   const [tab, setTab] = useState<WorkspaceTab>("files");
-  const selectedIndex = TABS.indexOf(tab);
+  const showingFiles = tab === "files";
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text variant="headline">Workspace</Text>
-        <SegmentedControl
-          segments={TAB_LABELS}
-          selectedIndex={selectedIndex}
-          onChange={(index) => setTab(TABS[index] ?? "files")}
-        />
+        <Text variant="footnote" color="mutedForeground">
+          {showingFiles ? "Browse files in this workspace." : "Review branch changes."}
+        </Text>
       </View>
-      {tab === "files" ? (
-        <FilesTab groupId={groupId} />
-      ) : tab === "changes" ? (
-        <ChangesTab groupId={groupId} />
-      ) : (
-        <CheckpointsTab groupId={groupId} sessionId={sessionId ?? null} />
-      )}
+      <View style={styles.workspaceBody}>
+        {showingFiles ? <FilesTab groupId={groupId} /> : <ChangesTab groupId={groupId} />}
+      </View>
+      <WorkspaceModeFab mode={tab} onChange={setTab} />
+    </View>
+  );
+}
+
+function WorkspaceModeFab({
+  mode,
+  onChange,
+}: {
+  mode: WorkspaceTab;
+  onChange: (mode: WorkspaceTab) => void;
+}) {
+  const theme = useTheme();
+  const nextMode: WorkspaceTab = mode === "files" ? "changes" : "files";
+  const label = mode === "files" ? "Changes" : "Files";
+  const icon: SFSymbol = mode === "files" ? "plus.forwardslash.minus" : "folder";
+
+  return (
+    <View style={[styles.fabWrap, { right: theme.spacing.lg, bottom: theme.spacing.lg }]}>
+      <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.fabGlass}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Show ${label}`}
+          onPress={() => {
+            void haptic.selection();
+            onChange(nextMode);
+          }}
+          style={({ pressed }) => [styles.fabButton, { opacity: pressed ? 0.72 : 1 }]}
+        >
+          <SymbolView
+            name={icon}
+            size={16}
+            tintColor={theme.colors.foreground}
+            resizeMode="scaleAspectFit"
+            style={styles.fabIcon}
+          />
+          <Text variant="footnote" color="foreground">
+            {label}
+          </Text>
+        </Pressable>
+      </Glass>
     </View>
   );
 }
@@ -516,99 +530,6 @@ function ChangesTab({ groupId }: { groupId: string }) {
   );
 }
 
-function CheckpointsTab({
-  groupId,
-  sessionId,
-}: {
-  groupId: string;
-  sessionId: string | null;
-}) {
-  const theme = useTheme();
-  const router = useRouter();
-  const gitCheckpoints = useEntityField("sessionGroups", groupId, "gitCheckpoints") as
-    | GitCheckpoint[]
-    | undefined;
-  const session = useEntityStore((state) => (sessionId ? state.sessions[sessionId] : undefined));
-  const group = useEntityStore((state) => state.sessionGroups[groupId]);
-  const checkpoints = useMemo(() => {
-    return [...(gitCheckpoints ?? [])].sort((a, b) => b.committedAt.localeCompare(a.committedAt));
-  }, [gitCheckpoints]);
-  const [restoringId, setRestoringId] = useState<string | null>(null);
-
-  async function restoreCheckpoint(checkpoint: GitCheckpoint) {
-    if (!session) {
-      Alert.alert("Select a session first", "Open a session in this workspace before restoring.");
-      return;
-    }
-    setRestoringId(checkpoint.id);
-    try {
-      const repo = session.repo as Repo | null | undefined;
-      const channelId =
-        group?.channel?.id ?? (group as { channelId?: string | null } | undefined)?.channelId;
-      const result = await getClient()
-        .mutation<StartSessionData>(START_SESSION_MUTATION, {
-          input: {
-            tool: session.tool,
-            model: session.model ?? undefined,
-            reasoningEffort: session.reasoningEffort ?? undefined,
-            hosting: session.hosting as HostingMode,
-            channelId: channelId ?? undefined,
-            repoId: repo?.id ?? undefined,
-            restoreCheckpointId: checkpoint.id,
-          },
-        })
-        .toPromise();
-      if (result.error) throw result.error;
-      const next = result.data?.startSession;
-      if (!next?.id || !next.sessionGroupId) throw new Error("No restored session returned.");
-      void haptic.success();
-      router.replace(`/sessions/${next.sessionGroupId}/${next.id}`);
-    } catch (error) {
-      void haptic.error();
-      Alert.alert("Couldn't restore checkpoint", error instanceof Error ? error.message : "Try again.");
-    } finally {
-      setRestoringId(null);
-    }
-  }
-
-  if (checkpoints.length === 0) return <EmptyState label="No checkpoints yet" />;
-
-  return (
-    <ScrollView style={styles.panel}>
-      {checkpoints.map((checkpoint, index) => (
-        <View
-          key={checkpoint.id}
-          style={[
-            styles.checkpointRow,
-            {
-              borderBottomWidth: index < checkpoints.length - 1 ? StyleSheet.hairlineWidth : 0,
-              borderBottomColor: theme.colors.border,
-            },
-          ]}
-        >
-          <View style={styles.checkpointText}>
-            <Text variant="body" numberOfLines={1}>
-              {checkpoint.subject || "Checkpoint"}
-            </Text>
-            <Text variant="footnote" color="mutedForeground" numberOfLines={1}>
-              {shortSha(checkpoint.commitSha)} · {checkpoint.filesChanged} files ·{" "}
-              {formatDate(checkpoint.committedAt)}
-            </Text>
-          </View>
-          <Button
-            title="Restore"
-            size="sm"
-            variant="secondary"
-            loading={restoringId === checkpoint.id}
-            disabled={restoringId !== null}
-            onPress={() => void restoreCheckpoint(checkpoint)}
-          />
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
 function LoadingState({ label }: { label: string }) {
   return (
     <View style={styles.centerState}>
@@ -648,19 +569,40 @@ function EmptyState({ label }: { label: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    minHeight: 520,
   },
   header: {
-    gap: 14,
-    padding: 16,
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingTop: 10,
     paddingBottom: 12,
+  },
+  workspaceBody: {
+    flex: 1,
   },
   panel: {
     flex: 1,
   },
+  fabWrap: {
+    position: "absolute",
+    zIndex: 10,
+  },
+  fabGlass: {
+    borderRadius: 9999,
+  },
+  fabButton: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+  },
+  fabIcon: {
+    width: 16,
+    height: 16,
+  },
   explorerShell: {
     flex: 1,
-    paddingBottom: 16,
+    paddingBottom: 76,
   },
   explorerHeader: {
     minHeight: 48,
@@ -738,15 +680,5 @@ const styles = StyleSheet.create({
   },
   monospace: {
     fontFamily: "SpaceMono",
-  },
-  checkpointRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 16,
-  },
-  checkpointText: {
-    flex: 1,
-    minWidth: 0,
   },
 });

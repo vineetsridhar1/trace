@@ -9,7 +9,7 @@ export default function WorkspaceSheetScreen() {
   }>();
 
   return (
-    <Sheet detents={["large"]}>
+    <Sheet detents={["large"]} showGrabber={false} padding="xs">
       <WorkspacePanelSheetContent groupId={groupId} sessionId={sessionId} />
     </Sheet>
   );
