@@ -182,6 +182,65 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
+  it("does not re-count Codex usage on turn.completed after a token_count event", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      model: "gpt-5.5",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 1000,
+              cached_input_tokens: 400,
+              output_tokens: 25,
+            },
+          },
+        },
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 25,
+          input_token_details: { cached_tokens: 400 },
+        },
+        cost_usd: 0.0099,
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "usage",
+      usage: {
+        inputTokens: 600,
+        outputTokens: 25,
+        cacheReadTokens: 400,
+        cacheCreationTokens: 0,
+      },
+      costUsd: 0.00395,
+    });
+    // The completion event must carry neither usage nor cost — both were
+    // already streamed by the token_count event.
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    const usageCalls = onOutput.mock.calls.filter(
+      ([event]) => event.type === "usage" || (event.type === "result" && event.usage),
+    );
+    expect(usageCalls).toHaveLength(1);
+  });
+
   it("normalizes Codex top-level token aliases", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();

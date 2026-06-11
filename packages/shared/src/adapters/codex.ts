@@ -11,6 +11,9 @@ interface ModelPricing {
   output: number;
 }
 
+// USD per 1M tokens. Source: https://developers.openai.com/api/docs/pricing
+// (standard tier), verified 2026-06-10. Update when OpenAI changes prices —
+// this is a fallback only and is ignored when Codex reports a cost directly.
 const OPENAI_STANDARD_PRICES_PER_MILLION: Record<string, ModelPricing> = {
   "gpt-5": { input: 1.25, cachedInput: 0.125, output: 10 },
   "gpt-5.5": { input: 5, cachedInput: 0.5, output: 30 },
@@ -111,6 +114,8 @@ function estimateCodexCost(usage: TokenUsage | undefined, model: string | undefi
   const pricing = OPENAI_STANDARD_PRICES_PER_MILLION[normalizeOpenAIModel(model) ?? ""];
   if (!pricing) return undefined;
 
+  // OpenAI has no separate cache-write SKU, so cache-creation tokens bill at the
+  // standard input rate alongside fresh input.
   const freshInputTokens = usage.inputTokens + usage.cacheCreationTokens;
   const costUsd =
     (freshInputTokens * pricing.input +
@@ -156,6 +161,7 @@ export class CodexAdapter implements CodingToolAdapter {
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
   private model: string | undefined;
+  private emittedIncrementalUsage = false;
 
   run({
     prompt,
@@ -174,6 +180,7 @@ export class CodexAdapter implements CodingToolAdapter {
     this.sawErrorEvent = false;
     this.lastErrorMessage = null;
     this.model = model;
+    this.emittedIncrementalUsage = false;
 
     if (toolSessionId && !this.threadId) {
       this.threadId = toolSessionId;
@@ -304,6 +311,7 @@ export class CodexAdapter implements CodingToolAdapter {
       const usage = parseCodexTokenCountUsage(data);
       const costUsd = estimateCodexCost(usage, this.model);
       if (usage) {
+        this.emittedIncrementalUsage = true;
         onOutput({
           type: "usage",
           usage,
@@ -337,6 +345,13 @@ export class CodexAdapter implements CodingToolAdapter {
 
     if (eventType === "turn.completed") {
       this.resultEmitted = true;
+      // token_count events already streamed this turn's usage and estimated cost
+      // incrementally, so the completion event must not re-add either or it
+      // double-counts. Only contribute usage/cost here when nothing streamed.
+      if (this.emittedIncrementalUsage) {
+        onOutput({ type: "result", subtype: this.sawErrorEvent ? "error" : "success" });
+        return;
+      }
       const usage = parseCodexUsage(data);
       const costUsd = parseCodexCost(data, usage, this.model);
       onOutput({

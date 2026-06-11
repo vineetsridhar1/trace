@@ -26,13 +26,19 @@ function num(...values: unknown[]): number {
   return 0;
 }
 
+/**
+ * Read usage only from an explicitly named usage container. We never fall back
+ * to the bare line object: agy is print-only and a model can legitimately print
+ * JSON containing keys like `input`/`output`, which must not be mistaken for
+ * usage metadata and swallowed from the visible output.
+ */
 function parseAntigravityUsage(data: Record<string, unknown>): TokenUsage | undefined {
   const usage =
     asRecord(data.usage) ??
     asRecord(data.tokenUsage) ??
     asRecord(data.token_usage) ??
-    asRecord(data.tokens) ??
-    data;
+    asRecord(data.tokens);
+  if (!usage) return undefined;
   const inputDetails = asRecord(usage.inputTokenDetails) ?? asRecord(usage.input_token_details);
 
   const normalized: TokenUsage = {
@@ -271,11 +277,14 @@ export class AntigravityAdapter implements CodingToolAdapter {
     const data = asRecord(parsed);
     if (!data) return false;
 
+    // Only treat the line as usage metadata (and swallow it) when it carries a
+    // named usage container. A bare JSON line the agent prints as real output is
+    // left untouched so we never drop visible content.
     const usage = parseAntigravityUsage(data);
-    const costUsd = parseAntigravityCost(data);
-    if (!usage && costUsd == null) return false;
+    if (!usage) return false;
 
-    if (usage) this.lastUsage = usage;
+    this.lastUsage = usage;
+    const costUsd = parseAntigravityCost(data);
     if (costUsd != null) this.lastCostUsd = costUsd;
     return true;
   }

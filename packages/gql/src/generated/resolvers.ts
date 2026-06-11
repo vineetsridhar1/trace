@@ -1977,7 +1977,6 @@ export type SessionGroup = {
   setupStatus: SetupStatus;
   slug?: Maybe<Scalars["String"]["output"]>;
   status: SessionGroupStatus;
-  totalCostUsd: Scalars["Float"]["output"];
   updatedAt: Scalars["DateTime"]["output"];
   visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
@@ -4526,7 +4525,6 @@ export type SessionGroupResolvers<
   setupStatus?: Resolver<ResolversTypes["SetupStatus"], ParentType, ContextType>;
   slug?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes["SessionGroupStatus"], ParentType, ContextType>;
-  totalCostUsd?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   visibility?: Resolver<ResolversTypes["SessionGroupVisibility"], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;

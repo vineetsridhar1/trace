@@ -497,7 +497,6 @@ type SessionGroup {
   archivedAt: DateTime
   setupStatus: SetupStatus!
   setupError: String
-  totalCostUsd: Float!
   createdAt: DateTime!
   updatedAt: DateTime!
 }

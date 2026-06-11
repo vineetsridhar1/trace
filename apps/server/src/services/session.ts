@@ -4775,7 +4775,7 @@ export class SessionService {
     }
 
     if (data.usage || typeof data.costUsd === "number") {
-      await this.recordUsage(sessionId, session.organizationId, session.sessionGroupId, data);
+      await this.recordUsage(sessionId, session.organizationId, data);
     }
 
     // If we found a title tag, update the session name
@@ -4846,7 +4846,6 @@ export class SessionService {
   private async recordUsage(
     sessionId: string,
     organizationId: string,
-    sessionGroupId: string | null,
     data: Record<string, unknown>,
   ) {
     const usage =
@@ -4888,8 +4887,9 @@ export class SessionService {
       },
     });
 
-    const sessionGroup = await this.loadSessionGroupSnapshot(sessionGroupId);
-
+    // No group snapshot here: this runs on every assistant message, and the
+    // group usage badge already derives its total from session entities, so the
+    // per-session patch is enough. Avoids an extra query on the hot path.
     await eventService.create({
       organizationId,
       scopeType: "session",
@@ -4902,7 +4902,6 @@ export class SessionService {
         cacheReadTokens: updated.cacheReadTokens,
         cacheCreationTokens: updated.cacheCreationTokens,
         costUsd: updated.costUsd,
-        ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "system",

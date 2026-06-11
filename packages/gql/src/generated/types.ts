@@ -1974,7 +1974,6 @@ export type SessionGroup = {
   setupStatus: SetupStatus;
   slug?: Maybe<Scalars["String"]["output"]>;
   status: SessionGroupStatus;
-  totalCostUsd: Scalars["Float"]["output"];
   updatedAt: Scalars["DateTime"]["output"];
   visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
