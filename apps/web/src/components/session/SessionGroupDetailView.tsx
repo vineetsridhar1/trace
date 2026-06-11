@@ -205,6 +205,10 @@ export function SessionGroupDetailView({
   const setActiveSessionId = useUIStore(
     (s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId,
   );
+  const setActiveSessionGroupId = useUIStore(
+    (s: { setActiveSessionGroupId: (groupId: string | null, sessionId?: string | null) => void }) =>
+      s.setActiveSessionGroupId,
+  );
   const setActiveTerminalId = useUIStore(
     (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
   );
@@ -699,8 +703,51 @@ export function SessionGroupDetailView({
     setActiveSessionId,
   ]);
 
+  // Close whatever tab is currently shown. Files/terminals/traffic reveal the
+  // session beneath them; closing the last session tab returns to the table.
+  const handleCloseCurrentTab = useCallback(() => {
+    if (activeWorkflowTab === "traffic" && trafficEndpointId) {
+      handleCloseTrafficTab();
+      return;
+    }
+    if (activeFilePath) {
+      handleCloseFile(activeFilePath);
+      return;
+    }
+    if (activeTerminalId) {
+      handleCloseTerminal(activeTerminalId);
+      return;
+    }
+    if (activeSessionId && (openTabIds?.length ?? 0) > 1) {
+      closeSessionTab(sessionGroupId, activeSessionId);
+      return;
+    }
+    setActiveSessionGroupId(null);
+  }, [
+    activeWorkflowTab,
+    trafficEndpointId,
+    activeFilePath,
+    activeTerminalId,
+    activeSessionId,
+    openTabIds,
+    handleCloseTrafficTab,
+    handleCloseFile,
+    handleCloseTerminal,
+    closeSessionTab,
+    sessionGroupId,
+    setActiveSessionGroupId,
+  ]);
+
   const sessionCommands = useMemo<RegisteredCommand[]>(() => {
     const commands: RegisteredCommand[] = [
+      {
+        id: "session.close-tab",
+        title: "Close tab",
+        group: "Session",
+        keywords: "close tab session terminal file",
+        run: handleCloseCurrentTab,
+        shortcut: { key: "w", mod: true },
+      },
       {
         id: "session.find-file",
         title: "Find file",
@@ -779,6 +826,7 @@ export function SessionGroupDetailView({
     canNewChatCmd,
     canOpenTerminalCmd,
     showApplicationsSidebarTab,
+    handleCloseCurrentTab,
     handleToggleFilePalette,
     handleToggleSidebar,
     handleToggleApplicationsSidebar,

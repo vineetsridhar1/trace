@@ -56,4 +56,18 @@ export function useGlobalShortcuts() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // In the desktop shell, ⌘W is owned by the app menu (it would close the
+  // window), so the menu forwards it here as an IPC command instead.
+  useEffect(() => {
+    const trace = window.trace;
+    if (!trace?.onMenuCommand) return;
+    return trace.onMenuCommand((command) => {
+      if (command !== "close-tab") return;
+      const commands = Object.values(
+        useCommandRegistryStore.getState().commandsByToken,
+      ).flat();
+      commands.find((c) => c.id === "session.close-tab")?.run();
+    });
+  }, []);
 }

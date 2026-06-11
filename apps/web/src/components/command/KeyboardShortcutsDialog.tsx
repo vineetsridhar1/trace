@@ -31,6 +31,7 @@ const SECTIONS: Array<{ heading: string; shortcuts: Shortcut[] }> = [
     heading: "Sessions",
     shortcuts: [
       { keys: [mod, "T"], label: "New tab" },
+      { keys: [mod, "W"], label: "Close tab" },
       { keys: [mod, "P"], label: "Find file" },
       { keys: [mod, "J"], label: "New terminal" },
       { keys: [mod, "⇧", "E"], label: "Toggle session sidebar" },

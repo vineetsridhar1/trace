@@ -121,7 +121,17 @@ function configureApplicationIdentity() {
         { role: "quit", label: `Quit ${appName}` },
       ],
     },
-    { role: "fileMenu" },
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "Close Tab",
+          accelerator: "CmdOrCtrl+W",
+          click: () => mainWindow?.webContents.send("menu-command", "close-tab"),
+        },
+        { role: "close", label: "Close Window", accelerator: "CmdOrCtrl+Shift+W" },
+      ],
+    },
     { role: "editMenu" },
     { role: "viewMenu" },
     { role: "windowMenu" },
