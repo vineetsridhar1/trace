@@ -34,7 +34,7 @@ export function BranchChangedFileRow({
       style={depth === undefined ? undefined : { paddingLeft: `${depth * 8 + 12}px` }}
     >
       <Circle size={6} className={cn("shrink-0", color)} />
-      <FileIcon path={fileName} size={14} />
+      <FileIcon path={file.path} size={14} />
       <span className="min-w-0 flex-1 truncate text-[11px]">
         {pathPosition === "before" && dirName && (
           <span className="text-muted-foreground">{dirName}/</span>

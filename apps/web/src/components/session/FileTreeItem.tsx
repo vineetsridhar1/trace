@@ -55,7 +55,7 @@ export function FileTreeItem({
         {node.isDirectory ? (
           <FolderIcon size={16} className="shrink-0 text-blue-400/80" />
         ) : (
-          <FileIcon path={node.name} size={16} />
+          <FileIcon path={node.path} size={16} />
         )}
         <span className="truncate text-[#cccccc]">{node.name}</span>
       </button>
