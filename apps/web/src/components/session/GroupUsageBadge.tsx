@@ -39,6 +39,7 @@ export function GroupUsageBadge({ sessionGroupId }: { sessionGroupId: string }) 
 
   return (
     <ActionTooltip
+      className="app-region-no-drag"
       contentClassName={usageTooltipContentClassName}
       label={
         <UsageTooltipCard
