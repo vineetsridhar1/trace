@@ -29,11 +29,18 @@ vi.mock("../lib/redis.js", async () => {
   return { redis: createRedisMock() };
 });
 
+vi.mock("../services/org-member.js", () => ({
+  orgMemberService: { addMember: vi.fn() },
+}));
+
 import { prisma } from "../lib/db.js";
 import { redis } from "../lib/redis.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { isLoopbackAddress } from "../lib/auth.js";
+import { orgMemberService } from "../services/org-member.js";
 import { authRouter } from "./auth.js";
+
+const orgMemberMock = orgMemberService as unknown as { addMember: ReturnType<typeof vi.fn> };
 
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 type PrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrismaMock> & {
@@ -1102,7 +1109,7 @@ describe("github device oauth", () => {
         if (url.startsWith("http://127.0.0.1")) {
           return realFetch(input, init);
         }
-        expect(new URLSearchParams(init?.body?.toString()).get("scope")).toBe("");
+        expect(new URLSearchParams(init?.body?.toString()).get("scope")).toBe("read:org");
         return new Response(
           JSON.stringify({
             device_code: "secret-device-code",
@@ -1214,6 +1221,12 @@ describe("github device oauth", () => {
             { headers: { "Content-Type": "application/json" } },
           );
         }
+        if (url.includes("/user/memberships/orgs/")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         throw new Error(`unexpected fetch: ${url}`);
       }),
     );
@@ -1229,6 +1242,7 @@ describe("github device oauth", () => {
 
     expect(pollRes.status).toBe(200);
     expect(await pollRes.json()).toEqual({ status: "success" });
+    expect(orgMemberMock.addMember).not.toHaveBeenCalled();
     const setCookie = pollRes.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("trace_token=");
     const cookieToken = /trace_token=([^;]+)/.exec(setCookie)?.[1];
@@ -1283,6 +1297,12 @@ describe("github device oauth", () => {
             { headers: { "Content-Type": "application/json" } },
           );
         }
+        if (url.includes("/user/memberships/orgs/")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         throw new Error(`unexpected fetch: ${url}`);
       }),
     );
@@ -1306,6 +1326,135 @@ describe("github device oauth", () => {
         avatarUrl: "https://example.com/a.png",
       },
     });
+  });
+
+  it("auto-joins the organization when the user is an active GitHub org member", async () => {
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce(null);
+    let membershipOrg: string | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.endsWith("/user")) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              login: "octocat",
+              email: null,
+              avatar_url: "https://example.com/a.png",
+              name: "Octo Cat",
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        const membershipMatch = /\/user\/memberships\/orgs\/([^/]+)$/.exec(url);
+        if (membershipMatch) {
+          membershipOrg = decodeURIComponent(membershipMatch[1]);
+          return new Response(JSON.stringify({ state: "active" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(200);
+    expect(membershipOrg).toBe("opendoor-labs");
+    expect(orgMemberMock.addMember).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      userId: "user-1",
+      actorType: "system",
+      actorId: "system",
+    });
+  });
+
+  it("does not auto-join when already an organization member", async () => {
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: "user-1" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.endsWith("/user")) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              login: "octocat",
+              email: null,
+              avatar_url: "https://example.com/a.png",
+              name: "Octo Cat",
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/user/memberships/orgs/")) {
+          return new Response(JSON.stringify({ state: "active" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(200);
+    expect(orgMemberMock.addMember).not.toHaveBeenCalled();
   });
 
   it("fails closed when GitHub user identity cannot be verified", async () => {

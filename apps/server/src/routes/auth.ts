@@ -27,11 +27,16 @@ import {
   revokeMobileDeviceByToken,
 } from "../services/mobile-auth.js";
 import { pushTokenService } from "../services/pushTokenService.js";
+import { orgMemberService } from "../services/org-member.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
 
 const router: RouterType = Router();
 
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
+// Trace is hosted only for opendoor, so login requests read:org to detect org
+// membership and auto-add members of AUTO_JOIN_GITHUB_ORG to the organization.
+const GITHUB_LOGIN_SCOPE = "read:org";
+const AUTO_JOIN_GITHUB_ORG = process.env.AUTO_JOIN_GITHUB_ORG?.trim() || "opendoor-labs";
 const JWT_SECRET = resolveJwtSecret();
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
@@ -285,6 +290,52 @@ async function upsertUserFromGitHubAccessToken(accessToken: string) {
   }
 
   return user;
+}
+
+async function isGitHubOrgMember(accessToken: string, orgSlug: string): Promise<boolean> {
+  const res = await fetch(
+    `https://api.github.com/user/memberships/orgs/${encodeURIComponent(orgSlug)}`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${accessToken}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    },
+  );
+  // 404 = not a member, 403 = read:org not granted; either way, do not auto-join.
+  if (!res.ok) return false;
+  const body = (await res.json().catch(() => null)) as { state?: string } | null;
+  return body?.state === "active";
+}
+
+// Auto-add members of the configured GitHub org to the Trace organization on login.
+// Failures here never block login — the user just isn't auto-added.
+async function autoJoinOrganizationIfMember(userId: string, accessToken: string): Promise<void> {
+  try {
+    if (!(await isGitHubOrgMember(accessToken, AUTO_JOIN_GITHUB_ORG))) return;
+
+    const organization = await prisma.organization.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (!organization) return;
+
+    const existing = await prisma.orgMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId: organization.id } },
+      select: { userId: true },
+    });
+    if (existing) return;
+
+    await orgMemberService.addMember({
+      organizationId: organization.id,
+      userId,
+      actorType: "system",
+      actorId: "system",
+    });
+  } catch (error) {
+    console.error("[auth] Failed to auto-join organization:", (error as Error).message);
+  }
 }
 
 function readOrganizationIdHeader(req: Request): string | null {
@@ -646,7 +697,7 @@ router.post("/auth/github/device/start", async (req: Request, res: Response) => 
       },
       body: new URLSearchParams({
         client_id: GITHUB_CLIENT_ID,
-        scope: "",
+        scope: GITHUB_LOGIN_SCOPE,
       }),
     });
   } catch (error) {
@@ -746,7 +797,11 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
     return res.status(400).json({ status: "error", error: payload.error ?? "GitHub login failed" });
   }
 
-  if (payload.scope && payload.scope.trim().length > 0) {
+  const grantedScopes = (payload.scope ?? "")
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  if (grantedScopes.some((scope) => scope !== GITHUB_LOGIN_SCOPE)) {
     const revoked = await revokeGitHubOAuthGrant(payload.access_token);
     await deleteGitHubDeviceAuth(deviceAuthId);
     return res.status(400).json({
@@ -767,6 +822,7 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
       error: "Could not verify GitHub identity. Start GitHub login again.",
     });
   }
+  await autoJoinOrganizationIfMember(user.id, payload.access_token);
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
   setSessionCookie(res, token);
   await deleteGitHubDeviceAuth(deviceAuthId);
