@@ -547,7 +547,6 @@ const styles = StyleSheet.create({
   },
   explorerShell: {
     flex: 1,
-    paddingBottom: 76,
   },
   explorerCard: {
     flex: 1,
