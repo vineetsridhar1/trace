@@ -1,8 +1,9 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
+import { getDefaultModel, getDefaultReasoningEffort } from "@trace/shared";
 import { ListRow, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
@@ -42,6 +43,7 @@ export function SessionModelPickerSheetContent({
   onSelectModel,
 }: SessionModelPickerSheetContentProps) {
   const theme = useTheme();
+  const [pendingTool, setPendingTool] = useState<CodingTool | null>(null);
   const [pendingModel, setPendingModel] = useState<string | null>(null);
   const [pendingReasoningEffort, setPendingReasoningEffort] = useState<string | null>(null);
 
@@ -71,6 +73,7 @@ export function SessionModelPickerSheetContent({
 
   const currentTool: CodingTool =
     tool === "codex" || tool === "pi" ? (tool as CodingTool) : "claude_code";
+  const effectiveTool = pendingTool ?? currentTool;
   const isTerminal =
     (worktreeDeleted === true || sessionStatus === "merged") && worktreeDeleted !== false;
   const isDisconnected = connection?.state === "disconnected";
@@ -89,7 +92,7 @@ export function SessionModelPickerSheetContent({
     handleToolChange,
   } = useSessionComposerConfig({
     connection,
-    currentTool,
+    currentTool: effectiveTool,
     hosting,
     isNotStarted: agentStatus === "not_started",
     isOptimistic,
@@ -98,6 +101,38 @@ export function SessionModelPickerSheetContent({
     sessionId,
     tool,
   });
+
+  useEffect(() => {
+    if (pendingTool && currentTool === pendingTool) setPendingTool(null);
+  }, [currentTool, pendingTool]);
+
+  useEffect(() => {
+    if (pendingModel && model === pendingModel) setPendingModel(null);
+  }, [model, pendingModel]);
+
+  useEffect(() => {
+    if (pendingReasoningEffort && reasoningEffort === pendingReasoningEffort) {
+      setPendingReasoningEffort(null);
+    }
+  }, [pendingReasoningEffort, reasoningEffort]);
+
+  const handleSelectTool = useCallback(
+    async (nextTool: CodingTool) => {
+      if (!canInteract) return;
+      if (selectedTool === nextTool) return;
+
+      setPendingTool(nextTool);
+      setPendingModel(getDefaultModel(nextTool) ?? null);
+      setPendingReasoningEffort(getDefaultReasoningEffort(nextTool) ?? null);
+      const changed = await handleToolChange(nextTool);
+      if (!changed) {
+        setPendingTool(null);
+        setPendingModel(null);
+        setPendingReasoningEffort(null);
+      }
+    },
+    [canInteract, handleToolChange, selectedTool],
+  );
 
   const handleSelectModel = useCallback(
     async (nextModel: string) => {
@@ -131,6 +166,7 @@ export function SessionModelPickerSheetContent({
     [canSelectModel, handleReasoningEffortChange, selectedReasoningEffort],
   );
 
+  const displayedTool = effectiveTool;
   const displayedModel = pendingModel ?? selectedModel;
   const displayedReasoningEffort = pendingReasoningEffort ?? selectedReasoningEffort;
 
@@ -153,16 +189,16 @@ export function SessionModelPickerSheetContent({
             key={option.value}
             title={option.label}
             trailing={
-              selectedTool === option.value ? (
+              displayedTool === option.value ? (
                 <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
             onPress={
-              canInteract && selectedTool !== option.value
-                ? () => void handleToolChange(option.value)
+              canInteract && displayedTool !== option.value
+                ? () => void handleSelectTool(option.value)
                 : undefined
             }
-            haptic={selectedTool === option.value ? "none" : "selection"}
+            haptic={displayedTool === option.value ? "none" : "selection"}
             separator={index < toolOptions.length - 1}
             style={!canInteract ? styles.disabledRow : undefined}
           />
