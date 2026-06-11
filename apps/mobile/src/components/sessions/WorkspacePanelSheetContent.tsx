@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { gql } from "@urql/core";
 import { SymbolView, type SFSymbol } from "expo-symbols";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, ListRow, Text, TraceLoader } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
@@ -54,6 +55,7 @@ type BranchDiffFile = {
   deletions: number;
 };
 type DiffData = { sessionGroupBranchDiff?: BranchDiffFile[] | null };
+type FileIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 type FileTreeNode = {
   name: string;
   path: string;
@@ -66,6 +68,50 @@ type VisibleBranchChangeTreeNode = VisibleFileTreeNode & { file?: BranchDiffFile
 
 const HEADER_BLUR_INTENSITY = 3;
 const HEADER_FADE_EXTRA_HEIGHT = 56;
+const FILE_ICON_BY_BASENAME: Record<string, { name: string; color: string }> = {
+  ".gitignore": { name: "git", color: "#f05032" },
+  ".npmrc": { name: "npm", color: "#cb3837" },
+  "docker-compose.yml": { name: "docker", color: "#2496ed" },
+  "docker-compose.yaml": { name: "docker", color: "#2496ed" },
+  dockerfile: { name: "docker", color: "#2496ed" },
+  "package-lock.json": { name: "npm", color: "#cb3837" },
+  "package.json": { name: "npm", color: "#cb3837" },
+  "pnpm-lock.yaml": { name: "npm", color: "#f69220" },
+  "yarn.lock": { name: "npm", color: "#2c8ebb" },
+};
+const FILE_ICON_BY_EXTENSION: Record<string, { name: string; color: string }> = {
+  c: { name: "language-c", color: "#a8b9cc" },
+  cc: { name: "language-cpp", color: "#659ad2" },
+  cpp: { name: "language-cpp", color: "#659ad2" },
+  cs: { name: "language-csharp", color: "#68217a" },
+  css: { name: "language-css3", color: "#1572b6" },
+  go: { name: "language-go", color: "#00add8" },
+  html: { name: "language-html5", color: "#e34f26" },
+  java: { name: "language-java", color: "#f89820" },
+  jpeg: { name: "file-image-outline", color: "#a78bfa" },
+  jpg: { name: "file-image-outline", color: "#a78bfa" },
+  js: { name: "language-javascript", color: "#f7df1e" },
+  json: { name: "code-json", color: "#f7df1e" },
+  jsx: { name: "react", color: "#61dafb" },
+  kt: { name: "language-kotlin", color: "#7f52ff" },
+  less: { name: "language-css3", color: "#1d365d" },
+  md: { name: "language-markdown", color: "#a1a1aa" },
+  mdx: { name: "language-markdown", color: "#a1a1aa" },
+  php: { name: "language-php", color: "#777bb4" },
+  png: { name: "file-image-outline", color: "#a78bfa" },
+  py: { name: "language-python", color: "#3776ab" },
+  rb: { name: "language-ruby", color: "#cc342d" },
+  rs: { name: "language-rust", color: "#dea584" },
+  sass: { name: "sass", color: "#cc6699" },
+  scss: { name: "sass", color: "#cc6699" },
+  swift: { name: "language-swift", color: "#f05138" },
+  svg: { name: "file-image-outline", color: "#ffb13b" },
+  ts: { name: "language-typescript", color: "#3178c6" },
+  tsx: { name: "react", color: "#61dafb" },
+  vue: { name: "vuejs", color: "#42b883" },
+  webp: { name: "file-image-outline", color: "#a78bfa" },
+  xml: { name: "file-xml-box", color: "#f97316" },
+};
 
 function buildFileTree(files: string[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
@@ -153,6 +199,18 @@ function fileSymbol(path: string): SFSymbol {
   return "doc";
 }
 
+function fileIconForPath(path: string): { name: FileIconName; color: string } | null {
+  const basename = path.split("/").pop()?.toLowerCase();
+  const basenameIcon = basename ? FILE_ICON_BY_BASENAME[basename] : undefined;
+  if (basenameIcon) return { name: basenameIcon.name as FileIconName, color: basenameIcon.color };
+
+  const ext = path.split(".").pop()?.toLowerCase();
+  if (!ext) return null;
+  const icon = FILE_ICON_BY_EXTENSION[ext];
+  if (!icon) return null;
+  return { name: icon.name as FileIconName, color: icon.color };
+}
+
 function branchChangeColor(status: string, theme: ReturnType<typeof useTheme>): string {
   switch (status) {
     case "A":
@@ -172,6 +230,38 @@ function branchChangeColor(status: string, theme: ReturnType<typeof useTheme>): 
     default:
       return theme.colors.mutedForeground;
   }
+}
+
+function FileTypeIcon({
+  path,
+  size = 16,
+  fallbackColor,
+}: {
+  path: string;
+  size?: number;
+  fallbackColor: string;
+}) {
+  const icon = fileIconForPath(path);
+  if (icon) {
+    return (
+      <MaterialCommunityIcons
+        name={icon.name}
+        size={size}
+        color={icon.color}
+        style={styles.fileTreeIcon}
+      />
+    );
+  }
+
+  return (
+    <SymbolView
+      name={fileSymbol(path)}
+      size={size}
+      tintColor={fallbackColor}
+      resizeMode="scaleAspectFit"
+      style={styles.fileTreeIcon}
+    />
+  );
 }
 
 export function WorkspacePanelSheetContent({
@@ -432,7 +522,10 @@ function FileTreeRow({
       ? "folder.fill"
       : "folder"
     : fileSymbol(node.name);
-  const iconColor = node.isDirectory ? theme.colors.accent : theme.colors.mutedForeground;
+  const fileIcon = fileIconForPath(node.name);
+  const iconColor = node.isDirectory
+    ? theme.colors.accent
+    : fileIcon?.color ?? theme.colors.mutedForeground;
 
   return (
     <Pressable
@@ -472,13 +565,17 @@ function FileTreeRow({
           },
         ]}
       >
-        <SymbolView
-          name={icon}
-          size={15}
-          tintColor={iconColor}
-          resizeMode="scaleAspectFit"
-          style={styles.fileTreeIcon}
-        />
+        {node.isDirectory ? (
+          <SymbolView
+            name={icon}
+            size={15}
+            tintColor={iconColor}
+            resizeMode="scaleAspectFit"
+            style={styles.fileTreeIcon}
+          />
+        ) : (
+          <FileTypeIcon path={node.name} size={16} fallbackColor={theme.colors.mutedForeground} />
+        )}
       </View>
       <View style={styles.fileTreeText}>
         <Text variant="body" color="foreground" numberOfLines={1} style={styles.fileTreeName}>
@@ -593,6 +690,8 @@ function BranchChangeTreeRow({
   const theme = useTheme();
   const file = node.file;
   const changeColor = file ? branchChangeColor(file.status, theme) : theme.colors.accent;
+  const fileIcon = fileIconForPath(node.name);
+  const fileIconColor = fileIcon?.color ?? changeColor;
   const icon: SFSymbol = node.isDirectory
     ? expanded
       ? "folder.fill"
@@ -631,18 +730,22 @@ function BranchChangeTreeRow({
           {
             backgroundColor: node.isDirectory
               ? alpha(theme.colors.accent, 0.14)
-              : alpha(changeColor, 0.12),
+              : alpha(fileIconColor, 0.12),
             borderRadius: theme.radius.sm,
           },
         ]}
       >
-        <SymbolView
-          name={icon}
-          size={15}
-          tintColor={node.isDirectory ? theme.colors.accent : changeColor}
-          resizeMode="scaleAspectFit"
-          style={styles.fileTreeIcon}
-        />
+        {node.isDirectory ? (
+          <SymbolView
+            name={icon}
+            size={15}
+            tintColor={theme.colors.accent}
+            resizeMode="scaleAspectFit"
+            style={styles.fileTreeIcon}
+          />
+        ) : (
+          <FileTypeIcon path={node.name} size={16} fallbackColor={changeColor} />
+        )}
       </View>
       <View style={styles.fileTreeText}>
         <Text variant="body" color="foreground" numberOfLines={1} style={styles.fileTreeName}>
