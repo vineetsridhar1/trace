@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { gql } from "@urql/core";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, ListRow, Text, TraceLoader } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
@@ -646,6 +647,7 @@ function FilesTab({ groupId, topInset }: { groupId: string; topInset: number }) 
     setContentLoading(false);
     setSelectedFile(null);
   }, []);
+  usePreventRemove(selectedFile !== null, closeFile);
 
   if (selectedFile) {
     return (
@@ -931,6 +933,7 @@ function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }
     setDiffError(null);
     setDiffLoading(false);
   }, []);
+  usePreventRemove(selectedDiffFile !== null, closeDiff);
 
   if (selectedDiffFile) {
     return (
