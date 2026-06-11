@@ -4774,7 +4774,7 @@ export class SessionService {
       });
     }
 
-    if (data.type === "result") {
+    if (data.usage || typeof data.costUsd === "number") {
       await this.recordUsage(sessionId, session.organizationId, session.sessionGroupId, data);
     }
 
@@ -4840,7 +4840,7 @@ export class SessionService {
   }
 
   /**
-   * Accumulate token usage and cost from a coding tool `result` message onto
+   * Accumulate token usage and cost from a coding tool output message onto
    * the session, then emit a usage_updated patch so clients update live.
    */
   private async recordUsage(

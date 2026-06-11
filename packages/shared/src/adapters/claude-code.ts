@@ -50,6 +50,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private claudeSessionId: string | null = null;
   private cwd: string | null = null;
   private resultEmitted = false;
+  private emittedIncrementalUsage = false;
   private lastPlanFilePath: string | null = null;
   private processGeneration = 0;
 
@@ -65,6 +66,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
+    this.emittedIncrementalUsage = false;
     this.lastPlanFilePath = null;
 
     // Use provided toolSessionId to restore resume capability after bridge restart
@@ -235,6 +237,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       const message = data.message as Record<string, unknown> | undefined;
       const content = message?.content;
       if (Array.isArray(content)) {
+        const usage = parseClaudeUsage(message?.usage);
+        if (usage) this.emittedIncrementalUsage = true;
+
         // Track plan file writes and detect ExitPlanMode before normalizing
         let hasExitPlanMode = false;
         let exitPlanModeToolUseId: string | undefined;
@@ -326,6 +331,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
           type: "assistant",
           message: { content: normalized },
           ...(parentToolUseId ? { parentToolUseId } : {}),
+          ...(usage ? { usage } : {}),
         });
       }
       return;
@@ -366,10 +372,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.resultEmitted = true;
       const usage = parseClaudeUsage(data.usage);
       const costUsd = typeof data.total_cost_usd === "number" ? data.total_cost_usd : undefined;
+      const includeUsage = usage && !this.emittedIncrementalUsage;
       onOutput({
         type: "result",
         subtype: isError ? "error" : "success",
-        ...(usage ? { usage } : {}),
+        ...(includeUsage ? { usage } : {}),
         ...(costUsd != null ? { costUsd } : {}),
       });
       return;

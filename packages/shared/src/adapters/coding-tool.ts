@@ -114,6 +114,10 @@ export interface AssistantEvent {
   message: { content: MessageBlock[] };
   /** Set when this message was produced inside a subagent, pointing to the spawning tool_use id. */
   parentToolUseId?: string;
+  /** Token usage for this assistant message, when the tool reports it incrementally. */
+  usage?: TokenUsage;
+  /** Cost of this assistant message in USD, when the tool reports it incrementally. */
+  costUsd?: number;
 }
 
 export interface UserEvent {

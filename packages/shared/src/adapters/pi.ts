@@ -84,6 +84,8 @@ export class PiAdapter implements CodingToolAdapter {
   private lastErrorMessage: string | null = null;
   private lastUsage: TokenUsage | undefined;
   private lastCostUsd: number | undefined;
+  private emittedIncrementalUsage = false;
+  private emittedIncrementalCost = false;
 
   run({
     prompt,
@@ -99,6 +101,8 @@ export class PiAdapter implements CodingToolAdapter {
     this.lastErrorMessage = null;
     this.lastUsage = undefined;
     this.lastCostUsd = undefined;
+    this.emittedIncrementalUsage = false;
+    this.emittedIncrementalCost = false;
 
     if (toolSessionId && !this.sessionId) {
       this.sessionId = toolSessionId;
@@ -220,14 +224,21 @@ export class PiAdapter implements CodingToolAdapter {
     if (type === "message_end") {
       const message = asRecord(data.message);
       if (message?.role === "assistant") {
-        this.captureUsage(message);
+        const captured = this.captureUsage(message);
+        if (captured.usage) this.emittedIncrementalUsage = true;
+        if (captured.costUsd != null) this.emittedIncrementalCost = true;
         const errorMessage = this.extractPiErrorMessage(message) ?? this.extractPiErrorMessage(data);
         if (errorMessage) {
           this.emitError(errorMessage, onOutput);
         }
         const blocks = this.normalizeAssistantBlocks(message.content);
         if (blocks.length > 0) {
-          onOutput({ type: "assistant", message: { content: blocks } });
+          onOutput({
+            type: "assistant",
+            message: { content: blocks },
+            ...(captured.usage ? { usage: captured.usage } : {}),
+            ...(captured.costUsd != null ? { costUsd: captured.costUsd } : {}),
+          });
         }
       }
       return;
@@ -270,8 +281,10 @@ export class PiAdapter implements CodingToolAdapter {
       onOutput({
         type: "result",
         subtype: this.sawErrorEvent ? "error" : "success",
-        ...(this.lastUsage ? { usage: this.lastUsage } : {}),
-        ...(this.lastCostUsd != null ? { costUsd: this.lastCostUsd } : {}),
+        ...(!this.emittedIncrementalUsage && this.lastUsage ? { usage: this.lastUsage } : {}),
+        ...(!this.emittedIncrementalCost && this.lastCostUsd != null
+          ? { costUsd: this.lastCostUsd }
+          : {}),
       });
       return;
     }
@@ -301,12 +314,20 @@ export class PiAdapter implements CodingToolAdapter {
     onOutput({ type: "error", message });
   }
 
-  private captureUsage(data: Record<string, unknown>) {
+  private captureUsage(data: Record<string, unknown>): {
+    usage?: TokenUsage;
+    costUsd?: number;
+  } {
     const usage = parsePiUsage(data.usage);
     if (usage) this.lastUsage = usage;
 
     const costUsd = parsePiCost(data.usage);
     if (costUsd != null) this.lastCostUsd = costUsd;
+
+    return {
+      ...(usage ? { usage } : {}),
+      ...(costUsd != null ? { costUsd } : {}),
+    };
   }
 
   private captureLatestUsageFromMessages(messages: unknown) {

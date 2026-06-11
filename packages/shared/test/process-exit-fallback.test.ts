@@ -154,6 +154,63 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("emits Claude Code assistant usage incrementally and suppresses duplicate result usage", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "assistant",
+        message: {
+          usage: {
+            input_tokens: 2,
+            output_tokens: 14,
+            cache_read_input_tokens: 120,
+            cache_creation_input_tokens: 8,
+          },
+          content: [{ type: "text", text: "done" }],
+        },
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "result",
+        subtype: "success",
+        usage: {
+          input_tokens: 2,
+          output_tokens: 14,
+          cache_read_input_tokens: 120,
+          cache_creation_input_tokens: 8,
+        },
+        total_cost_usd: 0.0045,
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "done" }] },
+      usage: {
+        inputTokens: 2,
+        outputTokens: 14,
+        cacheReadTokens: 120,
+        cacheCreationTokens: 8,
+      },
+    });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      costUsd: 0.0045,
+    });
+  });
+
   it("completes a Pi run when the process exits but stdio never closes", () => {
     const adapter = new PiAdapter();
     const onOutput = vi.fn();
@@ -266,7 +323,7 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
-  it("emits Pi message usage on the result event", () => {
+  it("emits Pi message usage incrementally and suppresses duplicate result usage", () => {
     const adapter = new PiAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -304,8 +361,8 @@ describe("coding tool adapter process exit fallback", () => {
     spawnedChildren[0].stdout.write(`${JSON.stringify({ type: "agent_end" })}\n`);
 
     expect(onOutput).toHaveBeenCalledWith({
-      type: "result",
-      subtype: "success",
+      type: "assistant",
+      message: { content: [{ type: "text", text: "done" }] },
       usage: {
         inputTokens: 120,
         outputTokens: 30,
@@ -313,6 +370,10 @@ describe("coding tool adapter process exit fallback", () => {
         cacheCreationTokens: 6,
       },
       costUsd: 0.0026,
+    });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
     });
   });
 
