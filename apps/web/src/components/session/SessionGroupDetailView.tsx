@@ -571,7 +571,7 @@ export function SessionGroupDetailView({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "p") return;
       event.preventDefault();
       setFilePaletteOpen((open) => !open);
     }
