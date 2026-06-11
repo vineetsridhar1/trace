@@ -269,7 +269,7 @@ export function SessionGroupHeader({
     if (linkedCheckout.available && linkedCheckout.repoLinked) {
       items.push({
         title: "Spotlight",
-        systemIcon: "sparkle.magnifyingglass",
+        systemIcon: "sparkles",
         onPress: handleSpotlight,
       });
     }

@@ -327,7 +327,7 @@ function ActionRow({
       <ActionButton
         theme={theme}
         label="Spotlight"
-        symbol="sparkle.magnifyingglass"
+        symbol="sparkles"
         iconColor="warning"
         accent={isAttachedToThisGroup}
         loading={pendingAction === "sync"}
