@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text as RNText,
+  View,
+} from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { gql } from "@urql/core";
@@ -65,9 +73,20 @@ type FileTreeNode = {
 
 type VisibleFileTreeNode = FileTreeNode & { depth: number };
 type VisibleBranchChangeTreeNode = VisibleFileTreeNode & { file?: BranchDiffFile };
+type HighlightKind =
+  | "plain"
+  | "comment"
+  | "string"
+  | "keyword"
+  | "number"
+  | "symbol"
+  | "punctuation";
+type HighlightPart = { text: string; kind: HighlightKind };
 
 const HEADER_BLUR_INTENSITY = 3;
 const HEADER_FADE_EXTRA_HEIGHT = 56;
+const CODE_TOKEN_PATTERN =
+  /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:import|from|export|default|function|return|const|let|var|if|else|for|while|class|interface|type|extends|async|await|try|catch|throw|new|true|false|null|undefined)\b|\b[A-Z][A-Za-z0-9_]*\b|\b\d+(?:\.\d+)?\b|[{}()[\]<>/=:+\-*.,;?])/g;
 const FILE_ICON_BY_BASENAME: Record<string, { name: string; color: string }> = {
   ".gitignore": { name: "git", color: "#f05032" },
   ".npmrc": { name: "npm", color: "#cb3837" },
@@ -232,6 +251,35 @@ function branchChangeColor(status: string, theme: ReturnType<typeof useTheme>): 
     default:
       return theme.colors.mutedForeground;
   }
+}
+
+function highlightCode(code: string): HighlightPart[] {
+  if (code.length > 100_000) return [{ text: code, kind: "plain" }];
+
+  const parts: HighlightPart[] = [];
+  let lastIndex = 0;
+  for (const match of code.matchAll(CODE_TOKEN_PATTERN)) {
+    const text = match[0];
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      parts.push({ text: code.slice(lastIndex, index), kind: "plain" });
+    }
+    parts.push({ text, kind: highlightKindForToken(text) });
+    lastIndex = index + text.length;
+  }
+  if (lastIndex < code.length) {
+    parts.push({ text: code.slice(lastIndex), kind: "plain" });
+  }
+  return parts;
+}
+
+function highlightKindForToken(token: string): HighlightKind {
+  if (token.startsWith("//") || token.startsWith("/*")) return "comment";
+  if (token.startsWith('"') || token.startsWith("'") || token.startsWith("`")) return "string";
+  if (/^\d/.test(token)) return "number";
+  if (/^[A-Z]/.test(token)) return "symbol";
+  if (/^[{}()[\]<>/=:+\-*.,;?]$/.test(token)) return "punctuation";
+  return "keyword";
 }
 
 function FileTypeIcon({
@@ -442,22 +490,22 @@ function FilesTab({ groupId, topInset }: { groupId: string; topInset: number }) 
   if (selectedFile) {
     return (
       <View style={styles.panel}>
-        <ListRow
-          title={selectedFile}
-          subtitle="Preview"
-          leading={
-            <SymbolView name="chevron.left" size={16} tintColor={theme.colors.mutedForeground} />
-          }
-          onPress={closeFile}
-          separator
-        />
+        <View style={{ paddingTop: topInset }}>
+          <ListRow
+            title={selectedFile}
+            subtitle="Preview"
+            leading={
+              <SymbolView name="chevron.left" size={16} tintColor={theme.colors.mutedForeground} />
+            }
+            onPress={closeFile}
+            separator
+          />
+        </View>
         {contentLoading ? (
           <LoadingState label="Loading file..." />
         ) : (
           <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
-            <Text variant="caption1" color="mutedForeground" style={styles.monospace}>
-              {content}
-            </Text>
+            <HighlightedCode code={content ?? ""} />
           </ScrollView>
         )}
       </View>
@@ -501,6 +549,30 @@ function FilesTab({ groupId, topInset }: { groupId: string; topInset: number }) 
         />
       </View>
     </View>
+  );
+}
+
+function HighlightedCode({ code }: { code: string }) {
+  const theme = useTheme();
+  const parts = useMemo(() => highlightCode(code), [code]);
+  const tokenStyles: Record<HighlightKind, { color: string }> = {
+    plain: { color: theme.colors.foreground },
+    comment: { color: theme.colors.dimForeground },
+    string: { color: theme.colors.success },
+    keyword: { color: theme.colors.accent },
+    number: { color: theme.colors.warning },
+    symbol: { color: "#c084fc" },
+    punctuation: { color: theme.colors.mutedForeground },
+  };
+
+  return (
+    <RNText style={[styles.codeText, { color: theme.colors.foreground }]}>
+      {parts.map((part, index) => (
+        <RNText key={`${index}:${part.kind}`} style={tokenStyles[part.kind]}>
+          {part.text}
+        </RNText>
+      ))}
+    </RNText>
   );
 }
 
@@ -917,9 +989,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   previewContent: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 96,
   },
-  monospace: {
+  codeText: {
     fontFamily: "SpaceMono",
+    fontSize: 13,
+    lineHeight: 20,
+    letterSpacing: 0,
   },
 });
