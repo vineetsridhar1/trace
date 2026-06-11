@@ -88,26 +88,7 @@ function PanelBody({
     pendingAction,
     refresh,
     sync,
-    restore,
-    toggleAutoSync,
   } = checkout;
-
-  const handle = useCallback(
-    async (
-      action: LinkedCheckoutAction,
-      fn: () => Promise<{ ok: boolean; error: string | null }>,
-    ) => {
-      void haptic.light();
-      const outcome = await fn();
-      if (!outcome.ok) {
-        void haptic.error();
-        Alert.alert(ACTION_ALERT_TITLE[action], outcome.error ?? "Unknown error.");
-        return;
-      }
-      void haptic.success();
-    },
-    [],
-  );
 
   const onSync = useCallback(async () => {
     void haptic.light();
@@ -151,7 +132,6 @@ function PanelBody({
     },
     [sync],
   );
-  const onRestore = useCallback(() => void handle("restore", restore), [handle, restore]);
   const canQueueGitHubAction = !!agentStatus && agentStatus === "active" && !worktreeDeleted;
   const canSendGitHubAction =
     !!sessionId &&
@@ -189,10 +169,6 @@ function PanelBody({
       }
     },
     [canQueueGitHubAction, canRunGitHubAction, pendingGitHubAction, sessionId],
-  );
-  const onTogglePause = useCallback(
-    () => void handle("toggle-auto-sync", toggleAutoSync),
-    [handle, toggleAutoSync],
   );
   const conflictSheet = (
     <LinkedCheckoutSyncConflictSheet
@@ -268,14 +244,11 @@ function PanelBody({
         <ActionRow
           theme={theme}
           pendingAction={pendingAction}
-          autoSyncEnabled={status?.autoSyncEnabled ?? false}
           isAttachedToThisGroup={false}
           prUrl={prUrl}
           canRunGitHubAction={canRunGitHubAction}
           pendingGitHubAction={pendingGitHubAction}
           onSync={onSync}
-          onTogglePause={onTogglePause}
-          onRestore={onRestore}
           onRunGitHubAction={(action) => void sendGitHubAction(action)}
         />
       </View>
@@ -306,14 +279,11 @@ function PanelBody({
       <ActionRow
         theme={theme}
         pendingAction={pendingAction}
-        autoSyncEnabled={status?.autoSyncEnabled ?? false}
         isAttachedToThisGroup={isAttachedToThisGroup}
         prUrl={prUrl}
         canRunGitHubAction={canRunGitHubAction}
         pendingGitHubAction={pendingGitHubAction}
         onSync={() => void onSync()}
-        onTogglePause={onTogglePause}
-        onRestore={onRestore}
         onRunGitHubAction={(action) => void sendGitHubAction(action)}
       />
     </View>
@@ -331,28 +301,22 @@ function SectionHeader() {
 interface ActionRowProps {
   theme: Theme;
   pendingAction: LinkedCheckoutAction | null;
-  autoSyncEnabled: boolean;
   isAttachedToThisGroup: boolean;
   prUrl: string | null | undefined;
   canRunGitHubAction: boolean;
   pendingGitHubAction: "create" | "merge" | null;
   onSync: () => void;
-  onTogglePause: () => void;
-  onRestore: () => void;
   onRunGitHubAction: (action: "create" | "merge") => void;
 }
 
 function ActionRow({
   theme,
   pendingAction,
-  autoSyncEnabled,
   isAttachedToThisGroup,
   prUrl,
   canRunGitHubAction,
   pendingGitHubAction,
   onSync,
-  onTogglePause,
-  onRestore,
   onRunGitHubAction,
 }: ActionRowProps) {
   const busy = pendingAction !== null;
@@ -405,26 +369,6 @@ function ActionRow({
           onPress={() => onRunGitHubAction("create")}
         />
       )}
-      {isAttachedToThisGroup ? (
-        <>
-          <ActionButton
-            theme={theme}
-            label={autoSyncEnabled ? "Pause" : "Resume"}
-            symbol={autoSyncEnabled ? "pause.fill" : "play.fill"}
-            loading={pendingAction === "toggle-auto-sync"}
-            disabled={busy}
-            onPress={onTogglePause}
-          />
-          <ActionButton
-            theme={theme}
-            label="Restore"
-            symbol="arrow.uturn.backward"
-            loading={pendingAction === "restore"}
-            disabled={busy}
-            onPress={onRestore}
-          />
-        </>
-      ) : null}
     </View>
   );
 }
