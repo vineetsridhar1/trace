@@ -1,15 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import {
   CLEAR_QUEUED_MESSAGES_MUTATION,
@@ -29,6 +19,8 @@ import { alpha, useTheme } from "@/theme";
 
 interface QueuedMessagesStripProps {
   sessionId: string;
+  editingId?: string | null;
+  onEditMessage?: (id: string) => void;
 }
 
 /**
@@ -37,7 +29,11 @@ interface QueuedMessagesStripProps {
  * shared handler so new chips appear without a refetch and drain as the agent
  * consumes the queue.
  */
-export function QueuedMessagesStrip({ sessionId }: QueuedMessagesStripProps) {
+export function QueuedMessagesStrip({
+  sessionId,
+  editingId,
+  onEditMessage,
+}: QueuedMessagesStripProps) {
   const theme = useTheme();
   const ids = useQueuedMessageIdsForSession(sessionId);
 
@@ -93,22 +89,33 @@ export function QueuedMessagesStrip({ sessionId }: QueuedMessagesStripProps) {
         keyboardShouldPersistTaps="handled"
       >
         {ids.map((id) => (
-          <QueuedMessageChip key={id} id={id} tint={theme.colors.accent} />
+          <QueuedMessageChip
+            key={id}
+            id={id}
+            tint={theme.colors.accent}
+            selected={editingId === id}
+            onEdit={onEditMessage}
+          />
         ))}
       </ScrollView>
     </View>
   );
 }
 
-function QueuedMessageChip({ id, tint }: { id: string; tint: string }) {
+function QueuedMessageChip({
+  id,
+  tint,
+  selected,
+  onEdit,
+}: {
+  id: string;
+  tint: string;
+  selected: boolean;
+  onEdit?: (id: string) => void;
+}) {
   const theme = useTheme();
   const text = useEntityField("queuedMessages", id, "text") as string | undefined;
   const imageKeys = useEntityField("queuedMessages", id, "imageKeys") as string[] | undefined;
-  const interactionMode = useEntityField("queuedMessages", id, "interactionMode") as
-    | string
-    | null
-    | undefined;
-  const [editing, setEditing] = useState(false);
   const displayText = useMemo(() => stripPromptWrapping(text ?? ""), [text]);
   const imageCount = imageKeys?.length ?? 0;
 
@@ -133,103 +140,93 @@ function QueuedMessageChip({ id, tint }: { id: string; tint: string }) {
   if (!text && imageCount === 0) return null;
 
   return (
-    <>
-      <Pressable
-        onPress={() => {
-          void haptic.selection();
-          setEditing(true);
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Edit queued message"
-        style={[
-          styles.chip,
-          { backgroundColor: alpha(tint, 0.12), borderColor: alpha(tint, 0.3) },
-        ]}
-      >
-        <Text variant="caption1" color="foreground" numberOfLines={1} style={styles.chipText}>
-          {displayText || "File attachment"}
-        </Text>
-        {imageCount > 0 ? (
-          <View style={styles.attachmentBadge}>
-            <SymbolView
-              name="paperclip"
-              size={9}
-              tintColor={theme.colors.mutedForeground}
-              resizeMode="scaleAspectFit"
-              style={styles.badgeIcon}
-            />
-            <Text variant="caption2" color="mutedForeground">
-              {imageCount}
-            </Text>
-          </View>
-        ) : null}
-        <Pressable
-          onPress={handleSteer}
-          accessibilityRole="button"
-          accessibilityLabel="Steer with queued message"
-          hitSlop={8}
-          style={[styles.iconButton, { backgroundColor: alpha(theme.colors.accent, 0.14) }]}
-        >
+    <Pressable
+      onPress={() => {
+        void haptic.selection();
+        onEdit?.(id);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel="Edit queued message"
+      style={[
+        styles.chip,
+        {
+          backgroundColor: alpha(tint, selected ? 0.2 : 0.12),
+          borderColor: alpha(tint, selected ? 0.72 : 0.3),
+        },
+      ]}
+    >
+      <Text variant="caption1" color="foreground" numberOfLines={1} style={styles.chipText}>
+        {displayText || "File attachment"}
+      </Text>
+      {imageCount > 0 ? (
+        <View style={styles.attachmentBadge}>
           <SymbolView
-            name="paperplane.fill"
-            size={10}
-            tintColor={theme.colors.accent}
-            resizeMode="scaleAspectFit"
-            style={styles.actionIcon}
-          />
-        </Pressable>
-        <Pressable
-          onPress={handleRemove}
-          accessibilityRole="button"
-          accessibilityLabel="Remove queued message"
-          hitSlop={8}
-          style={styles.iconButton}
-        >
-          <SymbolView
-            name="xmark"
+            name="paperclip"
             size={9}
             tintColor={theme.colors.mutedForeground}
             resizeMode="scaleAspectFit"
-            style={styles.removeIcon}
+            style={styles.badgeIcon}
           />
-        </Pressable>
+          <Text variant="caption2" color="mutedForeground">
+            {imageCount}
+          </Text>
+        </View>
+      ) : null}
+      <Pressable
+        onPress={handleSteer}
+        accessibilityRole="button"
+        accessibilityLabel="Steer with queued message"
+        hitSlop={8}
+        style={[styles.iconButton, { backgroundColor: alpha(theme.colors.accent, 0.14) }]}
+      >
+        <SymbolView
+          name="paperplane.fill"
+          size={10}
+          tintColor={theme.colors.accent}
+          resizeMode="scaleAspectFit"
+          style={styles.actionIcon}
+        />
       </Pressable>
-      <QueuedMessageEditor
-        id={id}
-        displayText={displayText}
-        imageCount={imageCount}
-        interactionMode={interactionMode}
-        visible={editing}
-        onClose={() => setEditing(false)}
-      />
-    </>
+      <Pressable
+        onPress={handleRemove}
+        accessibilityRole="button"
+        accessibilityLabel="Remove queued message"
+        hitSlop={8}
+        style={styles.iconButton}
+      >
+        <SymbolView
+          name="xmark"
+          size={9}
+          tintColor={theme.colors.mutedForeground}
+          resizeMode="scaleAspectFit"
+          style={styles.removeIcon}
+        />
+      </Pressable>
+    </Pressable>
   );
 }
 
-interface QueuedMessageEditorProps {
+interface QueuedMessageComposerEditorProps {
   id: string;
-  displayText: string;
-  imageCount: number;
-  interactionMode: string | null | undefined;
-  visible: boolean;
   onClose: () => void;
 }
 
-function QueuedMessageEditor({
-  id,
-  displayText,
-  imageCount,
-  interactionMode,
-  visible,
-  onClose,
-}: QueuedMessageEditorProps) {
+export function QueuedMessageComposerEditor({ id, onClose }: QueuedMessageComposerEditorProps) {
   const theme = useTheme();
+  const text = useEntityField("queuedMessages", id, "text") as string | undefined;
+  const imageKeys = useEntityField("queuedMessages", id, "imageKeys") as string[] | undefined;
+  const interactionMode = useEntityField("queuedMessages", id, "interactionMode") as
+    | string
+    | null
+    | undefined;
+  const displayText = useMemo(() => stripPromptWrapping(text ?? ""), [text]);
+  const imageCount = imageKeys?.length ?? 0;
   const [draft, setDraft] = useState(displayText);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (visible) setDraft(displayText);
-  }, [displayText, visible]);
+    setDraft(displayText);
+  }, [displayText, id]);
 
   const save = useCallback(async () => {
     const nextText = draft.trim();
@@ -308,145 +305,136 @@ function QueuedMessageEditor({
     }
   }, [displayText, draft, id, imageCount, interactionMode, onClose]);
 
+  if (!text && imageCount === 0) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.modalRoot}
+    <View style={{ paddingHorizontal: theme.spacing.md }}>
+      <Glass
+        preset="input"
+        interactive
+        tint={theme.colors.glassTintLight}
+        style={[styles.editorGlass, { borderColor: alpha(theme.colors.foreground, 0.16) }]}
       >
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <Glass
-          preset="card"
-          interactive
-          tint={theme.colors.glassTintLight}
+        <View
+          pointerEvents="none"
+          style={[styles.editorShine, { borderColor: alpha(theme.colors.foreground, 0.18) }]}
+        />
+        <View style={styles.editorHeader}>
+          <View style={styles.editorTitleRow}>
+            <SymbolView
+              name="pencil"
+              size={12}
+              tintColor={theme.colors.accent}
+              resizeMode="scaleAspectFit"
+              style={styles.editorTitleIcon}
+            />
+            <Text variant="caption1" color="mutedForeground" style={styles.editorLabel}>
+              Editing queued message
+            </Text>
+          </View>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close queued message editor"
+            hitSlop={8}
+            style={styles.closeButton}
+          >
+            <SymbolView
+              name="xmark"
+              size={12}
+              tintColor={theme.colors.mutedForeground}
+              resizeMode="scaleAspectFit"
+              style={styles.closeIcon}
+            />
+          </Pressable>
+        </View>
+        {imageCount > 0 ? (
+          <View
+            style={[
+              styles.inlineAttachmentRow,
+              { backgroundColor: alpha(theme.colors.accent, 0.1) },
+            ]}
+          >
+            <SymbolView
+              name="paperclip"
+              size={12}
+              tintColor={theme.colors.accent}
+              resizeMode="scaleAspectFit"
+              style={styles.attachmentIcon}
+            />
+            <Text variant="caption1" color="mutedForeground">
+              {imageCount} attachment{imageCount === 1 ? "" : "s"}
+            </Text>
+          </View>
+        ) : null}
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          editable={!busy}
+          multiline
+          autoFocus
+          placeholder="Queued message"
+          placeholderTextColor={theme.colors.mutedForeground}
+          selectionColor={theme.colors.accent}
+          textAlignVertical="top"
           style={[
-            styles.editorCard,
+            styles.input,
             {
-              borderColor: alpha(theme.colors.foreground, 0.14),
-              marginHorizontal: theme.spacing.md,
+              color: theme.colors.foreground,
+              backgroundColor: alpha(theme.colors.background, 0.42),
+              borderColor: alpha(theme.colors.foreground, 0.12),
             },
           ]}
-        >
-          <View
-            pointerEvents="none"
-            style={[
-              styles.editorShine,
-              { borderColor: alpha(theme.colors.foreground, 0.18) },
-            ]}
-          />
-          <View style={styles.editorHeader}>
-            <View>
-              <Text variant="headline" color="foreground">
-                Edit queued message
-              </Text>
-              <Text variant="caption1" color="mutedForeground">
-                Save changes or steer the agent now.
-              </Text>
-            </View>
+        />
+        <View style={styles.editorActions}>
+          <Pressable
+            onPress={remove}
+            disabled={busy}
+            accessibilityRole="button"
+            style={[styles.secondaryAction, { borderColor: alpha(theme.colors.foreground, 0.14) }]}
+          >
+            <Text variant="subheadline" color="mutedForeground">
+              Delete
+            </Text>
+          </Pressable>
+          <View style={styles.primaryActions}>
             <Pressable
-              onPress={onClose}
+              onPress={save}
+              disabled={busy || (!draft.trim() && imageCount === 0)}
               accessibilityRole="button"
-              accessibilityLabel="Close queued message editor"
-              hitSlop={8}
-              style={styles.closeButton}
-            >
-              <SymbolView
-                name="xmark"
-                size={12}
-                tintColor={theme.colors.mutedForeground}
-                resizeMode="scaleAspectFit"
-                style={styles.closeIcon}
-              />
-            </Pressable>
-          </View>
-          {imageCount > 0 ? (
-            <View
               style={[
-                styles.attachmentRow,
-                { backgroundColor: alpha(theme.colors.accent, 0.1) },
+                styles.secondaryAction,
+                { borderColor: alpha(theme.colors.foreground, 0.14), opacity: busy ? 0.6 : 1 },
+              ]}
+            >
+              <Text variant="subheadline" color="foreground">
+                Save
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={steer}
+              disabled={busy || (!draft.trim() && imageCount === 0)}
+              accessibilityRole="button"
+              style={[
+                styles.steerAction,
+                { backgroundColor: theme.colors.accent, opacity: busy ? 0.6 : 1 },
               ]}
             >
               <SymbolView
-                name="paperclip"
-                size={12}
-                tintColor={theme.colors.accent}
+                name="paperplane.fill"
+                size={13}
+                tintColor={theme.colors.accentForeground}
                 resizeMode="scaleAspectFit"
-                style={styles.attachmentIcon}
+                style={styles.steerIcon}
               />
-              <Text variant="caption1" color="mutedForeground">
-                {imageCount} attachment{imageCount === 1 ? "" : "s"}
-              </Text>
-            </View>
-          ) : null}
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            editable={!busy}
-            multiline
-            autoFocus
-            placeholder="Queued message"
-            placeholderTextColor={theme.colors.mutedForeground}
-            selectionColor={theme.colors.accent}
-            textAlignVertical="top"
-            style={[
-              styles.input,
-              {
-                color: theme.colors.foreground,
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.borderMuted,
-              },
-            ]}
-          />
-          <View style={styles.editorActions}>
-            <Pressable
-              onPress={remove}
-              disabled={busy}
-              accessibilityRole="button"
-              style={[styles.secondaryAction, { borderColor: theme.colors.borderMuted }]}
-            >
-              <Text variant="subheadline" color="mutedForeground">
-                Delete
+              <Text variant="subheadline" color="accentForeground">
+                Steer
               </Text>
             </Pressable>
-            <View style={styles.primaryActions}>
-              <Pressable
-                onPress={save}
-                disabled={busy || (!draft.trim() && imageCount === 0)}
-                accessibilityRole="button"
-                style={[
-                  styles.secondaryAction,
-                  { borderColor: theme.colors.borderMuted, opacity: busy ? 0.6 : 1 },
-                ]}
-              >
-                <Text variant="subheadline" color="foreground">
-                  Save
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={steer}
-                disabled={busy || (!draft.trim() && imageCount === 0)}
-                accessibilityRole="button"
-                style={[
-                  styles.steerAction,
-                  { backgroundColor: theme.colors.accent, opacity: busy ? 0.6 : 1 },
-                ]}
-              >
-                <SymbolView
-                  name="paperplane.fill"
-                  size={13}
-                  tintColor={theme.colors.accentForeground}
-                  resizeMode="scaleAspectFit"
-                  style={styles.steerIcon}
-                />
-                <Text variant="subheadline" color="accentForeground">
-                  Steer
-                </Text>
-              </Pressable>
-            </View>
           </View>
-        </Glass>
-      </KeyboardAvoidingView>
-    </Modal>
+        </View>
+      </Glass>
+    </View>
   );
 }
 
@@ -476,21 +464,24 @@ const styles = StyleSheet.create({
   chipText: { flexShrink: 1 },
   attachmentBadge: { flexDirection: "row", alignItems: "center", gap: 2 },
   badgeIcon: { width: 9, height: 9 },
-  iconButton: { width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  iconButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   actionIcon: { width: 10, height: 10 },
   removeIcon: { width: 9, height: 9 },
-  modalRoot: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.22)" },
-  editorCard: {
+  editorGlass: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 28,
-    padding: 16,
-    gap: 14,
-    marginBottom: 12,
+    padding: 12,
+    gap: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.26,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.28,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 14 },
     elevation: 18,
   },
   editorShine: {
@@ -499,10 +490,13 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     backgroundColor: "rgba(255,255,255,0.05)",
   },
-  editorHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  editorHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  editorTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  editorTitleIcon: { width: 12, height: 12 },
+  editorLabel: { letterSpacing: 0.3, textTransform: "uppercase" },
   closeButton: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   closeIcon: { width: 12, height: 12 },
-  attachmentRow: {
+  inlineAttachmentRow: {
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
@@ -513,8 +507,8 @@ const styles = StyleSheet.create({
   },
   attachmentIcon: { width: 12, height: 12 },
   input: {
-    minHeight: 120,
-    maxHeight: 220,
+    minHeight: 72,
+    maxHeight: 160,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 18,
     paddingHorizontal: 12,
