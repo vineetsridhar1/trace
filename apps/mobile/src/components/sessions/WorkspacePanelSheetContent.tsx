@@ -12,9 +12,9 @@ import {
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { gql } from "@urql/core";
+import { useRouter } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, ListRow, Text, TraceLoader } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
@@ -562,13 +562,11 @@ function WorkspaceModeFab({
 
 function FilesTab({ groupId, topInset }: { groupId: string; topInset: number }) {
   const theme = useTheme();
+  const router = useRouter();
   const [files, setFiles] = useState<string[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const didAutoExpandRef = useRef(false);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [contentLoading, setContentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const tree = useMemo(() => buildFileTree(files), [files]);
@@ -615,64 +613,12 @@ function FilesTab({ groupId, topInset }: { groupId: string; topInset: number }) 
   }, [loadFiles]);
 
   const openFile = useCallback(
-    async (filePath: string) => {
-      setSelectedFile(filePath);
-      setContent(null);
-      setContentLoading(true);
-      try {
-        const result = await getClient()
-          .query<FileContentData>(
-            SESSION_GROUP_FILE_CONTENT_QUERY,
-            { sessionGroupId: groupId, filePath },
-            { requestPolicy: "network-only" },
-          )
-          .toPromise();
-        if (result.error) throw result.error;
-        setContent(result.data?.sessionGroupFileContentWithSource?.content ?? "");
-      } catch (loadError) {
-        Alert.alert(
-          "Couldn't open file",
-          loadError instanceof Error ? loadError.message : "Try again.",
-        );
-        setSelectedFile(null);
-      } finally {
-        setContentLoading(false);
-      }
+    (filePath: string) => {
+      const params = new URLSearchParams({ groupId, filePath });
+      router.push(`/sheets/workspace-file?${params.toString()}`);
     },
-    [groupId],
+    [groupId, router],
   );
-
-  const closeFile = useCallback(() => {
-    setContent(null);
-    setContentLoading(false);
-    setSelectedFile(null);
-  }, []);
-  usePreventRemove(selectedFile !== null, closeFile);
-
-  if (selectedFile) {
-    return (
-      <View style={styles.panel}>
-        <View style={{ paddingTop: topInset }}>
-          <ListRow
-            title={selectedFile}
-            subtitle="Preview"
-            leading={
-              <SymbolView name="chevron.left" size={16} tintColor={theme.colors.mutedForeground} />
-            }
-            onPress={closeFile}
-            separator
-          />
-        </View>
-        {contentLoading ? (
-          <LoadingState label="Loading file..." />
-        ) : (
-          <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
-            <HighlightedCode code={content ?? ""} />
-          </ScrollView>
-        )}
-      </View>
-    );
-  }
 
   if (loading) return <LoadingState label="Loading files..." />;
   if (error) return <ErrorState message={error} onRetry={loadFiles} />;
@@ -735,6 +681,156 @@ function HighlightedCode({ code }: { code: string }) {
         </RNText>
       ))}
     </RNText>
+  );
+}
+
+export function WorkspaceFilePreviewContent({
+  groupId,
+  filePath,
+}: {
+  groupId: string;
+  filePath: string;
+}) {
+  const theme = useTheme();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topInset = insets.top + theme.spacing.sm;
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setContent(null);
+    getClient()
+      .query<FileContentData>(
+        SESSION_GROUP_FILE_CONTENT_QUERY,
+        { sessionGroupId: groupId, filePath },
+        { requestPolicy: "network-only" },
+      )
+      .toPromise()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.error) throw result.error;
+        setContent(result.data?.sessionGroupFileContentWithSource?.content ?? "");
+      })
+      .catch((loadError: unknown) => {
+        if (cancelled) return;
+        Alert.alert(
+          "Couldn't open file",
+          loadError instanceof Error ? loadError.message : "Try again.",
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath, groupId, router]);
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.panel}>
+        <View style={{ paddingTop: topInset }}>
+          <ListRow
+            title={filePath}
+            subtitle="Preview"
+            leading={
+              <SymbolView name="chevron.left" size={16} tintColor={theme.colors.mutedForeground} />
+            }
+            onPress={() => router.back()}
+            separator
+          />
+        </View>
+        {loading ? (
+          <LoadingState label="Loading file..." />
+        ) : (
+          <ScrollView style={styles.preview} contentContainerStyle={styles.previewContent}>
+            <HighlightedCode code={content ?? ""} />
+          </ScrollView>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export function WorkspaceDiffPreviewContent({
+  groupId,
+  file,
+}: {
+  groupId: string;
+  file: BranchDiffFile;
+}) {
+  const theme = useTheme();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topInset = insets.top + theme.spacing.sm;
+  const [content, setContent] = useState<{ original: string; modified: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDiff = useCallback(async () => {
+    setContent(null);
+    setError(null);
+    setLoading(true);
+    try {
+      const branchResult = await getClient()
+        .query<DefaultBranchData>(SESSION_GROUP_DEFAULT_BRANCH_QUERY, { id: groupId })
+        .toPromise();
+      if (branchResult.error) throw branchResult.error;
+      const defaultBranch = branchResult.data?.sessionGroup?.repo?.defaultBranch ?? "main";
+
+      const [originalResult, modifiedResult] = await Promise.all([
+        isAddedStatus(file.status)
+          ? Promise.resolve({ data: { sessionGroupFileAtRef: "" }, error: undefined })
+          : getClient()
+              .query<FileAtRefData>(SESSION_GROUP_FILE_AT_REF_QUERY, {
+                sessionGroupId: groupId,
+                filePath: file.path,
+                ref: defaultBranch,
+              })
+              .toPromise(),
+        isDeletedStatus(file.status)
+          ? Promise.resolve({ data: { sessionGroupFileContent: "" }, error: undefined })
+          : getClient()
+              .query<FileContentForDiffData>(
+                SESSION_GROUP_FILE_CONTENT_FOR_DIFF_QUERY,
+                { sessionGroupId: groupId, filePath: file.path },
+                { requestPolicy: "network-only" },
+              )
+              .toPromise(),
+      ]);
+      if (originalResult.error) throw originalResult.error;
+      if (modifiedResult.error) throw modifiedResult.error;
+      setContent({
+        original: originalResult.data?.sessionGroupFileAtRef ?? "",
+        modified: modifiedResult.data?.sessionGroupFileContent ?? "",
+      });
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load diff.");
+    } finally {
+      setLoading(false);
+    }
+  }, [file.path, file.status, groupId]);
+
+  useEffect(() => {
+    void loadDiff();
+  }, [loadDiff]);
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <DiffPreview
+        file={file}
+        content={content}
+        loading={loading}
+        error={error}
+        topInset={topInset}
+        onBack={() => router.back()}
+        onRetry={() => void loadDiff()}
+      />
+    </View>
   );
 }
 
@@ -824,14 +920,9 @@ function FileTreeRow({
 
 function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }) {
   const theme = useTheme();
+  const router = useRouter();
   const [files, setFiles] = useState<BranchDiffFile[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
-  const [selectedDiffFile, setSelectedDiffFile] = useState<BranchDiffFile | null>(null);
-  const [diffContent, setDiffContent] = useState<{ original: string; modified: string } | null>(
-    null,
-  );
-  const [diffLoading, setDiffLoading] = useState(false);
-  const [diffError, setDiffError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const tree = useMemo(() => buildFileTree(files.map((file) => file.path)), [files]);
@@ -880,74 +971,18 @@ function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }
   }, [loadChanges]);
 
   const openDiff = useCallback(
-    async (file: BranchDiffFile) => {
-      setSelectedDiffFile(file);
-      setDiffContent(null);
-      setDiffError(null);
-      setDiffLoading(true);
-      try {
-        const branchResult = await getClient()
-          .query<DefaultBranchData>(SESSION_GROUP_DEFAULT_BRANCH_QUERY, { id: groupId })
-          .toPromise();
-        if (branchResult.error) throw branchResult.error;
-        const defaultBranch = branchResult.data?.sessionGroup?.repo?.defaultBranch ?? "main";
-
-        const [originalResult, modifiedResult] = await Promise.all([
-          isAddedStatus(file.status)
-            ? Promise.resolve({ data: { sessionGroupFileAtRef: "" }, error: undefined })
-            : getClient()
-                .query<FileAtRefData>(SESSION_GROUP_FILE_AT_REF_QUERY, {
-                  sessionGroupId: groupId,
-                  filePath: file.path,
-                  ref: defaultBranch,
-                })
-                .toPromise(),
-          isDeletedStatus(file.status)
-            ? Promise.resolve({ data: { sessionGroupFileContent: "" }, error: undefined })
-            : getClient()
-                .query<FileContentForDiffData>(
-                  SESSION_GROUP_FILE_CONTENT_FOR_DIFF_QUERY,
-                  { sessionGroupId: groupId, filePath: file.path },
-                  { requestPolicy: "network-only" },
-                )
-                .toPromise(),
-        ]);
-        if (originalResult.error) throw originalResult.error;
-        if (modifiedResult.error) throw modifiedResult.error;
-        setDiffContent({
-          original: originalResult.data?.sessionGroupFileAtRef ?? "",
-          modified: modifiedResult.data?.sessionGroupFileContent ?? "",
-        });
-      } catch (loadError) {
-        setDiffError(loadError instanceof Error ? loadError.message : "Failed to load diff.");
-      } finally {
-        setDiffLoading(false);
-      }
+    (file: BranchDiffFile) => {
+      const params = new URLSearchParams({
+        groupId,
+        filePath: file.path,
+        status: file.status,
+        additions: String(file.additions),
+        deletions: String(file.deletions),
+      });
+      router.push(`/sheets/workspace-diff?${params.toString()}`);
     },
-    [groupId],
+    [groupId, router],
   );
-
-  const closeDiff = useCallback(() => {
-    setSelectedDiffFile(null);
-    setDiffContent(null);
-    setDiffError(null);
-    setDiffLoading(false);
-  }, []);
-  usePreventRemove(selectedDiffFile !== null, closeDiff);
-
-  if (selectedDiffFile) {
-    return (
-      <DiffPreview
-        file={selectedDiffFile}
-        content={diffContent}
-        loading={diffLoading}
-        error={diffError}
-        topInset={topInset}
-        onBack={closeDiff}
-        onRetry={() => void openDiff(selectedDiffFile)}
-      />
-    );
-  }
 
   if (loading) return <LoadingState label="Loading changes..." />;
   if (error) return <ErrorState message={error} onRetry={loadChanges} />;
