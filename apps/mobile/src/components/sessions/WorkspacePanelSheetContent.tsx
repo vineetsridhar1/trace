@@ -190,7 +190,9 @@ function directoryPathsFromTree(tree: FileTreeNode[]): Set<string> {
 
 function fileSymbol(path: string): SFSymbol {
   const ext = path.split(".").pop()?.toLowerCase();
-  if (["ts", "tsx", "js", "jsx", "py", "rb", "go", "rs", "java", "css", "html"].includes(ext ?? "")) {
+  if (
+    ["ts", "tsx", "js", "jsx", "py", "rb", "go", "rs", "java", "css", "html"].includes(ext ?? "")
+  ) {
     return "curlybraces";
   }
   if (["json", "jsonc", "yaml", "yml", "toml"].includes(ext ?? "")) return "gearshape";
@@ -321,10 +323,7 @@ function WorkspaceModeFab({
 
   return (
     <View
-      style={[
-        styles.fabWrap,
-        { right: theme.spacing.lg, bottom: bottomInset + theme.spacing.lg },
-      ]}
+      style={[styles.fabWrap, { right: theme.spacing.lg, bottom: bottomInset + theme.spacing.lg }]}
     >
       <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.fabGlass}>
         <Pressable
@@ -525,7 +524,7 @@ function FileTreeRow({
   const fileIcon = fileIconForPath(node.name);
   const iconColor = node.isDirectory
     ? theme.colors.accent
-    : fileIcon?.color ?? theme.colors.mutedForeground;
+    : (fileIcon?.color ?? theme.colors.mutedForeground);
 
   return (
     <Pressable
@@ -554,17 +553,7 @@ function FileTreeRow({
       ) : (
         <View style={styles.fileTreeChevron} />
       )}
-      <View
-        style={[
-          styles.fileTreeIconBubble,
-          {
-            backgroundColor: node.isDirectory
-              ? alpha(theme.colors.accent, 0.14)
-              : alpha(theme.colors.foreground, 0.06),
-            borderRadius: theme.radius.sm,
-          },
-        ]}
-      >
+      <View style={styles.fileTreeIconSlot}>
         {node.isDirectory ? (
           <SymbolView
             name={icon}
@@ -690,8 +679,6 @@ function BranchChangeTreeRow({
   const theme = useTheme();
   const file = node.file;
   const changeColor = file ? branchChangeColor(file.status, theme) : theme.colors.accent;
-  const fileIcon = fileIconForPath(node.name);
-  const fileIconColor = fileIcon?.color ?? changeColor;
   const icon: SFSymbol = node.isDirectory
     ? expanded
       ? "folder.fill"
@@ -724,17 +711,7 @@ function BranchChangeTreeRow({
       ) : (
         <View style={styles.fileTreeChevron} />
       )}
-      <View
-        style={[
-          styles.fileTreeIconBubble,
-          {
-            backgroundColor: node.isDirectory
-              ? alpha(theme.colors.accent, 0.14)
-              : alpha(fileIconColor, 0.12),
-            borderRadius: theme.radius.sm,
-          },
-        ]}
-      >
+      <View style={styles.fileTreeIconSlot}>
         {node.isDirectory ? (
           <SymbolView
             name={icon}
@@ -795,7 +772,13 @@ function LoadingState({ label }: { label: string }) {
   );
 }
 
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void | Promise<void> }) {
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void | Promise<void>;
+}) {
   return (
     <View style={styles.centerState}>
       <Text variant="footnote" color="destructive" align="center">
@@ -885,7 +868,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
   },
-  fileTreeIconBubble: {
+  fileTreeIconSlot: {
     width: 28,
     height: 28,
     alignItems: "center",
