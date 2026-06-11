@@ -10,3 +10,27 @@ export function formatCostUsd(costUsd: number): string {
   if (costUsd > 0 && costUsd < 0.01) return "<$0.01";
   return `$${costUsd.toFixed(2)}`;
 }
+
+export function formatSessionUsageDateRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): string | null {
+  if (!start) return null;
+  const startDate = new Date(start);
+  if (Number.isNaN(startDate.getTime())) return null;
+
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const startLabel = formatter.format(startDate);
+
+  if (!end) return startLabel;
+  const endDate = new Date(end);
+  if (Number.isNaN(endDate.getTime())) return startLabel;
+
+  return `${startLabel} - ${formatter.format(endDate)}`;
+}
