@@ -35,9 +35,17 @@ export const useCommandRegistryStore = create<CommandRegistryState>((set) => ({
     }),
 }));
 
+function isMacPlatform(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform ??
+    "";
+  return /Mac|iPhone|iPad/.test(platform);
+}
+
 export function formatShortcut(shortcut: CommandShortcut): string[] {
-  const isMac =
-    typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  const isMac = isMacPlatform();
   const keys: string[] = [];
   if (shortcut.mod) keys.push(isMac ? "⌘" : "Ctrl");
   if (shortcut.shift) keys.push("⇧");
@@ -53,6 +61,8 @@ function formatKey(key: string): string {
 }
 
 export function matchesShortcut(event: KeyboardEvent, shortcut: CommandShortcut): boolean {
+  // `mod` matches the platform command key on either OS: Cmd on macOS, Ctrl
+  // elsewhere. We accept both so chords work cross-platform without per-OS defs.
   const mod = event.metaKey || event.ctrlKey;
   if (!!shortcut.mod !== mod) return false;
   if (!!shortcut.shift !== event.shiftKey) return false;

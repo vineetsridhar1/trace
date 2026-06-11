@@ -10,7 +10,7 @@ import {
   Settings,
   Ticket,
 } from "lucide-react";
-import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import type { Channel, Chat } from "@trace/gql";
 import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
@@ -24,6 +24,9 @@ import {
   type CommandShortcut,
   type RegisteredCommand,
 } from "../../stores/command-registry";
+import { features } from "../../lib/features";
+import { createQuickSession } from "../../lib/create-quick-session";
+import { isLocalMode } from "../../lib/runtime-mode";
 
 interface PaletteItem {
   key: string;
@@ -34,9 +37,6 @@ interface PaletteItem {
   shortcut?: CommandShortcut;
   onSelect: () => void;
 }
-import { features } from "../../lib/features";
-import { createQuickSession } from "../../lib/create-quick-session";
-import { isLocalMode } from "../../lib/runtime-mode";
 
 const SETTINGS_TABS: { id: string; label: string }[] = [
   { id: "repositories", label: "Repositories" },
@@ -74,7 +74,7 @@ export function GlobalCommandPalette() {
 
 function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
-  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
 
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
@@ -126,14 +126,13 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     [chatsTable, currentUserId],
   );
 
-  const sessionGroups = useMemo(
-    () =>
-      Object.values(sessionGroupsTable).map((g) => ({
-        id: g.id,
-        name: g.name ?? g.slug ?? "Untitled session",
-      })),
-    [sessionGroupsTable],
-  );
+  const sessionGroups = useMemo(() => {
+    const sortTs = (g: SessionGroupEntity) =>
+      new Date(g._sortTimestamp ?? g.updatedAt ?? g.createdAt ?? 0).getTime();
+    return Object.values(sessionGroupsTable)
+      .sort((a, b) => sortTs(b) - sortTs(a))
+      .map((g) => ({ id: g.id, name: g.name ?? g.slug ?? "Untitled session" }));
+  }, [sessionGroupsTable]);
 
   const activeChannelIsCoding = useEntityStore((s: { channels: Record<string, Channel> }) =>
     activeChannelId ? s.channels[activeChannelId]?.type === "coding" : false,

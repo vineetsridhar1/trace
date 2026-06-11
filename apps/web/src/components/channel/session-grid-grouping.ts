@@ -26,7 +26,10 @@ function getRowSortTimestamp(row: SessionGroupRow | undefined): number {
 
 function isOwnedByCurrentUser(row: SessionGroupRow, currentUserId: string | null): boolean {
   if (!currentUserId) return false;
-  return (row.owner as { id?: string } | null | undefined)?.id === currentUserId;
+  const ownerId = (row.owner as { id?: string } | null | undefined)?.id;
+  // Also match the displayed "Created by" identity so the sort agrees with the
+  // column, since owner and creator can occasionally differ.
+  return ownerId === currentUserId || getSessionCreatedBy(row)?.id === currentUserId;
 }
 
 function getFilterText(row: SessionGroupRow, columnId: string): string {

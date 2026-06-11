@@ -103,35 +103,44 @@ function publishBridgeStatus(status: BridgeConnectionStatus) {
 function configureApplicationIdentity() {
   app.setName(appName);
 
-  if (process.platform !== "darwin") return;
+  const isMac = process.platform === "darwin";
+  if (isMac) app.dock?.setIcon(appIconPath);
 
-  app.dock?.setIcon(appIconPath);
+  // Cmd/Ctrl+W closes the in-app tab (forwarded to the renderer); the window
+  // close moves to Cmd/Ctrl+Shift+W. Built on every platform so the accelerator
+  // override applies on Windows/Linux too, not just macOS.
+  const fileSubmenu: MenuItemConstructorOptions[] = [
+    {
+      label: "Close Tab",
+      accelerator: "CmdOrCtrl+W",
+      click: () => mainWindow?.webContents.send("menu-command", "close-tab"),
+    },
+    { role: "close", label: "Close Window", accelerator: "CmdOrCtrl+Shift+W" },
+  ];
+  if (!isMac) {
+    fileSubmenu.push({ type: "separator" }, { role: "quit", label: `Quit ${appName}` });
+  }
+
   const menuTemplate: MenuItemConstructorOptions[] = [
-    {
-      label: appName,
-      submenu: [
-        { role: "about", label: `About ${appName}` },
-        { type: "separator" },
-        { role: "services" },
-        { type: "separator" },
-        { role: "hide", label: `Hide ${appName}` },
-        { role: "hideOthers" },
-        { role: "unhide" },
-        { type: "separator" },
-        { role: "quit", label: `Quit ${appName}` },
-      ],
-    },
-    {
-      label: "File",
-      submenu: [
-        {
-          label: "Close Tab",
-          accelerator: "CmdOrCtrl+W",
-          click: () => mainWindow?.webContents.send("menu-command", "close-tab"),
-        },
-        { role: "close", label: "Close Window", accelerator: "CmdOrCtrl+Shift+W" },
-      ],
-    },
+    ...(isMac
+      ? ([
+          {
+            label: appName,
+            submenu: [
+              { role: "about", label: `About ${appName}` },
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide", label: `Hide ${appName}` },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit", label: `Quit ${appName}` },
+            ],
+          },
+        ] as MenuItemConstructorOptions[])
+      : []),
+    { label: "File", submenu: fileSubmenu },
     { role: "editMenu" },
     { role: "viewMenu" },
     { role: "windowMenu" },
