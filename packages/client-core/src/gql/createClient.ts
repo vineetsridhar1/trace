@@ -59,11 +59,10 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
     url: options.wsUrl,
     webSocketImpl: createPlatformWebSocketImpl(platform),
     connectionParams: () => {
-      const { token, activeOrgId, githubToken } = useAuthStore.getState();
+      const { token, activeOrgId } = useAuthStore.getState();
       return {
         ...(usesBearerAuth && token ? { token } : {}),
         ...(activeOrgId ? { organizationId: activeOrgId } : {}),
-        ...(githubToken ? { githubToken } : {}),
         clientSource: platform.clientSource,
       };
     },

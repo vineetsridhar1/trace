@@ -44,17 +44,10 @@ const createSessionTicketsLoaderMock = createSessionTicketsLoader as unknown as 
 describe("auth helpers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // The GraphQL auth guard validates the GitHub token against GitHub's API;
-    // treat any token as valid here so context-building tests stay focused.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true }) as Response),
-    );
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
   });
 
   it("parses the auth cookie token", () => {
@@ -166,7 +159,7 @@ describe("auth helpers", () => {
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
     const context = await buildContext({
       req: {
-        headers: { authorization: `Bearer ${token}`, "x-github-token": "gh-token" },
+        headers: { authorization: `Bearer ${token}` },
         cookies: {},
       },
     } as unknown as Parameters<typeof buildContext>[0]);
@@ -194,7 +187,6 @@ describe("auth helpers", () => {
           authorization: `Bearer ${token}`,
           "x-organization-id": "org-1",
           "x-trace-client-source": "mobile",
-          "x-github-token": "gh-token",
         },
         cookies: {},
       },
@@ -212,6 +204,29 @@ describe("auth helpers", () => {
         },
       } as unknown as Parameters<typeof buildContext>[0]),
     ).rejects.toThrow("Not authenticated");
+  });
+
+  it("rejects HTTP context when the user has no organization membership", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce(null);
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    await expect(
+      buildContext({
+        req: {
+          headers: { authorization: `Bearer ${token}` },
+          cookies: {},
+        },
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toThrow("Organization membership required");
+  });
+
+  it("rejects websocket context when the user has no organization membership", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-3" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce(null);
+
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
+    await expect(buildWsContext({ token })).rejects.toThrow("Organization membership required");
   });
 
   it("rejects session tokens for external local-mode HTTP access", async () => {
@@ -358,7 +373,7 @@ describe("auth helpers", () => {
     });
 
     const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
-    const context = await buildWsContext({ githubToken: "gh-token" }, `trace_token=${token}`);
+    const context = await buildWsContext(undefined, `trace_token=${token}`);
 
     expect(context.userId).toBe("user-3");
     expect(context.role).toBe("observer");
@@ -392,7 +407,6 @@ describe("auth helpers", () => {
     const context = await buildWsContext({
       token: "opaque-device-secret",
       organizationId: "org-local",
-      githubToken: "gh-token",
     });
 
     expect(context.userId).toBe("user-4");
