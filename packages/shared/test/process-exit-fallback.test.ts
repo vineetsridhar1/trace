@@ -56,7 +56,7 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it("emits Codex turn usage on the result event", () => {
+  it("emits Codex turn usage without cost on the result event", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -93,13 +93,12 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 40,
         cacheCreationTokens: 5,
       },
-      costUsd: 0.0123,
     });
     expect(onOutput).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it("estimates Codex cost from usage when the CLI omits cost", () => {
+  it("does not estimate Codex cost from usage", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -135,7 +134,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 40,
         cacheCreationTokens: 5,
       },
-      costUsd: 0.001295,
     });
   });
 
@@ -178,7 +176,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 400,
         cacheCreationTokens: 0,
       },
-      costUsd: 0.00395,
     });
   });
 
@@ -230,10 +227,9 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 400,
         cacheCreationTokens: 0,
       },
-      costUsd: 0.00395,
     });
-    // The completion event must carry neither usage nor cost — both were
-    // already streamed by the token_count event.
+    // The completion event must not carry usage that was already streamed by
+    // the token_count event.
     expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
     const usageCalls = onOutput.mock.calls.filter(
       ([event]) => event.type === "usage" || (event.type === "result" && event.usage),
