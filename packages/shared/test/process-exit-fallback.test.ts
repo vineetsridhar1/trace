@@ -56,6 +56,83 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("emits Codex turn usage on the result event", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 25,
+          input_token_details: {
+            cached_tokens: 40,
+            cache_creation_tokens: 5,
+          },
+        },
+        cost_usd: 0.0123,
+      })}\n`,
+    );
+    spawnedChildren[0].emit("close", 0);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadTokens: 40,
+        cacheCreationTokens: 5,
+      },
+      costUsd: 0.0123,
+    });
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes Codex top-level token aliases", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        prompt_tokens: 80,
+        completion_tokens: 20,
+        cached_input_tokens: 30,
+        cache_creation_input_tokens: 4,
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 80,
+        outputTokens: 20,
+        cacheReadTokens: 30,
+        cacheCreationTokens: 4,
+      },
+    });
+  });
+
   it("completes a Claude Code run when the process exits but stdout never closes", () => {
     const adapter = new ClaudeCodeAdapter();
     const onOutput = vi.fn();

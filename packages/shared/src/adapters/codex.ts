@@ -1,9 +1,65 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
+import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function num(...values: unknown[]): number {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return 0;
+}
+
+function parseCodexUsage(data: Record<string, unknown>): TokenUsage | undefined {
+  const usage = asRecord(data.usage) ?? data;
+  const inputDetails = asRecord(usage.input_token_details);
+  const usageDetails = asRecord(usage.token_details);
+
+  const normalized: TokenUsage = {
+    inputTokens: num(usage.input_tokens, usage.prompt_tokens, usage.inputTokens),
+    outputTokens: num(usage.output_tokens, usage.completion_tokens, usage.outputTokens),
+    cacheReadTokens: num(
+      usage.cached_input_tokens,
+      usage.cache_read_input_tokens,
+      usage.cacheReadTokens,
+      inputDetails?.cached_tokens,
+      inputDetails?.cache_read_tokens,
+      usageDetails?.cached_input_tokens,
+    ),
+    cacheCreationTokens: num(
+      usage.cache_creation_input_tokens,
+      usage.cacheCreationTokens,
+      inputDetails?.cache_creation_tokens,
+      inputDetails?.cache_write_tokens,
+      usageDetails?.cache_creation_input_tokens,
+    ),
+  };
+
+  if (
+    normalized.inputTokens === 0 &&
+    normalized.outputTokens === 0 &&
+    normalized.cacheReadTokens === 0 &&
+    normalized.cacheCreationTokens === 0
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function parseCodexCost(data: Record<string, unknown>): number | undefined {
+  const usage = asRecord(data.usage);
+  const costUsd = num(data.cost_usd, data.costUsd, data.total_cost_usd, usage?.cost_usd, usage?.costUsd);
+  return costUsd > 0 ? costUsd : undefined;
+}
 
 /**
  * Adapter for running OpenAI Codex CLI sessions.
@@ -184,6 +240,19 @@ export class CodexAdapter implements CodingToolAdapter {
         this.lastErrorMessage = message;
       }
       this.sawErrorEvent = true;
+      return;
+    }
+
+    if (eventType === "turn.completed") {
+      this.resultEmitted = true;
+      const usage = parseCodexUsage(data);
+      const costUsd = parseCodexCost(data);
+      onOutput({
+        type: "result",
+        subtype: this.sawErrorEvent ? "error" : "success",
+        ...(usage ? { usage } : {}),
+        ...(costUsd != null ? { costUsd } : {}),
+      });
       return;
     }
 
