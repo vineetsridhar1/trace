@@ -591,20 +591,26 @@ export function WorkspacePanelSheetContent({
         locations={[0, 0.68, 1]}
         style={[styles.topFade, { height: topInset + HEADER_FADE_EXTRA_HEIGHT }]}
       />
-      <WorkspaceModeFab mode={tab} bottomInset={insets.bottom} onChange={setTab} />
-      <WorkspaceSearchFab bottomInset={insets.bottom} onPress={openSearch} />
+      <WorkspaceActionPill
+        mode={tab}
+        topInset={insets.top}
+        onChangeMode={setTab}
+        onSearch={openSearch}
+      />
     </View>
   );
 }
 
-function WorkspaceModeFab({
+function WorkspaceActionPill({
   mode,
-  bottomInset,
-  onChange,
+  topInset,
+  onChangeMode,
+  onSearch,
 }: {
   mode: WorkspaceTab;
-  bottomInset: number;
-  onChange: (mode: WorkspaceTab) => void;
+  topInset: number;
+  onChangeMode: (mode: WorkspaceTab) => void;
+  onSearch: () => void;
 }) {
   const theme = useTheme();
   const nextMode: WorkspaceTab = mode === "files" ? "changes" : "files";
@@ -613,67 +619,48 @@ function WorkspaceModeFab({
 
   return (
     <View
-      style={[styles.fabWrap, { right: theme.spacing.lg, bottom: bottomInset + theme.spacing.lg }]}
+      style={[styles.actionPillWrap, { top: topInset + theme.spacing.sm, right: theme.spacing.md }]}
     >
-      <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.fabGlass}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Show ${label}`}
-          onPress={() => {
-            void haptic.selection();
-            onChange(nextMode);
-          }}
-          style={({ pressed }) => [styles.fabButton, { opacity: pressed ? 0.72 : 1 }]}
-        >
-          <SymbolView
-            name={icon}
-            size={16}
-            tintColor={theme.colors.foreground}
-            resizeMode="scaleAspectFit"
-            style={styles.fabIcon}
-          />
-          <Text variant="footnote" color="foreground">
-            {label}
-          </Text>
-        </Pressable>
-      </Glass>
-    </View>
-  );
-}
-
-function WorkspaceSearchFab({
-  bottomInset,
-  onPress,
-}: {
-  bottomInset: number;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-
-  return (
-    <View
-      style={[styles.fabWrap, { left: theme.spacing.lg, bottom: bottomInset + theme.spacing.lg }]}
-    >
-      <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.fabGlass}>
+      <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.actionPillGlass}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Search files"
           onPress={() => {
             void haptic.selection();
-            onPress();
+            onSearch();
           }}
-          style={({ pressed }) => [styles.fabButton, { opacity: pressed ? 0.72 : 1 }]}
+          style={({ pressed }) => [styles.actionPillButton, { opacity: pressed ? 0.72 : 1 }]}
         >
           <SymbolView
             name="magnifyingglass"
-            size={16}
+            size={17}
             tintColor={theme.colors.foreground}
             resizeMode="scaleAspectFit"
-            style={styles.fabIcon}
+            style={styles.actionPillIcon}
           />
-          <Text variant="footnote" color="foreground">
-            Search
-          </Text>
+        </Pressable>
+        <View
+          style={[
+            styles.actionPillDivider,
+            { backgroundColor: alpha(theme.colors.foreground, 0.16) },
+          ]}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Show ${label}`}
+          onPress={() => {
+            void haptic.selection();
+            onChangeMode(nextMode);
+          }}
+          style={({ pressed }) => [styles.actionPillButton, { opacity: pressed ? 0.72 : 1 }]}
+        >
+          <SymbolView
+            name={icon}
+            size={17}
+            tintColor={theme.colors.foreground}
+            resizeMode="scaleAspectFit"
+            style={styles.actionPillIcon}
+          />
         </Pressable>
       </Glass>
     </View>
@@ -1568,23 +1555,29 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
   },
-  fabWrap: {
+  actionPillWrap: {
     position: "absolute",
     zIndex: 10,
   },
-  fabGlass: {
-    borderRadius: 9999,
-  },
-  fabButton: {
-    minHeight: 48,
+  actionPillGlass: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 18,
+    borderRadius: 9999,
+    overflow: "hidden",
   },
-  fabIcon: {
-    width: 16,
-    height: 16,
+  actionPillButton: {
+    width: 46,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionPillDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 22,
+  },
+  actionPillIcon: {
+    width: 17,
+    height: 17,
   },
   explorerShell: {
     flex: 1,
