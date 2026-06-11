@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { gql } from "@urql/core";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -129,30 +129,39 @@ function FilesTab({ groupId }: { groupId: string }) {
     void loadFiles();
   }, [loadFiles]);
 
-  async function openFile(filePath: string) {
-    setSelectedFile(filePath);
+  const openFile = useCallback(
+    async (filePath: string) => {
+      setSelectedFile(filePath);
+      setContent(null);
+      setContentLoading(true);
+      try {
+        const result = await getClient()
+          .query<FileContentData>(
+            SESSION_GROUP_FILE_CONTENT_QUERY,
+            { sessionGroupId: groupId, filePath },
+            { requestPolicy: "network-only" },
+          )
+          .toPromise();
+        if (result.error) throw result.error;
+        setContent(result.data?.sessionGroupFileContentWithSource?.content ?? "");
+      } catch (loadError) {
+        Alert.alert(
+          "Couldn't open file",
+          loadError instanceof Error ? loadError.message : "Try again.",
+        );
+        setSelectedFile(null);
+      } finally {
+        setContentLoading(false);
+      }
+    },
+    [groupId],
+  );
+
+  const closeFile = useCallback(() => {
     setContent(null);
-    setContentLoading(true);
-    try {
-      const result = await getClient()
-        .query<FileContentData>(
-          SESSION_GROUP_FILE_CONTENT_QUERY,
-          { sessionGroupId: groupId, filePath },
-          { requestPolicy: "network-only" },
-        )
-        .toPromise();
-      if (result.error) throw result.error;
-      setContent(result.data?.sessionGroupFileContentWithSource?.content ?? "");
-    } catch (loadError) {
-      Alert.alert(
-        "Couldn't open file",
-        loadError instanceof Error ? loadError.message : "Try again.",
-      );
-      setSelectedFile(null);
-    } finally {
-      setContentLoading(false);
-    }
-  }
+    setContentLoading(false);
+    setSelectedFile(null);
+  }, []);
 
   if (selectedFile) {
     return (
@@ -163,7 +172,7 @@ function FilesTab({ groupId }: { groupId: string }) {
           leading={
             <SymbolView name="chevron.left" size={16} tintColor={theme.colors.mutedForeground} />
           }
-          onPress={() => setSelectedFile(null)}
+          onPress={closeFile}
           separator
         />
         {contentLoading ? (
@@ -184,18 +193,24 @@ function FilesTab({ groupId }: { groupId: string }) {
   if (files.length === 0) return <EmptyState label="No files available" />;
 
   return (
-    <ScrollView style={styles.panel}>
-      {files.map((file, index) => (
+    <FlatList
+      style={styles.panel}
+      data={files}
+      keyExtractor={(file) => file}
+      initialNumToRender={24}
+      maxToRenderPerBatch={24}
+      windowSize={7}
+      removeClippedSubviews
+      renderItem={({ item: file, index }) => (
         <ListRow
-          key={file}
           title={file.split("/").pop() ?? file}
           subtitle={file}
           leading={<SymbolView name="doc.text" size={16} tintColor={theme.colors.mutedForeground} />}
           onPress={() => void openFile(file)}
           separator={index < files.length - 1}
         />
-      ))}
-    </ScrollView>
+      )}
+    />
   );
 }
 
