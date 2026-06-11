@@ -2,6 +2,7 @@ import { Circle } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { BranchDiffFile } from "./branch-changes-types";
 import { branchChangeStatusColor } from "./branch-changes-utils";
+import { FileIcon } from "./FileIcon";
 
 interface BranchChangedFileRowProps {
   file: BranchDiffFile;
@@ -33,6 +34,7 @@ export function BranchChangedFileRow({
       style={depth === undefined ? undefined : { paddingLeft: `${depth * 8 + 12}px` }}
     >
       <Circle size={6} className={cn("shrink-0", color)} />
+      <FileIcon path={fileName} size={14} />
       <span className="min-w-0 flex-1 truncate text-[11px]">
         {pathPosition === "before" && dirName && (
           <span className="text-muted-foreground">{dirName}/</span>
