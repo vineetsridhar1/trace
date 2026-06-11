@@ -67,7 +67,13 @@ export function useGlobalShortcuts() {
       const commands = Object.values(
         useCommandRegistryStore.getState().commandsByToken,
       ).flat();
-      commands.find((c) => c.id === "session.close-tab")?.run();
+      const closeTab = commands.find((c) => c.id === "session.close-tab");
+      if (closeTab) {
+        closeTab.run();
+      } else {
+        // No in-app tab to close (e.g. the sessions table) — close the window.
+        trace.send("close-window", null);
+      }
     });
   }, []);
 }

@@ -335,6 +335,8 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
   bridge.setAuthContext(organizationId);
   return true;
 });
+// Cmd+W with no in-app tab to close falls back to closing the window.
+ipcMain.on("close-window", () => mainWindow?.close());
 
 app.whenReady().then(() => {
   if (shouldMovePackagedMacAppToApplicationsFolder(app, process.execPath)) {
