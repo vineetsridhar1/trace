@@ -19,7 +19,10 @@ import {
   getCloudRuntimeLifecycleState,
 } from "@/components/sessions/CloudRuntimeNotice";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
-import { QueuedMessagesStrip } from "@/components/sessions/QueuedMessagesStrip";
+import {
+  QueuedMessageComposerEditor,
+  QueuedMessagesStrip,
+} from "@/components/sessions/QueuedMessagesStrip";
 import { SessionErrorCard } from "@/components/sessions/SessionErrorCard";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionInputComposer } from "@/components/sessions/SessionInputComposer";
@@ -91,6 +94,10 @@ export function SessionSurface({
     | null
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
+    | string
+    | null
+    | undefined;
   const sessionConnection = useEntityField("sessions", sessionId, "connection") as
     | { runtimeInstanceId?: string | null; state?: string | null }
     | null
@@ -112,16 +119,24 @@ export function SessionSurface({
     hosting,
     connection: sessionConnection ?? groupConnection,
   });
-  const bridgeLocked = !runtimeLifecycleState && !isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeLocked =
+    agentStatus !== "not_started" &&
+    !runtimeLifecycleState &&
+    !isBridgeInteractionAllowed(bridgeAccess);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
+  const [editingQueuedMessageId, setEditingQueuedMessageId] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
+
+  useEffect(() => {
+    setEditingQueuedMessageId(null);
+  }, [sessionId]);
 
   useEffect(() => {
     const getKeyboardInset = (e: KeyboardEvent) =>
@@ -262,12 +277,23 @@ export function SessionSurface({
           ) : (
             <>
               <SessionErrorCard sessionId={sessionId} />
-              <QueuedMessagesStrip sessionId={sessionId} />
-              <SessionInputComposer
+              <QueuedMessagesStrip
                 sessionId={sessionId}
-                keyboardVisible={keyboardVisible}
-                bottomSafeAreaInset={keyboardVisible ? 0 : undefined}
+                editingId={editingQueuedMessageId}
+                onEditMessage={setEditingQueuedMessageId}
               />
+              {editingQueuedMessageId ? (
+                <QueuedMessageComposerEditor
+                  id={editingQueuedMessageId}
+                  onClose={() => setEditingQueuedMessageId(null)}
+                />
+              ) : (
+                <SessionInputComposer
+                  sessionId={sessionId}
+                  keyboardVisible={keyboardVisible}
+                  bottomSafeAreaInset={keyboardVisible ? 0 : undefined}
+                />
+              )}
             </>
           )}
         </View>

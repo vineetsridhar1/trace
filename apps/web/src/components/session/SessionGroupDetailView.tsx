@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -37,6 +38,8 @@ import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import { useRegisterCommands } from "../../hooks/useRegisterCommands";
+import type { RegisteredCommand } from "../../stores/command-registry";
 
 const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-sidebar-width";
 const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
@@ -127,6 +130,11 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         sessionGroupId
         lastUserMessageAt
         lastMessageAt
+        inputTokens
+        outputTokens
+        cacheReadTokens
+        cacheCreationTokens
+        costUsd
         connection {
           state
           runtimeInstanceId
@@ -201,6 +209,10 @@ export function SessionGroupDetailView({
   );
   const setActiveSessionId = useUIStore(
     (s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId,
+  );
+  const setActiveSessionGroupId = useUIStore(
+    (s: { setActiveSessionGroupId: (groupId: string | null, sessionId?: string | null) => void }) =>
+      s.setActiveSessionGroupId,
   );
   const setActiveTerminalId = useUIStore(
     (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
@@ -569,16 +581,26 @@ export function SessionGroupDetailView({
     setFilePaletteOpen(true);
   }, []);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
-      event.preventDefault();
-      setFilePaletteOpen((open) => !open);
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+  const handleToggleFilePalette = useCallback(() => {
+    setFilePaletteOpen((open) => !open);
   }, []);
+
+  const handleOpenTerminalCmd = useCallback(() => {
+    setActiveWorkflowTab("session");
+    void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+  }, [handleOpenTerminal, selectedSession, terminalAllowed]);
+
+  const showSidebarTab = useCallback((tab: SidebarTab) => {
+    setShowApplicationsSidebar(false);
+    setShowSidebar(true);
+    setSidebarTab(tab);
+    if (tab !== "git") setHighlightCheckpointId(null);
+  }, []);
+
+  const canInteract = !selectedSessionIsOptimistic;
+  const canNewChatCmd =
+    !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed;
+  const canOpenTerminalCmd = !selectedSessionIsOptimistic && terminalAllowed;
 
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -685,6 +707,140 @@ export function SessionGroupDetailView({
     sessionGroupId,
     setActiveSessionId,
   ]);
+
+  // Close whatever tab is currently shown. Files/terminals/traffic reveal the
+  // session beneath them; closing the last session tab returns to the table.
+  const handleCloseCurrentTab = useCallback(() => {
+    if (activeWorkflowTab === "traffic" && trafficEndpointId) {
+      handleCloseTrafficTab();
+      return;
+    }
+    if (activeFilePath) {
+      handleCloseFile(activeFilePath);
+      return;
+    }
+    if (activeTerminalId) {
+      handleCloseTerminal(activeTerminalId);
+      return;
+    }
+    if (activeSessionId && (openTabIds?.length ?? 0) > 1) {
+      closeSessionTab(sessionGroupId, activeSessionId);
+      return;
+    }
+    setActiveSessionGroupId(null);
+  }, [
+    activeWorkflowTab,
+    trafficEndpointId,
+    activeFilePath,
+    activeTerminalId,
+    activeSessionId,
+    openTabIds,
+    handleCloseTrafficTab,
+    handleCloseFile,
+    handleCloseTerminal,
+    closeSessionTab,
+    sessionGroupId,
+    setActiveSessionGroupId,
+  ]);
+
+  const sessionCommands = useMemo<RegisteredCommand[]>(() => {
+    const commands: RegisteredCommand[] = [
+      {
+        id: "session.close-tab",
+        title: "Close tab",
+        group: "Session",
+        keywords: "close tab session terminal file",
+        run: handleCloseCurrentTab,
+        shortcut: { key: "w", mod: true },
+      },
+      {
+        id: "session.find-file",
+        title: "Find file",
+        group: "Session",
+        keywords: "open file search palette",
+        run: handleToggleFilePalette,
+        shortcut: { key: "p", mod: true },
+      },
+    ];
+    if (canInteract) {
+      commands.push(
+        {
+          id: "session.toggle-sidebar",
+          title: "Toggle session sidebar",
+          group: "Session",
+          keywords: "files git changes panel info",
+          run: handleToggleSidebar,
+          shortcut: { key: "e", mod: true, shift: true },
+        },
+        {
+          id: "session.show-files",
+          title: "Show files",
+          group: "Session",
+          keywords: "file tree explorer sidebar",
+          run: () => showSidebarTab("files"),
+        },
+        {
+          id: "session.show-git",
+          title: "Show git",
+          group: "Session",
+          keywords: "git checkpoints history sidebar",
+          run: () => showSidebarTab("git"),
+        },
+        {
+          id: "session.show-changes",
+          title: "Show changes",
+          group: "Session",
+          keywords: "diff changes review sidebar",
+          run: () => showSidebarTab("changes"),
+        },
+      );
+      // Applications panel only exists for cloud-hosted sessions; registering it
+      // otherwise would open a panel an effect immediately closes again.
+      if (showApplicationsSidebarTab) {
+        commands.push({
+          id: "session.toggle-applications",
+          title: "Toggle applications panel",
+          group: "Session",
+          keywords: "apps processes ports traffic",
+          run: handleToggleApplicationsSidebar,
+        });
+      }
+    }
+    if (canNewChatCmd) {
+      commands.push({
+        id: "session.new-chat",
+        title: "New chat in session group",
+        group: "Session",
+        keywords: "new chat session conversation",
+        run: () => void handleNewChat(),
+      });
+    }
+    if (canOpenTerminalCmd) {
+      commands.push({
+        id: "session.new-terminal",
+        title: "New terminal",
+        group: "Session",
+        keywords: "terminal shell console",
+        run: handleOpenTerminalCmd,
+        shortcut: { key: "j", mod: true },
+      });
+    }
+    return commands;
+  }, [
+    canInteract,
+    canNewChatCmd,
+    canOpenTerminalCmd,
+    showApplicationsSidebarTab,
+    handleCloseCurrentTab,
+    handleToggleFilePalette,
+    handleToggleSidebar,
+    handleToggleApplicationsSidebar,
+    showSidebarTab,
+    handleNewChat,
+    handleOpenTerminalCmd,
+  ]);
+
+  useRegisterCommands(sessionCommands);
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {

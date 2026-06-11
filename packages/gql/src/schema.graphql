@@ -528,6 +528,11 @@ type Session {
   worktreeDeleted: Boolean!
   lastUserMessageAt: DateTime
   lastMessageAt: DateTime
+  inputTokens: Int!
+  outputTokens: Int!
+  cacheReadTokens: Int!
+  cacheCreationTokens: Int!
+  costUsd: Float!
   queuedMessages: [QueuedMessage!]!
   createdAt: DateTime!
   updatedAt: DateTime!

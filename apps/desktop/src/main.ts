@@ -103,25 +103,44 @@ function publishBridgeStatus(status: BridgeConnectionStatus) {
 function configureApplicationIdentity() {
   app.setName(appName);
 
-  if (process.platform !== "darwin") return;
+  const isMac = process.platform === "darwin";
+  if (isMac) app.dock?.setIcon(appIconPath);
 
-  app.dock?.setIcon(appIconPath);
-  const menuTemplate: MenuItemConstructorOptions[] = [
+  // Cmd/Ctrl+W closes the in-app tab (forwarded to the renderer); the window
+  // close moves to Cmd/Ctrl+Shift+W. Built on every platform so the accelerator
+  // override applies on Windows/Linux too, not just macOS.
+  const fileSubmenu: MenuItemConstructorOptions[] = [
     {
-      label: appName,
-      submenu: [
-        { role: "about", label: `About ${appName}` },
-        { type: "separator" },
-        { role: "services" },
-        { type: "separator" },
-        { role: "hide", label: `Hide ${appName}` },
-        { role: "hideOthers" },
-        { role: "unhide" },
-        { type: "separator" },
-        { role: "quit", label: `Quit ${appName}` },
-      ],
+      label: "Close Tab",
+      accelerator: "CmdOrCtrl+W",
+      click: () => mainWindow?.webContents.send("menu-command", "close-tab"),
     },
-    { role: "fileMenu" },
+    { role: "close", label: "Close Window", accelerator: "CmdOrCtrl+Shift+W" },
+  ];
+  if (!isMac) {
+    fileSubmenu.push({ type: "separator" }, { role: "quit", label: `Quit ${appName}` });
+  }
+
+  const menuTemplate: MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? ([
+          {
+            label: appName,
+            submenu: [
+              { role: "about", label: `About ${appName}` },
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide", label: `Hide ${appName}` },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit", label: `Quit ${appName}` },
+            ],
+          },
+        ] as MenuItemConstructorOptions[])
+      : []),
+    { label: "File", submenu: fileSubmenu },
     { role: "editMenu" },
     { role: "viewMenu" },
     { role: "windowMenu" },
@@ -325,6 +344,8 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
   bridge.setAuthContext(organizationId);
   return true;
 });
+// Cmd+W with no in-app tab to close falls back to closing the window.
+ipcMain.on("close-window", () => mainWindow?.close());
 
 app.whenReady().then(() => {
   if (shouldMovePackagedMacAppToApplicationsFolder(app, process.execPath)) {

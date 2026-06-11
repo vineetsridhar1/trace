@@ -11,6 +11,7 @@ import {
   getDefaultModel,
   getDefaultReasoningEffort,
   getModelLabel,
+  getModelProviderGroupsForTool,
   getModelsForTool,
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
@@ -24,11 +25,15 @@ const TOOL_OPTIONS = [
   { value: "claude_code" as const, label: "Claude Code" },
   { value: "codex" as const, label: "Codex" },
   { value: "pi" as const, label: "Pi" },
+  { value: "antigravity" as const, label: "Antigravity" },
 ];
 
 type SessionDefaultsPatch = Pick<
   User,
-  "defaultSessionTool" | "defaultSessionModel" | "defaultSessionReasoningEffort"
+  | "defaultSessionTool"
+  | "defaultSessionModel"
+  | "defaultSessionReasoningEffort"
+  | "autoArchiveMergedSessions"
 >;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -61,9 +66,10 @@ function updateAuthUser(patch: SessionDefaultsPatch) {
 }
 
 async function saveDefaults(input: {
-  tool: CodingTool | null;
+  tool?: CodingTool | null;
   model?: string | null;
   reasoningEffort?: string | null;
+  autoArchiveMergedSessions?: boolean;
 }) {
   const result = await getClient()
     .mutation<{ updateSessionDefaults: SessionDefaultsPatch }>(UPDATE_SESSION_DEFAULTS_MUTATION, {
@@ -80,19 +86,25 @@ export function SessionDefaultsSheetContent() {
   const selectedTool = user?.defaultSessionTool ?? null;
   const selectedModel = user?.defaultSessionModel ?? null;
   const selectedReasoningEffort = user?.defaultSessionReasoningEffort ?? null;
+  const autoArchiveMergedSessions = user?.autoArchiveMergedSessions ?? true;
   const effectiveTool = selectedTool ?? "claude_code";
   const [pending, setPending] = useState(false);
 
   const modelOptions = useMemo(() => getModelsForTool(effectiveTool), [effectiveTool]);
+  const modelProviderGroups = useMemo(
+    () => getModelProviderGroupsForTool(effectiveTool),
+    [effectiveTool],
+  );
   const reasoningEffortOptions = useMemo(
     () => getReasoningEffortsForTool(effectiveTool),
     [effectiveTool],
   );
 
   async function handleSave(input: {
-    tool: CodingTool | null;
+    tool?: CodingTool | null;
     model?: string | null;
     reasoningEffort?: string | null;
+    autoArchiveMergedSessions?: boolean;
   }) {
     if (pending) return;
     setPending(true);
@@ -146,56 +158,111 @@ export function SessionDefaultsSheetContent() {
         ))}
       </Section>
 
-      <Section title="Model">
-        {modelOptions.map((option, index) => (
-          <ListRow
-            key={option.value}
-            title={option.label}
-            trailing={
-              selectedModel === option.value ? (
-                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
-              ) : undefined
-            }
-            onPress={
-              selectedTool
-                ? () =>
-                    void handleSave({
-                      tool: selectedTool,
-                      model: option.value,
-                      reasoningEffort: selectedReasoningEffort,
-                    })
-                : undefined
-            }
-            haptic={selectedModel === option.value ? "none" : "selection"}
-            separator={index < modelOptions.length - 1}
-            style={pending || !selectedTool ? styles.disabledRow : undefined}
-          />
-        ))}
-      </Section>
+      {modelProviderGroups.length > 0 ? (
+        modelProviderGroups.map((group) => (
+          <Section key={group.value} title={group.label}>
+            {group.models.map((option, index) => (
+              <ListRow
+                key={option.value}
+                title={option.label}
+                subtitle={group.description}
+                trailing={
+                  selectedModel === option.value ? (
+                    <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                  ) : undefined
+                }
+                onPress={
+                  selectedTool
+                    ? () =>
+                        void handleSave({
+                          tool: selectedTool,
+                          model: option.value,
+                          reasoningEffort: selectedReasoningEffort,
+                        })
+                    : undefined
+                }
+                haptic={selectedModel === option.value ? "none" : "selection"}
+                separator={index < group.models.length - 1}
+                style={pending || !selectedTool ? styles.disabledRow : undefined}
+              />
+            ))}
+          </Section>
+        ))
+      ) : modelOptions.length > 0 ? (
+        <Section title="Model">
+          {modelOptions.map((option, index) => (
+            <ListRow
+              key={option.value}
+              title={option.label}
+              trailing={
+                selectedModel === option.value ? (
+                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                ) : undefined
+              }
+              onPress={
+                selectedTool
+                  ? () =>
+                      void handleSave({
+                        tool: selectedTool,
+                        model: option.value,
+                        reasoningEffort: selectedReasoningEffort,
+                      })
+                  : undefined
+              }
+              haptic={selectedModel === option.value ? "none" : "selection"}
+              separator={index < modelOptions.length - 1}
+              style={pending || !selectedTool ? styles.disabledRow : undefined}
+            />
+          ))}
+        </Section>
+      ) : null}
 
-      <Section title="Effort">
-        {reasoningEffortOptions.map((option, index) => (
+      {reasoningEffortOptions.length > 0 ? (
+        <Section title="Effort">
+          {reasoningEffortOptions.map((option, index) => (
+            <ListRow
+              key={option.value}
+              title={option.label}
+              trailing={
+                selectedReasoningEffort === option.value ? (
+                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                ) : undefined
+              }
+              onPress={
+                selectedTool
+                  ? () =>
+                      void handleSave({
+                        tool: selectedTool,
+                        model: selectedModel,
+                        reasoningEffort: option.value,
+                      })
+                  : undefined
+              }
+              haptic={selectedReasoningEffort === option.value ? "none" : "selection"}
+              separator={index < reasoningEffortOptions.length - 1}
+              style={pending || !selectedTool ? styles.disabledRow : undefined}
+            />
+          ))}
+        </Section>
+      ) : null}
+
+      <Section title="Merged sessions">
+        {[
+          { value: true, label: "Auto archive" },
+          { value: false, label: "Keep visible" },
+        ].map((option, index, options) => (
           <ListRow
-            key={option.value}
+            key={String(option.value)}
             title={option.label}
             trailing={
-              selectedReasoningEffort === option.value ? (
+              autoArchiveMergedSessions === option.value ? (
                 <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
-            onPress={
-              selectedTool
-                ? () =>
-                    void handleSave({
-                      tool: selectedTool,
-                      model: selectedModel,
-                      reasoningEffort: option.value,
-                    })
-                : undefined
-            }
-            haptic={selectedReasoningEffort === option.value ? "none" : "selection"}
-            separator={index < reasoningEffortOptions.length - 1}
-            style={pending || !selectedTool ? styles.disabledRow : undefined}
+            onPress={() => void handleSave({ autoArchiveMergedSessions: option.value })}
+            haptic={autoArchiveMergedSessions === option.value ? "none" : "selection"}
+            separator={index < options.length - 1}
+            style={pending ? styles.disabledRow : undefined}
           />
         ))}
       </Section>
@@ -212,11 +279,12 @@ export function formatSessionDefaultsSummary(user: {
   const toolLabel =
     TOOL_OPTIONS.find((option) => option.value === user.defaultSessionTool)?.label ??
     user.defaultSessionTool;
-  const modelLabel = user.defaultSessionModel ? getModelLabel(user.defaultSessionModel) : "Model";
-  const effortLabel = user.defaultSessionReasoningEffort
-    ? getReasoningEffortLabel(user.defaultSessionReasoningEffort)
-    : "Effort";
-  return `${toolLabel} · ${modelLabel} · ${effortLabel}`;
+  const parts = [toolLabel];
+  if (user.defaultSessionModel) parts.push(getModelLabel(user.defaultSessionModel));
+  if (user.defaultSessionReasoningEffort) {
+    parts.push(getReasoningEffortLabel(user.defaultSessionReasoningEffort));
+  }
+  return parts.join(" · ");
 }
 
 const styles = StyleSheet.create({

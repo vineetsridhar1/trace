@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
+import { useRegisterCommands } from "../hooks/useRegisterCommands";
+import type { RegisteredCommand } from "../stores/command-registry";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { selectChannel } from "../lib/channel-click-navigation";
 import { features } from "../lib/features";
@@ -18,7 +20,7 @@ export function AppSidebar() {
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
-  const { state, isMobile, setOpenMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const sidebarData = useSidebarData();
 
   const restoreLastVisited = useUIStore((s: UIState) => s.restoreLastVisited);
@@ -72,6 +74,39 @@ export function AppSidebar() {
     currentTab,
     onTabCommit: handleTabCommit,
   });
+
+  const sidebarCommands = useMemo<RegisteredCommand[]>(() => {
+    const commands: RegisteredCommand[] = [
+      {
+        id: "sidebar.toggle",
+        title: "Toggle sidebar",
+        group: "Navigation",
+        keywords: "sidebar hide show collapse expand",
+        run: toggleSidebar,
+      },
+    ];
+    if (features.messaging) {
+      commands.push(
+        {
+          id: "sidebar.direct-messages",
+          title: "Switch to Direct Messages",
+          group: "Navigation",
+          keywords: "dm direct messages chats",
+          run: () => handleTabCommit("dm"),
+        },
+        {
+          id: "sidebar.channels",
+          title: "Switch to Channels",
+          group: "Navigation",
+          keywords: "channels sessions main",
+          run: () => handleTabCommit("main"),
+        },
+      );
+    }
+    return commands;
+  }, [toggleSidebar, handleTabCommit]);
+
+  useRegisterCommands(sidebarCommands);
 
   useEffect(() => {
     if (state === "expanded") setPeeking(false);

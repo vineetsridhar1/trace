@@ -1,9 +1,147 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
+import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
+
+interface ModelPricing {
+  input: number;
+  cachedInput: number;
+  output: number;
+}
+
+// USD per 1M tokens. Source: https://developers.openai.com/api/docs/pricing
+// (standard tier), verified 2026-06-10. Update when OpenAI changes prices —
+// this is a fallback only and is ignored when Codex reports a cost directly.
+const OPENAI_STANDARD_PRICES_PER_MILLION: Record<string, ModelPricing> = {
+  "gpt-5": { input: 1.25, cachedInput: 0.125, output: 10 },
+  "gpt-5.5": { input: 5, cachedInput: 0.5, output: 30 },
+  "gpt-5.4": { input: 2.5, cachedInput: 0.25, output: 15 },
+  "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.5 },
+  "gpt-5.4-nano": { input: 0.2, cachedInput: 0.02, output: 1.25 },
+  "gpt-5.3-codex": { input: 1.75, cachedInput: 0.175, output: 14 },
+};
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function num(...values: unknown[]): number {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return 0;
+}
+
+function parseCodexUsage(data: Record<string, unknown>): TokenUsage | undefined {
+  const usage = asRecord(data.usage) ?? data;
+  const inputDetails = asRecord(usage.input_token_details);
+  const usageDetails = asRecord(usage.token_details);
+
+  const normalized: TokenUsage = {
+    inputTokens: num(usage.input_tokens, usage.prompt_tokens, usage.inputTokens),
+    outputTokens: num(usage.output_tokens, usage.completion_tokens, usage.outputTokens),
+    cacheReadTokens: num(
+      usage.cached_input_tokens,
+      usage.cache_read_input_tokens,
+      usage.cacheReadTokens,
+      inputDetails?.cached_tokens,
+      inputDetails?.cache_read_tokens,
+      usageDetails?.cached_input_tokens,
+    ),
+    cacheCreationTokens: num(
+      usage.cache_creation_input_tokens,
+      usage.cacheCreationTokens,
+      inputDetails?.cache_creation_tokens,
+      inputDetails?.cache_write_tokens,
+      usageDetails?.cache_creation_input_tokens,
+    ),
+  };
+
+  if (
+    normalized.inputTokens === 0 &&
+    normalized.outputTokens === 0 &&
+    normalized.cacheReadTokens === 0 &&
+    normalized.cacheCreationTokens === 0
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function parseCodexTokenCountUsage(data: Record<string, unknown>): TokenUsage | undefined {
+  const payload = asRecord(data.payload);
+  if (payload?.type !== "token_count") return undefined;
+
+  const info = asRecord(payload.info);
+  const lastTokenUsage = asRecord(info?.last_token_usage);
+  if (!lastTokenUsage) return undefined;
+
+  const inputTokens = num(lastTokenUsage.input_tokens);
+  const cacheReadTokens = num(lastTokenUsage.cached_input_tokens);
+  const usage: TokenUsage = {
+    inputTokens: Math.max(0, inputTokens - cacheReadTokens),
+    outputTokens: num(lastTokenUsage.output_tokens),
+    cacheReadTokens,
+    cacheCreationTokens: 0,
+  };
+
+  if (
+    usage.inputTokens === 0 &&
+    usage.outputTokens === 0 &&
+    usage.cacheReadTokens === 0 &&
+    usage.cacheCreationTokens === 0
+  ) {
+    return undefined;
+  }
+
+  return usage;
+}
+
+function normalizeOpenAIModel(model: string | undefined): string | undefined {
+  if (!model) return undefined;
+  if (!model.includes("/")) return model;
+  const parts = model.split("/");
+  return parts[parts.length - 1];
+}
+
+function estimateCodexCost(usage: TokenUsage | undefined, model: string | undefined) {
+  if (!usage) return undefined;
+  const pricing = OPENAI_STANDARD_PRICES_PER_MILLION[normalizeOpenAIModel(model) ?? ""];
+  if (!pricing) return undefined;
+
+  // OpenAI has no separate cache-write SKU, so cache-creation tokens bill at the
+  // standard input rate alongside fresh input.
+  const freshInputTokens = usage.inputTokens + usage.cacheCreationTokens;
+  const costUsd =
+    (freshInputTokens * pricing.input +
+      usage.cacheReadTokens * pricing.cachedInput +
+      usage.outputTokens * pricing.output) /
+    1_000_000;
+
+  return costUsd > 0 ? costUsd : undefined;
+}
+
+function parseCodexCost(
+  data: Record<string, unknown>,
+  usage: TokenUsage | undefined,
+  model: string | undefined,
+): number | undefined {
+  const rawUsage = asRecord(data.usage);
+  const reportedCostUsd = num(
+    data.cost_usd,
+    data.costUsd,
+    data.total_cost_usd,
+    rawUsage?.cost_usd,
+    rawUsage?.costUsd,
+  );
+  if (reportedCostUsd > 0) return reportedCostUsd;
+  return estimateCodexCost(usage, model);
+}
 
 /**
  * Adapter for running OpenAI Codex CLI sessions.
@@ -22,6 +160,8 @@ export class CodexAdapter implements CodingToolAdapter {
   private processGeneration = 0;
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
+  private model: string | undefined;
+  private emittedIncrementalUsage = false;
 
   run({
     prompt,
@@ -39,6 +179,8 @@ export class CodexAdapter implements CodingToolAdapter {
     this.lastTextContent = null;
     this.sawErrorEvent = false;
     this.lastErrorMessage = null;
+    this.model = model;
+    this.emittedIncrementalUsage = false;
 
     if (toolSessionId && !this.threadId) {
       this.threadId = toolSessionId;
@@ -165,6 +307,20 @@ export class CodexAdapter implements CodingToolAdapter {
       return;
     }
 
+    if (eventType === "event_msg") {
+      const usage = parseCodexTokenCountUsage(data);
+      const costUsd = estimateCodexCost(usage, this.model);
+      if (usage) {
+        this.emittedIncrementalUsage = true;
+        onOutput({
+          type: "usage",
+          usage,
+          ...(costUsd != null ? { costUsd } : {}),
+        });
+      }
+      return;
+    }
+
     // Codex surfaces fatal run errors (e.g. usage limits, auth failures) as
     // top-level `error` and `turn.failed` events with no `item`. Emit these
     // as ErrorEvents so the UI renders the message instead of a bare "Run ended".
@@ -184,6 +340,26 @@ export class CodexAdapter implements CodingToolAdapter {
         this.lastErrorMessage = message;
       }
       this.sawErrorEvent = true;
+      return;
+    }
+
+    if (eventType === "turn.completed") {
+      this.resultEmitted = true;
+      // token_count events already streamed this turn's usage and estimated cost
+      // incrementally, so the completion event must not re-add either or it
+      // double-counts. Only contribute usage/cost here when nothing streamed.
+      if (this.emittedIncrementalUsage) {
+        onOutput({ type: "result", subtype: this.sawErrorEvent ? "error" : "success" });
+        return;
+      }
+      const usage = parseCodexUsage(data);
+      const costUsd = parseCodexCost(data, usage, this.model);
+      onOutput({
+        type: "result",
+        subtype: this.sawErrorEvent ? "error" : "success",
+        ...(usage ? { usage } : {}),
+        ...(costUsd != null ? { costUsd } : {}),
+      });
       return;
     }
 

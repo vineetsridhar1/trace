@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dia
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { Button } from "../ui/button";
 import { TraceLoader } from "../ui/trace-loader";
-import { getFileColor, getFileIcon } from "./file-explorer-utils";
+import { FileIcon } from "./FileIcon";
 import { searchFilePaths } from "./file-fuzzy-search";
 
 const MAX_FILE_RESULTS = 80;
@@ -82,7 +82,6 @@ export function FileCommandPalette({
                   <CommandGroup>
                     {results.map(({ path }) => {
                       const fileName = path.split("/").pop() ?? path;
-                      const Icon = getFileIcon(fileName);
                       const directory = path.slice(
                         0,
                         Math.max(0, path.length - fileName.length - 1),
@@ -97,7 +96,7 @@ export function FileCommandPalette({
                           }}
                           className="h-9 rounded-md px-3 text-[13px]"
                         >
-                          <Icon className={getFileColor(fileName)} size={16} />
+                          <FileIcon path={path} size={16} />
                           <div className="flex min-w-0 flex-1 items-baseline">
                             <span className="truncate font-medium text-[#d4d4d4]">{fileName}</span>
                             {directory && (

@@ -802,7 +802,7 @@ Do this ONCE at the start of your very first response to capture the overall goa
 
 /** Instruction appended to repo-based sessions so the AI reports branch name changes. */
 const BRANCH_INSTRUCTION = `\n\n<system-instruction>
-On the first response in a repo-based session, if the current git branch is still the default trace/<slug> branch, rename it to trace/<slug>/<descriptive-name>. Keep the descriptive name short, lowercase, and hyphenated. If the branch is already descriptive or differs from trace/<slug>, do not rename it.
+On the first response in a repo-based session, if the current git branch is still the default trace-<slug> branch, rename it to trace-<slug>-<descriptive-name>. Keep the descriptive name short, lowercase, hyphenated, and slash-free. Do not use "/" in AI-generated branch names. If the branch is already descriptive or differs from trace-<slug>, do not rename it.
 When you create or rename a git branch, output the full branch name wrapped in XML tags: <trace-branch>branch-name</trace-branch>.
 This lets the system track which branch this session is working on. The tag will be stripped and not shown to the user.
 </system-instruction>`;
@@ -4774,6 +4774,10 @@ export class SessionService {
       });
     }
 
+    if (data.usage || typeof data.costUsd === "number") {
+      await this.recordUsage(sessionId, session.organizationId, data);
+    }
+
     // If we found a title tag, update the session name
     if (extractedTitle) {
       await this.updateName(sessionId, extractedTitle);
@@ -4833,6 +4837,75 @@ export class SessionService {
         });
       }
     }
+  }
+
+  /**
+   * Accumulate token usage and cost from a coding tool output message onto
+   * the session, then emit a usage_updated patch so clients update live.
+   */
+  private async recordUsage(
+    sessionId: string,
+    organizationId: string,
+    data: Record<string, unknown>,
+  ) {
+    const usage =
+      data.usage && typeof data.usage === "object" && !Array.isArray(data.usage)
+        ? (data.usage as Record<string, unknown>)
+        : null;
+    const num = (value: unknown): number => (typeof value === "number" ? value : 0);
+    const inputTokens = num(usage?.inputTokens);
+    const outputTokens = num(usage?.outputTokens);
+    const cacheReadTokens = num(usage?.cacheReadTokens);
+    const cacheCreationTokens = num(usage?.cacheCreationTokens);
+    const costUsd = num(data.costUsd);
+
+    if (
+      inputTokens === 0 &&
+      outputTokens === 0 &&
+      cacheReadTokens === 0 &&
+      cacheCreationTokens === 0 &&
+      costUsd === 0
+    ) {
+      return;
+    }
+
+    const updated = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        inputTokens: { increment: inputTokens },
+        outputTokens: { increment: outputTokens },
+        cacheReadTokens: { increment: cacheReadTokens },
+        cacheCreationTokens: { increment: cacheCreationTokens },
+        costUsd: { increment: costUsd },
+      },
+      select: {
+        inputTokens: true,
+        outputTokens: true,
+        cacheReadTokens: true,
+        cacheCreationTokens: true,
+        costUsd: true,
+      },
+    });
+
+    // No group snapshot here: this runs on every assistant message, and the
+    // group usage badge already derives its total from session entities, so the
+    // per-session patch is enough. Avoids an extra query on the hot path.
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "usage_updated",
+        inputTokens: updated.inputTokens,
+        outputTokens: updated.outputTokens,
+        cacheReadTokens: updated.cacheReadTokens,
+        cacheCreationTokens: updated.cacheCreationTokens,
+        costUsd: updated.costUsd,
+      },
+      actorType: "system",
+      actorId: "system",
+    });
   }
 
   async updateName(sessionId: string, name: string) {

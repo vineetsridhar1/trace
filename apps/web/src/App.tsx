@@ -12,11 +12,14 @@ import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
+import { GlobalCommandPalette } from "./components/command/GlobalCommandPalette";
+import { KeyboardShortcutsDialog } from "./components/command/KeyboardShortcutsDialog";
 import { SidebarProvider, SidebarInset, useSidebar } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestToasts";
 import { Toaster } from "./components/ui/sonner";
 import { TraceLoader } from "./components/ui/trace-loader";
@@ -95,6 +98,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useOrgEvents();
   useHistorySync();
   useVisibilityRefresh();
+  useGlobalShortcuts();
   useBridgePendingRequestToasts();
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
@@ -144,6 +148,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   return (
     <TooltipProvider>
       <BridgeSyncHydrator />
+      <GlobalCommandPalette />
+      <KeyboardShortcutsDialog />
       <div
         className={`flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] ${
           isDesktopShell ? "[background:var(--trace-window-bg)]" : "bg-surface-deep"

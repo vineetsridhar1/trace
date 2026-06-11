@@ -1800,18 +1800,23 @@ export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
   branch?: Maybe<Scalars["String"]["output"]>;
+  cacheCreationTokens: Scalars["Int"]["output"];
+  cacheReadTokens: Scalars["Int"]["output"];
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
+  costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
+  inputTokens: Scalars["Int"]["output"];
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
+  outputTokens: Scalars["Int"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   projects: Array<Project>;
   queuedMessages: Array<QueuedMessage>;
@@ -2393,6 +2398,11 @@ export type SessionGroupsQuery = {
       sessionGroupId?: string | null;
       lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2454,6 +2464,11 @@ export type FilteredSessionGroupsQuery = {
       sessionGroupId?: string | null;
       lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2680,6 +2695,11 @@ export type SessionDetailQuery = {
     worktreeDeleted: boolean;
     lastUserMessageAt?: string | null;
     lastMessageAt?: string | null;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+    costUsd: number;
     sessionGroupId?: string | null;
     createdAt: string;
     updatedAt: string;
@@ -2870,6 +2890,11 @@ export type SessionGroupDetailQuery = {
       sessionGroupId?: string | null;
       lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -4058,6 +4083,11 @@ export type SidebarSessionGroupsQuery = {
       sessionGroupId?: string | null;
       lastUserMessageAt?: string | null;
       lastMessageAt?: string | null;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -4364,6 +4394,11 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                       { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -4532,6 +4567,11 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                       { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -5396,6 +5436,11 @@ export const SessionDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                 { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
+                { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
+                { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
+                { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
+                { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "connection" },
@@ -5827,6 +5872,11 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                       { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -9803,6 +9853,11 @@ export const SidebarSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                       { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "inputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
+                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },

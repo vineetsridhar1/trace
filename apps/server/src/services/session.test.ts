@@ -3890,7 +3890,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("appends the default-branch-only naming instruction for repo sessions", async () => {
+    it("appends the slash-free default-branch naming instruction for repo sessions", async () => {
       const session = makeSession({
         agentStatus: "done",
         sessionStatus: "in_progress",
@@ -3913,7 +3913,14 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({
-          prompt: expect.stringContaining("trace/<slug>/<descriptive-name>"),
+          prompt: expect.stringContaining("trace-<slug>-<descriptive-name>"),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.stringContaining('Do not use "/" in AI-generated branch names.'),
         }),
         expect.any(Object),
       );
@@ -3921,7 +3928,7 @@ describe("SessionService", () => {
         "session-1",
         expect.objectContaining({
           prompt: expect.stringContaining(
-            "If the branch is already descriptive or differs from trace/<slug>, do not rename it.",
+            "If the branch is already descriptive or differs from trace-<slug>, do not rename it.",
           ),
         }),
         expect.any(Object),

@@ -85,9 +85,17 @@ export type GithubCliStatus = {
   error: string | null;
 };
 
+// Once a tool is detected we keep reporting it: the probe runs on every
+// reconnect, and a transient timeout under load must never demote a tool that
+// is actually installed (which would leave existing sessions unable to send
+// messages until the app is reloaded).
+const detectedExecutables = new Set<string>();
+
 function hasExecutable(command: string): boolean {
+  if (detectedExecutables.has(command)) return true;
   try {
-    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 2_000 });
+    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 5_000 });
+    detectedExecutables.add(command);
     return true;
   } catch {
     return false;

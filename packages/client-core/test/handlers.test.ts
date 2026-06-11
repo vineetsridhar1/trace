@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Event, EventType, ScopeType } from "@trace/gql";
-import { handleOrgEvent } from "../src/events/handlers.js";
+import { handleOrgEvent, handleSessionEvent } from "../src/events/handlers.js";
 import { useEntityStore } from "../src/stores/entity.js";
 import { useAuthStore } from "../src/stores/auth.js";
 import { setOrgEventUIBindings, type OrgEventUIBindings } from "../src/events/ui-bindings.js";
@@ -521,6 +521,39 @@ describe("handleOrgEvent", () => {
     );
 
     expect(useEntityStore.getState().sessions["session-1"].workdir).toBe("/tmp/work");
+  });
+
+  it("routes session-scoped usage_updated into session totals", () => {
+    useEntityStore.setState({
+      sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        timestamp: "2026-02-01T00:00:00.000Z",
+        payload: {
+          type: "usage_updated",
+          inputTokens: 12,
+          outputTokens: 3,
+          cacheReadTokens: 40,
+          cacheCreationTokens: 0,
+          costUsd: 0.0042,
+        },
+      }) as Event & { id: string },
+    );
+
+    expect(useEntityStore.getState().sessions["session-1"]).toMatchObject({
+      inputTokens: 12,
+      outputTokens: 3,
+      cacheReadTokens: 40,
+      cacheCreationTokens: 0,
+      costUsd: 0.0042,
+    });
   });
 
   it("routes session_output workspace_failed into retryable session state", () => {

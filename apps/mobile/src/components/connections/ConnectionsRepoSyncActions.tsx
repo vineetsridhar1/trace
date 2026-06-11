@@ -11,7 +11,7 @@ import {
 } from "@/hooks/useConnectionSyncActions";
 
 const ALERT_TITLE: Record<ConnectionSyncAction, string> = {
-  sync: "Sync failed",
+  sync: "Spotlight failed",
   commit: "Commit failed",
   restore: "Restore failed",
   "toggle-auto-sync": "Couldn't update auto-sync",
@@ -55,7 +55,7 @@ export function ConnectionsRepoSyncActions({
     <View style={[styles.row, { gap: theme.spacing.sm }]}>
       <ActionButton
         theme={theme}
-        label="Sync"
+        label="Spotlight"
         symbol="arrow.triangle.2.circlepath"
         loading={pendingAction === "sync"}
         disabled={busy}
