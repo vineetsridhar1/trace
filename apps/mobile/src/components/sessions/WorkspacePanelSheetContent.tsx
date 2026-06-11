@@ -62,6 +62,7 @@ type FileTreeNode = {
 };
 
 type VisibleFileTreeNode = FileTreeNode & { depth: number };
+type VisibleBranchChangeTreeNode = VisibleFileTreeNode & { file?: BranchDiffFile };
 
 const HEADER_BLUR_INTENSITY = 3;
 const HEADER_FADE_EXTRA_HEIGHT = 56;
@@ -129,6 +130,18 @@ function initialExpandedPaths(tree: FileTreeNode[]): Set<string> {
   return expanded;
 }
 
+function directoryPathsFromTree(tree: FileTreeNode[]): Set<string> {
+  const paths = new Set<string>();
+  const visit = (node: FileTreeNode) => {
+    if (!node.isDirectory) return;
+    paths.add(node.path);
+    for (const child of node.children) visit(child);
+  };
+
+  for (const node of tree) visit(node);
+  return paths;
+}
+
 function fileSymbol(path: string): SFSymbol {
   const ext = path.split(".").pop()?.toLowerCase();
   if (["ts", "tsx", "js", "jsx", "py", "rb", "go", "rs", "java", "css", "html"].includes(ext ?? "")) {
@@ -138,6 +151,27 @@ function fileSymbol(path: string): SFSymbol {
   if (["md", "mdx", "txt"].includes(ext ?? "")) return "doc.text";
   if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext ?? "")) return "photo";
   return "doc";
+}
+
+function branchChangeColor(status: string, theme: ReturnType<typeof useTheme>): string {
+  switch (status) {
+    case "A":
+    case "added":
+      return theme.colors.success;
+    case "D":
+    case "deleted":
+      return theme.colors.destructive;
+    case "R":
+    case "C":
+    case "renamed":
+    case "copied":
+      return theme.colors.accent;
+    case "M":
+    case "modified":
+      return theme.colors.warning;
+    default:
+      return theme.colors.mutedForeground;
+  }
 }
 
 export function WorkspacePanelSheetContent({
@@ -471,8 +505,33 @@ function FileTreeRow({
 function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }) {
   const theme = useTheme();
   const [files, setFiles] = useState<BranchDiffFile[]>([]);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const tree = useMemo(() => buildFileTree(files.map((file) => file.path)), [files]);
+  const fileByPath = useMemo(
+    () => new Map(files.map((file) => [file.path, file] as const)),
+    [files],
+  );
+  const visibleFiles = useMemo<VisibleBranchChangeTreeNode[]>(() => {
+    return flattenFileTree(tree, expandedPaths).map((node) => ({
+      ...node,
+      file: node.isDirectory ? undefined : fileByPath.get(node.path),
+    }));
+  }, [expandedPaths, fileByPath, tree]);
+
+  useEffect(() => {
+    setExpandedPaths(directoryPathsFromTree(tree));
+  }, [tree]);
+
+  const toggleDirectory = useCallback((path: string) => {
+    setExpandedPaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
 
   const loadChanges = useCallback(async () => {
     setLoading(true);
@@ -499,27 +558,126 @@ function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }
   if (files.length === 0) return <EmptyState label="No changes on this branch" />;
 
   return (
-    <ScrollView
-      style={styles.panel}
+    <FlatList
+      data={visibleFiles}
+      keyExtractor={(node) => `${node.isDirectory ? "d" : "f"}:${node.path}`}
+      initialNumToRender={32}
+      maxToRenderPerBatch={32}
+      windowSize={9}
+      removeClippedSubviews
       contentContainerStyle={{ paddingTop: topInset }}
       scrollIndicatorInsets={{ top: topInset }}
-    >
-      {files.map((file, index) => (
-        <ListRow
-          key={file.path}
-          title={file.path.split("/").pop() ?? file.path}
-          subtitle={`${file.status}  +${file.additions} -${file.deletions}  ${file.path}`}
-          leading={
-            <SymbolView
-              name={file.status === "deleted" ? "minus.circle" : "plus.forwardslash.minus"}
-              size={16}
-              tintColor={file.status === "deleted" ? theme.colors.destructive : theme.colors.success}
-            />
-          }
-          separator={index < files.length - 1}
+      ItemSeparatorComponent={() => (
+        <View style={[styles.fileTreeSeparator, { backgroundColor: theme.colors.border }]} />
+      )}
+      renderItem={({ item: node }) => (
+        <BranchChangeTreeRow
+          node={node}
+          expanded={expandedPaths.has(node.path)}
+          onToggle={toggleDirectory}
         />
-      ))}
-    </ScrollView>
+      )}
+    />
+  );
+}
+
+function BranchChangeTreeRow({
+  node,
+  expanded,
+  onToggle,
+}: {
+  node: VisibleBranchChangeTreeNode;
+  expanded: boolean;
+  onToggle: (path: string) => void;
+}) {
+  const theme = useTheme();
+  const file = node.file;
+  const changeColor = file ? branchChangeColor(file.status, theme) : theme.colors.accent;
+  const icon: SFSymbol = node.isDirectory
+    ? expanded
+      ? "folder.fill"
+      : "folder"
+    : fileSymbol(node.name);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={node.path}
+      onPress={() => {
+        if (node.isDirectory) onToggle(node.path);
+      }}
+      style={({ pressed }) => [
+        styles.fileTreeRow,
+        {
+          paddingLeft: 12 + node.depth * 18,
+          backgroundColor: pressed ? alpha(changeColor, 0.08) : "transparent",
+        },
+      ]}
+    >
+      {node.isDirectory ? (
+        <SymbolView
+          name={expanded ? "chevron.down" : "chevron.right"}
+          size={12}
+          tintColor={theme.colors.dimForeground}
+          resizeMode="scaleAspectFit"
+          style={styles.fileTreeChevron}
+        />
+      ) : (
+        <View style={styles.fileTreeChevron} />
+      )}
+      <View
+        style={[
+          styles.fileTreeIconBubble,
+          {
+            backgroundColor: node.isDirectory
+              ? alpha(theme.colors.accent, 0.14)
+              : alpha(changeColor, 0.12),
+            borderRadius: theme.radius.sm,
+          },
+        ]}
+      >
+        <SymbolView
+          name={icon}
+          size={15}
+          tintColor={node.isDirectory ? theme.colors.accent : changeColor}
+          resizeMode="scaleAspectFit"
+          style={styles.fileTreeIcon}
+        />
+      </View>
+      <View style={styles.fileTreeText}>
+        <Text variant="body" color="foreground" numberOfLines={1} style={styles.fileTreeName}>
+          {node.name}
+        </Text>
+        {!node.isDirectory && node.depth > 0 ? (
+          <Text variant="caption2" color="dimForeground" numberOfLines={1}>
+            {node.path.split("/").slice(0, -1).join("/")}
+          </Text>
+        ) : null}
+      </View>
+      {file ? <BranchChangeStats file={file} color={changeColor} /> : null}
+    </Pressable>
+  );
+}
+
+function BranchChangeStats({ file, color }: { file: BranchDiffFile; color: string }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.changeStats}>
+      <View style={[styles.changeStatusDot, { backgroundColor: color }]} />
+      {file.additions > 0 ? (
+        <Text variant="caption2" style={[styles.changeStatText, { color: theme.colors.success }]}>
+          +{file.additions}
+        </Text>
+      ) : null}
+      {file.deletions > 0 ? (
+        <Text
+          variant="caption2"
+          style={[styles.changeStatText, { color: theme.colors.destructive }]}
+        >
+          -{file.deletions}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -640,6 +798,21 @@ const styles = StyleSheet.create({
   },
   fileTreeName: {
     lineHeight: 21,
+  },
+  changeStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingLeft: 8,
+  },
+  changeStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+  },
+  changeStatText: {
+    fontFamily: "SpaceMono",
+    lineHeight: 16,
   },
   centerState: {
     flex: 1,
