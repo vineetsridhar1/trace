@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { gql } from "@urql/core";
 import { SymbolView, type SFSymbol } from "expo-symbols";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, ListRow, Text, TraceLoader } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
@@ -59,6 +62,8 @@ type FileTreeNode = {
 };
 
 type VisibleFileTreeNode = FileTreeNode & { depth: number };
+
+const TOP_FADE_EXTRA_HEIGHT = 36;
 
 function buildFileTree(files: string[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
@@ -140,23 +145,48 @@ export function WorkspacePanelSheetContent({
   groupId: string;
   sessionId?: string | null;
 }) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<WorkspaceTab>("files");
   const showingFiles = tab === "files";
+  const topInset = insets.top + theme.spacing.sm;
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.workspaceBody}>
-        {showingFiles ? <FilesTab groupId={groupId} /> : <ChangesTab groupId={groupId} />}
+        {showingFiles ? (
+          <FilesTab groupId={groupId} topInset={topInset} />
+        ) : (
+          <ChangesTab groupId={groupId} topInset={topInset} />
+        )}
       </View>
-      <WorkspaceModeFab mode={tab} onChange={setTab} />
+      <BlurView
+        pointerEvents="none"
+        tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+        intensity={48}
+        style={[styles.topBlur, { height: topInset }]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          alpha(theme.colors.background, 1),
+          alpha(theme.colors.background, 0.5),
+          alpha(theme.colors.background, 0),
+        ]}
+        locations={[0, 0.68, 1]}
+        style={[styles.topFade, { height: topInset + TOP_FADE_EXTRA_HEIGHT }]}
+      />
+      <WorkspaceModeFab mode={tab} bottomInset={insets.bottom} onChange={setTab} />
     </View>
   );
 }
 
 function WorkspaceModeFab({
   mode,
+  bottomInset,
   onChange,
 }: {
   mode: WorkspaceTab;
+  bottomInset: number;
   onChange: (mode: WorkspaceTab) => void;
 }) {
   const theme = useTheme();
@@ -165,7 +195,12 @@ function WorkspaceModeFab({
   const icon: SFSymbol = mode === "files" ? "plus.forwardslash.minus" : "folder";
 
   return (
-    <View style={[styles.fabWrap, { right: theme.spacing.lg, bottom: theme.spacing.lg }]}>
+    <View
+      style={[
+        styles.fabWrap,
+        { right: theme.spacing.lg, bottom: bottomInset + theme.spacing.lg },
+      ]}
+    >
       <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.fabGlass}>
         <Pressable
           accessibilityRole="button"
@@ -192,7 +227,7 @@ function WorkspaceModeFab({
   );
 }
 
-function FilesTab({ groupId }: { groupId: string }) {
+function FilesTab({ groupId, topInset }: { groupId: string; topInset: number }) {
   const theme = useTheme();
   const [files, setFiles] = useState<string[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -315,7 +350,7 @@ function FilesTab({ groupId }: { groupId: string }) {
         style={[
           styles.explorerCard,
           {
-            backgroundColor: alpha(theme.colors.surfaceElevated, 0.76),
+            backgroundColor: theme.colors.background,
           },
         ]}
       >
@@ -326,6 +361,8 @@ function FilesTab({ groupId }: { groupId: string }) {
           maxToRenderPerBatch={32}
           windowSize={9}
           removeClippedSubviews
+          contentContainerStyle={{ paddingTop: topInset }}
+          scrollIndicatorInsets={{ top: topInset }}
           ItemSeparatorComponent={() => (
             <View style={[styles.fileTreeSeparator, { backgroundColor: theme.colors.border }]} />
           )}
@@ -430,7 +467,7 @@ function FileTreeRow({
   );
 }
 
-function ChangesTab({ groupId }: { groupId: string }) {
+function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }) {
   const theme = useTheme();
   const [files, setFiles] = useState<BranchDiffFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -461,7 +498,11 @@ function ChangesTab({ groupId }: { groupId: string }) {
   if (files.length === 0) return <EmptyState label="No changes on this branch" />;
 
   return (
-    <ScrollView style={styles.panel}>
+    <ScrollView
+      style={styles.panel}
+      contentContainerStyle={{ paddingTop: topInset }}
+      scrollIndicatorInsets={{ top: topInset }}
+    >
       {files.map((file, index) => (
         <ListRow
           key={file.path}
@@ -523,6 +564,20 @@ const styles = StyleSheet.create({
   },
   workspaceBody: {
     flex: 1,
+  },
+  topBlur: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 5,
+  },
+  topFade: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 6,
   },
   panel: {
     flex: 1,
