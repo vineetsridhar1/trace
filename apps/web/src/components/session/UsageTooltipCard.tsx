@@ -37,7 +37,7 @@ export function UsageTooltipCard({
   ] as const;
 
   return (
-    <div className="min-w-0 px-3 py-2.5 text-[13px] leading-5">
+    <div className="w-full min-w-0 px-3 py-2.5 text-[13px] leading-5">
       <div className="font-semibold text-zinc-100">{title}</div>
       {subtitle && <div className="text-zinc-200/90">{subtitle}</div>}
       {dateRange && <div className="mt-0.5 text-zinc-300/85">{dateRange}</div>}
