@@ -2,7 +2,10 @@ import { useCallback, useMemo, useState } from "react";
 import { buildSessionGridRows } from "./session-grid-grouping";
 import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
 
-export function useSessionStatusGrouping(rows: SessionGroupRow[]): {
+export function useSessionStatusGrouping(
+  rows: SessionGroupRow[],
+  currentUserId: string | null = null,
+): {
   gridRows: SessionGridRow[];
   onFilterModelChanged: (model: Record<string, unknown> | null) => void;
   onToggleStatusGroup: (status: string) => void;
@@ -11,8 +14,8 @@ export function useSessionStatusGrouping(rows: SessionGroupRow[]): {
   const [collapsedStatuses, setCollapsedStatuses] = useState<Set<string>>(() => new Set());
 
   const gridRows = useMemo(
-    () => buildSessionGridRows({ collapsedStatuses, filterModel, rows }),
-    [collapsedStatuses, filterModel, rows],
+    () => buildSessionGridRows({ collapsedStatuses, filterModel, rows, currentUserId }),
+    [collapsedStatuses, filterModel, rows, currentUserId],
   );
 
   const onToggleStatusGroup = useCallback((status: string) => {

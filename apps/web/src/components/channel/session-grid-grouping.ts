@@ -24,6 +24,14 @@ function getRowSortTimestamp(row: SessionGroupRow | undefined): number {
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
+function isOwnedByCurrentUser(row: SessionGroupRow, currentUserId: string | null): boolean {
+  if (!currentUserId) return false;
+  const ownerId = (row.owner as { id?: string } | null | undefined)?.id;
+  // Also match the displayed "Created by" identity so the sort agrees with the
+  // column, since owner and creator can occasionally differ.
+  return ownerId === currentUserId || getSessionCreatedBy(row)?.id === currentUserId;
+}
+
 function getFilterText(row: SessionGroupRow, columnId: string): string {
   switch (columnId) {
     case SESSION_COLUMN_IDS.compactSummary:
@@ -141,10 +149,12 @@ export function buildSessionGridRows({
   collapsedStatuses,
   filterModel,
   rows,
+  currentUserId = null,
 }: {
   collapsedStatuses: ReadonlySet<string>;
   filterModel: Record<string, unknown> | null;
   rows: SessionGroupRow[];
+  currentUserId?: string | null;
 }): SessionGridRow[] {
   const groups = new Map<string, SessionGroupRow[]>();
 
@@ -167,6 +177,9 @@ export function buildSessionGridRows({
     })
     .flatMap(([status, statusRows]) => {
       const sortedRows = [...statusRows].sort((a, b) => {
+        const aMine = isOwnedByCurrentUser(a, currentUserId);
+        const bMine = isOwnedByCurrentUser(b, currentUserId);
+        if (aMine !== bMine) return aMine ? -1 : 1;
         const diff = getRowSortTimestamp(b) - getRowSortTimestamp(a);
         if (diff !== 0) return diff;
         return a.id.localeCompare(b.id);

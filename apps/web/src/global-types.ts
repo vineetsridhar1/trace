@@ -164,6 +164,7 @@ declare global {
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
+    onMenuCommand?: (callback: (command: string) => void) => () => void;
   }
 
   interface Window {

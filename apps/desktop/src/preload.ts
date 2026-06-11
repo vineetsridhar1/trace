@@ -31,4 +31,9 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.on("bridge-status", listener);
     return () => ipcRenderer.removeListener("bridge-status", listener);
   },
+  onMenuCommand: (callback: (command: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, command: string) => callback(command);
+    ipcRenderer.on("menu-command", listener);
+    return () => ipcRenderer.removeListener("menu-command", listener);
+  },
 });

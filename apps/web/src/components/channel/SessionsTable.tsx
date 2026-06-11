@@ -39,8 +39,10 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
 
   const filteredGroups = useSessionGroupRows(channelId);
-  const { gridRows, onFilterModelChanged, onToggleStatusGroup } =
-    useSessionStatusGrouping(filteredGroups);
+  const { gridRows, onFilterModelChanged, onToggleStatusGroup } = useSessionStatusGrouping(
+    filteredGroups,
+    currentUserId,
+  );
 
   useEffect(() => {
     useSessionsGridTable.getState().setRows(gridRows);
