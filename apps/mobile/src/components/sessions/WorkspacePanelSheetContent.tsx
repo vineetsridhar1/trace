@@ -47,6 +47,30 @@ const SESSION_GROUP_BRANCH_DIFF_QUERY = gql`
   }
 `;
 
+const SESSION_GROUP_DEFAULT_BRANCH_QUERY = gql`
+  query MobileSessionGroupDefaultBranch($id: ID!) {
+    sessionGroup(id: $id) {
+      id
+      repo {
+        id
+        defaultBranch
+      }
+    }
+  }
+`;
+
+const SESSION_GROUP_FILE_AT_REF_QUERY = gql`
+  query MobileSessionGroupFileAtRef($sessionGroupId: ID!, $filePath: String!, $ref: String!) {
+    sessionGroupFileAtRef(sessionGroupId: $sessionGroupId, filePath: $filePath, ref: $ref)
+  }
+`;
+
+const SESSION_GROUP_FILE_CONTENT_FOR_DIFF_QUERY = gql`
+  query MobileSessionGroupFileContentForDiff($sessionGroupId: ID!, $filePath: String!) {
+    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)
+  }
+`;
+
 type WorkspaceTab = "files" | "changes";
 type FilesData = { sessionGroupFiles?: string[] | null };
 type FileContentData = {
@@ -63,6 +87,15 @@ type BranchDiffFile = {
   deletions: number;
 };
 type DiffData = { sessionGroupBranchDiff?: BranchDiffFile[] | null };
+type DefaultBranchData = {
+  sessionGroup?: {
+    repo?: {
+      defaultBranch: string;
+    } | null;
+  } | null;
+};
+type FileAtRefData = { sessionGroupFileAtRef?: string | null };
+type FileContentForDiffData = { sessionGroupFileContent?: string | null };
 type FileIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 type FileTreeNode = {
   name: string;
@@ -73,6 +106,14 @@ type FileTreeNode = {
 
 type VisibleFileTreeNode = FileTreeNode & { depth: number };
 type VisibleBranchChangeTreeNode = VisibleFileTreeNode & { file?: BranchDiffFile };
+type DiffLineType = "context" | "added" | "removed";
+type DiffLine = {
+  id: string;
+  type: DiffLineType;
+  oldLineNumber?: number;
+  newLineNumber?: number;
+  text: string;
+};
 type HighlightKind =
   | "plain"
   | "comment"
@@ -251,6 +292,119 @@ function branchChangeColor(status: string, theme: ReturnType<typeof useTheme>): 
     default:
       return theme.colors.mutedForeground;
   }
+}
+
+function isAddedStatus(status: string): boolean {
+  return status === "A" || status === "added";
+}
+
+function isDeletedStatus(status: string): boolean {
+  return status === "D" || status === "deleted";
+}
+
+function splitLines(content: string): string[] {
+  if (content.length === 0) return [];
+  const withoutTrailingNewline = content.endsWith("\n") ? content.slice(0, -1) : content;
+  return withoutTrailingNewline.split("\n");
+}
+
+function buildUnifiedDiffLines(original: string, modified: string): DiffLine[] {
+  const originalLines = splitLines(original);
+  const modifiedLines = splitLines(modified);
+  const cellCount = originalLines.length * modifiedLines.length;
+  if (cellCount > 250_000) {
+    return buildCoarseDiffLines(originalLines, modifiedLines);
+  }
+
+  const cols = modifiedLines.length + 1;
+  const table = new Uint16Array((originalLines.length + 1) * cols);
+  for (let i = originalLines.length - 1; i >= 0; i--) {
+    for (let j = modifiedLines.length - 1; j >= 0; j--) {
+      const index = i * cols + j;
+      if (originalLines[i] === modifiedLines[j]) {
+        table[index] = table[(i + 1) * cols + j + 1] + 1;
+      } else {
+        table[index] = Math.max(table[(i + 1) * cols + j], table[i * cols + j + 1]);
+      }
+    }
+  }
+
+  const lines: DiffLine[] = [];
+  let oldIndex = 0;
+  let newIndex = 0;
+  let sequence = 0;
+  while (oldIndex < originalLines.length || newIndex < modifiedLines.length) {
+    if (
+      oldIndex < originalLines.length &&
+      newIndex < modifiedLines.length &&
+      originalLines[oldIndex] === modifiedLines[newIndex]
+    ) {
+      sequence += 1;
+      lines.push({
+        id: `c:${sequence}`,
+        type: "context",
+        oldLineNumber: oldIndex + 1,
+        newLineNumber: newIndex + 1,
+        text: originalLines[oldIndex] ?? "",
+      });
+      oldIndex += 1;
+      newIndex += 1;
+      continue;
+    }
+
+    if (
+      newIndex < modifiedLines.length &&
+      (oldIndex >= originalLines.length ||
+        table[oldIndex * cols + newIndex + 1] >= table[(oldIndex + 1) * cols + newIndex])
+    ) {
+      sequence += 1;
+      lines.push({
+        id: `a:${sequence}`,
+        type: "added",
+        newLineNumber: newIndex + 1,
+        text: modifiedLines[newIndex] ?? "",
+      });
+      newIndex += 1;
+      continue;
+    }
+
+    if (oldIndex < originalLines.length) {
+      sequence += 1;
+      lines.push({
+        id: `r:${sequence}`,
+        type: "removed",
+        oldLineNumber: oldIndex + 1,
+        text: originalLines[oldIndex] ?? "",
+      });
+      oldIndex += 1;
+    }
+  }
+
+  return lines;
+}
+
+function buildCoarseDiffLines(originalLines: string[], modifiedLines: string[]): DiffLine[] {
+  let sequence = 0;
+  return [
+    ...originalLines.map((text, index) => {
+      sequence += 1;
+      return {
+        id: `r:${sequence}`,
+        type: "removed" as const,
+        oldLineNumber: index + 1,
+        text,
+      };
+    }),
+    ...modifiedLines.map((text, index) => {
+      sequence += 1;
+      return {
+        id: `a:${sequence}`,
+        type: "added" as const,
+        newLineNumber: index + 1,
+        text,
+      };
+    }),
+  ];
 }
 
 function highlightCode(code: string): HighlightPart[] {
@@ -664,6 +818,12 @@ function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }
   const theme = useTheme();
   const [files, setFiles] = useState<BranchDiffFile[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [selectedDiffFile, setSelectedDiffFile] = useState<BranchDiffFile | null>(null);
+  const [diffContent, setDiffContent] = useState<{ original: string; modified: string } | null>(
+    null,
+  );
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const tree = useMemo(() => buildFileTree(files.map((file) => file.path)), [files]);
@@ -711,6 +871,75 @@ function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }
     void loadChanges();
   }, [loadChanges]);
 
+  const openDiff = useCallback(
+    async (file: BranchDiffFile) => {
+      setSelectedDiffFile(file);
+      setDiffContent(null);
+      setDiffError(null);
+      setDiffLoading(true);
+      try {
+        const branchResult = await getClient()
+          .query<DefaultBranchData>(SESSION_GROUP_DEFAULT_BRANCH_QUERY, { id: groupId })
+          .toPromise();
+        if (branchResult.error) throw branchResult.error;
+        const defaultBranch = branchResult.data?.sessionGroup?.repo?.defaultBranch ?? "main";
+
+        const [originalResult, modifiedResult] = await Promise.all([
+          isAddedStatus(file.status)
+            ? Promise.resolve({ data: { sessionGroupFileAtRef: "" }, error: undefined })
+            : getClient()
+                .query<FileAtRefData>(SESSION_GROUP_FILE_AT_REF_QUERY, {
+                  sessionGroupId: groupId,
+                  filePath: file.path,
+                  ref: defaultBranch,
+                })
+                .toPromise(),
+          isDeletedStatus(file.status)
+            ? Promise.resolve({ data: { sessionGroupFileContent: "" }, error: undefined })
+            : getClient()
+                .query<FileContentForDiffData>(
+                  SESSION_GROUP_FILE_CONTENT_FOR_DIFF_QUERY,
+                  { sessionGroupId: groupId, filePath: file.path },
+                  { requestPolicy: "network-only" },
+                )
+                .toPromise(),
+        ]);
+        if (originalResult.error) throw originalResult.error;
+        if (modifiedResult.error) throw modifiedResult.error;
+        setDiffContent({
+          original: originalResult.data?.sessionGroupFileAtRef ?? "",
+          modified: modifiedResult.data?.sessionGroupFileContent ?? "",
+        });
+      } catch (loadError) {
+        setDiffError(loadError instanceof Error ? loadError.message : "Failed to load diff.");
+      } finally {
+        setDiffLoading(false);
+      }
+    },
+    [groupId],
+  );
+
+  const closeDiff = useCallback(() => {
+    setSelectedDiffFile(null);
+    setDiffContent(null);
+    setDiffError(null);
+    setDiffLoading(false);
+  }, []);
+
+  if (selectedDiffFile) {
+    return (
+      <DiffPreview
+        file={selectedDiffFile}
+        content={diffContent}
+        loading={diffLoading}
+        error={diffError}
+        topInset={topInset}
+        onBack={closeDiff}
+        onRetry={() => void openDiff(selectedDiffFile)}
+      />
+    );
+  }
+
   if (loading) return <LoadingState label="Loading changes..." />;
   if (error) return <ErrorState message={error} onRetry={loadChanges} />;
   if (files.length === 0) return <EmptyState label="No changes on this branch" />;
@@ -733,9 +962,124 @@ function ChangesTab({ groupId, topInset }: { groupId: string; topInset: number }
           node={node}
           expanded={expandedPaths.has(node.path)}
           onToggle={toggleDirectory}
+          onOpenFile={(file) => void openDiff(file)}
         />
       )}
     />
+  );
+}
+
+function DiffPreview({
+  file,
+  content,
+  loading,
+  error,
+  topInset,
+  onBack,
+  onRetry,
+}: {
+  file: BranchDiffFile;
+  content: { original: string; modified: string } | null;
+  loading: boolean;
+  error: string | null;
+  topInset: number;
+  onBack: () => void;
+  onRetry: () => void;
+}) {
+  const theme = useTheme();
+  const lines = useMemo(
+    () => (content ? buildUnifiedDiffLines(content.original, content.modified) : []),
+    [content],
+  );
+
+  return (
+    <View style={styles.panel}>
+      <View style={{ paddingTop: topInset }}>
+        <ListRow
+          title={file.path}
+          subtitle={`${file.status}  +${file.additions} -${file.deletions}`}
+          leading={
+            <SymbolView name="chevron.left" size={16} tintColor={theme.colors.mutedForeground} />
+          }
+          onPress={onBack}
+          separator
+        />
+      </View>
+      {loading ? (
+        <LoadingState label="Loading diff..." />
+      ) : error ? (
+        <ErrorState message={error} onRetry={onRetry} />
+      ) : lines.length === 0 ? (
+        <EmptyState label="No diff content" />
+      ) : (
+        <FlatList
+          data={lines}
+          keyExtractor={(line) => line.id}
+          initialNumToRender={40}
+          maxToRenderPerBatch={40}
+          windowSize={9}
+          removeClippedSubviews
+          contentContainerStyle={styles.diffContent}
+          renderItem={({ item }) => <DiffLineRow line={item} />}
+        />
+      )}
+    </View>
+  );
+}
+
+function DiffLineRow({ line }: { line: DiffLine }) {
+  const theme = useTheme();
+  const isAdded = line.type === "added";
+  const isRemoved = line.type === "removed";
+  const marker = isAdded ? "+" : isRemoved ? "-" : " ";
+  const backgroundColor = isAdded
+    ? alpha(theme.colors.success, 0.1)
+    : isRemoved
+      ? alpha(theme.colors.destructive, 0.1)
+      : "transparent";
+  const markerColor = isAdded
+    ? theme.colors.success
+    : isRemoved
+      ? theme.colors.destructive
+      : theme.colors.dimForeground;
+
+  return (
+    <View style={[styles.diffLineRow, { backgroundColor }]}>
+      <RNText style={[styles.diffLineNumber, { color: theme.colors.dimForeground }]}>
+        {line.oldLineNumber ?? ""}
+      </RNText>
+      <RNText style={[styles.diffLineNumber, { color: theme.colors.dimForeground }]}>
+        {line.newLineNumber ?? ""}
+      </RNText>
+      <RNText style={[styles.diffMarker, { color: markerColor }]}>{marker}</RNText>
+      <View style={styles.diffLineText}>
+        <HighlightedCodeLine code={line.text.length > 0 ? line.text : " "} />
+      </View>
+    </View>
+  );
+}
+
+function HighlightedCodeLine({ code }: { code: string }) {
+  const theme = useTheme();
+  const parts = useMemo(() => highlightCode(code), [code]);
+  const tokenStyles: Record<HighlightKind, { color: string }> = {
+    plain: { color: theme.colors.foreground },
+    comment: { color: theme.colors.dimForeground },
+    string: { color: theme.colors.success },
+    keyword: { color: theme.colors.accent },
+    number: { color: theme.colors.warning },
+    symbol: { color: "#c084fc" },
+    punctuation: { color: theme.colors.mutedForeground },
+  };
+
+  return (
+    <RNText style={[styles.diffCodeText, { color: theme.colors.foreground }]}>
+      {parts.map((part, index) => (
+        <RNText key={`${index}:${part.kind}`} style={tokenStyles[part.kind]}>
+          {part.text}
+        </RNText>
+      ))}
+    </RNText>
   );
 }
 
@@ -743,10 +1087,12 @@ function BranchChangeTreeRow({
   node,
   expanded,
   onToggle,
+  onOpenFile,
 }: {
   node: VisibleBranchChangeTreeNode;
   expanded: boolean;
   onToggle: (path: string) => void;
+  onOpenFile: (file: BranchDiffFile) => void;
 }) {
   const theme = useTheme();
   const file = node.file;
@@ -763,6 +1109,7 @@ function BranchChangeTreeRow({
       accessibilityLabel={node.path}
       onPress={() => {
         if (node.isDirectory) onToggle(node.path);
+        else if (file) onOpenFile(file);
       }}
       style={({ pressed }) => [
         styles.fileTreeRow,
@@ -971,6 +1318,42 @@ const styles = StyleSheet.create({
   changeStatText: {
     fontFamily: "SpaceMono",
     lineHeight: 16,
+  },
+  diffContent: {
+    paddingTop: 8,
+    paddingBottom: 96,
+  },
+  diffLineRow: {
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+  diffLineNumber: {
+    width: 34,
+    fontFamily: "SpaceMono",
+    fontSize: 11,
+    lineHeight: 18,
+    textAlign: "right",
+  },
+  diffMarker: {
+    width: 18,
+    fontFamily: "SpaceMono",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  diffLineText: {
+    flex: 1,
+    minWidth: 0,
+    paddingLeft: 2,
+  },
+  diffCodeText: {
+    fontFamily: "SpaceMono",
+    fontSize: 12,
+    lineHeight: 18,
+    letterSpacing: 0,
   },
   centerState: {
     flex: 1,
