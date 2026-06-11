@@ -99,6 +99,46 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("estimates Codex cost from usage when the CLI omits cost", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      model: "gpt-5.5",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 25,
+          input_token_details: {
+            cached_tokens: 40,
+            cache_creation_tokens: 5,
+          },
+        },
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadTokens: 40,
+        cacheCreationTokens: 5,
+      },
+      costUsd: 0.001295,
+    });
+  });
+
   it("normalizes Codex top-level token aliases", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();

@@ -5,6 +5,21 @@ import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
+interface ModelPricing {
+  input: number;
+  cachedInput: number;
+  output: number;
+}
+
+const OPENAI_STANDARD_PRICES_PER_MILLION: Record<string, ModelPricing> = {
+  "gpt-5": { input: 1.25, cachedInput: 0.125, output: 10 },
+  "gpt-5.5": { input: 5, cachedInput: 0.5, output: 30 },
+  "gpt-5.4": { input: 2.5, cachedInput: 0.25, output: 15 },
+  "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.5 },
+  "gpt-5.4-nano": { input: 0.2, cachedInput: 0.02, output: 1.25 },
+  "gpt-5.3-codex": { input: 1.75, cachedInput: 0.175, output: 14 },
+};
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value != null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -55,10 +70,43 @@ function parseCodexUsage(data: Record<string, unknown>): TokenUsage | undefined 
   return normalized;
 }
 
-function parseCodexCost(data: Record<string, unknown>): number | undefined {
-  const usage = asRecord(data.usage);
-  const costUsd = num(data.cost_usd, data.costUsd, data.total_cost_usd, usage?.cost_usd, usage?.costUsd);
+function normalizeOpenAIModel(model: string | undefined): string | undefined {
+  if (!model) return undefined;
+  if (!model.includes("/")) return model;
+  const parts = model.split("/");
+  return parts[parts.length - 1];
+}
+
+function estimateCodexCost(usage: TokenUsage | undefined, model: string | undefined) {
+  if (!usage) return undefined;
+  const pricing = OPENAI_STANDARD_PRICES_PER_MILLION[normalizeOpenAIModel(model) ?? ""];
+  if (!pricing) return undefined;
+
+  const freshInputTokens = usage.inputTokens + usage.cacheCreationTokens;
+  const costUsd =
+    (freshInputTokens * pricing.input +
+      usage.cacheReadTokens * pricing.cachedInput +
+      usage.outputTokens * pricing.output) /
+    1_000_000;
+
   return costUsd > 0 ? costUsd : undefined;
+}
+
+function parseCodexCost(
+  data: Record<string, unknown>,
+  usage: TokenUsage | undefined,
+  model: string | undefined,
+): number | undefined {
+  const rawUsage = asRecord(data.usage);
+  const reportedCostUsd = num(
+    data.cost_usd,
+    data.costUsd,
+    data.total_cost_usd,
+    rawUsage?.cost_usd,
+    rawUsage?.costUsd,
+  );
+  if (reportedCostUsd > 0) return reportedCostUsd;
+  return estimateCodexCost(usage, model);
 }
 
 /**
@@ -78,6 +126,7 @@ export class CodexAdapter implements CodingToolAdapter {
   private processGeneration = 0;
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
+  private model: string | undefined;
 
   run({
     prompt,
@@ -95,6 +144,7 @@ export class CodexAdapter implements CodingToolAdapter {
     this.lastTextContent = null;
     this.sawErrorEvent = false;
     this.lastErrorMessage = null;
+    this.model = model;
 
     if (toolSessionId && !this.threadId) {
       this.threadId = toolSessionId;
@@ -246,7 +296,7 @@ export class CodexAdapter implements CodingToolAdapter {
     if (eventType === "turn.completed") {
       this.resultEmitted = true;
       const usage = parseCodexUsage(data);
-      const costUsd = parseCodexCost(data);
+      const costUsd = parseCodexCost(data, usage, this.model);
       onOutput({
         type: "result",
         subtype: this.sawErrorEvent ? "error" : "success",
