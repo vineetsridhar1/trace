@@ -33,6 +33,22 @@ export default function SheetsLayout() {
           contentStyle: { backgroundColor: "#0a0a0a" },
         }}
       />
+      <Stack.Screen
+        name="workspace-file"
+        options={{
+          presentation: "card",
+          animation: "slide_from_right",
+          contentStyle: { backgroundColor: "#0a0a0a" },
+        }}
+      />
+      <Stack.Screen
+        name="workspace-diff"
+        options={{
+          presentation: "card",
+          animation: "slide_from_right",
+          contentStyle: { backgroundColor: "#0a0a0a" },
+        }}
+      />
     </Stack>
   );
 }
