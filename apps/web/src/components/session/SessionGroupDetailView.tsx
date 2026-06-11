@@ -709,14 +709,6 @@ export function SessionGroupDetailView({
         run: handleToggleFilePalette,
         shortcut: { key: "p", mod: true },
       },
-      {
-        id: "session.toggle-fullscreen",
-        title: isFullscreen ? "Exit fullscreen" : "Enter fullscreen",
-        group: "Session",
-        keywords: "fullscreen expand maximize",
-        run: toggleFullscreen,
-        shortcut: { key: "Enter", mod: true },
-      },
     ];
     if (canInteract) {
       commands.push(
@@ -727,14 +719,6 @@ export function SessionGroupDetailView({
           keywords: "files git changes panel info",
           run: handleToggleSidebar,
           shortcut: { key: "e", mod: true, shift: true },
-        },
-        {
-          id: "session.toggle-applications",
-          title: "Toggle applications panel",
-          group: "Session",
-          keywords: "apps processes ports traffic",
-          run: handleToggleApplicationsSidebar,
-          shortcut: { key: "a", mod: true, shift: true },
         },
         {
           id: "session.show-files",
@@ -758,6 +742,17 @@ export function SessionGroupDetailView({
           run: () => showSidebarTab("changes"),
         },
       );
+      // Applications panel only exists for cloud-hosted sessions; registering it
+      // otherwise would open a panel an effect immediately closes again.
+      if (showApplicationsSidebarTab) {
+        commands.push({
+          id: "session.toggle-applications",
+          title: "Toggle applications panel",
+          group: "Session",
+          keywords: "apps processes ports traffic",
+          run: handleToggleApplicationsSidebar,
+        });
+      }
     }
     if (canNewChatCmd) {
       commands.push({
@@ -780,12 +775,11 @@ export function SessionGroupDetailView({
     }
     return commands;
   }, [
-    isFullscreen,
     canInteract,
     canNewChatCmd,
     canOpenTerminalCmd,
+    showApplicationsSidebarTab,
     handleToggleFilePalette,
-    toggleFullscreen,
     handleToggleSidebar,
     handleToggleApplicationsSidebar,
     showSidebarTab,
