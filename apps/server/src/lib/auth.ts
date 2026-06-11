@@ -9,6 +9,7 @@ import {
 } from "../services/mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
+import { assertGitHubOrgAccess } from "./github-auth-guard.js";
 import { prisma } from "./db.js";
 import { isLocalMode } from "./mode.js";
 import {
@@ -350,10 +351,14 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     }
   }
 
+  const githubToken = readHeaderValue(req.headers, "x-github-token");
+  await assertGitHubOrgAccess({ githubToken, organizationId });
+
   return {
     userId: user.id,
     organizationId,
     clientSource: readClientSource(req.headers),
+    githubToken,
     role,
     actorType: "user",
     userLoader: createUserLoader(),
@@ -422,6 +427,12 @@ export async function buildWsContext(
     }
   }
 
+  const githubToken =
+    typeof connectionParams?.githubToken === "string" && connectionParams.githubToken.trim()
+      ? connectionParams.githubToken.trim()
+      : null;
+  await assertGitHubOrgAccess({ githubToken, organizationId });
+
   return {
     userId: user.id,
     organizationId,
@@ -429,6 +440,7 @@ export async function buildWsContext(
       typeof connectionParams?.clientSource === "string" && connectionParams.clientSource.trim()
         ? connectionParams.clientSource.trim()
         : null,
+    githubToken,
     role,
     actorType: "user",
     userLoader: createUserLoader(),

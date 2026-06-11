@@ -4,6 +4,7 @@ import { getPlatform } from "../platform.js";
 import { useEntityStore } from "./entity.js";
 
 const ACTIVE_ORG_KEY = "trace_active_org";
+const GITHUB_TOKEN_KEY = "trace_github_token";
 export const LOCAL_LOGIN_NAME_KEY = "trace_local_login_name";
 
 export interface OrgMembership {
@@ -24,10 +25,13 @@ export interface AuthState {
   loading: boolean;
   /** In-memory cache of the auth token for synchronous header construction. */
   token: string | null;
+  /** GitHub API token sent on every request so the backend can authorize it. */
+  githubToken: string | null;
   signInWithToken: (token: string) => Promise<void>;
   fetchMe: () => Promise<void>;
   logout: (options?: LogoutOptions) => Promise<void>;
   setActiveOrg: (orgId: string) => void;
+  setGithubToken: (githubToken: string | null) => void;
 }
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
@@ -47,6 +51,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   orgMemberships: [],
   loading: true,
   token: null,
+  githubToken: null,
 
   signInWithToken: async (token: string) => {
     if (shouldUseBearerAuth()) {
@@ -71,6 +76,9 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
           if (token) set({ token });
         }
       }
+
+      const storedGithubToken = await platform.storage.getItem(GITHUB_TOKEN_KEY);
+      if (storedGithubToken) set({ githubToken: storedGithubToken });
 
       const headers: Record<string, string> = {};
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -134,6 +142,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
     try {
       await platform.secureStorage.clearToken();
       await platform.storage.removeItem(ACTIVE_ORG_KEY);
+      await platform.storage.removeItem(GITHUB_TOKEN_KEY);
       await platform.storage.removeItem(LOCAL_LOGIN_NAME_KEY);
       // Time-box the server call: clearing local state doesn't require a
       // successful response, and without a cap a slow/offline network would
@@ -154,6 +163,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         activeOrgId: null,
         orgMemberships: [],
         token: null,
+        githubToken: null,
         loading: false,
       });
     }
@@ -165,6 +175,17 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
       console.error("[auth] failed to persist active org", err);
     });
   },
+
+  setGithubToken: (githubToken: string | null) => {
+    set({ githubToken });
+    const storage = getPlatform().storage;
+    const persist = githubToken
+      ? storage.setItem(GITHUB_TOKEN_KEY, githubToken)
+      : storage.removeItem(GITHUB_TOKEN_KEY);
+    Promise.resolve(persist).catch((err: unknown) => {
+      console.error("[auth] failed to persist GitHub token", err);
+    });
+  },
 }));
 
 /**
@@ -172,9 +193,10 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
  * Reads the in-memory token cache populated by `fetchMe` / `signInWithToken`.
  */
 export function getAuthHeaders(): Record<string, string> {
-  const { token, activeOrgId } = useAuthStore.getState();
+  const { token, activeOrgId, githubToken } = useAuthStore.getState();
   const headers: Record<string, string> = {};
   if (shouldUseBearerAuth() && token) headers.Authorization = `Bearer ${token}`;
   if (activeOrgId) headers["X-Organization-Id"] = activeOrgId;
+  if (githubToken) headers["X-GitHub-Token"] = githubToken;
   return headers;
 }
