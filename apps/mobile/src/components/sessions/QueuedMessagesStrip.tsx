@@ -22,7 +22,7 @@ import {
   wrapPrompt,
   type InteractionMode,
 } from "@trace/client-core";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
@@ -315,16 +315,25 @@ function QueuedMessageEditor({
         style={styles.modalRoot}
       >
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View
+        <Glass
+          preset="card"
+          interactive
+          tint={theme.colors.glassTintLight}
           style={[
             styles.editorCard,
             {
-              backgroundColor: theme.colors.surfaceElevated,
-              borderColor: theme.colors.borderMuted,
+              borderColor: alpha(theme.colors.foreground, 0.14),
               marginHorizontal: theme.spacing.md,
             },
           ]}
         >
+          <View
+            pointerEvents="none"
+            style={[
+              styles.editorShine,
+              { borderColor: alpha(theme.colors.foreground, 0.18) },
+            ]}
+          />
           <View style={styles.editorHeader}>
             <View>
               <Text variant="headline" color="foreground">
@@ -435,7 +444,7 @@ function QueuedMessageEditor({
               </Pressable>
             </View>
           </View>
-        </View>
+        </Glass>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -471,7 +480,7 @@ const styles = StyleSheet.create({
   actionIcon: { width: 10, height: 10 },
   removeIcon: { width: 9, height: 9 },
   modalRoot: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.22)" },
   editorCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 28,
@@ -479,10 +488,16 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 12,
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 12,
+    shadowOpacity: 0.26,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 18,
+  },
+  editorShine: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
   editorHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   closeButton: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
