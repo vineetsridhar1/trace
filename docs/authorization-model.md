@@ -61,7 +61,7 @@ first time a non-member issues a GraphQL call.
 ### Layer 3 — Resource authorization
 
 The interesting layer. The helpers live in `services/access.ts` and
-`services/runtime-access.ts`. The model has two ideas:
+`services/runtime-access.ts`. The model has three ideas:
 
 - **Org scoping** — every resource lookup is filtered by the caller's org, so a
   resource from another org simply "does not exist" to you.
@@ -76,11 +76,39 @@ The interesting layer. The helpers live in `services/access.ts` and
     || group.ownerUserId === userId;
   ```
 
+- **Bridge access (ownership & grants)** — a *local* bridge is a specific user's
+  machine. It is owned by one user, and acting on a session that lives on it
+  requires being that owner or holding an explicit grant (see next section).
+  This is enforced **independently** of session-group visibility.
+
 > **Important design note (read this before launch):** within a single org there
-> is **no per-session participant ACL**. Any org member may act on any session
-> that is *not* inside a private session group. Per-user isolation is achieved by
+> is **no per-session participant ACL** at the *visibility* layer. Any org member
+> may act on any session that is *not* inside a private session group — **but** if
+> that session runs on a local bridge, the bridge-access check below still applies
+> and blocks non-owners. Per-user isolation of *cloud* sessions is achieved by
 > putting work in a **private session group** owned by that user. Terminals are
-> stricter — see below.
+> stricter still — owner-only.
+
+### Bridge access: ownership & grants (within-org)
+
+This is the layer that answers *"can an org member act on a bridge they don't
+own?"* — the answer is **no**, unless granted.
+
+- Each local bridge (`BridgeRuntime`) has a single `ownerUserId`.
+  `runtimeAccessService.getAccessState` (`runtime-access.ts:397`) resolves a
+  caller's rights:
+  - **Owner** → full capabilities `["session", "terminal"]` (`:467`).
+  - **Non-owner** → `allowed` only if an active `BridgeAccessGrant` exists
+    (`:485`–`:499`); otherwise denied.
+- `assertAccess` (`runtime-access.ts:503`) enforces it and throws
+  `"Access denied: you do not have permission to use this local bridge"`
+  (`:10`). It applies **only to local bridges** — cloud runtimes return early
+  (`:520`), since they aren't anyone's personal machine.
+- Grants are **scoped and time-boxed**: a `BridgeAccessGrant` carries
+  `capabilities` (`session` / `terminal`), a `scopeType` (`all_sessions` or a
+  specific `session_group`), and an optional `expiresAt`. A non-owner obtains one
+  via the request/approve flow: `requestAccess` (`runtime-access.ts:587`) →
+  owner `approveRequest` (`:751`); the owner can `revokeGrant` (`:950`).
 
 ---
 
@@ -104,11 +132,21 @@ checks:
    caller must pass `canViewSessionGroup` (`access.ts:107`), else
    `Not authorized for this scope`.
 
+Then, before the message is dispatched, the **service** resolves the target
+runtime through `resolveAccessibleLocalRuntimeBinding` (`services/session.ts:5237`).
+For a local-bridge session this calls `assertRuntimeAccess`
+(`services/session.ts:1982`) → bridge-access check. So even a same-org member
+who can *see* the session cannot push a message to it if it runs on a bridge
+they don't own (and weren't granted) — they get
+`"Access denied: you do not have permission to use this local bridge"`.
+
 **What stops the attack**
 
 - *User in another org* → session invisible (org filter) → rejected.
 - *User in same org, target is in someone else's private group* → visibility
   check fails → rejected.
+- *User in same org, session runs on a bridge they don't own* → bridge-access
+  check fails at dispatch → rejected.
 - *User with no org* → blocked earlier at Layer 2.
 
 ---
@@ -132,7 +170,11 @@ if (session.sessionGroup && !canViewSessionGroup(session.sessionGroup, access.us
 
 Same two-part guarantee as messaging (org match + private-group visibility),
 enforced in the service layer so it also protects non-GraphQL callers (e.g. the
-agent runtime).
+agent runtime). And as with messaging, the run is dispatched through
+`resolveAccessibleLocalRuntimeBinding` → `assertRuntimeAccess`
+(`services/session.ts:3967` → `:1982`), so running a session on a local bridge
+you don't own is rejected with the bridge-access error even if you can see the
+session.
 
 ---
 
@@ -248,8 +290,8 @@ exact runtime + org (`resolveSessionBoundToThisRuntime`,
 
 | Operation | Layer 1 (authn) | Layer 2 (org) | Layer 3 (resource) | Strictness |
 |-----------|:---:|:---:|---|---|
-| Send session message | ✓ | ✓ | org scope + private-group visibility (`access.ts:86`) | org-wide unless private group |
-| Run session | ✓ | ✓ | org match + visibility, in service (`session.ts:3948`) | org-wide unless private group |
+| Send session message | ✓ | ✓ | org scope + private-group visibility (`access.ts:86`) + **bridge access on dispatch** (`session.ts:5237`→`:1982`) | org-wide for cloud; bridge-owner/grant for local |
+| Run session | ✓ | ✓ | org match + visibility (`session.ts:3948`) + **bridge access on dispatch** (`session.ts:3967`→`:1982`) | org-wide for cloud; bridge-owner/grant for local |
 | Attach to terminal | ✓ (post-connect) | ✓ | **owner-only** + org + bridge capability (`terminal-handler.ts:246`) | creator-only |
 | Start/control on bridge | ✓ (scoped JWT) | ✓ (at mint) | instanceId match + owner pinning + per-connection scope (`bridge-handler.ts`, `runtime-access.ts:262`) | bridge-owner-only |
 
@@ -259,11 +301,13 @@ exact runtime + org (`resolveSessionBoundToThisRuntime`,
 
 Be explicit about these before launch:
 
-1. **Org members are trusted at session scope.** There is no per-session
-   participant list. Any org member can message/run any session that isn't in a
-   **private session group**. If a session must be private to one user, it must
-   live in a private group they own. Terminals and bridges are *not* subject to
-   this — they are owner-only regardless.
+1. **Org members are trusted at the *visibility* layer, not the bridge layer.**
+   There is no per-session participant list, so any org member can see/message/run
+   any *cloud* session that isn't in a **private session group**. However,
+   sessions running on a **local bridge** are additionally gated by bridge
+   ownership/grants, so a non-owner is blocked there regardless of group
+   visibility. To make a *cloud* session private to one user, put it in a private
+   group they own. Terminals are owner-only regardless.
 2. **The `/terminal` upgrade is open; auth is enforced post-connect** (within
    5s, before any data flows). This is intentional but worth noting in a review.
 3. **New users have no access until added to the org.** A user can authenticate
