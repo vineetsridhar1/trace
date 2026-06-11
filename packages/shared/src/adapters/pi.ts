@@ -4,6 +4,7 @@ import type {
   CodingToolAdapter,
   MessageBlock,
   RunOptions,
+  TokenUsage,
   ToolOutput,
   ToolResultBlock,
 } from "./coding-tool.js";
@@ -14,6 +15,40 @@ const EXIT_CLOSE_GRACE_MS = 1_000;
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function num(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function parsePiUsage(raw: unknown): TokenUsage | undefined {
+  const usage = asRecord(raw);
+  if (!usage) return undefined;
+
+  const normalized: TokenUsage = {
+    inputTokens: num(usage.input),
+    outputTokens: num(usage.output),
+    cacheReadTokens: num(usage.cacheRead),
+    cacheCreationTokens: num(usage.cacheWrite),
+  };
+
+  if (
+    normalized.inputTokens === 0 &&
+    normalized.outputTokens === 0 &&
+    normalized.cacheReadTokens === 0 &&
+    normalized.cacheCreationTokens === 0
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function parsePiCost(raw: unknown): number | undefined {
+  const usage = asRecord(raw);
+  const cost = asRecord(usage?.cost);
+  const total = num(cost?.total);
+  return total > 0 ? total : undefined;
 }
 
 function textFromContent(content: unknown): string | null {
@@ -47,6 +82,10 @@ export class PiAdapter implements CodingToolAdapter {
   private processGeneration = 0;
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
+  private lastUsage: TokenUsage | undefined;
+  private lastCostUsd: number | undefined;
+  private emittedIncrementalUsage = false;
+  private emittedIncrementalCost = false;
 
   run({
     prompt,
@@ -60,6 +99,10 @@ export class PiAdapter implements CodingToolAdapter {
     this.resultEmitted = false;
     this.sawErrorEvent = false;
     this.lastErrorMessage = null;
+    this.lastUsage = undefined;
+    this.lastCostUsd = undefined;
+    this.emittedIncrementalUsage = false;
+    this.emittedIncrementalCost = false;
 
     if (toolSessionId && !this.sessionId) {
       this.sessionId = toolSessionId;
@@ -181,13 +224,21 @@ export class PiAdapter implements CodingToolAdapter {
     if (type === "message_end") {
       const message = asRecord(data.message);
       if (message?.role === "assistant") {
+        const captured = this.captureUsage(message);
+        if (captured.usage) this.emittedIncrementalUsage = true;
+        if (captured.costUsd != null) this.emittedIncrementalCost = true;
         const errorMessage = this.extractPiErrorMessage(message) ?? this.extractPiErrorMessage(data);
         if (errorMessage) {
           this.emitError(errorMessage, onOutput);
         }
         const blocks = this.normalizeAssistantBlocks(message.content);
         if (blocks.length > 0) {
-          onOutput({ type: "assistant", message: { content: blocks } });
+          onOutput({
+            type: "assistant",
+            message: { content: blocks },
+            ...(captured.usage ? { usage: captured.usage } : {}),
+            ...(captured.costUsd != null ? { costUsd: captured.costUsd } : {}),
+          });
         }
       }
       return;
@@ -224,8 +275,17 @@ export class PiAdapter implements CodingToolAdapter {
       if (errorMessage) {
         this.emitError(errorMessage, onOutput);
       }
+      this.captureUsage(data);
+      this.captureLatestUsageFromMessages(data.messages);
       this.resultEmitted = true;
-      onOutput({ type: "result", subtype: this.sawErrorEvent ? "error" : "success" });
+      onOutput({
+        type: "result",
+        subtype: this.sawErrorEvent ? "error" : "success",
+        ...(!this.emittedIncrementalUsage && this.lastUsage ? { usage: this.lastUsage } : {}),
+        ...(!this.emittedIncrementalCost && this.lastCostUsd != null
+          ? { costUsd: this.lastCostUsd }
+          : {}),
+      });
       return;
     }
 
@@ -252,6 +312,32 @@ export class PiAdapter implements CodingToolAdapter {
     if (this.lastErrorMessage === message) return;
     this.lastErrorMessage = message;
     onOutput({ type: "error", message });
+  }
+
+  private captureUsage(data: Record<string, unknown>): {
+    usage?: TokenUsage;
+    costUsd?: number;
+  } {
+    const usage = parsePiUsage(data.usage);
+    if (usage) this.lastUsage = usage;
+
+    const costUsd = parsePiCost(data.usage);
+    if (costUsd != null) this.lastCostUsd = costUsd;
+
+    return {
+      ...(usage ? { usage } : {}),
+      ...(costUsd != null ? { costUsd } : {}),
+    };
+  }
+
+  private captureLatestUsageFromMessages(messages: unknown) {
+    if (!Array.isArray(messages)) return;
+    for (const item of messages) {
+      const message = asRecord(item);
+      if (message?.role === "assistant") {
+        this.captureUsage(message);
+      }
+    }
   }
 
   private normalizeAssistantBlocks(content: unknown): MessageBlock[] {

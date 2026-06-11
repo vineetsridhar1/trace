@@ -114,6 +114,10 @@ export interface AssistantEvent {
   message: { content: MessageBlock[] };
   /** Set when this message was produced inside a subagent, pointing to the spawning tool_use id. */
   parentToolUseId?: string;
+  /** Token usage for this assistant message, when the tool reports it incrementally. */
+  usage?: TokenUsage;
+  /** Cost of this assistant message in USD, when the tool reports it incrementally. */
+  costUsd?: number;
 }
 
 export interface UserEvent {
@@ -122,9 +126,28 @@ export interface UserEvent {
   parentToolUseId?: string;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+}
+
 export interface ResultEvent {
   type: "result";
   subtype?: "success" | "error";
+  /** Token usage for the completed run, when the tool reports it. */
+  usage?: TokenUsage;
+  /** Cost of the completed run in USD, when the tool reports it. */
+  costUsd?: number;
+}
+
+export interface UsageEvent {
+  type: "usage";
+  /** Incremental token usage for the latest model call. */
+  usage: TokenUsage;
+  /** Incremental cost in USD, when it can be reported or estimated. */
+  costUsd?: number;
 }
 
 export interface ErrorEvent {
@@ -132,7 +155,7 @@ export interface ErrorEvent {
   message: string;
 }
 
-export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | ErrorEvent;
+export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 

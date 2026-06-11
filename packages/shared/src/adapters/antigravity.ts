@@ -3,7 +3,7 @@ import { readdirSync, statSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
+import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 /** Generous cap so long agent runs aren't cut short by agy's default 5m print timeout. */
@@ -12,6 +12,82 @@ const PRINT_TIMEOUT = "30m0s";
 const CONVERSATIONS_DIR = join(homedir(), ".gemini", "antigravity-cli", "conversations");
 /** agy prints this to stdout when --conversation points at a missing conversation. */
 const NOT_FOUND_WARNING = /^Warning: conversation ".*" not found\.$/;
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function num(...values: unknown[]): number {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return 0;
+}
+
+/**
+ * Read usage only from an explicitly named usage container. We never fall back
+ * to the bare line object: agy is print-only and a model can legitimately print
+ * JSON containing keys like `input`/`output`, which must not be mistaken for
+ * usage metadata and swallowed from the visible output.
+ */
+function parseAntigravityUsage(data: Record<string, unknown>): TokenUsage | undefined {
+  const usage =
+    asRecord(data.usage) ??
+    asRecord(data.tokenUsage) ??
+    asRecord(data.token_usage) ??
+    asRecord(data.tokens);
+  if (!usage) return undefined;
+  const inputDetails = asRecord(usage.inputTokenDetails) ?? asRecord(usage.input_token_details);
+
+  const normalized: TokenUsage = {
+    inputTokens: num(usage.inputTokens, usage.input_tokens, usage.input, usage.prompt_tokens),
+    outputTokens: num(usage.outputTokens, usage.output_tokens, usage.output, usage.completion_tokens),
+    cacheReadTokens: num(
+      usage.cacheReadTokens,
+      usage.cacheRead,
+      usage.cache_read_input_tokens,
+      usage.cached_input_tokens,
+      inputDetails?.cached_tokens,
+    ),
+    cacheCreationTokens: num(
+      usage.cacheCreationTokens,
+      usage.cacheWrite,
+      usage.cache_creation_input_tokens,
+      inputDetails?.cache_creation_tokens,
+    ),
+  };
+
+  if (
+    normalized.inputTokens === 0 &&
+    normalized.outputTokens === 0 &&
+    normalized.cacheReadTokens === 0 &&
+    normalized.cacheCreationTokens === 0
+  ) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function parseAntigravityCost(data: Record<string, unknown>): number | undefined {
+  const usage =
+    asRecord(data.usage) ??
+    asRecord(data.tokenUsage) ??
+    asRecord(data.token_usage) ??
+    asRecord(data.tokens);
+  const cost = asRecord(usage?.cost) ?? asRecord(data.cost);
+  const total = num(
+    data.costUsd,
+    data.cost_usd,
+    data.totalCostUsd,
+    data.total_cost_usd,
+    cost?.total,
+    cost?.usd,
+  );
+  return total > 0 ? total : undefined;
+}
 
 /**
  * Adapter for running Google's Antigravity CLI (`agy`) sessions.
@@ -35,8 +111,13 @@ export class AntigravityAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private conversationId: string | null = null;
   private processGeneration = 0;
+  private lastUsage: TokenUsage | undefined;
+  private lastCostUsd: number | undefined;
 
   run({ prompt, cwd, onOutput, onComplete, interactionMode, toolSessionId }: RunOptions) {
+    this.lastUsage = undefined;
+    this.lastCostUsd = undefined;
+
     // Restore resume capability after a bridge restart.
     if (toolSessionId && !this.conversationId) {
       this.conversationId = toolSessionId;
@@ -82,6 +163,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
       rl.on("line", (line) => {
         if (!isCurrentProcess()) return;
         if (NOT_FOUND_WARNING.test(line.trim())) return;
+        if (this.captureUsageLine(line)) return;
         stdoutChunks.push(line);
       });
     }
@@ -91,6 +173,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
       const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
         if (!isCurrentProcess()) return;
+        if (this.captureUsageLine(line)) return;
         stderrChunks.push(line);
       });
     }
@@ -117,7 +200,12 @@ export class AntigravityAdapter implements CodingToolAdapter {
       if (isError && stderrChunks.length > 0) {
         onOutput({ type: "error", message: stderrChunks.join("\n") });
       }
-      onOutput({ type: "result", subtype: isError ? "error" : "success" });
+      onOutput({
+        type: "result",
+        subtype: isError ? "error" : "success",
+        ...(this.lastUsage ? { usage: this.lastUsage } : {}),
+        ...(this.lastCostUsd != null ? { costUsd: this.lastCostUsd } : {}),
+      });
       onComplete();
       this.process = null;
     };
@@ -176,6 +264,29 @@ export class AntigravityAdapter implements CodingToolAdapter {
       }
     }
     return bestId;
+  }
+
+  private captureUsageLine(line: string): boolean {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      return false;
+    }
+
+    const data = asRecord(parsed);
+    if (!data) return false;
+
+    // Only treat the line as usage metadata (and swallow it) when it carries a
+    // named usage container. A bare JSON line the agent prints as real output is
+    // left untouched so we never drop visible content.
+    const usage = parseAntigravityUsage(data);
+    if (!usage) return false;
+
+    this.lastUsage = usage;
+    const costUsd = parseAntigravityCost(data);
+    if (costUsd != null) this.lastCostUsd = costUsd;
+    return true;
   }
 
   getSessionId(): string | null {

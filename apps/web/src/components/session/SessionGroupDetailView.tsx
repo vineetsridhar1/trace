@@ -130,6 +130,11 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         sessionGroupId
         lastUserMessageAt
         lastMessageAt
+        inputTokens
+        outputTokens
+        cacheReadTokens
+        cacheCreationTokens
+        costUsd
         connection {
           state
           runtimeInstanceId

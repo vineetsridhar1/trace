@@ -68,6 +68,25 @@ describe("buildSessionNodes", () => {
     expect(result.nodes).toEqual([]);
   });
 
+  it("hides raw usage events", () => {
+    const event = makeEvent({
+      eventType: "session_output",
+      payload: {
+        type: "usage",
+        usage: {
+          inputTokens: 600,
+          outputTokens: 25,
+          cacheReadTokens: 400,
+          cacheCreationTokens: 0,
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([]);
+  });
+
   it("keeps workspace_restored_from_base warning events", () => {
     const event = makeEvent({
       eventType: "session_output",

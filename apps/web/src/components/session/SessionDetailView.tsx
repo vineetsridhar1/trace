@@ -80,6 +80,11 @@ const SESSION_DETAIL_QUERY = gql`
       worktreeDeleted
       lastUserMessageAt
       lastMessageAt
+      inputTokens
+      outputTokens
+      cacheReadTokens
+      cacheCreationTokens
+      costUsd
       connection {
         state
         runtimeInstanceId

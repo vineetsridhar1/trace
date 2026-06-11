@@ -56,6 +56,225 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("emits Codex turn usage on the result event", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 25,
+          input_token_details: {
+            cached_tokens: 40,
+            cache_creation_tokens: 5,
+          },
+        },
+        cost_usd: 0.0123,
+      })}\n`,
+    );
+    spawnedChildren[0].emit("close", 0);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadTokens: 40,
+        cacheCreationTokens: 5,
+      },
+      costUsd: 0.0123,
+    });
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("estimates Codex cost from usage when the CLI omits cost", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      model: "gpt-5.5",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 25,
+          input_token_details: {
+            cached_tokens: 40,
+            cache_creation_tokens: 5,
+          },
+        },
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadTokens: 40,
+        cacheCreationTokens: 5,
+      },
+      costUsd: 0.001295,
+    });
+  });
+
+  it("emits Codex token_count usage as a hidden usage event", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      model: "gpt-5.5",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 1000,
+              cached_input_tokens: 400,
+              output_tokens: 25,
+              reasoning_output_tokens: 10,
+              total_tokens: 1025,
+            },
+          },
+        },
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "usage",
+      usage: {
+        inputTokens: 600,
+        outputTokens: 25,
+        cacheReadTokens: 400,
+        cacheCreationTokens: 0,
+      },
+      costUsd: 0.00395,
+    });
+  });
+
+  it("does not re-count Codex usage on turn.completed after a token_count event", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      model: "gpt-5.5",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 1000,
+              cached_input_tokens: 400,
+              output_tokens: 25,
+            },
+          },
+        },
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 25,
+          input_token_details: { cached_tokens: 400 },
+        },
+        cost_usd: 0.0099,
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "usage",
+      usage: {
+        inputTokens: 600,
+        outputTokens: 25,
+        cacheReadTokens: 400,
+        cacheCreationTokens: 0,
+      },
+      costUsd: 0.00395,
+    });
+    // The completion event must carry neither usage nor cost — both were
+    // already streamed by the token_count event.
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    const usageCalls = onOutput.mock.calls.filter(
+      ([event]) => event.type === "usage" || (event.type === "result" && event.usage),
+    );
+    expect(usageCalls).toHaveLength(1);
+  });
+
+  it("normalizes Codex top-level token aliases", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "turn.completed",
+        prompt_tokens: 80,
+        completion_tokens: 20,
+        cached_input_tokens: 30,
+        cache_creation_input_tokens: 4,
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 80,
+        outputTokens: 20,
+        cacheReadTokens: 30,
+        cacheCreationTokens: 4,
+      },
+    });
+  });
+
   it("completes a Claude Code run when the process exits but stdout never closes", () => {
     const adapter = new ClaudeCodeAdapter();
     const onOutput = vi.fn();
@@ -75,6 +294,63 @@ describe("coding tool adapter process exit fallback", () => {
     vi.advanceTimersByTime(1);
     expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits Claude Code assistant usage incrementally and suppresses duplicate result usage", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "assistant",
+        message: {
+          usage: {
+            input_tokens: 2,
+            output_tokens: 14,
+            cache_read_input_tokens: 120,
+            cache_creation_input_tokens: 8,
+          },
+          content: [{ type: "text", text: "done" }],
+        },
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "result",
+        subtype: "success",
+        usage: {
+          input_tokens: 2,
+          output_tokens: 14,
+          cache_read_input_tokens: 120,
+          cache_creation_input_tokens: 8,
+        },
+        total_cost_usd: 0.0045,
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "done" }] },
+      usage: {
+        inputTokens: 2,
+        outputTokens: 14,
+        cacheReadTokens: 120,
+        cacheCreationTokens: 8,
+      },
+    });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      costUsd: 0.0045,
+    });
   });
 
   it("completes a Pi run when the process exits but stdio never closes", () => {
@@ -189,6 +465,111 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
+  it("emits Pi message usage incrementally and suppresses duplicate result usage", () => {
+    const adapter = new PiAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "done" }],
+          usage: {
+            input: 120,
+            output: 30,
+            cacheRead: 50,
+            cacheWrite: 6,
+            totalTokens: 206,
+            cost: {
+              input: 0.0012,
+              output: 0.0009,
+              cacheRead: 0.0002,
+              cacheWrite: 0.0003,
+              total: 0.0026,
+            },
+          },
+        },
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write(`${JSON.stringify({ type: "agent_end" })}\n`);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "done" }] },
+      usage: {
+        inputTokens: 120,
+        outputTokens: 30,
+        cacheReadTokens: 50,
+        cacheCreationTokens: 6,
+      },
+      costUsd: 0.0026,
+    });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+    });
+  });
+
+  it("emits Pi agent_end message usage when message_end omitted it", () => {
+    const adapter = new PiAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "agent_end",
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: "done" }],
+            usage: {
+              input: 80,
+              output: 20,
+              cacheRead: 25,
+              cacheWrite: 4,
+              totalTokens: 129,
+              cost: {
+                input: 0.0008,
+                output: 0.0006,
+                cacheRead: 0.0001,
+                cacheWrite: 0.0002,
+                total: 0.0017,
+              },
+            },
+          },
+        ],
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 80,
+        outputTokens: 20,
+        cacheReadTokens: 25,
+        cacheCreationTokens: 4,
+      },
+      costUsd: 0.0017,
+    });
+  });
+
   it("completes an Antigravity run when the process exits but stdout never closes", () => {
     const adapter = new AntigravityAdapter();
     const onOutput = vi.fn();
@@ -246,6 +627,49 @@ describe("coding tool adapter process exit fallback", () => {
     });
     expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("captures Antigravity JSON usage metadata without rendering it as text", () => {
+    const adapter = new AntigravityAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "implement feature",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        tokenUsage: {
+          input: 90,
+          output: 18,
+          cacheRead: 32,
+          cacheWrite: 3,
+        },
+        costUsd: 0.0042,
+      })}\n`,
+    );
+    spawnedChildren[0].stdout.write("Here is the result.\n");
+    spawnedChildren[0].emit("close", 0);
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "Here is the result." }] },
+    });
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "result",
+      subtype: "success",
+      usage: {
+        inputTokens: 90,
+        outputTokens: 18,
+        cacheReadTokens: 32,
+        cacheCreationTokens: 3,
+      },
+      costUsd: 0.0042,
+    });
   });
 
   it("wraps Antigravity output as a plan block in plan mode", () => {

@@ -720,4 +720,11 @@ export function handleOrgEvent(event: Event): void {
  */
 export function handleSessionEvent(sessionId: string, event: Event & { id: string }): void {
   upsertSessionEventWithOptimisticResolution(sessionId, event);
+
+  const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
+  if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType)) {
+    const batch = new StoreBatchWriter();
+    routeSessionOutput({ event, payload, batch, ui: getOrgEventUIBindings() });
+    batch.flush();
+  }
 }
