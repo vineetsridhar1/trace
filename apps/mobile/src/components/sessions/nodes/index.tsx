@@ -314,7 +314,7 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
       );
 
     case "session_output":
-      return payload ? renderSessionOutput(payload, context, id) : null;
+      return payload ? renderSessionOutput(payload, context) : null;
 
     case "session_pr_opened":
       return <PRCard kind="opened" prUrl={prUrlFrom(payload)} />;

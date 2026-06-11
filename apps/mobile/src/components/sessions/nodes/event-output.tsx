@@ -11,14 +11,10 @@ import type { NodeRenderContext } from "./render-context";
 const AGENT_NAMES = new Set(["agent", "task"]);
 
 /** Dispatch the block array inside an assistant/user session_output payload. */
-export function renderSessionOutput(
-  payload: JsonObject,
-  context: NodeRenderContext,
-  eventId: string,
-): ReactNode {
+export function renderSessionOutput(payload: JsonObject, context: NodeRenderContext): ReactNode {
   const type = payload.type;
   if (type === "assistant" || type === "user") {
-    return renderAssistantContent(payload, context, eventId);
+    return renderAssistantContent(payload, context);
   }
   if (type === "result") return <CompletionRow />;
   if (type === "error") {
@@ -32,11 +28,7 @@ export function renderSessionOutput(
   return null;
 }
 
-function renderAssistantContent(
-  payload: JsonObject,
-  context: NodeRenderContext,
-  eventId: string,
-): ReactNode {
+function renderAssistantContent(payload: JsonObject, context: NodeRenderContext): ReactNode {
   const message = asJsonObject(payload.message);
   const blocks = message?.content;
   if (!Array.isArray(blocks)) return null;
@@ -48,7 +40,7 @@ function renderAssistantContent(
 
     if (block.type === "text" && typeof block.text === "string") {
       if (!block.text.trim()) continue;
-      rendered.push(<AssistantMessage key={i} text={block.text} eventId={eventId} />);
+      rendered.push(<AssistantMessage key={i} text={block.text} />);
       continue;
     }
 
