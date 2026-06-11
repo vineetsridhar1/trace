@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { useShallow } from "zustand/react/shallow";
 import {
   ChevronRight,
   Code,
@@ -96,36 +95,44 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     return [...byGroup.entries()];
   }, [commandsByToken]);
 
-  const channels = useEntityStore(
-    useShallow((s: { channels: Record<string, Channel> }) =>
-      Object.values(s.channels)
+  // Subscribe to the raw tables (stable references) and derive mapped arrays in
+  // useMemo. Returning freshly-built objects directly from a selector — even via
+  // useShallow — produces a new snapshot every render and loops useSyncExternalStore.
+  const channelsTable = useEntityStore((s: { channels: Record<string, Channel> }) => s.channels);
+  const chatsTable = useEntityStore((s: { chats: Record<string, Chat> }) => s.chats);
+  const sessionGroupsTable = useEntityStore(
+    (s: { sessionGroups: Record<string, SessionGroupEntity> }) => s.sessionGroups,
+  );
+
+  const channels = useMemo(
+    () =>
+      Object.values(channelsTable)
         .filter((c) => features.messaging || c.type !== "text")
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
         .map((c) => ({ id: c.id, name: c.name, type: c.type })),
-    ),
+    [channelsTable],
   );
 
-  const chats = useEntityStore(
-    useShallow((s: { chats: Record<string, Chat> }) =>
+  const chats = useMemo(
+    () =>
       features.messaging
-        ? Object.values(s.chats).map((c) => ({
+        ? Object.values(chatsTable).map((c) => ({
             id: c.id,
             name: c.name,
             type: c.type,
-            otherName:
-              c.members?.find((m) => m.user.id !== currentUserId)?.user.name ?? null,
+            otherName: c.members?.find((m) => m.user.id !== currentUserId)?.user.name ?? null,
           }))
         : [],
-    ),
+    [chatsTable, currentUserId],
   );
 
-  const sessionGroups = useEntityStore(
-    useShallow((s: { sessionGroups: Record<string, SessionGroupEntity> }) =>
-      Object.values(s.sessionGroups).map((g) => ({
+  const sessionGroups = useMemo(
+    () =>
+      Object.values(sessionGroupsTable).map((g) => ({
         id: g.id,
         name: g.name ?? g.slug ?? "Untitled session",
       })),
-    ),
+    [sessionGroupsTable],
   );
 
   const activeChannelIsCoding = useEntityStore((s: { channels: Record<string, Channel> }) =>
