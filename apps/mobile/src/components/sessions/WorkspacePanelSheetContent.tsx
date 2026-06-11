@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps 
 import {
   Alert,
   FlatList,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -126,6 +127,11 @@ type HighlightPart = { text: string; kind: HighlightKind };
 
 const HEADER_BLUR_INTENSITY = 3;
 const HEADER_FADE_EXTRA_HEIGHT = 56;
+const MONOSPACE_FONT_FAMILY = Platform.select({
+  ios: "Menlo",
+  android: "monospace",
+  default: "monospace",
+});
 const CODE_TOKEN_PATTERN =
   /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:import|from|export|default|function|return|const|let|var|if|else|for|while|class|interface|type|extends|async|await|try|catch|throw|new|true|false|null|undefined)\b|\b[A-Z][A-Za-z0-9_]*\b|\b\d+(?:\.\d+)?\b|[{}()[\]<>/=:+\-*.,;?])/g;
 const FILE_ICON_BY_BASENAME: Record<string, { name: string; color: string }> = {
@@ -1332,14 +1338,14 @@ const styles = StyleSheet.create({
   },
   diffLineNumber: {
     width: 34,
-    fontFamily: "SpaceMono",
+    fontFamily: MONOSPACE_FONT_FAMILY,
     fontSize: 11,
     lineHeight: 18,
     textAlign: "right",
   },
   diffMarker: {
     width: 18,
-    fontFamily: "SpaceMono",
+    fontFamily: MONOSPACE_FONT_FAMILY,
     fontSize: 12,
     lineHeight: 18,
     textAlign: "center",
@@ -1350,7 +1356,7 @@ const styles = StyleSheet.create({
     paddingLeft: 2,
   },
   diffCodeText: {
-    fontFamily: "SpaceMono",
+    fontFamily: MONOSPACE_FONT_FAMILY,
     fontSize: 12,
     lineHeight: 18,
     letterSpacing: 0,
@@ -1377,7 +1383,7 @@ const styles = StyleSheet.create({
     paddingBottom: 96,
   },
   codeText: {
-    fontFamily: "SpaceMono",
+    fontFamily: MONOSPACE_FONT_FAMILY,
     fontSize: 13,
     lineHeight: 20,
     letterSpacing: 0,
