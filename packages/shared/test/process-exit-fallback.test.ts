@@ -90,7 +90,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 40,
         cacheCreationTokens: 5,
       },
-      costUsd: 0.0123,
     });
     expect(onOutput).not.toHaveBeenCalledWith({ type: "result", subtype: "success" });
     expect(onComplete).not.toHaveBeenCalled();
@@ -101,7 +100,7 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it("estimates Codex cost from usage when the CLI omits cost", () => {
+  it("does not estimate Codex cost from usage", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -136,50 +135,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 40,
         cacheCreationTokens: 5,
       },
-      costUsd: 0.001095,
-    });
-  });
-
-  it("estimates Codex cost at long-context rates above the threshold", () => {
-    const adapter = new CodexAdapter();
-    const onOutput = vi.fn();
-    const onComplete = vi.fn();
-
-    adapter.run({
-      prompt: "count tokens",
-      cwd: "/tmp",
-      model: "gpt-5.5",
-      onOutput,
-      onComplete,
-    });
-
-    spawnedChildren[0].stdout.write(
-      `${JSON.stringify({
-        type: "event_msg",
-        payload: {
-          type: "token_count",
-          info: {
-            last_token_usage: {
-              input_tokens: 300_000,
-              cached_input_tokens: 0,
-              output_tokens: 100,
-            },
-          },
-        },
-      })}\n`,
-    );
-
-    // 300k prompt tokens > 272k threshold → gpt-5.5 long-context rates
-    // ($10 input, $45 output): (300_000 * 10 + 100 * 45) / 1e6 = 3.0045.
-    expect(onOutput).toHaveBeenCalledWith({
-      type: "usage",
-      usage: {
-        inputTokens: 300_000,
-        outputTokens: 100,
-        cacheReadTokens: 0,
-        cacheCreationTokens: 0,
-      },
-      costUsd: 3.0045,
     });
   });
 
@@ -222,7 +177,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 400,
         cacheCreationTokens: 0,
       },
-      costUsd: 0.00395,
     });
   });
 
@@ -274,10 +228,9 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 400,
         cacheCreationTokens: 0,
       },
-      costUsd: 0.00395,
     });
-    // The completion event must emit nothing — usage and cost were already
-    // streamed, and only process exit ends the run.
+    // The completion event must emit nothing. Usage was already streamed, and
+    // only process exit ends the run.
     expect(onOutput).toHaveBeenCalledTimes(1);
     expect(onComplete).not.toHaveBeenCalled();
     const usageCalls = onOutput.mock.calls.filter(

@@ -23,7 +23,8 @@ export function SessionUsageBadge({ sessionId }: { sessionId: string }) {
   const cacheReadTokens = (useEntityField("sessions", sessionId, "cacheReadTokens") as number) ?? 0;
   const cacheCreationTokens =
     (useEntityField("sessions", sessionId, "cacheCreationTokens") as number) ?? 0;
-  const costUsd = (useEntityField("sessions", sessionId, "costUsd") as number) ?? 0;
+  const storedCostUsd = (useEntityField("sessions", sessionId, "costUsd") as number) ?? 0;
+  const costUsd = tool === "codex" ? 0 : storedCostUsd;
 
   const totalTokens = inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens;
   if (totalTokens === 0 && costUsd === 0) return null;
@@ -54,9 +55,15 @@ export function SessionUsageBadge({ sessionId }: { sessionId: string }) {
       }
     >
       <span className="flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-zinc-900/35 px-2 py-1 text-xs text-zinc-200 shadow-sm ring-1 ring-white/5 backdrop-blur-xl">
-        <Coins size={12} />
-        {formatCostUsd(costUsd)}
-        <span className="text-zinc-300/70">· {formatTokens(totalTokens)} tok</span>
+        {costUsd > 0 ? (
+          <>
+            <Coins size={12} />
+            {formatCostUsd(costUsd)}
+            <span className="text-zinc-300/70">· {formatTokens(totalTokens)} tok</span>
+          </>
+        ) : (
+          <span>{formatTokens(totalTokens)} tok</span>
+        )}
       </span>
     </ActionTooltip>
   );
