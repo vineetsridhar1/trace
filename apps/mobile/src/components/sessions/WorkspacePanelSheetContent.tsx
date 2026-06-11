@@ -10,6 +10,7 @@ import { Button, ListRow, SegmentedControl, Text, TraceLoader } from "@/componen
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
+import { alpha } from "@/theme/colors";
 
 const SESSION_GROUP_FILES_QUERY = gql`
   query MobileSessionGroupFiles($sessionGroupId: ID!) {
@@ -311,46 +312,67 @@ function FilesTab({ groupId }: { groupId: string }) {
   if (files.length === 0) return <EmptyState label="No files available" />;
 
   return (
-    <View style={styles.explorerShell}>
+    <View style={[styles.explorerShell, { paddingHorizontal: theme.spacing.lg }]}>
       <View style={styles.explorerHeader}>
-        <Text variant="caption2" color="mutedForeground" style={styles.explorerTitle}>
-          EXPLORER
-        </Text>
+        <View style={styles.explorerHeaderText}>
+          <Text variant="subheadline" color="foreground">
+            Files
+          </Text>
+          <Text variant="caption1" color="mutedForeground">
+            {treeItemCount} item{treeItemCount === 1 ? "" : "s"} in this workspace
+          </Text>
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Refresh files"
           onPress={() => void loadFiles()}
-          style={({ pressed }) => [styles.explorerRefresh, { opacity: pressed ? 0.6 : 1 }]}
+          style={({ pressed }) => [
+            styles.explorerRefresh,
+            {
+              backgroundColor: alpha(theme.colors.surfaceElevated, 0.82),
+              borderColor: theme.colors.borderMuted,
+              borderRadius: theme.radius.full,
+              opacity: pressed ? 0.65 : 1,
+            },
+          ]}
         >
           <SymbolView
             name="arrow.clockwise"
-            size={12}
+            size={14}
             tintColor={theme.colors.mutedForeground}
             resizeMode="scaleAspectFit"
           />
         </Pressable>
       </View>
-      <FlatList
-        style={styles.explorerList}
-        data={visibleFiles}
-        keyExtractor={(node) => `${node.isDirectory ? "d" : "f"}:${node.path}`}
-        initialNumToRender={40}
-        maxToRenderPerBatch={40}
-        windowSize={9}
-        removeClippedSubviews
-        renderItem={({ item: node }) => (
-          <FileTreeRow
-            node={node}
-            expanded={expandedPaths.has(node.path)}
-            onToggle={toggleDirectory}
-            onOpenFile={(path) => void openFile(path)}
-          />
-        )}
-      />
-      <View style={styles.explorerFooter}>
-        <Text variant="caption2" color="dimForeground">
-          {treeItemCount} item{treeItemCount === 1 ? "" : "s"} loaded
-        </Text>
+      <View
+        style={[
+          styles.explorerCard,
+          {
+            backgroundColor: alpha(theme.colors.surfaceElevated, 0.76),
+            borderColor: theme.colors.borderMuted,
+            borderRadius: theme.radius.xl,
+          },
+        ]}
+      >
+        <FlatList
+          data={visibleFiles}
+          keyExtractor={(node) => `${node.isDirectory ? "d" : "f"}:${node.path}`}
+          initialNumToRender={32}
+          maxToRenderPerBatch={32}
+          windowSize={9}
+          removeClippedSubviews
+          ItemSeparatorComponent={() => (
+            <View style={[styles.fileTreeSeparator, { backgroundColor: theme.colors.border }]} />
+          )}
+          renderItem={({ item: node }) => (
+            <FileTreeRow
+              node={node}
+              expanded={expandedPaths.has(node.path)}
+              onToggle={toggleDirectory}
+              onOpenFile={(path) => void openFile(path)}
+            />
+          )}
+        />
       </View>
     </View>
   );
@@ -386,8 +408,8 @@ function FileTreeRow({
       style={({ pressed }) => [
         styles.fileTreeRow,
         {
-          paddingLeft: 6 + node.depth * 12,
-          backgroundColor: pressed ? theme.colors.surfaceElevated : "transparent",
+          paddingLeft: 12 + node.depth * 18,
+          backgroundColor: pressed ? alpha(theme.colors.accent, 0.08) : "transparent",
         },
       ]}
     >
@@ -402,16 +424,43 @@ function FileTreeRow({
       ) : (
         <View style={styles.fileTreeChevron} />
       )}
-      <SymbolView
-        name={icon}
-        size={15}
-        tintColor={iconColor}
-        resizeMode="scaleAspectFit"
-        style={styles.fileTreeIcon}
-      />
-      <Text variant="caption1" color="foreground" numberOfLines={1} style={styles.fileTreeName}>
-        {node.name}
-      </Text>
+      <View
+        style={[
+          styles.fileTreeIconBubble,
+          {
+            backgroundColor: node.isDirectory
+              ? alpha(theme.colors.accent, 0.14)
+              : alpha(theme.colors.foreground, 0.06),
+            borderRadius: theme.radius.sm,
+          },
+        ]}
+      >
+        <SymbolView
+          name={icon}
+          size={15}
+          tintColor={iconColor}
+          resizeMode="scaleAspectFit"
+          style={styles.fileTreeIcon}
+        />
+      </View>
+      <View style={styles.fileTreeText}>
+        <Text variant="body" color="foreground" numberOfLines={1} style={styles.fileTreeName}>
+          {node.name}
+        </Text>
+        {!node.isDirectory && node.depth > 0 ? (
+          <Text variant="caption2" color="dimForeground" numberOfLines={1}>
+            {node.path.split("/").slice(0, -1).join("/")}
+          </Text>
+        ) : null}
+      </View>
+      {!node.isDirectory ? (
+        <SymbolView
+          name="chevron.right"
+          size={12}
+          tintColor={theme.colors.dimForeground}
+          resizeMode="scaleAspectFit"
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -611,58 +660,62 @@ const styles = StyleSheet.create({
   },
   explorerShell: {
     flex: 1,
-    backgroundColor: "#1e1e1e",
+    paddingBottom: 16,
   },
   explorerHeader: {
-    minHeight: 30,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#2d2d2d",
-    paddingHorizontal: 12,
+    marginBottom: 8,
   },
-  explorerTitle: {
-    letterSpacing: 0.8,
-    fontWeight: "700",
-    color: "#bbbbbb",
+  explorerHeaderText: {
+    gap: 2,
   },
   explorerRefresh: {
-    width: 28,
-    height: 28,
+    width: 34,
+    height: 34,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  explorerList: {
+  explorerCard: {
     flex: 1,
-    paddingVertical: 2,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  explorerFooter: {
-    minHeight: 28,
-    justifyContent: "center",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#2d2d2d",
-    paddingHorizontal: 12,
+  fileTreeSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 58,
+    opacity: 0.55,
   },
   fileTreeRow: {
-    minHeight: 26,
+    minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingRight: 8,
+    gap: 8,
+    paddingRight: 12,
   },
   fileTreeChevron: {
     width: 16,
     height: 16,
   },
+  fileTreeIconBubble: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   fileTreeIcon: {
     width: 16,
     height: 16,
   },
-  fileTreeName: {
+  fileTreeText: {
     flex: 1,
-    color: "#cccccc",
-    lineHeight: 22,
+    minWidth: 0,
+  },
+  fileTreeName: {
+    lineHeight: 21,
   },
   centerState: {
     flex: 1,
