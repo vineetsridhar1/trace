@@ -13,6 +13,7 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "title_generated",
   "config_changed",
   "branch_renamed",
+  "usage",
   "usage_updated",
   "prepare",
   "run",

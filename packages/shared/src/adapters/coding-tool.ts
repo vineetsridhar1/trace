@@ -142,12 +142,20 @@ export interface ResultEvent {
   costUsd?: number;
 }
 
+export interface UsageEvent {
+  type: "usage";
+  /** Incremental token usage for the latest model call. */
+  usage: TokenUsage;
+  /** Incremental cost in USD, when it can be reported or estimated. */
+  costUsd?: number;
+}
+
 export interface ErrorEvent {
   type: "error";
   message: string;
 }
 
-export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | ErrorEvent;
+export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 

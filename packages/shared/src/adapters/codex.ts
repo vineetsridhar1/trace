@@ -70,6 +70,35 @@ function parseCodexUsage(data: Record<string, unknown>): TokenUsage | undefined 
   return normalized;
 }
 
+function parseCodexTokenCountUsage(data: Record<string, unknown>): TokenUsage | undefined {
+  const payload = asRecord(data.payload);
+  if (payload?.type !== "token_count") return undefined;
+
+  const info = asRecord(payload.info);
+  const lastTokenUsage = asRecord(info?.last_token_usage);
+  if (!lastTokenUsage) return undefined;
+
+  const inputTokens = num(lastTokenUsage.input_tokens);
+  const cacheReadTokens = num(lastTokenUsage.cached_input_tokens);
+  const usage: TokenUsage = {
+    inputTokens: Math.max(0, inputTokens - cacheReadTokens),
+    outputTokens: num(lastTokenUsage.output_tokens),
+    cacheReadTokens,
+    cacheCreationTokens: 0,
+  };
+
+  if (
+    usage.inputTokens === 0 &&
+    usage.outputTokens === 0 &&
+    usage.cacheReadTokens === 0 &&
+    usage.cacheCreationTokens === 0
+  ) {
+    return undefined;
+  }
+
+  return usage;
+}
+
 function normalizeOpenAIModel(model: string | undefined): string | undefined {
   if (!model) return undefined;
   if (!model.includes("/")) return model;
@@ -268,6 +297,19 @@ export class CodexAdapter implements CodingToolAdapter {
 
     if (eventType === "thread.started" && typeof data.thread_id === "string") {
       this.threadId = data.thread_id;
+      return;
+    }
+
+    if (eventType === "event_msg") {
+      const usage = parseCodexTokenCountUsage(data);
+      const costUsd = estimateCodexCost(usage, this.model);
+      if (usage) {
+        onOutput({
+          type: "usage",
+          usage,
+          ...(costUsd != null ? { costUsd } : {}),
+        });
+      }
       return;
     }
 

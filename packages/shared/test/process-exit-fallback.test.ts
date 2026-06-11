@@ -139,6 +139,49 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
+  it("emits Codex token_count usage as a hidden usage event", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      model: "gpt-5.5",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 1000,
+              cached_input_tokens: 400,
+              output_tokens: 25,
+              reasoning_output_tokens: 10,
+              total_tokens: 1025,
+            },
+          },
+        },
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "usage",
+      usage: {
+        inputTokens: 600,
+        outputTokens: 25,
+        cacheReadTokens: 400,
+        cacheCreationTokens: 0,
+      },
+      costUsd: 0.00395,
+    });
+  });
+
   it("normalizes Codex top-level token aliases", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();
