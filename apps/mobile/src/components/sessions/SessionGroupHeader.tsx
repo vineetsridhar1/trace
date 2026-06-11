@@ -4,8 +4,6 @@ import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import {
   ARCHIVE_SESSION_GROUP_MUTATION,
-  QUEUE_SESSION_MESSAGE_MUTATION,
-  SEND_SESSION_MESSAGE_MUTATION,
   useEntityField,
   useEntityStore,
 } from "@trace/client-core";
@@ -15,17 +13,11 @@ import { buildRunScriptsCommand, isRunScriptArray } from "@/lib/runScripts";
 import { getClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
-import { useLinkedCheckout } from "@/hooks/useLinkedCheckout";
 import { SessionActionsMenu, type SessionMenuAction } from "./SessionActionsMenu";
 import { SessionMovePickerSheetContent } from "./SessionMovePickerSheetContent";
 import { SessionTabSwitcherSheet } from "./SessionTabSwitcherSheet";
 import { SessionGroupTitleMenu } from "./SessionGroupTitleMenu";
 import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
-
-const CREATE_PR_PROMPT =
-  "Create a pull request for this session branch. Push any required commits, open the PR against the repository's normal merge target, and report the PR link.";
-const MERGE_PR_PROMPT =
-  "Merge the pull request for this session branch. Verify it is ready to merge, merge it using the repository's normal strategy, and report the result.";
 
 interface SessionGroupHeaderProps {
   groupId: string;
@@ -80,10 +72,6 @@ export function SessionGroupHeader({
     | string
     | null
     | undefined;
-  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
-    | string
-    | null
-    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId ?? "", "worktreeDeleted") as
     | boolean
     | undefined;
@@ -95,7 +83,6 @@ export function SessionGroupHeader({
     | SessionEndpoints
     | null
     | undefined;
-  const linkedCheckout = useLinkedCheckout(groupId);
   const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
   const canMoveSession =
     !!sessionId &&
@@ -107,7 +94,6 @@ export function SessionGroupHeader({
   const [leadingWidth, setLeadingWidth] = useState(0);
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false);
   const [moveSheetOpen, setMoveSheetOpen] = useState(false);
-  const [pendingGitHubAction, setPendingGitHubAction] = useState<"create" | "merge" | null>(null);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
     setRowWidth(e.nativeEvent.layout.width);
   }, []);
@@ -164,62 +150,6 @@ export function SessionGroupHeader({
   const handleOpenMoveSheet = useCallback(() => {
     setMoveSheetOpen(true);
   }, []);
-  const handleSpotlight = useCallback(async () => {
-    if (linkedCheckout.pendingAction) return;
-    void haptic.light();
-    const outcome = await linkedCheckout.sync();
-    if (outcome.ok) {
-      void haptic.success();
-      return;
-    }
-    void haptic.error();
-    if (outcome.errorCode === "DIRTY_ROOT_CHECKOUT") {
-      Alert.alert(
-        "Spotlight conflict",
-        "Open the title panel to resolve local checkout changes before spotlighting this workspace.",
-      );
-      return;
-    }
-    Alert.alert("Spotlight failed", outcome.error ?? "Unknown error.");
-  }, [linkedCheckout]);
-  const canQueueGitHubAction = !!agentStatus && agentStatus === "active" && !worktreeDeleted;
-  const canSendGitHubAction =
-    !!sessionId &&
-    !sessionOptimistic &&
-    !!agentStatus &&
-    !worktreeDeleted &&
-    sessionConnection?.state !== "disconnected" &&
-    agentStatus !== "active";
-  const canRunGitHubAction = canQueueGitHubAction || canSendGitHubAction;
-  const handleGitHubAction = useCallback(
-    async (action: "create" | "merge") => {
-      if (!sessionId || !canRunGitHubAction || pendingGitHubAction) return;
-      void haptic.light();
-      setPendingGitHubAction(action);
-      try {
-        const mutation = canQueueGitHubAction
-          ? QUEUE_SESSION_MESSAGE_MUTATION
-          : SEND_SESSION_MESSAGE_MUTATION;
-        const result = await getClient()
-          .mutation(mutation, {
-            sessionId,
-            text: action === "create" ? CREATE_PR_PROMPT : MERGE_PR_PROMPT,
-          })
-          .toPromise();
-        if (result.error) throw result.error;
-        void haptic.success();
-      } catch (error) {
-        void haptic.error();
-        Alert.alert(
-          action === "create" ? "Couldn't create PR" : "Couldn't merge PR",
-          error instanceof Error ? error.message : "Please try again.",
-        );
-      } finally {
-        setPendingGitHubAction(null);
-      }
-    },
-    [canQueueGitHubAction, canRunGitHubAction, pendingGitHubAction, sessionId],
-  );
   const setupBlocking = Boolean(setupScript) && setupStatus === "running";
   const canRunScripts = runScripts.length > 0 && !!sessionId && !sessionOptimistic && !setupBlocking;
   const handleRunScripts = useCallback(() => {
@@ -266,28 +196,6 @@ export function SessionGroupHeader({
         onPress: handleOpenApplications,
       });
     }
-    if (linkedCheckout.available && linkedCheckout.repoLinked) {
-      items.push({
-        title: "Spotlight",
-        systemIcon: "sparkles",
-        onPress: handleSpotlight,
-      });
-    }
-    if (sessionId && !sessionOptimistic && canRunGitHubAction) {
-      items.push(
-        prUrl
-          ? {
-              title: "Merge PR",
-              systemIcon: "arrow.triangle.merge",
-              onPress: () => void handleGitHubAction("merge"),
-            }
-          : {
-              title: "Create PR",
-              systemIcon: "arrow.triangle.pull",
-              onPress: () => void handleGitHubAction("create"),
-            },
-      );
-    }
     if (canRunScripts) {
       items.push({
         title: "Run scripts",
@@ -323,19 +231,14 @@ export function SessionGroupHeader({
     canMoveSession,
     canRunScripts,
     handleArchive,
-    handleGitHubAction,
     handleOpenMoveSheet,
     handleOpenApplications,
     handleOpenWorkspace,
     handleOpenTabSwitcher,
     handleRunScripts,
-    handleSpotlight,
     handleCopyLink,
     handleOpenPr,
-    linkedCheckout.available,
-    linkedCheckout.repoLinked,
     prUrl,
-    canRunGitHubAction,
     sessionId,
     sessionEndpoints?.ports?.length,
     sessionOptimistic,
