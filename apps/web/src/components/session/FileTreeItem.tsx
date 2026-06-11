@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, FolderClosed, FolderOpen, Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { FileTreeNode } from "./file-explorer-utils";
-import { getFileIcon, getFileColor } from "./file-explorer-utils";
+import { FileIcon } from "./FileIcon";
 
 export interface FileTreeItemProps {
   key?: React.Key;
@@ -20,8 +20,7 @@ export function FileTreeItem({
   onFileClick,
 }: FileTreeItemProps) {
   const isExpanded = expandedPaths.has(node.path);
-  const Icon = node.isDirectory ? (isExpanded ? FolderOpen : FolderClosed) : getFileIcon(node.name);
-  const iconColor = node.isDirectory ? "text-blue-400/80" : getFileColor(node.name);
+  const FolderIcon = isExpanded ? FolderOpen : FolderClosed;
 
   return (
     <>
@@ -53,7 +52,11 @@ export function FileTreeItem({
         ) : (
           <span className="h-4 w-4 shrink-0" />
         )}
-        <Icon size={16} className={cn("shrink-0", iconColor)} />
+        {node.isDirectory ? (
+          <FolderIcon size={16} className="shrink-0 text-blue-400/80" />
+        ) : (
+          <FileIcon path={node.path} size={16} />
+        )}
         <span className="truncate text-[#cccccc]">{node.name}</span>
       </button>
       {node.isDirectory && isExpanded && (

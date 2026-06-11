@@ -1,10 +1,13 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
-import type { SessionConnection } from "@trace/gql";
+import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField, useEntityStore } from "@trace/client-core";
+import type { SessionConnection, SessionEndpoints } from "@trace/gql";
 import { haptic } from "@/lib/haptics";
+import { buildRunScriptsCommand, isRunScriptArray } from "@/lib/runScripts";
 import { getClient } from "@/lib/urql";
+import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 import { SessionActionsMenu, type SessionMenuAction } from "./SessionActionsMenu";
 import { SessionMovePickerSheetContent } from "./SessionMovePickerSheetContent";
@@ -31,13 +34,41 @@ export function SessionGroupHeader({
   leadingAccessory,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
+  const router = useRouter();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
   const status = useEntityField("sessionGroups", groupId, "status");
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
+  const sessionGroupChannel = useEntityField("sessionGroups", groupId, "channel") as
+    | { id?: string | null }
+    | null
+    | undefined;
+  const rawChannelId = useEntityStore(
+    (state) =>
+      (state.sessionGroups[groupId] as { channelId?: string | null } | undefined)?.channelId ??
+      null,
+  );
+  const channelId = sessionGroupChannel?.id ?? rawChannelId ?? null;
+  const rawRunScripts = useEntityField("channels", channelId ?? "", "runScripts");
+  const setupStatus = useEntityField("sessionGroups", groupId, "setupStatus") as
+    | "idle"
+    | "running"
+    | "completed"
+    | "failed"
+    | null
+    | undefined;
+  const setupScript = useEntityField("channels", channelId ?? "", "setupScript") as
+    | string
+    | null
+    | undefined;
+  const runScripts = isRunScriptArray(rawRunScripts) ? rawRunScripts : [];
   const sessionOptimistic = useEntityField("sessions", sessionId ?? "", "_optimistic") as
     | boolean
     | undefined;
   const sessionStatus = useEntityField("sessions", sessionId ?? "", "sessionStatus") as
+    | string
+    | null
+    | undefined;
+  const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
     | string
     | null
     | undefined;
@@ -48,12 +79,14 @@ export function SessionGroupHeader({
     | SessionConnection
     | null
     | undefined;
+  const sessionEndpoints = useEntityField("sessions", sessionId ?? "", "endpoints") as
+    | SessionEndpoints
+    | null
+    | undefined;
   const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
+  const canShowApplications = hosting === "cloud";
   const canMoveSession =
-    !!sessionId &&
-    !sessionOptimistic &&
-    !mergedUnavailable &&
-    (sessionConnection?.canMove ?? true);
+    !!sessionId && !sessionOptimistic && !mergedUnavailable && (sessionConnection?.canMove ?? true);
 
   const [rowWidth, setRowWidth] = useState(0);
   const [leadingWidth, setLeadingWidth] = useState(0);
@@ -115,6 +148,30 @@ export function SessionGroupHeader({
   const handleOpenMoveSheet = useCallback(() => {
     setMoveSheetOpen(true);
   }, []);
+  const setupBlocking = Boolean(setupScript) && setupStatus === "running";
+  const canRunScripts =
+    runScripts.length > 0 && !!sessionId && !sessionOptimistic && !setupBlocking;
+  const handleRunScripts = useCallback(() => {
+    if (!sessionId || runScripts.length === 0) return;
+    if (setupBlocking) {
+      Alert.alert("Setup still running", "Run scripts after workspace setup finishes.");
+      return;
+    }
+    void haptic.light();
+    const command = buildRunScriptsCommand(runScripts);
+    useMobileUIStore.getState().queueTerminalInitialCommand(sessionId, `${command}\n`);
+    router.push(`/sessions/${groupId}/${sessionId}?pane=terminal`);
+  }, [groupId, router, runScripts, sessionId, setupBlocking]);
+  const handleOpenWorkspace = useCallback(() => {
+    const params = new URLSearchParams({ groupId });
+    if (sessionId) params.set("sessionId", sessionId);
+    router.push(`/sheets/workspace?${params.toString()}`);
+  }, [groupId, router, sessionId]);
+  const handleOpenApplications = useCallback(() => {
+    if (!sessionId) return;
+    const params = new URLSearchParams({ groupId, sessionId });
+    router.push(`/sheets/applications?${params.toString()}`);
+  }, [groupId, router, sessionId]);
 
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
@@ -123,6 +180,26 @@ export function SessionGroupHeader({
         title: "Tabs & terminals",
         systemIcon: "rectangle.on.rectangle",
         onPress: handleOpenTabSwitcher,
+      });
+    }
+    items.push({
+      title: "Files",
+      systemIcon: "folder",
+      onPress: handleOpenWorkspace,
+    });
+    if (sessionId && !sessionOptimistic && canShowApplications) {
+      const count = sessionEndpoints?.ports?.length ?? 0;
+      items.push({
+        title: count > 0 ? `Applications (${count})` : "Applications",
+        systemIcon: "network",
+        onPress: handleOpenApplications,
+      });
+    }
+    if (canRunScripts) {
+      items.push({
+        title: "Run scripts",
+        systemIcon: "play.fill",
+        onPress: handleRunScripts,
       });
     }
     if (canMoveSession) {
@@ -150,14 +227,20 @@ export function SessionGroupHeader({
     return items;
   }, [
     archivedAt,
+    canShowApplications,
     canMoveSession,
+    canRunScripts,
     handleArchive,
     handleOpenMoveSheet,
+    handleOpenApplications,
+    handleOpenWorkspace,
     handleOpenTabSwitcher,
+    handleRunScripts,
     handleCopyLink,
     handleOpenPr,
     prUrl,
     sessionId,
+    sessionEndpoints?.ports?.length,
     sessionOptimistic,
     status,
   ]);

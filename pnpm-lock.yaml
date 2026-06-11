@@ -491,6 +491,9 @@ importers:
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.1.17))(@types/react@19.1.17)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      devicons-react:
+        specifier: ^1.5.0
+        version: 1.5.0(react@19.1.0)
       diff:
         specifier: ^8.0.4
         version: 8.0.4
@@ -5375,6 +5378,11 @@ packages:
 
   detect-node@2.1.0:
     resolution: {integrity: sha512-T0NIuQpnTvFDATNuHN5roPwSBG83rFsuO+MXXH9/3N1eFbn4wcPjttvjMLEPWJ0RGUYgQE7cGgS3tNxbqCGM7g==}
+
+  devicons-react@1.5.0:
+    resolution: {integrity: sha512-8DYsWpgdbwI7ENDyC6Z9eqV72H01zUIAeRRo+UxBAq4clpPWcFhtqDrWSm0i5GUqbn/iNyiIfT1K69y0XLsscg==}
+    peerDependencies:
+      react: '*'
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
@@ -16751,6 +16759,10 @@ snapshots:
 
   detect-node@2.1.0:
     optional: true
+
+  devicons-react@1.5.0(react@19.1.0):
+    dependencies:
+      react: 19.1.0
 
   devlop@1.1.0:
     dependencies:

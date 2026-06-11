@@ -1,9 +1,17 @@
 import { useCallback, useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
+import {
+  QUEUE_SESSION_MESSAGE_MUTATION,
+  SEND_SESSION_MESSAGE_MUTATION,
+  useEntityField,
+} from "@trace/client-core";
+import type { SessionConnection } from "@trace/gql";
 import { TraceLoader, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
+import { getClient } from "@/lib/urql";
 import { useTheme, type Theme } from "@/theme";
+import { alpha } from "@/theme/colors";
 import {
   useLinkedCheckout,
   type LinkedCheckoutAction,
@@ -13,25 +21,60 @@ import { LinkedCheckoutSyncConflictSheet } from "./LinkedCheckoutSyncConflictShe
 
 interface LinkedCheckoutPanelSectionProps {
   groupId: string;
+  sessionId?: string;
 }
 
 const ACTION_ALERT_TITLE: Record<LinkedCheckoutAction, string> = {
-  sync: "Sync failed",
+  sync: "Spotlight failed",
   commit: "Commit failed",
   restore: "Restore failed",
   "toggle-auto-sync": "Couldn't update auto-sync",
 };
 
-export function LinkedCheckoutPanelSection({ groupId }: LinkedCheckoutPanelSectionProps) {
-  const checkout = useLinkedCheckout(groupId);
-  if (!checkout.available) return null;
-  return <PanelBody checkout={checkout} />;
+const CREATE_PR_PROMPT =
+  "Create a pull request for this session branch. Push any required commits, open the PR against the repository's normal merge target, and report the PR link.";
+const MERGE_PR_PROMPT =
+  "Merge the pull request for this session branch. Verify it is ready to merge, merge it using the repository's normal strategy, and report the result.";
+
+function getPullRequestLabel(prUrl: string): string {
+  const match = prUrl.match(/\/pull\/(\d+)(?:[/?#]|$)/);
+  return match ? `#${match[1]}` : "PR";
 }
 
-function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
+export function LinkedCheckoutPanelSection({ groupId, sessionId }: LinkedCheckoutPanelSectionProps) {
+  const checkout = useLinkedCheckout(groupId);
+  if (!checkout.available) return null;
+  return <PanelBody checkout={checkout} groupId={groupId} sessionId={sessionId} />;
+}
+
+function PanelBody({
+  checkout,
+  groupId,
+  sessionId,
+}: {
+  checkout: UseLinkedCheckoutResult;
+  groupId: string;
+  sessionId?: string;
+}) {
   const theme = useTheme();
   const [syncConflictOpen, setSyncConflictOpen] = useState(false);
   const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
+  const [pendingGitHubAction, setPendingGitHubAction] = useState<"create" | "merge" | null>(null);
+  const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as string | null | undefined;
+  const sessionOptimistic = useEntityField("sessions", sessionId ?? "", "_optimistic") as
+    | boolean
+    | undefined;
+  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
+    | string
+    | null
+    | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId ?? "", "worktreeDeleted") as
+    | boolean
+    | undefined;
+  const sessionConnection = useEntityField("sessions", sessionId ?? "", "connection") as
+    | SessionConnection
+    | null
+    | undefined;
   const {
     loading,
     fetchError,
@@ -45,26 +88,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     pendingAction,
     refresh,
     sync,
-    restore,
-    toggleAutoSync,
   } = checkout;
-
-  const handle = useCallback(
-    async (
-      action: LinkedCheckoutAction,
-      fn: () => Promise<{ ok: boolean; error: string | null }>,
-    ) => {
-      void haptic.light();
-      const outcome = await fn();
-      if (!outcome.ok) {
-        void haptic.error();
-        Alert.alert(ACTION_ALERT_TITLE[action], outcome.error ?? "Unknown error.");
-        return;
-      }
-      void haptic.success();
-    },
-    [],
-  );
 
   const onSync = useCallback(async () => {
     void haptic.light();
@@ -108,10 +132,43 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     },
     [sync],
   );
-  const onRestore = useCallback(() => void handle("restore", restore), [handle, restore]);
-  const onTogglePause = useCallback(
-    () => void handle("toggle-auto-sync", toggleAutoSync),
-    [handle, toggleAutoSync],
+  const canQueueGitHubAction = !!agentStatus && agentStatus === "active" && !worktreeDeleted;
+  const canSendGitHubAction =
+    !!sessionId &&
+    !sessionOptimistic &&
+    !!agentStatus &&
+    !worktreeDeleted &&
+    sessionConnection?.state !== "disconnected" &&
+    agentStatus !== "active";
+  const canRunGitHubAction = canQueueGitHubAction || canSendGitHubAction;
+  const sendGitHubAction = useCallback(
+    async (action: "create" | "merge") => {
+      if (!sessionId || !canRunGitHubAction || pendingGitHubAction) return;
+      void haptic.light();
+      setPendingGitHubAction(action);
+      try {
+        const mutation = canQueueGitHubAction
+          ? QUEUE_SESSION_MESSAGE_MUTATION
+          : SEND_SESSION_MESSAGE_MUTATION;
+        const result = await getClient()
+          .mutation(mutation, {
+            sessionId,
+            text: action === "create" ? CREATE_PR_PROMPT : MERGE_PR_PROMPT,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+        void haptic.success();
+      } catch (error) {
+        void haptic.error();
+        Alert.alert(
+          action === "create" ? "Couldn't create PR" : "Couldn't merge PR",
+          error instanceof Error ? error.message : "Please try again.",
+        );
+      } finally {
+        setPendingGitHubAction(null);
+      }
+    },
+    [canQueueGitHubAction, canRunGitHubAction, pendingGitHubAction, sessionId],
   );
   const conflictSheet = (
     <LinkedCheckoutSyncConflictSheet
@@ -187,11 +244,12 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
         <ActionRow
           theme={theme}
           pendingAction={pendingAction}
-          autoSyncEnabled={status?.autoSyncEnabled ?? false}
           isAttachedToThisGroup={false}
+          prUrl={prUrl}
+          canRunGitHubAction={canRunGitHubAction}
+          pendingGitHubAction={pendingGitHubAction}
           onSync={onSync}
-          onTogglePause={onTogglePause}
-          onRestore={onRestore}
+          onRunGitHubAction={(action) => void sendGitHubAction(action)}
         />
       </View>
     );
@@ -199,12 +257,12 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
 
   const subtitle =
     isAttachedToThisGroup && branch
-      ? `Main worktree following ${branch}${
+      ? `Local checkout spotlighting ${branch}${
           syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
         }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}${
           hasUncommittedChanges ? " (has live changes)" : ""
         }`
-      : "Sync this workspace into your main worktree.";
+      : "Spotlight this workspace in your local checkout.";
 
   return (
     <View style={styles.container}>
@@ -221,11 +279,12 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
       <ActionRow
         theme={theme}
         pendingAction={pendingAction}
-        autoSyncEnabled={status?.autoSyncEnabled ?? false}
         isAttachedToThisGroup={isAttachedToThisGroup}
+        prUrl={prUrl}
+        canRunGitHubAction={canRunGitHubAction}
+        pendingGitHubAction={pendingGitHubAction}
         onSync={() => void onSync()}
-        onTogglePause={onTogglePause}
-        onRestore={onRestore}
+        onRunGitHubAction={(action) => void sendGitHubAction(action)}
       />
     </View>
   );
@@ -242,54 +301,74 @@ function SectionHeader() {
 interface ActionRowProps {
   theme: Theme;
   pendingAction: LinkedCheckoutAction | null;
-  autoSyncEnabled: boolean;
   isAttachedToThisGroup: boolean;
+  prUrl: string | null | undefined;
+  canRunGitHubAction: boolean;
+  pendingGitHubAction: "create" | "merge" | null;
   onSync: () => void;
-  onTogglePause: () => void;
-  onRestore: () => void;
+  onRunGitHubAction: (action: "create" | "merge") => void;
 }
 
 function ActionRow({
   theme,
   pendingAction,
-  autoSyncEnabled,
   isAttachedToThisGroup,
+  prUrl,
+  canRunGitHubAction,
+  pendingGitHubAction,
   onSync,
-  onTogglePause,
-  onRestore,
+  onRunGitHubAction,
 }: ActionRowProps) {
   const busy = pendingAction !== null;
+  const prLabel = prUrl ? getPullRequestLabel(prUrl) : null;
+  const githubBusy = pendingGitHubAction !== null;
   return (
-    <View style={[styles.actionRow, { gap: theme.spacing.sm }]}>
+    <View style={[styles.actionRow, { gap: theme.spacing.xs }]}>
       <ActionButton
         theme={theme}
-        label="Sync"
-        symbol="arrow.triangle.2.circlepath"
+        label="Spotlight"
+        symbol="sparkles"
+        iconColor="warning"
         accent={isAttachedToThisGroup}
         loading={pendingAction === "sync"}
         disabled={busy}
         onPress={onSync}
       />
-      {isAttachedToThisGroup ? (
+      {prUrl && prLabel ? (
         <>
           <ActionButton
             theme={theme}
-            label={autoSyncEnabled ? "Pause" : "Resume"}
-            symbol={autoSyncEnabled ? "pause.fill" : "play.fill"}
-            loading={pendingAction === "toggle-auto-sync"}
-            disabled={busy}
-            onPress={onTogglePause}
+            label={prLabel}
+            symbol="arrow.up.forward"
+            success
+            loading={false}
+            disabled={false}
+            onPress={() => {
+              void haptic.light();
+              void Linking.openURL(prUrl);
+            }}
           />
           <ActionButton
             theme={theme}
-            label="Restore"
-            symbol="arrow.uturn.backward"
-            loading={pendingAction === "restore"}
-            disabled={busy}
-            onPress={onRestore}
+            label="Merge"
+            symbol="arrow.triangle.merge"
+            success
+            loading={pendingGitHubAction === "merge"}
+            disabled={!canRunGitHubAction || githubBusy}
+            onPress={() => onRunGitHubAction("merge")}
           />
         </>
-      ) : null}
+      ) : (
+        <ActionButton
+          theme={theme}
+          label="Create PR"
+          symbol="arrow.triangle.pull"
+          success
+          loading={pendingGitHubAction === "create"}
+          disabled={!canRunGitHubAction || githubBusy}
+          onPress={() => onRunGitHubAction("create")}
+        />
+      )}
     </View>
   );
 }
@@ -301,6 +380,8 @@ interface ActionButtonProps {
   loading: boolean;
   disabled: boolean;
   accent?: boolean;
+  success?: boolean;
+  iconColor?: keyof Theme["colors"];
   onPress: () => void;
 }
 
@@ -311,10 +392,12 @@ function ActionButton({
   loading,
   disabled,
   accent = false,
+  success = false,
+  iconColor,
   onPress,
 }: ActionButtonProps) {
-  const bg = accent ? theme.colors.accentMuted : theme.colors.surfaceElevated;
-  const fg = accent ? "accent" : "foreground";
+  const fg: keyof Theme["colors"] = success ? "success" : "foreground";
+  const iconTint = theme.colors[iconColor ?? fg];
   return (
     <Pressable
       accessibilityRole="button"
@@ -325,7 +408,12 @@ function ActionButton({
       style={({ pressed }) => [
         styles.actionButton,
         {
-          backgroundColor: bg,
+          backgroundColor: accent
+            ? alpha(theme.colors.accent, 0.12)
+            : alpha(theme.colors.surface, 0.4),
+          borderColor: accent
+            ? alpha(theme.colors.accent, 0.35)
+            : alpha(theme.colors.foreground, 0.1),
           borderRadius: theme.radius.md,
           opacity: disabled && !loading ? 0.4 : pressed ? 0.7 : 1,
         },
@@ -336,8 +424,8 @@ function ActionButton({
       ) : (
         <SymbolView
           name={symbol}
-          size={16}
-          tintColor={theme.colors[fg]}
+          size={13}
+          tintColor={iconTint}
           resizeMode="scaleAspectFit"
           style={styles.actionIcon}
         />
@@ -371,16 +459,18 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flexGrow: 1,
-    minWidth: 96,
-    height: 40,
+    minWidth: 92,
+    height: 32,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 8,
   },
   actionIcon: {
-    width: 16,
-    height: 16,
+    width: 13,
+    height: 13,
   },
   retryRow: {
     flexDirection: "row",

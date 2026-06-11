@@ -405,7 +405,7 @@ function PanelContent({
           />
         </View>
       ) : null}
-      <LinkedCheckoutPanelSection groupId={groupId} />
+      <LinkedCheckoutPanelSection groupId={groupId} sessionId={sessionId} />
     </View>
   );
 }
