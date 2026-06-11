@@ -624,15 +624,15 @@ function WorkspaceActionPill({
       <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.actionPillGlass}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Search files"
+          accessibilityLabel={`Show ${label}`}
           onPress={() => {
             void haptic.selection();
-            onSearch();
+            onChangeMode(nextMode);
           }}
           style={({ pressed }) => [styles.actionPillButton, { opacity: pressed ? 0.72 : 1 }]}
         >
           <SymbolView
-            name="magnifyingglass"
+            name={icon}
             size={17}
             tintColor={theme.colors.foreground}
             resizeMode="scaleAspectFit"
@@ -647,15 +647,15 @@ function WorkspaceActionPill({
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Show ${label}`}
+          accessibilityLabel="Search files"
           onPress={() => {
             void haptic.selection();
-            onChangeMode(nextMode);
+            onSearch();
           }}
           style={({ pressed }) => [styles.actionPillButton, { opacity: pressed ? 0.72 : 1 }]}
         >
           <SymbolView
-            name={icon}
+            name="magnifyingglass"
             size={17}
             tintColor={theme.colors.foreground}
             resizeMode="scaleAspectFit"
