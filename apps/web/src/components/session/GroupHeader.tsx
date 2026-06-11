@@ -17,6 +17,7 @@ import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { GitHubActions } from "./GitHubActions";
+import { GroupUsageBadge } from "./GroupUsageBadge";
 import { ActionTooltip } from "../ui/ActionTooltip";
 
 interface GroupHeaderProps {
@@ -132,6 +133,8 @@ export function GroupHeader({
         </h2>
         <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
+
+      <GroupUsageBadge sessionGroupId={sessionGroupId} />
 
       <GitHubActions
         sessionId={selectedSessionId}

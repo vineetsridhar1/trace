@@ -62,6 +62,19 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
   if (payload.type === "question_pending" || payload.type === "plan_pending") {
     return { sessionStatus: "needs_input" as SessionStatus };
   }
+  if (payload.type === "usage_updated") {
+    return {
+      ...(typeof payload.inputTokens === "number" ? { inputTokens: payload.inputTokens } : {}),
+      ...(typeof payload.outputTokens === "number" ? { outputTokens: payload.outputTokens } : {}),
+      ...(typeof payload.cacheReadTokens === "number"
+        ? { cacheReadTokens: payload.cacheReadTokens }
+        : {}),
+      ...(typeof payload.cacheCreationTokens === "number"
+        ? { cacheCreationTokens: payload.cacheCreationTokens }
+        : {}),
+      ...(typeof payload.costUsd === "number" ? { costUsd: payload.costUsd } : {}),
+    };
+  }
   if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
     const connection = asJsonObject(payload.connection);
     const sessionPatch: Partial<SessionEntity> = {
