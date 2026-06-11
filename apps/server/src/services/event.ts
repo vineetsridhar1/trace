@@ -81,6 +81,11 @@ const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
   "config_changed",
   "branch_renamed",
 ]);
+const DEFAULT_REDIS_EVENT_STREAM_MAXLEN = 10_000;
+const REDIS_EVENT_STREAM_MAXLEN = readPositiveIntegerEnv(
+  "TRACE_REDIS_EVENT_STREAM_MAXLEN",
+  DEFAULT_REDIS_EVENT_STREAM_MAXLEN,
+);
 
 // Maps scope types to their pubsub topic builders.
 // Keys must match the GraphQL subscription field names (e.g. "channel" → "channelEvents").
@@ -92,6 +97,17 @@ const scopeTopicMap: Record<string, (id: string) => string> = {
 };
 
 type TxClient = Prisma.TransactionClient;
+
+function readPositiveIntegerEnv(name: string, fallback: number): number {
+  const rawValue = process.env[name]?.trim();
+  if (!rawValue) return fallback;
+  const parsed = Number(rawValue);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    console.warn(`[event-service] ignoring invalid ${name}=${rawValue}; using ${fallback}`);
+    return fallback;
+  }
+  return parsed;
+}
 
 function eventCursorWhere(
   direction: "after" | "before",
@@ -239,9 +255,19 @@ export class EventService {
   private appendToStream(organizationId: string, event: { id: string } & Record<string, unknown>) {
     if (isLocalMode()) return;
     const streamKey = `stream:org:${organizationId}:events`;
-    redis.xadd(streamKey, "*", "event", JSON.stringify(event)).catch((err: Error) => {
-      console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
-    });
+    redis
+      .xadd(
+        streamKey,
+        "MAXLEN",
+        "~",
+        REDIS_EVENT_STREAM_MAXLEN,
+        "*",
+        "event",
+        JSON.stringify(event),
+      )
+      .catch((err: Error) => {
+        console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
+      });
   }
 
   async query(organizationId: string, opts: EventQueryOpts) {
@@ -270,10 +296,7 @@ export class EventService {
 
     const events = await prisma.event.findMany({
       where,
-      orderBy: [
-        { timestamp: isBefore ? "desc" : "asc" },
-        { id: isBefore ? "desc" : "asc" },
-      ],
+      orderBy: [{ timestamp: isBefore ? "desc" : "asc" }, { id: isBefore ? "desc" : "asc" }],
       take: limit,
     });
 

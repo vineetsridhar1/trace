@@ -38,6 +38,46 @@ const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
 const RATE_LIMIT_KEY_PREFIX = "auth:rate";
 const localRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
+class TTLStore<T> {
+  private readonly records = new Map<string, { value: T; expiresAt: number }>();
+  private readonly cleanupTimer: ReturnType<typeof setInterval>;
+
+  constructor(cleanupIntervalMs: number) {
+    this.cleanupTimer = setInterval(() => this.cleanupExpired(), cleanupIntervalMs);
+    this.cleanupTimer.unref?.();
+  }
+
+  set(key: string, value: T, ttlSeconds: number): void {
+    this.records.set(key, {
+      value,
+      expiresAt: Date.now() + Math.max(1, ttlSeconds) * 1000,
+    });
+  }
+
+  get(key: string): T | null {
+    const record = this.records.get(key);
+    if (!record) return null;
+    if (record.expiresAt <= Date.now()) {
+      this.records.delete(key);
+      return null;
+    }
+    return record.value;
+  }
+
+  delete(key: string): void {
+    this.records.delete(key);
+  }
+
+  private cleanupExpired(): void {
+    const now = Date.now();
+    for (const [key, record] of this.records) {
+      if (record.expiresAt <= now) {
+        this.records.delete(key);
+      }
+    }
+  }
+}
+
 type GitHubDeviceAuth = {
   deviceCode: string;
   expiresAt: number;
@@ -77,6 +117,7 @@ const mobilePairRateLimit: RateLimitConfig = {
   max: 30,
   windowSeconds: 60,
 };
+const localGitHubDeviceAuthRecords = new TTLStore<GitHubDeviceAuth>(60_000);
 
 function preventAuthResponseCaching(req: Request, res: Response) {
   delete req.headers["if-none-match"];
@@ -147,7 +188,10 @@ function rateLimitClientKey(req: Request): string {
   return forwardedClient || req.ip || req.socket.remoteAddress || "unknown";
 }
 
-function applyLocalRateLimit(key: string, config: RateLimitConfig): { limited: boolean; retryAfter: number } {
+function applyLocalRateLimit(
+  key: string,
+  config: RateLimitConfig,
+): { limited: boolean; retryAfter: number } {
   const now = Date.now();
   const existing = localRateLimitBuckets.get(key);
   const bucket =
@@ -490,6 +534,14 @@ function gitHubDeviceAuthTtlSeconds(record: GitHubDeviceAuth, now = Date.now()):
   return Math.max(1, Math.ceil((record.expiresAt - now) / 1000));
 }
 
+function saveLocalGitHubDeviceAuth(deviceAuthId: string, record: GitHubDeviceAuth): void {
+  localGitHubDeviceAuthRecords.set(deviceAuthId, record, gitHubDeviceAuthTtlSeconds(record));
+}
+
+function readLocalGitHubDeviceAuth(deviceAuthId: string): GitHubDeviceAuth | null {
+  return localGitHubDeviceAuthRecords.get(deviceAuthId);
+}
+
 function parseGitHubDeviceAuth(raw: string | null): GitHubDeviceAuth | null {
   if (!raw) return null;
   try {
@@ -512,32 +564,68 @@ function parseGitHubDeviceAuth(raw: string | null): GitHubDeviceAuth | null {
 }
 
 async function saveGitHubDeviceAuth(deviceAuthId: string, record: GitHubDeviceAuth): Promise<void> {
-  await redis.set(
-    githubDeviceAuthKey(deviceAuthId),
-    JSON.stringify(record),
-    "EX",
-    gitHubDeviceAuthTtlSeconds(record),
-  );
+  try {
+    await redis.set(
+      githubDeviceAuthKey(deviceAuthId),
+      JSON.stringify(record),
+      "EX",
+      gitHubDeviceAuthTtlSeconds(record),
+    );
+  } catch (error) {
+    console.warn(
+      "[auth] falling back to local GitHub device auth storage:",
+      (error as Error).message,
+    );
+    saveLocalGitHubDeviceAuth(deviceAuthId, record);
+  }
 }
 
 async function readGitHubDeviceAuth(deviceAuthId: string): Promise<GitHubDeviceAuth | null> {
   const key = githubDeviceAuthKey(deviceAuthId);
-  const record = parseGitHubDeviceAuth(await redis.get(key));
+  let record: GitHubDeviceAuth | null = null;
+  try {
+    record = parseGitHubDeviceAuth(await redis.get(key));
+  } catch (error) {
+    console.warn("[auth] reading local GitHub device auth storage:", (error as Error).message);
+  }
+  record ??= readLocalGitHubDeviceAuth(deviceAuthId);
   if (!record) return null;
   if (record.expiresAt <= Date.now()) {
-    await redis.del(key);
+    localGitHubDeviceAuthRecords.delete(deviceAuthId);
+    await redis.del(key).catch(() => undefined);
     return null;
   }
   return record;
 }
 
 async function deleteGitHubDeviceAuth(deviceAuthId: string): Promise<void> {
-  await redis.del(githubDeviceAuthKey(deviceAuthId));
+  localGitHubDeviceAuthRecords.delete(deviceAuthId);
+  await redis.del(githubDeviceAuthKey(deviceAuthId)).catch(() => undefined);
 }
 
 function readDeviceAuthId(req: Request): string {
   const value = req.body?.deviceAuthId;
   return typeof value === "string" ? value.trim() : "";
+}
+
+async function readJsonResponse(response: globalThis.Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function isGitHubDeviceCodeResponse(value: unknown): value is {
+  device_code?: string;
+  user_code?: string;
+  verification_uri?: string;
+  expires_in?: number;
+  interval?: number;
+  error?: string;
+  error_description?: string;
+} {
+  return Boolean(value && typeof value === "object");
 }
 
 router.post("/auth/github/device/start", async (req: Request, res: Response) => {
@@ -548,26 +636,26 @@ router.post("/auth/github/device/start", async (req: Request, res: Response) => 
     return;
   }
 
-  const response = await fetch("https://github.com/login/device/code", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
-      scope: "",
-    }),
-  });
-  const payload = (await response.json()) as {
-    device_code?: string;
-    user_code?: string;
-    verification_uri?: string;
-    expires_in?: number;
-    interval?: number;
-    error?: string;
-    error_description?: string;
-  };
+  let response: globalThis.Response;
+  try {
+    response = await fetch("https://github.com/login/device/code", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: GITHUB_CLIENT_ID,
+        scope: "",
+      }),
+    });
+  } catch (error) {
+    console.error("[auth] GitHub device code request failed:", (error as Error).message);
+    return res.status(502).json({ error: "Could not reach GitHub login. Try again." });
+  }
+
+  const rawPayload = await readJsonResponse(response);
+  const payload = isGitHubDeviceCodeResponse(rawPayload) ? rawPayload : {};
 
   if (
     !response.ok ||
