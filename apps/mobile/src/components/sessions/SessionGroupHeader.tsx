@@ -2,11 +2,7 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import {
-  ARCHIVE_SESSION_GROUP_MUTATION,
-  useEntityField,
-  useEntityStore,
-} from "@trace/client-core";
+import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionConnection, SessionEndpoints } from "@trace/gql";
 import { haptic } from "@/lib/haptics";
 import { buildRunScriptsCommand, isRunScriptArray } from "@/lib/runScripts";
@@ -72,6 +68,10 @@ export function SessionGroupHeader({
     | string
     | null
     | undefined;
+  const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
+    | string
+    | null
+    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId ?? "", "worktreeDeleted") as
     | boolean
     | undefined;
@@ -84,11 +84,9 @@ export function SessionGroupHeader({
     | null
     | undefined;
   const mergedUnavailable = sessionStatus === "merged" && worktreeDeleted !== false;
+  const canShowApplications = hosting === "cloud";
   const canMoveSession =
-    !!sessionId &&
-    !sessionOptimistic &&
-    !mergedUnavailable &&
-    (sessionConnection?.canMove ?? true);
+    !!sessionId && !sessionOptimistic && !mergedUnavailable && (sessionConnection?.canMove ?? true);
 
   const [rowWidth, setRowWidth] = useState(0);
   const [leadingWidth, setLeadingWidth] = useState(0);
@@ -151,7 +149,8 @@ export function SessionGroupHeader({
     setMoveSheetOpen(true);
   }, []);
   const setupBlocking = Boolean(setupScript) && setupStatus === "running";
-  const canRunScripts = runScripts.length > 0 && !!sessionId && !sessionOptimistic && !setupBlocking;
+  const canRunScripts =
+    runScripts.length > 0 && !!sessionId && !sessionOptimistic && !setupBlocking;
   const handleRunScripts = useCallback(() => {
     if (!sessionId || runScripts.length === 0) return;
     if (setupBlocking) {
@@ -188,7 +187,7 @@ export function SessionGroupHeader({
       systemIcon: "folder",
       onPress: handleOpenWorkspace,
     });
-    if (sessionId && !sessionOptimistic) {
+    if (sessionId && !sessionOptimistic && canShowApplications) {
       const count = sessionEndpoints?.ports?.length ?? 0;
       items.push({
         title: count > 0 ? `Applications (${count})` : "Applications",
@@ -228,6 +227,7 @@ export function SessionGroupHeader({
     return items;
   }, [
     archivedAt,
+    canShowApplications,
     canMoveSession,
     canRunScripts,
     handleArchive,
