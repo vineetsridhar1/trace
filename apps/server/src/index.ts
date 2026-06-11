@@ -45,6 +45,7 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
 import { endpointTrafficRetentionHours } from "./services/endpoint-utils.js";
+import { orgMembershipSyncService } from "./services/org-membership-sync.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -54,6 +55,8 @@ const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
+const DEFAULT_ORG_MEMBERSHIP_SYNC_INTERVAL_MS = 60 * 60 * 1000;
+const ORG_MEMBERSHIP_SYNC_LOCK_KEY = "trace:jobs:org-membership-sync";
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -385,6 +388,33 @@ async function main() {
       });
   }, ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS);
 
+  const orgMembershipSyncIntervalMs = readDurationEnv(
+    "TRACE_ORG_MEMBERSHIP_SYNC_INTERVAL_MS",
+    DEFAULT_ORG_MEMBERSHIP_SYNC_INTERVAL_MS,
+  );
+  const orgMembershipSync =
+    !localMode && orgMembershipSyncIntervalMs > 0
+      ? setInterval(() => {
+          void withRedisJobLock({
+            enabled: !localMode,
+            key: ORG_MEMBERSHIP_SYNC_LOCK_KEY,
+            ttlMs: Math.max(orgMembershipSyncIntervalMs * 2, 5 * 60 * 1000),
+            run: () => orgMembershipSyncService.reconcile(),
+          })
+            .then((result) => {
+              if (result && !result.skipped && result.removed.length > 0) {
+                console.log(
+                  `[org-membership-sync] removed ${result.removed.length} member(s) no longer in the GitHub org`,
+                );
+              }
+            })
+            .catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn(`[org-membership-sync] iteration failed: ${message}`);
+            });
+        }, orgMembershipSyncIntervalMs)
+      : null;
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (endpointProxyService.isEndpointHost(req.headers.host)) {
@@ -478,6 +508,7 @@ async function main() {
               clearInterval(deprovisionReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(endpointTrafficCleanup);
+              if (orgMembershipSync) clearInterval(orgMembershipSync);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();

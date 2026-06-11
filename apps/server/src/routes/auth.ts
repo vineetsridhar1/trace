@@ -28,15 +28,15 @@ import {
 } from "../services/mobile-auth.js";
 import { pushTokenService } from "../services/pushTokenService.js";
 import { orgMemberService } from "../services/org-member.js";
+import { AUTO_JOIN_GITHUB_ORG, isGitHubOrgMember } from "../lib/github-org.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
 
 const router: RouterType = Router();
 
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
-// Trace is hosted only for opendoor, so login requests read:org to detect org
-// membership and auto-add members of AUTO_JOIN_GITHUB_ORG to the organization.
+// Trace is hosted only for opendoor, so login requests read:org to detect
+// membership of AUTO_JOIN_GITHUB_ORG and auto-add those users to the organization.
 const GITHUB_LOGIN_SCOPE = "read:org";
-const AUTO_JOIN_GITHUB_ORG = process.env.AUTO_JOIN_GITHUB_ORG?.trim() || "opendoor-labs";
 const JWT_SECRET = resolveJwtSecret();
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
@@ -290,23 +290,6 @@ async function upsertUserFromGitHubAccessToken(accessToken: string) {
   }
 
   return user;
-}
-
-async function isGitHubOrgMember(accessToken: string, orgSlug: string): Promise<boolean> {
-  const res = await fetch(
-    `https://api.github.com/user/memberships/orgs/${encodeURIComponent(orgSlug)}`,
-    {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${accessToken}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-    },
-  );
-  // 404 = not a member, 403 = read:org not granted; either way, do not auto-join.
-  if (!res.ok) return false;
-  const body = (await res.json().catch(() => null)) as { state?: string } | null;
-  return body?.state === "active";
 }
 
 // Auto-add members of the configured GitHub org to the Trace organization on login.
