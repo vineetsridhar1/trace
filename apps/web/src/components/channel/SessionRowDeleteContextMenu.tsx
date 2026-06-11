@@ -38,7 +38,7 @@ export function SessionRowDeleteContextMenu({
     <div className="fixed inset-0 z-50" onPointerDown={onClose} onContextMenu={onClose}>
       <div
         role="menu"
-        className="fixed min-w-44 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+        className="fixed min-w-44 rounded-lg bg-popover/80 backdrop-blur-2xl p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
         style={{ left: menu.x, top: menu.y }}
         onPointerDown={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()}
