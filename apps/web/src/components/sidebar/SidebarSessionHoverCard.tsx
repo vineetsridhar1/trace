@@ -100,7 +100,7 @@ export function SidebarSessionHoverCard({
         align="start"
         sideOffset={10}
         alignOffset={-6}
-        className="pointer-events-none w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
+        className="pointer-events-none w-80 rounded-xl border border-white/15 bg-[rgb(24_24_27_/_0.48)] p-3.5 text-foreground shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur-3xl backdrop-saturate-150"
       >
         <SidebarSessionHoverContent
           branch={branch ?? groupBranch ?? sessionGroup?.branch ?? null}
@@ -153,7 +153,7 @@ function SidebarSessionHoverContent({
       </div>
 
       {spotlightDetails.length > 0 && (
-        <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
+        <div className="mt-3 rounded-lg border border-white/10 bg-[rgb(255_255_255_/_0.07)] px-2.5 py-2 shadow-inner shadow-white/5">
           <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/85">
             <Laptop size={12} className="shrink-0" />
             <span>Spotlighted checkout</span>
@@ -195,7 +195,7 @@ function SidebarSessionHoverContent({
       )}
 
       {applicationDetails.length > 0 && (
-        <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
+        <div className="mt-3 rounded-lg border border-white/10 bg-[rgb(255_255_255_/_0.07)] px-2.5 py-2 shadow-inner shadow-white/5">
           <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/85">
             <AppWindow size={12} className="shrink-0 text-sky-400" />
             <span>Applications</span>
