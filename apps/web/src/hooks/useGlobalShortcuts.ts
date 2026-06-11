@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useCommandPaletteStore } from "../stores/command-palette";
+import { matchesShortcut, useCommandRegistryStore } from "../stores/command-registry";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -31,6 +32,24 @@ export function useGlobalShortcuts() {
       ) {
         event.preventDefault();
         useCommandPaletteStore.getState().setShortcutsOpen(true);
+        return;
+      }
+
+      // Chords contributed by mounted components via the command registry.
+      const editable = isEditableTarget(event.target);
+      for (const commands of Object.values(
+        useCommandRegistryStore.getState().commandsByToken,
+      )) {
+        for (const command of commands) {
+          if (!command.shortcut) continue;
+          // Plain (modifier-less) chords are suppressed while typing.
+          if (!command.shortcut.mod && editable) continue;
+          if (matchesShortcut(event, command.shortcut)) {
+            event.preventDefault();
+            command.run();
+            return;
+          }
+        }
       }
     }
 

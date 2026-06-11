@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -37,6 +38,8 @@ import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import { useRegisterCommands } from "../../hooks/useRegisterCommands";
+import type { RegisteredCommand } from "../../stores/command-registry";
 
 const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-sidebar-width";
 const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
@@ -569,16 +572,26 @@ export function SessionGroupDetailView({
     setFilePaletteOpen(true);
   }, []);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "p") return;
-      event.preventDefault();
-      setFilePaletteOpen((open) => !open);
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+  const handleToggleFilePalette = useCallback(() => {
+    setFilePaletteOpen((open) => !open);
   }, []);
+
+  const handleOpenTerminalCmd = useCallback(() => {
+    setActiveWorkflowTab("session");
+    void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+  }, [handleOpenTerminal, selectedSession, terminalAllowed]);
+
+  const showSidebarTab = useCallback((tab: SidebarTab) => {
+    setShowApplicationsSidebar(false);
+    setShowSidebar(true);
+    setSidebarTab(tab);
+    if (tab !== "git") setHighlightCheckpointId(null);
+  }, []);
+
+  const canInteract = !selectedSessionIsOptimistic;
+  const canNewChatCmd =
+    !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed;
+  const canOpenTerminalCmd = !selectedSessionIsOptimistic && terminalAllowed;
 
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -685,6 +698,102 @@ export function SessionGroupDetailView({
     sessionGroupId,
     setActiveSessionId,
   ]);
+
+  const sessionCommands = useMemo<RegisteredCommand[]>(() => {
+    const commands: RegisteredCommand[] = [
+      {
+        id: "session.find-file",
+        title: "Find file",
+        group: "Session",
+        keywords: "open file search palette",
+        run: handleToggleFilePalette,
+        shortcut: { key: "p", mod: true },
+      },
+      {
+        id: "session.toggle-fullscreen",
+        title: isFullscreen ? "Exit fullscreen" : "Enter fullscreen",
+        group: "Session",
+        keywords: "fullscreen expand maximize",
+        run: toggleFullscreen,
+        shortcut: { key: "Enter", mod: true },
+      },
+    ];
+    if (canInteract) {
+      commands.push(
+        {
+          id: "session.toggle-sidebar",
+          title: "Toggle session sidebar",
+          group: "Session",
+          keywords: "files git changes panel info",
+          run: handleToggleSidebar,
+          shortcut: { key: "e", mod: true, shift: true },
+        },
+        {
+          id: "session.toggle-applications",
+          title: "Toggle applications panel",
+          group: "Session",
+          keywords: "apps processes ports traffic",
+          run: handleToggleApplicationsSidebar,
+          shortcut: { key: "a", mod: true, shift: true },
+        },
+        {
+          id: "session.show-files",
+          title: "Show files",
+          group: "Session",
+          keywords: "file tree explorer sidebar",
+          run: () => showSidebarTab("files"),
+        },
+        {
+          id: "session.show-git",
+          title: "Show git",
+          group: "Session",
+          keywords: "git checkpoints history sidebar",
+          run: () => showSidebarTab("git"),
+        },
+        {
+          id: "session.show-changes",
+          title: "Show changes",
+          group: "Session",
+          keywords: "diff changes review sidebar",
+          run: () => showSidebarTab("changes"),
+        },
+      );
+    }
+    if (canNewChatCmd) {
+      commands.push({
+        id: "session.new-chat",
+        title: "New chat in session group",
+        group: "Session",
+        keywords: "new chat session conversation",
+        run: () => void handleNewChat(),
+      });
+    }
+    if (canOpenTerminalCmd) {
+      commands.push({
+        id: "session.new-terminal",
+        title: "New terminal",
+        group: "Session",
+        keywords: "terminal shell console",
+        run: handleOpenTerminalCmd,
+        shortcut: { key: "j", mod: true },
+      });
+    }
+    return commands;
+  }, [
+    isFullscreen,
+    canInteract,
+    canNewChatCmd,
+    canOpenTerminalCmd,
+    handleToggleFilePalette,
+    toggleFullscreen,
+    handleToggleSidebar,
+    handleToggleApplicationsSidebar,
+    showSidebarTab,
+    handleNewChat,
+    handleOpenTerminalCmd,
+  ]);
+
+  useRegisterCommands(sessionCommands);
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {

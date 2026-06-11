@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Code, GitBranch, Hash, Inbox, MessageCircle, Plus, Settings, Ticket } from "lucide-react";
+import {
+  ChevronRight,
+  Code,
+  GitBranch,
+  Hash,
+  Inbox,
+  MessageCircle,
+  Plus,
+  Settings,
+  Ticket,
+} from "lucide-react";
 import { useAuthStore, useEntityStore } from "@trace/client-core";
 import type { Channel, Chat } from "@trace/gql";
 import type { SessionGroupEntity } from "@trace/client-core";
@@ -9,8 +19,28 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useUIStore } from "../../stores/ui";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
+import {
+  formatShortcut,
+  useCommandRegistryStore,
+  type RegisteredCommand,
+} from "../../stores/command-registry";
 import { features } from "../../lib/features";
 import { createQuickSession } from "../../lib/create-quick-session";
+import { isLocalMode } from "../../lib/runtime-mode";
+
+const SETTINGS_TABS: { id: string; label: string }[] = [
+  { id: "repositories", label: "Repositories" },
+  { id: "connections", label: "Connections" },
+  { id: "members", label: "Members" },
+  { id: "session-defaults", label: "Session Defaults" },
+  { id: "notifications", label: "Notifications" },
+  { id: "api-keys", label: "API Keys" },
+  { id: "bridge-access", label: "Bridge Access" },
+  { id: "agent-environments", label: "Agent Environments" },
+  { id: "org-secrets", label: "Org Secrets" },
+  { id: "integrations", label: "Integrations" },
+  { id: "channels", label: "Channels" },
+];
 
 export function GlobalCommandPalette() {
   const open = useCommandPaletteStore((s) => s.paletteOpen);
@@ -39,7 +69,26 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
+  const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const activeChannelId = useUIStore((s) => s.activeChannelId);
+
+  const commandsByToken = useCommandRegistryStore((s) => s.commandsByToken);
+  const registeredGroups = useMemo(() => {
+    const byGroup = new Map<string, RegisteredCommand[]>();
+    for (const commands of Object.values(commandsByToken)) {
+      for (const command of commands) {
+        const existing = byGroup.get(command.group);
+        if (existing) existing.push(command);
+        else byGroup.set(command.group, [command]);
+      }
+    }
+    return [...byGroup.entries()];
+  }, [commandsByToken]);
+
+  const openSettingsTab = (tabId: string) => {
+    setSettingsInitialTab(tabId);
+    setActivePage("settings");
+  };
 
   const channels = useEntityStore(
     useShallow((s: { channels: Record<string, Channel> }) =>
@@ -128,6 +177,46 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
             <Settings size={16} />
             <span>Settings</span>
           </CommandItem>
+        </CommandGroup>
+
+        {registeredGroups.map(([group, commands]) => (
+          <CommandGroup key={group} heading={group}>
+            {commands.map((command) => (
+              <CommandItem
+                key={command.id}
+                value={`${group} ${command.title} ${command.keywords ?? ""}`}
+                onSelect={() => run(command.run)}
+              >
+                <ChevronRight size={16} className="text-muted-foreground" />
+                <span className="truncate">{command.title}</span>
+                {command.shortcut && (
+                  <span className="ml-auto flex items-center gap-1">
+                    {formatShortcut(command.shortcut).map((key, i) => (
+                      <kbd
+                        key={i}
+                        className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 text-[11px] font-medium text-muted-foreground"
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
+                )}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
+
+        <CommandGroup heading="Settings">
+          {SETTINGS_TABS.filter((tab) => !(tab.id === "api-keys" && isLocalMode)).map((tab) => (
+            <CommandItem
+              key={tab.id}
+              value={`settings ${tab.label}`}
+              onSelect={() => run(() => openSettingsTab(tab.id))}
+            >
+              <Settings size={16} />
+              <span className="truncate">Settings: {tab.label}</span>
+            </CommandItem>
+          ))}
         </CommandGroup>
 
         {activeChannelIsCoding && activeChannelId && (
