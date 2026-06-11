@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   ChevronRight,
@@ -15,15 +15,26 @@ import { useAuthStore, useEntityStore } from "@trace/client-core";
 import type { Channel, Chat } from "@trace/gql";
 import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { useUIStore } from "../../stores/ui";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 import {
   formatShortcut,
   useCommandRegistryStore,
+  type CommandShortcut,
   type RegisteredCommand,
 } from "../../stores/command-registry";
+
+interface PaletteItem {
+  key: string;
+  group: string;
+  label: string;
+  search: string;
+  icon: ReactNode;
+  shortcut?: CommandShortcut;
+  onSelect: () => void;
+}
 import { features } from "../../lib/features";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
@@ -85,11 +96,6 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     return [...byGroup.entries()];
   }, [commandsByToken]);
 
-  const openSettingsTab = (tabId: string) => {
-    setSettingsInitialTab(tabId);
-    setActivePage("settings");
-  };
-
   const channels = useEntityStore(
     useShallow((s: { channels: Record<string, Channel> }) =>
       Object.values(s.channels)
@@ -142,8 +148,154 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     [chats],
   );
 
+  const items = useMemo<PaletteItem[]>(() => {
+    const list: PaletteItem[] = [];
+
+    list.push({
+      key: "goto-inbox",
+      group: "Go to",
+      label: "Inbox",
+      search: "inbox notifications go to",
+      icon: <Inbox size={16} />,
+      onSelect: () => setActivePage("inbox"),
+    });
+    if (features.tickets) {
+      list.push({
+        key: "goto-tickets",
+        group: "Go to",
+        label: "Tickets",
+        search: "tickets issues go to",
+        icon: <Ticket size={16} />,
+        onSelect: () => setActivePage("tickets"),
+      });
+    }
+    list.push({
+      key: "goto-settings",
+      group: "Go to",
+      label: "Settings",
+      search: "settings preferences go to",
+      icon: <Settings size={16} />,
+      onSelect: () => setActivePage("settings"),
+    });
+
+    for (const [group, commands] of registeredGroups) {
+      for (const command of commands) {
+        list.push({
+          key: command.id,
+          group,
+          label: command.title,
+          search: `${group} ${command.title} ${command.keywords ?? ""}`,
+          icon: <ChevronRight size={16} className="text-muted-foreground" />,
+          shortcut: command.shortcut,
+          onSelect: command.run,
+        });
+      }
+    }
+
+    for (const tab of SETTINGS_TABS) {
+      if (tab.id === "api-keys" && isLocalMode) continue;
+      list.push({
+        key: `settings-${tab.id}`,
+        group: "Settings",
+        label: `Settings: ${tab.label}`,
+        search: `settings ${tab.label}`,
+        icon: <Settings size={16} />,
+        onSelect: () => {
+          setSettingsInitialTab(tab.id);
+          setActivePage("settings");
+        },
+      });
+    }
+
+    if (activeChannelIsCoding && activeChannelId) {
+      list.push(
+        {
+          key: "new-session",
+          group: "Actions",
+          label: "New session",
+          search: "new session create public",
+          icon: <Plus size={16} />,
+          onSelect: () => void createQuickSession(activeChannelId, { visibility: "public" }),
+        },
+        {
+          key: "new-private-session",
+          group: "Actions",
+          label: "New private session",
+          search: "new private session create",
+          icon: <Plus size={16} />,
+          onSelect: () => void createQuickSession(activeChannelId, { visibility: "private" }),
+        },
+      );
+    }
+
+    for (const channel of channels) {
+      list.push({
+        key: `channel-${channel.id}`,
+        group: "Channels",
+        label: channel.name,
+        search: `channel ${channel.name} ${channel.id}`,
+        icon: channel.type === "coding" ? <Code size={16} /> : <Hash size={16} />,
+        onSelect: () => setActiveChannelId(channel.id),
+      });
+    }
+
+    for (const chat of chats) {
+      const label = chatLabel.get(chat.id) ?? "Direct Message";
+      list.push({
+        key: `chat-${chat.id}`,
+        group: "Direct Messages",
+        label,
+        search: `dm ${label} ${chat.id}`,
+        icon: <MessageCircle size={16} />,
+        onSelect: () => setActiveChatId(chat.id),
+      });
+    }
+
+    for (const group of sessionGroups) {
+      list.push({
+        key: `session-${group.id}`,
+        group: "Sessions",
+        label: group.name,
+        search: `session ${group.name} ${group.id}`,
+        icon: <GitBranch size={16} />,
+        onSelect: () => navigateToSessionGroup(null, group.id),
+      });
+    }
+
+    return list;
+  }, [
+    registeredGroups,
+    channels,
+    chats,
+    sessionGroups,
+    chatLabel,
+    activeChannelIsCoding,
+    activeChannelId,
+    setActivePage,
+    setActiveChannelId,
+    setActiveChatId,
+    setSettingsInitialTab,
+  ]);
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const visible = q ? items.filter((item) => item.search.toLowerCase().includes(q)) : items;
+    const ordered: { name: string; items: PaletteItem[] }[] = [];
+    const index = new Map<string, PaletteItem[]>();
+    for (const item of visible) {
+      let bucket = index.get(item.group);
+      if (!bucket) {
+        bucket = [];
+        index.set(item.group, bucket);
+        ordered.push({ name: item.group, items: bucket });
+      }
+      bucket.push(item);
+    }
+    return ordered;
+  }, [items, query]);
+
   return (
-    <Command loop className="rounded-lg bg-[#111111]">
+    <Command shouldFilter={false} loop className="rounded-lg bg-[#111111]">
       <CommandInput
         value={query}
         onValueChange={setQuery}
@@ -151,143 +303,31 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
         autoFocus
       />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-
-        <CommandGroup heading="Go to">
-          <CommandItem
-            value="inbox notifications"
-            onSelect={() => run(() => setActivePage("inbox"))}
-          >
-            <Inbox size={16} />
-            <span>Inbox</span>
-          </CommandItem>
-          {features.tickets && (
-            <CommandItem
-              value="tickets issues"
-              onSelect={() => run(() => setActivePage("tickets"))}
-            >
-              <Ticket size={16} />
-              <span>Tickets</span>
-            </CommandItem>
-          )}
-          <CommandItem
-            value="settings preferences"
-            onSelect={() => run(() => setActivePage("settings"))}
-          >
-            <Settings size={16} />
-            <span>Settings</span>
-          </CommandItem>
-        </CommandGroup>
-
-        {registeredGroups.map(([group, commands]) => (
-          <CommandGroup key={group} heading={group}>
-            {commands.map((command) => (
-              <CommandItem
-                key={command.id}
-                value={`${group} ${command.title} ${command.keywords ?? ""}`}
-                onSelect={() => run(command.run)}
-              >
-                <ChevronRight size={16} className="text-muted-foreground" />
-                <span className="truncate">{command.title}</span>
-                {command.shortcut && (
-                  <span className="ml-auto flex items-center gap-1">
-                    {formatShortcut(command.shortcut).map((key, i) => (
-                      <kbd
-                        key={i}
-                        className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 text-[11px] font-medium text-muted-foreground"
-                      >
-                        {key}
-                      </kbd>
-                    ))}
-                  </span>
-                )}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
-
-        <CommandGroup heading="Settings">
-          {SETTINGS_TABS.filter((tab) => !(tab.id === "api-keys" && isLocalMode)).map((tab) => (
-            <CommandItem
-              key={tab.id}
-              value={`settings ${tab.label}`}
-              onSelect={() => run(() => openSettingsTab(tab.id))}
-            >
-              <Settings size={16} />
-              <span className="truncate">Settings: {tab.label}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-
-        {activeChannelIsCoding && activeChannelId && (
-          <CommandGroup heading="Actions">
-            <CommandItem
-              value="new session create public"
-              onSelect={() =>
-                run(() => createQuickSession(activeChannelId, { visibility: "public" }))
-              }
-            >
-              <Plus size={16} />
-              <span>New session</span>
-            </CommandItem>
-            <CommandItem
-              value="new private session create"
-              onSelect={() =>
-                run(() => createQuickSession(activeChannelId, { visibility: "private" }))
-              }
-            >
-              <Plus size={16} />
-              <span>New private session</span>
-            </CommandItem>
-          </CommandGroup>
-        )}
-
-        {channels.length > 0 && (
-          <CommandGroup heading="Channels">
-            {channels.map((channel) => (
-              <CommandItem
-                key={channel.id}
-                value={`channel ${channel.name} ${channel.id}`}
-                onSelect={() => run(() => setActiveChannelId(channel.id))}
-              >
-                {channel.type === "coding" ? <Code size={16} /> : <Hash size={16} />}
-                <span className="truncate">{channel.name}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {chats.length > 0 && (
-          <CommandGroup heading="Direct Messages">
-            {chats.map((chat) => {
-              const label = chatLabel.get(chat.id) ?? "Direct Message";
-              return (
-                <CommandItem
-                  key={chat.id}
-                  value={`dm ${label} ${chat.id}`}
-                  onSelect={() => run(() => setActiveChatId(chat.id))}
-                >
-                  <MessageCircle size={16} />
-                  <span className="truncate">{label}</span>
+        {groups.length === 0 ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">No results found.</div>
+        ) : (
+          groups.map((group) => (
+            <CommandGroup key={group.name} heading={group.name}>
+              {group.items.map((item) => (
+                <CommandItem key={item.key} value={item.key} onSelect={() => run(item.onSelect)}>
+                  {item.icon}
+                  <span className="truncate">{item.label}</span>
+                  {item.shortcut && (
+                    <span className="ml-auto flex items-center gap-1">
+                      {formatShortcut(item.shortcut).map((key, i) => (
+                        <kbd
+                          key={i}
+                          className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1.5 text-[11px] font-medium text-muted-foreground"
+                        >
+                          {key}
+                        </kbd>
+                      ))}
+                    </span>
+                  )}
                 </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        )}
-
-        {sessionGroups.length > 0 && (
-          <CommandGroup heading="Sessions">
-            {sessionGroups.map((group) => (
-              <CommandItem
-                key={group.id}
-                value={`session ${group.name} ${group.id}`}
-                onSelect={() => run(() => navigateToSessionGroup(null, group.id))}
-              >
-                <GitBranch size={16} />
-                <span className="truncate">{group.name}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
+              ))}
+            </CommandGroup>
+          ))
         )}
       </CommandList>
     </Command>
