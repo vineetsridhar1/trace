@@ -122,9 +122,20 @@ export interface UserEvent {
   parentToolUseId?: string;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+}
+
 export interface ResultEvent {
   type: "result";
   subtype?: "success" | "error";
+  /** Token usage for the completed run, when the tool reports it. */
+  usage?: TokenUsage;
+  /** Cost of the completed run in USD, when the tool reports it. */
+  costUsd?: number;
 }
 
 export interface ErrorEvent {

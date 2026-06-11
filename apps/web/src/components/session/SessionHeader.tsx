@@ -32,6 +32,7 @@ import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-ac
 import { TraceLoader } from "../ui/trace-loader";
 import { GitHubActions } from "./GitHubActions";
 import { ActionTooltip } from "../ui/ActionTooltip";
+import { SessionUsageBadge } from "./SessionUsageBadge";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
@@ -231,6 +232,8 @@ export function SessionHeader({
           {runtimeDisplayLabel}
         </span>
       )}
+
+      <SessionUsageBadge sessionId={sessionId} />
 
       <div className="flex shrink-0 items-center gap-1">
         {panelMode && (

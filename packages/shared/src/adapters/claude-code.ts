@@ -2,13 +2,41 @@ import { spawn, type ChildProcess } from "child_process";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
+import type {
+  CodingToolAdapter,
+  RunOptions,
+  ToolOutput,
+  MessageBlock,
+  TokenUsage,
+} from "./coding-tool.js";
 import { parseQuestion } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
 const EXIT_CLOSE_GRACE_MS = 1_000;
+
+/** Parse the `usage` object on a Claude Code `result` message into shared TokenUsage. */
+function parseClaudeUsage(raw: unknown): TokenUsage | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const u = raw as Record<string, unknown>;
+  const num = (value: unknown): number => (typeof value === "number" ? value : 0);
+  const usage: TokenUsage = {
+    inputTokens: num(u.input_tokens),
+    outputTokens: num(u.output_tokens),
+    cacheReadTokens: num(u.cache_read_input_tokens),
+    cacheCreationTokens: num(u.cache_creation_input_tokens),
+  };
+  if (
+    usage.inputTokens === 0 &&
+    usage.outputTokens === 0 &&
+    usage.cacheReadTokens === 0 &&
+    usage.cacheCreationTokens === 0
+  ) {
+    return undefined;
+  }
+  return usage;
+}
 
 /**
  * Adapter for running Claude Code CLI sessions.
@@ -336,7 +364,14 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (type === "result") {
       const isError = data.is_error === true || data.subtype === "error";
       this.resultEmitted = true;
-      onOutput({ type: "result", subtype: isError ? "error" : "success" });
+      const usage = parseClaudeUsage(data.usage);
+      const costUsd = typeof data.total_cost_usd === "number" ? data.total_cost_usd : undefined;
+      onOutput({
+        type: "result",
+        subtype: isError ? "error" : "success",
+        ...(usage ? { usage } : {}),
+        ...(costUsd != null ? { costUsd } : {}),
+      });
       return;
     }
   }

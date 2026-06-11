@@ -701,6 +701,20 @@ export const sessionTypeResolvers = {
           ?.sessions ?? []
       );
     },
+    totalCostUsd: async (
+      group: { id: string; sessions?: { costUsd?: number | null }[] },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      const sessions = Array.isArray(group.sessions)
+        ? group.sessions
+        : ((
+            (await ctx.sessionGroupLoader.load(group.id)) as {
+              sessions?: { costUsd?: number | null }[];
+            } | null
+          )?.sessions ?? []);
+      return sessions.reduce((sum, session) => sum + (session.costUsd ?? 0), 0);
+    },
     gitCheckpoints: async (group: { id: string }) => {
       return sessionService.listGitCheckpointsForGroup(group.id);
     },

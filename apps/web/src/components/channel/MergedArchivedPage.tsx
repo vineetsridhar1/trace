@@ -62,6 +62,11 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         sessionGroupId
         lastUserMessageAt
         lastMessageAt
+        inputTokens
+        outputTokens
+        cacheReadTokens
+        cacheCreationTokens
+        costUsd
         connection {
           state
           runtimeInstanceId

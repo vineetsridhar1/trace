@@ -4774,6 +4774,10 @@ export class SessionService {
       });
     }
 
+    if (data.type === "result") {
+      await this.recordUsage(sessionId, session.organizationId, session.sessionGroupId, data);
+    }
+
     // If we found a title tag, update the session name
     if (extractedTitle) {
       await this.updateName(sessionId, extractedTitle);
@@ -4833,6 +4837,76 @@ export class SessionService {
         });
       }
     }
+  }
+
+  /**
+   * Accumulate token usage and cost from a coding tool `result` message onto
+   * the session, then emit a usage_updated patch so clients update live.
+   */
+  private async recordUsage(
+    sessionId: string,
+    organizationId: string,
+    sessionGroupId: string | null,
+    data: Record<string, unknown>,
+  ) {
+    const usage =
+      data.usage && typeof data.usage === "object" && !Array.isArray(data.usage)
+        ? (data.usage as Record<string, unknown>)
+        : null;
+    const num = (value: unknown): number => (typeof value === "number" ? value : 0);
+    const inputTokens = num(usage?.inputTokens);
+    const outputTokens = num(usage?.outputTokens);
+    const cacheReadTokens = num(usage?.cacheReadTokens);
+    const cacheCreationTokens = num(usage?.cacheCreationTokens);
+    const costUsd = num(data.costUsd);
+
+    if (
+      inputTokens === 0 &&
+      outputTokens === 0 &&
+      cacheReadTokens === 0 &&
+      cacheCreationTokens === 0 &&
+      costUsd === 0
+    ) {
+      return;
+    }
+
+    const updated = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        inputTokens: { increment: inputTokens },
+        outputTokens: { increment: outputTokens },
+        cacheReadTokens: { increment: cacheReadTokens },
+        cacheCreationTokens: { increment: cacheCreationTokens },
+        costUsd: { increment: costUsd },
+      },
+      select: {
+        inputTokens: true,
+        outputTokens: true,
+        cacheReadTokens: true,
+        cacheCreationTokens: true,
+        costUsd: true,
+      },
+    });
+
+    const sessionGroup = await this.loadSessionGroupSnapshot(sessionGroupId);
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "usage_updated",
+        inputTokens: updated.inputTokens,
+        outputTokens: updated.outputTokens,
+        cacheReadTokens: updated.cacheReadTokens,
+        cacheCreationTokens: updated.cacheCreationTokens,
+        costUsd: updated.costUsd,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType: "system",
+      actorId: "system",
+    });
   }
 
   async updateName(sessionId: string, name: string) {
