@@ -100,7 +100,7 @@ export function SidebarSessionHoverCard({
         align="start"
         sideOffset={10}
         alignOffset={-6}
-        className="pointer-events-none w-80 rounded-xl border border-white/10 !bg-zinc-900/72 p-3.5 text-foreground shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl"
+        className="pointer-events-none w-80 rounded-xl p-3.5 text-foreground shadow-2xl shadow-black/40"
       >
         <SidebarSessionHoverContent
           branch={branch ?? groupBranch ?? sessionGroup?.branch ?? null}
