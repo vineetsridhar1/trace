@@ -183,7 +183,7 @@ export function SessionGroupHeader({
       });
     }
     items.push({
-      title: "Workspace",
+      title: "Files",
       systemIcon: "folder",
       onPress: handleOpenWorkspace,
     });
