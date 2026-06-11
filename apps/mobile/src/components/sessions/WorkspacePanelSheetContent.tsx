@@ -109,14 +109,6 @@ function flattenFileTree(
   return visible;
 }
 
-function countTreeNodes(nodes: FileTreeNode[]): number {
-  let count = 0;
-  for (const node of nodes) {
-    count += 1 + countTreeNodes(node.children);
-  }
-  return count;
-}
-
 function initialExpandedPaths(tree: FileTreeNode[]): Set<string> {
   const expanded = new Set<string>();
   for (const node of tree) {
@@ -152,12 +144,6 @@ export function WorkspacePanelSheetContent({
   const showingFiles = tab === "files";
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text variant="headline">Workspace</Text>
-        <Text variant="footnote" color="mutedForeground">
-          {showingFiles ? "Browse files in this workspace." : "Review branch changes."}
-        </Text>
-      </View>
       <View style={styles.workspaceBody}>
         {showingFiles ? <FilesTab groupId={groupId} /> : <ChangesTab groupId={groupId} />}
       </View>
@@ -219,8 +205,6 @@ function FilesTab({ groupId }: { groupId: string }) {
 
   const tree = useMemo(() => buildFileTree(files), [files]);
   const visibleFiles = useMemo(() => flattenFileTree(tree, expandedPaths), [expandedPaths, tree]);
-  const treeItemCount = useMemo(() => countTreeNodes(tree), [tree]);
-
   useEffect(() => {
     if (tree.length === 0) {
       didAutoExpandRef.current = false;
@@ -326,45 +310,12 @@ function FilesTab({ groupId }: { groupId: string }) {
   if (files.length === 0) return <EmptyState label="No files available" />;
 
   return (
-    <View style={[styles.explorerShell, { paddingHorizontal: theme.spacing.lg }]}>
-      <View style={styles.explorerHeader}>
-        <View style={styles.explorerHeaderText}>
-          <Text variant="subheadline" color="foreground">
-            Files
-          </Text>
-          <Text variant="caption1" color="mutedForeground">
-            {treeItemCount} item{treeItemCount === 1 ? "" : "s"} in this workspace
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Refresh files"
-          onPress={() => void loadFiles()}
-          style={({ pressed }) => [
-            styles.explorerRefresh,
-            {
-              backgroundColor: alpha(theme.colors.surfaceElevated, 0.82),
-              borderColor: theme.colors.borderMuted,
-              borderRadius: theme.radius.full,
-              opacity: pressed ? 0.65 : 1,
-            },
-          ]}
-        >
-          <SymbolView
-            name="arrow.clockwise"
-            size={14}
-            tintColor={theme.colors.mutedForeground}
-            resizeMode="scaleAspectFit"
-          />
-        </Pressable>
-      </View>
+    <View style={styles.explorerShell}>
       <View
         style={[
           styles.explorerCard,
           {
             backgroundColor: alpha(theme.colors.surfaceElevated, 0.76),
-            borderColor: theme.colors.borderMuted,
-            borderRadius: theme.radius.xl,
           },
         ]}
       >
@@ -570,12 +521,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    gap: 4,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 12,
-  },
   workspaceBody: {
     flex: 1,
   },
@@ -604,27 +549,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingBottom: 76,
   },
-  explorerHeader: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  explorerHeaderText: {
-    gap: 2,
-  },
-  explorerRefresh: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   explorerCard: {
     flex: 1,
     overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
   },
   fileTreeSeparator: {
     height: StyleSheet.hairlineWidth,
