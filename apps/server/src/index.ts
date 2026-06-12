@@ -21,7 +21,12 @@ import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
-import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
+import {
+  buildContext,
+  buildWsContext,
+  revalidateWsContextMembership,
+  verifyBridgeAuthToken,
+} from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
@@ -223,7 +228,10 @@ async function main() {
         }
       },
       context: async (ctx: { extra: Record<string, unknown> }) => {
-        return (ctx.extra as Record<string, unknown>).__context as Context;
+        // Called per operation: re-check org membership so users removed from
+        // the org can't start new operations on a long-lived connection.
+        const context = (ctx.extra as Record<string, unknown>).__context as Context;
+        return revalidateWsContextMembership(context);
       },
     },
     wsServer,

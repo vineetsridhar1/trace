@@ -371,6 +371,19 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   };
 }
 
+// graphql-ws connections are long-lived and their context is built once at
+// connect time. Re-check org membership when a new operation starts so users
+// removed from the org can't keep starting subscriptions on a live socket.
+export async function revalidateWsContextMembership(context: Context): Promise<Context> {
+  if (!context.organizationId) return context;
+  const membership = await resolveOrgMembership(context.userId, context.organizationId);
+  if (!membership) {
+    throw new AuthenticationError("Not a member of this organization");
+  }
+  context.role = membership.role as Context["role"];
+  return context;
+}
+
 export async function buildWsContext(
   connectionParams?: Record<string, unknown>,
   cookieHeader?: string,
