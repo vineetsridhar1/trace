@@ -206,6 +206,23 @@ describe("auth helpers", () => {
     ).rejects.toThrow("Not authenticated");
   });
 
+  it("rejects unauthenticated external local-mode HTTP access with the paired-mobile requirement", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    await expect(
+      buildContext({
+        req: {
+          headers: {
+            host: "localhost:4000",
+            "x-forwarded-for": "203.0.113.10",
+          },
+          cookies: {},
+          socket: { remoteAddress: "127.0.0.1" },
+        },
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toThrow("External local-mode access requires a paired mobile token");
+  });
+
   it("rejects HTTP context when the user has no organization membership", async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
     prismaMock.orgMember.findFirst.mockResolvedValueOnce(null);
