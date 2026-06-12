@@ -30,6 +30,8 @@ import { resolveJwtSecret } from "./jwt-secret.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
+const EXTERNAL_LOCAL_MODE_AUTH_ERROR =
+  "External local-mode access requires a paired mobile token";
 
 type SessionTokenPayload = {
   userId: string;
@@ -53,6 +55,13 @@ export type AccessTokenAuthSubject = SessionAuthSubject | MobileAuthSubject;
 type RequestAuthSource = {
   headers: IncomingHttpHeaders;
   socket?: { remoteAddress?: string | null } | null;
+};
+
+type ContextBuildInput = {
+  token: string | undefined;
+  request?: RequestAuthSource;
+  requestedOrgId?: string | null;
+  clientSource: string | null;
 };
 
 function parseSessionToken(token: string): SessionTokenPayload | null {
@@ -291,32 +300,31 @@ export function getRequestToken(req: Pick<Request, "headers" | "cookies">): stri
   return req.cookies?.trace_token ?? parseCookieToken(req.headers.cookie);
 }
 
-export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
-  let userId: string | undefined;
-  let authSubject: AccessTokenAuthSubject | null = null;
-
-  // Accept token from Authorization header or cookie.
-  const token = getRequestToken(req);
-  if (token) {
-    authSubject = await authenticateAccessToken(token);
-    if (!authSubject) {
-      throw new AuthenticationError("Invalid token");
-    }
-    userId = authSubject.userId;
-  }
-
-  if (isExternalLocalModeRequest(req)) {
-    if (authSubject?.kind !== "mobile") {
-      throw new AuthenticationError("External local-mode access requires a paired mobile token");
-    }
-  }
-
-  if (!userId) {
+async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Context> {
+  if (!input.token) {
     throw new AuthenticationError();
   }
 
+  const authSubject = await authenticateAccessToken(input.token);
+  if (!authSubject) {
+    throw new AuthenticationError("Invalid token");
+  }
+
+  /*
+   * Local mode trusts same-machine browser traffic. Public-origin traffic must
+   * prove it came from a paired mobile device, so a normal session cookie cannot
+   * be replayed into a local Trace server from outside the machine.
+   */
+  if (
+    input.request &&
+    isExternalLocalModeRequest(input.request) &&
+    authSubject.kind !== "mobile"
+  ) {
+    throw new AuthenticationError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
+  }
+
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: authSubject.userId },
     select: { id: true, email: true },
   });
 
@@ -324,26 +332,26 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     throw new AuthenticationError("User not found");
   }
 
-  // Resolve organization from X-Organization-Id header
-  const orgHeader = req.headers["x-organization-id"];
-  const requestedOrgId = Array.isArray(orgHeader) ? orgHeader[0] : orgHeader;
-
   let organizationId: string | null = null;
   let role: Context["role"] = null;
 
+  /*
+   * Local mode has one canonical organization. It wins over client-provided
+   * organization identifiers so stale clients cannot steer the auth context to
+   * an arbitrary organization.
+   */
   const localModeMembership = await getLocalModeOrgMembership(user.id);
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
-  } else if (requestedOrgId) {
-    const membership = await resolveOrgMembership(user.id, requestedOrgId);
+  } else if (input.requestedOrgId) {
+    const membership = await resolveOrgMembership(user.id, input.requestedOrgId);
     if (!membership) {
       throw new AuthenticationError("Not a member of this organization");
     }
-    organizationId = requestedOrgId;
+    organizationId = input.requestedOrgId;
     role = membership.role;
   } else {
-    // Fall back to first org membership
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
       organizationId = firstMembership.organizationId;
@@ -353,10 +361,12 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
 
   assertOrgMembership(organizationId);
 
+  // Data loaders are scoped to one request or connection so cached batches never
+  // leak across users, organizations, or GraphQL operations.
   return {
     userId: user.id,
     organizationId,
-    clientSource: readClientSource(req.headers),
+    clientSource: input.clientSource,
     role,
     actorType: "user",
     userLoader: createUserLoader(),
@@ -374,6 +384,23 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   };
 }
 
+export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
+  const token = getRequestToken(req);
+  const orgHeader = req.headers["x-organization-id"];
+  const requestedOrgId = Array.isArray(orgHeader) ? orgHeader[0] : orgHeader;
+
+  if (!token && isExternalLocalModeRequest(req)) {
+    throw new AuthenticationError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
+  }
+
+  return buildAuthenticatedContext({
+    token,
+    request: req,
+    requestedOrgId,
+    clientSource: readClientSource(req.headers),
+  });
+}
+
 export async function buildWsContext(
   connectionParams?: Record<string, unknown>,
   cookieHeader?: string,
@@ -382,74 +409,19 @@ export async function buildWsContext(
   const token =
     (typeof connectionParams?.token === "string" ? connectionParams.token : undefined) ??
     parseCookieToken(cookieHeader);
-
-  if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
-
-  const authSubject = await authenticateAccessToken(token);
-  if (!authSubject) {
-    throw new AuthenticationError("Invalid token");
-  }
-  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "mobile") {
-    throw new AuthenticationError("External local-mode access requires a paired mobile token");
-  }
-  const userId = authSubject.userId;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true },
-  });
-  if (!user) throw new AuthenticationError("User not found");
-
-  // Resolve organization from connectionParams
   const requestedOrgId =
     typeof connectionParams?.organizationId === "string"
       ? connectionParams.organizationId
       : undefined;
+  const clientSource =
+    typeof connectionParams?.clientSource === "string" && connectionParams.clientSource.trim()
+      ? connectionParams.clientSource.trim()
+      : null;
 
-  let organizationId: string | null = null;
-  let role: Context["role"] = null;
-
-  const localModeMembership = await getLocalModeOrgMembership(user.id);
-  if (localModeMembership) {
-    organizationId = localModeMembership.organizationId;
-    role = localModeMembership.role;
-  } else if (requestedOrgId) {
-    const membership = await resolveOrgMembership(user.id, requestedOrgId);
-    if (!membership) {
-      throw new AuthenticationError("Not a member of this organization");
-    }
-    organizationId = requestedOrgId;
-    role = membership.role;
-  } else {
-    const firstMembership = await getFirstOrgMembership(user.id);
-    if (firstMembership) {
-      organizationId = firstMembership.organizationId;
-      role = firstMembership.role;
-    }
-  }
-
-  assertOrgMembership(organizationId);
-
-  return {
-    userId: user.id,
-    organizationId,
-    clientSource:
-      typeof connectionParams?.clientSource === "string" && connectionParams.clientSource.trim()
-        ? connectionParams.clientSource.trim()
-        : null,
-    role,
-    actorType: "user",
-    userLoader: createUserLoader(),
-    sessionLoader: createSessionLoader(),
-    sessionGroupLoader: createSessionGroupLoader(),
-    repoLoader: createRepoLoader(),
-    eventLoader: createEventLoader(),
-    conversationLoader: createConversationLoader(),
-    branchLoader: createBranchLoader(),
-    turnLoader: createTurnLoader(),
-    chatMembersLoader: createChatMembersLoader(),
-    sessionTicketsLoader: createSessionTicketsLoader(organizationId),
-    channelMembershipLoader: createChannelMembershipLoader(user.id),
-    chatMembershipLoader: createChatMembershipLoader(user.id),
-  };
+  return buildAuthenticatedContext({
+    token,
+    request,
+    requestedOrgId,
+    clientSource,
+  });
 }

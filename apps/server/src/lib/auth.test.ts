@@ -330,7 +330,7 @@ describe("auth helpers", () => {
 
   it("rejects invalid websocket auth", async () => {
     await expect(buildWsContext({ token: "bad-token" })).rejects.toThrow("Invalid token");
-    await expect(buildWsContext()).rejects.toThrow("Missing auth token for WebSocket");
+    await expect(buildWsContext()).rejects.toThrow("Not authenticated");
   });
 
   it("rejects session tokens for external local-mode websocket access", async () => {
