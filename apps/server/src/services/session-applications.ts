@@ -591,9 +591,14 @@ export class SessionApplicationService {
     return result.count;
   }
 
-  async markProcessRunning(processId: string, organizationId: string, bridgeProcessId: string) {
+  async markProcessRunning(
+    processId: string,
+    organizationId: string,
+    bridgeProcessId: string,
+    sourceRuntimeId: string,
+  ) {
     const existing = await prisma.sessionApplicationProcess.findFirst({
-      where: { id: processId, organizationId },
+      where: { id: processId, organizationId, runtimeInstanceId: sourceRuntimeId },
       select: { id: true },
     });
     if (!existing) return null;
@@ -618,9 +623,10 @@ export class SessionApplicationService {
     runId: string,
     organizationId: string,
     result: { exitCode: number; output?: string; error?: string },
+    sourceRuntimeId: string,
   ) {
     const existing = await prisma.sessionSetupScriptRun.findFirst({
-      where: { id: runId, organizationId },
+      where: this.setupRunFromRuntimeWhere(runId, organizationId, sourceRuntimeId),
       select: { id: true },
     });
     if (!existing) return null;
@@ -669,10 +675,34 @@ export class SessionApplicationService {
     return run;
   }
 
-  async appendSetupScriptOutput(runId: string, organizationId: string, data: string) {
+  // Setup script runs don't persist a runtime id, so bind reported results to
+  // the runtime currently connected to one of the run's group sessions — the
+  // same resolution used when the run was dispatched.
+  private setupRunFromRuntimeWhere(
+    runId: string,
+    organizationId: string,
+    sourceRuntimeId: string,
+  ): Prisma.SessionSetupScriptRunWhereInput {
+    return {
+      id: runId,
+      organizationId,
+      sessionGroup: {
+        sessions: {
+          some: { connection: { path: ["runtimeInstanceId"], equals: sourceRuntimeId } },
+        },
+      },
+    };
+  }
+
+  async appendSetupScriptOutput(
+    runId: string,
+    organizationId: string,
+    data: string,
+    sourceRuntimeId: string,
+  ) {
     if (!data) return null;
     const run = await prisma.sessionSetupScriptRun.findFirst({
-      where: { id: runId, organizationId },
+      where: this.setupRunFromRuntimeWhere(runId, organizationId, sourceRuntimeId),
       select: {
         id: true,
         status: true,
@@ -699,10 +729,11 @@ export class SessionApplicationService {
     processId: string,
     organizationId: string,
     exitCode: number | null,
-    error?: string | null,
+    error: string | null,
+    sourceRuntimeId: string,
   ) {
     const existing = await prisma.sessionApplicationProcess.findFirst({
-      where: { id: processId, organizationId },
+      where: { id: processId, organizationId, runtimeInstanceId: sourceRuntimeId },
       select: { id: true },
     });
     if (!existing) return null;
@@ -743,12 +774,13 @@ export class SessionApplicationService {
     organizationId: string,
     stream: "stdout" | "stderr",
     data: string,
+    sourceRuntimeId: string,
   ) {
     if (!data) return null;
     const prior = this.logAppendChains.get(processId) ?? Promise.resolve();
     const next = prior
       .catch(() => undefined)
-      .then(() => this.writeProcessLog(processId, organizationId, stream, data));
+      .then(() => this.writeProcessLog(processId, organizationId, stream, data, sourceRuntimeId));
     this.logAppendChains.set(processId, next);
     void next.finally(() => {
       if (this.logAppendChains.get(processId) === next) this.logAppendChains.delete(processId);
@@ -761,9 +793,10 @@ export class SessionApplicationService {
     organizationId: string,
     stream: "stdout" | "stderr",
     data: string,
+    sourceRuntimeId: string,
   ) {
     const process = await prisma.sessionApplicationProcess.findFirst({
-      where: { id: processId, organizationId },
+      where: { id: processId, organizationId, runtimeInstanceId: sourceRuntimeId },
       select: { id: true, organizationId: true, sessionGroupId: true },
     });
     if (!process) return null;
