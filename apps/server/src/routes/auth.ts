@@ -784,7 +784,12 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
     .split(",")
     .map((scope) => scope.trim())
     .filter(Boolean);
-  if (grantedScopes.some((scope) => scope !== GITHUB_LOGIN_SCOPE)) {
+  // Require exactly read:org. A missing scope (e.g. a returning user's old
+  // scopeless grant) would silently fail the membership check, so force re-auth
+  // rather than proceeding to a guaranteed-failed auto-join.
+  const hasExactLoginScope =
+    grantedScopes.length === 1 && grantedScopes[0] === GITHUB_LOGIN_SCOPE;
+  if (!hasExactLoginScope) {
     const revoked = await revokeGitHubOAuthGrant(payload.access_token);
     await deleteGitHubDeviceAuth(deviceAuthId);
     return res.status(400).json({

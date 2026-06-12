@@ -1205,7 +1205,7 @@ describe("github device oauth", () => {
           expect(init?.body?.toString()).toContain(
             "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code",
           );
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
             headers: { "Content-Type": "application/json" },
           });
         }
@@ -1281,7 +1281,7 @@ describe("github device oauth", () => {
           );
         }
         if (url.includes("/login/oauth/access_token")) {
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
             headers: { "Content-Type": "application/json" },
           });
         }
@@ -1478,7 +1478,7 @@ describe("github device oauth", () => {
           );
         }
         if (url.includes("/login/oauth/access_token")) {
-          return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "read:org" }), {
             headers: { "Content-Type": "application/json" },
           });
         }
@@ -1569,6 +1569,63 @@ describe("github device oauth", () => {
     });
     expect(revokedGrant).toBe(true);
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rejects a token missing the read:org scope and forces re-auth", async () => {
+    vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
+    let revokedGrant = false;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        if (url.includes("/login/device/code")) {
+          return new Response(
+            JSON.stringify({
+              device_code: "secret-device-code",
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://github.com/login/device",
+              expires_in: 900,
+              interval: 5,
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/login/oauth/access_token")) {
+          // Returning user with an old scopeless grant: GitHub hands back a token
+          // with no scope even though we requested read:org.
+          return new Response(JSON.stringify({ access_token: "gh-access", scope: "" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.includes("/applications/") && url.endsWith("/grant")) {
+          revokedGrant = true;
+          return new Response(null, { status: 204 });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+
+    const startRes = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+    const startBody = (await startRes.json()) as { deviceAuthId: string };
+
+    const pollRes = await fetch(`${baseUrl}/auth/github/device/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceAuthId: startBody.deviceAuthId }),
+    });
+
+    expect(pollRes.status).toBe(400);
+    expect(await pollRes.json()).toEqual({
+      status: "error",
+      error: "Removed old GitHub permissions for Trace. Start GitHub login again.",
+    });
+    expect(revokedGrant).toBe(true);
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    expect(orgMemberMock.addMember).not.toHaveBeenCalled();
   });
 
   it("keeps polling when GitHub authorization is pending", async () => {
