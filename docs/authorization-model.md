@@ -58,6 +58,13 @@ who may use the API at all**. Authentication (REST `/auth/*`) is deliberately
 *not* behind this gate, so login and `/auth/me` keep working; the gate bites the
 first time a non-member issues a GraphQL call.
 
+Membership is granted on login: members of the configured GitHub org
+(`AUTO_JOIN_GITHUB_ORG`, default `opendoor-labs`) are auto-added to the
+organization by `autoJoinOrganizationIfMember` (`routes/auth.ts:297`), which
+verifies membership via `isGitHubOrgMember` (`lib/github-org.ts:18`). A GitHub
+user who is *not* in that org logs in successfully but receives no `OrgMember`
+row, so Layer 2 blocks them on every GraphQL call — the intended posture.
+
 ### Layer 3 — Resource authorization
 
 The interesting layer. The helpers live in `services/access.ts` and
@@ -310,9 +317,11 @@ Be explicit about these before launch:
    group they own. Terminals are owner-only regardless.
 2. **The `/terminal` upgrade is open; auth is enforced post-connect** (within
    5s, before any data flows). This is intentional but worth noting in a review.
-3. **New users have no access until added to the org.** A user can authenticate
-   via GitHub but, with no `OrgMember` row, is blocked at Layer 2 on every
-   GraphQL call. Membership is granted by an admin (`addMember`) or local
-   bootstrap — there is currently no GitHub-org auto-join in this codebase.
+3. **Access is gated on GitHub-org membership.** On login, members of
+   `AUTO_JOIN_GITHUB_ORG` (default `opendoor-labs`) are auto-added to the org
+   (`routes/auth.ts:297`); everyone else authenticates but is blocked at Layer 2
+   on every GraphQL call. Auto-join fails *open* on errors — it never blocks
+   login, the user just isn't added (and so stays blocked at Layer 2). Admins can
+   also grant membership directly via `addMember`.
 4. **Everything rests on `JWT_SECRET`.** If it leaks, an attacker can mint
    tokens for any user/org. Protect it accordingly.
