@@ -281,7 +281,7 @@ async function getLocalModeOrgMembership(userId: string): Promise<{
   if (!membership) return null;
   return {
     organizationId,
-    role: membership.role as Context["role"],
+    role: membership.role,
   };
 }
 
@@ -341,13 +341,13 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
       throw new AuthenticationError("Not a member of this organization");
     }
     organizationId = requestedOrgId;
-    role = membership.role as Context["role"];
+    role = membership.role;
   } else {
     // Fall back to first org membership
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
       organizationId = firstMembership.organizationId;
-      role = firstMembership.role as Context["role"];
+      role = firstMembership.role;
     }
   }
 
@@ -401,7 +401,10 @@ export async function buildWsContext(
   if (!user) throw new AuthenticationError("User not found");
 
   // Resolve organization from connectionParams
-  const requestedOrgId = connectionParams?.organizationId as string | undefined;
+  const requestedOrgId =
+    typeof connectionParams?.organizationId === "string"
+      ? connectionParams.organizationId
+      : undefined;
 
   let organizationId: string | null = null;
   let role: Context["role"] = null;
@@ -416,12 +419,12 @@ export async function buildWsContext(
       throw new AuthenticationError("Not a member of this organization");
     }
     organizationId = requestedOrgId;
-    role = membership.role as Context["role"];
+    role = membership.role;
   } else {
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
       organizationId = firstMembership.organizationId;
-      role = firstMembership.role as Context["role"];
+      role = firstMembership.role;
     }
   }
 
