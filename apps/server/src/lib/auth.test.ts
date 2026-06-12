@@ -206,6 +206,29 @@ describe("auth helpers", () => {
     ).rejects.toThrow("Not authenticated");
   });
 
+  it("rejects HTTP context when the user has no organization membership", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce(null);
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    await expect(
+      buildContext({
+        req: {
+          headers: { authorization: `Bearer ${token}` },
+          cookies: {},
+        },
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toThrow("Organization membership required");
+  });
+
+  it("rejects websocket context when the user has no organization membership", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-3" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce(null);
+
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
+    await expect(buildWsContext({ token })).rejects.toThrow("Organization membership required");
+  });
+
   it("rejects session tokens for external local-mode HTTP access", async () => {
     vi.stubEnv("TRACE_LOCAL_MODE", "1");
 

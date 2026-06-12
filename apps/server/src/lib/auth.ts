@@ -9,6 +9,7 @@ import {
 } from "../services/mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
+import { assertOrgMembership } from "./org-access-guard.js";
 import { prisma } from "./db.js";
 import { isLocalMode } from "./mode.js";
 import {
@@ -350,6 +351,8 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     }
   }
 
+  assertOrgMembership(organizationId);
+
   return {
     userId: user.id,
     organizationId,
@@ -421,6 +424,8 @@ export async function buildWsContext(
       role = firstMembership.role as Context["role"];
     }
   }
+
+  assertOrgMembership(organizationId);
 
   return {
     userId: user.id,
