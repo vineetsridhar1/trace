@@ -1800,8 +1800,8 @@ export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
   branch?: Maybe<Scalars["String"]["output"]>;
-  cacheCreationTokens: Scalars["Int"]["output"];
-  cacheReadTokens: Scalars["Int"]["output"];
+  cacheCreationTokens: Scalars["Float"]["output"];
+  cacheReadTokens: Scalars["Float"]["output"];
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   costUsd: Scalars["Float"]["output"];
@@ -1811,12 +1811,12 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
-  inputTokens: Scalars["Int"]["output"];
+  inputTokens: Scalars["Float"]["output"];
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
-  outputTokens: Scalars["Int"]["output"];
+  outputTokens: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   projects: Array<Project>;
   queuedMessages: Array<QueuedMessage>;
