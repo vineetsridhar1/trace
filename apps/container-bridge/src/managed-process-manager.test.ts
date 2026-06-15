@@ -193,6 +193,40 @@ describe("ManagedProcessManager", () => {
     expect(Buffer.from(response.bodyBase64, "base64").toString("utf8")).toBe("proxied GET /hello");
   });
 
+  it("rewrites the Host header to the local target so framework host checks pass", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map(), (message) => messages.push(message));
+    const server = http.createServer((req, res) => {
+      res.writeHead(200);
+      res.end(`host=${req.headers.host}`);
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing test server port");
+
+    manager.proxyHttp({
+      requestId: "http-host",
+      port: address.port,
+      method: "GET",
+      path: "/",
+      // The proxy forwards the external preview host; the app must instead see
+      // the loopback target so its host allow-list accepts the request.
+      headers: { Host: "abc123.preview.trace.example" },
+    });
+
+    const response = await waitFor(
+      messages,
+      (message) => message.type === "endpoint_http_response",
+    );
+    if (response.type !== "endpoint_http_response" || !response.bodyBase64) {
+      throw new Error("Missing HTTP proxy body");
+    }
+    expect(Buffer.from(response.bodyBase64, "base64").toString("utf8")).toBe(
+      `host=127.0.0.1:${address.port}`,
+    );
+  });
+
   it("rejects unsafe working directories", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>

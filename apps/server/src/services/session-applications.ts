@@ -13,8 +13,7 @@ import { eventService } from "./event.js";
 import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
-
-import type { RepoEnvVar } from "@trace/gql";
+import { isLiteralEnv, type AppEnvVar } from "../config/hardcoded-applications.js";
 
 type Tx = Prisma.TransactionClient;
 const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
@@ -38,6 +37,8 @@ type ManagedSessionGroup = {
   }>;
   repo: {
     id: string;
+    name: string;
+    remoteUrl: string | null;
     setupConfig: Prisma.JsonValue;
   } | null;
 };
@@ -182,7 +183,7 @@ export class SessionApplicationService {
       organizationId,
       userId,
     );
-    const config = repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = repoApplicationConfigService.resolveApplicationConfig(group.repo);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
     if (!script) throw new ValidationError("Setup script not found");
     const run = await prisma.sessionSetupScriptRun.create({
@@ -865,17 +866,22 @@ export class SessionApplicationService {
     throw new Error("Could not generate unique endpoint key");
   }
 
-  // Env vars in the repo config reference org secrets by name; the plaintext
-  // value is never stored in the config. Resolve to actual values here, right
-  // before handing the process off to the runtime.
+  // Env vars are either literal values (hardcoded non-secret settings) or
+  // references to org secrets resolved by name. Secret plaintext is never stored
+  // in the config — resolve everything here, right before handing the process
+  // off to the runtime.
   private async resolveEnv(
     organizationId: string,
-    env: RepoEnvVar[] | null | undefined,
+    env: AppEnvVar[] | null | undefined,
   ): Promise<Record<string, string> | undefined> {
     if (!env || env.length === 0) return undefined;
     const resolved: Record<string, string> = {};
     const missing = new Set<string>();
     for (const entry of env) {
+      if (isLiteralEnv(entry)) {
+        resolved[entry.key] = entry.value;
+        continue;
+      }
       const value = await orgSecretService.getDecryptedValueByName(organizationId, entry.secretName);
       if (value == null) {
         missing.add(entry.secretName);
@@ -890,7 +896,7 @@ export class SessionApplicationService {
   }
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
-    const config = repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = repoApplicationConfigService.resolveApplicationConfig(group.repo);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
     if (!app) throw new ValidationError("Application not found");
     return app;
@@ -911,7 +917,7 @@ export class SessionApplicationService {
         visibility: true,
         repoId: true,
         workdir: true,
-        repo: { select: { id: true, setupConfig: true } },
+        repo: { select: { id: true, name: true, remoteUrl: true, setupConfig: true } },
         sessions: {
           select: { id: true, workdir: true, connection: true },
           orderBy: { updatedAt: "desc" },
