@@ -737,6 +737,22 @@ export const sessionTypeResolvers = {
     },
   },
   Session: {
+    inputTokens: (session: { inputTokens?: bigint | number | null }) =>
+      typeof session.inputTokens === "bigint"
+        ? Number(session.inputTokens)
+        : (session.inputTokens ?? 0),
+    outputTokens: (session: { outputTokens?: bigint | number | null }) =>
+      typeof session.outputTokens === "bigint"
+        ? Number(session.outputTokens)
+        : (session.outputTokens ?? 0),
+    cacheReadTokens: (session: { cacheReadTokens?: bigint | number | null }) =>
+      typeof session.cacheReadTokens === "bigint"
+        ? Number(session.cacheReadTokens)
+        : (session.cacheReadTokens ?? 0),
+    cacheCreationTokens: (session: { cacheCreationTokens?: bigint | number | null }) =>
+      typeof session.cacheCreationTokens === "bigint"
+        ? Number(session.cacheCreationTokens)
+        : (session.cacheCreationTokens ?? 0),
     tickets: (session: { id: string }, _args: unknown, ctx: Context) =>
       ctx.sessionTicketsLoader.load(session.id),
     gitCheckpoints: async (session: { id: string }) => {

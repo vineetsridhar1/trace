@@ -1810,8 +1810,8 @@ export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
   branch?: Maybe<Scalars["String"]["output"]>;
-  cacheCreationTokens: Scalars["Int"]["output"];
-  cacheReadTokens: Scalars["Int"]["output"];
+  cacheCreationTokens: Scalars["Float"]["output"];
+  cacheReadTokens: Scalars["Float"]["output"];
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   costUsd: Scalars["Float"]["output"];
@@ -1821,12 +1821,12 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars["ID"]["output"];
-  inputTokens: Scalars["Int"]["output"];
+  inputTokens: Scalars["Float"]["output"];
   lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastUserMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   model?: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
-  outputTokens: Scalars["Int"]["output"];
+  outputTokens: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   projects: Array<Project>;
   queuedMessages: Array<QueuedMessage>;
@@ -4366,8 +4366,8 @@ export type SessionResolvers<
 > = ResolversObject<{
   agentStatus?: Resolver<ResolversTypes["AgentStatus"], ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  cacheCreationTokens?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
-  cacheReadTokens?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  cacheCreationTokens?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
+  cacheReadTokens?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes["Channel"]>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes["SessionConnection"]>, ParentType, ContextType>;
   costUsd?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
@@ -4377,12 +4377,12 @@ export type SessionResolvers<
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes["HostingMode"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  inputTokens?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  inputTokens?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   lastMessageAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   lastUserMessageAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  outputTokens?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  outputTokens?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes["Project"]>, ParentType, ContextType>;
   queuedMessages?: Resolver<Array<ResolversTypes["QueuedMessage"]>, ParentType, ContextType>;

@@ -577,10 +577,10 @@ model Session {
   worktreeDeleted Boolean      @default(false)
   readOnlyWorkspace Boolean    @default(false)
 
-  inputTokens         Int   @default(0)
-  outputTokens        Int   @default(0)
-  cacheReadTokens     Int   @default(0)
-  cacheCreationTokens Int   @default(0)
+  inputTokens         BigInt @default(0)
+  outputTokens        BigInt @default(0)
+  cacheReadTokens     BigInt @default(0)
+  cacheCreationTokens BigInt @default(0)
   costUsd             Float @default(0)
 
   projects        SessionProject[]

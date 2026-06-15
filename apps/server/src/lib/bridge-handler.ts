@@ -136,7 +136,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
   function enqueueEvent(sessionId: string, fn: () => Promise<void>) {
     const prev = queues.get(sessionId) ?? Promise.resolve();
-    const next = prev.then(fn, fn);
+    const next = prev.then(fn, fn).catch((err: unknown) => {
+      console.error("[bridge] error processing queued session event:", err);
+    });
     queues.set(sessionId, next);
   }
 

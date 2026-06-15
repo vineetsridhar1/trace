@@ -626,6 +626,11 @@ const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
   "Access denied: you do not have permission to access files on this local bridge";
 
+function numberFromBigInt(value: bigint | number | null | undefined): number {
+  if (typeof value === "bigint") return Number(value);
+  return typeof value === "number" ? value : 0;
+}
+
 function serializeSession(session: {
   id: string;
   name: string;
@@ -647,6 +652,11 @@ function serializeSession(session: {
   worktreeDeleted?: boolean;
   lastUserMessageAt?: Date | null;
   lastMessageAt?: Date | null;
+  inputTokens?: bigint | number | null;
+  outputTokens?: bigint | number | null;
+  cacheReadTokens?: bigint | number | null;
+  cacheCreationTokens?: bigint | number | null;
+  costUsd?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -677,6 +687,11 @@ function serializeSession(session: {
     worktreeDeleted: session.worktreeDeleted ?? false,
     lastUserMessageAt: session.lastUserMessageAt ?? null,
     lastMessageAt: session.lastMessageAt ?? session.lastUserMessageAt ?? null,
+    inputTokens: numberFromBigInt(session.inputTokens),
+    outputTokens: numberFromBigInt(session.outputTokens),
+    cacheReadTokens: numberFromBigInt(session.cacheReadTokens),
+    cacheCreationTokens: numberFromBigInt(session.cacheCreationTokens),
+    costUsd: session.costUsd ?? 0,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -4897,10 +4912,10 @@ export class SessionService {
       eventType: "session_output",
       payload: {
         type: "usage_updated",
-        inputTokens: updated.inputTokens,
-        outputTokens: updated.outputTokens,
-        cacheReadTokens: updated.cacheReadTokens,
-        cacheCreationTokens: updated.cacheCreationTokens,
+        inputTokens: numberFromBigInt(updated.inputTokens),
+        outputTokens: numberFromBigInt(updated.outputTokens),
+        cacheReadTokens: numberFromBigInt(updated.cacheReadTokens),
+        cacheCreationTokens: numberFromBigInt(updated.cacheCreationTokens),
         costUsd: updated.costUsd,
       },
       actorType: "system",
