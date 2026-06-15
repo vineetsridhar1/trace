@@ -205,6 +205,12 @@ export class RepoApplicationConfigService {
     return this.parseApplicationConfig(repo?.setupConfig);
   }
 
+  // True when the repo's application config is owned by the hardcoded registry.
+  // Such repos ignore stored setupConfig, so edits to it must be rejected.
+  isHardcoded(repo: RepoIdentity | null | undefined): boolean {
+    return repo ? getHardcodedApplicationConfig(repo) != null : false;
+  }
+
   // Projects a resolved config to the GraphQL shape for display, dropping
   // literal env values (RepoEnvVar models secret refs only).
   toPublicConfig(config: HardcodedApplicationConfig): RepoApplicationConfig {

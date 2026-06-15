@@ -176,6 +176,24 @@ describe("repoApplicationConfigService", () => {
     });
   });
 
+  it("matches the mortgages remote but not an unrelated repo merely named mortgages", () => {
+    expect(
+      repoApplicationConfigService.isHardcoded({
+        name: "mortgages",
+        remoteUrl: "https://github.com/opendoor-labs/mortgages.git",
+        setupConfig: {},
+      }),
+    ).toBe(true);
+    // Name alone must not trigger the hardcoded config — only the remote does.
+    expect(
+      repoApplicationConfigService.isHardcoded({
+        name: "mortgages",
+        remoteUrl: "git@github.com:someone-else/mortgages-clone.git",
+        setupConfig: {},
+      }),
+    ).toBe(false);
+  });
+
   it("falls back to stored setupConfig for non-hardcoded repos", () => {
     const config = repoApplicationConfigService.resolveApplicationConfig({
       name: "some-other-repo",

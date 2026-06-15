@@ -69,10 +69,11 @@ const MORTGAGES_NPM_ENV: AppEnvVar[] = [{ key: "NPM_TOKEN", secretName: "MORTGAG
 // jemalloc cuts Ruby RSS substantially, matching the app's production image.
 const MORTGAGES_JEMALLOC_ENV: AppEnvVar = { key: "LD_PRELOAD", value: "libjemalloc.so.2" };
 
-// The Vite/asset build is memory-hungry on this RN-web codebase.
-const MORTGAGES_NODE_BUILD_MEMORY_ENV: AppEnvVar = {
+// Cap the Vite dev server's heap so it coexists with Postgres/Redis/Ruby in the
+// runner's memory budget rather than ballooning toward an OOM kill.
+const MORTGAGES_NODE_MEMORY_ENV: AppEnvVar = {
   key: "NODE_OPTIONS",
-  value: "--max-old-space-size=4096",
+  value: "--max-old-space-size=2048",
 };
 
 const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
@@ -96,17 +97,29 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
     },
     {
       id: "db-setup",
-      name: "Create, migrate & seed database",
-      command: "bin/rails db:prepare",
+      name: "Create database & load schema",
+      // Schema load only (no seeds): db/seeds.rb pulls in embedding/LLM-backed
+      // seeders that need creds the runner does not have. Run "db-seed"
+      // separately when seed data is actually wanted.
+      command: "bin/rails db:create db:schema:load",
+      workingDirectory: ".",
+      env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV],
+    },
+    {
+      id: "db-seed",
+      name: "Seed database (optional)",
+      command: "bin/rails db:seed",
       workingDirectory: ".",
       env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV],
     },
     {
       id: "assets-build",
-      name: "Build CSS & JS assets",
-      command: "yarn build:css && bin/vite build",
+      name: "Build CSS assets",
+      // JS is served by the Vite dev server through Rails' dev proxy, so only
+      // the Tailwind CSS bundle needs a one-time build here.
+      command: "yarn build:css",
       workingDirectory: ".",
-      env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_NPM_ENV, MORTGAGES_NODE_BUILD_MEMORY_ENV],
+      env: [],
     },
   ],
   applications: [
@@ -124,7 +137,6 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
             ...MORTGAGES_BASE_ENV,
             ...MORTGAGES_SECRET_ENV,
             { key: "PORT", value: "3000" },
-            { key: "RAILS_SERVE_STATIC_FILES", value: "true" },
             MORTGAGES_VITE_PORT_ENV,
             MORTGAGES_JEMALLOC_ENV,
           ],
@@ -144,11 +156,13 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           name: "Vite dev server",
           command: "bin/vite dev",
           workingDirectory: ".",
-          required: false,
+          // Required: in development Rails proxies asset requests to this dev
+          // server, so the web page only renders correctly when it is running.
+          required: true,
           env: [
             { key: "NODE_ENV", value: "development" },
             MORTGAGES_VITE_PORT_ENV,
-            MORTGAGES_NODE_BUILD_MEMORY_ENV,
+            MORTGAGES_NODE_MEMORY_ENV,
           ],
           ports: [
             {
@@ -180,11 +194,10 @@ const HARDCODED_CONFIGS: Array<{
   config: HardcodedApplicationConfig;
 }> = [
   {
-    matches: (repo) => {
-      const remote = (repo.remoteUrl ?? "").toLowerCase();
-      const name = (repo.name ?? "").toLowerCase();
-      return remote.includes("opendoor-labs/mortgages") || name === "mortgages";
-    },
+    // Match on the remote (handles git@github.com:... and https://github.com/...
+    // with or without a trailing .git) rather than the display name, which a
+    // user could set on an unrelated repo.
+    matches: (repo) => /[/:]opendoor-labs\/mortgages(\.git)?$/i.test(repo.remoteUrl ?? ""),
     config: MORTGAGES_APPLICATION_CONFIG,
   },
 ];

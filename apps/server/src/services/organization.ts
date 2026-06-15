@@ -12,6 +12,7 @@ import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { createChannelInTransaction } from "./channel-create.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
+import { ValidationError } from "../lib/errors.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -214,8 +215,14 @@ export class OrganizationService {
       // Verify repo belongs to caller's org before updating
       const existing = await tx.repo.findFirstOrThrow({
         where: { id, organizationId },
-        select: { id: true, setupConfig: true },
+        select: { id: true, name: true, remoteUrl: true, setupConfig: true },
       });
+
+      if (input.applicationConfig != null && repoApplicationConfigService.isHardcoded(existing)) {
+        throw new ValidationError(
+          "This repo's application config is managed by the internal fork and cannot be edited.",
+        );
+      }
 
       const repo = await tx.repo.update({
         where: { id },
@@ -232,8 +239,8 @@ export class OrganizationService {
         include: { projects: true, sessions: true },
       });
 
-      const applicationConfig = repoApplicationConfigService.parseApplicationConfig(
-        repo.setupConfig,
+      const applicationConfig = repoApplicationConfigService.toPublicConfig(
+        repoApplicationConfigService.resolveApplicationConfig(repo),
       );
 
       const event = await eventService.create(
