@@ -16,6 +16,23 @@ type ManagedProcess = {
 const MAX_LOG_CHUNK_BYTES = 16 * 1024;
 const MAX_SETUP_OUTPUT_BYTES = 64 * 1024;
 
+// Frameworks with host allow-lists (Rails config.hosts, Django ALLOWED_HOSTS,
+// Next.js) reject the external preview host that the proxy forwards. The app is
+// always reached on loopback here, so rewrite the Host to the local target to
+// satisfy those checks. Strips any existing host header regardless of casing.
+function withLocalHost(
+  headers: Record<string, string | string[]>,
+  port: number,
+): Record<string, string | string[]> {
+  const next: Record<string, string | string[]> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === "host") continue;
+    next[name] = value;
+  }
+  next.host = `127.0.0.1:${port}`;
+  return next;
+}
+
 function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   const relative = cwd.trim() || ".";
   if (
@@ -265,7 +282,7 @@ export class ManagedProcessManager {
         port: options.port,
         method: options.method,
         path: options.path,
-        headers: options.headers,
+        headers: withLocalHost(options.headers, options.port),
         timeout: 60_000,
       },
       (res) => {

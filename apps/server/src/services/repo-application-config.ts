@@ -9,6 +9,24 @@ import type {
   RepoSetupScript,
 } from "@trace/gql";
 import { ValidationError } from "../lib/errors.js";
+import {
+  getHardcodedApplicationConfig,
+  isLiteralEnv,
+  type AppEnvVar,
+  type HardcodedApplicationConfig,
+} from "../config/hardcoded-applications.js";
+
+type RepoIdentity = {
+  name?: string | null;
+  remoteUrl?: string | null;
+  setupConfig?: unknown;
+};
+
+function toPublicEnv(env: AppEnvVar[]): RepoEnvVar[] {
+  // The GraphQL RepoEnvVar only models secret references, so literal env
+  // values (hardcoded non-secret settings) are omitted from the public view.
+  return env.filter((entry): entry is RepoEnvVar => !isLiteralEnv(entry));
+}
 
 type JsonRecord = Record<string, unknown>;
 
@@ -175,6 +193,34 @@ export class RepoApplicationConfigService {
     const applicationsRoot = record(root.applications);
     if (!applicationsRoot) return this.empty();
     return this.normalize(applicationsRoot);
+  }
+
+  // Resolves the effective application config for a repo: a hardcoded config
+  // when the repo matches the internal registry, otherwise the config stored on
+  // the repo. The result carries literal env values, so the runtime/setup path
+  // must use this rather than parseApplicationConfig + raw setupConfig.
+  resolveApplicationConfig(repo: RepoIdentity | null | undefined): HardcodedApplicationConfig {
+    const hardcoded = repo ? getHardcodedApplicationConfig(repo) : null;
+    if (hardcoded) return hardcoded;
+    return this.parseApplicationConfig(repo?.setupConfig);
+  }
+
+  // Projects a resolved config to the GraphQL shape for display, dropping
+  // literal env values (RepoEnvVar models secret refs only).
+  toPublicConfig(config: HardcodedApplicationConfig): RepoApplicationConfig {
+    return {
+      setupScripts: config.setupScripts.map((script) => ({
+        ...script,
+        env: toPublicEnv(script.env),
+      })),
+      applications: config.applications.map((application) => ({
+        ...application,
+        processes: application.processes.map((process) => ({
+          ...process,
+          env: toPublicEnv(process.env),
+        })),
+      })),
+    };
   }
 
   normalize(input: RepoApplicationConfigInput | unknown): RepoApplicationConfig {

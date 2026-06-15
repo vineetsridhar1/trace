@@ -157,4 +157,66 @@ describe("repoApplicationConfigService", () => {
       }),
     ).toThrow(ValidationError);
   });
+
+  it("resolves the hardcoded config for the mortgages repo, including literal env", () => {
+    const config = repoApplicationConfigService.resolveApplicationConfig({
+      name: "mortgages",
+      remoteUrl: "git@github.com:opendoor-labs/mortgages.git",
+      setupConfig: {},
+    });
+
+    const app = config.applications.find((candidate) => candidate.id === "mortgages");
+    expect(app).toBeDefined();
+    const web = app?.processes.find((candidate) => candidate.id === "web");
+    expect(web?.ports[0]).toMatchObject({ port: 3000, defaultForwardingEnabled: true });
+    expect(web?.env).toContainEqual({ key: "RAILS_ENV", value: "development" });
+    expect(web?.env).toContainEqual({
+      key: "SECRET_KEY_BASE",
+      secretName: "MORTGAGES_SECRET_KEY_BASE",
+    });
+  });
+
+  it("falls back to stored setupConfig for non-hardcoded repos", () => {
+    const config = repoApplicationConfigService.resolveApplicationConfig({
+      name: "some-other-repo",
+      remoteUrl: "git@github.com:opendoor-labs/other.git",
+      setupConfig: {
+        applications: {
+          applications: [
+            {
+              id: "web",
+              name: "Web",
+              processes: [
+                { id: "dev", name: "Dev", command: "pnpm dev", ports: [] },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    expect(config.applications).toHaveLength(1);
+    expect(config.applications[0].id).toBe("web");
+  });
+
+  it("drops literal env from the public projection but keeps secret refs", () => {
+    const resolved = repoApplicationConfigService.resolveApplicationConfig({
+      name: "mortgages",
+      remoteUrl: "git@github.com:opendoor-labs/mortgages.git",
+      setupConfig: {},
+    });
+    const publicConfig = repoApplicationConfigService.toPublicConfig(resolved);
+
+    const web = publicConfig.applications[0].processes.find(
+      (candidate) => candidate.id === "web",
+    );
+    expect(web?.env).toContainEqual({
+      key: "SECRET_KEY_BASE",
+      secretName: "MORTGAGES_SECRET_KEY_BASE",
+    });
+    for (const entry of web?.env ?? []) {
+      expect(entry).toHaveProperty("secretName");
+      expect(entry).not.toHaveProperty("value");
+    }
+  });
 });
