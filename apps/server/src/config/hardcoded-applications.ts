@@ -163,6 +163,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
             { key: "NODE_ENV", value: "development" },
             MORTGAGES_VITE_PORT_ENV,
             MORTGAGES_NODE_MEMORY_ENV,
+            ...MORTGAGES_NPM_ENV,
           ],
           ports: [
             {
