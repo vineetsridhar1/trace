@@ -62,6 +62,19 @@ const MORTGAGES_SECRET_ENV: AppEnvVar[] = [
 
 const MORTGAGES_VITE_PORT_ENV: AppEnvVar = { key: "VITE_RUBY_PORT", value: "3036" };
 
+// Private @opendoor JS packages resolve from npmjs with this token (see the
+// repo's committed .npmrc, which expands ${NPM_TOKEN}).
+const MORTGAGES_NPM_ENV: AppEnvVar[] = [{ key: "NPM_TOKEN", secretName: "MORTGAGES_NPM_TOKEN" }];
+
+// jemalloc cuts Ruby RSS substantially, matching the app's production image.
+const MORTGAGES_JEMALLOC_ENV: AppEnvVar = { key: "LD_PRELOAD", value: "libjemalloc.so.2" };
+
+// The Vite/asset build is memory-hungry on this RN-web codebase.
+const MORTGAGES_NODE_BUILD_MEMORY_ENV: AppEnvVar = {
+  key: "NODE_OPTIONS",
+  value: "--max-old-space-size=4096",
+};
+
 const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
   setupScripts: [
     {
@@ -74,9 +87,12 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
     {
       id: "yarn-install",
       name: "Install JS deps (yarn install)",
-      command: "yarn install --frozen-lockfile",
+      // Rewrite locked registry URLs to npmjs so private @opendoor packages
+      // resolve with NPM_TOKEN auth (mirrors the app's deploy build).
+      command:
+        "sed -i 's#https://registry.yarnpkg.com/#https://registry.npmjs.org/#g' yarn.lock && yarn install --frozen-lockfile",
       workingDirectory: ".",
-      env: [],
+      env: [...MORTGAGES_NPM_ENV],
     },
     {
       id: "db-setup",
@@ -90,7 +106,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       name: "Build CSS & JS assets",
       command: "yarn build:css && bin/vite build",
       workingDirectory: ".",
-      env: [...MORTGAGES_BASE_ENV],
+      env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_NPM_ENV, MORTGAGES_NODE_BUILD_MEMORY_ENV],
     },
   ],
   applications: [
@@ -110,6 +126,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
             { key: "PORT", value: "3000" },
             { key: "RAILS_SERVE_STATIC_FILES", value: "true" },
             MORTGAGES_VITE_PORT_ENV,
+            MORTGAGES_JEMALLOC_ENV,
           ],
           ports: [
             {
@@ -128,7 +145,11 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           command: "bin/vite dev",
           workingDirectory: ".",
           required: false,
-          env: [{ key: "NODE_ENV", value: "development" }, MORTGAGES_VITE_PORT_ENV],
+          env: [
+            { key: "NODE_ENV", value: "development" },
+            MORTGAGES_VITE_PORT_ENV,
+            MORTGAGES_NODE_BUILD_MEMORY_ENV,
+          ],
           ports: [
             {
               id: "vite",
@@ -146,7 +167,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           command: "bundle exec sidekiq -C config/sidekiq.yml",
           workingDirectory: ".",
           required: false,
-          env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV],
+          env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV, MORTGAGES_JEMALLOC_ENV],
           ports: [],
         },
       ],
