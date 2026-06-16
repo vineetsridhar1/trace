@@ -62,6 +62,13 @@ const MORTGAGES_SECRET_ENV: AppEnvVar[] = [
 
 const MORTGAGES_VITE_PORT_ENV: AppEnvVar = { key: "VITE_RUBY_PORT", value: "3036" };
 
+// Pin the dev server to IPv4 loopback. Vite's default "localhost" bind resolves
+// to IPv6 ::1 in the runner, but vite_ruby's in-Rails dev-server proxy connects
+// over IPv4 127.0.0.1 — the mismatch makes Rails treat the dev server as down
+// and serve raw .tsx off disk instead of proxying. Setting VITE_RUBY_HOST aligns
+// both the Vite bind and the proxy target on 127.0.0.1.
+const MORTGAGES_VITE_HOST_ENV: AppEnvVar = { key: "VITE_RUBY_HOST", value: "127.0.0.1" };
+
 // Private @opendoor JS packages resolve from npmjs with this token (see the
 // repo's committed .npmrc, which expands ${NPM_TOKEN}).
 const MORTGAGES_NPM_ENV: AppEnvVar[] = [{ key: "NPM_TOKEN", secretName: "MORTGAGES_NPM_TOKEN" }];
@@ -138,6 +145,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
             ...MORTGAGES_SECRET_ENV,
             { key: "PORT", value: "3000" },
             MORTGAGES_VITE_PORT_ENV,
+            MORTGAGES_VITE_HOST_ENV,
             MORTGAGES_JEMALLOC_ENV,
           ],
           ports: [
@@ -162,6 +170,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           env: [
             { key: "NODE_ENV", value: "development" },
             MORTGAGES_VITE_PORT_ENV,
+            MORTGAGES_VITE_HOST_ENV,
             MORTGAGES_NODE_MEMORY_ENV,
             ...MORTGAGES_NPM_ENV,
           ],
