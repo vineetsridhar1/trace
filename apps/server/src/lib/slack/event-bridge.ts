@@ -9,7 +9,44 @@ type ThreadBinding = {
   slackChannelId: string;
   slackThreadTs: string;
   assistantMessageTs?: string;
+  workflowMessageTs?: string;
 };
+
+type WorkflowStepView = { label: string; status: string };
+
+function workflowStepIcon(status: string): string {
+  if (status === "completed") return "✅";
+  if (status === "running") return "⏳";
+  if (status === "failed") return "❌";
+  return "▫️";
+}
+
+function extractWorkflowSteps(payload: Record<string, unknown>): WorkflowStepView[] {
+  const workflow = getObject(payload.workflow);
+  const steps = workflow?.steps;
+  if (!Array.isArray(steps)) return [];
+  return steps.flatMap((entry) => {
+    const step = getObject(entry);
+    const label = typeof step?.label === "string" ? step.label : null;
+    const status = typeof step?.status === "string" ? step.status : "pending";
+    return label ? [{ label, status }] : [];
+  });
+}
+
+function buildWorkflowText(
+  header: string,
+  steps: WorkflowStepView[],
+  options?: { links?: string | null; error?: string | null },
+): string {
+  const lines = [header];
+  if (steps.length > 0) {
+    lines.push("");
+    for (const step of steps) lines.push(`${workflowStepIcon(step.status)} ${step.label}`);
+  }
+  if (options?.error) lines.push("", options.error);
+  if (options?.links) lines.push("", options.links);
+  return lines.join("\n");
+}
 
 type EventEnvelope = { sessionEvents: PrismaEvent };
 
@@ -221,13 +258,24 @@ class SlackEventBridgeManager {
       return;
     }
 
+    if (
+      event.eventType === "session_application_workflow_started" ||
+      event.eventType === "session_application_workflow_updated"
+    ) {
+      await this.postOrUpdateWorkflow(
+        binding,
+        buildWorkflowText("⚙️ *Starting application…*", extractWorkflowSteps(payload)),
+      );
+      return;
+    }
+
     if (event.eventType === "session_application_workflow_completed") {
       const links = await this.enabledEndpointLinks(sessionGroupId);
-      await this.post(
+      await this.postOrUpdateWorkflow(
         binding,
-        links
-          ? `✅ Everything's running.\n${links}`
-          : "✅ Everything's running.",
+        buildWorkflowText("✅ *Application is up and running.*", extractWorkflowSteps(payload), {
+          links,
+        }),
       );
       return;
     }
@@ -238,9 +286,51 @@ class SlackEventBridgeManager {
         typeof workflow?.lastError === "string" && workflow.lastError
           ? workflow.lastError
           : "unknown error";
-      await this.post(binding, `❌ Couldn't start the application: ${lastError}`);
+      await this.postOrUpdateWorkflow(
+        binding,
+        buildWorkflowText("❌ *Couldn't start the application.*", extractWorkflowSteps(payload), {
+          error: lastError,
+        }),
+      );
       return;
     }
+  }
+
+  // The workflow progress is a single message updated in place as each step
+  // settles, so the thread shows live status (bundle install → DB seed → Rails
+  // up) without spamming a new message per transition.
+  private async postOrUpdateWorkflow(binding: ThreadBinding, text: string): Promise<void> {
+    const client = await getSlackClient(binding.slackTeamId);
+    if (!client) return;
+
+    if (binding.workflowMessageTs) {
+      const updated = await client.chat
+        .update({ channel: binding.slackChannelId, ts: binding.workflowMessageTs, text })
+        .then(() => true)
+        .catch((err: unknown) => {
+          console.warn(
+            "[slack-bridge] failed to update workflow message:",
+            (err as Error).message,
+          );
+          return false;
+        });
+      if (updated) return;
+      binding.workflowMessageTs = undefined;
+    }
+
+    const response = await client.chat
+      .postMessage({
+        channel: binding.slackChannelId,
+        thread_ts: binding.slackThreadTs,
+        text,
+        mrkdwn: true,
+        reply_broadcast: false,
+      })
+      .catch((err: unknown) => {
+        console.warn("[slack-bridge] failed to post workflow message:", (err as Error).message);
+        return null;
+      });
+    binding.workflowMessageTs = slackMessageTs(response) ?? undefined;
   }
 
   private async enabledEndpointLinks(sessionGroupId: string): Promise<string | null> {

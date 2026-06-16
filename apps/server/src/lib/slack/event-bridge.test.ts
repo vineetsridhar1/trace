@@ -208,10 +208,62 @@ describe("SlackEventBridgeManager", () => {
         text: "🔗 *Rails server* is live: <http://abc123def456.preview.localhost|open>",
       }),
     );
-    expect(slackMocks.postMessage.mock.calls[1]?.[0]?.text).toContain("Everything's running");
+    expect(slackMocks.postMessage.mock.calls[1]?.[0]?.text).toContain("up and running");
     expect(slackMocks.postMessage.mock.calls[1]?.[0]?.text).toContain(
       "<http://abc123def456.preview.localhost|Rails server>",
     );
+  });
+
+  it("posts a step checklist and updates it in place as the workflow advances", async () => {
+    slackMocks.postMessage.mockReset();
+    slackMocks.update.mockReset();
+    slackMocks.postMessage.mockResolvedValue({ ts: "1710000000.000700" });
+    slackMocks.update.mockResolvedValue({});
+
+    slackEventBridge.attachGroup("group-1", {
+      slackTeamId: "T1",
+      slackChannelId: "C1",
+      slackThreadTs: "1710000000.000100",
+    });
+
+    eventSource.push({
+      sessionEvents: {
+        eventType: "session_application_workflow_started",
+        payload: {
+          workflow: {
+            steps: [
+              { label: "Bundle install", status: "running" },
+              { label: "Rails server", status: "pending" },
+            ],
+          },
+        },
+      } as unknown as PrismaEvent,
+    });
+    await waitForBridge();
+
+    eventSource.push({
+      sessionEvents: {
+        eventType: "session_application_workflow_updated",
+        payload: {
+          workflow: {
+            steps: [
+              { label: "Bundle install", status: "completed" },
+              { label: "Rails server", status: "running" },
+            ],
+          },
+        },
+      } as unknown as PrismaEvent,
+    });
+    await waitForBridge();
+
+    // One message posted, then updated in place — no per-step spam.
+    expect(slackMocks.postMessage).toHaveBeenCalledTimes(1);
+    expect(slackMocks.postMessage.mock.calls[0]?.[0]?.text).toContain("⏳ Bundle install");
+    expect(slackMocks.postMessage.mock.calls[0]?.[0]?.text).toContain("▫️ Rails server");
+    expect(slackMocks.update).toHaveBeenCalledTimes(1);
+    expect(slackMocks.update.mock.calls[0]?.[0]).toMatchObject({ ts: "1710000000.000700" });
+    expect(slackMocks.update.mock.calls[0]?.[0]?.text).toContain("✅ Bundle install");
+    expect(slackMocks.update.mock.calls[0]?.[0]?.text).toContain("⏳ Rails server");
   });
 
   it("reports a failed application workflow to the bound thread", async () => {

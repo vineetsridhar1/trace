@@ -116,6 +116,7 @@ vi.mock("../lib/slack/event-bridge.js", () => ({
   slackEventBridge: {
     attach: vi.fn(),
     attachGroup: vi.fn(),
+    detachGroup: vi.fn(),
   },
 }));
 

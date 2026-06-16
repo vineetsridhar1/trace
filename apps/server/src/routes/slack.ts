@@ -2186,6 +2186,14 @@ async function handleSlackRunApplication(input: {
   }
 
   const app = target;
+  // Subscribe before starting so the bridge captures the first progress events
+  // (the initial setup step is often the slowest) rather than missing them.
+  slackEventBridge.attachGroup(sessionGroupId, {
+    slackTeamId: teamId,
+    slackChannelId: channel,
+    slackThreadTs: threadTs,
+  });
+
   try {
     await sessionApplicationWorkflowService.startWorkflow(
       sessionGroupId,
@@ -2194,6 +2202,7 @@ async function handleSlackRunApplication(input: {
       traceUserId,
     );
   } catch (err: unknown) {
+    slackEventBridge.detachGroup(sessionGroupId);
     await postMentionFeedback({
       slackTeamId: teamId,
       slackChannelId: channel,
@@ -2204,17 +2213,11 @@ async function handleSlackRunApplication(input: {
     return;
   }
 
-  slackEventBridge.attachGroup(sessionGroupId, {
-    slackTeamId: teamId,
-    slackChannelId: channel,
-    slackThreadTs: threadTs,
-  });
-
   await postThreadNotice({
     slackTeamId: teamId,
     slackChannelId: channel,
     slackThreadTs: threadTs,
-    text: `🚀 Starting *${app.name}* — running setup scripts and processes. I'll share the link here once it's live.`,
+    text: `🚀 Starting *${app.name}* — I'll post progress here and share the link once it's live.`,
   });
 }
 
