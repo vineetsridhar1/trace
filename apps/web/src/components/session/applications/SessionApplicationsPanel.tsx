@@ -16,6 +16,7 @@ import type {
   RepoApplicationConfig,
   SessionApplicationLogEntry,
   SessionApplicationProcess,
+  SessionApplicationWorkflowRun,
   SessionEndpoint,
   SessionSetupScriptRun,
 } from "@trace/gql";
@@ -25,6 +26,7 @@ import { client } from "../../../lib/urql";
 import { useUIStore } from "../../../stores/ui";
 import { Button, buttonVariants } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
+import { ApplicationWorkflowControl } from "./ApplicationWorkflowControl";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
@@ -96,6 +98,23 @@ const APPLICATIONS_STATE_QUERY = gql`
       lastError
       startedAt
       completedAt
+    }
+    sessionApplicationWorkflowRuns(sessionGroupId: $sessionGroupId) {
+      id
+      sessionGroupId
+      appConfigId
+      status
+      lastError
+      startedAt
+      completedAt
+      steps {
+        stepId
+        kind
+        label
+        status
+        dependsOn
+        optional
+      }
     }
     sessionEndpoints(sessionGroupId: $sessionGroupId) {
       id
@@ -236,6 +255,14 @@ export function SessionApplicationsPanel({
       );
     }
     setSetupRuns((result.data?.sessionSetupScriptRuns as SessionSetupScriptRun[] | undefined) ?? []);
+    if (result.data?.sessionApplicationWorkflowRuns) {
+      upsertMany(
+        "sessionApplicationWorkflowRuns",
+        result.data.sessionApplicationWorkflowRuns as Array<
+          SessionApplicationWorkflowRun & { id: string }
+        >,
+      );
+    }
     if (result.data?.sessionEndpoints) {
       upsertMany("sessionEndpoints", result.data.sessionEndpoints as Array<SessionEndpoint & { id: string }>);
     }
@@ -534,6 +561,10 @@ export function SessionApplicationsPanel({
             <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {application.name}
             </p>
+            <ApplicationWorkflowControl
+              sessionGroupId={sessionGroupId}
+              appConfigId={application.id}
+            />
             <div className="space-y-2">
               {application.processes.map((processConfig) => {
                 const process = processesByKey.get(`${application.id}:${processConfig.id}`);

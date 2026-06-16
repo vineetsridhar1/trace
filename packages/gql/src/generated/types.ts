@@ -448,6 +448,10 @@ export type EventType =
   | "session_application_process_failed"
   | "session_application_process_started"
   | "session_application_process_stopped"
+  | "session_application_workflow_completed"
+  | "session_application_workflow_failed"
+  | "session_application_workflow_started"
+  | "session_application_workflow_updated"
   | "session_deleted"
   | "session_endpoint_access_updated"
   | "session_endpoint_created"
@@ -684,6 +688,7 @@ export type Mutation = {
   setOrgSecret: OrgSecret;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
+  startSessionApplicationWorkflow: SessionApplicationWorkflowRun;
   startSessionProcess: SessionApplicationProcess;
   steerQueuedMessage: Event;
   stopSessionApplication: Array<SessionApplicationProcess>;
@@ -1106,6 +1111,11 @@ export type MutationStartSessionApplicationArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationStartSessionApplicationWorkflowArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationStartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1356,6 +1366,7 @@ export type Query = {
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
+  sessionApplicationWorkflowRuns: Array<SessionApplicationWorkflowRun>;
   sessionEndpoints: Array<SessionEndpoint>;
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
@@ -1547,6 +1558,10 @@ export type QuerySessionApplicationLogsArgs = {
 };
 
 export type QuerySessionApplicationProcessesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionApplicationWorkflowRunsArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1752,6 +1767,7 @@ export type RepoPortDefinitionInput = {
 export type RepoProcessDefinition = {
   __typename?: "RepoProcessDefinition";
   command: Scalars["String"]["output"];
+  dependsOn: Array<Scalars["String"]["output"]>;
   env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1762,6 +1778,7 @@ export type RepoProcessDefinition = {
 
 export type RepoProcessDefinitionInput = {
   command: Scalars["String"]["input"];
+  dependsOn?: InputMaybe<Array<Scalars["String"]["input"]>>;
   env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
@@ -1773,6 +1790,7 @@ export type RepoProcessDefinitionInput = {
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
   command: Scalars["String"]["output"];
+  dependsOn: Array<Scalars["String"]["output"]>;
   env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1781,6 +1799,7 @@ export type RepoSetupScript = {
 
 export type RepoSetupScriptInput = {
   command: Scalars["String"]["input"];
+  dependsOn?: InputMaybe<Array<Scalars["String"]["input"]>>;
   env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
@@ -1855,6 +1874,28 @@ export type SessionApplicationProcess = {
   startedAt?: Maybe<Scalars["DateTime"]["output"]>;
   status: ApplicationProcessStatus;
   stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+};
+
+export type SessionApplicationWorkflowRun = {
+  __typename?: "SessionApplicationWorkflowRun";
+  appConfigId: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  startedAt: Scalars["DateTime"]["output"];
+  status: WorkflowRunStatus;
+  steps: Array<SessionApplicationWorkflowStep>;
+};
+
+export type SessionApplicationWorkflowStep = {
+  __typename?: "SessionApplicationWorkflowStep";
+  dependsOn: Array<Scalars["String"]["output"]>;
+  kind: WorkflowStepKind;
+  label: Scalars["String"]["output"];
+  optional: Scalars["Boolean"]["output"];
+  status: WorkflowStepStatus;
+  stepId: Scalars["String"]["output"];
 };
 
 export type SessionConnection = {
@@ -2305,6 +2346,12 @@ export type User = {
 };
 
 export type UserRole = "admin" | "member" | "observer";
+
+export type WorkflowRunStatus = "completed" | "failed" | "running";
+
+export type WorkflowStepKind = "process" | "setup";
+
+export type WorkflowStepStatus = "completed" | "failed" | "pending" | "running";
 
 export type WorktreeChangesResult = {
   __typename?: "WorktreeChangesResult";

@@ -112,6 +112,18 @@ function assertUnique(ids: string[], label: string): void {
   }
 }
 
+function normalizeDependsOn(value: unknown): string[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new ValidationError("dependsOn must be a list");
+  const seen = new Set<string>();
+  return value.map((entry) => {
+    const id = validateId(requiredString(entry, "Dependency ID"), "Dependency ID");
+    if (seen.has(id)) throw new ValidationError("dependsOn IDs must be unique");
+    seen.add(id);
+    return id;
+  });
+}
+
 function normalizeSetupScript(value: unknown): RepoSetupScript {
   const input = record(value);
   if (!input) throw new ValidationError("Setup script must be an object");
@@ -120,6 +132,7 @@ function normalizeSetupScript(value: unknown): RepoSetupScript {
     name: requiredString(input.name, "Setup script name"),
     command: requiredString(input.command, "Setup script command"),
     workingDirectory: normalizeWorkingDirectory(input.workingDirectory),
+    dependsOn: normalizeDependsOn(input.dependsOn),
     env: normalizeEnv(input.env),
   };
 }
@@ -158,6 +171,7 @@ function normalizeProcess(value: unknown): RepoProcessDefinition {
     name: requiredString(input.name, "Process name"),
     command: requiredString(input.command, "Process command"),
     workingDirectory: normalizeWorkingDirectory(input.workingDirectory),
+    dependsOn: normalizeDependsOn(input.dependsOn),
     env: normalizeEnv(input.env),
     required: input.required !== false,
     ports,

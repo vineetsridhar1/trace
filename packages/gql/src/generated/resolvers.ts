@@ -451,6 +451,10 @@ export type EventType =
   | "session_application_process_failed"
   | "session_application_process_started"
   | "session_application_process_stopped"
+  | "session_application_workflow_completed"
+  | "session_application_workflow_failed"
+  | "session_application_workflow_started"
+  | "session_application_workflow_updated"
   | "session_deleted"
   | "session_endpoint_access_updated"
   | "session_endpoint_created"
@@ -687,6 +691,7 @@ export type Mutation = {
   setOrgSecret: OrgSecret;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
+  startSessionApplicationWorkflow: SessionApplicationWorkflowRun;
   startSessionProcess: SessionApplicationProcess;
   steerQueuedMessage: Event;
   stopSessionApplication: Array<SessionApplicationProcess>;
@@ -1109,6 +1114,11 @@ export type MutationStartSessionApplicationArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationStartSessionApplicationWorkflowArgs = {
+  appConfigId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationStartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1359,6 +1369,7 @@ export type Query = {
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
+  sessionApplicationWorkflowRuns: Array<SessionApplicationWorkflowRun>;
   sessionEndpoints: Array<SessionEndpoint>;
   sessionEventsAroundEvent: Array<Event>;
   sessionGroup?: Maybe<SessionGroup>;
@@ -1550,6 +1561,10 @@ export type QuerySessionApplicationLogsArgs = {
 };
 
 export type QuerySessionApplicationProcessesArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QuerySessionApplicationWorkflowRunsArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1755,6 +1770,7 @@ export type RepoPortDefinitionInput = {
 export type RepoProcessDefinition = {
   __typename?: "RepoProcessDefinition";
   command: Scalars["String"]["output"];
+  dependsOn: Array<Scalars["String"]["output"]>;
   env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1765,6 +1781,7 @@ export type RepoProcessDefinition = {
 
 export type RepoProcessDefinitionInput = {
   command: Scalars["String"]["input"];
+  dependsOn?: InputMaybe<Array<Scalars["String"]["input"]>>;
   env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
@@ -1776,6 +1793,7 @@ export type RepoProcessDefinitionInput = {
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
   command: Scalars["String"]["output"];
+  dependsOn: Array<Scalars["String"]["output"]>;
   env: Array<RepoEnvVar>;
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
@@ -1784,6 +1802,7 @@ export type RepoSetupScript = {
 
 export type RepoSetupScriptInput = {
   command: Scalars["String"]["input"];
+  dependsOn?: InputMaybe<Array<Scalars["String"]["input"]>>;
   env?: InputMaybe<Array<RepoEnvVarInput>>;
   id: Scalars["ID"]["input"];
   name: Scalars["String"]["input"];
@@ -1858,6 +1877,28 @@ export type SessionApplicationProcess = {
   startedAt?: Maybe<Scalars["DateTime"]["output"]>;
   status: ApplicationProcessStatus;
   stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+};
+
+export type SessionApplicationWorkflowRun = {
+  __typename?: "SessionApplicationWorkflowRun";
+  appConfigId: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  id: Scalars["ID"]["output"];
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  startedAt: Scalars["DateTime"]["output"];
+  status: WorkflowRunStatus;
+  steps: Array<SessionApplicationWorkflowStep>;
+};
+
+export type SessionApplicationWorkflowStep = {
+  __typename?: "SessionApplicationWorkflowStep";
+  dependsOn: Array<Scalars["String"]["output"]>;
+  kind: WorkflowStepKind;
+  label: Scalars["String"]["output"];
+  optional: Scalars["Boolean"]["output"];
+  status: WorkflowStepStatus;
+  stepId: Scalars["String"]["output"];
 };
 
 export type SessionConnection = {
@@ -2309,6 +2350,12 @@ export type User = {
 
 export type UserRole = "admin" | "member" | "observer";
 
+export type WorkflowRunStatus = "completed" | "failed" | "running";
+
+export type WorkflowStepKind = "process" | "setup";
+
+export type WorkflowStepStatus = "completed" | "failed" | "pending" | "running";
+
 export type WorktreeChangesResult = {
   __typename?: "WorktreeChangesResult";
   files: Array<LinkedCheckoutChangedFile>;
@@ -2502,6 +2549,8 @@ export type ResolversTypes = ResolversObject<{
   Session: ResolverTypeWrapper<Session>;
   SessionApplicationLogEntry: ResolverTypeWrapper<SessionApplicationLogEntry>;
   SessionApplicationProcess: ResolverTypeWrapper<SessionApplicationProcess>;
+  SessionApplicationWorkflowRun: ResolverTypeWrapper<SessionApplicationWorkflowRun>;
+  SessionApplicationWorkflowStep: ResolverTypeWrapper<SessionApplicationWorkflowStep>;
   SessionConnection: ResolverTypeWrapper<SessionConnection>;
   SessionConnectionState: SessionConnectionState;
   SessionEndpoint: ResolverTypeWrapper<SessionEndpoint>;
@@ -2551,6 +2600,9 @@ export type ResolversTypes = ResolversObject<{
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
   UserRole: UserRole;
+  WorkflowRunStatus: WorkflowRunStatus;
+  WorkflowStepKind: WorkflowStepKind;
+  WorkflowStepStatus: WorkflowStepStatus;
   WorktreeChangesResult: ResolverTypeWrapper<WorktreeChangesResult>;
 }>;
 
@@ -2630,6 +2682,8 @@ export type ResolversParentTypes = ResolversObject<{
   Session: Session;
   SessionApplicationLogEntry: SessionApplicationLogEntry;
   SessionApplicationProcess: SessionApplicationProcess;
+  SessionApplicationWorkflowRun: SessionApplicationWorkflowRun;
+  SessionApplicationWorkflowStep: SessionApplicationWorkflowStep;
   SessionConnection: SessionConnection;
   SessionEndpoint: SessionEndpoint;
   SessionEndpoints: SessionEndpoints;
@@ -3641,6 +3695,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationStartSessionApplicationArgs, "appConfigId" | "sessionGroupId">
   >;
+  startSessionApplicationWorkflow?: Resolver<
+    ResolversTypes["SessionApplicationWorkflowRun"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationStartSessionApplicationWorkflowArgs, "appConfigId" | "sessionGroupId">
+  >;
   startSessionProcess?: Resolver<
     ResolversTypes["SessionApplicationProcess"],
     ParentType,
@@ -4103,6 +4163,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySessionApplicationProcessesArgs, "sessionGroupId">
   >;
+  sessionApplicationWorkflowRuns?: Resolver<
+    Array<ResolversTypes["SessionApplicationWorkflowRun"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySessionApplicationWorkflowRunsArgs, "sessionGroupId">
+  >;
   sessionEndpoints?: Resolver<
     Array<ResolversTypes["SessionEndpoint"]>,
     ParentType,
@@ -4321,6 +4387,7 @@ export type RepoProcessDefinitionResolvers<
     ResolversParentTypes["RepoProcessDefinition"],
 > = ResolversObject<{
   command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  dependsOn?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
   env?: Resolver<Array<ResolversTypes["RepoEnvVar"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
@@ -4336,6 +4403,7 @@ export type RepoSetupScriptResolvers<
     ResolversParentTypes["RepoSetupScript"],
 > = ResolversObject<{
   command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  dependsOn?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
   env?: Resolver<Array<ResolversTypes["RepoEnvVar"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
@@ -4414,6 +4482,40 @@ export type SessionApplicationProcessResolvers<
   startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes["ApplicationProcessStatus"], ParentType, ContextType>;
   stoppedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionApplicationWorkflowRunResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionApplicationWorkflowRun"] =
+    ResolversParentTypes["SessionApplicationWorkflowRun"],
+> = ResolversObject<{
+  appConfigId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["WorkflowRunStatus"], ParentType, ContextType>;
+  steps?: Resolver<
+    Array<ResolversTypes["SessionApplicationWorkflowStep"]>,
+    ParentType,
+    ContextType
+  >;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionApplicationWorkflowStepResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionApplicationWorkflowStep"] =
+    ResolversParentTypes["SessionApplicationWorkflowStep"],
+> = ResolversObject<{
+  dependsOn?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  kind?: Resolver<ResolversTypes["WorkflowStepKind"], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  optional?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["WorkflowStepStatus"], ParentType, ContextType>;
+  stepId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4879,6 +4981,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Session?: SessionResolvers<ContextType>;
   SessionApplicationLogEntry?: SessionApplicationLogEntryResolvers<ContextType>;
   SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;
+  SessionApplicationWorkflowRun?: SessionApplicationWorkflowRunResolvers<ContextType>;
+  SessionApplicationWorkflowStep?: SessionApplicationWorkflowStepResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoint?: SessionEndpointResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;

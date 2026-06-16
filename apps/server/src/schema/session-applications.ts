@@ -8,6 +8,7 @@ import { requireOrgContext } from "../lib/require-org.js";
 import { prisma } from "../lib/db.js";
 import { buildEndpointUrl } from "../services/endpoint-utils.js";
 import { sessionApplicationService } from "../services/session-applications.js";
+import { sessionApplicationWorkflowService } from "../services/session-application-workflow.js";
 
 function requireUser(ctx: Context): string {
   if (!ctx.userId) throw new AuthenticationError();
@@ -31,6 +32,16 @@ export const sessionApplicationQueries = {
     ctx: Context,
   ) =>
     sessionApplicationService.listProcesses(args.sessionGroupId, requireOrgContext(ctx), requireUser(ctx)),
+  sessionApplicationWorkflowRuns: (
+    _parent: unknown,
+    args: { sessionGroupId: string },
+    ctx: Context,
+  ) =>
+    sessionApplicationWorkflowService.listWorkflowRuns(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
   sessionApplicationLogs: (
     _parent: unknown,
     args: { processId: string; limit?: number | null; beforeSequence?: number | null },
@@ -71,6 +82,17 @@ export const sessionApplicationMutations = {
     ctx: Context,
   ) =>
     sessionApplicationService.startApplication(
+      args.sessionGroupId,
+      args.appConfigId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
+  startSessionApplicationWorkflow: (
+    _parent: unknown,
+    args: { sessionGroupId: string; appConfigId: string },
+    ctx: Context,
+  ) =>
+    sessionApplicationWorkflowService.startWorkflow(
       args.sessionGroupId,
       args.appConfigId,
       requireOrgContext(ctx),

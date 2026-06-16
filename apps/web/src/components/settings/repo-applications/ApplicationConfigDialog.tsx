@@ -75,6 +75,7 @@ function normalizeConfig(config: RepoApplicationConfig | undefined): DraftConfig
       name: script.name,
       command: script.command,
       workingDirectory: script.workingDirectory ?? ".",
+      dependsOn: script.dependsOn ?? [],
       env: envVars(script.env),
     })),
     applications: source.applications.map((application) => ({
@@ -86,6 +87,7 @@ function normalizeConfig(config: RepoApplicationConfig | undefined): DraftConfig
         command: process.command,
         workingDirectory: process.workingDirectory ?? ".",
         required: process.required,
+        dependsOn: process.dependsOn ?? [],
         env: envVars(process.env),
         ports: process.ports.map((port) => ({
           id: port.id,
@@ -107,6 +109,7 @@ function toConfig(draft: DraftConfig): RepoApplicationConfig {
       name: script.name.trim(),
       command: script.command.trim(),
       workingDirectory: script.workingDirectory?.trim() || ".",
+      dependsOn: script.dependsOn ?? [],
       env: toEnv(script.env),
     })),
     applications: draft.applications.map((application) => ({
@@ -118,6 +121,7 @@ function toConfig(draft: DraftConfig): RepoApplicationConfig {
         command: process.command.trim(),
         workingDirectory: process.workingDirectory?.trim() || ".",
         required: process.required,
+        dependsOn: process.dependsOn ?? [],
         env: toEnv(process.env),
         ports: process.ports.map((port) => ({
           id: slug(port.id, slug(port.label, "port")),
@@ -152,7 +156,14 @@ function validate(config: RepoApplicationConfig) {
 function exampleConfig(): DraftConfig {
   return normalizeConfig({
     setupScripts: [
-      { id: "install", name: "Install", command: "pnpm install", workingDirectory: ".", env: [] },
+      {
+        id: "install",
+        name: "Install",
+        command: "pnpm install",
+        workingDirectory: ".",
+        dependsOn: [],
+        env: [],
+      },
     ],
     applications: [
       {
@@ -164,6 +175,7 @@ function exampleConfig(): DraftConfig {
             name: "Dev server",
             command: "pnpm dev --host 0.0.0.0 --port 3000",
             workingDirectory: ".",
+            dependsOn: [],
             env: [],
             required: true,
             ports: [
@@ -321,6 +333,7 @@ export function ApplicationConfigDialog({
           name: "Setup script",
           command: "",
           workingDirectory: ".",
+          dependsOn: [],
           env: [],
         },
       ],
@@ -539,6 +552,7 @@ function ApplicationEditor({
           name: "Process",
           command: "",
           workingDirectory: ".",
+          dependsOn: [],
           env: [],
           required: false,
           ports: [],
