@@ -134,7 +134,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       workingDirectory: ".",
       // Needs JS deps installed.
       dependsOn: ["pnpm-install"],
-      env: [],
+      env: [...MORTGAGES_NPM_ENV],
     },
   ],
   applications: [
