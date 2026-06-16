@@ -98,12 +98,11 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       env: [],
     },
     {
-      id: "yarn-install",
-      name: "Install JS deps (yarn install)",
-      // Rewrite locked registry URLs to npmjs so private @opendoor packages
-      // resolve with NPM_TOKEN auth (mirrors the app's deploy build).
-      command:
-        "sed -i 's#https://registry.yarnpkg.com/#https://registry.npmjs.org/#g' yarn.lock && yarn install --frozen-lockfile",
+      id: "pnpm-install",
+      name: "Install JS deps (pnpm install)",
+      // Private @opendoor packages resolve with NPM_TOKEN auth via the repo's
+      // committed .npmrc (mirrors the app's deploy build).
+      command: "pnpm install --frozen-lockfile",
       workingDirectory: ".",
       dependsOn: [],
       env: [...MORTGAGES_NPM_ENV],
@@ -131,10 +130,10 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       name: "Build CSS assets",
       // JS is served by the Vite dev server through Rails' dev proxy, so only
       // the Tailwind CSS bundle needs a one-time build here.
-      command: "yarn build:css",
+      command: "pnpm build:css",
       workingDirectory: ".",
       // Needs JS deps installed.
-      dependsOn: ["yarn-install"],
+      dependsOn: ["pnpm-install"],
       env: [],
     },
   ],
@@ -178,7 +177,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           // Required: in development Rails proxies asset requests to this dev
           // server, so the web page only renders correctly when it is running.
           required: true,
-          dependsOn: ["yarn-install"],
+          dependsOn: ["pnpm-install"],
           env: [
             { key: "NODE_ENV", value: "development" },
             MORTGAGES_VITE_PORT_ENV,
