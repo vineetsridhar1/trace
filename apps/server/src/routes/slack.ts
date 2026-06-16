@@ -31,6 +31,8 @@ import {
   type SlackSessionSettings,
 } from "../lib/slack/session-orchestrator.js";
 import { sessionService } from "../services/session.js";
+import { sessionApplicationService } from "../services/session-applications.js";
+import { sessionApplicationWorkflowService } from "../services/session-application-workflow.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { storage } from "../lib/storage/index.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -2049,6 +2051,176 @@ function claimMentionEvent(teamId: string, channel: string, threadTs: string): b
   return true;
 }
 
+const RUN_COMMAND_PREFIXES = [
+  "run everything",
+  "run all",
+  "run application",
+  "run app",
+  "start everything",
+  "start application",
+  "start app",
+];
+
+// Detects the "run the whole application" command inside a thread already bound
+// to a Trace session, e.g. "run", "run all", or "start app mortgages". Returns
+// the optional trailing application id/name so a repo with several apps can be
+// disambiguated.
+function parseRunApplicationCommand(text: string): { matched: boolean; appArg: string | null } {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const lower = normalized.toLowerCase();
+  if (lower === "run") return { matched: true, appArg: null };
+  for (const prefix of RUN_COMMAND_PREFIXES) {
+    if (lower === prefix) return { matched: true, appArg: null };
+    if (lower.startsWith(`${prefix} `)) {
+      return { matched: true, appArg: normalized.slice(prefix.length).trim() || null };
+    }
+  }
+  return { matched: false, appArg: null };
+}
+
+async function handleSlackRunApplication(input: {
+  teamId: string;
+  channel: string;
+  threadTs: string;
+  slackUserId: string;
+  organizationId: string;
+  sessionId: string;
+  sessionGroupId: string | null;
+  appArg: string | null;
+}): Promise<void> {
+  const { teamId, channel, threadTs, slackUserId, organizationId, sessionGroupId, appArg } = input;
+
+  const account = await resolveSlackAccount(teamId, slackUserId);
+  if (!account) {
+    await postLinkPrompt({ slackTeamId: teamId, slackUserId, slackChannelId: channel, threadTs });
+    return;
+  }
+  const traceUserId = account.userId;
+
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId: traceUserId, organizationId } },
+    select: { userId: true },
+  });
+  if (!membership) {
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: "Your Trace account is not in this workspace's org, so it can't run applications here.",
+    });
+    return;
+  }
+
+  if (!sessionGroupId) {
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: "This session isn't connected to a repo, so there's no application to run.",
+    });
+    return;
+  }
+
+  let applications: Array<{ id: string; name: string }>;
+  try {
+    applications = await sessionApplicationService.listApplications(
+      sessionGroupId,
+      organizationId,
+      traceUserId,
+    );
+  } catch (err: unknown) {
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: `Couldn't load applications: ${errorMessage(err)}`,
+    });
+    return;
+  }
+
+  if (applications.length === 0) {
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: "No application is configured for this repo yet.",
+    });
+    return;
+  }
+
+  let target: { id: string; name: string } | undefined;
+  if (appArg) {
+    const needle = appArg.toLowerCase();
+    target = applications.find(
+      (app) => app.id.toLowerCase() === needle || app.name.toLowerCase() === needle,
+    );
+    if (!target) {
+      await postMentionFeedback({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackUserId,
+        threadTs,
+        text: `No application named "${appArg}". Available: ${applications
+          .map((app) => `\`${app.id}\``)
+          .join(", ")}.`,
+      });
+      return;
+    }
+  } else if (applications.length === 1) {
+    target = applications[0];
+  } else {
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: `This repo has multiple applications. Pick one: ${applications
+        .map((app) => `\`run ${app.id}\``)
+        .join(", ")}.`,
+    });
+    return;
+  }
+
+  const app = target;
+  // Subscribe before starting so the bridge captures the first progress events
+  // (the initial setup step is often the slowest) rather than missing them.
+  slackEventBridge.attachGroup(sessionGroupId, {
+    slackTeamId: teamId,
+    slackChannelId: channel,
+    slackThreadTs: threadTs,
+  });
+
+  try {
+    await sessionApplicationWorkflowService.startWorkflow(
+      sessionGroupId,
+      app.id,
+      organizationId,
+      traceUserId,
+    );
+  } catch (err: unknown) {
+    slackEventBridge.detachGroup(sessionGroupId);
+    await postMentionFeedback({
+      slackTeamId: teamId,
+      slackChannelId: channel,
+      slackUserId,
+      threadTs,
+      text: `Couldn't start *${app.name}*: ${errorMessage(err)}`,
+    });
+    return;
+  }
+
+  await postThreadNotice({
+    slackTeamId: teamId,
+    slackChannelId: channel,
+    slackThreadTs: threadTs,
+    text: `🚀 Starting *${app.name}* — I'll post progress here and share the link once it's live.`,
+  });
+}
+
 async function handleAppMention(input: {
   teamId: string;
   event: SlackEventBody;
@@ -2084,7 +2256,11 @@ async function handleAppMention(input: {
         slackThreadTs: threadTs,
       },
     },
-    select: { id: true, session: { select: { worktreeDeleted: true } } },
+    select: {
+      id: true,
+      sessionId: true,
+      session: { select: { worktreeDeleted: true, sessionGroupId: true } },
+    },
   });
   if (existingThread) {
     console.info("[slack] app_mention for existing Trace thread", { teamId, channel, threadTs });
@@ -2094,6 +2270,24 @@ async function handleAppMention(input: {
         slackChannelId: channel,
         slackThreadTs: threadTs,
         text: "This Trace session's worktree has been deleted, so it can't accept new messages.",
+      });
+      return;
+    }
+    const commandText = stripBotMention(
+      typeof event.text === "string" ? event.text : "",
+      install.botUserId,
+    ).trim();
+    const runCommand = parseRunApplicationCommand(commandText);
+    if (runCommand.matched) {
+      await handleSlackRunApplication({
+        teamId,
+        channel,
+        threadTs,
+        slackUserId,
+        organizationId: install.organizationId,
+        sessionId: existingThread.sessionId,
+        sessionGroupId: existingThread.session.sessionGroupId,
+        appArg: runCommand.appArg,
       });
       return;
     }

@@ -115,11 +115,28 @@ vi.mock("../lib/slack/event-bridge.js", () => ({
   buildTraceSessionLink: vi.fn(async () => null),
   slackEventBridge: {
     attach: vi.fn(),
+    attachGroup: vi.fn(),
+    detachGroup: vi.fn(),
+  },
+}));
+
+vi.mock("../services/session-applications.js", () => ({
+  sessionApplicationService: {
+    listApplications: vi.fn(),
+  },
+}));
+
+vi.mock("../services/session-application-workflow.js", () => ({
+  sessionApplicationWorkflowService: {
+    startWorkflow: vi.fn(),
   },
 }));
 
 import { prisma } from "../lib/db.js";
 import { sessionService } from "../services/session.js";
+import { sessionApplicationService } from "../services/session-applications.js";
+import { sessionApplicationWorkflowService } from "../services/session-application-workflow.js";
+import { slackEventBridge } from "../lib/slack/event-bridge.js";
 import { slackRouter } from "./slack.js";
 
 type BasePrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
@@ -164,6 +181,15 @@ type PrismaMock = BasePrismaMock & {
 const prismaMock = prisma as unknown as PrismaMock;
 const sessionServiceMock = sessionService as unknown as {
   sendMessage: ReturnType<typeof vi.fn>;
+};
+const applicationServiceMock = sessionApplicationService as unknown as {
+  listApplications: ReturnType<typeof vi.fn>;
+};
+const workflowServiceMock = sessionApplicationWorkflowService as unknown as {
+  startWorkflow: ReturnType<typeof vi.fn>;
+};
+const eventBridgeMock = slackEventBridge as unknown as {
+  attachGroup: ReturnType<typeof vi.fn>;
 };
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const SLACK_SIGNING_SECRET = "test-slack-signing-secret";
@@ -461,6 +487,71 @@ describe("Slack routes", () => {
         channel: "C1",
         thread_ts: "1710000000.000100",
         text: expect.stringContaining("worktree has been deleted"),
+      }),
+    );
+  });
+
+  it("starts the application workflow when @trace run is used in a bound thread", async () => {
+    prismaMock.slackProcessedEvent.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.slackProcessedEvent.create.mockResolvedValue({});
+    prismaMock.slackInstall.findUnique.mockResolvedValue({
+      organizationId: "org-1",
+      botUserId: "BTRACE",
+    });
+    prismaMock.slackThreadSession.findUnique.mockResolvedValue({
+      id: "thread-1",
+      sessionId: "session-1",
+      session: { worktreeDeleted: false, sessionGroupId: "group-1" },
+    });
+    prismaMock.slackAccount.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    applicationServiceMock.listApplications.mockResolvedValue([
+      { id: "mortgages", name: "Mortgages" },
+    ]);
+    workflowServiceMock.startWorkflow.mockResolvedValue({ id: "run-1" });
+
+    const rawBody = JSON.stringify({
+      type: "event_callback",
+      team_id: "T1",
+      event_id: "E5",
+      event: {
+        type: "app_mention",
+        user: "U1",
+        channel: "C1",
+        channel_type: "channel",
+        ts: "1710000500.000200",
+        thread_ts: "1710000500.000100",
+        text: "<@BTRACE> run all",
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/slack/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(workflowServiceMock.startWorkflow).toHaveBeenCalledWith(
+      "group-1",
+      "mortgages",
+      "org-1",
+      "user-1",
+    );
+    expect(eventBridgeMock.attachGroup).toHaveBeenCalledWith("group-1", {
+      slackTeamId: "T1",
+      slackChannelId: "C1",
+      slackThreadTs: "1710000500.000100",
+    });
+    expect(slackMocks.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C1",
+        thread_ts: "1710000500.000100",
+        text: expect.stringContaining("Starting *Mortgages*"),
       }),
     );
   });

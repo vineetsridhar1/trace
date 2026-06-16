@@ -149,6 +149,22 @@ export class SessionApplicationService {
     });
   }
 
+  async listApplications(sessionGroupId: string, organizationId: string, userId: string) {
+    const group = await prisma.sessionGroup.findFirstOrThrow({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        visibility: true,
+        ownerUserId: true,
+        repo: { select: { id: true, name: true, remoteUrl: true, setupConfig: true } },
+      },
+    });
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
+    const config = repoApplicationConfigService.resolveApplicationConfig(group.repo);
+    return config.applications.map((app) => ({ id: app.id, name: app.name }));
+  }
+
   async listEndpoints(sessionGroupId: string, organizationId: string, userId: string) {
     await this.assertCanView(sessionGroupId, organizationId, userId);
     return prisma.sessionEndpoint.findMany({
