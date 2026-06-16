@@ -43,6 +43,11 @@ CREATE INDEX "SessionApplicationWorkflowRun_organizationId_sessionGroupId_idx" O
 -- CreateIndex
 CREATE INDEX "SessionApplicationWorkflowRun_sessionGroupId_status_idx" ON "SessionApplicationWorkflowRun"("sessionGroupId", "status");
 
+-- CreateIndex
+-- At most one running workflow per app: a second concurrent run would clobber
+-- the first run's process ownership (each process row holds one workflowRunId).
+CREATE UNIQUE INDEX "SessionApplicationWorkflowRun_one_running_per_app_idx" ON "SessionApplicationWorkflowRun"("sessionGroupId", "appConfigId") WHERE "status" = 'running';
+
 -- AddForeignKey
 ALTER TABLE "SessionApplicationWorkflowRun" ADD CONSTRAINT "SessionApplicationWorkflowRun_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

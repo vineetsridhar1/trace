@@ -152,4 +152,54 @@ describe("SessionApplicationWorkflowService.advance", () => {
     expect(serviceMock.runSetupScript).not.toHaveBeenCalled();
     expect(serviceMock.startProcess).not.toHaveBeenCalled();
   });
+
+  it("fails when an optional step a required step depends on fails", async () => {
+    // Graph: optional process "o" (no deps) -> required process "r" depends on "o".
+    // A failed "o" must fail the workflow instead of leaving "r" stuck pending.
+    prismaMock.sessionApplicationWorkflowRun.findUnique.mockResolvedValue(RUN);
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
+      id: "group-1",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: "repo-1",
+      repo: {
+        id: "repo-1",
+        name: "App",
+        remoteUrl: null,
+        setupConfig: {
+          applications: {
+            setupScripts: [],
+            applications: [
+              {
+                id: "app",
+                name: "App",
+                processes: [
+                  { id: "o", name: "Optional", command: "run o", required: false, dependsOn: [], ports: [] },
+                  { id: "r", name: "Required", command: "run r", required: true, dependsOn: ["o"], ports: [] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+    prismaMock.sessionSetupScriptRun.findMany.mockResolvedValue([]);
+    prismaMock.sessionApplicationProcess.findMany.mockResolvedValue([
+      { processConfigId: "o", status: "failed" },
+    ]);
+    prismaMock.sessionApplicationWorkflowRun.update.mockImplementation(async ({ data }) => ({
+      ...RUN,
+      ...data,
+    }));
+
+    await sessionApplicationWorkflowService.advance("wf-1");
+
+    expect(prismaMock.sessionApplicationWorkflowRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "wf-1" },
+        data: expect.objectContaining({ status: "failed" }),
+      }),
+    );
+  });
 });

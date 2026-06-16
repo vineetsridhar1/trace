@@ -38,6 +38,15 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  );
+}
+
 // Builds the dependency graph for an application: every process the app
 // declares plus the transitive closure of setup scripts they depend on.
 // Throws on dangling dependencies or cycles so a malformed config fails loudly.
@@ -84,7 +93,31 @@ function buildSteps(config: HardcodedApplicationConfig, app: AppDefinition): Wor
   };
 
   for (const process of app.processes) visit(process.id);
-  return [...steps.values()];
+
+  // Propagate requiredness down the graph: a dependency of a required step is
+  // itself required, even if its own `required` flag is false. Otherwise a
+  // required step that depends on a failed optional one would never become
+  // ready and the workflow would hang instead of failing.
+  const dependents = new Map<string, string[]>();
+  for (const step of steps.values()) {
+    for (const dependency of step.dependsOn) {
+      dependents.set(dependency, [...(dependents.get(dependency) ?? []), step.stepId]);
+    }
+  }
+  const requiredCache = new Map<string, boolean>();
+  const isRequired = (stepId: string): boolean => {
+    const cached = requiredCache.get(stepId);
+    if (cached !== undefined) return cached;
+    // Guard against re-entrancy; the graph is already known to be acyclic.
+    requiredCache.set(stepId, false);
+    const required =
+      !steps.get(stepId)?.optional ||
+      (dependents.get(stepId) ?? []).some((dependentId) => isRequired(dependentId));
+    requiredCache.set(stepId, required);
+    return required;
+  };
+
+  return [...steps.values()].map((step) => ({ ...step, optional: !isRequired(step.stepId) }));
 }
 
 function setupRunStatus(status: string): StepStatus {
@@ -120,15 +153,31 @@ export class SessionApplicationWorkflowService {
     );
     const steps = buildSteps(config, app);
 
-    const run = await prisma.sessionApplicationWorkflowRun.create({
-      data: {
-        organizationId,
-        sessionGroupId,
-        repoId: group.repoId ?? "",
-        appConfigId,
-        startedByUserId: userId,
-      },
-    });
+    // Only one workflow may be running per app at a time: a second run would
+    // overwrite the first run's process ownership (each process row holds a
+    // single workflowRunId) and leave the older run stuck. Return the active
+    // run if one already exists; a partial unique index backstops the race.
+    const active = await this.findActiveRun(sessionGroupId, appConfigId, organizationId);
+    if (active) return this.getRun(active.id, organizationId, userId);
+
+    let run: SessionApplicationWorkflowRun;
+    try {
+      run = await prisma.sessionApplicationWorkflowRun.create({
+        data: {
+          organizationId,
+          sessionGroupId,
+          repoId: group.repoId ?? "",
+          appConfigId,
+          startedByUserId: userId,
+        },
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        const racing = await this.findActiveRun(sessionGroupId, appConfigId, organizationId);
+        if (racing) return this.getRun(racing.id, organizationId, userId);
+      }
+      throw err;
+    }
     const pending: WorkflowState = {
       steps,
       status: new Map(steps.map((step) => [step.stepId, "pending" as StepStatus])),
@@ -148,6 +197,12 @@ export class SessionApplicationWorkflowService {
     return Promise.all(runs.map((run) => this.publicRun(run, groupConfig)));
   }
 
+  private findActiveRun(sessionGroupId: string, appConfigId: string, organizationId: string) {
+    return prisma.sessionApplicationWorkflowRun.findFirst({
+      where: { sessionGroupId, appConfigId, organizationId, status: "running" },
+    });
+  }
+
   async getRun(runId: string, organizationId: string, userId: string | null | undefined) {
     const run = await prisma.sessionApplicationWorkflowRun.findFirstOrThrow({
       where: { id: runId, organizationId },
@@ -161,7 +216,14 @@ export class SessionApplicationWorkflowService {
   // and finalize once every required step has completed. Serialized per run so
   // concurrent settle callbacks can't double-dispatch a step.
   async advance(runId: string) {
-    return this.enqueue(runId, () => this.advanceLocked(runId));
+    // advance is mostly invoked fire-and-forget from bridge settle callbacks, so
+    // it must never reject into the void. A transient failure here is recovered
+    // by the next settle callback re-running advance.
+    return this.enqueue(runId, () =>
+      this.advanceLocked(runId).catch((err) => {
+        console.error(`[workflow] advance failed for run ${runId}:`, err);
+      }),
+    );
   }
 
   private async advanceLocked(runId: string) {
@@ -364,9 +426,12 @@ export class SessionApplicationWorkflowService {
     const prior = this.chains.get(runId) ?? Promise.resolve();
     const next = prior.catch(() => undefined).then(fn);
     this.chains.set(runId, next);
-    void next.finally(() => {
+    // then(cleanup, cleanup) rather than void finally(...) so a rejection of
+    // `next` is observed here instead of surfacing as an unhandled rejection.
+    const cleanup = () => {
       if (this.chains.get(runId) === next) this.chains.delete(runId);
-    });
+    };
+    void next.then(cleanup, cleanup);
     return next;
   }
 }
