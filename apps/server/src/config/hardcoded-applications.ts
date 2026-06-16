@@ -177,7 +177,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           // Required: in development Rails proxies asset requests to this dev
           // server, so the web page only renders correctly when it is running.
           required: true,
-          dependsOn: ["pnpm-install"],
+          dependsOn: ["pnpm-install", "bundle-install"],
           env: [
             { key: "NODE_ENV", value: "development" },
             MORTGAGES_VITE_PORT_ENV,
