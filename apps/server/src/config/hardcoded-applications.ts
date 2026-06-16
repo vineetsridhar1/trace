@@ -102,7 +102,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       name: "Install JS deps (pnpm install)",
       // Private @opendoor packages resolve with NPM_TOKEN auth via the repo's
       // committed .npmrc (mirrors the app's deploy build).
-      command: "pnpm install --frozen-lockfile",
+      command: "pnpm install --frozen-lockfile --filter mortgages-rails",
       workingDirectory: ".",
       dependsOn: [],
       env: [...MORTGAGES_NPM_ENV],
