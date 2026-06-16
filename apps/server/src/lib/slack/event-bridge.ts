@@ -1,6 +1,7 @@
 import type { Event as PrismaEvent } from "@prisma/client";
 import { prisma } from "../db.js";
 import { pubsub, topics } from "../pubsub.js";
+import { buildEndpointUrl } from "../../services/endpoint-utils.js";
 import { getSlackClient } from "./client.js";
 
 type ThreadBinding = {
@@ -94,9 +95,16 @@ export async function buildTraceSessionLink(sessionId: string): Promise<string |
   });
 }
 
+const WORKFLOW_TERMINAL_EVENT_TYPES = new Set([
+  "session_application_workflow_completed",
+  "session_application_workflow_failed",
+]);
+
 class SlackEventBridgeManager {
   private active = new Map<string, ThreadBinding>();
   private cancellers = new Map<string, () => void>();
+  private activeGroups = new Map<string, ThreadBinding>();
+  private groupCancellers = new Map<string, () => void>();
 
   attach(sessionId: string, binding: ThreadBinding): void {
     if (this.active.has(sessionId)) return;
@@ -143,6 +151,107 @@ class SlackEventBridgeManager {
 
   isAttached(sessionId: string): boolean {
     return this.active.has(sessionId);
+  }
+
+  // Application workflow and endpoint events are scoped to the session group, not
+  // the session, so they arrive on a different pubsub topic than the per-session
+  // chat stream. Subscribe to the group topic while a "run everything" workflow
+  // is in flight so the triggering Slack thread receives the live preview links
+  // and the final success/failure summary. Self-detaches on the terminal event.
+  attachGroup(sessionGroupId: string, binding: ThreadBinding): void {
+    // Always point at the latest thread that triggered a run so links land there.
+    this.activeGroups.set(sessionGroupId, binding);
+    if (this.groupCancellers.has(sessionGroupId)) return;
+
+    const iterator = pubsub.asyncIterator<EventEnvelope>(topics.sessionEvents(sessionGroupId));
+    let cancelled = false;
+
+    const cancel = () => {
+      if (cancelled) return;
+      cancelled = true;
+      iterator.return?.().catch(() => {});
+    };
+    this.groupCancellers.set(sessionGroupId, cancel);
+
+    void (async () => {
+      try {
+        for await (const envelope of iterator) {
+          if (cancelled) break;
+          const event = envelope?.sessionEvents;
+          if (!event) continue;
+          const current = this.activeGroups.get(sessionGroupId);
+          if (current) await this.handleGroupEvent(sessionGroupId, event, current);
+          if (WORKFLOW_TERMINAL_EVENT_TYPES.has(event.eventType)) {
+            this.detachGroup(sessionGroupId);
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `[slack-bridge] group iterator error for ${sessionGroupId}:`,
+          (err as Error).message,
+        );
+        this.detachGroup(sessionGroupId);
+      }
+    })();
+  }
+
+  detachGroup(sessionGroupId: string): void {
+    const canceller = this.groupCancellers.get(sessionGroupId);
+    this.groupCancellers.delete(sessionGroupId);
+    this.activeGroups.delete(sessionGroupId);
+    if (canceller) canceller();
+  }
+
+  private async handleGroupEvent(
+    sessionGroupId: string,
+    event: PrismaEvent,
+    binding: ThreadBinding,
+  ): Promise<void> {
+    const payload =
+      event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+        ? (event.payload as Record<string, unknown>)
+        : {};
+
+    if (event.eventType === "session_endpoint_forwarding_enabled") {
+      const endpoint = getObject(payload.endpoint);
+      const url = typeof endpoint?.url === "string" ? endpoint.url : null;
+      const label = typeof endpoint?.label === "string" ? endpoint.label : "Endpoint";
+      if (url) await this.post(binding, `🔗 *${label}* is live: <${url}|open>`);
+      return;
+    }
+
+    if (event.eventType === "session_application_workflow_completed") {
+      const links = await this.enabledEndpointLinks(sessionGroupId);
+      await this.post(
+        binding,
+        links
+          ? `✅ Everything's running.\n${links}`
+          : "✅ Everything's running.",
+      );
+      return;
+    }
+
+    if (event.eventType === "session_application_workflow_failed") {
+      const workflow = getObject(payload.workflow);
+      const lastError =
+        typeof workflow?.lastError === "string" && workflow.lastError
+          ? workflow.lastError
+          : "unknown error";
+      await this.post(binding, `❌ Couldn't start the application: ${lastError}`);
+      return;
+    }
+  }
+
+  private async enabledEndpointLinks(sessionGroupId: string): Promise<string | null> {
+    const endpoints = await prisma.sessionEndpoint.findMany({
+      where: { sessionGroupId, status: "enabled" },
+      select: { key: true, label: true },
+    });
+    if (endpoints.length === 0) return null;
+    return endpoints
+      .map((endpoint) => `• <${buildEndpointUrl(endpoint.key)}|${endpoint.label}>`)
+      .join("\n");
   }
 
   private async handleEvent(
