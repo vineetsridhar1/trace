@@ -12,6 +12,7 @@ import { canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
 import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
+import { sessionApplicationWorkflowService } from "./session-application-workflow.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
 import { isLiteralEnv, type AppEnvVar } from "../config/hardcoded-applications.js";
 
@@ -177,7 +178,14 @@ export class SessionApplicationService {
     });
   }
 
-  async runSetupScript(sessionGroupId: string, scriptId: string, organizationId: string, userId: string) {
+  async runSetupScript(
+    sessionGroupId: string,
+    scriptId: string,
+    organizationId: string,
+    userId: string | null | undefined,
+    options?: { workflowRunId?: string },
+  ) {
+    if (!userId) throw new AuthenticationError();
     const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
       sessionGroupId,
       organizationId,
@@ -197,6 +205,7 @@ export class SessionApplicationService {
         workingDirectory: script.workingDirectory ?? ".",
         outputPreview: `[trace] Queued setup script: ${script.command}\n`,
         startedByUserId: userId,
+        workflowRunId: options?.workflowRunId ?? null,
       },
     });
     await eventService.create({
@@ -232,6 +241,22 @@ export class SessionApplicationService {
     return true;
   }
 
+  // Validates manage access, a connected cloud runtime, and that the app
+  // exists, returning the resolved config so the workflow engine can build its
+  // dependency graph before creating a run.
+  async getRunnableApplication(
+    sessionGroupId: string,
+    appConfigId: string,
+    organizationId: string,
+    userId: string | null | undefined,
+  ) {
+    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
+    const config = repoApplicationConfigService.resolveApplicationConfig(group.repo);
+    const app = config.applications.find((candidate) => candidate.id === appConfigId);
+    if (!app) throw new ValidationError("Application not found");
+    return { group, config, app };
+  }
+
   async startApplication(sessionGroupId: string, appConfigId: string, organizationId: string, userId: string) {
     const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
     const app = this.getApplication(group, appConfigId);
@@ -259,8 +284,10 @@ export class SessionApplicationService {
     appConfigId: string,
     processConfigId: string,
     organizationId: string,
-    userId: string,
+    userId: string | null | undefined,
+    options?: { workflowRunId?: string },
   ) {
+    if (!userId) throw new AuthenticationError();
     const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
       sessionGroupId,
       organizationId,
@@ -271,6 +298,7 @@ export class SessionApplicationService {
     if (!processConfig) throw new ValidationError("Process not found");
 
     const env = await this.resolveEnv(organizationId, processConfig.env);
+    const workflowRunId = options?.workflowRunId ?? null;
 
     const process = await prisma.$transaction(async (tx) => {
       const process = await tx.sessionApplicationProcess.upsert({
@@ -291,6 +319,7 @@ export class SessionApplicationService {
           stoppedAt: null,
           exitCode: null,
           lastError: null,
+          workflowRunId,
         },
         update: {
           label: processConfig.name,
@@ -303,6 +332,7 @@ export class SessionApplicationService {
           stoppedAt: null,
           exitCode: null,
           lastError: null,
+          workflowRunId,
         },
       });
       await this.ensureEndpoints(tx, group, appConfigId, processConfigId, processConfig.ports);
@@ -345,23 +375,9 @@ export class SessionApplicationService {
       throw new Error(`Runtime not available: ${delivery}`);
     }
 
-    for (const port of processConfig.ports) {
-      if (!port.defaultForwardingEnabled) continue;
-      const endpoint = await prisma.sessionEndpoint.findUnique({
-        where: {
-          sessionGroupId_appConfigId_processConfigId_portConfigId: {
-            sessionGroupId,
-            appConfigId,
-            processConfigId,
-            portConfigId: port.id,
-          },
-        },
-      });
-      if (endpoint) {
-        await this.enableEndpoint(endpoint.id, organizationId, userId);
-      }
-    }
-
+    // Default-forwarding endpoints are enabled once the runtime reports the
+    // process running (markProcessRunning), not here — enableEndpoint requires a
+    // running process, and at this point the process is only "starting".
     return process;
   }
 
@@ -612,7 +628,59 @@ export class SessionApplicationService {
       actorType: "system",
       actorId: "bridge",
     });
+    await this.enableDefaultForwarding(process);
+    if (process.workflowRunId) {
+      void sessionApplicationWorkflowService.advance(process.workflowRunId);
+    }
     return process;
+  }
+
+  // Once the runtime reports a process running, turn on forwarding for any of
+  // its ports flagged defaultForwardingEnabled so a one-click start yields a
+  // reachable link without a manual toggle.
+  private async enableDefaultForwarding(process: PrismaSessionApplicationProcess) {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: process.sessionGroupId, organizationId: process.organizationId },
+      select: { repo: { select: { id: true, name: true, remoteUrl: true, setupConfig: true } } },
+    });
+    if (!group?.repo) return;
+    const config = repoApplicationConfigService.resolveApplicationConfig(group.repo);
+    const app = config.applications.find((candidate) => candidate.id === process.appConfigId);
+    const processConfig = app?.processes.find((candidate) => candidate.id === process.processConfigId);
+    if (!processConfig) return;
+    for (const port of processConfig.ports) {
+      if (!port.defaultForwardingEnabled) continue;
+      const endpoint = await prisma.sessionEndpoint.findUnique({
+        where: {
+          sessionGroupId_appConfigId_processConfigId_portConfigId: {
+            sessionGroupId: process.sessionGroupId,
+            appConfigId: process.appConfigId,
+            processConfigId: process.processConfigId,
+            portConfigId: port.id,
+          },
+        },
+      });
+      if (!endpoint || endpoint.status === "enabled" || endpoint.status === "revoked") continue;
+      const updated = await prisma.sessionEndpoint.update({
+        where: { id: endpoint.id },
+        data: {
+          status: "enabled",
+          accessMode: "public",
+          enabledAt: new Date(),
+          disabledAt: null,
+          currentRuntimeInstanceId: process.runtimeInstanceId,
+        },
+      });
+      await eventService.create({
+        organizationId: process.organizationId,
+        scopeType: "session",
+        scopeId: process.sessionGroupId,
+        eventType: "session_endpoint_forwarding_enabled",
+        payload: { endpoint: publicEndpoint(updated) },
+        actorType: "system",
+        actorId: "session-application-service",
+      });
+    }
   }
 
   async completeSetupScriptRun(
@@ -667,6 +735,9 @@ export class SessionApplicationService {
       actorType: "system",
       actorId: "bridge",
     });
+    if (run.workflowRunId) {
+      void sessionApplicationWorkflowService.advance(run.workflowRunId);
+    }
     return run;
   }
 
@@ -732,6 +803,9 @@ export class SessionApplicationService {
       actorType: "system",
       actorId: "bridge",
     });
+    if (process.workflowRunId) {
+      void sessionApplicationWorkflowService.advance(process.workflowRunId);
+    }
     return process;
   }
 

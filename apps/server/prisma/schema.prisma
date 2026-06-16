@@ -226,6 +226,10 @@ enum EventType {
   session_application_process_stopped
   session_application_process_failed
   session_application_log_appended
+  session_application_workflow_started
+  session_application_workflow_updated
+  session_application_workflow_completed
+  session_application_workflow_failed
   session_endpoint_created
   session_endpoint_forwarding_enabled
   session_endpoint_forwarding_disabled
@@ -244,6 +248,12 @@ enum SessionApplicationProcessStatus {
 }
 
 enum SessionSetupScriptRunStatus {
+  running
+  completed
+  failed
+}
+
+enum SessionApplicationWorkflowRunStatus {
   running
   completed
   failed
@@ -288,6 +298,7 @@ model Organization {
   inboxItems    InboxItem[]
   sessionSetupScriptRuns SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
+  sessionApplicationWorkflowRuns SessionApplicationWorkflowRun[]
   sessionEndpoints SessionEndpoint[]
   agentEnvironments AgentEnvironment[]
   orgSecrets    OrgSecret[]
@@ -533,6 +544,7 @@ model SessionGroup {
   bridgeAccessRequests BridgeAccessRequest[]
   setupScriptRuns SessionSetupScriptRun[]
   applicationProcesses SessionApplicationProcess[]
+  applicationWorkflowRuns SessionApplicationWorkflowRun[]
   endpoints SessionEndpoint[]
 
   createdAt DateTime @default(now())
@@ -614,6 +626,7 @@ model SessionSetupScriptRun {
   outputPreview    String?
   outputTruncated  Boolean                     @default(false)
   lastError        String?
+  workflowRunId    String?
 
   startedByUserId  String?
   startedAt        DateTime                    @default(now())
@@ -623,6 +636,7 @@ model SessionSetupScriptRun {
 
   @@index([organizationId, sessionGroupId])
   @@index([sessionGroupId, scriptConfigId, startedAt])
+  @@index([workflowRunId])
 }
 
 model SessionApplicationProcess {
@@ -644,6 +658,7 @@ model SessionApplicationProcess {
   bridgeProcessId    String?
   exitCode           Int?
   lastError          String?
+  workflowRunId      String?
 
   startedByUserId    String?
   startedAt          DateTime?
@@ -657,6 +672,29 @@ model SessionApplicationProcess {
   @@unique([sessionGroupId, appConfigId, processConfigId])
   @@index([organizationId, sessionGroupId])
   @@index([runtimeInstanceId])
+  @@index([workflowRunId])
+}
+
+model SessionApplicationWorkflowRun {
+  id               String                              @id @default(uuid())
+  organizationId   String
+  organization     Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId   String
+  sessionGroup     SessionGroup                        @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId           String
+
+  appConfigId      String
+  status           SessionApplicationWorkflowRunStatus @default(running)
+  lastError        String?
+
+  startedByUserId  String?
+  startedAt        DateTime                            @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime                            @default(now())
+  updatedAt        DateTime                            @updatedAt
+
+  @@index([organizationId, sessionGroupId])
+  @@index([sessionGroupId, status])
 }
 
 model SessionApplicationLogEntry {

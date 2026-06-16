@@ -135,6 +135,24 @@ enum SetupScriptRunStatus {
   failed
 }
 
+enum WorkflowRunStatus {
+  running
+  completed
+  failed
+}
+
+enum WorkflowStepKind {
+  setup
+  process
+}
+
+enum WorkflowStepStatus {
+  pending
+  running
+  completed
+  failed
+}
+
 enum SessionEndpointStatus {
   disabled
   enabled
@@ -318,6 +336,10 @@ enum EventType {
   session_application_process_stopped
   session_application_process_failed
   session_application_log_appended
+  session_application_workflow_started
+  session_application_workflow_updated
+  session_application_workflow_completed
+  session_application_workflow_failed
   session_endpoint_created
   session_endpoint_forwarding_enabled
   session_endpoint_forwarding_disabled
@@ -403,6 +425,7 @@ type RepoSetupScript {
   name: String!
   command: String!
   workingDirectory: String
+  dependsOn: [String!]!
   env: [RepoEnvVar!]!
 }
 
@@ -422,6 +445,7 @@ type RepoProcessDefinition {
   name: String!
   command: String!
   workingDirectory: String
+  dependsOn: [String!]!
   env: [RepoEnvVar!]!
   required: Boolean!
   ports: [RepoPortDefinition!]!
@@ -779,6 +803,26 @@ type SessionApplicationLogEntry {
   data: String!
   sequence: Int!
   timestamp: DateTime!
+}
+
+type SessionApplicationWorkflowStep {
+  stepId: String!
+  kind: WorkflowStepKind!
+  label: String!
+  status: WorkflowStepStatus!
+  dependsOn: [String!]!
+  optional: Boolean!
+}
+
+type SessionApplicationWorkflowRun {
+  id: ID!
+  sessionGroupId: ID!
+  appConfigId: String!
+  status: WorkflowRunStatus!
+  lastError: String
+  startedAt: DateTime!
+  completedAt: DateTime
+  steps: [SessionApplicationWorkflowStep!]!
 }
 
 type SessionEndpoint {
@@ -1165,6 +1209,7 @@ input RepoSetupScriptInput {
   name: String!
   command: String!
   workingDirectory: String
+  dependsOn: [String!]
   env: [RepoEnvVarInput!]
 }
 
@@ -1184,6 +1229,7 @@ input RepoProcessDefinitionInput {
   name: String!
   command: String!
   workingDirectory: String
+  dependsOn: [String!]
   env: [RepoEnvVarInput!]
   required: Boolean
   ports: [RepoPortDefinitionInput!]
@@ -1363,6 +1409,7 @@ type Query {
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
+  sessionApplicationWorkflowRuns(sessionGroupId: ID!): [SessionApplicationWorkflowRun!]!
   sessionApplicationLogs(processId: ID!, limit: Int, beforeSequence: Int): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
@@ -1569,6 +1616,7 @@ type Mutation {
   destroyTerminal(terminalId: ID!): Boolean!
   runSessionGroupSetupScript(sessionGroupId: ID!, scriptId: ID!): Boolean!
   startSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
+  startSessionApplicationWorkflow(sessionGroupId: ID!, appConfigId: ID!): SessionApplicationWorkflowRun!
   stopSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
   startSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
   stopSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!

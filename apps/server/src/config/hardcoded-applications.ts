@@ -11,6 +11,10 @@ import type {
 // (ports, RAILS_ENV, local service URLs, etc.).
 export type AppEnvVar = { key: string; value: string } | RepoEnvVar;
 
+// `dependsOn` lists the step IDs a step waits on: a step only runs once every
+// dependency has succeeded. The "run all" workflow starts an application and
+// walks this graph. Dependencies reference setup script IDs or process IDs
+// within the same application config (a single ID namespace across both).
 export type AppSetupScript = Omit<RepoSetupScript, "env"> & { env: AppEnvVar[] };
 export type AppProcessDefinition = Omit<RepoProcessDefinition, "env"> & { env: AppEnvVar[] };
 export type AppDefinition = Omit<RepoApplicationDefinition, "processes"> & {
@@ -90,6 +94,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       name: "Install gems (bundle install)",
       command: "bundle install",
       workingDirectory: ".",
+      dependsOn: [],
       env: [],
     },
     {
@@ -100,23 +105,25 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       command:
         "sed -i 's#https://registry.yarnpkg.com/#https://registry.npmjs.org/#g' yarn.lock && yarn install --frozen-lockfile",
       workingDirectory: ".",
+      dependsOn: [],
       env: [...MORTGAGES_NPM_ENV],
     },
     {
       id: "db-setup",
       name: "Create database & load schema",
-      // Schema load only (no seeds): db/seeds.rb pulls in embedding/LLM-backed
-      // seeders that need creds the runner does not have. Run "db-seed"
-      // separately when seed data is actually wanted.
       command: "bin/rails db:create db:schema:load",
       workingDirectory: ".",
+      // Needs gems installed to run the rails CLI.
+      dependsOn: ["bundle-install"],
       env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV],
     },
     {
       id: "db-seed",
-      name: "Seed database (optional)",
+      name: "Seed database",
       command: "bin/rails db:seed",
       workingDirectory: ".",
+      // Seeds load into the schema created by db-setup.
+      dependsOn: ["db-setup"],
       env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV],
     },
     {
@@ -126,6 +133,8 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       // the Tailwind CSS bundle needs a one-time build here.
       command: "yarn build:css",
       workingDirectory: ".",
+      // Needs JS deps installed.
+      dependsOn: ["yarn-install"],
       env: [],
     },
   ],
@@ -140,6 +149,8 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           command: "bin/rails server -b 0.0.0.0 -p 3000",
           workingDirectory: ".",
           required: true,
+          // Boot only once the DB is seeded and CSS is built.
+          dependsOn: ["db-seed", "assets-build"],
           env: [
             ...MORTGAGES_BASE_ENV,
             ...MORTGAGES_SECRET_ENV,
@@ -167,6 +178,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           // Required: in development Rails proxies asset requests to this dev
           // server, so the web page only renders correctly when it is running.
           required: true,
+          dependsOn: ["yarn-install"],
           env: [
             { key: "NODE_ENV", value: "development" },
             MORTGAGES_VITE_PORT_ENV,
@@ -191,6 +203,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           command: "bundle exec sidekiq -C config/sidekiq.yml",
           workingDirectory: ".",
           required: false,
+          dependsOn: ["db-seed"],
           env: [...MORTGAGES_BASE_ENV, ...MORTGAGES_SECRET_ENV, MORTGAGES_JEMALLOC_ENV],
           ports: [],
         },

@@ -13,6 +13,7 @@ import type {
   Repo,
   ScopeType,
   SessionApplicationProcess,
+  SessionApplicationWorkflowRun,
   SessionEndpoint,
   SessionStatus,
 } from "@trace/gql";
@@ -201,6 +202,23 @@ export function handleOrgEvent(event: Event): void {
         "sessionApplicationProcesses",
         process.id,
         (existing ? { ...existing, ...process } : process) as unknown as SessionApplicationProcess,
+      );
+    }
+  }
+
+  const workflowEventTypes = new Set<EventType>([
+    "session_application_workflow_started",
+    "session_application_workflow_updated",
+    "session_application_workflow_completed",
+    "session_application_workflow_failed",
+  ]);
+  if (workflowEventTypes.has(event.eventType)) {
+    const workflow = asJsonObject(payload.workflow);
+    if (workflow && typeof workflow.id === "string") {
+      batch.upsert(
+        "sessionApplicationWorkflowRuns",
+        workflow.id,
+        workflow as unknown as SessionApplicationWorkflowRun,
       );
     }
   }

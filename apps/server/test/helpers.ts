@@ -229,6 +229,14 @@ export function createPrismaMock() {
       findFirst: vi.fn(),
       findMany: vi.fn(),
     },
+    sessionApplicationWorkflowRun: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
     sessionEndpoint: {
       create: vi.fn(),
       deleteMany: vi.fn(),
