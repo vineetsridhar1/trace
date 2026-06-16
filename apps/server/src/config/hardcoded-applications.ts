@@ -98,12 +98,25 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
       env: [],
     },
     {
+<<<<<<< Updated upstream
       id: "yarn-install",
       name: "Install JS deps (yarn install)",
       // Rewrite locked registry URLs to npmjs so private @opendoor packages
       // resolve with NPM_TOKEN auth (mirrors the app's deploy build).
       command:
         "sed -i 's#https://registry.yarnpkg.com/#https://registry.npmjs.org/#g' yarn.lock && yarn install --frozen-lockfile",
+=======
+      id: "pnpm-install",
+      name: "Install JS deps (pnpm install)",
+      // The runner only runs the Rails app, Vite, and Sidekiq — all backed by
+      // the root `mortgages-rails` workspace package. Filtering to it skips the
+      // sibling service packages (ai-service, runtime-node, etc.) that aren't
+      // run here; in particular this avoids installing runtime-node's puppeteer,
+      // whose postinstall downloads a Chrome binary the runner's network blocks.
+      // Private @opendoor packages resolve with NPM_TOKEN auth via the repo's
+      // committed .npmrc (mirrors the app's deploy build).
+      command: "pnpm install --frozen-lockfile --filter mortgages-rails",
+>>>>>>> Stashed changes
       workingDirectory: ".",
       dependsOn: [],
       env: [...MORTGAGES_NPM_ENV],
