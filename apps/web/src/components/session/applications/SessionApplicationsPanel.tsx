@@ -465,7 +465,9 @@ export function SessionApplicationsPanel({
           <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Setup</p>
           {config.setupScripts.map((script) => {
             const latestRun = latestSetupRunByScript.get(script.id);
-            const runOutput = latestRun?.lastError ?? latestRun?.outputPreview;
+            const runOutput = [latestRun?.outputPreview, latestRun?.lastError]
+              .filter(Boolean)
+              .join("\n");
             const logsOpen = !!openSetupLogIds[script.id];
             return (
               <div
