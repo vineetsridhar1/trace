@@ -142,6 +142,25 @@ async function main() {
   app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
   app.get("/apple-app-site-association", sendAppleAppSiteAssociation);
 
+  // Intercept preview-host traffic before CORS: proxied application requests
+  // must not be subject to Trace's own API CORS allowlist. The browser sends an
+  // Origin on module-script/fetch requests (e.g. Vite's @vite/client and
+  // entrypoints), and the preview host is not an allowed Trace origin, so the
+  // cors() middleware would reject them with a 500 before they reach the proxy.
+  // The proxy forwards Origin to the app, which enforces its own CORS.
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const endpointKey = endpointProxyService.extractKey(req.headers.host);
+    if (!endpointKey) {
+      next();
+      return;
+    }
+    void endpointProxyService.handleHttpRequest(req, res, endpointKey).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!res.headersSent) res.status(500);
+      res.end(message);
+    });
+  });
+
   app.use(
     cors({
       origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
@@ -155,19 +174,6 @@ async function main() {
     }),
   );
   app.use(cookieParser());
-
-  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const endpointKey = endpointProxyService.extractKey(req.headers.host);
-    if (!endpointKey) {
-      next();
-      return;
-    }
-    void endpointProxyService.handleHttpRequest(req, res, endpointKey).catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      if (!res.headersSent) res.status(500);
-      res.end(message);
-    });
-  });
 
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
