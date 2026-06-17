@@ -109,8 +109,8 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
     },
     {
       id: "db-setup",
-      name: "Create database & load schema",
-      command: "bin/rails db:create db:schema:load",
+      name: "Create database & run migrations",
+      command: "bin/rails db:create db:migrate",
       workingDirectory: ".",
       // Needs gems installed to run the rails CLI.
       dependsOn: ["bundle-install"],
