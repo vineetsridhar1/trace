@@ -34,11 +34,16 @@ export function isLiteralEnv(entry: AppEnvVar): entry is { key: string; value: s
 // start-trace-postgres / start-trace-redis, so the app config only models the
 // application's own processes. The local Postgres listens on 127.0.0.1:5432 and
 // Redis on 127.0.0.1:6379.
+// Override the runtime image default (app_development) so the app and its
+// migrations target the mortgages dev database on the local Postgres.
+const MORTGAGES_DATABASE_URL_ENV: AppEnvVar = {
+  key: "DATABASE_URL",
+  value: "postgres://postgres@127.0.0.1:5432/mortgages_development",
+};
+
 const MORTGAGES_BASE_ENV: AppEnvVar[] = [
   { key: "RAILS_ENV", value: "development" },
-  // Override the runtime image default (app_development) so the app and its
-  // migrations target the mortgages dev database on the local Postgres.
-  { key: "DATABASE_URL", value: "postgres://postgres@127.0.0.1:5432/mortgages_development" },
+  MORTGAGES_DATABASE_URL_ENV,
   { key: "DB_HOST", value: "127.0.0.1" },
   { key: "DB_PORT", value: "5432" },
   { key: "PGUSER", value: "postgres" },
@@ -180,6 +185,7 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
           dependsOn: ["pnpm-install", "bundle-install"],
           env: [
             { key: "NODE_ENV", value: "development" },
+            MORTGAGES_DATABASE_URL_ENV,
             MORTGAGES_VITE_PORT_ENV,
             MORTGAGES_VITE_HOST_ENV,
             MORTGAGES_NODE_MEMORY_ENV,
