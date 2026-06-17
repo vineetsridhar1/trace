@@ -19,6 +19,7 @@ import { uploadRouter } from "./routes/upload.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
+import { mcpOAuthRouter } from "./routes/mcp-oauth.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -198,6 +199,7 @@ async function main() {
     next();
   });
   app.use(authRouter);
+  app.use("/mcp", mcpOAuthRouter);
   app.use(uploadRouter);
 
   // GraphQL subscriptions

@@ -3,6 +3,7 @@ import { Prisma, type McpConnection, type McpServer } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { decryptSecret, encryptSecret } from "../lib/encryption.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 import { mcpServerService } from "./mcp-server.js";
 import { refreshToken } from "../lib/mcp-oauth.js";
 
@@ -52,7 +53,15 @@ function connectionPayload(connection: McpConnection): Prisma.InputJsonObject {
 
 export class McpConnectionService {
   /** Per-server connection status for a user across the org's enabled servers. */
-  async listForUser(userId: string, organizationId: string): Promise<McpConnectionStatus[]> {
+  async listForUser(
+    userId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<McpConnectionStatus[]> {
+    await prisma.$transaction((tx: TxClient) =>
+      assertActorOrgAccess(tx, organizationId, actorType, actorId),
+    );
     const [servers, connections] = await Promise.all([
       prisma.mcpServer.findMany({
         where: { organizationId, enabled: true },
