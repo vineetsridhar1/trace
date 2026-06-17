@@ -5,24 +5,36 @@ import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
-interface ModelPricing {
+interface TierPricing {
   input: number;
   output: number;
 }
 
-// Cached input tokens bill at 1/10 the standard input rate.
+interface ModelPricing {
+  short: TierPricing;
+  // Long-context rates apply once the prompt exceeds the threshold below.
+  // Omitted for models OpenAI prices at a single tier.
+  long?: TierPricing;
+}
+
+// Cached input tokens bill at 1/10 the standard input rate (holds across both
+// the short- and long-context tiers).
 const CACHED_INPUT_DISCOUNT = 0.1;
+
+// Prompts larger than this (total input tokens, cached included) bill at the
+// model's long-context rates.
+const LONG_CONTEXT_THRESHOLD_TOKENS = 272_000;
 
 // USD per 1M tokens. Source: https://developers.openai.com/api/docs/pricing
 // (standard tier), verified 2026-06-10. Update when OpenAI changes prices —
 // this is a fallback only and is ignored when Codex reports a cost directly.
 const OPENAI_STANDARD_PRICES_PER_MILLION: Record<string, ModelPricing> = {
-  "gpt-5": { input: 1.25, output: 10 },
-  "gpt-5.5": { input: 5, output: 30 },
-  "gpt-5.4": { input: 2.5, output: 15 },
-  "gpt-5.4-mini": { input: 0.75, output: 4.5 },
-  "gpt-5.4-nano": { input: 0.2, output: 1.25 },
-  "gpt-5.3-codex": { input: 1.75, output: 14 },
+  "gpt-5": { short: { input: 1.25, output: 10 } },
+  "gpt-5.5": { short: { input: 5, output: 30 }, long: { input: 10, output: 45 } },
+  "gpt-5.4": { short: { input: 2.5, output: 15 }, long: { input: 5, output: 22.5 } },
+  "gpt-5.4-mini": { short: { input: 0.75, output: 4.5 } },
+  "gpt-5.4-nano": { short: { input: 0.2, output: 1.25 } },
+  "gpt-5.3-codex": { short: { input: 1.75, output: 14 } },
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -121,13 +133,19 @@ function estimateCodexCost(usage: TokenUsage | undefined, model: string | undefi
   const pricing = OPENAI_STANDARD_PRICES_PER_MILLION[normalizeOpenAIModel(model) ?? ""];
   if (!pricing) return undefined;
 
+  // Long-context rates kick in based on total prompt size (fresh + cached input),
+  // not output. Fall back to short rates when the model has no long-context tier.
+  const promptTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheCreationTokens;
+  const tier =
+    pricing.long && promptTokens > LONG_CONTEXT_THRESHOLD_TOKENS ? pricing.long : pricing.short;
+
   // OpenAI has no separate cache-write SKU, so cache-creation tokens bill at the
   // standard input rate alongside fresh input.
   const freshInputTokens = usage.inputTokens + usage.cacheCreationTokens;
   const costUsd =
-    (freshInputTokens * pricing.input +
-      usage.cacheReadTokens * pricing.input * CACHED_INPUT_DISCOUNT +
-      usage.outputTokens * pricing.output) /
+    (freshInputTokens * tier.input +
+      usage.cacheReadTokens * tier.input * CACHED_INPUT_DISCOUNT +
+      usage.outputTokens * tier.output) /
     1_000_000;
 
   return costUsd > 0 ? costUsd : undefined;

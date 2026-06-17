@@ -88,7 +88,7 @@ describe("coding tool adapter process exit fallback", () => {
       type: "result",
       subtype: "success",
       usage: {
-        inputTokens: 100,
+        inputTokens: 60,
         outputTokens: 25,
         cacheReadTokens: 40,
         cacheCreationTokens: 5,
@@ -130,12 +130,55 @@ describe("coding tool adapter process exit fallback", () => {
       type: "result",
       subtype: "success",
       usage: {
-        inputTokens: 100,
+        inputTokens: 60,
         outputTokens: 25,
         cacheReadTokens: 40,
         cacheCreationTokens: 5,
       },
-      costUsd: 0.001295,
+      costUsd: 0.001095,
+    });
+  });
+
+  it("estimates Codex cost at long-context rates above the threshold", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "count tokens",
+      cwd: "/tmp",
+      model: "gpt-5.5",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 300_000,
+              cached_input_tokens: 0,
+              output_tokens: 100,
+            },
+          },
+        },
+      })}\n`,
+    );
+
+    // 300k prompt tokens > 272k threshold → gpt-5.5 long-context rates
+    // ($10 input, $45 output): (300_000 * 10 + 100 * 45) / 1e6 = 3.0045.
+    expect(onOutput).toHaveBeenCalledWith({
+      type: "usage",
+      usage: {
+        inputTokens: 300_000,
+        outputTokens: 100,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      },
+      costUsd: 3.0045,
     });
   });
 
@@ -267,7 +310,7 @@ describe("coding tool adapter process exit fallback", () => {
       type: "result",
       subtype: "success",
       usage: {
-        inputTokens: 80,
+        inputTokens: 50,
         outputTokens: 20,
         cacheReadTokens: 30,
         cacheCreationTokens: 4,
