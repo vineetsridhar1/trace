@@ -7,20 +7,22 @@ const EXIT_CLOSE_GRACE_MS = 1_000;
 
 interface ModelPricing {
   input: number;
-  cachedInput: number;
   output: number;
 }
+
+// Cached input tokens bill at 1/10 the standard input rate.
+const CACHED_INPUT_DISCOUNT = 0.1;
 
 // USD per 1M tokens. Source: https://developers.openai.com/api/docs/pricing
 // (standard tier), verified 2026-06-10. Update when OpenAI changes prices —
 // this is a fallback only and is ignored when Codex reports a cost directly.
 const OPENAI_STANDARD_PRICES_PER_MILLION: Record<string, ModelPricing> = {
-  "gpt-5": { input: 1.25, cachedInput: 0.125, output: 10 },
-  "gpt-5.5": { input: 5, cachedInput: 0.5, output: 30 },
-  "gpt-5.4": { input: 2.5, cachedInput: 0.25, output: 15 },
-  "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.5 },
-  "gpt-5.4-nano": { input: 0.2, cachedInput: 0.02, output: 1.25 },
-  "gpt-5.3-codex": { input: 1.75, cachedInput: 0.175, output: 14 },
+  "gpt-5": { input: 1.25, output: 10 },
+  "gpt-5.5": { input: 5, output: 30 },
+  "gpt-5.4": { input: 2.5, output: 15 },
+  "gpt-5.4-mini": { input: 0.75, output: 4.5 },
+  "gpt-5.4-nano": { input: 0.2, output: 1.25 },
+  "gpt-5.3-codex": { input: 1.75, output: 14 },
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -41,17 +43,22 @@ function parseCodexUsage(data: Record<string, unknown>): TokenUsage | undefined 
   const inputDetails = asRecord(usage.input_token_details);
   const usageDetails = asRecord(usage.token_details);
 
+  const rawInputTokens = num(usage.input_tokens, usage.prompt_tokens, usage.inputTokens);
+  const cacheReadTokens = num(
+    usage.cached_input_tokens,
+    usage.cache_read_input_tokens,
+    usage.cacheReadTokens,
+    inputDetails?.cached_tokens,
+    inputDetails?.cache_read_tokens,
+    usageDetails?.cached_input_tokens,
+  );
+
+  // OpenAI bundles cached tokens into the reported input/prompt count, so subtract
+  // them to get fresh (full-rate) input and avoid billing cached tokens twice.
   const normalized: TokenUsage = {
-    inputTokens: num(usage.input_tokens, usage.prompt_tokens, usage.inputTokens),
+    inputTokens: Math.max(0, rawInputTokens - cacheReadTokens),
     outputTokens: num(usage.output_tokens, usage.completion_tokens, usage.outputTokens),
-    cacheReadTokens: num(
-      usage.cached_input_tokens,
-      usage.cache_read_input_tokens,
-      usage.cacheReadTokens,
-      inputDetails?.cached_tokens,
-      inputDetails?.cache_read_tokens,
-      usageDetails?.cached_input_tokens,
-    ),
+    cacheReadTokens,
     cacheCreationTokens: num(
       usage.cache_creation_input_tokens,
       usage.cacheCreationTokens,
@@ -119,7 +126,7 @@ function estimateCodexCost(usage: TokenUsage | undefined, model: string | undefi
   const freshInputTokens = usage.inputTokens + usage.cacheCreationTokens;
   const costUsd =
     (freshInputTokens * pricing.input +
-      usage.cacheReadTokens * pricing.cachedInput +
+      usage.cacheReadTokens * pricing.input * CACHED_INPUT_DISCOUNT +
       usage.outputTokens * pricing.output) /
     1_000_000;
 
