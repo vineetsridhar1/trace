@@ -3933,6 +3933,20 @@ describe("SessionService", () => {
         }),
         expect.any(Object),
       );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.stringContaining("keep the main agent process alive"),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.stringContaining("Do not send a final response while background work"),
+        }),
+        expect.any(Object),
+      );
     });
 
     it("pins delivery to the session's home runtime via expectedHomeRuntimeId", async () => {

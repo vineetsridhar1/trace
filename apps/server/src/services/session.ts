@@ -807,6 +807,11 @@ When you create or rename a git branch, output the full branch name wrapped in X
 This lets the system track which branch this session is working on. The tag will be stripped and not shown to the user.
 </system-instruction>`;
 
+/** Instruction appended to every session prompt so the AI waits for background work it started. */
+const BACKGROUND_WORK_INSTRUCTION = `\n\n<system-instruction>
+If you start anything in the background, including long-running shell commands, dev servers, watchers, or subagents, keep the main agent process alive until that work is complete or intentionally stopped. Do not send a final response while background work you started is still running unless the user explicitly asks you to leave it running; in that case, report what is running and how it is being kept alive.
+</system-instruction>`;
+
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 After completing each task, silently save your work to the remote:
@@ -821,9 +826,10 @@ function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
-/** Append all system instructions (title, branch, auto-save) to a prompt in the correct order. */
+/** Append all system instructions (title, background work, branch, auto-save) to a prompt in the correct order. */
 function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolean }): string {
   let result = prompt + TITLE_INSTRUCTION;
+  result += BACKGROUND_WORK_INSTRUCTION;
   if (hasRepo) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
