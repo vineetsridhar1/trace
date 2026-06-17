@@ -54,13 +54,23 @@ describe("ProvisionedRuntimeAdapter", () => {
         startUrl: "http://launcher.example/start",
       }),
     ).rejects.toThrow("startUrl must use HTTPS");
+  });
+
+  it("defaults startupTimeoutSeconds instead of rejecting missing/invalid values", async () => {
+    const adapter = new ProvisionedRuntimeAdapter();
 
     await expect(
       adapter.validateConfig({
-        ...provisionedConfig,
-        startupTimeoutSeconds: 0,
+        startUrl: provisionedConfig.startUrl,
+        stopUrl: provisionedConfig.stopUrl,
+        statusUrl: provisionedConfig.statusUrl,
+        auth: provisionedConfig.auth,
+        deprovisionPolicy: provisionedConfig.deprovisionPolicy,
       }),
-    ).rejects.toThrow("startupTimeoutSeconds must be a positive integer");
+    ).resolves.toBeUndefined();
+    await expect(
+      adapter.validateConfig({ ...provisionedConfig, startupTimeoutSeconds: 0 }),
+    ).resolves.toBeUndefined();
   });
 
   it("allows Pi in provisioned runtime tool capabilities", async () => {

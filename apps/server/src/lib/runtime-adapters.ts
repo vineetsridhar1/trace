@@ -16,6 +16,7 @@ import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 
 const CODING_TOOLS = new Set(["antigravity", "claude_code", "codex", "custom", "pi"]);
+const DEFAULT_STARTUP_TIMEOUT_SECONDS = 180;
 const PROVISIONED_DEPROVISION_POLICIES = new Set(["on_session_end", "manual"]);
 const PROVISIONED_STATUS_VALUES = new Set([
   "unknown",
@@ -146,16 +147,6 @@ function assertCompatibilityConstraints(config: Record<string, unknown>): void {
       }
     }
   }
-
-  const startupTimeoutSeconds = config.startupTimeoutSeconds;
-  if (
-    startupTimeoutSeconds !== undefined &&
-    (typeof startupTimeoutSeconds !== "number" ||
-      !Number.isInteger(startupTimeoutSeconds) ||
-      startupTimeoutSeconds < 1)
-  ) {
-    throw new Error("Agent environment startupTimeoutSeconds must be a positive integer");
-  }
 }
 
 function assertHttpsUrl(value: unknown, key: string): string {
@@ -196,16 +187,13 @@ function assertProvisionedAuthConfig(value: unknown): ProvisionedAuthConfig {
 function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedConfig {
   assertCompatibilityConstraints(config);
 
-  const startupTimeoutSeconds = config.startupTimeoutSeconds;
-  if (
-    typeof startupTimeoutSeconds !== "number" ||
-    !Number.isInteger(startupTimeoutSeconds) ||
-    startupTimeoutSeconds < 1
-  ) {
-    throw new Error(
-      "Provisioned agent environment startupTimeoutSeconds must be a positive integer",
-    );
-  }
+  const rawStartupTimeoutSeconds = config.startupTimeoutSeconds;
+  const startupTimeoutSeconds =
+    typeof rawStartupTimeoutSeconds === "number" &&
+    Number.isInteger(rawStartupTimeoutSeconds) &&
+    rawStartupTimeoutSeconds >= 1
+      ? rawStartupTimeoutSeconds
+      : DEFAULT_STARTUP_TIMEOUT_SECONDS;
 
   const deprovisionPolicy = config.deprovisionPolicy;
   if (
