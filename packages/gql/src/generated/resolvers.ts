@@ -339,6 +339,13 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateMcpServerInput = {
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+  transport?: InputMaybe<McpServerTransport>;
+  url: Scalars["String"]["input"];
+};
+
 export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
@@ -437,6 +444,11 @@ export type EventType =
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
+  | "mcp_connection_created"
+  | "mcp_connection_deleted"
+  | "mcp_server_created"
+  | "mcp_server_deleted"
+  | "mcp_server_updated"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -584,6 +596,31 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type McpConnectionState = "connected" | "disconnected" | "expired";
+
+export type McpConnectionStatus = {
+  __typename?: "McpConnectionStatus";
+  expiresAt?: Maybe<Scalars["DateTime"]["output"]>;
+  mcpServer: McpServer;
+  scope?: Maybe<Scalars["String"]["output"]>;
+  state: McpConnectionState;
+  updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
+};
+
+export type McpServer = {
+  __typename?: "McpServer";
+  createdAt: Scalars["DateTime"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  transport: McpServerTransport;
+  updatedAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
+export type McpServerTransport = "http" | "sse";
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -628,6 +665,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createMcpServer: McpServer;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -639,12 +677,14 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteMcpServer: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
   destroyTerminal: Scalars["Boolean"]["output"];
   disableSessionEndpointForwarding: SessionEndpoint;
+  disconnectMcp: Scalars["Boolean"]["output"];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChannelMessage: Message;
@@ -711,6 +751,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateMcpServer: McpServer;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -805,6 +846,10 @@ export type MutationCreateChatArgs = {
   input: CreateChatInput;
 };
 
+export type MutationCreateMcpServerArgs = {
+  input: CreateMcpServerInput;
+};
+
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
 };
@@ -851,6 +896,10 @@ export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
 };
 
+export type MutationDeleteMcpServerArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationDeleteOrgSecretArgs = {
   id: Scalars["ID"]["input"];
   orgId: Scalars["ID"]["input"];
@@ -874,6 +923,10 @@ export type MutationDestroyTerminalArgs = {
 
 export type MutationDisableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
+};
+
+export type MutationDisconnectMcpArgs = {
+  mcpServerId: Scalars["ID"]["input"];
 };
 
 export type MutationDismissInboxItemArgs = {
@@ -1216,6 +1269,10 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateMcpServerArgs = {
+  input: UpdateMcpServerInput;
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1350,9 +1407,11 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
+  mcpServers: Array<McpServer>;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
   myConnections: Array<ConnectionsBridge>;
+  myMcpConnections: Array<McpConnectionStatus>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
@@ -1494,6 +1553,14 @@ export type QueryLinkedCheckoutStatusArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryMcpServersArgs = {
+  orgId: Scalars["ID"]["input"];
+};
+
+export type QueryMyMcpConnectionsArgs = {
+  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryMySessionsArgs = {
@@ -2282,6 +2349,14 @@ export type UpdateChannelInput = {
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type UpdateMcpServerInput = {
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  id: Scalars["ID"]["input"];
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  transport?: InputMaybe<McpServerTransport>;
+  url?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type UpdateRepoInput = {
   applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
@@ -2453,6 +2528,7 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateMcpServerInput: CreateMcpServerInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -2478,6 +2554,10 @@ export type ResolversTypes = ResolversObject<{
   LinkedCheckoutErrorCode: LinkedCheckoutErrorCode;
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
+  McpConnectionState: McpConnectionState;
+  McpConnectionStatus: ResolverTypeWrapper<McpConnectionStatus>;
+  McpServer: ResolverTypeWrapper<McpServer>;
+  McpServerTransport: McpServerTransport;
   Message: ResolverTypeWrapper<Message>;
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
@@ -2556,6 +2636,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateAgentEnvironmentInput: UpdateAgentEnvironmentInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateMcpServerInput: UpdateMcpServerInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -2594,6 +2675,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateMcpServerInput: CreateMcpServerInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -2610,6 +2692,8 @@ export type ResolversParentTypes = ResolversObject<{
   LinkedCheckoutActionResult: LinkedCheckoutActionResult;
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   LinkedCheckoutStatus: LinkedCheckoutStatus;
+  McpConnectionStatus: McpConnectionStatus;
+  McpServer: McpServer;
   Message: Message;
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
@@ -2671,6 +2755,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateAgentEnvironmentInput: UpdateAgentEnvironmentInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateChannelInput: UpdateChannelInput;
+  UpdateMcpServerInput: UpdateMcpServerInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -3140,6 +3225,34 @@ export type LinkedCheckoutStatusResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type McpConnectionStatusResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["McpConnectionStatus"] =
+    ResolversParentTypes["McpConnectionStatus"],
+> = ResolversObject<{
+  expiresAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  mcpServer?: Resolver<ResolversTypes["McpServer"], ParentType, ContextType>;
+  scope?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  state?: Resolver<ResolversTypes["McpConnectionState"], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type McpServerResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["McpServer"] = ResolversParentTypes["McpServer"],
+> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  enabled?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  orgId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  transport?: Resolver<ResolversTypes["McpServerTransport"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  url?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type MessageResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Message"] = ResolversParentTypes["Message"],
@@ -3271,6 +3384,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationCreateChatArgs, "input">
   >;
+  createMcpServer?: Resolver<
+    ResolversTypes["McpServer"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateMcpServerArgs, "input">
+  >;
   createOrganization?: Resolver<
     ResolversTypes["OrgMember"],
     ParentType,
@@ -3337,6 +3456,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationDeleteChatMessageArgs, "messageId">
   >;
+  deleteMcpServer?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDeleteMcpServerArgs, "id">
+  >;
   deleteOrgSecret?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -3372,6 +3497,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationDisableSessionEndpointForwardingArgs, "endpointId">
+  >;
+  disconnectMcp?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDisconnectMcpArgs, "mcpServerId">
   >;
   dismissInboxItem?: Resolver<
     ResolversTypes["InboxItem"],
@@ -3778,6 +3909,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationUpdateChannelGroupArgs, "id" | "input">
   >;
+  updateMcpServer?: Resolver<
+    ResolversTypes["McpServer"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpdateMcpServerArgs, "input">
+  >;
   updateOrgMemberRole?: Resolver<
     ResolversTypes["OrgMember"],
     ParentType,
@@ -4032,9 +4169,21 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryLinkedCheckoutStatusArgs, "repoId" | "sessionGroupId">
   >;
+  mcpServers?: Resolver<
+    Array<ResolversTypes["McpServer"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryMcpServersArgs, "orgId">
+  >;
   myApiTokens?: Resolver<Array<ResolversTypes["ApiTokenStatus"]>, ParentType, ContextType>;
   myBridgeRuntimes?: Resolver<Array<ResolversTypes["BridgeRuntime"]>, ParentType, ContextType>;
   myConnections?: Resolver<Array<ResolversTypes["ConnectionsBridge"]>, ParentType, ContextType>;
+  myMcpConnections?: Resolver<
+    Array<ResolversTypes["McpConnectionStatus"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryMyMcpConnectionsArgs, "orgId">
+  >;
   myOrganizations?: Resolver<Array<ResolversTypes["OrgMember"]>, ParentType, ContextType>;
   mySessions?: Resolver<
     Array<ResolversTypes["Session"]>,
@@ -4875,6 +5024,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
+  McpConnectionStatus?: McpConnectionStatusResolvers<ContextType>;
+  McpServer?: McpServerResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;

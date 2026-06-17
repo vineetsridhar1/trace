@@ -208,6 +208,17 @@ enum AgentEnvironmentAdapterType {
   provisioned
 }
 
+enum McpServerTransport {
+  http
+  sse
+}
+
+enum McpConnectionState {
+  connected
+  expired
+  disconnected
+}
+
 enum InboxItemType {
   plan
   question
@@ -323,6 +334,11 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  mcp_server_created
+  mcp_server_updated
+  mcp_server_deleted
+  mcp_connection_created
+  mcp_connection_deleted
 }
 
 # --- Core Types ---
@@ -352,6 +368,25 @@ type AgentEnvironment {
 type AgentEnvironmentTestResult {
   ok: Boolean!
   message: String
+}
+
+type McpServer {
+  id: ID!
+  orgId: ID!
+  name: String!
+  url: String!
+  transport: McpServerTransport!
+  enabled: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type McpConnectionStatus {
+  mcpServer: McpServer!
+  state: McpConnectionState!
+  expiresAt: DateTime
+  scope: String
+  updatedAt: DateTime
 }
 
 type OrgSecret {
@@ -1251,6 +1286,21 @@ input UpdateAgentEnvironmentInput {
   isDefault: Boolean
 }
 
+input CreateMcpServerInput {
+  orgId: ID!
+  name: String!
+  url: String!
+  transport: McpServerTransport
+}
+
+input UpdateMcpServerInput {
+  id: ID!
+  name: String
+  url: String
+  transport: McpServerTransport
+  enabled: Boolean
+}
+
 input SetOrgSecretInput {
   orgId: ID!
   name: String!
@@ -1267,6 +1317,8 @@ type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
+  mcpServers(orgId: ID!): [McpServer!]!
+  myMcpConnections(orgId: ID!): [McpConnectionStatus!]!
   orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
@@ -1438,6 +1490,10 @@ type Mutation {
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
   deleteAgentEnvironment(id: ID!): Boolean!
   testAgentEnvironment(id: ID!): AgentEnvironmentTestResult!
+  createMcpServer(input: CreateMcpServerInput!): McpServer!
+  updateMcpServer(input: UpdateMcpServerInput!): McpServer!
+  deleteMcpServer(id: ID!): Boolean!
+  disconnectMcp(mcpServerId: ID!): Boolean!
   setOrgSecret(input: SetOrgSecretInput!): OrgSecret!
   deleteOrgSecret(orgId: ID!, id: ID!): Boolean!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!

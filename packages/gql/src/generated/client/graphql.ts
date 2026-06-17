@@ -338,6 +338,13 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateMcpServerInput = {
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+  transport?: InputMaybe<McpServerTransport>;
+  url: Scalars["String"]["input"];
+};
+
 export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
@@ -436,6 +443,11 @@ export type EventType =
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
+  | "mcp_connection_created"
+  | "mcp_connection_deleted"
+  | "mcp_server_created"
+  | "mcp_server_deleted"
+  | "mcp_server_updated"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -583,6 +595,31 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type McpConnectionState = "connected" | "disconnected" | "expired";
+
+export type McpConnectionStatus = {
+  __typename?: "McpConnectionStatus";
+  expiresAt?: Maybe<Scalars["DateTime"]["output"]>;
+  mcpServer: McpServer;
+  scope?: Maybe<Scalars["String"]["output"]>;
+  state: McpConnectionState;
+  updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
+};
+
+export type McpServer = {
+  __typename?: "McpServer";
+  createdAt: Scalars["DateTime"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  transport: McpServerTransport;
+  updatedAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
+export type McpServerTransport = "http" | "sse";
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -627,6 +664,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createMcpServer: McpServer;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -638,12 +676,14 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteMcpServer: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
   destroyTerminal: Scalars["Boolean"]["output"];
   disableSessionEndpointForwarding: SessionEndpoint;
+  disconnectMcp: Scalars["Boolean"]["output"];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChannelMessage: Message;
@@ -710,6 +750,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateMcpServer: McpServer;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -804,6 +845,10 @@ export type MutationCreateChatArgs = {
   input: CreateChatInput;
 };
 
+export type MutationCreateMcpServerArgs = {
+  input: CreateMcpServerInput;
+};
+
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
 };
@@ -850,6 +895,10 @@ export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
 };
 
+export type MutationDeleteMcpServerArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationDeleteOrgSecretArgs = {
   id: Scalars["ID"]["input"];
   orgId: Scalars["ID"]["input"];
@@ -873,6 +922,10 @@ export type MutationDestroyTerminalArgs = {
 
 export type MutationDisableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
+};
+
+export type MutationDisconnectMcpArgs = {
+  mcpServerId: Scalars["ID"]["input"];
 };
 
 export type MutationDismissInboxItemArgs = {
@@ -1215,6 +1268,10 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateMcpServerArgs = {
+  input: UpdateMcpServerInput;
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1349,9 +1406,11 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
+  mcpServers: Array<McpServer>;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
   myConnections: Array<ConnectionsBridge>;
+  myMcpConnections: Array<McpConnectionStatus>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
@@ -1493,6 +1552,14 @@ export type QueryLinkedCheckoutStatusArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryMcpServersArgs = {
+  orgId: Scalars["ID"]["input"];
+};
+
+export type QueryMyMcpConnectionsArgs = {
+  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryMySessionsArgs = {
@@ -2279,6 +2346,14 @@ export type UpdateChannelInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
   runScripts?: InputMaybe<Scalars["JSON"]["input"]>;
   setupScript?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpdateMcpServerInput = {
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  id: Scalars["ID"]["input"];
+  name?: InputMaybe<Scalars["String"]["input"]>;
+  transport?: InputMaybe<McpServerTransport>;
+  url?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateRepoInput = {
