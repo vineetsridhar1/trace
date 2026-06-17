@@ -16,6 +16,7 @@ import type {
   Message,
   QueuedMessage,
   AgentEnvironment,
+  McpServer,
   SessionApplicationProcess,
   SessionEndpoint,
 } from "@trace/gql";
@@ -48,6 +49,7 @@ export type EntityTableMap = {
   messages: Message;
   queuedMessages: QueuedMessage;
   agentEnvironments: AgentEnvironment;
+  mcpServers: McpServer;
   sessionApplicationProcesses: SessionApplicationProcess;
   sessionEndpoints: SessionEndpoint;
 };
@@ -115,6 +117,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   messages: {},
   queuedMessages: {},
   agentEnvironments: {},
+  mcpServers: {},
   sessionApplicationProcesses: {},
   sessionEndpoints: {},
   eventsByScope: {},
@@ -354,6 +357,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       messages: {},
       queuedMessages: {},
       agentEnvironments: {},
+      mcpServers: {},
       sessionApplicationProcesses: {},
       sessionEndpoints: {},
       eventsByScope: {},

@@ -44,8 +44,9 @@ function fetchMock(): ReturnType<typeof vi.fn> {
 }
 
 async function flushPromises() {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+  }
 }
 
 beforeEach(() => {
@@ -576,7 +577,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onWorkspaceReady: vi.fn(),
     });
 
-    await Promise.resolve();
+    await flushPromises();
 
     expect(provisionedStart).toHaveBeenCalledWith(
       expect.objectContaining({

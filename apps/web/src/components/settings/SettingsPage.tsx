@@ -21,6 +21,7 @@ import { MembersSection } from "./MembersSection";
 import { ChannelsSection } from "./ChannelsSection";
 import { BridgeAccessSection } from "./BridgeAccessSection";
 import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
+import { McpServersSection } from "./McpServersSection";
 import { OrgSecretsSection } from "./OrgSecretsSection";
 import { ConnectionsSection } from "./ConnectionsSection";
 import { IntegrationsSection } from "./IntegrationsSection";
@@ -36,6 +37,7 @@ type SettingsTab =
   | "connections"
   | "bridge-access"
   | "agent-environments"
+  | "mcp-servers"
   | "org-secrets"
   | "integrations";
 
@@ -48,6 +50,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "api-keys", label: "API Keys", icon: Key },
   { id: "bridge-access", label: "Bridge Access", icon: MonitorCog },
   { id: "agent-environments", label: "Agent Environments", icon: ServerCog },
+  { id: "mcp-servers", label: "MCP Servers", icon: Plug },
   { id: "org-secrets", label: "Org Secrets", icon: KeyRound },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "channels", label: "Channels", icon: Code },
@@ -95,6 +98,7 @@ export function SettingsPage() {
     activeTab === "channels" ||
     activeTab === "bridge-access" ||
     activeTab === "agent-environments" ||
+    activeTab === "mcp-servers" ||
     activeTab === "org-secrets" ||
     activeTab === "integrations"
       ? "mx-auto max-w-5xl"
@@ -138,6 +142,7 @@ export function SettingsPage() {
             {activeTab === "api-keys" && <ApiTokensSection />}
             {activeTab === "bridge-access" && <BridgeAccessSection />}
             {activeTab === "agent-environments" && <AgentEnvironmentsSection />}
+            {activeTab === "mcp-servers" && <McpServersSection />}
             {activeTab === "org-secrets" && <OrgSecretsSection />}
             {activeTab === "integrations" && <IntegrationsSection />}
             {activeTab === "channels" && <ChannelsSection />}

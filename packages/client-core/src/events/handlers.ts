@@ -9,6 +9,7 @@ import type {
   Event,
   EventType,
   InboxItem,
+  McpServer,
   QueuedMessage,
   Repo,
   ScopeType,
@@ -302,6 +303,19 @@ export function handleOrgEvent(event: Event): void {
           : null;
     if (environmentId) {
       batch.remove("agentEnvironments", environmentId);
+    }
+  }
+
+  if (event.eventType === "mcp_server_created" || event.eventType === "mcp_server_updated") {
+    const server = asJsonObject(payload.mcpServer);
+    if (server && typeof server.id === "string") {
+      batch.upsert("mcpServers", server.id, server as unknown as McpServer);
+    }
+  }
+  if (event.eventType === "mcp_server_deleted") {
+    const server = asJsonObject(payload.mcpServer);
+    if (server && typeof server.id === "string") {
+      batch.remove("mcpServers", server.id);
     }
   }
 
