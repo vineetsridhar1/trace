@@ -3387,6 +3387,7 @@ export class SessionService {
     const initialCheckpointContextId = resolvedRepoId && input.prompt ? randomUUID() : null;
     const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
+    let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
     const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const sessionGroup = existingGroup
         ? await (async () => {
@@ -3508,7 +3509,7 @@ export class SessionService {
         defaultMetadata: startEventMetadata,
       });
 
-      await eventService.create(
+      startEventToPublish = await eventService.create(
         {
           id: startEventId,
           organizationId: input.organizationId,
@@ -3520,6 +3521,7 @@ export class SessionService {
           actorType: startEventOverride?.actorType ?? "user",
           actorId: startEventOverride?.actorId ?? input.createdById,
           timestamp: startEventOverride?.timestamp,
+          deferPublish: true,
         },
         tx,
       );
@@ -3536,6 +3538,12 @@ export class SessionService {
 
       return session;
     });
+
+    // Publish the start event only after the transaction commits so subscribers
+    // don't query for the session before its row is visible (e.g. long-running forks).
+    if (startEventToPublish) {
+      eventService.publishCreated(startEventToPublish);
+    }
 
     // Reuse the group's runtime binding when a shared workspace already exists,
     // or inherit from the restore group so the session lands on the same machine.
