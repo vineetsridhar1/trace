@@ -610,6 +610,13 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
+        ...(input.userMcpConfig
+          ? {
+              TRACE_MCP_CONFIG: Buffer.from(
+                JSON.stringify({ mcpServers: input.userMcpConfig }),
+              ).toString("base64"),
+            }
+          : {}),
       },
       metadata: {
         requestedBy: input.actorId,

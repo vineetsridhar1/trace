@@ -28,6 +28,7 @@ import type {
   BridgeListWorkspaceSlugsCommand,
 } from "@trace/shared";
 import { prisma } from "./db.js";
+import { mcpConnectionService } from "../services/mcp-connection.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
@@ -1904,6 +1905,51 @@ export class SessionRouter {
   // --- Adapter-dispatched lifecycle methods ---
 
   /**
+   * Build the per-user MCP server config injected into cloud runtimes. For each
+   * MCP server the user has connected, resolve a fresh access token (refreshing
+   * if near expiry) and emit a Claude-Code-compatible mcpServers entry. Failures
+   * are swallowed — a broken MCP connection must never block session start.
+   */
+  private async resolveUserMcpConfig(
+    userId: string,
+    organizationId: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    try {
+      const statuses = await mcpConnectionService.listForUser(
+        userId,
+        organizationId,
+        "user",
+        userId,
+      );
+      const config: Record<string, unknown> = {};
+      for (const status of statuses) {
+        if (status.state === "disconnected") continue;
+        try {
+          const token = await mcpConnectionService.resolveFreshAccessToken(
+            userId,
+            status.server.id,
+          );
+          if (!token) continue;
+          config[status.server.name] = {
+            type: status.server.transport,
+            url: status.server.url,
+            headers: { Authorization: `Bearer ${token}` },
+          };
+        } catch (err) {
+          console.error(
+            `[session-router] MCP token resolution failed for ${status.server.name}:`,
+            (err as Error).message,
+          );
+        }
+      }
+      return Object.keys(config).length > 0 ? config : undefined;
+    } catch (err) {
+      console.error("[session-router] MCP config resolution failed:", (err as Error).message);
+      return undefined;
+    }
+  }
+
+  /**
    * Provision/select compute for a session through the runtime adapter registry,
    * then keep bridge command delivery centralized here.
    */
@@ -1933,6 +1979,11 @@ export class SessionRouter {
           });
         }
 
+        const userMcpConfig =
+          adapterType === "provisioned"
+            ? await this.resolveUserMcpConfig(options.createdById, options.organizationId)
+            : undefined;
+
         const startResult = await adapter.startSession({
           sessionId: options.sessionId,
           sessionGroupId: options.sessionGroupId,
@@ -1951,6 +2002,7 @@ export class SessionRouter {
           runtimeInstanceId: provisionedRuntimeInstanceId,
           runtimeToken: options.runtimeToken,
           bridgeUrl: options.bridgeUrl,
+          userMcpConfig,
         });
 
         if (startResult.runtimeInstanceId && adapterType !== "provisioned") {
@@ -2271,6 +2323,10 @@ export class SessionRouter {
       });
       const conn = connectionRecord(session.connection);
       const environment = await this.resolveRuntimeEnvironment(conn);
+      const userMcpConfig = await this.resolveUserMcpConfig(
+        session.createdById,
+        session.organizationId,
+      );
       const startResult = await adapter.startSession({
         sessionId,
         organizationId: session.organizationId,
@@ -2279,6 +2335,7 @@ export class SessionRouter {
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
+        userMcpConfig,
       });
       const runtimeId =
         startResult.runtimeInstanceId ??

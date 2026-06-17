@@ -27,6 +27,8 @@ export type RuntimeStartInput = {
   runtimeInstanceId?: string;
   runtimeToken?: string;
   bridgeUrl?: string;
+  /** Per-user MCP server config (cloud only), injected into the container env. */
+  userMcpConfig?: Record<string, unknown>;
 };
 
 export type RuntimeStartResult = {

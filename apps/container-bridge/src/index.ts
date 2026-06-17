@@ -44,6 +44,52 @@ function setupSshKey(): void {
   console.log("[container-bridge] SSH key configured");
 }
 
+/**
+ * If a per-user MCP config was injected (base64-encoded), decode it and merge
+ * the mcpServers block into ~/.claude.json so Claude Code auto-loads the
+ * connected MCP servers. The env var is cleared afterward so the bearer tokens
+ * don't linger where child processes could read them.
+ */
+function setupMcpConfig(): void {
+  const b64 = process.env.TRACE_MCP_CONFIG;
+  if (!b64) return;
+
+  let injected: { mcpServers?: Record<string, unknown> };
+  try {
+    injected = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+  } catch (err) {
+    console.error("[container-bridge] failed to parse TRACE_MCP_CONFIG:", (err as Error).message);
+    delete process.env.TRACE_MCP_CONFIG;
+    return;
+  }
+
+  if (!injected.mcpServers || Object.keys(injected.mcpServers).length === 0) {
+    delete process.env.TRACE_MCP_CONFIG;
+    return;
+  }
+
+  const configPath = "/home/coder/.claude.json";
+  let existing: Record<string, unknown> = {};
+  try {
+    if (fs.existsSync(configPath)) {
+      existing = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    }
+  } catch {
+    existing = {};
+  }
+
+  const existingServers =
+    existing.mcpServers && typeof existing.mcpServers === "object"
+      ? (existing.mcpServers as Record<string, unknown>)
+      : {};
+  existing.mcpServers = { ...existingServers, ...injected.mcpServers };
+
+  fs.writeFileSync(configPath, JSON.stringify(existing, null, 2), { mode: 0o600 });
+
+  delete process.env.TRACE_MCP_CONFIG;
+  console.log("[container-bridge] MCP config written");
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -61,6 +107,9 @@ async function main(): Promise<void> {
 
   // Set up SSH key before any git operations
   setupSshKey();
+
+  // Write per-user MCP config so Claude Code picks up connected servers.
+  setupMcpConfig();
 
   await runRuntimeSetupCommands(
     parseRuntimeSetupCommands(process.env.TRACE_RUNTIME_SETUP_COMMANDS),
