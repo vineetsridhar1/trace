@@ -231,6 +231,11 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  mcp_server_created
+  mcp_server_updated
+  mcp_server_deleted
+  mcp_connection_created
+  mcp_connection_deleted
 }
 
 enum SessionApplicationProcessStatus {
@@ -293,6 +298,7 @@ model Organization {
   aiConversations  AiConversation[]
   slackInstalls SlackInstall[]
   slackChannelBindings SlackChannelBinding[]
+  mcpServers    McpServer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -342,6 +348,48 @@ model OrgSecret {
   @@index([organizationId])
 }
 
+model McpServer {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  url            String
+  transport      String       @default("http")
+  enabled        Boolean      @default(true)
+  oauthMetadata  Json?
+  clientId       String?
+  encryptedClientSecret String?
+  clientSecretIv String?
+
+  connections McpConnection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model McpConnection {
+  id                    String    @id @default(uuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mcpServerId           String
+  mcpServer             McpServer @relation(fields: [mcpServerId], references: [id], onDelete: Cascade)
+  encryptedAccessToken  String
+  accessIv              String
+  encryptedRefreshToken String?
+  refreshIv             String?
+  expiresAt             DateTime?
+  scope                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, mcpServerId])
+  @@index([userId])
+}
+
 model User {
   id             String       @id @default(uuid())
   email          String       @unique
@@ -379,6 +427,7 @@ model User {
   slackInstalls     SlackInstall[]   @relation("SlackInstallInstaller")
   slackAccounts     SlackAccount[]
   slackChannelBindings SlackChannelBinding[]
+  mcpConnections    McpConnection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
