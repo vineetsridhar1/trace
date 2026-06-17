@@ -83,7 +83,6 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   name?: string | null;
   allowVisibleSourceSession?: boolean;
   startEventId?: string;
-  deferStartEventPublish?: boolean;
   buildStartEvent?: (input: StartSessionBuildStartEventInput) => StartSessionEventOverride;
   afterCreate?: (input: StartSessionAfterCreateInput) => Promise<void>;
 };
@@ -3522,7 +3521,7 @@ export class SessionService {
           actorType: startEventOverride?.actorType ?? "user",
           actorId: startEventOverride?.actorId ?? input.createdById,
           timestamp: startEventOverride?.timestamp,
-          deferPublish: input.deferStartEventPublish === true,
+          deferPublish: true,
         },
         tx,
       );
@@ -3542,7 +3541,7 @@ export class SessionService {
 
     // Publish the start event only after the transaction commits so subscribers
     // don't query for the session before its row is visible (e.g. long-running forks).
-    if (input.deferStartEventPublish === true && startEventToPublish) {
+    if (startEventToPublish) {
       eventService.publishCreated(startEventToPublish);
     }
 
@@ -3699,7 +3698,6 @@ export class SessionService {
       provisionWithoutPrompt: true,
       name: sourceSession.name,
       startEventId: targetStartEventId,
-      deferStartEventPublish: true,
       buildStartEvent: ({ session, defaultPayload }) => {
         if (!sourceStartEvent || !session.sessionGroupId) {
           return {
