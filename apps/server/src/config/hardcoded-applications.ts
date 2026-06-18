@@ -34,11 +34,13 @@ export function isLiteralEnv(entry: AppEnvVar): entry is { key: string; value: s
 // start-trace-postgres / start-trace-redis, so the app config only models the
 // application's own processes. The local Postgres listens on 127.0.0.1:5432 and
 // Redis on 127.0.0.1:6379.
-// Override the runtime image default (app_development) so the app and its
-// migrations target the mortgages dev database on the local Postgres.
+// Pin to the runtime image's default database so the Rails server, its
+// migrations, and ad-hoc `rails runner`/shell sessions (which inherit the
+// container's ambient DATABASE_URL) all share one DB. Otherwise records created
+// from a runner land in a database the server never queries.
 const MORTGAGES_DATABASE_URL_ENV: AppEnvVar = {
   key: "DATABASE_URL",
-  value: "postgres://postgres@127.0.0.1:5432/mortgages_development",
+  value: "postgres://postgres@127.0.0.1:5432/app_development",
 };
 
 const MORTGAGES_BASE_ENV: AppEnvVar[] = [
