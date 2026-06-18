@@ -4,6 +4,7 @@ export class NotFoundError extends Error {
   constructor(entity: string, id: string) {
     super(`${entity} not found: ${id}`);
     this.name = "NotFoundError";
+    Object.setPrototypeOf(this, NotFoundError.prototype);
   }
 }
 
@@ -11,6 +12,7 @@ export class AuthorizationError extends Error {
   constructor(message = "Not authorized") {
     super(message);
     this.name = "AuthorizationError";
+    Object.setPrototypeOf(this, AuthorizationError.prototype);
   }
 }
 
@@ -18,6 +20,7 @@ export class ValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ValidationError";
+    Object.setPrototypeOf(this, ValidationError.prototype);
   }
 }
 
@@ -25,6 +28,7 @@ export class AuthenticationError extends Error {
   constructor(message = "Not authenticated") {
     super(message);
     this.name = "AuthenticationError";
+    Object.setPrototypeOf(this, AuthenticationError.prototype);
   }
 }
 
