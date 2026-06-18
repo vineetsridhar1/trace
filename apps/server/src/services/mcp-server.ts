@@ -112,6 +112,18 @@ export class McpServerService {
     const url = normalizeUrl(input.url);
     const transport = normalizeTransport(input.transport);
 
+    // Authorize BEFORE any network side effects (SSRF + dynamic client
+    // registration are externally observable), then reject obvious conflicts
+    // so we don't register an OAuth client we can't persist.
+    await prisma.$transaction((tx: TxClient) =>
+      assertActorOrgAdmin(tx, input.organizationId, actorType, actorId),
+    );
+    const conflict = await prisma.mcpServer.findUnique({
+      where: { organizationId_name: { organizationId: input.organizationId, name } },
+      select: { id: true },
+    });
+    if (conflict) throw new Error("An MCP server with that name already exists");
+
     // OAuth discovery + dynamic client registration happen outside the
     // transaction — they make network calls and must not hold a DB lock.
     const metadata = await discoverOAuthMetadata(url);
@@ -160,25 +172,34 @@ export class McpServerService {
     const url = input.url !== undefined ? normalizeUrl(input.url) : undefined;
     const transport = input.transport !== undefined ? normalizeTransport(input.transport) : undefined;
 
+    // Authorize before any network side effects.
+    const existing = await prisma.mcpServer.findUniqueOrThrow({ where: { id } });
+    await prisma.$transaction((tx: TxClient) =>
+      assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId),
+    );
+
     // If the URL changes, re-discover metadata and re-register the client.
+    const urlChanged = url !== undefined && url !== existing.url;
     let rediscovered: { metadata: OAuthMetadata; clientId: string; secret: { encrypted: string; iv: string } | null } | null =
       null;
-    if (url !== undefined) {
-      const existing = await prisma.mcpServer.findUniqueOrThrow({ where: { id } });
-      if (url !== existing.url) {
-        const metadata = await discoverOAuthMetadata(url);
-        const client = await registerClient(metadata, mcpRedirectUri());
-        rediscovered = {
-          metadata,
-          clientId: client.clientId,
-          secret: client.clientSecret ? encryptSecret(client.clientSecret) : null,
-        };
-      }
+    if (urlChanged) {
+      const metadata = await discoverOAuthMetadata(url);
+      const client = await registerClient(metadata, mcpRedirectUri());
+      rediscovered = {
+        metadata,
+        clientId: client.clientId,
+        secret: client.clientSecret ? encryptSecret(client.clientSecret) : null,
+      };
     }
 
     return prisma.$transaction(async (tx: TxClient) => {
-      const existing = await tx.mcpServer.findUniqueOrThrow({ where: { id } });
       await assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId);
+
+      // A new URL means a new OAuth client/endpoints — existing user
+      // connections hold tokens for the old client and are now invalid.
+      if (urlChanged) {
+        await tx.mcpConnection.deleteMany({ where: { mcpServerId: id } });
+      }
 
       const updated = await tx.mcpServer.update({
         where: { id },

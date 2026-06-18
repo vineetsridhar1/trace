@@ -85,6 +85,23 @@ export function createPrismaMock() {
       findFirst: vi.fn(),
       upsert: vi.fn(),
     },
+    mcpServer: {
+      create: vi.fn(),
+      delete: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+    },
+    mcpConnection: {
+      create: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+    },
     pushToken: {
       findMany: vi.fn(),
       findUnique: vi.fn(),

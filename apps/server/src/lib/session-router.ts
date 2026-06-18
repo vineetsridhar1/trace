@@ -1905,44 +1905,16 @@ export class SessionRouter {
   // --- Adapter-dispatched lifecycle methods ---
 
   /**
-   * Build the per-user MCP server config injected into cloud runtimes. For each
-   * MCP server the user has connected, resolve a fresh access token (refreshing
-   * if near expiry) and emit a Claude-Code-compatible mcpServers entry. Failures
-   * are swallowed — a broken MCP connection must never block session start.
+   * Build the per-user MCP server config injected into cloud runtimes. Delegates
+   * to the connection service (one query + parallel token refresh). Failures are
+   * swallowed — a broken MCP connection must never block session start.
    */
   private async resolveUserMcpConfig(
     userId: string,
     organizationId: string,
   ): Promise<Record<string, unknown> | undefined> {
     try {
-      const statuses = await mcpConnectionService.listForUser(
-        userId,
-        organizationId,
-        "user",
-        userId,
-      );
-      const config: Record<string, unknown> = {};
-      for (const status of statuses) {
-        if (status.state === "disconnected") continue;
-        try {
-          const token = await mcpConnectionService.resolveFreshAccessToken(
-            userId,
-            status.server.id,
-          );
-          if (!token) continue;
-          config[status.server.name] = {
-            type: status.server.transport,
-            url: status.server.url,
-            headers: { Authorization: `Bearer ${token}` },
-          };
-        } catch (err) {
-          console.error(
-            `[session-router] MCP token resolution failed for ${status.server.name}:`,
-            (err as Error).message,
-          );
-        }
-      }
-      return Object.keys(config).length > 0 ? config : undefined;
+      return await mcpConnectionService.resolveLaunchMcpConfig(userId, organizationId);
     } catch (err) {
       console.error("[session-router] MCP config resolution failed:", (err as Error).message);
       return undefined;

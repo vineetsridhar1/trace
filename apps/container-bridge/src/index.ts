@@ -70,12 +70,18 @@ function setupMcpConfig(): void {
 
   const configPath = "/home/coder/.claude.json";
   let existing: Record<string, unknown> = {};
-  try {
-    if (fs.existsSync(configPath)) {
+  if (fs.existsSync(configPath)) {
+    try {
       existing = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    } catch (err) {
+      // Don't clobber an existing (if malformed) config we can't safely merge.
+      console.error(
+        "[container-bridge] existing .claude.json is not valid JSON; skipping MCP config:",
+        (err as Error).message,
+      );
+      delete process.env.TRACE_MCP_CONFIG;
+      return;
     }
-  } catch {
-    existing = {};
   }
 
   const existingServers =

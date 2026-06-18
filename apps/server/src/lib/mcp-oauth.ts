@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from "crypto";
+import { lookup } from "dns/promises";
+import { isIP } from "net";
 
 /**
  * OAuth helpers for connecting to remote MCP servers.
@@ -9,8 +11,8 @@ import { createHash, randomBytes } from "crypto";
  *   - Dynamic Client Registration (RFC 7591) so admins only enter a URL.
  *   - Authorization Code + PKCE (S256) and refresh-token grants (RFC 6749/7636).
  *
- * Everything here is pure (only `fetch` + crypto) so it can be unit-tested
- * with a mocked fetch. No database or encryption concerns live here.
+ * Everything here uses only `fetch` + crypto (no DB/encryption), so it can be
+ * unit-tested with a mocked fetch.
  */
 
 export interface OAuthMetadata {
@@ -18,6 +20,7 @@ export interface OAuthMetadata {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   registrationEndpoint?: string;
+  revocationEndpoint?: string;
   scopesSupported?: string[];
 }
 
@@ -59,6 +62,90 @@ export function mcpRedirectUri(): string {
   return new URL("/mcp/oauth/callback", base).toString();
 }
 
+/**
+ * Whether private/loopback/link-local hosts are permitted as MCP targets.
+ * Allowed in non-production (local dev points at localhost) or when explicitly
+ * opted in for self-hosted deployments with internal MCP servers.
+ */
+function privateHostsAllowed(): boolean {
+  return (
+    process.env.TRACE_MCP_ALLOW_PRIVATE_HOSTS === "true" || process.env.NODE_ENV !== "production"
+  );
+}
+
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  let value = 0;
+  for (const part of parts) {
+    const n = Number(part);
+    if (!Number.isInteger(n) || n < 0 || n > 255) return null;
+    value = value * 256 + n;
+  }
+  return value >>> 0;
+}
+
+function isPrivateAddress(address: string): boolean {
+  const family = isIP(address);
+  if (family === 4) {
+    const n = ipv4ToInt(address);
+    if (n === null) return true;
+    const inRange = (cidr: string, bits: number) =>
+      (n >>> (32 - bits)) === ((ipv4ToInt(cidr)! >>> (32 - bits)) >>> 0);
+    return (
+      inRange("0.0.0.0", 8) || // "this" network / unspecified
+      inRange("10.0.0.0", 8) ||
+      inRange("100.64.0.0", 10) || // CGNAT
+      inRange("127.0.0.0", 8) || // loopback
+      inRange("169.254.0.0", 16) || // link-local (incl. cloud metadata 169.254.169.254)
+      inRange("172.16.0.0", 12) ||
+      inRange("192.168.0.0", 16)
+    );
+  }
+  if (family === 6) {
+    const addr = address.toLowerCase();
+    if (addr === "::1" || addr === "::") return true;
+    if (addr.startsWith("fe80")) return true; // link-local
+    if (addr.startsWith("fc") || addr.startsWith("fd")) return true; // unique-local fc00::/7
+    if (addr.startsWith("::ffff:")) {
+      const mapped = addr.slice(7);
+      if (isIP(mapped) === 4) return isPrivateAddress(mapped);
+    }
+    return false;
+  }
+  return false;
+}
+
+/**
+ * SSRF guard: reject MCP/OAuth hosts that resolve to private, loopback, or
+ * link-local addresses (e.g. cloud metadata endpoints). Even though the
+ * mutations are admin-gated, an admin should not be able to point Trace's
+ * server at its own internal network.
+ */
+export async function assertSafeMcpUrl(rawUrl: string): Promise<void> {
+  if (privateHostsAllowed()) return;
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error("Invalid MCP server URL");
+  }
+  if (url.protocol !== "https:") {
+    throw new Error("MCP server URL must use https in production");
+  }
+  const host = url.hostname;
+  const addresses =
+    isIP(host) !== 0 ? [{ address: host }] : await lookup(host, { all: true }).catch(() => null);
+  if (!addresses || addresses.length === 0) {
+    throw new Error("Could not resolve MCP server host");
+  }
+  for (const { address } of addresses) {
+    if (isPrivateAddress(address)) {
+      throw new Error("MCP server host resolves to a private or loopback address");
+    }
+  }
+}
+
 async function fetchJson(url: string): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -88,6 +175,7 @@ function metadataFromDoc(doc: Record<string, unknown>): OAuthMetadata | null {
     authorizationEndpoint,
     tokenEndpoint,
     registrationEndpoint: asString(doc.registration_endpoint),
+    revocationEndpoint: asString(doc.revocation_endpoint),
     scopesSupported: asStringArray(doc.scopes_supported),
   };
 }
@@ -100,12 +188,14 @@ function metadataFromDoc(doc: Record<string, unknown>): OAuthMetadata | null {
  * fall back to treating the MCP server's own origin as the issuer.
  */
 export async function discoverOAuthMetadata(serverUrl: string): Promise<OAuthMetadata> {
+  await assertSafeMcpUrl(serverUrl);
   const origin = originOf(serverUrl);
 
   const protectedResource = await fetchJson(`${origin}/.well-known/oauth-protected-resource`);
   const authServers = asStringArray(protectedResource?.authorization_servers);
   const issuer = authServers?.[0] ?? origin;
   const issuerOrigin = originOf(issuer);
+  await assertSafeMcpUrl(issuerOrigin);
 
   for (const wellKnown of [
     `${issuerOrigin}/.well-known/oauth-authorization-server`,
@@ -248,4 +338,39 @@ export async function refreshToken(params: {
   const result = await tokenRequest(params.metadata.tokenEndpoint, body, params.clientSecret);
   // Some servers omit refresh_token on refresh — carry the old one forward.
   return { ...result, refreshToken: result.refreshToken ?? params.refreshToken };
+}
+
+/**
+ * Best-effort token revocation (RFC 7009). Returns false instead of throwing
+ * when the server doesn't advertise a revocation endpoint or the request fails
+ * — revocation is a courtesy cleanup, not a correctness requirement.
+ */
+export async function revokeToken(params: {
+  metadata: OAuthMetadata;
+  clientId: string;
+  clientSecret?: string;
+  token: string;
+  tokenTypeHint?: "access_token" | "refresh_token";
+}): Promise<boolean> {
+  if (!params.metadata.revocationEndpoint) return false;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    Accept: "application/json",
+  };
+  const body: Record<string, string> = { token: params.token, client_id: params.clientId };
+  if (params.tokenTypeHint) body.token_type_hint = params.tokenTypeHint;
+  if (params.clientSecret) {
+    const basic = Buffer.from(`${params.clientId}:${params.clientSecret}`).toString("base64");
+    headers.Authorization = `Basic ${basic}`;
+  }
+  try {
+    const res = await fetch(params.metadata.revocationEndpoint, {
+      method: "POST",
+      headers,
+      body: new URLSearchParams(body).toString(),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
