@@ -435,7 +435,37 @@ async function setUpstreamIfRemote(
   baseRef: string,
 ): Promise<void> {
   if (!branch || !baseRef.startsWith("origin/")) return;
+  await ensureRemoteTracksBranch(repoPath, baseRef.slice("origin/".length));
   await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
+}
+
+/**
+ * Ensure `remote.origin.fetch` covers `branch` so upstream tracking resolves.
+ *
+ * A `--single-branch` clone only writes a fetch refspec for its clone branch, so
+ * a branch fetched ad-hoc by {@link fetchBranch} exists as a remote-tracking ref
+ * yet isn't reverse-mappable through the configured refspec. Both
+ * `git branch --set-upstream-to` and `@{upstream}` reject such a ref
+ * ("cannot set up tracking information; starting point '...' is not a branch").
+ * Registering the one branch keeps fetches scoped to the branches we actually
+ * work on — no wildcard, no pulling every branch — while making tracking work.
+ */
+async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promise<void> {
+  const desired = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
+  const wildcard = "+refs/heads/*:refs/remotes/origin/*";
+  const result = await execFileAsync(
+    "git",
+    ["config", "--get-all", "remote.origin.fetch"],
+    { cwd: repoPath },
+  ).catch(() => null);
+  const refspecs = (result?.stdout ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (refspecs.includes(desired) || refspecs.includes(wildcard)) return;
+  await execFileAsync("git", ["remote", "set-branches", "--add", "origin", branch], {
+    cwd: repoPath,
+  });
 }
 
 /**
