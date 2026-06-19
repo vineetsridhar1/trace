@@ -372,4 +372,60 @@ describe("createWorktree upstream tracking", () => {
       gitCallIndex((args) => args[0] === "branch" && args[1] === "--set-upstream-to"),
     ).toBeGreaterThanOrEqual(0);
   });
+
+  it("does not re-add a refspec entry that already lists the exact branch (idempotent on resume)", async () => {
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const callback = callbackFrom(args);
+      const cmd = Array.isArray(args[1]) ? (args[1] as string[]) : [];
+      if (cmd[0] === "config" && cmd.includes("remote.origin.fetch")) {
+        callback(
+          null,
+          "+refs/heads/main:refs/remotes/origin/main\n" +
+            "+refs/heads/feature/work:refs/remotes/origin/feature/work\n",
+          "",
+        );
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await createWorktree({
+      repoId: "repo-1",
+      sessionId: "session-1",
+      defaultBranch: "main",
+      branch: "feature/work",
+      preserveBranchName: true,
+      slug: "otter",
+    });
+
+    expect(gitCallIndex((args) => args[0] === "remote" && args[1] === "set-branches")).toBe(-1);
+  });
+
+  it("does not fail worktree creation when setting upstream errors", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const callback = callbackFrom(args);
+      const cmd = Array.isArray(args[1]) ? (args[1] as string[]) : [];
+      if (cmd[0] === "branch" && cmd[1] === "--set-upstream-to") {
+        callback(new Error("fatal: cannot set up tracking information"), "", "");
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await expect(
+      createWorktree({
+        repoId: "repo-1",
+        sessionId: "session-1",
+        defaultBranch: "main",
+        branch: "feature/work",
+        preserveBranchName: true,
+        slug: "otter",
+      }),
+    ).resolves.toEqual({
+      workdir: "/workspaces/otter",
+      branch: "feature/work",
+      slug: "otter",
+    });
+  });
 });

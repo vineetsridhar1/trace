@@ -435,8 +435,16 @@ async function setUpstreamIfRemote(
   baseRef: string,
 ): Promise<void> {
   if (!branch || !baseRef.startsWith("origin/")) return;
-  await ensureRemoteTracksBranch(repoPath, baseRef.slice("origin/".length));
-  await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
+  // Upstream tracking is cosmetic for an ephemeral worktree (Trace pushes
+  // explicitly), so a failure here must never abort workspace bootstrap.
+  try {
+    await ensureRemoteTracksBranch(repoPath, baseRef.slice("origin/".length));
+    await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
+  } catch (error) {
+    console.warn(
+      `[workspace] failed to set upstream for ${branch} -> ${baseRef}: ${getErrorMessage(error)}`,
+    );
+  }
 }
 
 /**
@@ -449,6 +457,10 @@ async function setUpstreamIfRemote(
  * ("cannot set up tracking information; starting point '...' is not a branch").
  * Registering the one branch keeps fetches scoped to the branches we actually
  * work on — no wildcard, no pulling every branch — while making tracking work.
+ *
+ * No fetch is needed here: callers only reach this for an `origin/<branch>`
+ * baseRef, which `resolveBaseRef` returns only after confirming the
+ * remote-tracking ref already exists locally.
  */
 async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promise<void> {
   const desired = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
@@ -458,6 +470,8 @@ async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promi
     ["config", "--get-all", "remote.origin.fetch"],
     { cwd: repoPath },
   ).catch(() => null);
+  // Conservative exact-string match: a non-canonical covering refspec (e.g. a
+  // narrower wildcard) would just add a redundant entry, which git dedupes.
   const refspecs = (result?.stdout ?? "")
     .split("\n")
     .map((line) => line.trim())
