@@ -218,12 +218,6 @@ function payloadRecord(event: Event): Record<string, unknown> | null {
   return asRecord(event.payload);
 }
 
-function isCompletedSessionEvent(event: Event): boolean {
-  if (event.eventType !== "session_terminated") return false;
-  const payload = payloadRecord(event);
-  return payload?.agentStatus === "done" && payload.sessionStatus !== "needs_input";
-}
-
 function isPrLifecycleEvent(event: Event): boolean {
   return (
     event.eventType === "session_pr_opened" ||
@@ -512,7 +506,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
         const event = result.data.sessionEvents as Event & { id: string };
         handleSessionEvent(sessionId, event);
 
-        if (isCompletedSessionEvent(event)) {
+        if (event.eventType === "session_terminated") {
           void fetchEvents();
         } else if (timelineModeRef.current === "compact") {
           updateCompactItems((current) => appendEventItem(current, event));
@@ -652,6 +646,7 @@ export function useSessionEvents(sessionId: string, options?: { skip?: boolean }
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
   const eventIds = useScopedEventIds(scopeKey);
+
   const compactEventIdSet = useMemo(() => {
     if (!compactItems) return null;
     const ids = new Set<string>();
