@@ -1,9 +1,15 @@
 import type { ActorType } from "@trace/gql";
-import { Prisma, type McpServer } from "@prisma/client";
+import { Prisma, type McpConnection, type McpServer } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { decryptSecret, encryptSecret } from "../lib/encryption.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
+import {
+  MCP_CATALOG,
+  getMcpCatalogEntry,
+  isCatalogEntryAvailable,
+  preregisteredClient,
+} from "../lib/mcp-catalog.js";
 import {
   discoverOAuthMetadata,
   mcpRedirectUri,
@@ -13,21 +19,7 @@ import {
 
 type TxClient = Prisma.TransactionClient;
 
-const VALID_TRANSPORTS = new Set(["http", "sse"]);
-
-export interface McpServerInput {
-  organizationId: string;
-  name: string;
-  url: string;
-  transport?: string;
-}
-
-export interface McpServerUpdateInput {
-  name?: string;
-  url?: string;
-  transport?: string;
-  enabled?: boolean;
-}
+export type McpConnectionState = "connected" | "expired" | "disconnected";
 
 /** OAuth context needed to drive the authorize/exchange/refresh flow for a server. */
 export interface McpOAuthContext {
@@ -37,32 +29,15 @@ export interface McpOAuthContext {
   clientSecret?: string;
 }
 
-function normalizeName(name: string): string {
-  const normalized = name.trim();
-  if (!normalized) throw new Error("MCP server name is required");
-  return normalized;
-}
-
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim();
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    throw new Error("MCP server url must be a valid URL");
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("MCP server url must use http:// or https://");
-  }
-  return trimmed;
-}
-
-function normalizeTransport(transport: string | undefined): string {
-  const value = (transport ?? "http").trim();
-  if (!VALID_TRANSPORTS.has(value)) {
-    throw new Error("MCP server transport must be 'http' or 'sse'");
-  }
-  return value;
+/** A catalog provider combined with org enablement + a user's connection state. */
+export interface McpCatalogProviderStatus {
+  id: string;
+  name: string;
+  transport: string;
+  available: boolean;
+  enabled: boolean;
+  serverId: string | null;
+  connectionState: McpConnectionState;
 }
 
 /** Public projection — never exposes client secret or cached metadata. */
@@ -71,6 +46,7 @@ export function mcpServerPayload(server: McpServer): Prisma.InputJsonObject {
     id: server.id,
     orgId: server.organizationId,
     organizationId: server.organizationId,
+    catalogId: server.catalogId,
     name: server.name,
     url: server.url,
     transport: server.transport,
@@ -80,6 +56,18 @@ export function mcpServerPayload(server: McpServer): Prisma.InputJsonObject {
   };
 }
 
+function connectionStateOf(connection: McpConnection | undefined): McpConnectionState {
+  if (!connection) return "disconnected";
+  if (
+    connection.expiresAt &&
+    connection.expiresAt.getTime() <= Date.now() &&
+    !connection.encryptedRefreshToken
+  ) {
+    return "expired";
+  }
+  return "connected";
+}
+
 function metadataToJson(metadata: OAuthMetadata): Prisma.InputJsonObject {
   return { ...metadata } as unknown as Prisma.InputJsonObject;
 }
@@ -87,59 +75,95 @@ function metadataToJson(metadata: OAuthMetadata): Prisma.InputJsonObject {
 function jsonToMetadata(value: Prisma.JsonValue | null): OAuthMetadata | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const doc = value as Record<string, unknown>;
-  if (
-    typeof doc.authorizationEndpoint !== "string" ||
-    typeof doc.tokenEndpoint !== "string"
-  ) {
+  if (typeof doc.authorizationEndpoint !== "string" || typeof doc.tokenEndpoint !== "string") {
     return null;
   }
   return doc as unknown as OAuthMetadata;
 }
 
 export class McpServerService {
-  async list(organizationId: string, actorType: ActorType, actorId: string) {
-    return prisma.$transaction(async (tx: TxClient) => {
-      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
-      return tx.mcpServer.findMany({
-        where: { organizationId },
-        orderBy: { name: "asc" },
-      });
+  /** Catalog grid for a user: availability, org enablement, and connection state. */
+  async listCatalog(
+    userId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<McpCatalogProviderStatus[]> {
+    await prisma.$transaction((tx: TxClient) =>
+      assertActorOrgAccess(tx, organizationId, actorType, actorId),
+    );
+    const servers = await prisma.mcpServer.findMany({ where: { organizationId } });
+    const serverByCatalog = new Map(servers.map((s) => [s.catalogId, s] as const));
+    const connections = servers.length
+      ? await prisma.mcpConnection.findMany({
+          where: { userId, mcpServerId: { in: servers.map((s) => s.id) } },
+        })
+      : [];
+    const connByServer = new Map(connections.map((c) => [c.mcpServerId, c] as const));
+
+    return MCP_CATALOG.map((entry) => {
+      const server = serverByCatalog.get(entry.id);
+      const connection = server ? connByServer.get(server.id) : undefined;
+      return {
+        id: entry.id,
+        name: entry.name,
+        transport: entry.transport,
+        available: isCatalogEntryAvailable(entry),
+        enabled: Boolean(server),
+        serverId: server?.id ?? null,
+        connectionState: connectionStateOf(connection),
+      };
     });
   }
 
-  async create(input: McpServerInput, actorType: ActorType, actorId: string) {
-    const name = normalizeName(input.name);
-    const url = normalizeUrl(input.url);
-    const transport = normalizeTransport(input.transport);
+  /** Enable a catalog provider for an org (admin only). Resolves the OAuth client. */
+  async enable(
+    organizationId: string,
+    catalogId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<McpServer> {
+    const entry = getMcpCatalogEntry(catalogId);
+    if (!entry) throw new Error("Unknown MCP provider");
+    if (!isCatalogEntryAvailable(entry)) {
+      throw new Error(`${entry.name} is not configured on this server`);
+    }
 
-    // Authorize BEFORE any network side effects (SSRF + dynamic client
-    // registration are externally observable), then reject obvious conflicts
-    // so we don't register an OAuth client we can't persist.
+    // Authorize BEFORE any network side effects (SSRF + DCR are observable).
     await prisma.$transaction((tx: TxClient) =>
-      assertActorOrgAdmin(tx, input.organizationId, actorType, actorId),
+      assertActorOrgAdmin(tx, organizationId, actorType, actorId),
     );
     const conflict = await prisma.mcpServer.findUnique({
-      where: { organizationId_name: { organizationId: input.organizationId, name } },
+      where: { organizationId_catalogId: { organizationId, catalogId } },
       select: { id: true },
     });
-    if (conflict) throw new Error("An MCP server with that name already exists");
+    if (conflict) throw new Error(`${entry.name} is already enabled`);
 
-    // OAuth discovery + dynamic client registration happen outside the
-    // transaction — they make network calls and must not hold a DB lock.
-    const metadata = await discoverOAuthMetadata(url);
-    const client = await registerClient(metadata, mcpRedirectUri());
-    const secret = client.clientSecret ? encryptSecret(client.clientSecret) : null;
+    const metadata = await discoverOAuthMetadata(entry.url);
+    let clientId: string;
+    let secret: { encrypted: string; iv: string } | null = null;
+    if (entry.auth.strategy === "dcr") {
+      const client = await registerClient(metadata, mcpRedirectUri());
+      clientId = client.clientId;
+      secret = client.clientSecret ? encryptSecret(client.clientSecret) : null;
+    } else {
+      const creds = preregisteredClient(entry);
+      if (!creds) throw new Error(`${entry.name} is not configured on this server`);
+      clientId = creds.clientId;
+      secret = creds.clientSecret ? encryptSecret(creds.clientSecret) : null;
+    }
 
     return prisma.$transaction(async (tx: TxClient) => {
-      await assertActorOrgAdmin(tx, input.organizationId, actorType, actorId);
+      await assertActorOrgAdmin(tx, organizationId, actorType, actorId);
       const created = await tx.mcpServer.create({
         data: {
-          organizationId: input.organizationId,
-          name,
-          url,
-          transport,
+          organizationId,
+          catalogId,
+          name: entry.name,
+          url: entry.url,
+          transport: entry.transport,
           oauthMetadata: metadataToJson(metadata),
-          clientId: client.clientId,
+          clientId,
           encryptedClientSecret: secret?.encrypted ?? null,
           clientSecretIv: secret?.iv ?? null,
         },
@@ -164,59 +188,16 @@ export class McpServerService {
 
   async update(
     id: string,
-    input: McpServerUpdateInput,
+    input: { enabled?: boolean },
     actorType: ActorType,
     actorId: string,
-  ) {
-    const name = input.name !== undefined ? normalizeName(input.name) : undefined;
-    const url = input.url !== undefined ? normalizeUrl(input.url) : undefined;
-    const transport = input.transport !== undefined ? normalizeTransport(input.transport) : undefined;
-
-    // Authorize before any network side effects.
+  ): Promise<McpServer> {
     const existing = await prisma.mcpServer.findUniqueOrThrow({ where: { id } });
-    await prisma.$transaction((tx: TxClient) =>
-      assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId),
-    );
-
-    // If the URL changes, re-discover metadata and re-register the client.
-    const urlChanged = url !== undefined && url !== existing.url;
-    let rediscovered: { metadata: OAuthMetadata; clientId: string; secret: { encrypted: string; iv: string } | null } | null =
-      null;
-    if (urlChanged) {
-      const metadata = await discoverOAuthMetadata(url);
-      const client = await registerClient(metadata, mcpRedirectUri());
-      rediscovered = {
-        metadata,
-        clientId: client.clientId,
-        secret: client.clientSecret ? encryptSecret(client.clientSecret) : null,
-      };
-    }
-
     return prisma.$transaction(async (tx: TxClient) => {
       await assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId);
-
-      // A new URL means a new OAuth client/endpoints — existing user
-      // connections hold tokens for the old client and are now invalid.
-      if (urlChanged) {
-        await tx.mcpConnection.deleteMany({ where: { mcpServerId: id } });
-      }
-
       const updated = await tx.mcpServer.update({
         where: { id },
-        data: {
-          ...(name !== undefined ? { name } : {}),
-          ...(url !== undefined ? { url } : {}),
-          ...(transport !== undefined ? { transport } : {}),
-          ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-          ...(rediscovered
-            ? {
-                oauthMetadata: metadataToJson(rediscovered.metadata),
-                clientId: rediscovered.clientId,
-                encryptedClientSecret: rediscovered.secret?.encrypted ?? null,
-                clientSecretIv: rediscovered.secret?.iv ?? null,
-              }
-            : {}),
-        },
+        data: { ...(input.enabled !== undefined ? { enabled: input.enabled } : {}) },
       });
 
       await eventService.create(

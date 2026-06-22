@@ -6,6 +6,7 @@ import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
 import { decryptSecret, encryptSecret } from "../lib/encryption.js";
 import { mcpServerService } from "../services/mcp-server.js";
 import { mcpConnectionService } from "../services/mcp-connection.js";
+import { getMcpCatalogEntry } from "../lib/mcp-catalog.js";
 import {
   buildAuthorizeUrl,
   exchangeCode,
@@ -136,6 +137,7 @@ router.get("/:serverId/oauth/start", async (req: Request, res: Response) => {
       redirectUri: mcpRedirectUri(),
       state,
       codeChallenge: pkce.challenge,
+      scope: getMcpCatalogEntry(server.catalogId)?.scope,
     });
     res.redirect(authorizeUrl);
   } catch (err) {

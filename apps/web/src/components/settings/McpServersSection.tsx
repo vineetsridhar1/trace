@@ -5,41 +5,24 @@ import { toast } from "sonner";
 import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 
-const MCP_SERVERS_QUERY = gql`
-  query McpServers($orgId: ID!) {
-    mcpServers(orgId: $orgId) {
+const MCP_CATALOG_QUERY = gql`
+  query McpCatalog($orgId: ID!) {
+    mcpCatalog(orgId: $orgId) {
       id
-      orgId
       name
-      url
       transport
+      available
       enabled
+      serverId
+      connectionState
     }
   }
 `;
 
-const MY_MCP_CONNECTIONS_QUERY = gql`
-  query MyMcpConnections($orgId: ID!) {
-    myMcpConnections(orgId: $orgId) {
-      mcpServer {
-        id
-        name
-        url
-        transport
-      }
-      state
-      expiresAt
-      scope
-      updatedAt
-    }
-  }
-`;
-
-const CREATE_MCP_SERVER = gql`
-  mutation CreateMcpServer($input: CreateMcpServerInput!) {
-    createMcpServer(input: $input) {
+const ENABLE_MCP_SERVER = gql`
+  mutation EnableMcpServer($input: EnableMcpServerInput!) {
+    enableMcpServer(input: $input) {
       id
     }
   }
@@ -57,21 +40,14 @@ const DISCONNECT_MCP = gql`
   }
 `;
 
-type McpServerRow = {
+type CatalogProvider = {
   id: string;
-  orgId: string;
   name: string;
-  url: string;
   transport: string;
+  available: boolean;
   enabled: boolean;
-};
-
-type McpConnectionRow = {
-  mcpServer: { id: string; name: string; url: string; transport: string };
-  state: "connected" | "expired" | "disconnected";
-  expiresAt: string | null;
-  scope: string | null;
-  updatedAt: string | null;
+  serverId: string | null;
+  connectionState: "connected" | "expired" | "disconnected";
 };
 
 export function McpServersSection() {
@@ -82,75 +58,53 @@ export function McpServersSection() {
     [orgMemberships, activeOrgId],
   );
 
-  const [servers, setServers] = useState<McpServerRow[]>([]);
-  const [connections, setConnections] = useState<McpConnectionRow[]>([]);
-  const [newName, setNewName] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [providers, setProviders] = useState<CatalogProvider[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const connectionByServerId = useMemo(
-    () => new Map(connections.map((c) => [c.mcpServer.id, c] as const)),
-    [connections],
-  );
-
-  const fetchConnections = useCallback(async () => {
+  const fetchCatalog = useCallback(async () => {
     if (!activeOrgId) return;
     const result = await client
-      .query(MY_MCP_CONNECTIONS_QUERY, { orgId: activeOrgId })
+      .query(MCP_CATALOG_QUERY, { orgId: activeOrgId }, { requestPolicy: "network-only" })
       .toPromise();
-    if (result.data?.myMcpConnections) {
-      setConnections(result.data.myMcpConnections as McpConnectionRow[]);
-    }
-  }, [activeOrgId]);
-
-  const fetchServers = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client.query(MCP_SERVERS_QUERY, { orgId: activeOrgId }).toPromise();
-    if (result.data?.mcpServers) {
-      setServers(result.data.mcpServers as McpServerRow[]);
+    if (result.data?.mcpCatalog) {
+      setProviders(result.data.mcpCatalog as CatalogProvider[]);
     }
   }, [activeOrgId]);
 
   useEffect(() => {
-    void fetchServers();
-    void fetchConnections();
-  }, [fetchServers, fetchConnections]);
+    void fetchCatalog();
+  }, [fetchCatalog]);
 
-  const handleCreate = useCallback(async () => {
-    if (!activeOrgId || !newName.trim() || !newUrl.trim()) return;
-    setCreating(true);
-    setError(null);
-    try {
-      const result = await client
-        .mutation(CREATE_MCP_SERVER, {
-          input: { orgId: activeOrgId, name: newName.trim(), url: newUrl.trim() },
-        })
-        .toPromise();
-      if (result.error) throw new Error(result.error.message);
-      setNewName("");
-      setNewUrl("");
-      await fetchServers();
-      await fetchConnections();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add MCP server");
-    } finally {
-      setCreating(false);
-    }
-  }, [activeOrgId, newName, newUrl, fetchServers, fetchConnections]);
+  const handleEnable = useCallback(
+    async (catalogId: string) => {
+      if (!activeOrgId) return;
+      setBusyId(catalogId);
+      try {
+        const result = await client
+          .mutation(ENABLE_MCP_SERVER, { input: { orgId: activeOrgId, catalogId } })
+          .toPromise();
+        if (result.error) throw new Error(result.error.message);
+        await fetchCatalog();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to enable provider");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [activeOrgId, fetchCatalog],
+  );
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      if (!window.confirm("Remove this MCP server for the whole organization?")) return;
-      const result = await client.mutation(DELETE_MCP_SERVER, { id }).toPromise();
+  const handleRemove = useCallback(
+    async (serverId: string) => {
+      if (!window.confirm("Remove this MCP provider for the whole organization?")) return;
+      const result = await client.mutation(DELETE_MCP_SERVER, { id: serverId }).toPromise();
       if (result.error) {
         toast.error(result.error.message);
         return;
       }
-      await fetchServers();
-      await fetchConnections();
+      await fetchCatalog();
     },
-    [fetchServers, fetchConnections],
+    [fetchCatalog],
   );
 
   const handleConnect = useCallback(
@@ -161,11 +115,11 @@ export function McpServersSection() {
       const timer = window.setInterval(() => {
         if (popup.closed) {
           window.clearInterval(timer);
-          void fetchConnections();
+          void fetchCatalog();
         }
       }, 1000);
     },
-    [fetchConnections],
+    [fetchCatalog],
   );
 
   const handleDisconnect = useCallback(
@@ -175,9 +129,9 @@ export function McpServersSection() {
         toast.error(result.error.message);
         return;
       }
-      await fetchConnections();
+      await fetchCatalog();
     },
-    [fetchConnections],
+    [fetchCatalog],
   );
 
   if (!activeOrgId) {
@@ -189,97 +143,81 @@ export function McpServersSection() {
       <div>
         <h2 className="text-base font-semibold text-foreground">MCP Servers</h2>
         <p className="text-sm text-muted-foreground">
-          Connect remote MCP servers once; your connection is injected into cloud coding sessions
-          automatically.
+          Connect a supported MCP provider with your own account. Your connection is injected into
+          cloud coding sessions automatically.
         </p>
       </div>
 
-      {isAdmin && (
-        <div className="rounded-lg border border-border bg-surface-deep p-4">
-          <p className="mb-3 text-sm font-medium text-foreground">Add a server</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              placeholder="Name (e.g. Linear)"
-              value={newName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)}
-              className="sm:max-w-[200px]"
-            />
-            <Input
-              placeholder="https://mcp.example.com/sse"
-              value={newUrl}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewUrl(e.target.value)}
-            />
-            <Button
-              onClick={handleCreate}
-              disabled={creating || !newName.trim() || !newUrl.trim()}
-            >
-              {creating ? "Adding..." : "Add"}
-            </Button>
-          </div>
-          {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-        </div>
-      )}
-
-      <div className="space-y-2">
-        {servers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No MCP servers configured yet.</p>
-        ) : (
-          servers.map((server) => {
-            const connection = connectionByServerId.get(server.id);
-            const state = connection?.state ?? "disconnected";
-            return (
-              <div
-                key={server.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-elevated p-4"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Plug size={16} className="shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{server.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{server.url}</p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {state === "connected" ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-                      <CheckCircle2 size={12} />
-                      Connected
-                    </span>
-                  ) : state === "expired" ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-amber-500">
-                      <CircleAlert size={12} />
-                      Expired
-                    </span>
-                  ) : null}
-                  {state === "disconnected" || state === "expired" ? (
-                    <Button size="sm" onClick={() => handleConnect(server.id)}>
-                      {state === "expired" ? "Reconnect" : "Connect"}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void handleDisconnect(server.id)}
-                    >
-                      <Unplug size={14} />
-                      Disconnect
-                    </Button>
-                  )}
-                  {isAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => void handleDelete(server.id)}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  )}
-                </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {providers.map((provider) => (
+          <div
+            key={provider.id}
+            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-elevated p-4"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <Plug size={16} className="shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">{provider.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {!provider.available
+                    ? "Unavailable — not configured on this server"
+                    : !provider.enabled
+                      ? "Not enabled for this org"
+                      : provider.connectionState === "connected"
+                        ? "Connected"
+                        : provider.connectionState === "expired"
+                          ? "Connection expired"
+                          : "Ready to connect"}
+                </p>
               </div>
-            );
-          })
-        )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {provider.enabled && provider.connectionState === "connected" && (
+                <CheckCircle2 size={14} className="text-emerald-500" />
+              )}
+              {provider.enabled && provider.connectionState === "expired" && (
+                <CircleAlert size={14} className="text-amber-500" />
+              )}
+
+              {!provider.available ? null : !provider.enabled ? (
+                isAdmin ? (
+                  <Button
+                    size="sm"
+                    disabled={busyId === provider.id}
+                    onClick={() => void handleEnable(provider.id)}
+                  >
+                    {busyId === provider.id ? "Enabling..." : "Enable"}
+                  </Button>
+                ) : null
+              ) : provider.connectionState === "connected" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => provider.serverId && void handleDisconnect(provider.serverId)}
+                >
+                  <Unplug size={14} />
+                  Disconnect
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => provider.serverId && handleConnect(provider.serverId)}>
+                  {provider.connectionState === "expired" ? "Reconnect" : "Connect"}
+                </Button>
+              )}
+
+              {isAdmin && provider.enabled && provider.serverId && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive"
+                  onClick={() => void handleRemove(provider.serverId!)}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );

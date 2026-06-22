@@ -1,6 +1,6 @@
 import type { Context } from "../context.js";
 import type {
-  CreateMcpServerInput,
+  EnableMcpServerInput,
   UpdateMcpServerInput,
   McpServerTransport,
 } from "@trace/gql";
@@ -8,24 +8,16 @@ import { mcpServerService } from "../services/mcp-server.js";
 import { mcpConnectionService } from "../services/mcp-connection.js";
 
 export const mcpQueries = {
-  mcpServers: (_: unknown, args: { orgId: string }, ctx: Context) => {
-    return mcpServerService.list(args.orgId, ctx.actorType, ctx.userId);
-  },
-
-  myMcpConnections: (_: unknown, args: { orgId: string }, ctx: Context) => {
-    return mcpConnectionService.listForUser(ctx.userId, args.orgId, ctx.actorType, ctx.userId);
+  mcpCatalog: (_: unknown, args: { orgId: string }, ctx: Context) => {
+    return mcpServerService.listCatalog(ctx.userId, args.orgId, ctx.actorType, ctx.userId);
   },
 };
 
 export const mcpMutations = {
-  createMcpServer: (_: unknown, args: { input: CreateMcpServerInput }, ctx: Context) => {
-    return mcpServerService.create(
-      {
-        organizationId: args.input.orgId,
-        name: args.input.name,
-        url: args.input.url,
-        transport: args.input.transport ?? undefined,
-      },
+  enableMcpServer: (_: unknown, args: { input: EnableMcpServerInput }, ctx: Context) => {
+    return mcpServerService.enable(
+      args.input.orgId,
+      args.input.catalogId,
       ctx.actorType,
       ctx.userId,
     );
@@ -34,12 +26,7 @@ export const mcpMutations = {
   updateMcpServer: (_: unknown, args: { input: UpdateMcpServerInput }, ctx: Context) => {
     return mcpServerService.update(
       args.input.id,
-      {
-        name: args.input.name ?? undefined,
-        url: args.input.url ?? undefined,
-        transport: args.input.transport ?? undefined,
-        enabled: args.input.enabled ?? undefined,
-      },
+      { enabled: args.input.enabled ?? undefined },
       ctx.actorType,
       ctx.userId,
     );
@@ -59,7 +46,7 @@ export const mcpTypeResolvers = {
     orgId: (server: { organizationId: string }) => server.organizationId,
     transport: (server: { transport: string }) => server.transport as McpServerTransport,
   },
-  McpConnectionStatus: {
-    mcpServer: (status: { server: unknown }) => status.server,
+  McpCatalogProvider: {
+    transport: (provider: { transport: string }) => provider.transport as McpServerTransport,
   },
 };

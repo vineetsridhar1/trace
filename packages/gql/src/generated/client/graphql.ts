@@ -338,13 +338,6 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
-export type CreateMcpServerInput = {
-  name: Scalars["String"]["input"];
-  orgId: Scalars["ID"]["input"];
-  transport?: InputMaybe<McpServerTransport>;
-  url: Scalars["String"]["input"];
-};
-
 export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
@@ -379,6 +372,11 @@ export type DeliveryResult =
   | "no_runtime"
   | "runtime_disconnected"
   | "session_unbound";
+
+export type EnableMcpServerInput = {
+  catalogId: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+};
 
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
@@ -595,19 +593,30 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
-export type McpConnectionState = "connected" | "disconnected" | "expired";
-
-export type McpConnectionStatus = {
-  __typename?: "McpConnectionStatus";
-  expiresAt?: Maybe<Scalars["DateTime"]["output"]>;
-  mcpServer: McpServer;
-  scope?: Maybe<Scalars["String"]["output"]>;
-  state: McpConnectionState;
-  updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
+/**
+ * A supported MCP provider combined with this org's enablement and the current
+ * user's connection status. Drives the MCP settings grid.
+ */
+export type McpCatalogProvider = {
+  __typename?: "McpCatalogProvider";
+  /** Whether the provider can be enabled (client credentials configured). */
+  available: Scalars["Boolean"]["output"];
+  /** This user's connection state for the provider. */
+  connectionState: McpConnectionState;
+  /** Whether an org admin has enabled this provider. */
+  enabled: Scalars["Boolean"]["output"];
+  id: Scalars["String"]["output"];
+  name: Scalars["String"]["output"];
+  /** The McpServer id when enabled (used to start/disconnect OAuth). */
+  serverId?: Maybe<Scalars["ID"]["output"]>;
+  transport: McpServerTransport;
 };
+
+export type McpConnectionState = "connected" | "disconnected" | "expired";
 
 export type McpServer = {
   __typename?: "McpServer";
+  catalogId: Scalars["String"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   enabled: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
@@ -664,7 +673,6 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
-  createMcpServer: McpServer;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -688,6 +696,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  enableMcpServer: McpServer;
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
   joinChannel: Channel;
@@ -845,10 +854,6 @@ export type MutationCreateChatArgs = {
   input: CreateChatInput;
 };
 
-export type MutationCreateMcpServerArgs = {
-  input: CreateMcpServerInput;
-};
-
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
 };
@@ -944,6 +949,10 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars["String"]["input"];
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationEnableMcpServerArgs = {
+  input: EnableMcpServerInput;
 };
 
 export type MutationEnableSessionEndpointForwardingArgs = {
@@ -1406,11 +1415,10 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
-  mcpServers: Array<McpServer>;
+  mcpCatalog: Array<McpCatalogProvider>;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
   myConnections: Array<ConnectionsBridge>;
-  myMcpConnections: Array<McpConnectionStatus>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
@@ -1554,11 +1562,7 @@ export type QueryLinkedCheckoutStatusArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
-export type QueryMcpServersArgs = {
-  orgId: Scalars["ID"]["input"];
-};
-
-export type QueryMyMcpConnectionsArgs = {
+export type QueryMcpCatalogArgs = {
   orgId: Scalars["ID"]["input"];
 };
 
@@ -2351,9 +2355,6 @@ export type UpdateChannelInput = {
 export type UpdateMcpServerInput = {
   enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
   id: Scalars["ID"]["input"];
-  name?: InputMaybe<Scalars["String"]["input"]>;
-  transport?: InputMaybe<McpServerTransport>;
-  url?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateRepoInput = {
@@ -3286,6 +3287,45 @@ export type DeleteApiTokenMutationVariables = Exact<{
 }>;
 
 export type DeleteApiTokenMutation = { __typename?: "Mutation"; deleteApiToken: boolean };
+
+export type McpCatalogQueryVariables = Exact<{
+  orgId: Scalars["ID"]["input"];
+}>;
+
+export type McpCatalogQuery = {
+  __typename?: "Query";
+  mcpCatalog: Array<{
+    __typename?: "McpCatalogProvider";
+    id: string;
+    name: string;
+    transport: McpServerTransport;
+    available: boolean;
+    enabled: boolean;
+    serverId?: string | null;
+    connectionState: McpConnectionState;
+  }>;
+};
+
+export type EnableMcpServerMutationVariables = Exact<{
+  input: EnableMcpServerInput;
+}>;
+
+export type EnableMcpServerMutation = {
+  __typename?: "Mutation";
+  enableMcpServer: { __typename?: "McpServer"; id: string };
+};
+
+export type DeleteMcpServerMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type DeleteMcpServerMutation = { __typename?: "Mutation"; deleteMcpServer: boolean };
+
+export type DisconnectMcpMutationVariables = Exact<{
+  mcpServerId: Scalars["ID"]["input"];
+}>;
+
+export type DisconnectMcpMutation = { __typename?: "Mutation"; disconnectMcp: boolean };
 
 export type AddOrgMemberMutationVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
@@ -7033,6 +7073,166 @@ export const DeleteApiTokenDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>;
+export const McpCatalogDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "McpCatalog" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "mcpCatalog" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "orgId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "orgId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "transport" } },
+                { kind: "Field", name: { kind: "Name", value: "available" } },
+                { kind: "Field", name: { kind: "Name", value: "enabled" } },
+                { kind: "Field", name: { kind: "Name", value: "serverId" } },
+                { kind: "Field", name: { kind: "Name", value: "connectionState" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<McpCatalogQuery, McpCatalogQueryVariables>;
+export const EnableMcpServerDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "EnableMcpServer" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "EnableMcpServerInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "enableMcpServer" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<EnableMcpServerMutation, EnableMcpServerMutationVariables>;
+export const DeleteMcpServerDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteMcpServer" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "deleteMcpServer" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DeleteMcpServerMutation, DeleteMcpServerMutationVariables>;
+export const DisconnectMcpDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DisconnectMcp" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "mcpServerId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "disconnectMcp" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "mcpServerId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "mcpServerId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DisconnectMcpMutation, DisconnectMcpMutationVariables>;
 export const AddOrgMemberDocument = {
   kind: "Document",
   definitions: [

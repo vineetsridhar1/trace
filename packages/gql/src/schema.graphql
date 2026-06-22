@@ -373,6 +373,7 @@ type AgentEnvironmentTestResult {
 type McpServer {
   id: ID!
   orgId: ID!
+  catalogId: String!
   name: String!
   url: String!
   transport: McpServerTransport!
@@ -381,12 +382,22 @@ type McpServer {
   updatedAt: DateTime!
 }
 
-type McpConnectionStatus {
-  mcpServer: McpServer!
-  state: McpConnectionState!
-  expiresAt: DateTime
-  scope: String
-  updatedAt: DateTime
+"""
+A supported MCP provider combined with this org's enablement and the current
+user's connection status. Drives the MCP settings grid.
+"""
+type McpCatalogProvider {
+  id: String!
+  name: String!
+  transport: McpServerTransport!
+  "Whether the provider can be enabled (client credentials configured)."
+  available: Boolean!
+  "Whether an org admin has enabled this provider."
+  enabled: Boolean!
+  "The McpServer id when enabled (used to start/disconnect OAuth)."
+  serverId: ID
+  "This user's connection state for the provider."
+  connectionState: McpConnectionState!
 }
 
 type OrgSecret {
@@ -1286,18 +1297,13 @@ input UpdateAgentEnvironmentInput {
   isDefault: Boolean
 }
 
-input CreateMcpServerInput {
+input EnableMcpServerInput {
   orgId: ID!
-  name: String!
-  url: String!
-  transport: McpServerTransport
+  catalogId: String!
 }
 
 input UpdateMcpServerInput {
   id: ID!
-  name: String
-  url: String
-  transport: McpServerTransport
   enabled: Boolean
 }
 
@@ -1317,8 +1323,7 @@ type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
-  mcpServers(orgId: ID!): [McpServer!]!
-  myMcpConnections(orgId: ID!): [McpConnectionStatus!]!
+  mcpCatalog(orgId: ID!): [McpCatalogProvider!]!
   orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
@@ -1490,7 +1495,7 @@ type Mutation {
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
   deleteAgentEnvironment(id: ID!): Boolean!
   testAgentEnvironment(id: ID!): AgentEnvironmentTestResult!
-  createMcpServer(input: CreateMcpServerInput!): McpServer!
+  enableMcpServer(input: EnableMcpServerInput!): McpServer!
   updateMcpServer(input: UpdateMcpServerInput!): McpServer!
   deleteMcpServer(id: ID!): Boolean!
   disconnectMcp(mcpServerId: ID!): Boolean!

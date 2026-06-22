@@ -50,6 +50,10 @@ type Documents = {
   "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n": typeof types.MyApiTokensDocument;
   "\n  mutation SetApiToken($input: SetApiTokenInput!) {\n    setApiToken(input: $input) {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n": typeof types.SetApiTokenDocument;
   "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n": typeof types.DeleteApiTokenDocument;
+  "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      available\n      enabled\n      serverId\n      connectionState\n    }\n  }\n": typeof types.McpCatalogDocument;
+  "\n  mutation EnableMcpServer($input: EnableMcpServerInput!) {\n    enableMcpServer(input: $input) {\n      id\n    }\n  }\n": typeof types.EnableMcpServerDocument;
+  "\n  mutation DeleteMcpServer($id: ID!) {\n    deleteMcpServer(id: $id)\n  }\n": typeof types.DeleteMcpServerDocument;
+  "\n  mutation DisconnectMcp($mcpServerId: ID!) {\n    disconnectMcp(mcpServerId: $mcpServerId)\n  }\n": typeof types.DisconnectMcpDocument;
   "\n  mutation AddOrgMember($organizationId: ID!, $userId: ID!, $role: UserRole) {\n    addOrgMember(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n        name\n        email\n        avatarUrl\n      }\n      role\n      joinedAt\n    }\n  }\n": typeof types.AddOrgMemberDocument;
   "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n": typeof types.RemoveOrgMemberDocument;
   "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": typeof types.UpdateOrgMemberRoleDocument;
@@ -169,6 +173,14 @@ const documents: Documents = {
     types.SetApiTokenDocument,
   "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n":
     types.DeleteApiTokenDocument,
+  "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      available\n      enabled\n      serverId\n      connectionState\n    }\n  }\n":
+    types.McpCatalogDocument,
+  "\n  mutation EnableMcpServer($input: EnableMcpServerInput!) {\n    enableMcpServer(input: $input) {\n      id\n    }\n  }\n":
+    types.EnableMcpServerDocument,
+  "\n  mutation DeleteMcpServer($id: ID!) {\n    deleteMcpServer(id: $id)\n  }\n":
+    types.DeleteMcpServerDocument,
+  "\n  mutation DisconnectMcp($mcpServerId: ID!) {\n    disconnectMcp(mcpServerId: $mcpServerId)\n  }\n":
+    types.DisconnectMcpDocument,
   "\n  mutation AddOrgMember($organizationId: ID!, $userId: ID!, $role: UserRole) {\n    addOrgMember(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n        name\n        email\n        avatarUrl\n      }\n      role\n      joinedAt\n    }\n  }\n":
     types.AddOrgMemberDocument,
   "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n":
@@ -491,6 +503,30 @@ export function graphql(
 export function graphql(
   source: "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n",
 ): (typeof documents)["\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      available\n      enabled\n      serverId\n      connectionState\n    }\n  }\n",
+): (typeof documents)["\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      available\n      enabled\n      serverId\n      connectionState\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation EnableMcpServer($input: EnableMcpServerInput!) {\n    enableMcpServer(input: $input) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation EnableMcpServer($input: EnableMcpServerInput!) {\n    enableMcpServer(input: $input) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation DeleteMcpServer($id: ID!) {\n    deleteMcpServer(id: $id)\n  }\n",
+): (typeof documents)["\n  mutation DeleteMcpServer($id: ID!) {\n    deleteMcpServer(id: $id)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation DisconnectMcp($mcpServerId: ID!) {\n    disconnectMcp(mcpServerId: $mcpServerId)\n  }\n",
+): (typeof documents)["\n  mutation DisconnectMcp($mcpServerId: ID!) {\n    disconnectMcp(mcpServerId: $mcpServerId)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

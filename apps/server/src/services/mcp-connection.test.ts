@@ -59,40 +59,6 @@ beforeEach(() => {
   });
 });
 
-describe("listForUser", () => {
-  it("asserts org access and maps per-server connection state", async () => {
-    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "u1" });
-    prismaMock.mcpServer.findMany.mockResolvedValue([
-      { id: "srv-1", organizationId: "org-1", name: "A", url: "u", transport: "http" },
-      { id: "srv-2", organizationId: "org-1", name: "B", url: "u", transport: "http" },
-    ]);
-    prismaMock.mcpConnection.findMany.mockResolvedValue([connection({ mcpServerId: "srv-1" })]);
-
-    const result = await mcpConnectionService.listForUser("u1", "org-1", "user", "u1");
-
-    expect(prismaMock.orgMember.findUniqueOrThrow).toHaveBeenCalled();
-    expect(result.find((r) => r.server.id === "srv-1")?.state).toBe("connected");
-    expect(result.find((r) => r.server.id === "srv-2")?.state).toBe("disconnected");
-  });
-
-  it("reports expired when the token is past expiry with no refresh token", async () => {
-    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "u1" });
-    prismaMock.mcpServer.findMany.mockResolvedValue([
-      { id: "srv-1", organizationId: "org-1", name: "A", url: "u", transport: "http" },
-    ]);
-    prismaMock.mcpConnection.findMany.mockResolvedValue([
-      connection({
-        expiresAt: new Date(Date.now() - 1000),
-        encryptedRefreshToken: null,
-        refreshIv: null,
-      }),
-    ]);
-
-    const result = await mcpConnectionService.listForUser("u1", "org-1", "user", "u1");
-    expect(result[0].state).toBe("expired");
-  });
-});
-
 describe("upsertTokens", () => {
   it("emits mcp_connection_created", async () => {
     prismaMock.mcpServer.findUniqueOrThrow.mockResolvedValue({ id: "srv-1", organizationId: "org-1" });

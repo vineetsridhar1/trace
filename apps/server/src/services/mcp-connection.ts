@@ -1,9 +1,7 @@
-import type { ActorType, McpConnectionState } from "@trace/gql";
-import { Prisma, type McpConnection, type McpServer } from "@prisma/client";
+import { Prisma, type McpConnection } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { decryptSecret, encryptSecret } from "../lib/encryption.js";
 import { eventService } from "./event.js";
-import { assertActorOrgAccess } from "./actor-auth.js";
 import { mcpServerService } from "./mcp-server.js";
 import { refreshToken, revokeToken } from "../lib/mcp-oauth.js";
 
@@ -18,14 +16,6 @@ const REFRESH_LEEWAY_MS = 60 * 1000;
  * racing — important for providers that rotate refresh tokens on use.
  */
 const inflightRefreshes = new Map<string, Promise<string | null>>();
-
-export interface McpConnectionStatus {
-  server: McpServer;
-  state: McpConnectionState;
-  expiresAt: Date | null;
-  scope: string | null;
-  updatedAt: Date | null;
-}
 
 export interface UpsertTokensInput {
   accessToken: string;
@@ -43,18 +33,6 @@ function mcpServerKey(name: string, fallbackId: string): string {
   return key || fallbackId;
 }
 
-function connectionState(connection: McpConnection | undefined): McpConnectionState {
-  if (!connection) return "disconnected";
-  if (
-    connection.expiresAt &&
-    connection.expiresAt.getTime() <= Date.now() &&
-    !connection.encryptedRefreshToken
-  ) {
-    return "expired";
-  }
-  return "connected";
-}
-
 function connectionPayload(connection: McpConnection): Prisma.InputJsonObject {
   return {
     mcpServerId: connection.mcpServerId,
@@ -66,36 +44,6 @@ function connectionPayload(connection: McpConnection): Prisma.InputJsonObject {
 }
 
 export class McpConnectionService {
-  /** Per-server connection status for a user across the org's enabled servers. */
-  async listForUser(
-    userId: string,
-    organizationId: string,
-    actorType: ActorType,
-    actorId: string,
-  ): Promise<McpConnectionStatus[]> {
-    await prisma.$transaction((tx: TxClient) =>
-      assertActorOrgAccess(tx, organizationId, actorType, actorId),
-    );
-    const [servers, connections] = await Promise.all([
-      prisma.mcpServer.findMany({
-        where: { organizationId, enabled: true },
-        orderBy: { name: "asc" },
-      }),
-      prisma.mcpConnection.findMany({ where: { userId } }),
-    ]);
-    const byServerId = new Map(connections.map((c) => [c.mcpServerId, c] as const));
-    return servers.map((server) => {
-      const connection = byServerId.get(server.id);
-      return {
-        server,
-        state: connectionState(connection),
-        expiresAt: connection?.expiresAt ?? null,
-        scope: connection?.scope ?? null,
-        updatedAt: connection?.updatedAt ?? null,
-      };
-    });
-  }
-
   /** Store tokens from the OAuth callback and announce the new connection. */
   async upsertTokens(
     userId: string,

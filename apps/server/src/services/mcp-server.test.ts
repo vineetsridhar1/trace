@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -44,121 +44,124 @@ function asMember() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  delete process.env.MCP_FIGMA_CLIENT_ID;
+  delete process.env.MCP_FIGMA_CLIENT_SECRET;
   discoverMock.mockResolvedValue(METADATA);
   registerMock.mockResolvedValue({ clientId: "client-1", clientSecret: "shh" });
+  prismaMock.mcpServer.findUnique.mockResolvedValue(null);
 });
 
-describe("mcpServerService.create", () => {
-  it("does NOT perform OAuth discovery or DCR when the actor is not an admin", async () => {
+afterEach(() => {
+  delete process.env.MCP_FIGMA_CLIENT_ID;
+  delete process.env.MCP_FIGMA_CLIENT_SECRET;
+});
+
+describe("mcpServerService.enable", () => {
+  it("does NOT discover or register for a non-admin", async () => {
     asMember();
-
-    await expect(
-      mcpServerService.create(
-        { organizationId: "org-1", name: "Linear", url: "https://mcp.example/sse" },
-        "user",
-        "u1",
-      ),
-    ).rejects.toThrow(/admin/i);
-
+    await expect(mcpServerService.enable("org-1", "linear", "user", "u1")).rejects.toThrow(/admin/i);
     expect(discoverMock).not.toHaveBeenCalled();
     expect(registerMock).not.toHaveBeenCalled();
     expect(prismaMock.mcpServer.create).not.toHaveBeenCalled();
   });
 
-  it("rejects a duplicate name before registering a client", async () => {
+  it("rejects an unknown catalog id", async () => {
     asAdmin();
-    prismaMock.mcpServer.findUnique.mockResolvedValue({ id: "existing" });
-
-    await expect(
-      mcpServerService.create(
-        { organizationId: "org-1", name: "Linear", url: "https://mcp.example/sse" },
-        "user",
-        "u1",
-      ),
-    ).rejects.toThrow(/already exists/);
-
-    expect(registerMock).not.toHaveBeenCalled();
+    await expect(mcpServerService.enable("org-1", "nope", "user", "u1")).rejects.toThrow(/Unknown/);
+    expect(discoverMock).not.toHaveBeenCalled();
   });
 
-  it("discovers, registers, encrypts the secret, persists, and emits created", async () => {
+  it("performs DCR for a dcr provider and persists with the catalog id", async () => {
     asAdmin();
-    prismaMock.mcpServer.findUnique.mockResolvedValue(null);
-    const created = {
+    prismaMock.mcpServer.create.mockResolvedValue({
       id: "srv-1",
       organizationId: "org-1",
+      catalogId: "linear",
       name: "Linear",
-      url: "https://mcp.example/sse",
+      url: "https://mcp.linear.app/mcp",
       transport: "http",
       enabled: true,
       createdAt: new Date("2026-01-01"),
       updatedAt: new Date("2026-01-01"),
-    };
-    prismaMock.mcpServer.create.mockResolvedValue(created);
+    });
 
-    const result = await mcpServerService.create(
-      { organizationId: "org-1", name: "Linear", url: "https://mcp.example/sse" },
-      "user",
-      "u1",
-    );
+    await mcpServerService.enable("org-1", "linear", "user", "u1");
 
-    expect(result).toBe(created);
-    expect(discoverMock).toHaveBeenCalledTimes(1);
-    const createArgs = prismaMock.mcpServer.create.mock.calls[0][0];
-    expect(createArgs.data.clientId).toBe("client-1");
-    expect(createArgs.data.encryptedClientSecret).toBe("enc(shh)");
-    expect(eventMock).toHaveBeenCalledTimes(1);
+    expect(registerMock).toHaveBeenCalledTimes(1);
+    const data = prismaMock.mcpServer.create.mock.calls[0][0].data;
+    expect(data.catalogId).toBe("linear");
+    expect(data.clientId).toBe("client-1");
     expect(eventMock.mock.calls[0][0].eventType).toBe("mcp_server_created");
+  });
+
+  it("rejects a pre-registered provider when its credentials are not configured", async () => {
+    asAdmin();
+    await expect(mcpServerService.enable("org-1", "figma", "user", "u1")).rejects.toThrow(
+      /not configured/,
+    );
+    expect(discoverMock).not.toHaveBeenCalled();
+    expect(registerMock).not.toHaveBeenCalled();
+  });
+
+  it("uses configured credentials for a pre-registered provider without DCR", async () => {
+    asAdmin();
+    process.env.MCP_FIGMA_CLIENT_ID = "figma-client";
+    process.env.MCP_FIGMA_CLIENT_SECRET = "figma-secret";
+    prismaMock.mcpServer.create.mockResolvedValue({
+      id: "srv-2",
+      organizationId: "org-1",
+      catalogId: "figma",
+      name: "Figma",
+      url: "https://mcp.figma.com/mcp",
+      transport: "http",
+      enabled: true,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    });
+
+    await mcpServerService.enable("org-1", "figma", "user", "u1");
+
+    expect(registerMock).not.toHaveBeenCalled();
+    const data = prismaMock.mcpServer.create.mock.calls[0][0].data;
+    expect(data.clientId).toBe("figma-client");
+    expect(data.encryptedClientSecret).toBe("enc(figma-secret)");
+  });
+
+  it("rejects enabling a provider that is already enabled", async () => {
+    asAdmin();
+    prismaMock.mcpServer.findUnique.mockResolvedValue({ id: "existing" });
+    await expect(mcpServerService.enable("org-1", "linear", "user", "u1")).rejects.toThrow(
+      /already enabled/,
+    );
+    expect(registerMock).not.toHaveBeenCalled();
   });
 });
 
-describe("mcpServerService.update", () => {
-  it("clears existing connections and re-registers when the URL changes", async () => {
-    asAdmin();
-    prismaMock.mcpServer.findUniqueOrThrow.mockResolvedValue({
-      id: "srv-1",
-      organizationId: "org-1",
-      url: "https://old.example/sse",
-    });
-    prismaMock.mcpServer.update.mockResolvedValue({
-      id: "srv-1",
-      organizationId: "org-1",
-      name: "Linear",
-      url: "https://new.example/sse",
-      transport: "http",
-      enabled: true,
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-02"),
-    });
+describe("mcpServerService.listCatalog", () => {
+  it("reports availability, enablement, and per-user connection state", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "u1" });
+    prismaMock.mcpServer.findMany.mockResolvedValue([
+      { id: "srv-1", organizationId: "org-1", catalogId: "linear", transport: "http" },
+    ]);
+    prismaMock.mcpConnection.findMany.mockResolvedValue([
+      {
+        mcpServerId: "srv-1",
+        expiresAt: new Date(Date.now() + 3600_000),
+        encryptedRefreshToken: "enc(r)",
+      },
+    ]);
 
-    await mcpServerService.update("srv-1", { url: "https://new.example/sse" }, "user", "u1");
+    const catalog = await mcpServerService.listCatalog("u1", "org-1", "user", "u1");
 
-    expect(discoverMock).toHaveBeenCalledWith("https://new.example/sse");
-    expect(prismaMock.mcpConnection.deleteMany).toHaveBeenCalledWith({
-      where: { mcpServerId: "srv-1" },
-    });
-  });
+    const linear = catalog.find((p) => p.id === "linear")!;
+    expect(linear.enabled).toBe(true);
+    expect(linear.serverId).toBe("srv-1");
+    expect(linear.available).toBe(true);
+    expect(linear.connectionState).toBe("connected");
 
-  it("does not re-register when the URL is unchanged", async () => {
-    asAdmin();
-    prismaMock.mcpServer.findUniqueOrThrow.mockResolvedValue({
-      id: "srv-1",
-      organizationId: "org-1",
-      url: "https://same.example/sse",
-    });
-    prismaMock.mcpServer.update.mockResolvedValue({
-      id: "srv-1",
-      organizationId: "org-1",
-      name: "Renamed",
-      url: "https://same.example/sse",
-      transport: "http",
-      enabled: true,
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-02"),
-    });
-
-    await mcpServerService.update("srv-1", { name: "Renamed" }, "user", "u1");
-
-    expect(discoverMock).not.toHaveBeenCalled();
-    expect(prismaMock.mcpConnection.deleteMany).not.toHaveBeenCalled();
+    const figma = catalog.find((p) => p.id === "figma")!;
+    expect(figma.enabled).toBe(false);
+    expect(figma.available).toBe(false); // creds not configured
+    expect(figma.connectionState).toBe("disconnected");
   });
 });
