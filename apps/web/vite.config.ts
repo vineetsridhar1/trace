@@ -56,6 +56,7 @@ export default defineConfig({
           /^\/graphql/,
           /^\/ws/,
           /^\/auth/,
+          /^\/mcp/,
           /^\/slack/,
           /^\/terminal/,
           /^\/\.well-known/,
@@ -89,6 +90,7 @@ export default defineConfig({
       "/apple-app-site-association": api,
       "/auth": api,
       "/graphql": api,
+      "/mcp": api,
       "/slack": api,
       "/uploads": api,
       "/ws": {
