@@ -66,13 +66,18 @@ export function useSidebarSessionStatusGroupsForChannel(
   scope: SidebarSessionScope,
 ): SidebarSessionStatusGroup[] {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
+  const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const rows = useSessionGroupRows(channelId, { includeActiveMerged: true });
 
   return useMemo(() => {
     const groups = new Map<string, SidebarSessionGroupRecord[]>();
 
     for (const row of rows) {
-      if (!isRowVisibleForScope(row, scope, userId)) continue;
+      // Keep the active session group visible even when the scope filter would
+      // hide it, so the sidebar always shows a selection while you're inside it.
+      if (!isRowVisibleForScope(row, scope, userId) && row.id !== activeSessionGroupId) {
+        continue;
+      }
       const record = buildSidebarSessionGroupRecord(row);
       const statusRecords = groups.get(record.status) ?? [];
       statusRecords.push(record);
@@ -93,7 +98,7 @@ export function useSidebarSessionStatusGroupsForChannel(
         status,
         records: [...statusRecords].sort(sortSessionGroupRecords),
       }));
-  }, [rows, scope, userId]);
+  }, [rows, scope, userId, activeSessionGroupId]);
 }
 
 export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
