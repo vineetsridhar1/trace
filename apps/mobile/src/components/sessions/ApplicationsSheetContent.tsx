@@ -1,5 +1,21 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import {
+  Alert,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  UIManager,
+  View,
+} from "react-native";
 import { gql } from "@urql/core";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -184,6 +200,22 @@ const STOP_PROCESS_MUTATION = gql`
   }
 `;
 
+const START_APPLICATION_MUTATION = gql`
+  mutation MobileStartSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
+    startSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) {
+      id
+    }
+  }
+`;
+
+const STOP_APPLICATION_MUTATION = gql`
+  mutation MobileStopSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
+    stopSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) {
+      id
+    }
+  }
+`;
+
 const ENABLE_ENDPOINT_MUTATION = gql`
   mutation MobileEnableSessionEndpointForwarding($endpointId: ID!) {
     enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {
@@ -205,6 +237,13 @@ const CLEAR_TRAFFIC_MUTATION = gql`
     clearEndpointTraffic(endpointId: $endpointId)
   }
 `;
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type ApplicationsStateData = {
   sessionGroup?: ({ id: string; repo?: Repo | null } & Partial<SessionGroupEntity>) | null;
@@ -286,6 +325,17 @@ export function ApplicationsSheetContent({
   const [pending, setPending] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openSetupLogIds, setOpenSetupLogIds] = useState<Record<string, boolean>>({});
+  const [openProcessLogIds, setOpenProcessLogIds] = useState<Record<string, boolean>>({});
+
+  const toggleSetupLogs = useCallback((scriptId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenSetupLogIds((current) => ({ ...current, [scriptId]: !current[scriptId] }));
+  }, []);
+  const toggleProcessLogs = useCallback((processId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenProcessLogIds((current) => ({ ...current, [processId]: !current[processId] }));
+  }, []);
 
   const processes = useMemo(
     () => Object.values(processTable).filter((process) => process.sessionGroupId === groupId),
@@ -527,6 +577,10 @@ export function ApplicationsSheetContent({
           onOpenEndpoint={openEndpoint}
           onRunAction={runAction}
           onShowTraffic={showTraffic}
+          onToggleProcessLogs={toggleProcessLogs}
+          onToggleSetupLogs={toggleSetupLogs}
+          openProcessLogIds={openProcessLogIds}
+          openSetupLogIds={openSetupLogIds}
           pending={pending}
           processesByKey={processesByKey}
           processLogsById={processLogsById}
@@ -564,6 +618,10 @@ function ApplicationsTab({
   onOpenEndpoint,
   onRunAction,
   onShowTraffic,
+  onToggleProcessLogs,
+  onToggleSetupLogs,
+  openProcessLogIds,
+  openSetupLogIds,
   pending,
   processesByKey,
   processLogsById,
@@ -578,6 +636,10 @@ function ApplicationsTab({
   onOpenEndpoint: (endpoint: SessionEndpoint) => void;
   onRunAction: (key: string, fn: () => Promise<unknown>) => Promise<void>;
   onShowTraffic: (endpointId: string) => void;
+  onToggleProcessLogs: (processId: string) => void;
+  onToggleSetupLogs: (scriptId: string) => void;
+  openProcessLogIds: Record<string, boolean>;
+  openSetupLogIds: Record<string, boolean>;
   pending: string | null;
   processesByKey: Map<string, SessionApplicationProcess>;
   processLogsById: Record<string, SessionApplicationLogEntry[]>;
@@ -612,6 +674,7 @@ function ApplicationsTab({
           {config.setupScripts.map((script) => {
             const latestRun = latestSetupRuns.get(script.id);
             const running = latestRun?.status === "running";
+            const setupLogsOpen = !!openSetupLogIds[script.id];
             return (
               <View key={script.id} style={styles.block}>
                 <ListRow
@@ -643,14 +706,22 @@ function ApplicationsTab({
                     />
                   }
                 />
-                {latestRun?.lastError || latestRun?.outputPreview ? (
-                  <Text
-                    variant="caption2"
-                    color={latestRun.lastError ? "destructive" : "mutedForeground"}
-                    style={styles.logPreview}
-                  >
-                    {(latestRun.lastError ?? latestRun.outputPreview ?? "").trim()}
-                  </Text>
+                {latestRun ? (
+                  <View style={styles.logToggleWrap}>
+                    <LogToggle
+                      open={setupLogsOpen}
+                      onToggle={() => onToggleSetupLogs(script.id)}
+                    />
+                    {setupLogsOpen ? (
+                      <Text
+                        variant="caption2"
+                        color={latestRun.lastError ? "destructive" : "mutedForeground"}
+                        style={styles.logBlock}
+                      >
+                        {(latestRun.lastError ?? latestRun.outputPreview ?? "No logs yet.").trim()}
+                      </Text>
+                    ) : null}
+                  </View>
                 ) : null}
               </View>
             );
@@ -658,14 +729,41 @@ function ApplicationsTab({
         </View>
       ) : null}
 
-      {config.applications.map((application) => (
+      {config.applications.map((application) => {
+        const appActive = application.processes.some((processConfig) =>
+          isActive(processesByKey.get(`${application.id}:${processConfig.id}`)?.status),
+        );
+        return (
         <View key={application.id} style={styles.section}>
-          <SectionTitle title={application.name} />
+          <SectionTitle
+            title={application.name}
+            trailing={
+              application.processes.length > 0 ? (
+                <Button
+                  title={appActive ? "Stop all" : "Run all"}
+                  size="sm"
+                  variant={appActive ? "ghost" : "secondary"}
+                  disabled={pending === `app:${application.id}`}
+                  onPress={() =>
+                    void onRunAction(`app:${application.id}`, () =>
+                      getClient()
+                        .mutation(
+                          appActive ? STOP_APPLICATION_MUTATION : START_APPLICATION_MUTATION,
+                          { sessionGroupId, appConfigId: application.id },
+                        )
+                        .toPromise(),
+                    )
+                  }
+                />
+              ) : undefined
+            }
+          />
           {application.processes.map((processConfig) => {
             const process = processesByKey.get(`${application.id}:${processConfig.id}`);
             const endpoints = endpointsByProcess.get(`${application.id}:${processConfig.id}`) ?? [];
             const active = isActive(process?.status);
-            const logs = process ? (processLogsById[process.id] ?? []).slice(-4) : [];
+            const processLogsOpen = process ? !!openProcessLogIds[process.id] : false;
+            const logs = process ? (processLogsById[process.id] ?? []).slice(-16) : [];
             return (
               <View key={processConfig.id} style={styles.block}>
                 <ListRow
@@ -702,18 +800,32 @@ function ApplicationsTab({
                     />
                   }
                 />
-                {logs.length > 0 ? (
-                  <View style={styles.logs}>
-                    {logs.map((log) => (
-                      <Text
-                        key={log.id}
-                        variant="caption2"
-                        color={log.stream === "stderr" ? "destructive" : "mutedForeground"}
-                        style={styles.logLine}
-                      >
-                        {`${log.stream}: ${log.data.trim() || "(empty)"}`}
-                      </Text>
-                    ))}
+                {process ? (
+                  <View style={styles.logToggleWrap}>
+                    <LogToggle
+                      open={processLogsOpen}
+                      onToggle={() => onToggleProcessLogs(process.id)}
+                    />
+                    {processLogsOpen ? (
+                      <View style={styles.logs}>
+                        {logs.length === 0 ? (
+                          <Text variant="caption2" color="mutedForeground">
+                            No logs yet.
+                          </Text>
+                        ) : (
+                          logs.map((log) => (
+                            <Text
+                              key={log.id}
+                              variant="caption2"
+                              color={log.stream === "stderr" ? "destructive" : "mutedForeground"}
+                              style={styles.logLine}
+                            >
+                              {`${log.stream}: ${log.data.trim() || "(empty)"}`}
+                            </Text>
+                          ))
+                        )}
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
                 {endpoints.length > 0 ? (
@@ -736,7 +848,8 @@ function ApplicationsTab({
             );
           })}
         </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }
@@ -921,13 +1034,30 @@ function TrafficEntryRow({ entry }: { entry: EndpointTrafficEntry }) {
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
+function SectionTitle({ title, trailing }: { title: string; trailing?: ReactNode }) {
   return (
     <View style={styles.sectionHeader}>
       <Text variant="subheadline" color="mutedForeground">
         {title}
       </Text>
+      {trailing}
     </View>
+  );
+}
+
+function LogToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable onPress={onToggle} style={styles.logToggle} hitSlop={6}>
+      <Text variant="caption2" color="mutedForeground">
+        {open ? "Hide logs" : "View logs"}
+      </Text>
+      <SymbolView
+        name={open ? "chevron.up" : "chevron.down"}
+        size={11}
+        tintColor={theme.colors.mutedForeground}
+      />
+    </Pressable>
   );
 }
 
@@ -960,6 +1090,10 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     paddingBottom: 8,
   },
   block: {
@@ -967,14 +1101,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 10,
   },
-  logPreview: {
+  logToggleWrap: {
     paddingHorizontal: 16,
     paddingBottom: 12,
+    gap: 6,
+  },
+  logToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    paddingVertical: 4,
+  },
+  logBlock: {
+    fontFamily: "SpaceMono",
   },
   logs: {
     gap: 4,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
   },
   logLine: {
     fontFamily: "SpaceMono",
