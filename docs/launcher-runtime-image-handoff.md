@@ -77,8 +77,11 @@ TRACE_RUNTIME_IMAGE=registry.acme.com/trace-runtime:platform-tools
 
 ## Required Runtime Environment
 
-The launcher still needs to inject the Trace bootstrap environment values from the start-session
-request:
+The launcher still needs to inject every key in the start-session request's `bootstrapEnv` object
+into the runtime container environment. Trace may add optional bootstrap keys over time; for
+example, `TRACE_MCP_CONFIG` carries per-user MCP server config for the runtime bridge.
+
+Today `bootstrapEnv` includes these core keys:
 
 ```txt
 TRACE_SESSION_ID
@@ -87,6 +90,9 @@ TRACE_RUNTIME_INSTANCE_ID
 TRACE_RUNTIME_TOKEN
 TRACE_BRIDGE_URL
 ```
+
+Treat all `bootstrapEnv` values as sensitive. Do not log them, and prefer provider-native secret
+delivery when the platform supports it.
 
 It should also pass through tool and repo values when present:
 

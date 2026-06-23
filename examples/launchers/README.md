@@ -22,8 +22,12 @@ messages, terminal streams, or file operations.
 
 ## Lifecycle Contract
 
-Start requests include session, org, repo, tool, model, runtime token, bridge URL, and bootstrap env
-values. Launchers should inject at least these env vars into the runtime container:
+Start requests include session, org, repo, tool, model, runtime token, bridge URL, and a
+`bootstrapEnv` object. Launchers must inject every key in `bootstrapEnv` into the runtime
+container environment. Trace may add optional bootstrap keys over time; for example,
+`TRACE_MCP_CONFIG` carries per-user MCP server config for the runtime bridge.
+
+Today `bootstrapEnv` includes these core keys:
 
 ```txt
 TRACE_SESSION_ID
@@ -32,6 +36,9 @@ TRACE_RUNTIME_INSTANCE_ID
 TRACE_RUNTIME_TOKEN
 TRACE_BRIDGE_URL
 ```
+
+Treat all `bootstrapEnv` values as sensitive. Do not log them, and prefer provider-native secret
+delivery when the platform supports it.
 
 Launchers may also inject `TRACE_RUNTIME_SETUP_COMMANDS` when using the default
 `trace-agent-runtime` image. The value can be a JSON array of shell commands or newline-separated

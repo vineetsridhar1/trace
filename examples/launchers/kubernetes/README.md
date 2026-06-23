@@ -53,7 +53,8 @@ metadata:
     trace.trace.dev/idempotency-key: session:sess-123:start
 ```
 
-Set `restartPolicy: Never` and inject the Trace bootstrap env vars into the runtime container:
+Set `restartPolicy: Never` and inject every key from the start-session `bootstrapEnv` object into
+the runtime container. Today that includes these core env vars:
 
 ```yaml
 env:
@@ -72,8 +73,9 @@ env:
     value: wss://trace.example.com/bridge
 ```
 
-Prefer a short-lived Secret for `TRACE_RUNTIME_TOKEN` instead of placing the token directly in the
-Job manifest.
+`bootstrapEnv` may also include optional sensitive values such as `TRACE_MCP_CONFIG`. Prefer
+short-lived Secrets for `TRACE_RUNTIME_TOKEN`, `TRACE_MCP_CONFIG`, and other sensitive bootstrap
+values instead of placing them directly in the Job manifest.
 
 Return the Job name or UID as `runtimeId`:
 

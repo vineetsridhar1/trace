@@ -75,9 +75,11 @@ Recommended ECS inputs:
 - `networkConfiguration.awsvpcConfiguration.securityGroups`: runtime security group IDs
 - `networkConfiguration.awsvpcConfiguration.assignPublicIp`: `DISABLED` for private VPC egress, or
   `ENABLED` only when intentional
-- `overrides.containerOverrides[].environment`: Trace bootstrap env vars plus optional repo/tool env
+- `overrides.containerOverrides[].environment`: every key from `bootstrapEnv`, plus optional repo/tool
+  env
 
-Inject these runtime env vars:
+Inject every start-session `bootstrapEnv` entry into the task container. Today that includes these
+core runtime env vars:
 
 ```txt
 TRACE_SESSION_ID
@@ -90,6 +92,9 @@ TRACE_MODEL
 TRACE_REPO_URL
 TRACE_REPO_BRANCH
 ```
+
+`bootstrapEnv` may also include optional sensitive values such as `TRACE_MCP_CONFIG`. Do not log
+those values; use ECS secrets or tightly scoped task env injection where possible.
 
 Return the ECS task ARN as `runtimeId`:
 

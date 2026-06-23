@@ -146,6 +146,10 @@ curl -sS http://localhost:8787/trace/start-session \
   }'
 ```
 
+The controller forwards every key in `bootstrapEnv` into the Fly Machine environment. Optional
+sensitive keys such as `TRACE_MCP_CONFIG` may appear when a session needs per-user MCP config, so do
+not log `bootstrapEnv` values.
+
 Stop a session:
 
 ```bash
