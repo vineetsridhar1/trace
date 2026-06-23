@@ -16,13 +16,15 @@ import {
   UIManager,
   View,
 } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { gql } from "@urql/core";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import * as Clipboard from "expo-clipboard";
 import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import type {
-  EndpointTrafficEntry,
   Repo,
   RepoApplicationConfig,
   SessionApplicationLogEntry,
@@ -30,18 +32,16 @@ import type {
   SessionEndpoint,
   SessionSetupScriptRun,
 } from "@trace/gql";
-import {
-  Button,
-  EmptyState,
-  Glass,
-  SegmentedControl,
-  Text,
-  TraceLoader,
-} from "@/components/design-system";
+import { EmptyState, Text, TraceLoader } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
-import { alpha, useTheme, type Theme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
+import { GlassButton } from "./GlassButton";
+
+const HEADER_BLUR_INTENSITY = 3;
+const HEADER_FADE_EXTRA_HEIGHT = 56;
+const HEADER_CONTENT_HEIGHT = 36;
 
 const APPLICATIONS_STATE_QUERY = gql`
   query MobileSessionApplicationsState($sessionGroupId: ID!) {
@@ -147,21 +147,6 @@ const PROCESS_LOGS_QUERY = gql`
   }
 `;
 
-const ENDPOINT_TRAFFIC_QUERY = gql`
-  query MobileEndpointTraffic($endpointId: ID!, $limit: Int) {
-    endpointTraffic(endpointId: $endpointId, limit: $limit) {
-      id
-      endpointId
-      startedAt
-      durationMs
-      requestMethod
-      requestPath
-      responseStatus
-      error
-    }
-  }
-`;
-
 const RUN_SETUP_MUTATION = gql`
   mutation MobileRunSessionGroupSetupScript($sessionGroupId: ID!, $scriptId: ID!) {
     runSessionGroupSetupScript(sessionGroupId: $sessionGroupId, scriptId: $scriptId)
@@ -232,12 +217,6 @@ const DISABLE_ENDPOINT_MUTATION = gql`
   }
 `;
 
-const CLEAR_TRAFFIC_MUTATION = gql`
-  mutation MobileClearEndpointTraffic($endpointId: ID!) {
-    clearEndpointTraffic(endpointId: $endpointId)
-  }
-`;
-
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -256,15 +235,7 @@ type ProcessLogsData = {
   sessionApplicationLogs?: SessionApplicationLogEntry[] | null;
 };
 
-type EndpointTrafficData = {
-  endpointTraffic?: EndpointTrafficEntry[] | null;
-};
-
-type ApplicationTab = "applications" | "traffic";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
-
-const TABS: ApplicationTab[] = ["applications", "traffic"];
-const TAB_LABELS = ["Apps", "Traffic"];
 
 function displayStatus(status: string | null | undefined): string {
   if (!status) return "Unknown";
@@ -300,6 +271,8 @@ export function ApplicationsSheetContent({
 }) {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topInset = insets.top + theme.spacing.sm;
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
@@ -315,13 +288,10 @@ export function ApplicationsSheetContent({
   );
   const config = groupRepo?.applicationConfig ?? repoApplicationConfig;
 
-  const [tab, setTab] = useState<ApplicationTab>("applications");
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>(
     {},
   );
-  const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
-  const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -361,10 +331,6 @@ export function ApplicationsSheetContent({
     return map;
   }, [endpoints]);
   const latestSetupRuns = useMemo(() => latestSetupRunByScript(setupRuns), [setupRuns]);
-  const selectedEndpoint = useMemo(
-    () => endpoints.find((endpoint) => endpoint.id === selectedEndpointId) ?? null,
-    [endpoints, selectedEndpointId],
-  );
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -402,7 +368,6 @@ export function ApplicationsSheetContent({
       (result.data?.sessionEndpoints ?? []) as Array<SessionEndpoint & { id: string }>,
     );
     setSetupRuns(result.data?.sessionSetupScriptRuns ?? []);
-    setSelectedEndpointId((current) => current ?? result.data?.sessionEndpoints?.[0]?.id ?? null);
   }, [groupId, upsert, upsertMany]);
 
   const loadProcessLogs = useCallback(async (processId: string) => {
@@ -418,18 +383,6 @@ export function ApplicationsSheetContent({
       ...current,
       [processId]: result.data?.sessionApplicationLogs ?? [],
     }));
-  }, []);
-
-  const loadTraffic = useCallback(async (endpointId: string) => {
-    const result = await getClient()
-      .query<EndpointTrafficData>(
-        ENDPOINT_TRAFFIC_QUERY,
-        { endpointId, limit: 100 },
-        { requestPolicy: "network-only" },
-      )
-      .toPromise();
-    if (result.error) throw result.error;
-    setTrafficEntries(result.data?.endpointTraffic ?? []);
   }, []);
 
   useEffect(() => {
@@ -461,20 +414,6 @@ export function ApplicationsSheetContent({
     }, 1500);
     return () => clearInterval(interval);
   }, [processes, refresh]);
-
-  useEffect(() => {
-    if (!selectedEndpointId || tab !== "traffic") {
-      setTrafficEntries([]);
-      return;
-    }
-    void loadTraffic(selectedEndpointId).catch((trafficError) => {
-      setError(trafficError instanceof Error ? trafficError.message : "Failed to load traffic.");
-    });
-    const interval = setInterval(() => {
-      void loadTraffic(selectedEndpointId).catch(() => undefined);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [loadTraffic, selectedEndpointId, tab]);
 
   async function runAction(key: string, fn: () => Promise<unknown>) {
     setPending(key);
@@ -508,66 +447,35 @@ export function ApplicationsSheetContent({
     [groupId, router, sessionId],
   );
 
-  const showTraffic = useCallback((endpointId: string) => {
-    setSelectedEndpointId(endpointId);
-    setTab("traffic");
-  }, []);
+  const showTraffic = useCallback(
+    (endpointId: string) => {
+      void haptic.selection();
+      const params = new URLSearchParams({ groupId, endpointId });
+      router.push(`/sheets/applications-traffic?${params.toString()}`);
+    },
+    [groupId, router],
+  );
 
   const copyEndpoint = useCallback(async (url: string) => {
     await Clipboard.setStringAsync(url);
     void haptic.light();
   }, []);
 
-  const clearTraffic = useCallback(async () => {
-    if (!selectedEndpointId) return;
-    await runAction(`traffic:${selectedEndpointId}`, async () => {
-      const result = await getClient()
-        .mutation(CLEAR_TRAFFIC_MUTATION, { endpointId: selectedEndpointId })
-        .toPromise();
-      if (result.error) throw result.error;
-      setTrafficEntries([]);
-      return result;
-    });
-  }, [selectedEndpointId]);
-
-  const selectedIndex = TABS.indexOf(tab);
   const hasConfig = Boolean(config && (config.setupScripts.length > 0 || config.applications.length > 0));
 
-  return (
-    <View style={styles.container}>
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg }]}>
-        <View style={styles.headerRow}>
-          <Text variant="headline">Applications</Text>
-          <GlassButton
-            symbol="arrow.clockwise"
-            accessibilityLabel="Refresh applications"
-            disabled={loading}
-            onPress={() => {
-              setLoading(true);
-              void refresh()
-                .catch((refreshError) =>
-                  setError(
-                    refreshError instanceof Error ? refreshError.message : "Failed to load applications.",
-                  ),
-                )
-                .finally(() => setLoading(false));
-            }}
-          />
-        </View>
-        <SegmentedControl
-          segments={TAB_LABELS}
-          selectedIndex={selectedIndex}
-          onChange={(index) => setTab(TABS[index] ?? "applications")}
-        />
-      </View>
+  const headerBottom = topInset + HEADER_CONTENT_HEIGHT;
 
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {loading ? (
         <View style={styles.center}>
           <TraceLoader size="small" color="mutedForeground" />
         </View>
-      ) : tab === "applications" ? (
+      ) : (
         <ApplicationsTab
           config={config ?? null}
+          contentPaddingBottom={insets.bottom + theme.spacing.xxl}
+          contentPaddingTop={headerBottom + theme.spacing.sm}
           endpointsByProcess={endpointsByProcess}
           error={error}
           hasConfig={hasConfig}
@@ -585,30 +493,56 @@ export function ApplicationsSheetContent({
           processLogsById={processLogsById}
           sessionGroupId={groupId}
         />
-      ) : (
-        <TrafficTab
-          endpoints={endpoints}
-          error={error}
-          onClearTraffic={clearTraffic}
-          onRefreshTraffic={() => {
-            if (!selectedEndpointId) return;
-            void loadTraffic(selectedEndpointId).catch((trafficError) =>
-              setError(trafficError instanceof Error ? trafficError.message : "Failed to load traffic."),
-            );
-          }}
-          onSelectEndpoint={setSelectedEndpointId}
-          pending={pending}
-          selectedEndpoint={selectedEndpoint}
-          selectedEndpointId={selectedEndpointId}
-          trafficEntries={trafficEntries}
-        />
       )}
+      <BlurView
+        pointerEvents="none"
+        tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+        intensity={HEADER_BLUR_INTENSITY}
+        style={[styles.topBlur, { height: headerBottom - 8 }]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          alpha(theme.colors.background, 1),
+          alpha(theme.colors.background, 0.48),
+          alpha(theme.colors.background, 0),
+        ]}
+        locations={[0, 0.68, 1]}
+        style={[styles.topFade, { height: headerBottom + HEADER_FADE_EXTRA_HEIGHT }]}
+      />
+      <View
+        style={[
+          styles.floatingHeader,
+          { top: topInset, paddingHorizontal: theme.spacing.lg },
+        ]}
+      >
+        <Text variant="title2">Applications</Text>
+        <GlassButton
+          symbol="arrow.clockwise"
+          accessibilityLabel="Refresh applications"
+          disabled={loading}
+          onPress={() => {
+            setLoading(true);
+            void refresh()
+              .catch((refreshError) =>
+                setError(
+                  refreshError instanceof Error
+                    ? refreshError.message
+                    : "Failed to load applications.",
+                ),
+              )
+              .finally(() => setLoading(false));
+          }}
+        />
+      </View>
     </View>
   );
 }
 
 function ApplicationsTab({
   config,
+  contentPaddingBottom,
+  contentPaddingTop,
   endpointsByProcess,
   error,
   hasConfig,
@@ -627,6 +561,8 @@ function ApplicationsTab({
   sessionGroupId,
 }: {
   config: RepoApplicationConfig | null;
+  contentPaddingBottom: number;
+  contentPaddingTop: number;
   endpointsByProcess: Map<string, SessionEndpoint[]>;
   error: string | null;
   hasConfig: boolean;
@@ -647,7 +583,7 @@ function ApplicationsTab({
   const theme = useTheme();
   if (!hasConfig || !config) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { paddingTop: contentPaddingTop }]}>
         <EmptyState
           icon="apps.iphone"
           title="No applications configured"
@@ -658,7 +594,13 @@ function ApplicationsTab({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: contentPaddingTop, paddingBottom: contentPaddingBottom },
+      ]}
+      scrollIndicatorInsets={{ top: contentPaddingTop }}
+    >
       {error ? (
         <View style={[styles.errorBox, { borderColor: theme.colors.destructive }]}>
           <Text variant="footnote" color="destructive">
@@ -957,120 +899,6 @@ function EndpointRow({
   );
 }
 
-function TrafficTab({
-  endpoints,
-  error,
-  onClearTraffic,
-  onRefreshTraffic,
-  onSelectEndpoint,
-  pending,
-  selectedEndpoint,
-  selectedEndpointId,
-  trafficEntries,
-}: {
-  endpoints: SessionEndpoint[];
-  error: string | null;
-  onClearTraffic: () => Promise<void>;
-  onRefreshTraffic: () => void;
-  onSelectEndpoint: (endpointId: string) => void;
-  pending: string | null;
-  selectedEndpoint: SessionEndpoint | null;
-  selectedEndpointId: string | null;
-  trafficEntries: EndpointTrafficEntry[];
-}) {
-  const theme = useTheme();
-  return (
-    <View style={styles.trafficRoot}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.endpointPills}>
-        {endpoints.map((endpoint) => (
-          <Button
-            key={endpoint.id}
-            title={endpoint.label}
-            size="sm"
-            variant={selectedEndpointId === endpoint.id ? "primary" : "secondary"}
-            onPress={() => onSelectEndpoint(endpoint.id)}
-          />
-        ))}
-      </ScrollView>
-      <View style={[styles.trafficHeader, { paddingHorizontal: theme.spacing.lg }]}>
-        <View style={styles.trafficTitle}>
-          <Text variant="subheadline" numberOfLines={1}>
-            {selectedEndpoint?.label ?? "Endpoint Traffic"}
-          </Text>
-          <Text variant="caption2" color="mutedForeground" numberOfLines={1}>
-            {selectedEndpoint?.url ?? "Select an endpoint"}
-          </Text>
-        </View>
-        <Button title="Refresh" size="sm" variant="secondary" disabled={!selectedEndpointId} onPress={onRefreshTraffic} />
-        <Button
-          title="Clear"
-          size="sm"
-          variant="ghost"
-          disabled={!selectedEndpointId || pending === `traffic:${selectedEndpointId}`}
-          onPress={() => void onClearTraffic()}
-        />
-      </View>
-      {error ? (
-        <View style={[styles.errorBox, { borderColor: theme.colors.destructive }]}>
-          <Text variant="footnote" color="destructive">
-            {error}
-          </Text>
-        </View>
-      ) : null}
-      <ScrollView contentContainerStyle={styles.trafficList}>
-        {trafficEntries.length === 0 ? (
-          <View style={styles.center}>
-            <EmptyState
-              icon="network"
-              title="No traffic captured"
-              subtitle="Requests appear here after the endpoint receives traffic."
-            />
-          </View>
-        ) : (
-          trafficEntries.map((entry) => <TrafficEntryRow key={entry.id} entry={entry} />)
-        )}
-      </ScrollView>
-    </View>
-  );
-}
-
-function TrafficEntryRow({ entry }: { entry: EndpointTrafficEntry }) {
-  const theme = useTheme();
-  const status = entry.responseStatus ?? (entry.error ? "ERR" : "...");
-  return (
-    <View style={[styles.trafficRow, { borderColor: theme.colors.border }]}>
-      <View style={styles.trafficMethod}>
-        <Text variant="caption2" color="mutedForeground">
-          {new Date(entry.startedAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          })}
-        </Text>
-        <Text variant="subheadline">{entry.requestMethod}</Text>
-      </View>
-      <View style={styles.trafficPath}>
-        <Text variant="subheadline" numberOfLines={1}>
-          {entry.requestPath}
-        </Text>
-        {entry.error ? (
-          <Text variant="caption2" color="destructive" numberOfLines={1}>
-            {entry.error}
-          </Text>
-        ) : null}
-      </View>
-      <View style={styles.trafficStatus}>
-        <Text variant="subheadline" align="right">
-          {status}
-        </Text>
-        <Text variant="caption2" color="mutedForeground" align="right">
-          {entry.durationMs != null ? `${entry.durationMs}ms` : "-"}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function SectionLabel({ title, trailing }: { title: string; trailing?: ReactNode }) {
   return (
     <View style={styles.sectionHeader}>
@@ -1079,58 +907,6 @@ function SectionLabel({ title, trailing }: { title: string; trailing?: ReactNode
       </Text>
       {trailing}
     </View>
-  );
-}
-
-function GlassButton({
-  symbol,
-  label,
-  accessibilityLabel,
-  onPress,
-  disabled = false,
-  tint = "foreground",
-}: {
-  symbol: SymbolName;
-  label?: string;
-  accessibilityLabel: string;
-  onPress: () => void;
-  disabled?: boolean;
-  tint?: keyof Theme["colors"];
-}) {
-  const theme = useTheme();
-  return (
-    <Glass preset="pinnedBar" glassStyleEffect="clear" interactive style={styles.glassButton}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityState={{ disabled }}
-        disabled={disabled}
-        hitSlop={6}
-        onPress={() => {
-          if (disabled) return;
-          void haptic.selection();
-          onPress();
-        }}
-        style={({ pressed }) => [
-          styles.glassButtonInner,
-          label ? styles.glassButtonWithLabel : styles.glassButtonIconOnly,
-          { opacity: disabled ? 0.4 : pressed ? 0.72 : 1 },
-        ]}
-      >
-        <SymbolView
-          name={symbol}
-          size={14}
-          tintColor={theme.colors[tint]}
-          resizeMode="scaleAspectFit"
-          style={styles.glassButtonGlyph}
-        />
-        {label ? (
-          <Text variant="footnote" color={tint}>
-            {label}
-          </Text>
-        ) : null}
-      </Pressable>
-    </Glass>
   );
 }
 
@@ -1173,16 +949,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    gap: 12,
-    paddingTop: 12,
-    paddingBottom: 14,
+  topFade: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9,
   },
-  headerRow: {
+  topBlur: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 8,
+  },
+  floatingHeader: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+    minHeight: HEADER_CONTENT_HEIGHT,
   },
   center: {
     flex: 1,
@@ -1192,7 +982,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
   },
   section: {
     marginBottom: 22,
@@ -1238,27 +1027,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 1,
   },
-  glassButton: {
-    borderRadius: 9999,
-    overflow: "hidden",
-  },
-  glassButtonInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    minHeight: 36,
-  },
-  glassButtonWithLabel: {
-    paddingHorizontal: 14,
-  },
-  glassButtonIconOnly: {
-    width: 40,
-  },
-  glassButtonGlyph: {
-    width: 14,
-    height: 14,
-  },
   logsDisclosure: {
     marginTop: 10,
     gap: 6,
@@ -1301,47 +1069,7 @@ const styles = StyleSheet.create({
   errorBox: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 8,
-    marginHorizontal: 16,
     marginBottom: 12,
     padding: 12,
-  },
-  trafficRoot: {
-    flex: 1,
-  },
-  endpointPills: {
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  trafficHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingBottom: 12,
-  },
-  trafficTitle: {
-    flex: 1,
-    minWidth: 0,
-  },
-  trafficList: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-  trafficRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10,
-  },
-  trafficMethod: {
-    width: 58,
-  },
-  trafficPath: {
-    flex: 1,
-    minWidth: 0,
-  },
-  trafficStatus: {
-    width: 58,
   },
 });
