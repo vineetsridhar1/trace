@@ -1004,8 +1004,8 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: 54,
-    opacity: 0.55,
+    marginHorizontal: 14,
+    opacity: 1,
   },
   cell: {
     paddingHorizontal: 14,
