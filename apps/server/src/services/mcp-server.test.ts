@@ -94,16 +94,16 @@ describe("mcpServerService.enable", () => {
     expect(eventMock.mock.calls[0][0].eventType).toBe("mcp_server_created");
   });
 
-  it("rejects a pre-registered provider when its credentials are not configured", async () => {
+  it("rejects a pre-registered provider when no credentials are available", async () => {
     asAdmin();
     await expect(mcpServerService.enable("org-1", "figma", "user", "u1")).rejects.toThrow(
-      /not configured/,
+      /requires an OAuth client/,
     );
     expect(discoverMock).not.toHaveBeenCalled();
     expect(registerMock).not.toHaveBeenCalled();
   });
 
-  it("uses configured credentials for a pre-registered provider without DCR", async () => {
+  it("uses environment credentials for a pre-registered provider without DCR", async () => {
     asAdmin();
     process.env.MCP_FIGMA_CLIENT_ID = "figma-client";
     process.env.MCP_FIGMA_CLIENT_SECRET = "figma-secret";
@@ -125,6 +125,31 @@ describe("mcpServerService.enable", () => {
     const data = prismaMock.mcpServer.create.mock.calls[0][0].data;
     expect(data.clientId).toBe("figma-client");
     expect(data.encryptedClientSecret).toBe("enc(figma-secret)");
+  });
+
+  it("uses admin-supplied credentials for a pre-registered provider", async () => {
+    asAdmin();
+    prismaMock.mcpServer.create.mockResolvedValue({
+      id: "srv-3",
+      organizationId: "org-1",
+      catalogId: "figma",
+      name: "Figma",
+      url: "https://mcp.figma.com/mcp",
+      transport: "http",
+      enabled: true,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    });
+
+    await mcpServerService.enable("org-1", "figma", "user", "u1", {
+      clientId: "manual-id",
+      clientSecret: "manual-secret",
+    });
+
+    expect(registerMock).not.toHaveBeenCalled();
+    const data = prismaMock.mcpServer.create.mock.calls[0][0].data;
+    expect(data.clientId).toBe("manual-id");
+    expect(data.encryptedClientSecret).toBe("enc(manual-secret)");
   });
 
   it("rejects enabling a provider that is already enabled", async () => {
@@ -156,12 +181,12 @@ describe("mcpServerService.listCatalog", () => {
     const linear = catalog.find((p) => p.id === "linear")!;
     expect(linear.enabled).toBe(true);
     expect(linear.serverId).toBe("srv-1");
-    expect(linear.available).toBe(true);
+    expect(linear.needsClientCredentials).toBe(false);
     expect(linear.connectionState).toBe("connected");
 
     const figma = catalog.find((p) => p.id === "figma")!;
     expect(figma.enabled).toBe(false);
-    expect(figma.available).toBe(false); // creds not configured
+    expect(figma.needsClientCredentials).toBe(true); // env creds not configured
     expect(figma.connectionState).toBe("disconnected");
   });
 });

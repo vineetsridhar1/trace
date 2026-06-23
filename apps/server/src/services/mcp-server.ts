@@ -7,7 +7,7 @@ import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import {
   MCP_CATALOG,
   getMcpCatalogEntry,
-  isCatalogEntryAvailable,
+  needsClientCredentials,
   preregisteredClient,
 } from "../lib/mcp-catalog.js";
 import {
@@ -34,10 +34,15 @@ export interface McpCatalogProviderStatus {
   id: string;
   name: string;
   transport: string;
-  available: boolean;
+  needsClientCredentials: boolean;
   enabled: boolean;
   serverId: string | null;
   connectionState: McpConnectionState;
+}
+
+export interface EnableMcpOptions {
+  clientId?: string;
+  clientSecret?: string;
 }
 
 /** Public projection — never exposes client secret or cached metadata. */
@@ -108,7 +113,7 @@ export class McpServerService {
         id: entry.id,
         name: entry.name,
         transport: entry.transport,
-        available: isCatalogEntryAvailable(entry),
+        needsClientCredentials: needsClientCredentials(entry),
         enabled: Boolean(server),
         serverId: server?.id ?? null,
         connectionState: connectionStateOf(connection),
@@ -122,11 +127,23 @@ export class McpServerService {
     catalogId: string,
     actorType: ActorType,
     actorId: string,
+    options: EnableMcpOptions = {},
   ): Promise<McpServer> {
     const entry = getMcpCatalogEntry(catalogId);
     if (!entry) throw new Error("Unknown MCP provider");
-    if (!isCatalogEntryAvailable(entry)) {
-      throw new Error(`${entry.name} is not configured on this server`);
+
+    // Resolve pre-registered credentials up front: prefer environment config,
+    // otherwise accept admin-supplied client credentials.
+    let preCreds: { clientId: string; clientSecret?: string } | null = null;
+    if (entry.auth.strategy === "preregistered") {
+      preCreds =
+        preregisteredClient(entry) ??
+        (options.clientId
+          ? { clientId: options.clientId.trim(), clientSecret: options.clientSecret?.trim() }
+          : null);
+      if (!preCreds) {
+        throw new Error(`${entry.name} requires an OAuth client ID and secret`);
+      }
     }
 
     // Authorize BEFORE any network side effects (SSRF + DCR are observable).
@@ -147,10 +164,8 @@ export class McpServerService {
       clientId = client.clientId;
       secret = client.clientSecret ? encryptSecret(client.clientSecret) : null;
     } else {
-      const creds = preregisteredClient(entry);
-      if (!creds) throw new Error(`${entry.name} is not configured on this server`);
-      clientId = creds.clientId;
-      secret = creds.clientSecret ? encryptSecret(creds.clientSecret) : null;
+      clientId = preCreds!.clientId;
+      secret = preCreds!.clientSecret ? encryptSecret(preCreds!.clientSecret) : null;
     }
 
     return prisma.$transaction(async (tx: TxClient) => {

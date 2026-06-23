@@ -373,6 +373,9 @@ export type DeliveryResult =
 
 export type EnableMcpServerInput = {
   catalogId: Scalars["String"]["input"];
+  /** OAuth client credentials for pre-registered providers (e.g. Figma). */
+  clientId?: InputMaybe<Scalars["String"]["input"]>;
+  clientSecret?: InputMaybe<Scalars["String"]["input"]>;
   orgId: Scalars["ID"]["input"];
 };
 
@@ -597,14 +600,14 @@ export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE"
  */
 export type McpCatalogProvider = {
   __typename?: "McpCatalogProvider";
-  /** Whether the provider can be enabled (client credentials configured). */
-  available: Scalars["Boolean"]["output"];
   /** This user's connection state for the provider. */
   connectionState: McpConnectionState;
   /** Whether an org admin has enabled this provider. */
   enabled: Scalars["Boolean"]["output"];
   id: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
+  /** Whether enabling requires an admin to supply OAuth client credentials by hand. */
+  needsClientCredentials: Scalars["Boolean"]["output"];
   /** The McpServer id when enabled (used to start/disconnect OAuth). */
   serverId?: Maybe<Scalars["ID"]["output"]>;
   transport: McpServerTransport;

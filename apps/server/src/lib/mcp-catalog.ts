@@ -67,22 +67,7 @@ export function getMcpCatalogEntry(id: string): McpCatalogEntry | undefined {
   return MCP_CATALOG.find((entry) => entry.id === id);
 }
 
-/**
- * Whether a provider can currently be enabled. DCR providers are always
- * available; pre-registered ones require their client credentials to be
- * configured in the environment.
- */
-export function isCatalogEntryAvailable(entry: McpCatalogEntry): boolean {
-  if (entry.auth.strategy === "dcr") return true;
-  const clientId = process.env[entry.auth.clientIdEnv]?.trim();
-  if (!clientId) return false;
-  if (entry.auth.clientSecretEnv) {
-    return Boolean(process.env[entry.auth.clientSecretEnv]?.trim());
-  }
-  return true;
-}
-
-/** Resolve pre-registered client credentials from the environment. */
+/** Resolve pre-registered client credentials from the environment, if configured. */
 export function preregisteredClient(
   entry: McpCatalogEntry,
 ): { clientId: string; clientSecret?: string } | null {
@@ -93,4 +78,13 @@ export function preregisteredClient(
     ? process.env[entry.auth.clientSecretEnv]?.trim() || undefined
     : undefined;
   return { clientId, clientSecret };
+}
+
+/**
+ * Whether enabling this provider requires an admin to supply OAuth client
+ * credentials by hand — true only for pre-registered providers (gated DCR)
+ * whose credentials aren't already configured in the environment.
+ */
+export function needsClientCredentials(entry: McpCatalogEntry): boolean {
+  return entry.auth.strategy === "preregistered" && preregisteredClient(entry) === null;
 }

@@ -376,6 +376,9 @@ export type DeliveryResult =
 
 export type EnableMcpServerInput = {
   catalogId: Scalars["String"]["input"];
+  /** OAuth client credentials for pre-registered providers (e.g. Figma). */
+  clientId?: InputMaybe<Scalars["String"]["input"]>;
+  clientSecret?: InputMaybe<Scalars["String"]["input"]>;
   orgId: Scalars["ID"]["input"];
 };
 
@@ -600,14 +603,14 @@ export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE"
  */
 export type McpCatalogProvider = {
   __typename?: "McpCatalogProvider";
-  /** Whether the provider can be enabled (client credentials configured). */
-  available: Scalars["Boolean"]["output"];
   /** This user's connection state for the provider. */
   connectionState: McpConnectionState;
   /** Whether an org admin has enabled this provider. */
   enabled: Scalars["Boolean"]["output"];
   id: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
+  /** Whether enabling requires an admin to supply OAuth client credentials by hand. */
+  needsClientCredentials: Scalars["Boolean"]["output"];
   /** The McpServer id when enabled (used to start/disconnect OAuth). */
   serverId?: Maybe<Scalars["ID"]["output"]>;
   transport: McpServerTransport;
@@ -3231,11 +3234,11 @@ export type McpCatalogProviderResolvers<
   ParentType extends ResolversParentTypes["McpCatalogProvider"] =
     ResolversParentTypes["McpCatalogProvider"],
 > = ResolversObject<{
-  available?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   connectionState?: Resolver<ResolversTypes["McpConnectionState"], ParentType, ContextType>;
   enabled?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  needsClientCredentials?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   serverId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   transport?: Resolver<ResolversTypes["McpServerTransport"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;

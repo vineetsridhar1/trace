@@ -390,8 +390,8 @@ type McpCatalogProvider {
   id: String!
   name: String!
   transport: McpServerTransport!
-  "Whether the provider can be enabled (client credentials configured)."
-  available: Boolean!
+  "Whether enabling requires an admin to supply OAuth client credentials by hand."
+  needsClientCredentials: Boolean!
   "Whether an org admin has enabled this provider."
   enabled: Boolean!
   "The McpServer id when enabled (used to start/disconnect OAuth)."
@@ -1300,6 +1300,9 @@ input UpdateAgentEnvironmentInput {
 input EnableMcpServerInput {
   orgId: ID!
   catalogId: String!
+  "OAuth client credentials for pre-registered providers (e.g. Figma)."
+  clientId: String
+  clientSecret: String
 }
 
 input UpdateMcpServerInput {

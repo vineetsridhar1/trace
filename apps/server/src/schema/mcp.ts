@@ -15,12 +15,10 @@ export const mcpQueries = {
 
 export const mcpMutations = {
   enableMcpServer: (_: unknown, args: { input: EnableMcpServerInput }, ctx: Context) => {
-    return mcpServerService.enable(
-      args.input.orgId,
-      args.input.catalogId,
-      ctx.actorType,
-      ctx.userId,
-    );
+    return mcpServerService.enable(args.input.orgId, args.input.catalogId, ctx.actorType, ctx.userId, {
+      clientId: args.input.clientId ?? undefined,
+      clientSecret: args.input.clientSecret ?? undefined,
+    });
   },
 
   updateMcpServer: (_: unknown, args: { input: UpdateMcpServerInput }, ctx: Context) => {
