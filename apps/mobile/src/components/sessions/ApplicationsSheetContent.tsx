@@ -32,11 +32,11 @@ import type {
   SessionEndpoint,
   SessionSetupScriptRun,
 } from "@trace/gql";
-import { EmptyState, Text, TraceLoader } from "@/components/design-system";
+import { EmptyState, IconButton, Text, TraceLoader, type IconMenuItem } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
-import { alpha, useTheme } from "@/theme";
+import { alpha, useTheme, type Theme } from "@/theme";
 import { GlassButton } from "./GlassButton";
 
 const HEADER_BLUR_INTENSITY = 3;
@@ -622,53 +622,38 @@ function ApplicationsTab({
                   {index > 0 ? (
                     <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
                   ) : null}
-                  <View style={styles.cell}>
-                    <View style={styles.cellRow}>
-                      <View style={styles.iconSlot}>
-                        <SymbolView
-                          name={running ? "clock" : "terminal"}
-                          size={18}
-                          tintColor={theme.colors.mutedForeground}
-                          resizeMode="scaleAspectFit"
-                        />
-                      </View>
-                      <View style={styles.cellText}>
-                        <Text variant="body" numberOfLines={1}>
-                          {script.name}
-                        </Text>
-                        <Text variant="caption2" color="dimForeground" numberOfLines={1}>
-                          {latestRun ? displayStatus(latestRun.status) : script.command}
-                        </Text>
-                      </View>
-                      <GlassButton
-                        symbol="play.fill"
-                        label="Run"
-                        accessibilityLabel={`Run ${script.name}`}
-                        disabled={pending === script.id || running}
-                        onPress={() =>
-                          void onRunAction(script.id, () =>
-                            getClient()
-                              .mutation(RUN_SETUP_MUTATION, { sessionGroupId, scriptId: script.id })
-                              .toPromise(),
-                          )
-                        }
-                      />
-                    </View>
-                    {latestRun ? (
-                      <LogsDisclosure
-                        open={setupLogsOpen}
-                        onToggle={() => onToggleSetupLogs(script.id)}
+                  <AppRow
+                    icon={running ? "clock" : "terminal"}
+                    iconColor={theme.colors.mutedForeground}
+                    title={script.name}
+                    subtitle={latestRun ? displayStatus(latestRun.status) : script.command}
+                    primary={{
+                      symbol: "play.fill",
+                      color: "accent",
+                      accessibilityLabel: `Run ${script.name}`,
+                      disabled: pending === script.id || running,
+                      onPress: () =>
+                        void onRunAction(script.id, () =>
+                          getClient()
+                            .mutation(RUN_SETUP_MUTATION, { sessionGroupId, scriptId: script.id })
+                            .toPromise(),
+                        ),
+                    }}
+                    expandable={!!latestRun}
+                    expanded={setupLogsOpen}
+                    onPress={latestRun ? () => onToggleSetupLogs(script.id) : undefined}
+                  />
+                  {latestRun && setupLogsOpen ? (
+                    <View style={styles.logsContent}>
+                      <Text
+                        variant="caption2"
+                        color={latestRun.lastError ? "destructive" : "mutedForeground"}
+                        style={styles.logBlock}
                       >
-                        <Text
-                          variant="caption2"
-                          color={latestRun.lastError ? "destructive" : "mutedForeground"}
-                          style={styles.logBlock}
-                        >
-                          {(latestRun.lastError ?? latestRun.outputPreview ?? "No logs yet.").trim()}
-                        </Text>
-                      </LogsDisclosure>
-                    ) : null}
-                  </View>
+                        {(latestRun.lastError ?? latestRun.outputPreview ?? "No logs yet.").trim()}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               );
             })}
@@ -686,13 +671,13 @@ function ApplicationsTab({
               title={application.name}
               trailing={
                 application.processes.length > 0 ? (
-                  <GlassButton
-                    symbol={appActive ? "stop.fill" : "play.fill"}
-                    label={appActive ? "Stop all" : "Run all"}
+                  <IconButton
+                    symbol={appActive ? "stop.circle" : "play.circle"}
+                    size="sm"
+                    color={appActive ? "destructive" : "accent"}
                     accessibilityLabel={
-                      appActive ? `Stop ${application.name}` : `Run ${application.name}`
+                      appActive ? `Stop ${application.name}` : `Run all in ${application.name}`
                     }
-                    tint={appActive ? "destructive" : "foreground"}
                     disabled={pending === `app:${application.id}`}
                     onPress={() =>
                       void onRunAction(`app:${application.id}`, () =>
@@ -716,6 +701,7 @@ function ApplicationsTab({
                 const active = isActive(process?.status);
                 const processLogsOpen = process ? !!openProcessLogIds[process.id] : false;
                 const logs = process ? (processLogsById[process.id] ?? []).slice(-16) : [];
+                const processKey = `${application.id}:${processConfig.id}`;
                 return (
                   <View key={processConfig.id}>
                     {index > 0 ? (
@@ -723,97 +709,76 @@ function ApplicationsTab({
                         style={[styles.separator, { backgroundColor: theme.colors.border }]}
                       />
                     ) : null}
-                    <View style={styles.cell}>
-                      <View style={styles.cellRow}>
-                        <View style={styles.iconSlot}>
-                          <SymbolView
-                            name={statusIcon(process?.status)}
-                            size={18}
-                            tintColor={
-                              process?.status === "failed"
-                                ? theme.colors.destructive
-                                : process?.status === "running"
-                                  ? theme.colors.success
-                                  : theme.colors.mutedForeground
-                            }
-                            resizeMode="scaleAspectFit"
-                          />
+                    <AppRow
+                      icon={statusIcon(process?.status)}
+                      iconColor={
+                        process?.status === "failed"
+                          ? theme.colors.destructive
+                          : process?.status === "running"
+                            ? theme.colors.success
+                            : theme.colors.mutedForeground
+                      }
+                      title={processConfig.name}
+                      subtitle={process?.lastError ?? displayStatus(process?.status ?? "stopped")}
+                      subtitleColor={process?.status === "failed" ? "destructive" : "dimForeground"}
+                      primary={{
+                        symbol: active ? "stop.fill" : "play.fill",
+                        color: active ? "destructive" : "accent",
+                        accessibilityLabel: active
+                          ? `Stop ${processConfig.name}`
+                          : `Start ${processConfig.name}`,
+                        disabled: pending === processKey,
+                        onPress: () =>
+                          void onRunAction(processKey, () =>
+                            getClient()
+                              .mutation(active ? STOP_PROCESS_MUTATION : START_PROCESS_MUTATION, {
+                                sessionGroupId,
+                                appConfigId: application.id,
+                                processConfigId: processConfig.id,
+                              })
+                              .toPromise(),
+                          ),
+                      }}
+                      expandable={!!process}
+                      expanded={processLogsOpen}
+                      onPress={process ? () => onToggleProcessLogs(process.id) : undefined}
+                    />
+                    {process && processLogsOpen ? (
+                      <View style={styles.logsContent}>
+                        <View style={styles.logs}>
+                          {logs.length === 0 ? (
+                            <Text variant="caption2" color="mutedForeground">
+                              No logs yet.
+                            </Text>
+                          ) : (
+                            logs.map((log) => (
+                              <Text
+                                key={log.id}
+                                variant="caption2"
+                                color={log.stream === "stderr" ? "destructive" : "mutedForeground"}
+                                style={styles.logLine}
+                              >
+                                {`${log.stream}: ${log.data.trim() || "(empty)"}`}
+                              </Text>
+                            ))
+                          )}
                         </View>
-                        <View style={styles.cellText}>
-                          <Text variant="body" numberOfLines={1}>
-                            {processConfig.name}
-                          </Text>
-                          <Text
-                            variant="caption2"
-                            color={process?.status === "failed" ? "destructive" : "dimForeground"}
-                            numberOfLines={1}
-                          >
-                            {process?.lastError ?? displayStatus(process?.status ?? "stopped")}
-                          </Text>
-                        </View>
-                        <GlassButton
-                          symbol={active ? "stop.fill" : "play.fill"}
-                          label={active ? "Stop" : "Start"}
-                          accessibilityLabel={
-                            active ? `Stop ${processConfig.name}` : `Start ${processConfig.name}`
-                          }
-                          tint={active ? "destructive" : "foreground"}
-                          disabled={pending === `${application.id}:${processConfig.id}`}
-                          onPress={() =>
-                            void onRunAction(`${application.id}:${processConfig.id}`, () =>
-                              getClient()
-                                .mutation(active ? STOP_PROCESS_MUTATION : START_PROCESS_MUTATION, {
-                                  sessionGroupId,
-                                  appConfigId: application.id,
-                                  processConfigId: processConfig.id,
-                                })
-                                .toPromise(),
-                            )
-                          }
+                      </View>
+                    ) : null}
+                    {endpoints.map((endpoint) => (
+                      <View key={endpoint.id}>
+                        <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+                        <EndpointRow
+                          endpoint={endpoint}
+                          onCopyEndpoint={onCopyEndpoint}
+                          onOpenEndpoint={onOpenEndpoint}
+                          onRunAction={onRunAction}
+                          onShowTraffic={onShowTraffic}
+                          pending={pending}
+                          running={process?.status === "running"}
                         />
                       </View>
-                      {process ? (
-                        <LogsDisclosure
-                          open={processLogsOpen}
-                          onToggle={() => onToggleProcessLogs(process.id)}
-                        >
-                          <View style={styles.logs}>
-                            {logs.length === 0 ? (
-                              <Text variant="caption2" color="mutedForeground">
-                                No logs yet.
-                              </Text>
-                            ) : (
-                              logs.map((log) => (
-                                <Text
-                                  key={log.id}
-                                  variant="caption2"
-                                  color={log.stream === "stderr" ? "destructive" : "mutedForeground"}
-                                  style={styles.logLine}
-                                >
-                                  {`${log.stream}: ${log.data.trim() || "(empty)"}`}
-                                </Text>
-                              ))
-                            )}
-                          </View>
-                        </LogsDisclosure>
-                      ) : null}
-                      {endpoints.length > 0 ? (
-                        <View style={styles.endpointList}>
-                          {endpoints.map((endpoint) => (
-                            <EndpointRow
-                              key={endpoint.id}
-                              endpoint={endpoint}
-                              onCopyEndpoint={onCopyEndpoint}
-                              onOpenEndpoint={onOpenEndpoint}
-                              onRunAction={onRunAction}
-                              onShowTraffic={onShowTraffic}
-                              pending={pending}
-                              running={process?.status === "running"}
-                            />
-                          ))}
-                        </View>
-                      ) : null}
-                    </View>
+                    ))}
                   </View>
                 );
               })}
@@ -845,57 +810,156 @@ function EndpointRow({
   const theme = useTheme();
   const enabled = endpoint.status === "enabled";
   const canOpen = enabled && endpoint.url.length > 0;
+  const toggleForwarding = () =>
+    void onRunAction(endpoint.id, () =>
+      getClient()
+        .mutation(enabled ? DISABLE_ENDPOINT_MUTATION : ENABLE_ENDPOINT_MUTATION, {
+          endpointId: endpoint.id,
+        })
+        .toPromise(),
+    );
+
+  const menuItems: IconMenuItem[] = [
+    enabled
+      ? { title: "Disable forwarding", systemIcon: "bolt.slash", onPress: toggleForwarding }
+      : { title: "Enable forwarding", systemIcon: "bolt", onPress: toggleForwarding },
+    ...(endpoint.url
+      ? [
+          {
+            title: "Copy URL",
+            systemIcon: "doc.on.doc" as const,
+            onPress: () => void onCopyEndpoint(endpoint.url),
+          },
+        ]
+      : []),
+    { title: "View traffic", systemIcon: "chart.bar.xaxis", onPress: () => onShowTraffic(endpoint.id) },
+  ];
+
+  const primary = canOpen
+    ? {
+        symbol: "arrow.up.forward" as const,
+        color: "accent" as const,
+        accessibilityLabel: "Open endpoint",
+        onPress: () => onOpenEndpoint(endpoint),
+      }
+    : {
+        symbol: "bolt.fill" as const,
+        color: "accent" as const,
+        accessibilityLabel: "Enable forwarding",
+        disabled: pending === endpoint.id || (!enabled && !running),
+        onPress: toggleForwarding,
+      };
+
   return (
-    <View style={[styles.endpointRow, { borderColor: theme.colors.border }]}>
-      <View style={styles.endpointText}>
-        <Text variant="subheadline" numberOfLines={1}>
-          {endpoint.label}
-        </Text>
-        <Text variant="caption2" color="dimForeground" numberOfLines={1}>
-          {enabled && endpoint.url
-            ? endpoint.url
-            : `:${endpoint.targetPort} · ${displayStatus(endpoint.status)}`}
-        </Text>
+    <AppRow
+      icon="globe"
+      iconColor={enabled ? theme.colors.success : theme.colors.dimForeground}
+      title={endpoint.label}
+      subtitle={
+        enabled && endpoint.url
+          ? endpoint.url
+          : `:${endpoint.targetPort} · ${displayStatus(endpoint.status)}`
+      }
+      indent
+      primary={primary}
+      menuItems={menuItems}
+      onPress={canOpen ? () => onOpenEndpoint(endpoint) : undefined}
+    />
+  );
+}
+
+type RowAction = {
+  symbol: SymbolName;
+  accessibilityLabel: string;
+  onPress: () => void;
+  disabled?: boolean;
+  color?: keyof Theme["colors"];
+};
+
+function AppRow({
+  icon,
+  iconColor,
+  title,
+  subtitle,
+  subtitleColor = "dimForeground",
+  primary,
+  menuItems,
+  expandable = false,
+  expanded = false,
+  indent = false,
+  onPress,
+}: {
+  icon: SymbolName;
+  iconColor: string;
+  title: string;
+  subtitle?: string;
+  subtitleColor?: keyof Theme["colors"];
+  primary?: RowAction;
+  menuItems?: IconMenuItem[];
+  expandable?: boolean;
+  expanded?: boolean;
+  indent?: boolean;
+  onPress?: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole={onPress ? "button" : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        indent ? styles.rowIndent : null,
+        {
+          backgroundColor:
+            pressed && onPress ? alpha(theme.colors.foreground, 0.06) : "transparent",
+        },
+      ]}
+    >
+      <View style={styles.iconSlot}>
+        <SymbolView name={icon} size={18} tintColor={iconColor} resizeMode="scaleAspectFit" />
       </View>
-      <View style={styles.endpointActions}>
-        <GlassButton
-          symbol={enabled ? "bolt.slash.fill" : "bolt.fill"}
-          label={enabled ? "Off" : "On"}
-          accessibilityLabel={enabled ? "Disable forwarding" : "Enable forwarding"}
-          tint={enabled ? "success" : "foreground"}
-          disabled={pending === endpoint.id || (!enabled && !running)}
-          onPress={() =>
-            void onRunAction(endpoint.id, () =>
-              getClient()
-                .mutation(enabled ? DISABLE_ENDPOINT_MUTATION : ENABLE_ENDPOINT_MUTATION, {
-                  endpointId: endpoint.id,
-                })
-                .toPromise(),
-            )
-          }
-        />
-        <GlassButton
-          symbol="arrow.up.forward.app.fill"
-          label="Open"
-          accessibilityLabel="Open endpoint"
-          disabled={!canOpen}
-          onPress={() => onOpenEndpoint(endpoint)}
-        />
-        <GlassButton
-          symbol="doc.on.doc"
-          label="Copy"
-          accessibilityLabel="Copy endpoint URL"
-          disabled={!endpoint.url}
-          onPress={() => void onCopyEndpoint(endpoint.url)}
-        />
-        <GlassButton
-          symbol="chart.bar.xaxis"
-          label="Traffic"
-          accessibilityLabel="View endpoint traffic"
-          onPress={() => onShowTraffic(endpoint.id)}
-        />
+      <View style={styles.cellText}>
+        <Text variant="body" numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text variant="caption2" color={subtitleColor} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
-    </View>
+      {primary ? (
+        <IconButton
+          symbol={primary.symbol}
+          size="sm"
+          color={primary.color ?? "foreground"}
+          disabled={primary.disabled}
+          accessibilityLabel={primary.accessibilityLabel}
+          onPress={primary.onPress}
+        />
+      ) : null}
+      {menuItems && menuItems.length > 0 ? (
+        <IconButton
+          symbol="ellipsis"
+          size="sm"
+          color="mutedForeground"
+          accessibilityLabel="More actions"
+          dropdownMenuMode
+          menuItems={menuItems}
+          onPress={() => undefined}
+        />
+      ) : null}
+      {expandable ? (
+        <SymbolView
+          name={expanded ? "chevron.down" : "chevron.right"}
+          size={12}
+          tintColor={theme.colors.dimForeground}
+          resizeMode="scaleAspectFit"
+          style={styles.rowChevron}
+        />
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -906,41 +970,6 @@ function SectionLabel({ title, trailing }: { title: string; trailing?: ReactNode
         {title.toUpperCase()}
       </Text>
       {trailing}
-    </View>
-  );
-}
-
-function LogsDisclosure({
-  open,
-  onToggle,
-  children,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={styles.logsDisclosure}>
-      <Pressable
-        onPress={onToggle}
-        hitSlop={6}
-        style={({ pressed }) => [
-          styles.logToggle,
-          { backgroundColor: pressed ? alpha(theme.colors.foreground, 0.06) : "transparent" },
-        ]}
-      >
-        <Text variant="caption2" color="dimForeground">
-          {open ? "Hide logs" : "View logs"}
-        </Text>
-        <SymbolView
-          name={open ? "chevron.up" : "chevron.down"}
-          size={11}
-          tintColor={theme.colors.dimForeground}
-          resizeMode="scaleAspectFit"
-        />
-      </Pressable>
-      {open ? children : null}
     </View>
   );
 }
@@ -1007,14 +1036,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
     opacity: 1,
   },
-  cell: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  cellRow: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  rowIndent: {
+    paddingLeft: 30,
+  },
+  rowChevron: {
+    width: 12,
+    height: 12,
   },
   iconSlot: {
     width: 28,
@@ -1027,18 +1062,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 1,
   },
-  logsDisclosure: {
-    marginTop: 10,
-    gap: 6,
-  },
-  logToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    borderRadius: 6,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+  logsContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
   },
   logBlock: {
     fontFamily: "SpaceMono",
@@ -1048,23 +1074,6 @@ const styles = StyleSheet.create({
   },
   logLine: {
     fontFamily: "SpaceMono",
-  },
-  endpointList: {
-    gap: 8,
-    marginTop: 10,
-  },
-  endpointRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 10,
-    gap: 10,
-  },
-  endpointText: {
-    minWidth: 0,
-  },
-  endpointActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
   },
   errorBox: {
     borderWidth: StyleSheet.hairlineWidth,
