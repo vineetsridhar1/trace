@@ -231,6 +231,98 @@ describe("SessionApplicationService", () => {
     );
   });
 
+  it("starts every process in an application, including optional processes", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
+      id: "group-1",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: "repo-1",
+      workdir: "/workspace",
+      repo: {
+        id: "repo-1",
+        setupConfig: {
+          applications: {
+            setupScripts: [],
+            applications: [
+              {
+                id: "web",
+                name: "Web",
+                processes: [
+                  {
+                    id: "dev",
+                    name: "Dev",
+                    command: "pnpm dev",
+                    workingDirectory: ".",
+                    required: true,
+                    ports: [],
+                  },
+                  {
+                    id: "worker",
+                    name: "Worker",
+                    command: "pnpm worker",
+                    workingDirectory: ".",
+                    required: false,
+                    ports: [],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      sessions: [
+        {
+          id: "session-1",
+          workdir: "/workspace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ],
+    });
+    prismaMock.sessionApplicationProcess.upsert.mockImplementation(async (args: {
+      create: {
+        processConfigId: string;
+        label: string;
+        command: string;
+        workingDirectory: string;
+      };
+    }) => ({
+      id: `process-${args.create.processConfigId}`,
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: args.create.processConfigId,
+      label: args.create.label,
+      command: args.create.command,
+      workingDirectory: args.create.workingDirectory,
+      status: "starting",
+      runtimeInstanceId: "runtime-1",
+      bridgeProcessId: null,
+      exitCode: null,
+      lastError: null,
+      startedByUserId: "user-1",
+      startedAt: new Date("2026-06-07T00:00:00.000Z"),
+      stoppedAt: null,
+      lastHeartbeatAt: null,
+      createdAt: new Date("2026-06-07T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-07T00:00:00.000Z"),
+    }));
+
+    await new SessionApplicationService().startApplication("group-1", "web", "org-1", "user-1");
+
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "runtime-1",
+      expect.objectContaining({ type: "app_process_start", processConfigId: "dev" }),
+      "org-1",
+    );
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "runtime-1",
+      expect.objectContaining({ type: "app_process_start", processConfigId: "worker" }),
+      "org-1",
+    );
+  });
+
   it("enables default preview forwarding when a repo-less app process starts", async () => {
     const runningProcess = {
       id: "process-1",
@@ -307,6 +399,129 @@ describe("SessionApplicationService", () => {
         eventType: "session_endpoint_forwarding_enabled",
         actorType: "system",
       }),
+    );
+  });
+
+  it("stops only existing active application processes", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
+      id: "group-1",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: "repo-1",
+      workdir: "/workspace",
+      repo: {
+        id: "repo-1",
+        setupConfig: {
+          applications: {
+            setupScripts: [],
+            applications: [
+              {
+                id: "web",
+                name: "Web",
+                processes: [
+                  {
+                    id: "dev",
+                    name: "Dev",
+                    command: "pnpm dev",
+                    workingDirectory: ".",
+                    required: true,
+                    ports: [],
+                  },
+                  {
+                    id: "worker",
+                    name: "Worker",
+                    command: "pnpm worker",
+                    workingDirectory: ".",
+                    required: false,
+                    ports: [],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      sessions: [
+        {
+          id: "session-1",
+          workdir: "/workspace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ],
+    });
+    prismaMock.sessionApplicationProcess.findMany.mockResolvedValueOnce([
+      { processConfigId: "dev" },
+    ]);
+    prismaMock.sessionApplicationProcess.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      label: "Dev",
+      command: "pnpm dev",
+      workingDirectory: ".",
+      status: "running",
+      runtimeInstanceId: "runtime-1",
+      bridgeProcessId: "bridge-1",
+      exitCode: null,
+      lastError: null,
+      startedByUserId: "user-1",
+      startedAt: new Date("2026-06-07T00:00:00.000Z"),
+      stoppedAt: null,
+      lastHeartbeatAt: null,
+      createdAt: new Date("2026-06-07T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-07T00:00:00.000Z"),
+    });
+    prismaMock.sessionApplicationProcess.update.mockImplementationOnce(async (args: {
+      data: {
+        status?: string;
+        runtimeInstanceId?: string | null;
+        bridgeProcessId?: string | null;
+        stoppedAt?: Date;
+      };
+    }) => ({
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      label: "Dev",
+      command: "pnpm dev",
+      workingDirectory: ".",
+      status: "stopped",
+      runtimeInstanceId: null,
+      bridgeProcessId: null,
+      exitCode: null,
+      lastError: null,
+      startedByUserId: "user-1",
+      startedAt: new Date("2026-06-07T00:00:00.000Z"),
+      stoppedAt: new Date("2026-06-07T00:00:00.000Z"),
+      lastHeartbeatAt: null,
+      createdAt: new Date("2026-06-07T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-07T00:00:00.000Z"),
+      ...args.data,
+    }));
+
+    await new SessionApplicationService().stopApplication("group-1", "web", "org-1", "user-1");
+
+    expect(prismaMock.sessionApplicationProcess.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          appConfigId: "web",
+          processConfigId: { in: ["dev", "worker"] },
+          status: { in: ["starting", "running", "stopping"] },
+        }),
+      }),
+    );
+    expect(prismaMock.sessionApplicationProcess.findUniqueOrThrow).toHaveBeenCalledTimes(1);
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "runtime-1",
+      expect.objectContaining({ type: "app_process_stop", processInstanceId: "process-1" }),
+      "org-1",
     );
   });
 

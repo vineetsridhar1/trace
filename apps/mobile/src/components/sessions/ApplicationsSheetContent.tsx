@@ -819,10 +819,14 @@ function EndpointRow({
         .toPromise(),
     );
 
+  const forwardingMenuItem: IconMenuItem | null = enabled
+    ? { title: "Disable forwarding", systemIcon: "bolt.slash", onPress: toggleForwarding }
+    : running
+      ? { title: "Enable forwarding", systemIcon: "bolt", onPress: toggleForwarding }
+      : null;
+
   const menuItems: IconMenuItem[] = [
-    enabled
-      ? { title: "Disable forwarding", systemIcon: "bolt.slash", onPress: toggleForwarding }
-      : { title: "Enable forwarding", systemIcon: "bolt", onPress: toggleForwarding },
+    ...(forwardingMenuItem ? [forwardingMenuItem] : []),
     ...(endpoint.url
       ? [
           {
