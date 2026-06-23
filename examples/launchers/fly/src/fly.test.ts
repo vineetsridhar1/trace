@@ -43,6 +43,15 @@ describe("Fly machine helpers", () => {
       ]),
     });
   });
+
+  it("forwards injected MCP config from bootstrapEnv", () => {
+    const request = startRequest();
+    request.bootstrapEnv.TRACE_MCP_CONFIG = "base64-mcp-config";
+
+    expect(buildMachineEnv(request)).toMatchObject({
+      TRACE_MCP_CONFIG: "base64-mcp-config",
+    });
+  });
 });
 
 function startRequest(): StartSessionRequest {
