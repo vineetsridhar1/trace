@@ -34,6 +34,7 @@ export interface McpCatalogProviderStatus {
   id: string;
   name: string;
   transport: string;
+  oauthRedirectUri: string;
   needsClientCredentials: boolean;
   enabled: boolean;
   serverId: string | null;
@@ -108,13 +109,15 @@ export class McpServerService {
 
     return MCP_CATALOG.map((entry) => {
       const server = serverByCatalog.get(entry.id);
-      const connection = server ? connByServer.get(server.id) : undefined;
+      const enabled = Boolean(server?.enabled);
+      const connection = enabled && server ? connByServer.get(server.id) : undefined;
       return {
         id: entry.id,
         name: entry.name,
         transport: entry.transport,
-        needsClientCredentials: needsClientCredentials(entry),
-        enabled: Boolean(server),
+        oauthRedirectUri: mcpRedirectUri(),
+        needsClientCredentials: !server?.clientId && needsClientCredentials(entry),
+        enabled,
         serverId: server?.id ?? null,
         connectionState: connectionStateOf(connection),
       };
@@ -132,6 +135,19 @@ export class McpServerService {
     const entry = getMcpCatalogEntry(catalogId);
     if (!entry) throw new Error("Unknown MCP provider");
 
+    // Authorize BEFORE any network side effects (SSRF + DCR are observable).
+    await prisma.$transaction((tx: TxClient) =>
+      assertActorOrgAdmin(tx, organizationId, actorType, actorId),
+    );
+    const conflict = await prisma.mcpServer.findUnique({
+      where: { organizationId_catalogId: { organizationId, catalogId } },
+      select: { id: true, enabled: true },
+    });
+    if (conflict) {
+      if (conflict.enabled) throw new Error(`${entry.name} is already enabled`);
+      return this.update(conflict.id, { enabled: true }, actorType, actorId);
+    }
+
     // Resolve pre-registered credentials up front: prefer environment config,
     // otherwise accept admin-supplied client credentials.
     let preCreds: { clientId: string; clientSecret?: string } | null = null;
@@ -145,16 +161,6 @@ export class McpServerService {
         throw new Error(`${entry.name} requires an OAuth client ID and secret`);
       }
     }
-
-    // Authorize BEFORE any network side effects (SSRF + DCR are observable).
-    await prisma.$transaction((tx: TxClient) =>
-      assertActorOrgAdmin(tx, organizationId, actorType, actorId),
-    );
-    const conflict = await prisma.mcpServer.findUnique({
-      where: { organizationId_catalogId: { organizationId, catalogId } },
-      select: { id: true },
-    });
-    if (conflict) throw new Error(`${entry.name} is already enabled`);
 
     const metadata = await discoverOAuthMetadata(entry.url);
     let clientId: string;

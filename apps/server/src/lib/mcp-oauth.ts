@@ -328,6 +328,7 @@ export async function refreshToken(params: {
   clientSecret?: string;
   refreshToken: string;
   scope?: string;
+  resource?: string;
 }): Promise<TokenResponse> {
   const body: Record<string, string> = {
     grant_type: "refresh_token",
@@ -335,6 +336,7 @@ export async function refreshToken(params: {
     client_id: params.clientId,
   };
   if (params.scope) body.scope = params.scope;
+  if (params.resource) body.resource = params.resource;
   const result = await tokenRequest(params.metadata.tokenEndpoint, body, params.clientSecret);
   // Some servers omit refresh_token on refresh — carry the old one forward.
   return { ...result, refreshToken: result.refreshToken ?? params.refreshToken };

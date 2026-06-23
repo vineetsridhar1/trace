@@ -390,11 +390,13 @@ type McpCatalogProvider {
   id: String!
   name: String!
   transport: McpServerTransport!
+  "The exact OAuth redirect URI admins must register for pre-registered providers."
+  oauthRedirectUri: String!
   "Whether enabling requires an admin to supply OAuth client credentials by hand."
   needsClientCredentials: Boolean!
   "Whether an org admin has enabled this provider."
   enabled: Boolean!
-  "The McpServer id when enabled (used to start/disconnect OAuth)."
+  "The McpServer id when configured (used to start/disconnect OAuth or remove the provider)."
   serverId: ID
   "This user's connection state for the provider."
   connectionState: McpConnectionState!

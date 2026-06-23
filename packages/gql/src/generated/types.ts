@@ -608,7 +608,9 @@ export type McpCatalogProvider = {
   name: Scalars["String"]["output"];
   /** Whether enabling requires an admin to supply OAuth client credentials by hand. */
   needsClientCredentials: Scalars["Boolean"]["output"];
-  /** The McpServer id when enabled (used to start/disconnect OAuth). */
+  /** The exact OAuth redirect URI admins must register for pre-registered providers. */
+  oauthRedirectUri: Scalars["String"]["output"];
+  /** The McpServer id when configured (used to start/disconnect OAuth or remove the provider). */
   serverId?: Maybe<Scalars["ID"]["output"]>;
   transport: McpServerTransport;
 };

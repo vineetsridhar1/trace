@@ -53,6 +53,7 @@ function connection(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   resolveOAuthContextMock.mockResolvedValue({
+    server: { id: "srv-1", url: "https://mcp.example/mcp" },
     metadata: { tokenEndpoint: "https://auth.example/token" },
     clientId: "client-1",
     clientSecret: undefined,
@@ -98,6 +99,9 @@ describe("resolveFreshAccessToken", () => {
 
     expect(token).toBe("access-2");
     expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).toHaveBeenCalledWith(
+      expect.objectContaining({ resource: "https://mcp.example/mcp" }),
+    );
     expect(eventMock).not.toHaveBeenCalled();
   });
 

@@ -50,7 +50,7 @@ type Documents = {
   "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n": typeof types.MyApiTokensDocument;
   "\n  mutation SetApiToken($input: SetApiTokenInput!) {\n    setApiToken(input: $input) {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n": typeof types.SetApiTokenDocument;
   "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n": typeof types.DeleteApiTokenDocument;
-  "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n": typeof types.McpCatalogDocument;
+  "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      oauthRedirectUri\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n": typeof types.McpCatalogDocument;
   "\n  mutation EnableMcpServer($input: EnableMcpServerInput!) {\n    enableMcpServer(input: $input) {\n      id\n    }\n  }\n": typeof types.EnableMcpServerDocument;
   "\n  mutation DeleteMcpServer($id: ID!) {\n    deleteMcpServer(id: $id)\n  }\n": typeof types.DeleteMcpServerDocument;
   "\n  mutation DisconnectMcp($mcpServerId: ID!) {\n    disconnectMcp(mcpServerId: $mcpServerId)\n  }\n": typeof types.DisconnectMcpDocument;
@@ -173,7 +173,7 @@ const documents: Documents = {
     types.SetApiTokenDocument,
   "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n":
     types.DeleteApiTokenDocument,
-  "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n":
+  "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      oauthRedirectUri\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n":
     types.McpCatalogDocument,
   "\n  mutation EnableMcpServer($input: EnableMcpServerInput!) {\n    enableMcpServer(input: $input) {\n      id\n    }\n  }\n":
     types.EnableMcpServerDocument,
@@ -507,8 +507,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n",
-): (typeof documents)["\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n"];
+  source: "\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      oauthRedirectUri\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n",
+): (typeof documents)["\n  query McpCatalog($orgId: ID!) {\n    mcpCatalog(orgId: $orgId) {\n      id\n      name\n      transport\n      oauthRedirectUri\n      needsClientCredentials\n      enabled\n      serverId\n      connectionState\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

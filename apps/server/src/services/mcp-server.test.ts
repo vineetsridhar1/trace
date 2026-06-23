@@ -154,11 +154,40 @@ describe("mcpServerService.enable", () => {
 
   it("rejects enabling a provider that is already enabled", async () => {
     asAdmin();
-    prismaMock.mcpServer.findUnique.mockResolvedValue({ id: "existing" });
+    prismaMock.mcpServer.findUnique.mockResolvedValue({ id: "existing", enabled: true });
     await expect(mcpServerService.enable("org-1", "linear", "user", "u1")).rejects.toThrow(
       /already enabled/,
     );
     expect(registerMock).not.toHaveBeenCalled();
+  });
+
+  it("re-enables an existing disabled provider without registering again", async () => {
+    asAdmin();
+    prismaMock.mcpServer.findUnique.mockResolvedValue({ id: "existing", enabled: false });
+    prismaMock.mcpServer.findUniqueOrThrow.mockResolvedValue({
+      id: "existing",
+      organizationId: "org-1",
+    });
+    prismaMock.mcpServer.update.mockResolvedValue({
+      id: "existing",
+      organizationId: "org-1",
+      catalogId: "linear",
+      name: "Linear",
+      url: "https://mcp.linear.app/mcp",
+      transport: "http",
+      enabled: true,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    });
+
+    await mcpServerService.enable("org-1", "linear", "user", "u1");
+
+    expect(discoverMock).not.toHaveBeenCalled();
+    expect(registerMock).not.toHaveBeenCalled();
+    expect(prismaMock.mcpServer.update).toHaveBeenCalledWith({
+      where: { id: "existing" },
+      data: { enabled: true },
+    });
   });
 });
 
@@ -166,7 +195,14 @@ describe("mcpServerService.listCatalog", () => {
   it("reports availability, enablement, and per-user connection state", async () => {
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "u1" });
     prismaMock.mcpServer.findMany.mockResolvedValue([
-      { id: "srv-1", organizationId: "org-1", catalogId: "linear", transport: "http" },
+      {
+        id: "srv-1",
+        organizationId: "org-1",
+        catalogId: "linear",
+        transport: "http",
+        enabled: true,
+        clientId: "client-1",
+      },
     ]);
     prismaMock.mcpConnection.findMany.mockResolvedValue([
       {
@@ -181,6 +217,7 @@ describe("mcpServerService.listCatalog", () => {
     const linear = catalog.find((p) => p.id === "linear")!;
     expect(linear.enabled).toBe(true);
     expect(linear.serverId).toBe("srv-1");
+    expect(linear.oauthRedirectUri).toBe("https://trace.example/mcp/oauth/callback");
     expect(linear.needsClientCredentials).toBe(false);
     expect(linear.connectionState).toBe("connected");
 
@@ -188,5 +225,33 @@ describe("mcpServerService.listCatalog", () => {
     expect(figma.enabled).toBe(false);
     expect(figma.needsClientCredentials).toBe(true); // env creds not configured
     expect(figma.connectionState).toBe("disconnected");
+  });
+
+  it("reports disabled server rows as not enabled", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "u1" });
+    prismaMock.mcpServer.findMany.mockResolvedValue([
+      {
+        id: "srv-1",
+        organizationId: "org-1",
+        catalogId: "linear",
+        transport: "http",
+        enabled: false,
+        clientId: "client-1",
+      },
+    ]);
+    prismaMock.mcpConnection.findMany.mockResolvedValue([
+      {
+        mcpServerId: "srv-1",
+        expiresAt: new Date(Date.now() + 3600_000),
+        encryptedRefreshToken: "enc(r)",
+      },
+    ]);
+
+    const catalog = await mcpServerService.listCatalog("u1", "org-1", "user", "u1");
+
+    const linear = catalog.find((p) => p.id === "linear")!;
+    expect(linear.enabled).toBe(false);
+    expect(linear.serverId).toBe("srv-1");
+    expect(linear.connectionState).toBe("disconnected");
   });
 });

@@ -213,15 +213,15 @@ export class McpConnectionService {
         connection.encryptedRefreshToken!,
         connection.refreshIv!,
       );
-      const { metadata, clientId, clientSecret } = await mcpServerService.resolveOAuthContext(
-        connection.mcpServerId,
-      );
+      const { server, metadata, clientId, clientSecret } =
+        await mcpServerService.resolveOAuthContext(connection.mcpServerId);
       const refreshed = await refreshToken({
         metadata,
         clientId,
         clientSecret,
         refreshToken: currentRefresh,
         scope: connection.scope ?? undefined,
+        resource: server.url,
       });
       await this.persistTokens(
         connection.userId,

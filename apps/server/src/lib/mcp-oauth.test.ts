@@ -138,6 +138,7 @@ describe("mcp-oauth", () => {
           state: "state-token",
           codeChallenge: "challenge",
           scope: "read write",
+          resource: "https://mcp.example/mcp",
         }),
       );
       expect(url.origin + url.pathname).toBe("https://auth.example/authorize");
@@ -146,6 +147,7 @@ describe("mcp-oauth", () => {
       expect(url.searchParams.get("code_challenge_method")).toBe("S256");
       expect(url.searchParams.get("scope")).toBe("read write");
       expect(url.searchParams.get("state")).toBe("state-token");
+      expect(url.searchParams.get("resource")).toBe("https://mcp.example/mcp");
     });
 
     it("defaults scope to the discovered scopes_supported", () => {
@@ -178,6 +180,7 @@ describe("mcp-oauth", () => {
         code: "auth-code",
         redirectUri: "https://x/cb",
         codeVerifier: "verifier",
+        resource: "https://mcp.example/mcp",
       });
       expect(result.accessToken).toBe("access-1");
       expect(result.refreshToken).toBe("refresh-1");
@@ -188,6 +191,7 @@ describe("mcp-oauth", () => {
       const body = new URLSearchParams((init as RequestInit).body as string);
       expect(body.get("grant_type")).toBe("authorization_code");
       expect(body.get("code_verifier")).toBe("verifier");
+      expect(body.get("resource")).toBe("https://mcp.example/mcp");
     });
 
     it("throws on a non-ok token response", async () => {
@@ -213,9 +217,13 @@ describe("mcp-oauth", () => {
         metadata: METADATA,
         clientId: "client-123",
         refreshToken: "refresh-old",
+        resource: "https://mcp.example/mcp",
       });
       expect(result.accessToken).toBe("access-2");
       expect(result.refreshToken).toBe("refresh-old");
+      const [, init] = fetchMock.mock.calls[0];
+      const body = new URLSearchParams((init as RequestInit).body as string);
+      expect(body.get("resource")).toBe("https://mcp.example/mcp");
     });
   });
 });

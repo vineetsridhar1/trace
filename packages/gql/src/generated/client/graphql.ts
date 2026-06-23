@@ -610,7 +610,9 @@ export type McpCatalogProvider = {
   name: Scalars["String"]["output"];
   /** Whether enabling requires an admin to supply OAuth client credentials by hand. */
   needsClientCredentials: Scalars["Boolean"]["output"];
-  /** The McpServer id when enabled (used to start/disconnect OAuth). */
+  /** The exact OAuth redirect URI admins must register for pre-registered providers. */
+  oauthRedirectUri: Scalars["String"]["output"];
+  /** The McpServer id when configured (used to start/disconnect OAuth or remove the provider). */
   serverId?: Maybe<Scalars["ID"]["output"]>;
   transport: McpServerTransport;
 };
@@ -3302,6 +3304,7 @@ export type McpCatalogQuery = {
     id: string;
     name: string;
     transport: McpServerTransport;
+    oauthRedirectUri: string;
     needsClientCredentials: boolean;
     enabled: boolean;
     serverId?: string | null;
@@ -7112,6 +7115,7 @@ export const McpCatalogDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "transport" } },
+                { kind: "Field", name: { kind: "Name", value: "oauthRedirectUri" } },
                 { kind: "Field", name: { kind: "Name", value: "needsClientCredentials" } },
                 { kind: "Field", name: { kind: "Name", value: "enabled" } },
                 { kind: "Field", name: { kind: "Name", value: "serverId" } },

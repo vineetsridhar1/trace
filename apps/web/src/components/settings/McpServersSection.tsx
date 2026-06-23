@@ -16,6 +16,7 @@ const MCP_CATALOG_QUERY = gql`
       id
       name
       transport
+      oauthRedirectUri
       needsClientCredentials
       enabled
       serverId
@@ -48,6 +49,7 @@ type CatalogProvider = {
   id: string;
   name: string;
   transport: string;
+  oauthRedirectUri: string;
   needsClientCredentials: boolean;
   enabled: boolean;
   serverId: string | null;
@@ -139,14 +141,29 @@ export function McpServersSection() {
   const handleConnect = useCallback(
     (serverId: string) => {
       const url = `${window.location.origin}/mcp/${encodeURIComponent(serverId)}/oauth/start`;
+      let timer: number | undefined;
+      let timeout: number | undefined;
+      let refreshed = false;
+      const refreshOnce = () => {
+        if (refreshed) return;
+        refreshed = true;
+        if (timer !== undefined) window.clearInterval(timer);
+        if (timeout !== undefined) window.clearTimeout(timeout);
+        window.removeEventListener("focus", refreshOnce);
+        void fetchCatalog();
+      };
+      window.addEventListener("focus", refreshOnce, { once: true });
       const popup = window.open(url, "_blank", "noopener,noreferrer,width=600,height=720");
-      if (!popup) return;
-      const timer = window.setInterval(() => {
+      if (!popup) {
+        timeout = window.setTimeout(refreshOnce, 3000);
+        return;
+      }
+      timer = window.setInterval(() => {
         if (popup.closed) {
-          window.clearInterval(timer);
-          void fetchCatalog();
+          refreshOnce();
         }
       }, 1000);
+      timeout = window.setTimeout(refreshOnce, 5 * 60 * 1000);
     },
     [fetchCatalog],
   );
@@ -257,7 +274,7 @@ export function McpServersSection() {
                     </Button>
                   )}
 
-                  {isAdmin && provider.enabled && provider.serverId && (
+                  {isAdmin && provider.serverId && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -283,7 +300,7 @@ export function McpServersSection() {
                       <p className="text-xs text-muted-foreground">
                         {provider.name} requires a registered OAuth app. Create one in {provider.name}
                         ’s developer settings (redirect URI{" "}
-                        <code className="text-foreground">{window.location.origin}/mcp/oauth/callback</code>
+                        <code className="text-foreground">{provider.oauthRedirectUri}</code>
                         ) and paste its credentials.
                       </p>
                       <Input

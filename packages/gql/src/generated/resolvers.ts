@@ -611,7 +611,9 @@ export type McpCatalogProvider = {
   name: Scalars["String"]["output"];
   /** Whether enabling requires an admin to supply OAuth client credentials by hand. */
   needsClientCredentials: Scalars["Boolean"]["output"];
-  /** The McpServer id when enabled (used to start/disconnect OAuth). */
+  /** The exact OAuth redirect URI admins must register for pre-registered providers. */
+  oauthRedirectUri: Scalars["String"]["output"];
+  /** The McpServer id when configured (used to start/disconnect OAuth or remove the provider). */
   serverId?: Maybe<Scalars["ID"]["output"]>;
   transport: McpServerTransport;
 };
@@ -3239,6 +3241,7 @@ export type McpCatalogProviderResolvers<
   id?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   needsClientCredentials?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  oauthRedirectUri?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   serverId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   transport?: Resolver<ResolversTypes["McpServerTransport"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;

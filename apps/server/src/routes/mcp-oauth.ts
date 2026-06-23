@@ -138,6 +138,7 @@ router.get("/:serverId/oauth/start", async (req: Request, res: Response) => {
       state,
       codeChallenge: pkce.challenge,
       scope: getMcpCatalogEntry(server.catalogId)?.scope,
+      resource: server.url,
     });
     res.redirect(authorizeUrl);
   } catch (err) {
@@ -166,7 +167,7 @@ router.get("/oauth/callback", async (req: Request, res: Response) => {
   }
 
   try {
-    const { metadata, clientId, clientSecret } = await mcpServerService.resolveOAuthContext(
+    const { server, metadata, clientId, clientSecret } = await mcpServerService.resolveOAuthContext(
       state.mcpServerId,
     );
     const codeVerifier = decryptSecret(state.ev, state.eiv);
@@ -177,6 +178,7 @@ router.get("/oauth/callback", async (req: Request, res: Response) => {
       code,
       redirectUri: mcpRedirectUri(),
       codeVerifier,
+      resource: server.url,
     });
     await mcpConnectionService.upsertTokens(state.userId, state.mcpServerId, {
       accessToken: tokens.accessToken,
