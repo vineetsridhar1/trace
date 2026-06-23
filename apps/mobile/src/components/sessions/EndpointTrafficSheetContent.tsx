@@ -319,8 +319,8 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: 14,
-    opacity: 0.55,
+    marginHorizontal: 14,
+    opacity: 1,
   },
   row: {
     flexDirection: "row",
