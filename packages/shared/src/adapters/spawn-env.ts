@@ -35,7 +35,9 @@ function envEntryBytes(key: string, value: string): number {
 }
 
 function isEssentialEnvKey(key: string): boolean {
-  return ESSENTIAL_ENV_KEYS.has(key) || key.startsWith("LC_");
+  return (
+    ESSENTIAL_ENV_KEYS.has(key) || key.startsWith("LC_") || key.startsWith("TRACE_MCP_TOKEN_")
+  );
 }
 
 export function buildChildProcessEnv(

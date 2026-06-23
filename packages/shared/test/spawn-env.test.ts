@@ -53,4 +53,19 @@ describe("buildChildProcessEnv", () => {
     expect(env.OPENAI_API_KEY).toBe("sk-test");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-test");
   });
+
+  it("keeps injected MCP token variables for Codex", () => {
+    const env = buildChildProcessEnv({
+      HOME: "/home/coder",
+      PATH: "/usr/bin",
+      TRACE_MCP_TOKEN_LINEAR_MCP: "mcp-token",
+      LARGE_ONE: "a".repeat(15 * 1024),
+      LARGE_TWO: "b".repeat(15 * 1024),
+      LARGE_THREE: "c".repeat(15 * 1024),
+      LARGE_FOUR: "d".repeat(15 * 1024),
+      LARGE_FIVE: "e".repeat(15 * 1024),
+    });
+
+    expect(env.TRACE_MCP_TOKEN_LINEAR_MCP).toBe("mcp-token");
+  });
 });

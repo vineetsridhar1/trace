@@ -44,17 +44,107 @@ function setupSshKey(): void {
   console.log("[container-bridge] SSH key configured");
 }
 
+type InjectedMcpServer = {
+  type?: unknown;
+  url?: unknown;
+  headers?: unknown;
+};
+
+type InjectedMcpConfig = {
+  mcpServers?: Record<string, InjectedMcpServer>;
+};
+
+function authTokenFromHeaders(headers: unknown): string | null {
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return null;
+  const authorization = (headers as Record<string, unknown>).Authorization;
+  if (typeof authorization !== "string") return null;
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1] ?? null;
+}
+
+function codexTokenEnvName(serverName: string): string {
+  const suffix = serverName
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+  return `TRACE_MCP_TOKEN_${suffix || "SERVER"}`;
+}
+
+function writeClaudeMcpConfig(mcpServers: Record<string, InjectedMcpServer>): boolean {
+  const configPath = "/home/coder/.claude.json";
+  let existing: Record<string, unknown> = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      existing = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    } catch (err) {
+      // Don't clobber an existing (if malformed) config we can't safely merge.
+      console.error(
+        "[container-bridge] existing .claude.json is not valid JSON; skipping MCP config:",
+        (err as Error).message,
+      );
+      return false;
+    }
+  }
+
+  const existingServers =
+    existing.mcpServers && typeof existing.mcpServers === "object"
+      ? (existing.mcpServers as Record<string, unknown>)
+      : {};
+  existing.mcpServers = { ...existingServers, ...mcpServers };
+
+  fs.writeFileSync(configPath, JSON.stringify(existing, null, 2), { mode: 0o600 });
+  return true;
+}
+
+function writeCodexMcpConfig(mcpServers: Record<string, InjectedMcpServer>): boolean {
+  let configuredCount = 0;
+
+  for (const [name, server] of Object.entries(mcpServers)) {
+    if (typeof server.url !== "string") {
+      console.error(`[container-bridge] skipping MCP server ${name}: missing URL`);
+      continue;
+    }
+
+    const token = authTokenFromHeaders(server.headers);
+    const args = ["mcp", "add", name, "--url", server.url];
+    if (token) {
+      const tokenEnvName = codexTokenEnvName(name);
+      process.env[tokenEnvName] = token;
+      args.push("--bearer-token-env-var", tokenEnvName);
+    }
+
+    try {
+      execFileSync("codex", ["mcp", "remove", name], { stdio: "ignore" });
+    } catch {
+      // The server may not exist yet. Add below is authoritative.
+    }
+
+    try {
+      execFileSync("codex", args, { stdio: "ignore" });
+      configuredCount += 1;
+    } catch (err) {
+      console.error(
+        `[container-bridge] failed to write Codex MCP server ${name}:`,
+        (err as Error).message,
+      );
+    }
+  }
+
+  return configuredCount > 0;
+}
+
 /**
- * If a per-user MCP config was injected (base64-encoded), decode it and merge
- * the mcpServers block into ~/.claude.json so Claude Code auto-loads the
- * connected MCP servers. The env var is cleared afterward so the bearer tokens
- * don't linger where child processes could read them.
+ * If a per-user MCP config was injected (base64-encoded), decode it and write
+ * the tool-specific config file so the selected coding tool auto-loads the
+ * connected MCP servers. The transport env var is cleared afterward; Codex
+ * keeps per-server token env vars because its config references them directly.
  */
-function setupMcpConfig(): void {
+function setupMcpConfig(tool: string): void {
   const b64 = process.env.TRACE_MCP_CONFIG;
   if (!b64) return;
 
-  let injected: { mcpServers?: Record<string, unknown> };
+  let injected: InjectedMcpConfig;
   try {
     injected = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
   } catch (err) {
@@ -68,32 +158,13 @@ function setupMcpConfig(): void {
     return;
   }
 
-  const configPath = "/home/coder/.claude.json";
-  let existing: Record<string, unknown> = {};
-  if (fs.existsSync(configPath)) {
-    try {
-      existing = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
-    } catch (err) {
-      // Don't clobber an existing (if malformed) config we can't safely merge.
-      console.error(
-        "[container-bridge] existing .claude.json is not valid JSON; skipping MCP config:",
-        (err as Error).message,
-      );
-      delete process.env.TRACE_MCP_CONFIG;
-      return;
-    }
-  }
-
-  const existingServers =
-    existing.mcpServers && typeof existing.mcpServers === "object"
-      ? (existing.mcpServers as Record<string, unknown>)
-      : {};
-  existing.mcpServers = { ...existingServers, ...injected.mcpServers };
-
-  fs.writeFileSync(configPath, JSON.stringify(existing, null, 2), { mode: 0o600 });
+  const wroteConfig =
+    tool === "codex"
+      ? writeCodexMcpConfig(injected.mcpServers)
+      : writeClaudeMcpConfig(injected.mcpServers);
 
   delete process.env.TRACE_MCP_CONFIG;
-  console.log("[container-bridge] MCP config written");
+  if (wroteConfig) console.log(`[container-bridge] MCP config written for ${tool}`);
 }
 
 function requireEnv(name: string): string {
@@ -114,8 +185,8 @@ async function main(): Promise<void> {
   // Set up SSH key before any git operations
   setupSshKey();
 
-  // Write per-user MCP config so Claude Code picks up connected servers.
-  setupMcpConfig();
+  // Write per-user MCP config so the selected tool picks up connected servers.
+  setupMcpConfig(tool);
 
   await runRuntimeSetupCommands(
     parseRuntimeSetupCommands(process.env.TRACE_RUNTIME_SETUP_COMMANDS),
