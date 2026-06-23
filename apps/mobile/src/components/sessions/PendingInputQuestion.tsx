@@ -131,16 +131,11 @@ export function PendingInputQuestion({
                       <View style={styles.menuCopy}>
                         <Text
                           variant="subheadline"
+                          numberOfLines={2}
                           color={selected ? "accent" : "foreground"}
                           style={styles.optionTitle}
                         >
                           {opt.label}
-                        </Text>
-                        <Text
-                          variant="caption1"
-                          style={{ color: alpha(theme.colors.foreground, 0.88) }}
-                        >
-                          {opt.description}
                         </Text>
                       </View>
                     </Pressable>
