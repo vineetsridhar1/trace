@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from "react";
 import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
 import {
   isSessionPreparing,
@@ -193,6 +200,45 @@ export function SessionInput({
     (event: ChangeEvent<HTMLInputElement>) => {
       addAttachments(Array.from(event.currentTarget.files ?? []));
       event.currentTarget.value = "";
+    },
+    [addAttachments],
+  );
+
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const isFileDrag = (event: DragEvent<HTMLDivElement>) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+
+  const handleDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    dragCounterRef.current += 1;
+    setIsDragging(true);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+  }, []);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+      addAttachments(Array.from(event.dataTransfer.files));
     },
     [addAttachments],
   );
@@ -456,13 +502,25 @@ export function SessionInput({
           ? "What should the agent work on?"
           : "Send a message...";
 
+  const dropEnabled = canSend && !isSending;
+
   return (
     <div
       className={cn(
-        "shrink-0 border-t px-4 py-3 transition-colors",
+        "relative shrink-0 border-t px-4 py-3 transition-colors",
         MODE_CONFIG[mode as InteractionMode].containerBorder,
       )}
+      onDragEnter={dropEnabled ? handleDragEnter : undefined}
+      onDragOver={dropEnabled ? handleDragOver : undefined}
+      onDragLeave={dropEnabled ? handleDragLeave : undefined}
+      onDrop={dropEnabled ? handleDrop : undefined}
     >
+      {dropEnabled && isDragging && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary bg-surface-deep/90 backdrop-blur-sm">
+          <Paperclip size={20} className="text-primary" />
+          <span className="text-sm font-medium text-foreground">Drop files to attach</span>
+        </div>
+      )}
       {preparing && (
         <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
           <TraceLoader size={12} showLabel={false} className="shrink-0" />
