@@ -32,7 +32,6 @@ import {
 import {
   ChatEditor,
   type ChatEditorHandle,
-  type ChatEditorPasteFilesOptions,
   type ChatEditorSubmitOptions,
 } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
@@ -40,7 +39,7 @@ import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type FileAttachment } from "./ImageAttachmentBar";
 import { uploadFile } from "../../lib/upload";
-import { generateUUID } from "@trace/client-core";
+import { useAddAttachments, MAX_ATTACHMENTS } from "./useAddAttachments";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { useTerminalStore } from "../../stores/terminal";
@@ -49,8 +48,6 @@ import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
-
-const MAX_ATTACHMENTS = 5;
 
 export function SessionInput({
   sessionId,
@@ -147,47 +144,7 @@ export function SessionInput({
     });
   }, []);
 
-  const addAttachments = useCallback(
-    (files: File[], options?: ChatEditorPasteFilesOptions) => {
-      if (isSendingRef.current || files.length === 0) return false;
-
-      let added = false;
-      let rejectedForLimit = false;
-      let remainingSlots = 0;
-
-      setDraftImages(sessionId, (prev) => {
-        const remaining = MAX_ATTACHMENTS - prev.length;
-        remainingSlots = remaining;
-        if (remaining <= 0) {
-          rejectedForLimit = true;
-          return prev;
-        }
-
-        const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
-          id: generateUUID(),
-          file,
-          previewUrl: URL.createObjectURL(file),
-          s3Key: null,
-          uploading: false,
-        }));
-        added = newAttachments.length > 0;
-        return [...prev, ...newAttachments];
-      });
-
-      if (!options?.fallbackToEditor) {
-        if (rejectedForLimit) {
-          toast.error(`You can attach up to ${MAX_ATTACHMENTS} files`);
-        } else if (files.length > remainingSlots) {
-          toast.error(
-            `Only ${remainingSlots} more attachment${remainingSlots === 1 ? "" : "s"} allowed`,
-          );
-        }
-      }
-
-      return added;
-    },
-    [sessionId, setDraftImages],
-  );
+  const addAttachments = useAddAttachments(sessionId);
 
   const handleFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
