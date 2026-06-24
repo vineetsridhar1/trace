@@ -12,6 +12,9 @@ export function useFileActions() {
   const setActiveTerminalId = useUIStore(
     (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
   );
+  const setActiveBrowserId = useUIStore(
+    (s: { setActiveBrowserId: (id: string | null) => void }) => s.setActiveBrowserId,
+  );
   const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const fileBuffersRef = useRef(new Map<string, FileEditorBuffer>());
@@ -41,8 +44,9 @@ export function useFileActions() {
       });
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
+      setActiveBrowserId(null);
     },
-    [setActiveTerminalId],
+    [setActiveTerminalId, setActiveBrowserId],
   );
 
   const handleDraftAttachmentClick = useCallback(
@@ -63,8 +67,9 @@ export function useFileActions() {
       });
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
+      setActiveBrowserId(null);
     },
-    [setActiveTerminalId],
+    [setActiveTerminalId, setActiveBrowserId],
   );
 
   const handleUploadedAttachmentClick = useCallback(
@@ -84,8 +89,9 @@ export function useFileActions() {
       });
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
+      setActiveBrowserId(null);
     },
-    [setActiveTerminalId],
+    [setActiveTerminalId, setActiveBrowserId],
   );
 
   const handleDiffFileClick = useCallback(
@@ -98,16 +104,18 @@ export function useFileActions() {
       });
       setActiveFilePath(diffKey);
       setActiveTerminalId(null);
+      setActiveBrowserId(null);
     },
-    [setActiveTerminalId],
+    [setActiveTerminalId, setActiveBrowserId],
   );
 
   const handleSelectFile = useCallback(
     (filePath: string) => {
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
+      setActiveBrowserId(null);
     },
-    [setActiveTerminalId],
+    [setActiveTerminalId, setActiveBrowserId],
   );
 
   const handleCloseFile = useCallback((filePath: string) => {

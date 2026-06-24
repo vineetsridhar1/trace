@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ExternalLink, Globe, RotateCw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
-import { useUIStore, type BrowserTab, type UIState } from "../../stores/ui";
+import { useSessionBrowserStore, type BrowserTabEntry } from "../../stores/session-browser";
+import { WebviewFrame } from "./WebviewFrame";
 
 function normalizeUrl(input: string): string {
   const trimmed = input.trim();
@@ -11,8 +12,10 @@ function normalizeUrl(input: string): string {
   return `https://${trimmed}`;
 }
 
-export function BrowserPane({ tab, active }: { tab: BrowserTab; active: boolean }) {
-  const setBrowserTabUrl = useUIStore((s: UIState) => s.setBrowserTabUrl);
+const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
+
+export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; active: boolean }) {
+  const setBrowserUrl = useSessionBrowserStore((s) => s.setBrowserUrl);
   const [input, setInput] = useState(tab.url);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -25,17 +28,17 @@ export function BrowserPane({ tab, active }: { tab: BrowserTab; active: boolean 
     const next = normalizeUrl(input);
     setInput(next);
     if (next !== tab.url) {
-      setBrowserTabUrl(tab.id, next);
+      setBrowserUrl(tab.id, next);
     } else {
       setReloadKey((k) => k + 1);
     }
   };
 
   return (
-    <div className={cn("absolute inset-0 flex flex-col", !active && "hidden")}>
+    <div className={cn("absolute inset-0 flex flex-col bg-background", !active && "hidden")}>
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-1 border-b border-border/70 bg-background/60 px-2 py-1.5"
+        className="flex items-center gap-1 border-b border-border/70 bg-surface-mid px-2 py-1.5"
       >
         <Button
           type="button"
@@ -67,17 +70,21 @@ export function BrowserPane({ tab, active }: { tab: BrowserTab; active: boolean 
           <ExternalLink size={14} />
         </Button>
       </form>
-      <div className="relative min-h-0 flex-1 bg-background">
+      <div className="relative min-h-0 flex-1 bg-white">
         {tab.url ? (
-          <iframe
-            key={`${tab.id}:${reloadKey}`}
-            src={tab.url}
-            title={tab.title}
-            className="size-full border-0"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
-          />
+          isDesktopShell ? (
+            <WebviewFrame url={tab.url} reloadKey={reloadKey} />
+          ) : (
+            <iframe
+              key={`${tab.id}:${reloadKey}`}
+              src={tab.url}
+              title={tab.title}
+              className="size-full border-0"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+            />
+          )
         ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-2 text-muted-foreground">
+          <div className="flex size-full flex-col items-center justify-center gap-2 bg-background text-muted-foreground">
             <Globe size={32} className="opacity-50" />
             <p className="text-sm">Enter a URL to get started</p>
           </div>
