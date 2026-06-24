@@ -16,6 +16,8 @@ import { EventScopeContext } from "./EventScopeContext";
 import { SessionMessageList, type SessionListNode } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
+import { SessionDropzone } from "./SessionDropzone";
+import { useAddAttachments } from "./useAddAttachments";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
@@ -548,6 +550,10 @@ export function SessionDetailView({
     await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
+  const addAttachments = useAddAttachments(sessionId);
+  const composerActive =
+    !runtimeLifecycleState && bridgeInteractionAllowed && !showQuestion && !activePlan;
+
   return (
     <EventScopeContext.Provider value={scopeKey}>
       <div className="flex h-full flex-col overflow-hidden">
@@ -562,7 +568,12 @@ export function SessionDetailView({
           />
         )}
 
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <SessionDropzone
+          className="flex flex-1 flex-col overflow-hidden"
+          onFileDropped={addAttachments}
+          disabled={!composerActive}
+        >
+          <div className="flex flex-1 flex-col overflow-hidden">
           <div className="relative flex-1 overflow-hidden">
             {error ? (
               <div className="flex h-full items-center justify-center">
@@ -704,6 +715,7 @@ export function SessionDetailView({
             />
           </>
         )}
+        </SessionDropzone>
       </div>
     </EventScopeContext.Provider>
   );

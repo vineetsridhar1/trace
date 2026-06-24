@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
 import {
   isSessionPreparing,
@@ -39,7 +32,6 @@ import {
 import {
   ChatEditor,
   type ChatEditorHandle,
-  type ChatEditorPasteFilesOptions,
   type ChatEditorSubmitOptions,
 } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
@@ -47,7 +39,7 @@ import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type FileAttachment } from "./ImageAttachmentBar";
 import { uploadFile } from "../../lib/upload";
-import { generateUUID } from "@trace/client-core";
+import { useAddAttachments, MAX_ATTACHMENTS } from "./useAddAttachments";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { useTerminalStore } from "../../stores/terminal";
@@ -56,8 +48,6 @@ import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
-
-const MAX_ATTACHMENTS = 5;
 
 export function SessionInput({
   sessionId,
@@ -154,91 +144,12 @@ export function SessionInput({
     });
   }, []);
 
-  const addAttachments = useCallback(
-    (files: File[], options?: ChatEditorPasteFilesOptions) => {
-      if (isSendingRef.current || files.length === 0) return false;
-
-      let added = false;
-      let rejectedForLimit = false;
-      let remainingSlots = 0;
-
-      setDraftImages(sessionId, (prev) => {
-        const remaining = MAX_ATTACHMENTS - prev.length;
-        remainingSlots = remaining;
-        if (remaining <= 0) {
-          rejectedForLimit = true;
-          return prev;
-        }
-
-        const newAttachments: FileAttachment[] = files.slice(0, remaining).map((file) => ({
-          id: generateUUID(),
-          file,
-          previewUrl: URL.createObjectURL(file),
-          s3Key: null,
-          uploading: false,
-        }));
-        added = newAttachments.length > 0;
-        return [...prev, ...newAttachments];
-      });
-
-      if (!options?.fallbackToEditor) {
-        if (rejectedForLimit) {
-          toast.error(`You can attach up to ${MAX_ATTACHMENTS} files`);
-        } else if (files.length > remainingSlots) {
-          toast.error(
-            `Only ${remainingSlots} more attachment${remainingSlots === 1 ? "" : "s"} allowed`,
-          );
-        }
-      }
-
-      return added;
-    },
-    [sessionId, setDraftImages],
-  );
+  const addAttachments = useAddAttachments(sessionId);
 
   const handleFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       addAttachments(Array.from(event.currentTarget.files ?? []));
       event.currentTarget.value = "";
-    },
-    [addAttachments],
-  );
-
-  const [isDragging, setIsDragging] = useState(false);
-  const dragCounterRef = useRef(0);
-
-  const isFileDrag = (event: DragEvent<HTMLDivElement>) =>
-    Array.from(event.dataTransfer.types).includes("Files");
-
-  const handleDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
-    if (!isFileDrag(event)) return;
-    event.preventDefault();
-    dragCounterRef.current += 1;
-    setIsDragging(true);
-  }, []);
-
-  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
-    if (!isFileDrag(event)) return;
-    event.preventDefault();
-  }, []);
-
-  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
-    if (!isFileDrag(event)) return;
-    event.preventDefault();
-    dragCounterRef.current -= 1;
-    if (dragCounterRef.current <= 0) {
-      dragCounterRef.current = 0;
-      setIsDragging(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      if (!isFileDrag(event)) return;
-      event.preventDefault();
-      dragCounterRef.current = 0;
-      setIsDragging(false);
-      addAttachments(Array.from(event.dataTransfer.files));
     },
     [addAttachments],
   );
@@ -502,25 +413,13 @@ export function SessionInput({
           ? "What should the agent work on?"
           : "Send a message...";
 
-  const dropEnabled = canSend && !isSending;
-
   return (
     <div
       className={cn(
-        "relative shrink-0 border-t px-4 py-3 transition-colors",
+        "shrink-0 border-t px-4 py-3 transition-colors",
         MODE_CONFIG[mode as InteractionMode].containerBorder,
       )}
-      onDragEnter={dropEnabled ? handleDragEnter : undefined}
-      onDragOver={dropEnabled ? handleDragOver : undefined}
-      onDragLeave={dropEnabled ? handleDragLeave : undefined}
-      onDrop={dropEnabled ? handleDrop : undefined}
     >
-      {dropEnabled && isDragging && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary bg-surface-deep/90 backdrop-blur-sm">
-          <Paperclip size={20} className="text-primary" />
-          <span className="text-sm font-medium text-foreground">Drop files to attach</span>
-        </div>
-      )}
       {preparing && (
         <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
           <TraceLoader size={12} showLabel={false} className="shrink-0" />
