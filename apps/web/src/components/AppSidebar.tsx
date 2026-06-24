@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Globe } from "lucide-react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useRegisterCommands } from "../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../stores/command-registry";
@@ -25,7 +24,6 @@ export function AppSidebar() {
   const sidebarData = useSidebarData();
 
   const restoreLastVisited = useUIStore((s: UIState) => s.restoreLastVisited);
-  const openBrowser = useUIStore((s: UIState) => s.openBrowser);
 
   const closeSidebar = useCallback(() => {
     if (isMobile) {
@@ -86,13 +84,6 @@ export function AppSidebar() {
         keywords: "sidebar hide show collapse expand",
         run: toggleSidebar,
       },
-      {
-        id: "browser.open",
-        title: "Open browser",
-        group: "Navigation",
-        keywords: "browser web tab url internet",
-        run: openBrowser,
-      },
     ];
     if (features.messaging) {
       commands.push(
@@ -113,7 +104,7 @@ export function AppSidebar() {
       );
     }
     return commands;
-  }, [toggleSidebar, handleTabCommit, openBrowser]);
+  }, [toggleSidebar, handleTabCommit]);
 
   useRegisterCommands(sidebarCommands);
 
@@ -192,16 +183,6 @@ export function AppSidebar() {
           </SidebarContent>
 
           <SidebarFooter className="app-region-no-drag gap-0 p-0">
-            <div className="px-3 pt-2">
-              <button
-                type="button"
-                onClick={openBrowser}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/80 hover:bg-white/5 hover:text-sidebar-foreground"
-              >
-                <Globe size={16} />
-                <span>Browser</span>
-              </button>
-            </div>
             {features.messaging && (
               <div className="px-3 py-2">
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />

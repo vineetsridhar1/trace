@@ -173,6 +173,9 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // Enables the in-app browser (<webview>), which—unlike <iframe>—is not
+      // blocked by a site's X-Frame-Options/CSP, so external sites load.
+      webviewTag: true,
     },
   });
 

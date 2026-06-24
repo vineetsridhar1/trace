@@ -183,9 +183,11 @@ const DISABLE_ENDPOINT_MUTATION = gql`
 export function SessionApplicationsPanel({
   sessionGroupId,
   onOpenTraffic,
+  onOpenBrowser,
 }: {
   sessionGroupId: string;
   onOpenTraffic: (endpointId: string) => void;
+  onOpenBrowser: (url: string, title?: string) => void;
 }) {
   const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
     | { id: string; applicationConfig?: RepoApplicationConfig | null }
@@ -201,7 +203,6 @@ export function SessionApplicationsPanel({
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
-  const openBrowserTab = useUIStore((s) => s.openBrowserTab);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
   const [refreshingProcessLogIds, setRefreshingProcessLogIds] = useState<Record<string, boolean>>({});
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
@@ -681,7 +682,7 @@ export function SessionApplicationsPanel({
                               {endpointEnabled && endpointUrl ? (
                                 <button
                                   type="button"
-                                  onClick={() => openBrowserTab(endpointUrl, endpoint.label)}
+                                  onClick={() => onOpenBrowser(endpointUrl, endpoint.label)}
                                   className="block w-full truncate text-left text-[11px] text-primary underline-offset-4 hover:underline"
                                   title={endpointUrl}
                                 >
@@ -734,7 +735,7 @@ export function SessionApplicationsPanel({
                               variant="ghost"
                               size="icon-sm"
                               disabled={!canOpen}
-                              onClick={() => openBrowserTab(endpointUrl, endpoint.label)}
+                              onClick={() => onOpenBrowser(endpointUrl, endpoint.label)}
                               title={`Open ${endpoint.label}`}
                               aria-label={`Open ${endpoint.label}`}
                             >

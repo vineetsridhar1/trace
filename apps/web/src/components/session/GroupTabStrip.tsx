@@ -5,6 +5,7 @@ import {
   FilePlus2,
   FileCode,
   GitCompareArrows,
+  Globe,
   MessageSquarePlus,
   Plus,
   TerminalSquare,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import type { SessionEntity } from "@trace/client-core";
 import type { TerminalEntry } from "../../stores/terminal";
+import type { BrowserTabEntry } from "../../stores/session-browser";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/ui";
 import { ScrambleText } from "../ui/ScrambleText";
@@ -51,6 +53,8 @@ interface GroupTabStripProps {
   activeTerminalId: string | null;
   openFiles: OpenFileTab[];
   activeFilePath: string | null;
+  browsers: BrowserTabEntry[];
+  activeBrowserId: string | null;
   trafficTabOpen: boolean;
   trafficTabActive: boolean;
   onSelectSession: (sessionId: string) => void;
@@ -61,11 +65,14 @@ interface GroupTabStripProps {
   onRenameTerminal: (terminalId: string, name: string) => void;
   onSelectFile: (filePath: string) => void;
   onCloseFile: (filePath: string) => void;
+  onSelectBrowser: (browserId: string) => void;
+  onCloseBrowser: (browserId: string) => void;
   onSelectTraffic: () => void;
   onCloseTraffic: () => void;
   onNewChat: () => void;
   onOpenTerminal: () => void;
   onOpenFilePalette: () => void;
+  onOpenBrowser: () => void;
   canNewChat: boolean;
   canOpenTerminal: boolean;
 }
@@ -85,6 +92,8 @@ export function GroupTabStrip({
   activeTerminalId,
   openFiles,
   activeFilePath,
+  browsers,
+  activeBrowserId,
   trafficTabOpen,
   trafficTabActive,
   onSelectSession,
@@ -95,11 +104,14 @@ export function GroupTabStrip({
   onRenameTerminal,
   onSelectFile,
   onCloseFile,
+  onSelectBrowser,
+  onCloseBrowser,
   onSelectTraffic,
   onCloseTraffic,
   onNewChat,
   onOpenTerminal,
   onOpenFilePalette,
+  onOpenBrowser,
   canNewChat,
   canOpenTerminal,
 }: GroupTabStripProps) {
@@ -118,7 +130,9 @@ export function GroupTabStrip({
   }, []);
 
   // Scroll the active tab into view when selection changes
-  const activeKey = activeFilePath ?? activeTerminalId ?? (trafficTabActive ? "traffic" : selectedSessionId);
+  const activeKey = activeBrowserId
+    ? `browser:${activeBrowserId}`
+    : (activeFilePath ?? activeTerminalId ?? (trafficTabActive ? "traffic" : selectedSessionId));
   useEffect(() => {
     if (!activeKey) return;
     const el = tabRefs.current.get(activeKey);
@@ -153,11 +167,23 @@ export function GroupTabStrip({
         e.preventDefault();
         setDropdownOpen(false);
         onOpenFilePalette();
+      } else if (e.key === "4") {
+        e.preventDefault();
+        setDropdownOpen(false);
+        onOpenBrowser();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [dropdownOpen, canNewChat, canOpenTerminal, onNewChat, onOpenTerminal, onOpenFilePalette]);
+  }, [
+    dropdownOpen,
+    canNewChat,
+    canOpenTerminal,
+    onNewChat,
+    onOpenTerminal,
+    onOpenFilePalette,
+    onOpenBrowser,
+  ]);
 
   return (
     <TooltipProvider delay={300}>
@@ -176,6 +202,7 @@ export function GroupTabStrip({
               const isActive =
                 !activeTerminalId &&
                 !activeFilePath &&
+                !activeBrowserId &&
                 !trafficTabActive &&
                 selectedSessionId === session.id;
               const hasDoneBadge = !!sessionDoneBadges[session.id];
@@ -370,6 +397,38 @@ export function GroupTabStrip({
               );
             })}
 
+            {browsers.map((browser) => {
+              const isActive = activeBrowserId === browser.id;
+              return (
+                <div
+                  key={browser.id}
+                  ref={(el: HTMLElement | null) => setTabRef(`browser:${browser.id}`, el)}
+                  className={cn(
+                    tabBase,
+                    "max-w-[260px] gap-0 p-0",
+                    isActive ? tabActive : tabInactive,
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectBrowser(browser.id)}
+                    className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                  >
+                    <Globe size={12} className="shrink-0" />
+                    <span className="truncate">{browser.title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCloseBrowser(browser.id)}
+                    className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
+                    title="Close browser tab"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              );
+            })}
+
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger
                 className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
@@ -392,6 +451,11 @@ export function GroupTabStrip({
                   <FilePlus2 size={14} />
                   File
                   <DropdownMenuShortcut>3</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onOpenBrowser}>
+                  <Globe size={14} />
+                  Browser
+                  <DropdownMenuShortcut>4</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

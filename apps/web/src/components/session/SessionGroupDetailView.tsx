@@ -14,11 +14,13 @@ import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
+import { useSessionBrowserStore, useSessionGroupBrowsers } from "../../stores/session-browser";
 import { useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
+import { SessionBrowserLayer } from "./SessionBrowserLayer";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
@@ -217,6 +219,10 @@ export function SessionGroupDetailView({
   const setActiveTerminalId = useUIStore(
     (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
   );
+  const activeBrowserId = useUIStore((s: { activeBrowserId: string | null }) => s.activeBrowserId);
+  const setActiveBrowserId = useUIStore(
+    (s: { setActiveBrowserId: (id: string | null) => void }) => s.setActiveBrowserId,
+  );
   const openTabIds = useUIStore(
     (s: { openSessionTabsByGroup: Record<string, string[]> }) =>
       s.openSessionTabsByGroup[sessionGroupId],
@@ -241,6 +247,9 @@ export function SessionGroupDetailView({
     (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
   );
   const terminals = useSessionGroupTerminals(sessionGroupId);
+  const browsers = useSessionGroupBrowsers(sessionGroupId);
+  const addBrowser = useSessionBrowserStore((s) => s.addBrowser);
+  const removeBrowser = useSessionBrowserStore((s) => s.removeBrowser);
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [showApplicationsSidebar, setShowApplicationsSidebar] = useState(false);
@@ -525,8 +534,9 @@ export function SessionGroupDetailView({
       setActiveWorkflowTab("traffic");
       setActiveTerminalId(null);
       setActiveFilePath(null);
+      setActiveBrowserId(null);
     },
-    [setActiveFilePath, setActiveTerminalId],
+    [setActiveFilePath, setActiveTerminalId, setActiveBrowserId],
   );
 
   const handleSelectTrafficTab = useCallback(() => {
@@ -534,7 +544,8 @@ export function SessionGroupDetailView({
     setActiveWorkflowTab("traffic");
     setActiveTerminalId(null);
     setActiveFilePath(null);
-  }, [setActiveFilePath, setActiveTerminalId, trafficEndpointId]);
+    setActiveBrowserId(null);
+  }, [setActiveFilePath, setActiveTerminalId, setActiveBrowserId, trafficEndpointId]);
 
   const handleCloseTrafficTab = useCallback(() => {
     setTrafficEndpointId(null);
@@ -555,6 +566,40 @@ export function SessionGroupDetailView({
       handleSelectFile(filePath);
     },
     [handleSelectFile],
+  );
+
+  const handleSelectBrowserTab = useCallback(
+    (browserId: string) => {
+      setActiveWorkflowTab("session");
+      setActiveBrowserId(browserId);
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [setActiveBrowserId, setActiveTerminalId, setActiveFilePath],
+  );
+
+  const handleOpenBrowserUrl = useCallback(
+    (url: string, title?: string) => {
+      const id = crypto.randomUUID();
+      addBrowser(id, sessionGroupId, url, title);
+      setActiveWorkflowTab("session");
+      setActiveBrowserId(id);
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [addBrowser, sessionGroupId, setActiveBrowserId, setActiveTerminalId, setActiveFilePath],
+  );
+
+  const handleOpenBrowser = useCallback(() => {
+    handleOpenBrowserUrl("");
+  }, [handleOpenBrowserUrl]);
+
+  const handleCloseBrowser = useCallback(
+    (browserId: string) => {
+      removeBrowser(browserId);
+      if (activeBrowserId === browserId) setActiveBrowserId(null);
+    },
+    [removeBrowser, activeBrowserId, setActiveBrowserId],
   );
 
   const handleToggleSidebar = useCallback(() => {
@@ -723,6 +768,10 @@ export function SessionGroupDetailView({
       handleCloseTerminal(activeTerminalId);
       return;
     }
+    if (activeBrowserId) {
+      handleCloseBrowser(activeBrowserId);
+      return;
+    }
     if (activeSessionId && (openTabIds?.length ?? 0) > 1) {
       closeSessionTab(sessionGroupId, activeSessionId);
       return;
@@ -733,6 +782,8 @@ export function SessionGroupDetailView({
     trafficEndpointId,
     activeFilePath,
     activeTerminalId,
+    activeBrowserId,
+    handleCloseBrowser,
     activeSessionId,
     openTabIds,
     handleCloseTrafficTab,
@@ -760,6 +811,13 @@ export function SessionGroupDetailView({
         keywords: "open file search palette",
         run: handleToggleFilePalette,
         shortcut: { key: "p", mod: true },
+      },
+      {
+        id: "session.new-browser",
+        title: "New browser",
+        group: "Session",
+        keywords: "browser web url internet preview tab",
+        run: handleOpenBrowser,
       },
     ];
     if (canInteract) {
@@ -838,6 +896,7 @@ export function SessionGroupDetailView({
     showSidebarTab,
     handleNewChat,
     handleOpenTerminalCmd,
+    handleOpenBrowser,
   ]);
 
   useRegisterCommands(sessionCommands);
@@ -904,6 +963,8 @@ export function SessionGroupDetailView({
                 activeTerminalId={activeTerminalId}
                 openFiles={openFiles}
                 activeFilePath={activeFilePath}
+                browsers={browsers}
+                activeBrowserId={activeBrowserId}
                 trafficTabOpen={trafficEndpointId !== null}
                 trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
                 onSelectSession={handleSelectSession}
@@ -914,6 +975,8 @@ export function SessionGroupDetailView({
                 onRenameTerminal={renameTerminal}
                 onSelectFile={handleSelectFileTab}
                 onCloseFile={handleCloseFile}
+                onSelectBrowser={handleSelectBrowserTab}
+                onCloseBrowser={handleCloseBrowser}
                 onSelectTraffic={handleSelectTrafficTab}
                 onCloseTraffic={handleCloseTrafficTab}
                 onNewChat={handleNewChat}
@@ -922,6 +985,7 @@ export function SessionGroupDetailView({
                   void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
                 }}
                 onOpenFilePalette={handleOpenFilePalette}
+                onOpenBrowser={handleOpenBrowser}
                 canNewChat={
                   !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
                 }
@@ -929,7 +993,7 @@ export function SessionGroupDetailView({
               />
 
               <div className="flex min-h-0 flex-1 overflow-hidden">
-                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                   <SessionGroupContentArea
                     sessionGroupId={sessionGroupId}
                     activeFilePath={activeFilePath}
@@ -952,6 +1016,7 @@ export function SessionGroupDetailView({
                     onForkSession={handleOpenForkDialog}
                     canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                   />
+                  <SessionBrowserLayer browsers={browsers} activeBrowserId={activeBrowserId} />
                 </div>
                 {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
                   <div
@@ -968,6 +1033,7 @@ export function SessionGroupDetailView({
                       <SessionApplicationsPanel
                         sessionGroupId={sessionGroupId}
                         onOpenTraffic={handleOpenTrafficTab}
+                        onOpenBrowser={handleOpenBrowserUrl}
                       />
                     ) : (
                       <SidebarPanel
