@@ -13,6 +13,7 @@ export function buildPath(
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
   if (page === "tickets") return "/tickets";
+  if (page === "browser") return "/browser";
   if (chatId) return `/dm/${chatId}`;
   if (channelId && sessionGroupId && sessionId) {
     return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;

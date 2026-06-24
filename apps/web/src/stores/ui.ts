@@ -13,8 +13,23 @@ import {
   resolveSessionGroupIdForSession,
 } from "./ui-navigation";
 
-export type ActivePage = "main" | "settings" | "inbox" | "tickets";
+export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "browser";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
+
+export interface BrowserTab {
+  id: string;
+  url: string;
+  title: string;
+}
+
+export function deriveBrowserTabTitle(url: string): string {
+  if (!url) return "New Tab";
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
 export interface NavigationState {
   channelId: string | null;
   sessionGroupId: string | null;
@@ -45,6 +60,13 @@ export interface UIState {
   setActiveTerminalId: (id: string | null) => void;
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
+  browserTabs: BrowserTab[];
+  activeBrowserTabId: string | null;
+  openBrowser: () => void;
+  openBrowserTab: (url: string, title?: string) => void;
+  closeBrowserTab: (id: string) => void;
+  setActiveBrowserTabId: (id: string) => void;
+  setBrowserTabUrl: (id: string, url: string) => void;
   refreshTick: number;
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
@@ -100,6 +122,8 @@ const initialNavigationState = {
   activeSessionId: null as string | null,
   activeTerminalId: null as string | null,
   activeThreadId: null as string | null,
+  browserTabs: [] as BrowserTab[],
+  activeBrowserTabId: null as string | null,
   lastSelectedSessionIdsByGroup: {} as Record<string, string>,
   openSessionTabsByGroup: {} as Record<string, string[]>,
   channelSubPage: null as ChannelSubPage,
@@ -206,6 +230,10 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
     if (page === "tickets") {
       pushNav(null, null, null, "tickets");
+      return;
+    }
+    if (page === "browser") {
+      pushNav(null, null, null, "browser");
       return;
     }
 
@@ -418,6 +446,52 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
 
   setActiveThreadId: (id: string | null) => {
     set({ activeThreadId: id });
+  },
+
+  openBrowser: () => {
+    if (get().browserTabs.length === 0) {
+      get().openBrowserTab("");
+      return;
+    }
+    set({ activePage: "browser", channelSubPage: null });
+    pushNav(null, null, null, "browser");
+  },
+
+  openBrowserTab: (url: string, title?: string) => {
+    const id = crypto.randomUUID();
+    set((s: UIState) => ({
+      activePage: "browser" as ActivePage,
+      channelSubPage: null,
+      browserTabs: [...s.browserTabs, { id, url, title: title ?? deriveBrowserTabTitle(url) }],
+      activeBrowserTabId: id,
+    }));
+    pushNav(null, null, null, "browser");
+  },
+
+  closeBrowserTab: (id: string) => {
+    set((s: UIState) => {
+      const idx = s.browserTabs.findIndex((t: BrowserTab) => t.id === id);
+      if (idx === -1) return {};
+      const browserTabs = s.browserTabs.filter((t: BrowserTab) => t.id !== id);
+      let activeBrowserTabId = s.activeBrowserTabId;
+      if (activeBrowserTabId === id) {
+        const adjacent = browserTabs[Math.min(idx, browserTabs.length - 1)];
+        activeBrowserTabId = adjacent?.id ?? null;
+      }
+      return { browserTabs, activeBrowserTabId };
+    });
+  },
+
+  setActiveBrowserTabId: (id: string) => {
+    set({ activeBrowserTabId: id });
+  },
+
+  setBrowserTabUrl: (id: string, url: string) => {
+    set((s: UIState) => ({
+      browserTabs: s.browserTabs.map((t: BrowserTab) =>
+        t.id === id ? { ...t, url, title: deriveBrowserTabTitle(url) } : t,
+      ),
+    }));
   },
 
   restoreLastVisited: (tab: "dm" | "main") => {
