@@ -12,6 +12,7 @@ import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
+import { BrowserView } from "./components/browser/BrowserView";
 import { GlobalCommandPalette } from "./components/command/GlobalCommandPalette";
 import { KeyboardShortcutsDialog } from "./components/command/KeyboardShortcutsDialog";
 import { SidebarProvider, SidebarInset, useSidebar } from "./components/ui/sidebar";
@@ -137,6 +138,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     !!activeChannelId &&
     (features.messaging || (activeChannelType !== undefined && activeChannelType !== "text"));
   const shouldRenderSessionView = activePage === "main" && !!activeSessionGroupId;
+  const showBrowser = activePage === "browser";
   const isDesktopShell = typeof window.trace !== "undefined";
 
   return (
@@ -153,7 +155,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
           <AppSidebar />
 
           <MainContentFrame>
-            {activePage === "settings" ? (
+            {showBrowser ? null : activePage === "settings" ? (
               <SettingsPage />
             ) : activePage === "inbox" ? (
               <InboxView />
@@ -171,6 +173,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
             ) : (
               <HomeView />
             )}
+            <BrowserView active={showBrowser} />
           </MainContentFrame>
           <AppTitleBar />
         </SidebarProvider>

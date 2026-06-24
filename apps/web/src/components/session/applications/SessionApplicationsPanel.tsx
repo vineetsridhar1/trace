@@ -23,7 +23,7 @@ import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/
 import { cn } from "@/lib/utils";
 import { client } from "../../../lib/urql";
 import { useUIStore } from "../../../stores/ui";
-import { Button, buttonVariants } from "../../ui/button";
+import { Button } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
 
 const APPLICATIONS_STATE_QUERY = gql`
@@ -201,6 +201,7 @@ export function SessionApplicationsPanel({
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
+  const openBrowserTab = useUIStore((s) => s.openBrowserTab);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>({});
   const [refreshingProcessLogIds, setRefreshingProcessLogIds] = useState<Record<string, boolean>>({});
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
@@ -678,15 +679,14 @@ export function SessionApplicationsPanel({
                                 <span className="ml-1 font-normal text-muted-foreground">:{endpoint.targetPort}</span>
                               </p>
                               {endpointEnabled && endpointUrl ? (
-                                <a
-                                  href={endpointUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block truncate text-[11px] text-primary underline-offset-4 hover:underline"
+                                <button
+                                  type="button"
+                                  onClick={() => openBrowserTab(endpointUrl, endpoint.label)}
+                                  className="block w-full truncate text-left text-[11px] text-primary underline-offset-4 hover:underline"
                                   title={endpointUrl}
                                 >
                                   {endpointUrl}
-                                </a>
+                                </button>
                               ) : (
                                 <p className="text-[11px] text-muted-foreground">Forwarding disabled</p>
                               )}
@@ -730,20 +730,16 @@ export function SessionApplicationsPanel({
                             >
                               {endpointEnabled ? <Square size={14} /> : <Power size={14} />}
                             </Button>
-                            <a
-                              className={cn(
-                                buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                                !canOpen && "pointer-events-none opacity-50",
-                              )}
-                              href={canOpen ? endpointUrl : undefined}
-                              target="_blank"
-                              rel="noreferrer"
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={!canOpen}
+                              onClick={() => openBrowserTab(endpointUrl, endpoint.label)}
                               title={`Open ${endpoint.label}`}
-                              aria-disabled={!canOpen}
                               aria-label={`Open ${endpoint.label}`}
                             >
                               <ExternalLink size={14} />
-                            </a>
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon-sm"
