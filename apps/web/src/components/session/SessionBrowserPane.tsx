@@ -1,9 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { ExternalLink, Globe, RotateCw } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowLeft, ArrowRight, Code, ExternalLink, Globe, RotateCw } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { useSessionBrowserStore, type BrowserTabEntry } from "../../stores/session-browser";
-import { WebviewFrame } from "./WebviewFrame";
+import { WebviewFrame, type WebviewHandle } from "./WebviewFrame";
 
 function normalizeUrl(input: string): string {
   const trimmed = input.trim();
@@ -18,10 +18,16 @@ export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; acti
   const setBrowserUrl = useSessionBrowserStore((s) => s.setBrowserUrl);
   const [input, setInput] = useState(tab.url);
   const [reloadKey, setReloadKey] = useState(0);
+  const webviewRef = useRef<WebviewHandle>(null);
 
   useEffect(() => {
     setInput(tab.url);
   }, [tab.url]);
+
+  const reload = () => {
+    if (isDesktopShell) webviewRef.current?.reload();
+    else setReloadKey((k) => k + 1);
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -30,7 +36,7 @@ export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; acti
     if (next !== tab.url) {
       setBrowserUrl(tab.id, next);
     } else {
-      setReloadKey((k) => k + 1);
+      reload();
     }
   };
 
@@ -40,6 +46,32 @@ export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; acti
         onSubmit={handleSubmit}
         className="flex items-center gap-1 border-b border-border/70 bg-surface-mid px-2 py-1.5"
       >
+        {isDesktopShell && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              title="Back"
+              aria-label="Back"
+              disabled={!tab.url}
+              onClick={() => webviewRef.current?.goBack()}
+            >
+              <ArrowLeft size={14} />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              title="Forward"
+              aria-label="Forward"
+              disabled={!tab.url}
+              onClick={() => webviewRef.current?.goForward()}
+            >
+              <ArrowRight size={14} />
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -47,7 +79,7 @@ export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; acti
           title="Reload"
           aria-label="Reload"
           disabled={!tab.url}
-          onClick={() => setReloadKey((k) => k + 1)}
+          onClick={reload}
         >
           <RotateCw size={14} />
         </Button>
@@ -58,6 +90,19 @@ export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; acti
           spellCheck={false}
           className="h-7 min-w-0 flex-1 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring"
         />
+        {isDesktopShell && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            title="Open DevTools (console, network)"
+            aria-label="Open DevTools"
+            disabled={!tab.url}
+            onClick={() => webviewRef.current?.openDevTools()}
+          >
+            <Code size={14} />
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -73,7 +118,7 @@ export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; acti
       <div className="relative min-h-0 flex-1 bg-white">
         {tab.url ? (
           isDesktopShell ? (
-            <WebviewFrame url={tab.url} reloadKey={reloadKey} />
+            <WebviewFrame ref={webviewRef} url={tab.url} />
           ) : (
             <iframe
               key={`${tab.id}:${reloadKey}`}
