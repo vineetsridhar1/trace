@@ -2291,13 +2291,7 @@ async function handleAppMention(input: {
       });
       return;
     }
-    await postMentionFeedback({
-      slackTeamId: teamId,
-      slackChannelId: channel,
-      slackUserId,
-      threadTs,
-      text: "This Slack thread is already connected to a Trace session. Reply in the thread without mentioning `@trace` to send a message.",
-    });
+    await handleThreadMessage({ teamId, event });
     return;
   }
 
@@ -2621,7 +2615,7 @@ async function handleThreadMessage(input: {
   if (!install) return;
 
   const rawText = typeof event.text === "string" ? event.text : "";
-  if (rawText.includes(`<@${install.botUserId}>`)) {
+  if (!rawText.includes(`<@${install.botUserId}>`)) {
     return;
   }
 
@@ -2642,7 +2636,7 @@ async function handleThreadMessage(input: {
   });
   if (!membership) return;
 
-  const text = rawText.trim();
+  const text = stripBotMention(rawText, install.botUserId);
   if (thread.session.worktreeDeleted) {
     await postThreadNotice({
       slackTeamId: teamId,
