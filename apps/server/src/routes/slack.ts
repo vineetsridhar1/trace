@@ -2084,26 +2084,11 @@ async function handleAppMention(input: {
         slackThreadTs: threadTs,
       },
     },
-    select: { id: true, session: { select: { worktreeDeleted: true } } },
+    select: { id: true },
   });
   if (existingThread) {
     console.info("[slack] app_mention for existing Trace thread", { teamId, channel, threadTs });
-    if (existingThread.session.worktreeDeleted) {
-      await postThreadNotice({
-        slackTeamId: teamId,
-        slackChannelId: channel,
-        slackThreadTs: threadTs,
-        text: "This Trace session's worktree has been deleted, so it can't accept new messages.",
-      });
-      return;
-    }
-    await postMentionFeedback({
-      slackTeamId: teamId,
-      slackChannelId: channel,
-      slackUserId,
-      threadTs,
-      text: "This Slack thread is already connected to a Trace session. Reply in the thread without mentioning `@trace` to send a message.",
-    });
+    await handleThreadMessage({ teamId, event });
     return;
   }
 
@@ -2427,7 +2412,7 @@ async function handleThreadMessage(input: {
   if (!install) return;
 
   const rawText = typeof event.text === "string" ? event.text : "";
-  if (rawText.includes(`<@${install.botUserId}>`)) {
+  if (!rawText.includes(`<@${install.botUserId}>`)) {
     return;
   }
 
@@ -2448,7 +2433,7 @@ async function handleThreadMessage(input: {
   });
   if (!membership) return;
 
-  const text = rawText.trim();
+  const text = stripBotMention(rawText, install.botUserId);
   if (thread.session.worktreeDeleted) {
     await postThreadNotice({
       slackTeamId: teamId,
