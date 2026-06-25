@@ -16,6 +16,8 @@ import { EventScopeContext } from "./EventScopeContext";
 import { SessionMessageList, type SessionListNode } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
+import { SessionDropzone } from "./SessionDropzone";
+import { useAddAttachments } from "./useAddAttachments";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
@@ -25,7 +27,7 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import { AlertCircle, Cloud, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
-import { isTerminalStatus } from "./sessionStatus";
+import { isDisconnected, isTerminalStatus } from "./sessionStatus";
 import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
@@ -548,6 +550,21 @@ export function SessionDetailView({
     await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
+  const addAttachments = useAddAttachments(sessionId);
+  // Mirror the conditions under which the composer (with its attachment bar) is
+  // actually shown and can accept input. Otherwise dropped files would land in a
+  // draft with no visible attachment bar (recovery panel) or no way to send
+  // (read-only worktree). The recovery/notice cases match SessionInput's own
+  // early returns: disconnected with access -> recovery panel; no access -> notice.
+  const isNotStarted = agentStatus === "not_started";
+  const composerActive =
+    !runtimeLifecycleState &&
+    bridgeInteractionAllowed &&
+    !showQuestion &&
+    !activePlan &&
+    !worktreeDeleted &&
+    !(isDisconnected(connection) && !isNotStarted);
+
   return (
     <EventScopeContext.Provider value={scopeKey}>
       <div className="flex h-full flex-col overflow-hidden">
@@ -562,148 +579,154 @@ export function SessionDetailView({
           />
         )}
 
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="relative flex-1 overflow-hidden">
-            {error ? (
-              <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-destructive">Failed to load events</p>
+        <SessionDropzone
+          className="flex flex-1 flex-col overflow-hidden"
+          onFileDropped={addAttachments}
+          disabled={!composerActive}
+        >
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="relative flex-1 overflow-hidden">
+              {error ? (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm text-destructive">Failed to load events</p>
+                </div>
+              ) : (
+                <SessionMessageList
+                  key={sessionId}
+                  sessionId={sessionId}
+                  nodes={listNodes}
+                  promptIndexItems={promptIndexItems}
+                  gitCheckpoints={gitCheckpoints ?? []}
+                  initialLoading={initialEventsLoading}
+                  hasOlder={hasOlder}
+                  loadingOlder={loadingOlder}
+                  onLoadOlder={fetchOlderEvents}
+                  onLoadAroundEvent={fetchEventsAroundEvent}
+                  completedAgentTools={completedAgentTools}
+                  toolResultByUseId={toolResultByUseId}
+                  scrollToEventId={scrollToEventId}
+                  onScrollComplete={onScrollComplete}
+                  activePlanId={activePlan?.node.id}
+                  planComments={planComments}
+                  onAddPlanComment={handleAddPlanComment}
+                  onRemovePlanComment={handleRemovePlanComment}
+                  onForkSession={onForkSession}
+                  canForkSession={canForkSession}
+                  messageActionsEventIds={messageActionsEventIds}
+                />
+              )}
+              {initialEventsLoading && (
+                <div className="absolute inset-0 bg-background pointer-events-none">
+                  <div className="flex flex-col gap-4 p-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex gap-3">
+                        <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-3.5 w-24" />
+                          <Skeleton className="h-3.5 w-[80%]" />
+                          <Skeleton className="h-3.5 w-[60%]" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {!hideHeader && setupBlocking && (
+              <div className="flex items-center gap-2 border-t border-border bg-surface-deep px-4 py-2">
+                <TraceLoader size={14} showLabel={false} />
+                <span className="text-xs text-muted-foreground">Setting up environment...</span>
               </div>
-            ) : (
-              <SessionMessageList
-                key={sessionId}
+            )}
+
+            {!hideHeader && !setupBlocking && setupStatus === "failed" && (
+              <div className="flex items-center gap-2 border-t border-border bg-destructive/10 px-4 py-2">
+                <AlertCircle size={14} className="text-destructive" />
+                <span className="text-xs text-destructive">
+                  Setup failed{setupError ? `: ${setupError}` : ""}
+                </span>
+                <button
+                  type="button"
+                  disabled={!sessionGroupId || retryingSetup || !bridgeInteractionAllowed}
+                  className="ml-2 text-xs text-foreground underline"
+                  onClick={() => {
+                    if (!sessionGroupId) return;
+                    setRetryingSetup(true);
+                    client
+                      .mutation(RETRY_SESSION_GROUP_SETUP_MUTATION, { id: sessionGroupId })
+                      .toPromise()
+                      .finally(() => setRetryingSetup(false));
+                  }}
+                >
+                  {retryingSetup ? "Retrying..." : "Retry"}
+                </button>
+              </div>
+            )}
+
+            {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
+              <TerminalPanel
                 sessionId={sessionId}
-                nodes={listNodes}
-                promptIndexItems={promptIndexItems}
-                gitCheckpoints={gitCheckpoints ?? []}
-                initialLoading={initialEventsLoading}
-                hasOlder={hasOlder}
-                loadingOlder={loadingOlder}
-                onLoadOlder={fetchOlderEvents}
-                onLoadAroundEvent={fetchEventsAroundEvent}
-                completedAgentTools={completedAgentTools}
-                toolResultByUseId={toolResultByUseId}
-                scrollToEventId={scrollToEventId}
-                onScrollComplete={onScrollComplete}
-                activePlanId={activePlan?.node.id}
-                planComments={planComments}
-                onAddPlanComment={handleAddPlanComment}
-                onRemovePlanComment={handleRemovePlanComment}
-                onForkSession={onForkSession}
-                canForkSession={canForkSession}
-                messageActionsEventIds={messageActionsEventIds}
+                onClose={() => {
+                  setShowTerminal(false);
+                  setShowTerminalPanel(false);
+                }}
               />
             )}
-            {initialEventsLoading && (
-              <div className="absolute inset-0 bg-background pointer-events-none">
-                <div className="flex flex-col gap-4 p-4">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex gap-3">
-                      <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-3.5 w-24" />
-                        <Skeleton className="h-3.5 w-[80%]" />
-                        <Skeleton className="h-3.5 w-[60%]" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
-          {!hideHeader && setupBlocking && (
-            <div className="flex items-center gap-2 border-t border-border bg-surface-deep px-4 py-2">
-              <TraceLoader size={14} showLabel={false} />
-              <span className="text-xs text-muted-foreground">Setting up environment...</span>
-            </div>
-          )}
-
-          {!hideHeader && !setupBlocking && setupStatus === "failed" && (
-            <div className="flex items-center gap-2 border-t border-border bg-destructive/10 px-4 py-2">
-              <AlertCircle size={14} className="text-destructive" />
-              <span className="text-xs text-destructive">
-                Setup failed{setupError ? `: ${setupError}` : ""}
-              </span>
-              <button
-                type="button"
-                disabled={!sessionGroupId || retryingSetup || !bridgeInteractionAllowed}
-                className="ml-2 text-xs text-foreground underline"
-                onClick={() => {
-                  if (!sessionGroupId) return;
-                  setRetryingSetup(true);
-                  client
-                    .mutation(RETRY_SESSION_GROUP_SETUP_MUTATION, { id: sessionGroupId })
-                    .toPromise()
-                    .finally(() => setRetryingSetup(false));
-                }}
-              >
-                {retryingSetup ? "Retrying..." : "Retry"}
-              </button>
-            </div>
-          )}
-
-          {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
-            <TerminalPanel
+          {runtimeLifecycleState ? (
+            <RuntimeLifecycleNotice
               sessionId={sessionId}
-              onClose={() => {
-                setShowTerminal(false);
-                setShowTerminalPanel(false);
+              connection={connection}
+              connectionState={runtimeLifecycleState}
+            />
+          ) : !bridgeInteractionAllowed ? (
+            <div className="border-t p-4">
+              <BridgeAccessNotice
+                access={bridgeAccess}
+                sessionGroupId={sessionGroupId ?? null}
+                onRequested={refreshBridgeAccess}
+              />
+            </div>
+          ) : showQuestion ? (
+            <AskUserQuestionBar
+              node={showQuestion}
+              onResponse={(text) => {
+                client
+                  .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                    sessionId,
+                    text,
+                    interactionMode: activePlan ? "plan" : undefined,
+                  })
+                  .toPromise();
+              }}
+              onDismiss={() => {
+                setDismissedQuestionId(showQuestion.id);
               }}
             />
-          )}
-        </div>
-
-        {runtimeLifecycleState ? (
-          <RuntimeLifecycleNotice
-            sessionId={sessionId}
-            connection={connection}
-            connectionState={runtimeLifecycleState}
-          />
-        ) : !bridgeInteractionAllowed ? (
-          <div className="border-t p-4">
-            <BridgeAccessNotice
-              access={bridgeAccess}
-              sessionGroupId={sessionGroupId ?? null}
-              onRequested={refreshBridgeAccess}
-            />
-          </div>
-        ) : showQuestion ? (
-          <AskUserQuestionBar
-            node={showQuestion}
-            onResponse={(text) => {
-              client
-                .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                  sessionId,
-                  text,
-                  interactionMode: activePlan ? "plan" : undefined,
-                })
-                .toPromise();
-            }}
-            onDismiss={() => {
-              setDismissedQuestionId(showQuestion.id);
-            }}
-          />
-        ) : activePlan ? (
-          <PlanResponseBar
-            sessionId={sessionId}
-            planContent={activePlan.node.planContent}
-            planComments={planComments}
-            onClearPlanComments={handleClearPlanComments}
-            onDismiss={handleDismissPlan}
-          />
-        ) : (
-          <>
-            {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
-            <QueuedMessagesList sessionId={sessionId} />
-            <SessionInput
+          ) : activePlan ? (
+            <PlanResponseBar
               sessionId={sessionId}
-              onStop={handleStop}
-              bridgeAccess={bridgeAccess}
-              sessionGroupId={sessionGroupId ?? null}
-              onAccessRequested={refreshBridgeAccess}
+              planContent={activePlan.node.planContent}
+              planComments={planComments}
+              onClearPlanComments={handleClearPlanComments}
+              onDismiss={handleDismissPlan}
             />
-          </>
-        )}
+          ) : (
+            <>
+              {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
+              <QueuedMessagesList sessionId={sessionId} />
+              <SessionInput
+                sessionId={sessionId}
+                onStop={handleStop}
+                bridgeAccess={bridgeAccess}
+                sessionGroupId={sessionGroupId ?? null}
+                onAccessRequested={refreshBridgeAccess}
+              />
+            </>
+          )}
+        </SessionDropzone>
       </div>
     </EventScopeContext.Provider>
   );
