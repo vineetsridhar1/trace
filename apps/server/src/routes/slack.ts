@@ -2039,13 +2039,13 @@ async function openAdvancedStartModal(input: {
   return true;
 }
 
-function claimMentionEvent(teamId: string, channel: string, threadTs: string): boolean {
+function claimMentionEvent(teamId: string, channel: string, messageTs: string): boolean {
   const now = Date.now();
   for (const [key, expiresAt] of recentMentionKeys) {
     if (expiresAt <= now) recentMentionKeys.delete(key);
   }
 
-  const key = `${teamId}:${channel}:${threadTs}`;
+  const key = `${teamId}:${channel}:${messageTs}`;
   if (recentMentionKeys.has(key)) return false;
   recentMentionKeys.set(key, now + RECENT_MENTION_TTL_MS);
   return true;
@@ -2234,7 +2234,7 @@ async function handleAppMention(input: {
     console.warn("[slack] app_mention missing required fields", { teamId, slackUserId, channel, ts, threadTs });
     return;
   }
-  if (!claimMentionEvent(teamId, channel, threadTs)) {
+  if (!claimMentionEvent(teamId, channel, ts)) {
     console.info("[slack] ignoring duplicate mention event", { teamId, channel, threadTs });
     return;
   }
@@ -2291,13 +2291,7 @@ async function handleAppMention(input: {
       });
       return;
     }
-    await postMentionFeedback({
-      slackTeamId: teamId,
-      slackChannelId: channel,
-      slackUserId,
-      threadTs,
-      text: "This Slack thread is already connected to a Trace session. Reply in the thread without mentioning `@trace` to send a message.",
-    });
+    await handleThreadMessage({ teamId, event });
     return;
   }
 
@@ -2621,7 +2615,7 @@ async function handleThreadMessage(input: {
   if (!install) return;
 
   const rawText = typeof event.text === "string" ? event.text : "";
-  if (rawText.includes(`<@${install.botUserId}>`)) {
+  if (!rawText.includes(`<@${install.botUserId}>`)) {
     return;
   }
 
@@ -2642,7 +2636,7 @@ async function handleThreadMessage(input: {
   });
   if (!membership) return;
 
-  const text = rawText.trim();
+  const text = stripBotMention(rawText, install.botUserId);
   if (thread.session.worktreeDeleted) {
     await postThreadNotice({
       slackTeamId: teamId,
