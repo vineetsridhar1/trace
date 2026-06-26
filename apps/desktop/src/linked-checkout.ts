@@ -675,7 +675,13 @@ async function pullTargetWorktreeBranchIfAvailable(
     return false;
   }
 
-  await runGit(worktreePath, ["pull", "--ff-only", "origin", branch]);
+  await runGit(worktreePath, [
+    "fetch",
+    "origin",
+    "--prune",
+    `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+  ]);
+  await runGit(worktreePath, ["merge", "--ff-only", `refs/remotes/origin/${branch}`]);
   return true;
 }
 
