@@ -675,12 +675,20 @@ async function pullTargetWorktreeBranchIfAvailable(
     return false;
   }
 
-  await runGit(worktreePath, [
-    "fetch",
-    "origin",
-    "--prune",
-    `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
-  ]);
+  try {
+    await runGit(worktreePath, [
+      "fetch",
+      "origin",
+      "--prune",
+      `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+    ]);
+  } catch (error) {
+    if (isMissingRemoteRefError(error)) {
+      await deleteRemoteTrackingRef(worktreePath, branch);
+      return true;
+    }
+    throw error;
+  }
   await runGit(worktreePath, ["merge", "--ff-only", `refs/remotes/origin/${branch}`]);
   return true;
 }
