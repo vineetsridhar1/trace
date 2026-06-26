@@ -2039,13 +2039,13 @@ async function openAdvancedStartModal(input: {
   return true;
 }
 
-function claimMentionEvent(teamId: string, channel: string, threadTs: string): boolean {
+function claimMentionEvent(teamId: string, channel: string, messageTs: string): boolean {
   const now = Date.now();
   for (const [key, expiresAt] of recentMentionKeys) {
     if (expiresAt <= now) recentMentionKeys.delete(key);
   }
 
-  const key = `${teamId}:${channel}:${threadTs}`;
+  const key = `${teamId}:${channel}:${messageTs}`;
   if (recentMentionKeys.has(key)) return false;
   recentMentionKeys.set(key, now + RECENT_MENTION_TTL_MS);
   return true;
@@ -2234,7 +2234,7 @@ async function handleAppMention(input: {
     console.warn("[slack] app_mention missing required fields", { teamId, slackUserId, channel, ts, threadTs });
     return;
   }
-  if (!claimMentionEvent(teamId, channel, threadTs)) {
+  if (!claimMentionEvent(teamId, channel, ts)) {
     console.info("[slack] ignoring duplicate mention event", { teamId, channel, threadTs });
     return;
   }
