@@ -991,6 +991,7 @@ type ParsedSlackPrompt = {
   model?: string;
   reasoningEffort?: string;
   hosting?: "cloud" | "local";
+  yolo?: boolean;
 };
 
 function parseSlackPrompt(text: string): ParsedSlackPrompt {
@@ -1030,6 +1031,11 @@ function parseSlackPrompt(text: string): ParsedSlackPrompt {
       continue;
     }
     promptParts.push(clean(token));
+  }
+
+  if (promptParts.length > 0 && promptParts[promptParts.length - 1]!.toLowerCase() === "yolo") {
+    result.yolo = true;
+    promptParts.pop();
   }
 
   result.prompt = promptParts.join(" ").trim();
@@ -2384,6 +2390,22 @@ async function handleAppMention(input: {
     prompt,
     fileRefs: files.refs,
   });
+  if (parsed.yolo) {
+    try {
+      const settings = await recommendedSettingsForDraft(draftId, slackUserId);
+      await startSlackSessionFromDraft({ draftId, slackUserId, settings });
+    } catch (err: unknown) {
+      await postMentionFeedback({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackUserId,
+        threadTs,
+        text: `Could not start with recommended settings: ${errorMessage(err)}`,
+      });
+    }
+    return;
+  }
+
   const settingsSummary = await recommendedSettingsSummaryForDraft(draftId, slackUserId);
   const posted = await postStartDraftPrompt({
     slackTeamId: teamId,
