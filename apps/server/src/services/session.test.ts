@@ -3949,6 +3949,112 @@ describe("SessionService", () => {
       );
     });
 
+    it("passes enableClaudeInChrome on the delivery command when the creator enabled it", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        createdBy: { id: "user-1", name: "Test User", avatarUrl: null, enableClaudeInChrome: true },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "implement filters",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "send", enableClaudeInChrome: true }),
+        expect.any(Object),
+      );
+    });
+
+    it("does not pass enableClaudeInChrome for non-Claude tools even when the creator enabled it", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        tool: "codex",
+        model: "gpt-5-codex",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        createdBy: { id: "user-1", name: "Test User", avatarUrl: null, enableClaudeInChrome: true },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "implement filters",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "send", enableClaudeInChrome: false }),
+        expect.any(Object),
+      );
+    });
+
+    it("defaults enableClaudeInChrome to false when the creator setting is unset", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "implement filters",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "send", enableClaudeInChrome: false }),
+        expect.any(Object),
+      );
+    });
+
     it("pins delivery to the session's home runtime via expectedHomeRuntimeId", async () => {
       // Scenario: session was running on Laptop A (runtime-a). sendMessage must
       // pass runtime-a as expectedHomeRuntimeId so sessionRouter.send cannot
