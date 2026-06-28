@@ -378,6 +378,7 @@ type User {
   defaultSessionModel: String
   defaultSessionReasoningEffort: String
   autoArchiveMergedSessions: Boolean!
+  enableClaudeInChrome: Boolean!
   organizations: [OrgMember!]!
 }
 
@@ -1104,6 +1105,7 @@ input UpdateSessionDefaultsInput {
   model: String
   reasoningEffort: String
   autoArchiveMergedSessions: Boolean
+  enableClaudeInChrome: Boolean
 }
 
 input SessionFilters {

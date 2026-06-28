@@ -180,6 +180,8 @@ export interface RunOptions {
   interactionMode?: "code" | "plan" | "ask";
   model?: string;
   reasoningEffort?: string;
+  /** When true, pass Claude Code's `--chrome` flag to enable Claude in Chrome. */
+  enableClaudeInChrome?: boolean;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
 }

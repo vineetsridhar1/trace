@@ -15,6 +15,7 @@ export interface BridgeRunCommand {
   tool?: string;
   model?: string;
   reasoningEffort?: string;
+  enableClaudeInChrome?: boolean;
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
@@ -29,6 +30,7 @@ export interface BridgeSendCommand {
   tool?: string;
   model?: string;
   reasoningEffort?: string;
+  enableClaudeInChrome?: boolean;
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
