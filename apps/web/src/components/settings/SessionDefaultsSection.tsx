@@ -32,6 +32,7 @@ type SessionDefaultsPatch = Pick<
   | "defaultSessionModel"
   | "defaultSessionReasoningEffort"
   | "autoArchiveMergedSessions"
+  | "enableClaudeInChrome"
 >;
 
 function updateAuthUser(patch: SessionDefaultsPatch) {
@@ -45,6 +46,7 @@ async function saveDefaults(input: {
   model?: string | null;
   reasoningEffort?: string | null;
   autoArchiveMergedSessions?: boolean;
+  enableClaudeInChrome?: boolean;
 }) {
   const result = await client.mutation(UPDATE_SESSION_DEFAULTS_MUTATION, { input }).toPromise();
   if (result.error) throw result.error;
@@ -58,6 +60,7 @@ export function SessionDefaultsSection() {
   const defaultModel = user?.defaultSessionModel ?? null;
   const defaultReasoningEffort = user?.defaultSessionReasoningEffort ?? null;
   const autoArchiveMergedSessions = user?.autoArchiveMergedSessions ?? true;
+  const enableClaudeInChrome = user?.enableClaudeInChrome ?? false;
   const effectiveTool = defaultTool ?? "claude_code";
   const modelOptions = getModelsForTool(effectiveTool);
   const reasoningEffortOptions = getReasoningEffortsForTool(effectiveTool);
@@ -114,6 +117,17 @@ export function SessionDefaultsSection() {
     if (value !== "yes" && value !== "no") return;
     try {
       await saveDefaults({ autoArchiveMergedSessions: value === "yes" });
+    } catch (error) {
+      toast.error("Failed to update session defaults", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
+
+  const handleClaudeInChromeChange = async (value: string | null) => {
+    if (value !== "yes" && value !== "no") return;
+    try {
+      await saveDefaults({ enableClaudeInChrome: value === "yes" });
     } catch (error) {
       toast.error("Failed to update session defaults", {
         description: error instanceof Error ? error.message : undefined,
@@ -222,6 +236,22 @@ export function SessionDefaultsSection() {
           >
             <SelectTrigger className="w-full md:w-56">
               <SelectValue>{autoArchiveMergedSessions ? "Yes" : "No"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="yes">Yes</SelectItem>
+              <SelectItem value="no">No</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="border-t border-border pt-4">
+          <label className="mb-1.5 block text-sm text-muted-foreground">Claude in Chrome</label>
+          <Select
+            value={enableClaudeInChrome ? "yes" : "no"}
+            onValueChange={handleClaudeInChromeChange}
+          >
+            <SelectTrigger className="w-full md:w-56">
+              <SelectValue>{enableClaudeInChrome ? "Yes" : "No"}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="yes">Yes</SelectItem>

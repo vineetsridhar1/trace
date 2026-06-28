@@ -4157,6 +4157,7 @@ export class SessionService {
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
+      enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -4759,10 +4760,25 @@ export class SessionService {
       data.autoArchiveMergedSessions = input.autoArchiveMergedSessions;
     }
 
+    if (typeof input.enableClaudeInChrome === "boolean") {
+      data.enableClaudeInChrome = input.enableClaudeInChrome;
+    }
+
     return prisma.user.update({
       where: { id: userId },
       data,
     });
+  }
+
+  /**
+   * Resolve whether the "Claude in Chrome" flag should be passed for a session.
+   * User-level setting on the session creator; only relevant for Claude Code.
+   */
+  private claudeInChromeFlag(
+    tool: string | null | undefined,
+    createdBy: { enableClaudeInChrome: boolean } | null | undefined,
+  ): boolean {
+    return tool === "claude_code" && (createdBy?.enableClaudeInChrome ?? false);
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
@@ -5236,6 +5252,7 @@ export class SessionService {
         sessionStatus: true,
         hosting: true,
         createdById: true,
+        createdBy: { select: { enableClaudeInChrome: true } },
         tool: true,
         model: true,
         reasoningEffort: true,
@@ -5511,6 +5528,7 @@ export class SessionService {
       tool: activeTool,
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
+      enableClaudeInChrome: this.claudeInChromeFlag(activeTool, session.createdBy),
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -6601,6 +6619,7 @@ export class SessionService {
         tool: true,
         model: true,
         reasoningEffort: true,
+        createdBy: { select: { enableClaudeInChrome: true } },
         workdir: true,
         toolSessionId: true,
         repoId: true,
@@ -6653,6 +6672,7 @@ export class SessionService {
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
+        enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
         interactionMode: options.interactionMode,
         cwd: session.workdir ?? undefined,
         checkpointContext,
@@ -8749,6 +8769,7 @@ export class SessionService {
         tool: true,
         model: true,
         reasoningEffort: true,
+        createdBy: { select: { enableClaudeInChrome: true } },
         sessionStatus: true,
         workdir: true,
         toolSessionId: true,
@@ -8797,6 +8818,7 @@ export class SessionService {
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
+      enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -8809,6 +8831,7 @@ export class SessionService {
       tool: CodingTool;
       model?: string;
       reasoningEffort?: string;
+      enableClaudeInChrome?: boolean;
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;

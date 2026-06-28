@@ -62,6 +62,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     interactionMode,
     model,
     reasoningEffort,
+    enableClaudeInChrome,
     toolSessionId,
   }: RunOptions) {
     this.cwd = cwd;
@@ -87,6 +88,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
     if (reasoningEffort && reasoningEffort !== "auto") {
       args.push("--effort", reasoningEffort);
+    }
+    if (enableClaudeInChrome) {
+      args.push("--chrome");
     }
     if (interactionMode === "plan") {
       args.push("--permission-mode", "plan");
