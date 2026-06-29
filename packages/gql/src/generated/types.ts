@@ -1366,6 +1366,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
+  searchMessages: Array<Message>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
@@ -1540,6 +1541,10 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QuerySearchMessagesArgs = {
+  query: Scalars["String"]["input"];
 };
 
 export type QuerySearchSessionsArgs = {

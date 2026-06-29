@@ -6,6 +6,7 @@ import {
   Hash,
   Inbox,
   MessageCircle,
+  MessageSquareText,
   Plus,
   Settings,
   Ticket,
@@ -27,11 +28,13 @@ import {
 import { features } from "../../lib/features";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
+import { useMessageSearch } from "../../hooks/useMessageSearch";
 
 interface PaletteItem {
   key: string;
   group: string;
   label: string;
+  sublabel?: string;
   search: string;
   icon: ReactNode;
   shortcut?: CommandShortcut;
@@ -152,6 +155,33 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
         ]),
       ),
     [chats],
+  );
+
+  const channelLabel = useMemo(() => new Map(channels.map((c) => [c.id, c.name])), [channels]);
+
+  const messageResults = useMessageSearch(query);
+  const messageItems = useMemo<PaletteItem[]>(
+    () =>
+      messageResults.map((m) => {
+        const conversation = m.chatId
+          ? (chatLabel.get(m.chatId) ?? "Direct Message")
+          : m.channelId
+            ? (channelLabel.get(m.channelId) ?? "Channel")
+            : undefined;
+        return {
+          key: `message-${m.id}`,
+          group: "Messages",
+          label: m.text,
+          sublabel: conversation,
+          search: "",
+          icon: <MessageSquareText size={16} />,
+          onSelect: () => {
+            if (m.chatId) setActiveChatId(m.chatId);
+            else if (m.channelId) setActiveChannelId(m.channelId);
+          },
+        };
+      }),
+    [messageResults, chatLabel, channelLabel, setActiveChatId, setActiveChannelId],
   );
 
   const items = useMemo<PaletteItem[]>(() => {
@@ -297,15 +327,18 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       }
       bucket.push(item);
     }
+    // Message results are already filtered server-side, so they bypass the
+    // client-side query filter and are appended as their own group.
+    if (messageItems.length) ordered.push({ name: "Messages", items: messageItems });
     return ordered;
-  }, [items, query]);
+  }, [items, query, messageItems]);
 
   return (
     <Command shouldFilter={false} loop className="rounded-lg bg-[#111111]">
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder="Jump to a channel, conversation, or run a command…"
+        placeholder="Search messages, or jump to a channel, conversation, or session…"
         autoFocus
       />
       <CommandList>
@@ -318,6 +351,11 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
                 <CommandItem key={item.key} value={item.key} onSelect={() => run(item.onSelect)}>
                   {item.icon}
                   <span className="truncate">{item.label}</span>
+                  {item.sublabel && (
+                    <span className="ml-2 shrink-0 truncate text-xs text-muted-foreground">
+                      {item.sublabel}
+                    </span>
+                  )}
                   {item.shortcut && (
                     <span className="ml-auto flex items-center gap-1">
                       {formatShortcut(item.shortcut).map((key, i) => (

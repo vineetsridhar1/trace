@@ -341,4 +341,57 @@ describe("ChatService", () => {
       prismaMock,
     );
   });
+
+  it("skips the query for searches shorter than two characters", async () => {
+    const service = new ChatService();
+
+    await expect(service.searchMessages("a", "user-1", "org-1")).resolves.toEqual([]);
+    expect(prismaMock.message.findMany).not.toHaveBeenCalled();
+  });
+
+  it("searches messages scoped to visible chats and channels", async () => {
+    prismaMock.message.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "m1",
+          chatId: "chat-1",
+          channelId: null,
+          parentMessageId: null,
+          actorType: "user",
+          actorId: "user-2",
+          text: "hello world",
+          html: null,
+          mentions: null,
+          editedAt: null,
+          deletedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ])
+      // hydrateMessages looks up replies for root messages.
+      .mockResolvedValueOnce([]);
+
+    const service = new ChatService();
+    const results = await service.searchMessages("hello", "user-1", "org-1");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ id: "m1", text: "hello world", replyCount: 0 });
+
+    const where = prismaMock.message.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({
+      deletedAt: null,
+      text: { contains: "hello", mode: "insensitive" },
+    });
+    // Restricts to chats the user belongs to and channels visible to them.
+    expect(where.OR).toEqual([
+      expect.objectContaining({
+        chat: expect.objectContaining({
+          members: { some: { userId: "user-1", leftAt: null } },
+        }),
+      }),
+      expect.objectContaining({
+        channel: expect.objectContaining({ organizationId: "org-1" }),
+      }),
+    ]);
+  });
 });

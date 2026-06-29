@@ -25,6 +25,9 @@ export const chatQueries = {
       limit: args.limit,
     });
   },
+  searchMessages: (_: unknown, args: { query: string }, ctx: Context) => {
+    return chatService.searchMessages(args.query, ctx.userId, requireOrgContext(ctx));
+  },
 };
 
 export const chatMutations = {

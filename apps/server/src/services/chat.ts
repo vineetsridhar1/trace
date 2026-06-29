@@ -11,6 +11,7 @@ import {
   type MessageWithSummary,
 } from "./message-utils.js";
 import { normalizeMembers } from "./member-utils.js";
+import { visibleChannelWhere } from "./access.js";
 
 function buildMemberKey(...userIds: string[]) {
   return userIds.sort().join(":");
@@ -482,6 +483,37 @@ export class ChatService {
 
     const orderedMessages = isBefore ? messages.reverse() : messages;
     return hydrateMessages(orderedMessages);
+  }
+
+  /**
+   * Full-text-ish search over message bodies the user can see — chats they are an
+   * active member of and channels visible to them. Used by the command palette.
+   */
+  async searchMessages(query: string, userId: string, organizationId: string) {
+    const trimmed = query.trim().slice(0, 200);
+    if (trimmed.length < 2) return [];
+
+    const messages = await prisma.message.findMany({
+      where: {
+        deletedAt: null,
+        text: { contains: trimmed, mode: "insensitive" },
+        OR: [
+          {
+            chat: {
+              ...chatInOrganizationWhere(organizationId),
+              members: { some: { userId, leftAt: null } },
+            },
+          },
+          {
+            channel: { organizationId, ...visibleChannelWhere(userId) },
+          },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+
+    return hydrateMessages(messages);
   }
 
   async getReplies(rootMessageId: string, userId: string, opts?: { after?: Date; limit?: number }) {
