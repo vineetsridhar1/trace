@@ -397,6 +397,24 @@ function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean 
   );
 }
 
+/**
+ * True when a runtime's provider compute is already torn down, so an idle
+ * cleanup stop would do nothing but re-emit stopping/stopped lifecycle events.
+ *
+ * A provisioned runtime stopped by a prior idle sweep lands in
+ * `state: "disconnected"` with `deprovisionedAt` set but keeps its runtime
+ * binding ids. The group still looks idle, so without this guard the next sweep
+ * re-stops the already-gone runtime — an infinite loop, since stopping an idle
+ * group never changes the selection criteria. A `disconnected` runtime with no
+ * recorded deprovision (e.g. a dropped bridge whose provider compute may still
+ * be alive) is intentionally NOT treated as gone — that compute is still worth
+ * reclaiming.
+ */
+function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
+  if (conn.state === "stopped" || conn.state === "deprovisioned") return true;
+  return conn.state === "disconnected" && conn.deprovisionedAt != null;
+}
+
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
   if (sessionStatus === "merged") return "merged";
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
@@ -9077,11 +9095,17 @@ export class SessionService {
     group: IdleCloudSessionGroupCandidate,
     cloudSession: IdleCloudSessionGroupCandidate["sessions"][number],
   ): Promise<boolean> {
-    const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => ({
-      ...conn,
-      disconnectOnDeprovision: true,
-      disconnectReason: "idle_session_group_cleanup",
-    }));
+    const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => {
+      // The runtime's compute is already gone. Re-stopping it would just
+      // re-emit stopping/stopped events on every idle sweep without ever
+      // settling, since an idle group is re-selected each tick.
+      if (isRuntimeComputeGone(conn)) return null;
+      return {
+        ...conn,
+        disconnectOnDeprovision: true,
+        disconnectReason: "idle_session_group_cleanup",
+      };
+    });
     if (!disconnectFlagged) return false;
 
     const session = await prisma.session.findUnique({

@@ -2962,6 +2962,16 @@ export type SessionGroupDetailQuery = {
   } | null;
 };
 
+export type StartSessionApplicationWorkflowMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  appConfigId: Scalars["ID"]["input"];
+}>;
+
+export type StartSessionApplicationWorkflowMutation = {
+  __typename?: "Mutation";
+  startSessionApplicationWorkflow: { __typename?: "SessionApplicationWorkflowRun"; id: string };
+};
+
 export type SessionApplicationsStateQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
 }>;
@@ -3039,6 +3049,25 @@ export type SessionApplicationsStateQuery = {
     lastError?: string | null;
     startedAt: string;
     completedAt?: string | null;
+  }>;
+  sessionApplicationWorkflowRuns: Array<{
+    __typename?: "SessionApplicationWorkflowRun";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    status: WorkflowRunStatus;
+    lastError?: string | null;
+    startedAt: string;
+    completedAt?: string | null;
+    steps: Array<{
+      __typename?: "SessionApplicationWorkflowStep";
+      stepId: string;
+      kind: WorkflowStepKind;
+      label: string;
+      status: WorkflowStepStatus;
+      dependsOn: Array<string>;
+      optional: boolean;
+    }>;
   }>;
   sessionEndpoints: Array<{
     __typename?: "SessionEndpoint";
@@ -5986,6 +6015,62 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
+export const StartSessionApplicationWorkflowDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "StartSessionApplicationWorkflow" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "startSessionApplicationWorkflow" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "appConfigId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  StartSessionApplicationWorkflowMutation,
+  StartSessionApplicationWorkflowMutationVariables
+>;
 export const SessionApplicationsStateDocument = {
   kind: "Document",
   definitions: [
@@ -6209,6 +6294,44 @@ export const SessionApplicationsStateDocument = {
                 { kind: "Field", name: { kind: "Name", value: "lastError" } },
                 { kind: "Field", name: { kind: "Name", value: "startedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionApplicationWorkflowRuns" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "steps" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "stepId" } },
+                      { kind: "Field", name: { kind: "Name", value: "kind" } },
+                      { kind: "Field", name: { kind: "Name", value: "label" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "dependsOn" } },
+                      { kind: "Field", name: { kind: "Name", value: "optional" } },
+                    ],
+                  },
+                },
               ],
             },
           },
