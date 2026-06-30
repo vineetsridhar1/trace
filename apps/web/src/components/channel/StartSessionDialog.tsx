@@ -16,6 +16,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex" />}>
           <button
+            type="button"
             onClick={handleClick}
             className={cn(
               "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground",

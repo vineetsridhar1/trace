@@ -495,6 +495,7 @@ function SidebarMenuButton({
     props: mergeProps<"button">(
       {
         className: cn(sidebarMenuButtonVariants({ variant, size }), className),
+        type: "button",
       },
       props,
     ),
