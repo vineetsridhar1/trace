@@ -408,7 +408,10 @@ function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean 
  * group never changes the selection criteria. A `disconnected` runtime with no
  * recorded deprovision (e.g. a dropped bridge whose provider compute may still
  * be alive) is intentionally NOT treated as gone — that compute is still worth
- * reclaiming.
+ * reclaiming. Likewise `failed`/`timed_out` are deliberately excluded: a start
+ * that failed may have leaked provider compute that idle cleanup should still
+ * reap, and `stopping`/`deprovision_failed` are owned by the deprovision
+ * reconciler, not this sweep.
  */
 function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
   if (conn.state === "stopped" || conn.state === "deprovisioned") return true;
@@ -9078,6 +9081,14 @@ export class SessionService {
           !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
+
+      // Skip groups whose runtime compute is already torn down. Such groups
+      // keep matching this idle query forever (the binding ids linger), so
+      // re-stopping them only re-emits stopping/stopped events every sweep.
+      // Evaluated against the already-fetched candidate connection so dead
+      // groups cost no extra query; the same predicate is re-checked
+      // race-safely inside the conditional update below.
+      if (isRuntimeComputeGone(this.parseConnection(cloudSession.connection))) continue;
 
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,

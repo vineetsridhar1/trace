@@ -6921,7 +6921,9 @@ describe("SessionService", () => {
       // Regression: a provisioned runtime stopped by a prior idle sweep lands in
       // `state: "disconnected"` while keeping its runtime binding ids. The group
       // still looks idle, so without a guard the sweep re-stops the already-gone
-      // runtime and re-emits stopping/stopped events on every tick forever.
+      // runtime and re-emits stopping/stopped events on every tick forever. The
+      // skip happens against the already-fetched candidate connection, so a dead
+      // group also costs zero extra DB reads per sweep.
       const disconnectedConnection = {
         state: "disconnected",
         providerStatus: "stopped",
@@ -6958,14 +6960,6 @@ describe("SessionService", () => {
           ],
         },
       ]);
-      prismaMock.session.findUnique.mockResolvedValueOnce(
-        makeSession({
-          id: "session-1",
-          sessionGroupId: "group-1",
-          organizationId: "org-1",
-          connection: disconnectedConnection,
-        }),
-      );
 
       const result = await service.cleanupIdleCloudSessionGroups({
         idleAfterMs: 10 * 60 * 1000,
@@ -6973,6 +6967,7 @@ describe("SessionService", () => {
       });
 
       expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
