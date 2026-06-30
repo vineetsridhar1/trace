@@ -6916,6 +6916,61 @@ describe("SessionService", () => {
         expect.objectContaining({ reason: "idle_session_group_cleanup" }),
       );
     });
+
+    it("does not re-stop a group whose runtime is already disconnected", async () => {
+      // Regression: a provisioned runtime stopped by a prior idle sweep lands in
+      // `state: "disconnected"` while keeping its runtime binding ids. The group
+      // still looks idle, so without a guard the sweep re-stops the already-gone
+      // runtime and re-emits stopping/stopped events on every tick forever. The
+      // skip happens against the already-fetched candidate connection, so a dead
+      // group also costs zero extra DB reads per sweep.
+      const disconnectedConnection = {
+        state: "disconnected",
+        providerStatus: "stopped",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        disconnectReason: "idle_session_group_cleanup",
+        disconnectOnDeprovision: false,
+        deprovisionedAt: "2026-05-12T11:32:00.000Z",
+        canRetry: true,
+        canMove: true,
+        version: 5,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: disconnectedConnection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:31:00.000Z"),
+              connection: disconnectedConnection,
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
   });
 
   describe("archiveGroup", () => {
