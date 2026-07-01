@@ -35,9 +35,11 @@ export function AiLoadingIndicator({ model, startedAt }: AiLoadingIndicatorProps
   };
 
   return (
-    <div className="mb-2 flex h-7 items-center gap-1.5 text-white">
-      <TraceLoader size={14} showLabel={false} />
-      <span className="text-[11px]">{model} is working • {formatTime(elapsed)}</span>
+    <div className="mb-2 flex h-7 items-center gap-1.5">
+      <TraceLoader size={14} showLabel={false} className="text-white" />
+      <span className="text-[11px] text-muted-foreground">
+        {model} is working • {formatTime(elapsed)}
+      </span>
     </div>
   );
 }
