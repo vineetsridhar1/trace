@@ -44,10 +44,9 @@ const PI_MODELS: readonly ModelOption[] = [
 
 const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
   { value: "auto", label: "Auto" },
-  { value: "sonnet-4.5", label: "Sonnet 4.5" },
-  { value: "sonnet-4.5-thinking", label: "Sonnet 4.5 Thinking" },
-  { value: "opus-4.1", label: "Opus 4.1" },
-  { value: "gpt-5", label: "GPT-5" },
+  { value: "gpt-5.5", label: "GPT-5.5" },
+  { value: "opus-4.8", label: "Opus 4.8" },
+  { value: "sonnet-4.8", label: "Sonnet 4.8" },
 ];
 
 const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
