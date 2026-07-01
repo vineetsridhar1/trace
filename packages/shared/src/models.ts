@@ -65,12 +65,16 @@ const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
  * `auto` ignores the level. GPT-5.5 has no "max"/"xhigh" tiers, so both clamp to
  * its top "extra-high"; Claude families expose the level as a thinking variant.
  */
+const CURSOR_COMPOSER_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
+
 export function resolveCursorComposerModel(
   model: string | undefined,
   effort: string | undefined,
 ): string | undefined {
   if (!model || model === "auto") return model ?? undefined;
-  const level = effort ?? "medium";
+  // Clamp to a known level: a stale/foreign effort (e.g. "auto" carried over
+  // from Claude) must never produce an invalid id like `...-thinking-auto`.
+  const level = effort && CURSOR_COMPOSER_LEVELS.has(effort) ? effort : "medium";
   if (model === "gpt-5.5") {
     const gptLevel = level === "xhigh" || level === "max" ? "extra-high" : level;
     return `gpt-5.5-${gptLevel}`;

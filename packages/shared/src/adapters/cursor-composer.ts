@@ -17,6 +17,12 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
  * `{ readToolCall: { args, result } }`. Strip the `ToolCall` suffix to get a
  * human-readable tool name and return the nested detail object.
  */
+/** Coerce a Cursor tool result into the shared block's `string | Record` shape. */
+function toToolResultContent(value: unknown): string | Record<string, unknown> {
+  if (typeof value === "string") return value;
+  return asRecord(value) ?? {};
+}
+
 function unwrapToolCall(
   toolCall: Record<string, unknown>,
 ): { name: string; detail: Record<string, unknown> } | undefined {
@@ -213,7 +219,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
               {
                 type: "tool_result",
                 name: unwrapped.name,
-                content: (unwrapped.detail.result ?? unwrapped.detail) as Record<string, unknown>,
+                content: toToolResultContent(unwrapped.detail.result ?? unwrapped.detail),
                 ...(callId ? { tool_use_id: callId } : {}),
               },
             ],

@@ -56,3 +56,11 @@ export const CODING_TOOL_CLIS: Readonly<Record<string, CodingToolCli>> = {
 export function getCodingToolCli(tool: string): CodingToolCli | undefined {
   return CODING_TOOL_CLIS[tool];
 }
+
+/**
+ * The canonical set of `CodingTool` ids — the runnable CLIs plus the special
+ * `custom` marker. Single source of truth for the server's tool allowlists so a
+ * new tool can't be recognized in one place and silently dropped in another.
+ * Kept in sync with the GraphQL/Prisma `CodingTool` enum.
+ */
+export const CODING_TOOL_IDS: readonly string[] = [...Object.keys(CODING_TOOL_CLIS), "custom"];

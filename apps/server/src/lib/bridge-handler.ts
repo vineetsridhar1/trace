@@ -1,12 +1,13 @@
 import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
 import type { CodingTool } from "@trace/gql";
-import type {
-  BridgeLinkedCheckoutStatus,
-  BridgeLinkedCheckoutChangedFilePreview,
-  BridgeLinkedCheckoutActionResultPayload,
-  BridgeWorkspaceWarning,
-  GitCheckpointContext,
+import {
+  CODING_TOOL_IDS,
+  type BridgeLinkedCheckoutStatus,
+  type BridgeLinkedCheckoutChangedFilePreview,
+  type BridgeLinkedCheckoutActionResultPayload,
+  type BridgeWorkspaceWarning,
+  type GitCheckpointContext,
 } from "@trace/shared";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
@@ -25,14 +26,7 @@ const DISCONNECT_GRACE_MS = 10_000;
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
 const BRIDGE_PROTOCOL_VERSION = 1;
-const CODING_TOOLS = new Set<CodingTool>([
-  "claude_code",
-  "codex",
-  "custom",
-  "pi",
-  "antigravity",
-  "cursor_composer",
-]);
+const CODING_TOOLS = new Set<CodingTool>(CODING_TOOL_IDS as CodingTool[]);
 
 type LocalBridgeAuth = {
   kind: "local";
@@ -71,12 +65,11 @@ function stringArray(value: unknown): string[] | null {
 function parseSupportedTools(value: unknown): CodingTool[] | null {
   const tools = stringArray(value);
   if (!tools) return null;
-  const result: CodingTool[] = [];
-  for (const tool of tools) {
-    if (!CODING_TOOLS.has(tool as CodingTool)) return null;
-    result.push(tool as CodingTool);
-  }
-  return result;
+  // Filter out tools this server doesn't recognize rather than discarding the
+  // whole announce — a newer bridge advertising an unknown tool must not wipe
+  // the tools the server *does* support (that silently dropped cursor_composer
+  // and pi before). Returns null only when the field isn't a string array.
+  return tools.filter((tool): tool is CodingTool => CODING_TOOLS.has(tool as CodingTool));
 }
 
 function isCompatibleProtocolVersion(value: unknown): boolean {

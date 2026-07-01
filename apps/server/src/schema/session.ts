@@ -310,17 +310,21 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
-  runSession: (
+  runSession: async (
     _: unknown,
     args: { id: string; prompt?: string | null; interactionMode?: string | null },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
-    return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined, {
-      userId: ctx.userId,
-      organizationId: requireOrgContext(ctx),
-      clientSource: ctx.clientSource,
-    });
+    try {
+      return await sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined, {
+        userId: ctx.userId,
+        organizationId: requireOrgContext(ctx),
+        clientSource: ctx.clientSource,
+      });
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   terminateSession: async (_: unknown, args: { id: string }, ctx: Context) => {
     await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
