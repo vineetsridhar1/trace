@@ -42,6 +42,14 @@ const PI_MODELS: readonly ModelOption[] = [
   { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
 ];
 
+const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
+  { value: "auto", label: "Auto" },
+  { value: "sonnet-4.5", label: "Sonnet 4.5" },
+  { value: "sonnet-4.5-thinking", label: "Sonnet 4.5 Thinking" },
+  { value: "opus-4.1", label: "Opus 4.1" },
+  { value: "gpt-5", label: "GPT-5" },
+];
+
 const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
   {
     value: "openai",
@@ -66,6 +74,7 @@ const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
 const MODEL_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ModelOption[]>> = {
   claude_code: CLAUDE_CODE_MODELS,
   codex: CODEX_MODELS,
+  cursor_composer: CURSOR_COMPOSER_MODELS,
   pi: PI_MODELS,
 };
 
@@ -95,6 +104,7 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "claude-opus-4-8[1m]",
   codex: "gpt-5.5",
+  cursor_composer: "auto",
   pi: "openai/gpt-5.5",
 };
 

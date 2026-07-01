@@ -24,6 +24,15 @@ export function AntigravityIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Cursor Composer (`cursor-agent` CLI) — angled cursor arrow mark. */
+export function CursorComposerIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M4 2.5 19 12l-6.4 1.6L9.5 20 4 2.5Z" />
+    </svg>
+  );
+}
+
 export function PiIcon({ className, style, ...props }: HTMLAttributes<HTMLSpanElement>) {
   const maskStyle: CSSProperties = {
     WebkitMask: "url(/pi-logo.svg) center / contain no-repeat",

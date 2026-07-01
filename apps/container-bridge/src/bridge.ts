@@ -42,6 +42,7 @@ import {
   AntigravityAdapter,
   ClaudeCodeAdapter,
   CodexAdapter,
+  CursorComposerAdapter,
   PiAdapter,
 } from "@trace/shared/adapters";
 import {
@@ -323,6 +324,8 @@ export class ContainerBridge implements IBridgeClient {
         return new PiAdapter();
       case "codex":
         return new CodexAdapter();
+      case "cursor_composer":
+        return new CursorComposerAdapter();
       case "claude_code":
       default:
         return new ClaudeCodeAdapter();
