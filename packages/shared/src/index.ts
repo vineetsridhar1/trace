@@ -191,6 +191,8 @@ export {
   getReasoningEffortLabel,
   isSupportedReasoningEffort,
 } from "./models.js";
+export type { CodingToolCli } from "./coding-tools.js";
+export { CODING_TOOL_CLIS, getCodingToolCli } from "./coding-tools.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
 export {

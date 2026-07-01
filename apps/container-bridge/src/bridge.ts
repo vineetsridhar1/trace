@@ -174,6 +174,7 @@ export class ContainerBridge implements IBridgeClient {
       const supportedTools = ["claude_code", "codex"];
       if (hasExecutable("pi")) supportedTools.push("pi");
       if (hasExecutable("agy")) supportedTools.push("antigravity");
+      if (hasExecutable("cursor-agent")) supportedTools.push("cursor_composer");
       // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
       // they intentionally register no pre-existing repos.
       this.send({

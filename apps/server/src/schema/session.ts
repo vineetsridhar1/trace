@@ -12,7 +12,7 @@ import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
 import { prisma } from "../lib/db.js";
-import { AuthenticationError } from "../lib/errors.js";
+import { AuthenticationError, toGraphQLError } from "../lib/errors.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import {
@@ -409,16 +409,20 @@ export const sessionMutations = {
     ctx: Context,
   ) => {
     await assertScopeAccess("session", args.sessionId, ctx.userId, requireOrgContext(ctx));
-    return sessionService.sendMessage({
-      sessionId: args.sessionId,
-      text: args.text,
-      imageKeys: args.attachmentKeys ?? args.imageKeys ?? undefined,
-      actorType: ctx.actorType,
-      actorId: ctx.userId,
-      interactionMode: args.interactionMode ?? undefined,
-      clientMutationId: args.clientMutationId ?? undefined,
-      clientSource: ctx.clientSource,
-    });
+    try {
+      return await sessionService.sendMessage({
+        sessionId: args.sessionId,
+        text: args.text,
+        imageKeys: args.attachmentKeys ?? args.imageKeys ?? undefined,
+        actorType: ctx.actorType,
+        actorId: ctx.userId,
+        interactionMode: args.interactionMode ?? undefined,
+        clientMutationId: args.clientMutationId ?? undefined,
+        clientSource: ctx.clientSource,
+      });
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.retryConnection(

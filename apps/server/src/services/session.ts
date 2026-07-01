@@ -18,7 +18,7 @@ import {
 } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
-import { AuthorizationError, ValidationError } from "../lib/errors.js";
+import { AuthorizationError, ToolNotInstalledError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionApplicationService } from "./session-applications.js";
 import {
@@ -2033,7 +2033,10 @@ export class SessionService {
         const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
         if (!supportsTool) {
           if (!params.allowToolFallback) {
-            throw new Error("Selected runtime does not support this tool");
+            throw new ToolNotInstalledError(
+              params.tool,
+              runtime.label ?? conn.runtimeLabel ?? null,
+            );
           }
           const fallbackTool = selectRuntimeSupportedTool(runtime, params.tool);
           if (!fallbackTool) {
@@ -7656,6 +7659,11 @@ export class SessionService {
       throw new AuthorizationError("Not authorized for this session group");
     }
 
+    // Tool availability no longer gates runtime selection: any local runtime is
+    // offered regardless of whether the tool's CLI is installed. If the chosen
+    // runtime lacks the tool, the send path surfaces a ToolNotInstalledError with
+    // install instructions. `supportedTools` is still returned so callers can
+    // reflect install state in the UI.
     const allRuntimes = sessionRouter
       .listRuntimes()
       .filter(
@@ -7663,8 +7671,7 @@ export class SessionService {
           runtime.hostingMode === "local" &&
           runtime.organizationId === organizationId &&
           (scopedGroup?.visibility !== "private" ||
-            runtime.ownerUserId === scopedGroup.ownerUserId) &&
-          runtime.supportedTools.includes(tool),
+            runtime.ownerUserId === scopedGroup.ownerUserId),
       );
 
     const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);

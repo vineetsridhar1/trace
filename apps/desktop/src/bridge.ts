@@ -701,6 +701,7 @@ export class BridgeClient implements IBridgeClient {
     if (hasExecutable("codex")) supportedTools.push("codex");
     if (hasExecutable("pi")) supportedTools.push("pi");
     if (hasExecutable("agy")) supportedTools.push("antigravity");
+    if (hasExecutable("cursor-agent")) supportedTools.push("cursor_composer");
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
       label,
