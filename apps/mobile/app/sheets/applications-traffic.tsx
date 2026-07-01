@@ -1,11 +1,11 @@
 import { useLocalSearchParams } from "expo-router";
 import { Sheet } from "@/components/design-system";
-import { ApplicationsSheetContent } from "@/components/sessions/ApplicationsSheetContent";
+import { EndpointTrafficSheetContent } from "@/components/sessions/EndpointTrafficSheetContent";
 
-export default function ApplicationsSheetScreen() {
-  const { groupId, sessionId } = useLocalSearchParams<{
+export default function ApplicationsTrafficSheetScreen() {
+  const { groupId, endpointId } = useLocalSearchParams<{
     groupId: string;
-    sessionId?: string;
+    endpointId?: string;
   }>();
 
   return (
@@ -15,7 +15,7 @@ export default function ApplicationsSheetScreen() {
       padding="xs"
       style={{ paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 }}
     >
-      <ApplicationsSheetContent groupId={groupId} sessionId={sessionId} />
+      <EndpointTrafficSheetContent groupId={groupId} endpointId={endpointId} />
     </Sheet>
   );
 }

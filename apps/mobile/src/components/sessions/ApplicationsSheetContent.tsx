@@ -1,12 +1,30 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import {
+  Alert,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  UIManager,
+  View,
+} from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { gql } from "@urql/core";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import * as Clipboard from "expo-clipboard";
 import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import type {
-  EndpointTrafficEntry,
   Repo,
   RepoApplicationConfig,
   SessionApplicationLogEntry,
@@ -14,18 +32,16 @@ import type {
   SessionEndpoint,
   SessionSetupScriptRun,
 } from "@trace/gql";
-import {
-  Button,
-  EmptyState,
-  ListRow,
-  SegmentedControl,
-  Text,
-  TraceLoader,
-} from "@/components/design-system";
+import { EmptyState, IconButton, Text, TraceLoader, type IconMenuItem } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
-import { useTheme } from "@/theme";
+import { alpha, useTheme, type Theme } from "@/theme";
+import { GlassButton } from "./GlassButton";
+
+const HEADER_BLUR_INTENSITY = 3;
+const HEADER_FADE_EXTRA_HEIGHT = 56;
+const HEADER_CONTENT_HEIGHT = 36;
 
 const APPLICATIONS_STATE_QUERY = gql`
   query MobileSessionApplicationsState($sessionGroupId: ID!) {
@@ -131,21 +147,6 @@ const PROCESS_LOGS_QUERY = gql`
   }
 `;
 
-const ENDPOINT_TRAFFIC_QUERY = gql`
-  query MobileEndpointTraffic($endpointId: ID!, $limit: Int) {
-    endpointTraffic(endpointId: $endpointId, limit: $limit) {
-      id
-      endpointId
-      startedAt
-      durationMs
-      requestMethod
-      requestPath
-      responseStatus
-      error
-    }
-  }
-`;
-
 const RUN_SETUP_MUTATION = gql`
   mutation MobileRunSessionGroupSetupScript($sessionGroupId: ID!, $scriptId: ID!) {
     runSessionGroupSetupScript(sessionGroupId: $sessionGroupId, scriptId: $scriptId)
@@ -184,6 +185,22 @@ const STOP_PROCESS_MUTATION = gql`
   }
 `;
 
+const START_APPLICATION_MUTATION = gql`
+  mutation MobileStartSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
+    startSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) {
+      id
+    }
+  }
+`;
+
+const STOP_APPLICATION_MUTATION = gql`
+  mutation MobileStopSessionApplication($sessionGroupId: ID!, $appConfigId: ID!) {
+    stopSessionApplication(sessionGroupId: $sessionGroupId, appConfigId: $appConfigId) {
+      id
+    }
+  }
+`;
+
 const ENABLE_ENDPOINT_MUTATION = gql`
   mutation MobileEnableSessionEndpointForwarding($endpointId: ID!) {
     enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {
@@ -200,11 +217,12 @@ const DISABLE_ENDPOINT_MUTATION = gql`
   }
 `;
 
-const CLEAR_TRAFFIC_MUTATION = gql`
-  mutation MobileClearEndpointTraffic($endpointId: ID!) {
-    clearEndpointTraffic(endpointId: $endpointId)
-  }
-`;
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type ApplicationsStateData = {
   sessionGroup?: ({ id: string; repo?: Repo | null } & Partial<SessionGroupEntity>) | null;
@@ -217,15 +235,7 @@ type ProcessLogsData = {
   sessionApplicationLogs?: SessionApplicationLogEntry[] | null;
 };
 
-type EndpointTrafficData = {
-  endpointTraffic?: EndpointTrafficEntry[] | null;
-};
-
-type ApplicationTab = "applications" | "traffic";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
-
-const TABS: ApplicationTab[] = ["applications", "traffic"];
-const TAB_LABELS = ["Apps", "Traffic"];
 
 function displayStatus(status: string | null | undefined): string {
   if (!status) return "Unknown";
@@ -261,6 +271,8 @@ export function ApplicationsSheetContent({
 }) {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topInset = insets.top + theme.spacing.sm;
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
@@ -276,16 +288,24 @@ export function ApplicationsSheetContent({
   );
   const config = groupRepo?.applicationConfig ?? repoApplicationConfig;
 
-  const [tab, setTab] = useState<ApplicationTab>("applications");
   const [setupRuns, setSetupRuns] = useState<SessionSetupScriptRun[]>([]);
   const [processLogsById, setProcessLogsById] = useState<Record<string, SessionApplicationLogEntry[]>>(
     {},
   );
-  const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
-  const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openSetupLogIds, setOpenSetupLogIds] = useState<Record<string, boolean>>({});
+  const [openProcessLogIds, setOpenProcessLogIds] = useState<Record<string, boolean>>({});
+
+  const toggleSetupLogs = useCallback((scriptId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenSetupLogIds((current) => ({ ...current, [scriptId]: !current[scriptId] }));
+  }, []);
+  const toggleProcessLogs = useCallback((processId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenProcessLogIds((current) => ({ ...current, [processId]: !current[processId] }));
+  }, []);
 
   const processes = useMemo(
     () => Object.values(processTable).filter((process) => process.sessionGroupId === groupId),
@@ -311,10 +331,6 @@ export function ApplicationsSheetContent({
     return map;
   }, [endpoints]);
   const latestSetupRuns = useMemo(() => latestSetupRunByScript(setupRuns), [setupRuns]);
-  const selectedEndpoint = useMemo(
-    () => endpoints.find((endpoint) => endpoint.id === selectedEndpointId) ?? null,
-    [endpoints, selectedEndpointId],
-  );
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -352,7 +368,6 @@ export function ApplicationsSheetContent({
       (result.data?.sessionEndpoints ?? []) as Array<SessionEndpoint & { id: string }>,
     );
     setSetupRuns(result.data?.sessionSetupScriptRuns ?? []);
-    setSelectedEndpointId((current) => current ?? result.data?.sessionEndpoints?.[0]?.id ?? null);
   }, [groupId, upsert, upsertMany]);
 
   const loadProcessLogs = useCallback(async (processId: string) => {
@@ -368,18 +383,6 @@ export function ApplicationsSheetContent({
       ...current,
       [processId]: result.data?.sessionApplicationLogs ?? [],
     }));
-  }, []);
-
-  const loadTraffic = useCallback(async (endpointId: string) => {
-    const result = await getClient()
-      .query<EndpointTrafficData>(
-        ENDPOINT_TRAFFIC_QUERY,
-        { endpointId, limit: 100 },
-        { requestPolicy: "network-only" },
-      )
-      .toPromise();
-    if (result.error) throw result.error;
-    setTrafficEntries(result.data?.endpointTraffic ?? []);
   }, []);
 
   useEffect(() => {
@@ -411,20 +414,6 @@ export function ApplicationsSheetContent({
     }, 1500);
     return () => clearInterval(interval);
   }, [processes, refresh]);
-
-  useEffect(() => {
-    if (!selectedEndpointId || tab !== "traffic") {
-      setTrafficEntries([]);
-      return;
-    }
-    void loadTraffic(selectedEndpointId).catch((trafficError) => {
-      setError(trafficError instanceof Error ? trafficError.message : "Failed to load traffic.");
-    });
-    const interval = setInterval(() => {
-      void loadTraffic(selectedEndpointId).catch(() => undefined);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [loadTraffic, selectedEndpointId, tab]);
 
   async function runAction(key: string, fn: () => Promise<unknown>) {
     setPending(key);
@@ -458,67 +447,35 @@ export function ApplicationsSheetContent({
     [groupId, router, sessionId],
   );
 
-  const showTraffic = useCallback((endpointId: string) => {
-    setSelectedEndpointId(endpointId);
-    setTab("traffic");
-  }, []);
+  const showTraffic = useCallback(
+    (endpointId: string) => {
+      void haptic.selection();
+      const params = new URLSearchParams({ groupId, endpointId });
+      router.push(`/sheets/applications-traffic?${params.toString()}`);
+    },
+    [groupId, router],
+  );
 
   const copyEndpoint = useCallback(async (url: string) => {
     await Clipboard.setStringAsync(url);
     void haptic.light();
   }, []);
 
-  const clearTraffic = useCallback(async () => {
-    if (!selectedEndpointId) return;
-    await runAction(`traffic:${selectedEndpointId}`, async () => {
-      const result = await getClient()
-        .mutation(CLEAR_TRAFFIC_MUTATION, { endpointId: selectedEndpointId })
-        .toPromise();
-      if (result.error) throw result.error;
-      setTrafficEntries([]);
-      return result;
-    });
-  }, [selectedEndpointId]);
-
-  const selectedIndex = TABS.indexOf(tab);
   const hasConfig = Boolean(config && (config.setupScripts.length > 0 || config.applications.length > 0));
 
-  return (
-    <View style={styles.container}>
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg }]}>
-        <View style={styles.headerRow}>
-          <Text variant="headline">Applications</Text>
-          <Button
-            title="Refresh"
-            size="sm"
-            variant="secondary"
-            disabled={loading}
-            onPress={() => {
-              setLoading(true);
-              void refresh()
-                .catch((refreshError) =>
-                  setError(
-                    refreshError instanceof Error ? refreshError.message : "Failed to load applications.",
-                  ),
-                )
-                .finally(() => setLoading(false));
-            }}
-          />
-        </View>
-        <SegmentedControl
-          segments={TAB_LABELS}
-          selectedIndex={selectedIndex}
-          onChange={(index) => setTab(TABS[index] ?? "applications")}
-        />
-      </View>
+  const headerBottom = topInset + HEADER_CONTENT_HEIGHT;
 
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {loading ? (
         <View style={styles.center}>
           <TraceLoader size="small" color="mutedForeground" />
         </View>
-      ) : tab === "applications" ? (
+      ) : (
         <ApplicationsTab
           config={config ?? null}
+          contentPaddingBottom={insets.bottom + theme.spacing.xxl}
+          contentPaddingTop={headerBottom + theme.spacing.sm}
           endpointsByProcess={endpointsByProcess}
           error={error}
           hasConfig={hasConfig}
@@ -527,35 +484,65 @@ export function ApplicationsSheetContent({
           onOpenEndpoint={openEndpoint}
           onRunAction={runAction}
           onShowTraffic={showTraffic}
+          onToggleProcessLogs={toggleProcessLogs}
+          onToggleSetupLogs={toggleSetupLogs}
+          openProcessLogIds={openProcessLogIds}
+          openSetupLogIds={openSetupLogIds}
           pending={pending}
           processesByKey={processesByKey}
           processLogsById={processLogsById}
           sessionGroupId={groupId}
         />
-      ) : (
-        <TrafficTab
-          endpoints={endpoints}
-          error={error}
-          onClearTraffic={clearTraffic}
-          onRefreshTraffic={() => {
-            if (!selectedEndpointId) return;
-            void loadTraffic(selectedEndpointId).catch((trafficError) =>
-              setError(trafficError instanceof Error ? trafficError.message : "Failed to load traffic."),
-            );
-          }}
-          onSelectEndpoint={setSelectedEndpointId}
-          pending={pending}
-          selectedEndpoint={selectedEndpoint}
-          selectedEndpointId={selectedEndpointId}
-          trafficEntries={trafficEntries}
-        />
       )}
+      <BlurView
+        pointerEvents="none"
+        tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+        intensity={HEADER_BLUR_INTENSITY}
+        style={[styles.topBlur, { height: headerBottom - 8 }]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          alpha(theme.colors.background, 1),
+          alpha(theme.colors.background, 0.48),
+          alpha(theme.colors.background, 0),
+        ]}
+        locations={[0, 0.68, 1]}
+        style={[styles.topFade, { height: headerBottom + HEADER_FADE_EXTRA_HEIGHT }]}
+      />
+      <View
+        style={[
+          styles.floatingHeader,
+          { top: topInset, paddingHorizontal: theme.spacing.lg },
+        ]}
+      >
+        <Text variant="title2">Applications</Text>
+        <GlassButton
+          symbol="arrow.clockwise"
+          accessibilityLabel="Refresh applications"
+          disabled={loading}
+          onPress={() => {
+            setLoading(true);
+            void refresh()
+              .catch((refreshError) =>
+                setError(
+                  refreshError instanceof Error
+                    ? refreshError.message
+                    : "Failed to load applications.",
+                ),
+              )
+              .finally(() => setLoading(false));
+          }}
+        />
+      </View>
     </View>
   );
 }
 
 function ApplicationsTab({
   config,
+  contentPaddingBottom,
+  contentPaddingTop,
   endpointsByProcess,
   error,
   hasConfig,
@@ -564,12 +551,18 @@ function ApplicationsTab({
   onOpenEndpoint,
   onRunAction,
   onShowTraffic,
+  onToggleProcessLogs,
+  onToggleSetupLogs,
+  openProcessLogIds,
+  openSetupLogIds,
   pending,
   processesByKey,
   processLogsById,
   sessionGroupId,
 }: {
   config: RepoApplicationConfig | null;
+  contentPaddingBottom: number;
+  contentPaddingTop: number;
   endpointsByProcess: Map<string, SessionEndpoint[]>;
   error: string | null;
   hasConfig: boolean;
@@ -578,6 +571,10 @@ function ApplicationsTab({
   onOpenEndpoint: (endpoint: SessionEndpoint) => void;
   onRunAction: (key: string, fn: () => Promise<unknown>) => Promise<void>;
   onShowTraffic: (endpointId: string) => void;
+  onToggleProcessLogs: (processId: string) => void;
+  onToggleSetupLogs: (scriptId: string) => void;
+  openProcessLogIds: Record<string, boolean>;
+  openSetupLogIds: Record<string, boolean>;
   pending: string | null;
   processesByKey: Map<string, SessionApplicationProcess>;
   processLogsById: Record<string, SessionApplicationLogEntry[]>;
@@ -586,7 +583,7 @@ function ApplicationsTab({
   const theme = useTheme();
   if (!hasConfig || !config) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { paddingTop: contentPaddingTop }]}>
         <EmptyState
           icon="apps.iphone"
           title="No applications configured"
@@ -597,7 +594,13 @@ function ApplicationsTab({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: contentPaddingTop, paddingBottom: contentPaddingBottom },
+      ]}
+      scrollIndicatorInsets={{ top: contentPaddingTop }}
+    >
       {error ? (
         <View style={[styles.errorBox, { borderColor: theme.colors.destructive }]}>
           <Text variant="footnote" color="destructive">
@@ -608,135 +611,181 @@ function ApplicationsTab({
 
       {config.setupScripts.length > 0 ? (
         <View style={styles.section}>
-          <SectionTitle title="Setup" />
-          {config.setupScripts.map((script) => {
-            const latestRun = latestSetupRuns.get(script.id);
-            const running = latestRun?.status === "running";
-            return (
-              <View key={script.id} style={styles.block}>
-                <ListRow
-                  title={script.name}
-                  subtitle={latestRun ? displayStatus(latestRun.status) : script.command}
-                  leading={
-                    <SymbolView
-                      name={running ? "clock" : "terminal"}
-                      size={22}
-                      tintColor={theme.colors.mutedForeground}
-                    />
-                  }
-                  trailing={
-                    <Button
-                      title="Run"
-                      size="sm"
-                      variant="secondary"
-                      disabled={pending === script.id || running}
-                      onPress={() =>
+          <SectionLabel title="Setup" />
+          <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            {config.setupScripts.map((script, index) => {
+              const latestRun = latestSetupRuns.get(script.id);
+              const running = latestRun?.status === "running";
+              const setupLogsOpen = !!openSetupLogIds[script.id];
+              return (
+                <View key={script.id}>
+                  {index > 0 ? (
+                    <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+                  ) : null}
+                  <AppRow
+                    icon={running ? "clock" : "terminal"}
+                    iconColor={theme.colors.mutedForeground}
+                    title={script.name}
+                    subtitle={latestRun ? displayStatus(latestRun.status) : script.command}
+                    primary={{
+                      symbol: "play.fill",
+                      color: "accent",
+                      accessibilityLabel: `Run ${script.name}`,
+                      disabled: pending === script.id || running,
+                      onPress: () =>
                         void onRunAction(script.id, () =>
                           getClient()
-                            .mutation(RUN_SETUP_MUTATION, {
-                              sessionGroupId,
-                              scriptId: script.id,
-                            })
+                            .mutation(RUN_SETUP_MUTATION, { sessionGroupId, scriptId: script.id })
                             .toPromise(),
-                        )
-                      }
-                    />
-                  }
-                />
-                {latestRun?.lastError || latestRun?.outputPreview ? (
-                  <Text
-                    variant="caption2"
-                    color={latestRun.lastError ? "destructive" : "mutedForeground"}
-                    style={styles.logPreview}
-                  >
-                    {(latestRun.lastError ?? latestRun.outputPreview ?? "").trim()}
-                  </Text>
-                ) : null}
-              </View>
-            );
-          })}
+                        ),
+                    }}
+                    expandable={!!latestRun}
+                    expanded={setupLogsOpen}
+                    onPress={latestRun ? () => onToggleSetupLogs(script.id) : undefined}
+                  />
+                  {latestRun && setupLogsOpen ? (
+                    <View style={styles.logsContent}>
+                      <Text
+                        variant="caption2"
+                        color={latestRun.lastError ? "destructive" : "mutedForeground"}
+                        style={styles.logBlock}
+                      >
+                        {(latestRun.lastError ?? latestRun.outputPreview ?? "No logs yet.").trim()}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
         </View>
       ) : null}
 
-      {config.applications.map((application) => (
-        <View key={application.id} style={styles.section}>
-          <SectionTitle title={application.name} />
-          {application.processes.map((processConfig) => {
-            const process = processesByKey.get(`${application.id}:${processConfig.id}`);
-            const endpoints = endpointsByProcess.get(`${application.id}:${processConfig.id}`) ?? [];
-            const active = isActive(process?.status);
-            const logs = process ? (processLogsById[process.id] ?? []).slice(-4) : [];
-            return (
-              <View key={processConfig.id} style={styles.block}>
-                <ListRow
-                  title={processConfig.name}
-                  subtitle={process?.lastError ?? displayStatus(process?.status ?? "stopped")}
-                  leading={
-                    <SymbolView
-                      name={statusIcon(process?.status)}
-                      size={22}
-                      tintColor={
+      {config.applications.map((application) => {
+        const appActive = application.processes.some((processConfig) =>
+          isActive(processesByKey.get(`${application.id}:${processConfig.id}`)?.status),
+        );
+        return (
+          <View key={application.id} style={styles.section}>
+            <SectionLabel
+              title={application.name}
+              trailing={
+                application.processes.length > 0 ? (
+                  <IconButton
+                    symbol={appActive ? "stop.circle" : "play.circle"}
+                    size="sm"
+                    color={appActive ? "destructive" : "accent"}
+                    accessibilityLabel={
+                      appActive ? `Stop ${application.name}` : `Run all in ${application.name}`
+                    }
+                    disabled={pending === `app:${application.id}`}
+                    onPress={() =>
+                      void onRunAction(`app:${application.id}`, () =>
+                        getClient()
+                          .mutation(
+                            appActive ? STOP_APPLICATION_MUTATION : START_APPLICATION_MUTATION,
+                            { sessionGroupId, appConfigId: application.id },
+                          )
+                          .toPromise(),
+                      )
+                    }
+                  />
+                ) : undefined
+              }
+            />
+            <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+              {application.processes.map((processConfig, index) => {
+                const process = processesByKey.get(`${application.id}:${processConfig.id}`);
+                const endpoints =
+                  endpointsByProcess.get(`${application.id}:${processConfig.id}`) ?? [];
+                const active = isActive(process?.status);
+                const processLogsOpen = process ? !!openProcessLogIds[process.id] : false;
+                const logs = process ? (processLogsById[process.id] ?? []).slice(-16) : [];
+                const processKey = `${application.id}:${processConfig.id}`;
+                return (
+                  <View key={processConfig.id}>
+                    {index > 0 ? (
+                      <View
+                        style={[styles.separator, { backgroundColor: theme.colors.border }]}
+                      />
+                    ) : null}
+                    <AppRow
+                      icon={statusIcon(process?.status)}
+                      iconColor={
                         process?.status === "failed"
                           ? theme.colors.destructive
-                          : theme.colors.mutedForeground
+                          : process?.status === "running"
+                            ? theme.colors.success
+                            : theme.colors.mutedForeground
                       }
+                      title={processConfig.name}
+                      subtitle={process?.lastError ?? displayStatus(process?.status ?? "stopped")}
+                      subtitleColor={process?.status === "failed" ? "destructive" : "dimForeground"}
+                      primary={{
+                        symbol: active ? "stop.fill" : "play.fill",
+                        color: active ? "destructive" : "accent",
+                        accessibilityLabel: active
+                          ? `Stop ${processConfig.name}`
+                          : `Start ${processConfig.name}`,
+                        disabled: pending === processKey,
+                        onPress: () =>
+                          void onRunAction(processKey, () =>
+                            getClient()
+                              .mutation(active ? STOP_PROCESS_MUTATION : START_PROCESS_MUTATION, {
+                                sessionGroupId,
+                                appConfigId: application.id,
+                                processConfigId: processConfig.id,
+                              })
+                              .toPromise(),
+                          ),
+                      }}
+                      expandable={!!process}
+                      expanded={processLogsOpen}
+                      onPress={process ? () => onToggleProcessLogs(process.id) : undefined}
                     />
-                  }
-                  trailing={
-                    <Button
-                      title={active ? "Stop" : "Start"}
-                      size="sm"
-                      variant={active ? "ghost" : "secondary"}
-                      disabled={pending === `${application.id}:${processConfig.id}`}
-                      onPress={() =>
-                        void onRunAction(`${application.id}:${processConfig.id}`, () =>
-                          getClient()
-                            .mutation(active ? STOP_PROCESS_MUTATION : START_PROCESS_MUTATION, {
-                              sessionGroupId,
-                              appConfigId: application.id,
-                              processConfigId: processConfig.id,
-                            })
-                            .toPromise(),
-                        )
-                      }
-                    />
-                  }
-                />
-                {logs.length > 0 ? (
-                  <View style={styles.logs}>
-                    {logs.map((log) => (
-                      <Text
-                        key={log.id}
-                        variant="caption2"
-                        color={log.stream === "stderr" ? "destructive" : "mutedForeground"}
-                        style={styles.logLine}
-                      >
-                        {`${log.stream}: ${log.data.trim() || "(empty)"}`}
-                      </Text>
-                    ))}
-                  </View>
-                ) : null}
-                {endpoints.length > 0 ? (
-                  <View style={styles.endpointList}>
+                    {process && processLogsOpen ? (
+                      <View style={styles.logsContent}>
+                        <View style={styles.logs}>
+                          {logs.length === 0 ? (
+                            <Text variant="caption2" color="mutedForeground">
+                              No logs yet.
+                            </Text>
+                          ) : (
+                            logs.map((log) => (
+                              <Text
+                                key={log.id}
+                                variant="caption2"
+                                color={log.stream === "stderr" ? "destructive" : "mutedForeground"}
+                                style={styles.logLine}
+                              >
+                                {`${log.stream}: ${log.data.trim() || "(empty)"}`}
+                              </Text>
+                            ))
+                          )}
+                        </View>
+                      </View>
+                    ) : null}
                     {endpoints.map((endpoint) => (
-                      <EndpointRow
-                        key={endpoint.id}
-                        endpoint={endpoint}
-                        onCopyEndpoint={onCopyEndpoint}
-                        onOpenEndpoint={onOpenEndpoint}
-                        onRunAction={onRunAction}
-                        onShowTraffic={onShowTraffic}
-                        pending={pending}
-                        running={process?.status === "running"}
-                      />
+                      <View key={endpoint.id}>
+                        <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+                        <EndpointRow
+                          endpoint={endpoint}
+                          onCopyEndpoint={onCopyEndpoint}
+                          onOpenEndpoint={onOpenEndpoint}
+                          onRunAction={onRunAction}
+                          onShowTraffic={onShowTraffic}
+                          pending={pending}
+                          running={process?.status === "running"}
+                        />
+                      </View>
                     ))}
                   </View>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      ))}
+                );
+              })}
+            </View>
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -761,172 +810,170 @@ function EndpointRow({
   const theme = useTheme();
   const enabled = endpoint.status === "enabled";
   const canOpen = enabled && endpoint.url.length > 0;
+  const toggleForwarding = () =>
+    void onRunAction(endpoint.id, () =>
+      getClient()
+        .mutation(enabled ? DISABLE_ENDPOINT_MUTATION : ENABLE_ENDPOINT_MUTATION, {
+          endpointId: endpoint.id,
+        })
+        .toPromise(),
+    );
+
+  const forwardingMenuItem: IconMenuItem | null = enabled
+    ? { title: "Disable forwarding", systemIcon: "bolt.slash", onPress: toggleForwarding }
+    : running
+      ? { title: "Enable forwarding", systemIcon: "bolt", onPress: toggleForwarding }
+      : null;
+
+  const menuItems: IconMenuItem[] = [
+    ...(forwardingMenuItem ? [forwardingMenuItem] : []),
+    ...(endpoint.url
+      ? [
+          {
+            title: "Copy URL",
+            systemIcon: "doc.on.doc" as const,
+            onPress: () => void onCopyEndpoint(endpoint.url),
+          },
+        ]
+      : []),
+    { title: "View traffic", systemIcon: "chart.bar.xaxis", onPress: () => onShowTraffic(endpoint.id) },
+  ];
+
+  const primary = canOpen
+    ? {
+        symbol: "arrow.up.forward" as const,
+        color: "accent" as const,
+        accessibilityLabel: "Open endpoint",
+        onPress: () => onOpenEndpoint(endpoint),
+      }
+    : {
+        symbol: "bolt.fill" as const,
+        color: "accent" as const,
+        accessibilityLabel: "Enable forwarding",
+        disabled: pending === endpoint.id || (!enabled && !running),
+        onPress: toggleForwarding,
+      };
+
   return (
-    <View style={[styles.endpointRow, { borderColor: theme.colors.border }]}>
-      <View style={styles.endpointText}>
-        <Text variant="subheadline" numberOfLines={1}>
-          {endpoint.label}
-        </Text>
-        <Text variant="caption2" color="mutedForeground" numberOfLines={1}>
-          {enabled && endpoint.url ? endpoint.url : `:${endpoint.targetPort} - ${displayStatus(endpoint.status)}`}
-        </Text>
-      </View>
-      <View style={styles.endpointActions}>
-        <Button
-          title={enabled ? "Off" : "On"}
-          size="sm"
-          variant="ghost"
-          disabled={pending === endpoint.id || (!enabled && !running)}
-          onPress={() =>
-            void onRunAction(endpoint.id, () =>
-              getClient()
-                .mutation(enabled ? DISABLE_ENDPOINT_MUTATION : ENABLE_ENDPOINT_MUTATION, {
-                  endpointId: endpoint.id,
-                })
-                .toPromise(),
-            )
-          }
-        />
-        <Button
-          title="Open"
-          size="sm"
-          variant="secondary"
-          disabled={!canOpen}
-          onPress={() => onOpenEndpoint(endpoint)}
-        />
-        <Button
-          title="Copy"
-          size="sm"
-          variant="ghost"
-          disabled={!endpoint.url}
-          onPress={() => void onCopyEndpoint(endpoint.url)}
-        />
-        <Button title="Traffic" size="sm" variant="ghost" onPress={() => onShowTraffic(endpoint.id)} />
-      </View>
-    </View>
+    <AppRow
+      icon="globe"
+      iconColor={enabled ? theme.colors.success : theme.colors.dimForeground}
+      title={endpoint.label}
+      subtitle={
+        enabled && endpoint.url
+          ? endpoint.url
+          : `:${endpoint.targetPort} · ${displayStatus(endpoint.status)}`
+      }
+      indent
+      primary={primary}
+      menuItems={menuItems}
+      onPress={canOpen ? () => onOpenEndpoint(endpoint) : undefined}
+    />
   );
 }
 
-function TrafficTab({
-  endpoints,
-  error,
-  onClearTraffic,
-  onRefreshTraffic,
-  onSelectEndpoint,
-  pending,
-  selectedEndpoint,
-  selectedEndpointId,
-  trafficEntries,
+type RowAction = {
+  symbol: SymbolName;
+  accessibilityLabel: string;
+  onPress: () => void;
+  disabled?: boolean;
+  color?: keyof Theme["colors"];
+};
+
+function AppRow({
+  icon,
+  iconColor,
+  title,
+  subtitle,
+  subtitleColor = "dimForeground",
+  primary,
+  menuItems,
+  expandable = false,
+  expanded = false,
+  indent = false,
+  onPress,
 }: {
-  endpoints: SessionEndpoint[];
-  error: string | null;
-  onClearTraffic: () => Promise<void>;
-  onRefreshTraffic: () => void;
-  onSelectEndpoint: (endpointId: string) => void;
-  pending: string | null;
-  selectedEndpoint: SessionEndpoint | null;
-  selectedEndpointId: string | null;
-  trafficEntries: EndpointTrafficEntry[];
+  icon: SymbolName;
+  iconColor: string;
+  title: string;
+  subtitle?: string;
+  subtitleColor?: keyof Theme["colors"];
+  primary?: RowAction;
+  menuItems?: IconMenuItem[];
+  expandable?: boolean;
+  expanded?: boolean;
+  indent?: boolean;
+  onPress?: () => void;
 }) {
   const theme = useTheme();
   return (
-    <View style={styles.trafficRoot}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.endpointPills}>
-        {endpoints.map((endpoint) => (
-          <Button
-            key={endpoint.id}
-            title={endpoint.label}
-            size="sm"
-            variant={selectedEndpointId === endpoint.id ? "primary" : "secondary"}
-            onPress={() => onSelectEndpoint(endpoint.id)}
-          />
-        ))}
-      </ScrollView>
-      <View style={[styles.trafficHeader, { paddingHorizontal: theme.spacing.lg }]}>
-        <View style={styles.trafficTitle}>
-          <Text variant="subheadline" numberOfLines={1}>
-            {selectedEndpoint?.label ?? "Endpoint Traffic"}
-          </Text>
-          <Text variant="caption2" color="mutedForeground" numberOfLines={1}>
-            {selectedEndpoint?.url ?? "Select an endpoint"}
-          </Text>
-        </View>
-        <Button title="Refresh" size="sm" variant="secondary" disabled={!selectedEndpointId} onPress={onRefreshTraffic} />
-        <Button
-          title="Clear"
-          size="sm"
-          variant="ghost"
-          disabled={!selectedEndpointId || pending === `traffic:${selectedEndpointId}`}
-          onPress={() => void onClearTraffic()}
-        />
+    <Pressable
+      accessibilityRole={onPress ? "button" : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        indent ? styles.rowIndent : null,
+        {
+          backgroundColor:
+            pressed && onPress ? alpha(theme.colors.foreground, 0.06) : "transparent",
+        },
+      ]}
+    >
+      <View style={styles.iconSlot}>
+        <SymbolView name={icon} size={18} tintColor={iconColor} resizeMode="scaleAspectFit" />
       </View>
-      {error ? (
-        <View style={[styles.errorBox, { borderColor: theme.colors.destructive }]}>
-          <Text variant="footnote" color="destructive">
-            {error}
-          </Text>
-        </View>
-      ) : null}
-      <ScrollView contentContainerStyle={styles.trafficList}>
-        {trafficEntries.length === 0 ? (
-          <View style={styles.center}>
-            <EmptyState
-              icon="network"
-              title="No traffic captured"
-              subtitle="Requests appear here after the endpoint receives traffic."
-            />
-          </View>
-        ) : (
-          trafficEntries.map((entry) => <TrafficEntryRow key={entry.id} entry={entry} />)
-        )}
-      </ScrollView>
-    </View>
-  );
-}
-
-function TrafficEntryRow({ entry }: { entry: EndpointTrafficEntry }) {
-  const theme = useTheme();
-  const status = entry.responseStatus ?? (entry.error ? "ERR" : "...");
-  return (
-    <View style={[styles.trafficRow, { borderColor: theme.colors.border }]}>
-      <View style={styles.trafficMethod}>
-        <Text variant="caption2" color="mutedForeground">
-          {new Date(entry.startedAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          })}
+      <View style={styles.cellText}>
+        <Text variant="body" numberOfLines={1}>
+          {title}
         </Text>
-        <Text variant="subheadline">{entry.requestMethod}</Text>
-      </View>
-      <View style={styles.trafficPath}>
-        <Text variant="subheadline" numberOfLines={1}>
-          {entry.requestPath}
-        </Text>
-        {entry.error ? (
-          <Text variant="caption2" color="destructive" numberOfLines={1}>
-            {entry.error}
+        {subtitle ? (
+          <Text variant="caption2" color={subtitleColor} numberOfLines={1}>
+            {subtitle}
           </Text>
         ) : null}
       </View>
-      <View style={styles.trafficStatus}>
-        <Text variant="subheadline" align="right">
-          {status}
-        </Text>
-        <Text variant="caption2" color="mutedForeground" align="right">
-          {entry.durationMs != null ? `${entry.durationMs}ms` : "-"}
-        </Text>
-      </View>
-    </View>
+      {primary ? (
+        <IconButton
+          symbol={primary.symbol}
+          size="sm"
+          color={primary.color ?? "foreground"}
+          disabled={primary.disabled}
+          accessibilityLabel={primary.accessibilityLabel}
+          onPress={primary.onPress}
+        />
+      ) : null}
+      {menuItems && menuItems.length > 0 ? (
+        <IconButton
+          symbol="ellipsis"
+          size="sm"
+          color="mutedForeground"
+          accessibilityLabel="More actions"
+          dropdownMenuMode
+          menuItems={menuItems}
+          onPress={() => undefined}
+        />
+      ) : null}
+      {expandable ? (
+        <SymbolView
+          name={expanded ? "chevron.down" : "chevron.right"}
+          size={12}
+          tintColor={theme.colors.dimForeground}
+          resizeMode="scaleAspectFit"
+          style={styles.rowChevron}
+        />
+      ) : null}
+    </Pressable>
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
+function SectionLabel({ title, trailing }: { title: string; trailing?: ReactNode }) {
   return (
     <View style={styles.sectionHeader}>
-      <Text variant="subheadline" color="mutedForeground">
-        {title}
+      <Text variant="caption1" color="dimForeground" style={styles.sectionLabelText}>
+        {title.toUpperCase()}
       </Text>
+      {trailing}
     </View>
   );
 }
@@ -935,16 +982,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    gap: 12,
-    paddingTop: 12,
-    paddingBottom: 14,
+  topFade: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9,
   },
-  headerRow: {
+  topBlur: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 8,
+  },
+  floatingHeader: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+    minHeight: HEADER_CONTENT_HEIGHT,
   },
   center: {
     flex: 1,
@@ -954,93 +1015,74 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
   },
   section: {
     marginBottom: 22,
   },
   sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    minHeight: 36,
+    paddingLeft: 4,
     paddingBottom: 8,
   },
-  block: {
-    overflow: "hidden",
-    borderRadius: 8,
-    marginBottom: 10,
+  sectionLabelText: {
+    letterSpacing: 0.6,
   },
-  logPreview: {
-    paddingHorizontal: 16,
+  card: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 14,
+    opacity: 1,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  rowIndent: {
+    paddingLeft: 30,
+  },
+  rowChevron: {
+    width: 12,
+    height: 12,
+  },
+  iconSlot: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cellText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  logsContent: {
+    paddingHorizontal: 14,
     paddingBottom: 12,
+  },
+  logBlock: {
+    fontFamily: "SpaceMono",
   },
   logs: {
     gap: 4,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
   },
   logLine: {
     fontFamily: "SpaceMono",
   },
-  endpointList: {
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  endpointRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 10,
-    gap: 10,
-  },
-  endpointText: {
-    minWidth: 0,
-  },
-  endpointActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
   errorBox: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 8,
-    marginHorizontal: 16,
     marginBottom: 12,
     padding: 12,
-  },
-  trafficRoot: {
-    flex: 1,
-  },
-  endpointPills: {
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  trafficHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingBottom: 12,
-  },
-  trafficTitle: {
-    flex: 1,
-    minWidth: 0,
-  },
-  trafficList: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-  trafficRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10,
-  },
-  trafficMethod: {
-    width: 58,
-  },
-  trafficPath: {
-    flex: 1,
-    minWidth: 0,
-  },
-  trafficStatus: {
-    width: 58,
   },
 });
