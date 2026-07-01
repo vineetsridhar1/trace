@@ -448,7 +448,9 @@ export const eventSubscriptions = {
             return false;
           }
 
-          // Invalidate cache on membership changes
+          // Invalidate cache on membership changes. The DataLoaders cache for
+          // the lifetime of the WS connection, so they must be cleared too —
+          // otherwise removed members keep receiving private-scope events.
           if (
             event.eventType === "channel_member_added" ||
             event.eventType === "channel_member_removed" ||
@@ -459,6 +461,11 @@ export const eventSubscriptions = {
             membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
             sessionVisibilityCache.clear();
             channelVisibilityCache.clear();
+            if (event.scopeType === "channel") {
+              ctx.channelMembershipLoader.clear(event.scopeId);
+            } else if (event.scopeType === "chat") {
+              ctx.chatMembershipLoader.clear(event.scopeId);
+            }
           }
 
           if (event.scopeType === "chat") {

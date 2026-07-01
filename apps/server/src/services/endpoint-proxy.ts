@@ -19,6 +19,7 @@ import {
 } from "./endpoint-utils.js";
 
 type PendingHttp = {
+  runtimeId: string;
   endpointId: string;
   trafficEntryId: string;
   trafficWrite: Promise<unknown>;
@@ -42,6 +43,24 @@ function requestPath(req: IncomingMessage): { path: string; query: string | null
 function authenticatedUserId(req: IncomingMessage): string | null {
   const cookieToken = parseCookieToken(req.headers.cookie);
   return cookieToken ? verifyToken(cookieToken) : null;
+}
+
+async function canAccessPrivateEndpoint(
+  req: IncomingMessage,
+  endpoint: { organizationId: string; sessionGroupId: string },
+): Promise<boolean> {
+  const userId = authenticatedUserId(req);
+  if (!userId) return false;
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId: endpoint.organizationId } },
+    select: { userId: true },
+  });
+  if (!membership) return false;
+  const group = await prisma.sessionGroup.findFirst({
+    where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
+    select: { visibility: true, ownerUserId: true },
+  });
+  return group != null && canViewSessionGroup(group, userId);
 }
 
 class RequestBodyTooLargeError extends Error {}
@@ -91,16 +110,11 @@ export class EndpointProxyService {
       return;
     }
     if (endpoint.accessMode === "private") {
-      const userId = authenticatedUserId(req);
-      if (!userId) {
+      if (!authenticatedUserId(req)) {
         res.writeHead(401).end("Authentication required");
         return;
       }
-      const group = await prisma.sessionGroup.findFirst({
-        where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
-        select: { visibility: true, ownerUserId: true },
-      });
-      if (!group || !canViewSessionGroup(group, userId)) {
+      if (!(await canAccessPrivateEndpoint(req, endpoint))) {
         res.writeHead(403).end("Forbidden");
         return;
       }
@@ -191,6 +205,7 @@ export class EndpointProxyService {
         .catch(() => {});
     }, endpointProxyRequestTimeoutMs());
     const pending: PendingHttp = {
+      runtimeId: runtime.key,
       endpointId: endpoint.id,
       trafficEntryId,
       trafficWrite,
@@ -221,9 +236,13 @@ export class EndpointProxyService {
     }
   }
 
-  resolveHttpResponse(requestId: string, response: { status: number; headers: Record<string, string | string[]>; bodyBase64?: string }) {
+  resolveHttpResponse(
+    requestId: string,
+    response: { status: number; headers: Record<string, string | string[]>; bodyBase64?: string },
+    sourceRuntimeId: string,
+  ) {
     const pending = this.pendingHttp.get(requestId);
-    if (!pending) return;
+    if (!pending || pending.runtimeId !== sourceRuntimeId) return;
     this.pendingHttp.delete(requestId);
     clearTimeout(pending.timer);
     const body = response.bodyBase64 ? Buffer.from(response.bodyBase64, "base64") : Buffer.alloc(0);
@@ -253,9 +272,9 @@ export class EndpointProxyService {
       .catch(() => {});
   }
 
-  resolveHttpError(requestId: string, error: string) {
+  resolveHttpError(requestId: string, error: string, sourceRuntimeId: string) {
     const pending = this.pendingHttp.get(requestId);
-    if (!pending) return;
+    if (!pending || pending.runtimeId !== sourceRuntimeId) return;
     this.pendingHttp.delete(requestId);
     clearTimeout(pending.timer);
     pending.response.writeHead(502).end(error);
@@ -292,20 +311,13 @@ export class EndpointProxyService {
       client.close();
       return;
     }
-    if (endpoint.accessMode === "private") {
-      const userId = authenticatedUserId(req);
-      if (!userId) {
-        client.close();
-        return;
-      }
-      const group = await prisma.sessionGroup.findFirst({
-        where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
-        select: { visibility: true, ownerUserId: true },
-      });
-      if (!group || !canViewSessionGroup(group, userId)) {
-        client.close();
-        return;
-      }
+    if (endpoint.accessMode === "private" && !(await canAccessPrivateEndpoint(req, endpoint))) {
+      client.close();
+      return;
+    }
+    if (endpoint.expiresAt && endpoint.expiresAt <= new Date()) {
+      client.close();
+      return;
     }
     const process = await prisma.sessionApplicationProcess.findUnique({
       where: {
@@ -373,16 +385,16 @@ export class EndpointProxyService {
 
   resolveWebSocketOpened(_requestId: string) {}
 
-  resolveWebSocketData(requestId: string, dataBase64: string) {
+  resolveWebSocketData(requestId: string, dataBase64: string, sourceRuntimeId: string) {
     const pending = this.pendingWs.get(requestId);
-    if (!pending) return;
+    if (!pending || pending.runtimeId !== sourceRuntimeId) return;
     const data = Buffer.from(dataBase64, "base64");
     if (pending.client.readyState === pending.client.OPEN) pending.client.send(data);
   }
 
-  resolveWebSocketClosed(requestId: string) {
+  resolveWebSocketClosed(requestId: string, sourceRuntimeId: string) {
     const pending = this.pendingWs.get(requestId);
-    if (!pending) return;
+    if (!pending || pending.runtimeId !== sourceRuntimeId) return;
     this.pendingWs.delete(requestId);
     pending.client.close();
   }
