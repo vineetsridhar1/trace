@@ -431,6 +431,7 @@ export function SessionInput({
         onRemove={handleRemoveImage}
         onOpenAttachment={handleOpenAttachment}
       />
+      {isActive && <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />}
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>
@@ -523,7 +524,6 @@ export function SessionInput({
         )}
       </div>
 
-      {isActive && <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />}
       <SessionInputOptions
         sessionId={sessionId}
         mode={mode}
