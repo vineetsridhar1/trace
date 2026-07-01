@@ -86,6 +86,7 @@ enum CodingTool {
   custom
   pi
   antigravity
+  cursor_composer
 }
 
 enum ChatType {

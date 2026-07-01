@@ -7,6 +7,7 @@ import {
   getModelsForTool,
   isSupportedModel,
   isSupportedReasoningEffort,
+  resolveCursorComposerModel,
 } from "../src/models.js";
 
 describe("model catalog", () => {
@@ -81,6 +82,35 @@ describe("model catalog", () => {
     ]);
     expect(getModelProviderForModel("pi", "openai-codex/gpt-5.5")?.value).toBe(
       "openai-codex",
+    );
+  });
+});
+
+describe("resolveCursorComposerModel", () => {
+  it("passes auto through and ignores the level", () => {
+    expect(resolveCursorComposerModel("auto", "high")).toBe("auto");
+    expect(resolveCursorComposerModel(undefined, "high")).toBeUndefined();
+  });
+
+  it("folds the thinking level into Claude model ids", () => {
+    expect(resolveCursorComposerModel("opus-4.8", "low")).toBe("claude-opus-4-8-thinking-low");
+    expect(resolveCursorComposerModel("opus-4.8", "max")).toBe("claude-opus-4-8-thinking-max");
+    expect(resolveCursorComposerModel("sonnet-5", "high")).toBe("claude-sonnet-5-thinking-high");
+  });
+
+  it("maps GPT-5.5 levels and clamps xhigh/max to extra-high", () => {
+    expect(resolveCursorComposerModel("gpt-5.5", "low")).toBe("gpt-5.5-low");
+    expect(resolveCursorComposerModel("gpt-5.5", "high")).toBe("gpt-5.5-high");
+    expect(resolveCursorComposerModel("gpt-5.5", "xhigh")).toBe("gpt-5.5-extra-high");
+    expect(resolveCursorComposerModel("gpt-5.5", "max")).toBe("gpt-5.5-extra-high");
+  });
+
+  it("defaults to medium when the level is missing or foreign", () => {
+    expect(resolveCursorComposerModel("opus-4.8", undefined)).toBe(
+      "claude-opus-4-8-thinking-medium",
+    );
+    expect(resolveCursorComposerModel("opus-4.8", "auto")).toBe(
+      "claude-opus-4-8-thinking-medium",
     );
   });
 });

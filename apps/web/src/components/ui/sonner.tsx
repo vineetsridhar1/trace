@@ -31,6 +31,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
       icons={icons}
       style={toasterStyle}
       closeButton
+      // Toasts render at top-right, overlapping the Electron title-bar drag
+      // region, which would swallow clicks on the close/action buttons. Opt the
+      // toast (and its children) out of the drag region so they stay clickable.
+      toastOptions={{ className: "app-region-no-drag" }}
       {...props}
     />
   );

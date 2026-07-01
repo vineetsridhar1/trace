@@ -23,7 +23,7 @@ export function validateStartSessionRequest(body: unknown): StartSessionRequest 
     runtimeTokenScope: requireLiteral(value.runtimeTokenScope, "session", "runtimeTokenScope"),
     bridgeUrl: requireString(value.bridgeUrl, "bridgeUrl"),
     repo,
-    tool: requireOneOf(value.tool, ["claude_code", "codex", "pi"], "tool"),
+    tool: requireOneOf(value.tool, ["claude_code", "codex", "cursor_composer", "pi"], "tool"),
     model: value.model === null ? null : requireString(value.model, "model"),
     reasoningEffort:
       value.reasoningEffort === null || value.reasoningEffort === undefined
