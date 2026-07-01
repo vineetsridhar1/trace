@@ -2031,6 +2031,16 @@ export class SessionService {
       const runtime = sessionRouter.getRuntime(conn.runtimeInstanceId, params.organizationId);
       if (runtime) {
         const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
+        runtimeDebug("resolveBinding tool-support check", {
+          sessionId: params.sessionId,
+          tool: params.tool,
+          runtimeInstanceId: conn.runtimeInstanceId,
+          runtimeId: runtime.id,
+          runtimeLabel: runtime.label,
+          supportedTools: runtime.supportedTools,
+          supportsTool,
+          allowToolFallback: params.allowToolFallback,
+        });
         if (!supportsTool) {
           if (!params.allowToolFallback) {
             throw new ToolNotInstalledError(
