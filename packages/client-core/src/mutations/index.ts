@@ -660,6 +660,7 @@ export const UPDATE_SESSION_DEFAULTS_MUTATION = gql`
       defaultSessionModel
       defaultSessionReasoningEffort
       autoArchiveMergedSessions
+      enableClaudeInChrome
     }
   }
 `;

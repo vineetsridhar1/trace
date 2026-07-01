@@ -34,6 +34,7 @@ type SessionDefaultsPatch = Pick<
   | "defaultSessionModel"
   | "defaultSessionReasoningEffort"
   | "autoArchiveMergedSessions"
+  | "enableClaudeInChrome"
 >;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -87,6 +88,7 @@ export function SessionDefaultsSheetContent() {
   const selectedModel = user?.defaultSessionModel ?? null;
   const selectedReasoningEffort = user?.defaultSessionReasoningEffort ?? null;
   const autoArchiveMergedSessions = user?.autoArchiveMergedSessions ?? true;
+  const enableClaudeInChrome = user?.enableClaudeInChrome ?? false;
   const effectiveTool = selectedTool ?? "claude_code";
   const [pending, setPending] = useState(false);
 
@@ -105,6 +107,7 @@ export function SessionDefaultsSheetContent() {
     model?: string | null;
     reasoningEffort?: string | null;
     autoArchiveMergedSessions?: boolean;
+    enableClaudeInChrome?: boolean;
   }) {
     if (pending) return;
     setPending(true);
@@ -261,6 +264,27 @@ export function SessionDefaultsSheetContent() {
             }
             onPress={() => void handleSave({ autoArchiveMergedSessions: option.value })}
             haptic={autoArchiveMergedSessions === option.value ? "none" : "selection"}
+            separator={index < options.length - 1}
+            style={pending ? styles.disabledRow : undefined}
+          />
+        ))}
+      </Section>
+
+      <Section title="Claude in Chrome">
+        {[
+          { value: true, label: "Enabled" },
+          { value: false, label: "Disabled" },
+        ].map((option, index, options) => (
+          <ListRow
+            key={String(option.value)}
+            title={option.label}
+            trailing={
+              enableClaudeInChrome === option.value ? (
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+              ) : undefined
+            }
+            onPress={() => void handleSave({ enableClaudeInChrome: option.value })}
+            haptic={enableClaudeInChrome === option.value ? "none" : "selection"}
             separator={index < options.length - 1}
             style={pending ? styles.disabledRow : undefined}
           />

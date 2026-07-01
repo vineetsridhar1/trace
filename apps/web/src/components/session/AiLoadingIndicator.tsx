@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { TraceLoader } from "../ui/trace-loader";
 
 interface AiLoadingIndicatorProps {
@@ -35,11 +36,17 @@ export function AiLoadingIndicator({ model, startedAt }: AiLoadingIndicatorProps
   };
 
   return (
-    <div className="mt-2 flex h-7 items-center gap-1.5">
-      <TraceLoader size={14} showLabel={false} />
+    <motion.div
+      initial={{ height: 0, opacity: 0, y: -4 }}
+      animate={{ height: 28, opacity: 1, y: 0 }}
+      exit={{ height: 0, opacity: 0, y: -4, marginBottom: 0 }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      className="mb-2 flex items-center gap-1.5 overflow-hidden"
+    >
+      <TraceLoader size={14} showLabel={false} className="text-white" />
       <span className="text-[11px] text-muted-foreground">
         {model} is working • {formatTime(elapsed)}
       </span>
-    </div>
+    </motion.div>
   );
 }

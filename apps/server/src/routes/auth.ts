@@ -842,6 +842,7 @@ router.get("/auth/me", async (req: Request, res: Response) => {
         defaultSessionModel: true,
         defaultSessionReasoningEffort: true,
         autoArchiveMergedSessions: true,
+        enableClaudeInChrome: true,
         orgMemberships: {
           select: {
             organizationId: true,

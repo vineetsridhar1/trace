@@ -364,6 +364,7 @@ model User {
   defaultSessionModel           String?
   defaultSessionReasoningEffort String?
   autoArchiveMergedSessions      Boolean      @default(true)
+  enableClaudeInChrome           Boolean      @default(false)
 
   orgMemberships    OrgMember[]
   mobilePairingTokens MobilePairingToken[] @relation("MobilePairingTokenOwner")

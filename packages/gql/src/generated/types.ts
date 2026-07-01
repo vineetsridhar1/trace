@@ -2319,6 +2319,7 @@ export type UpdateRepoInput = {
 
 export type UpdateSessionDefaultsInput = {
   autoArchiveMergedSessions?: InputMaybe<Scalars["Boolean"]["input"]>;
+  enableClaudeInChrome?: InputMaybe<Scalars["Boolean"]["input"]>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   tool?: InputMaybe<CodingTool>;
@@ -2340,6 +2341,7 @@ export type User = {
   defaultSessionReasoningEffort?: Maybe<Scalars["String"]["output"]>;
   defaultSessionTool?: Maybe<CodingTool>;
   email: Scalars["String"]["output"];
+  enableClaudeInChrome: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   organizations: Array<OrgMember>;
