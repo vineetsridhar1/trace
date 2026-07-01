@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
 import path from "path";
-import { execFile, execFileSync } from "child_process";
+import { execFile } from "child_process";
 import crypto from "crypto";
 import { promisify } from "util";
 import type {
@@ -44,6 +44,7 @@ import {
   CodexAdapter,
   CursorComposerAdapter,
   PiAdapter,
+  resolveExecutable,
 } from "@trace/shared/adapters";
 import {
   ensureRepo,
@@ -61,12 +62,7 @@ const BRIDGE_PROTOCOL_VERSION = 1;
 const AGENT_VERSION = "0.1.0";
 
 function hasExecutable(command: string): boolean {
-  try {
-    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 2_000 });
-    return true;
-  } catch {
-    return false;
-  }
+  return resolveExecutable(command) !== null;
 }
 
 async function inspectGitCheckpoint(

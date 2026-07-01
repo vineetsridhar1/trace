@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
 import path from "path";
-import { execFile, execFileSync } from "child_process";
+import { execFile } from "child_process";
 import crypto from "crypto";
 import { promisify } from "util";
 import type {
@@ -47,6 +47,7 @@ import {
   CodexAdapter,
   CursorComposerAdapter,
   PiAdapter,
+  resolveExecutable,
 } from "@trace/shared/adapters";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
@@ -94,13 +95,14 @@ const detectedExecutables = new Set<string>();
 
 function hasExecutable(command: string): boolean {
   if (detectedExecutables.has(command)) return true;
-  try {
-    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 5_000 });
+  // Resolve against PATH + common install dirs instead of executing the binary:
+  // GUI-launched processes often have a narrower PATH than the user's shell, and
+  // executing `--version` is fragile (slow cold starts, non-interactive hangs).
+  if (resolveExecutable(command) !== null) {
     detectedExecutables.add(command);
     return true;
-  } catch {
-    return false;
   }
+  return false;
 }
 
 async function inspectGitCheckpoint(
