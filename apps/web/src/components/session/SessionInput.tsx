@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 import {
   isSessionPreparing,
   isSessionRuntimeStartingUp,
@@ -431,7 +432,15 @@ export function SessionInput({
         onRemove={handleRemoveImage}
         onOpenAttachment={handleOpenAttachment}
       />
-      {isActive && <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />}
+      <AnimatePresence initial={false}>
+        {isActive && (
+          <AiLoadingIndicator
+            key="ai-loading-indicator"
+            model={displayModel}
+            startedAt={lastUserMessageAt}
+          />
+        )}
+      </AnimatePresence>
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>
