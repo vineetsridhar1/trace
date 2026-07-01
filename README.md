@@ -77,6 +77,7 @@ check in from your phone.
 - You want to review branches, files, terminals, and checkpoints from one place.
 - You want mobile access for checking progress and responding while away from your desk.
 - You want a pluggable runtime layer instead of hardcoding one coding tool or host.
+- You want a shared event log that keeps humans and agents oriented together.
 
 <br/>
 
