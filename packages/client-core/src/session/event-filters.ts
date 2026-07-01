@@ -25,6 +25,8 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "session_runtime_connected",
   "session_runtime_start_failed",
   "session_runtime_start_timed_out",
+  "session_runtime_stopping",
+  "session_runtime_stopped",
   "recovery_requested",
   "recovery_failed",
   "tool_session_recovered",
