@@ -31,6 +31,7 @@ const CODING_TOOLS = new Set<CodingTool>([
   "custom",
   "pi",
   "antigravity",
+  "cursor_composer",
 ]);
 
 type LocalBridgeAuth = {
