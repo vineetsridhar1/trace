@@ -46,8 +46,39 @@ const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
   { value: "auto", label: "Auto" },
   { value: "gpt-5.5", label: "GPT-5.5" },
   { value: "opus-4.8", label: "Opus 4.8" },
-  { value: "sonnet-4.8", label: "Sonnet 4.8" },
+  { value: "sonnet-5", label: "Sonnet 5" },
 ];
+
+// Cursor encodes the thinking level in the model id (e.g. gpt-5.5-high,
+// claude-opus-4-8-thinking-high) rather than accepting a separate flag, so the
+// effort selector maps to those id suffixes in resolveCursorComposerModel.
+const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra high" },
+  { value: "max", label: "Max" },
+];
+
+/**
+ * Compose the concrete Cursor model id from the selected family + thinking level.
+ * `auto` ignores the level. GPT-5.5 has no "max"/"xhigh" tiers, so both clamp to
+ * its top "extra-high"; Claude families expose the level as a thinking variant.
+ */
+export function resolveCursorComposerModel(
+  model: string | undefined,
+  effort: string | undefined,
+): string | undefined {
+  if (!model || model === "auto") return model ?? undefined;
+  const level = effort ?? "medium";
+  if (model === "gpt-5.5") {
+    const gptLevel = level === "xhigh" || level === "max" ? "extra-high" : level;
+    return `gpt-5.5-${gptLevel}`;
+  }
+  if (model === "opus-4.8") return `claude-opus-4-8-thinking-${level}`;
+  if (model === "sonnet-5") return `claude-sonnet-5-thinking-${level}`;
+  return model;
+}
 
 const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
   {
@@ -97,6 +128,7 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
   {
     claude_code: CLAUDE_CODE_REASONING_EFFORTS,
     codex: CODEX_REASONING_EFFORTS,
+    cursor_composer: CURSOR_COMPOSER_REASONING_EFFORTS,
     pi: CODEX_REASONING_EFFORTS,
   };
 
@@ -110,6 +142,7 @@ const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "auto",
   codex: "medium",
+  cursor_composer: "medium",
   pi: "medium",
 };
 

@@ -190,6 +190,7 @@ export {
   getDefaultReasoningEffort,
   getReasoningEffortLabel,
   isSupportedReasoningEffort,
+  resolveCursorComposerModel,
 } from "./models.js";
 export type { CodingToolCli } from "./coding-tools.js";
 export { CODING_TOOL_CLIS, getCodingToolCli } from "./coding-tools.js";

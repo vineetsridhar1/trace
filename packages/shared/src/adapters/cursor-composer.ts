@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
+import { resolveCursorComposerModel } from "../models.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
@@ -47,6 +48,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     onComplete,
     interactionMode,
     model,
+    reasoningEffort,
     toolSessionId,
   }: RunOptions) {
     this.resultEmitted = false;
@@ -56,8 +58,11 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     }
 
     const args = ["-p", "--output-format", "stream-json", "--force"];
-    if (model) {
-      args.push("--model", model);
+    // Cursor encodes the thinking level into the model id (e.g.
+    // claude-opus-4-8-thinking-high), so fold the effort in here.
+    const resolvedModel = resolveCursorComposerModel(model, reasoningEffort);
+    if (resolvedModel) {
+      args.push("--model", resolvedModel);
     }
     if (interactionMode === "plan" || interactionMode === "ask") {
       args.push("--mode", interactionMode);
