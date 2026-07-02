@@ -73,6 +73,23 @@ describe("ProvisionedRuntimeAdapter", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("defaults deprovisionPolicy instead of rejecting missing/invalid values", async () => {
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.validateConfig({
+        startUrl: provisionedConfig.startUrl,
+        stopUrl: provisionedConfig.stopUrl,
+        statusUrl: provisionedConfig.statusUrl,
+        auth: provisionedConfig.auth,
+        startupTimeoutSeconds: provisionedConfig.startupTimeoutSeconds,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      adapter.validateConfig({ ...provisionedConfig, deprovisionPolicy: "never" }),
+    ).resolves.toBeUndefined();
+  });
+
   it("allows Pi in provisioned runtime tool capabilities", async () => {
     const adapter = new ProvisionedRuntimeAdapter();
 
