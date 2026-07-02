@@ -6,5 +6,9 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../../packages/shared" }, { "path": "../../packages/gql" }]
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/gql" },
+    { "path": "../mcp" }
+  ]
 }

@@ -525,6 +525,9 @@ async function main() {
   log("building shared package");
   await runCommand("build:shared", ["build:shared"], sharedEnv);
 
+  log("building MCP package");
+  await runCommand("build:mcp", ["--filter", "@trace/mcp", "build"], sharedEnv);
+
   log("starting local Prisma dev server");
   const databaseUrl = await ensurePrismaDev();
   const serverEnv = await migrateAndSeed(databaseUrl);

@@ -1,0 +1,38 @@
+{
+  "name": "@trace/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server for Trace — the shared AI coding cockpit. Observe and drive AI coding sessions over Trace's GraphQL API.",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "bin": {
+    "trace-mcp": "dist/index.js"
+  },
+  "exports": {
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "start": "node dist/index.js",
+    "lint": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

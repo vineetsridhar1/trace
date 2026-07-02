@@ -35,7 +35,9 @@ const EXTERNAL_LOCAL_MODE_AUTH_ERROR =
 
 type SessionTokenPayload = {
   userId: string;
-  tokenType?: "session";
+  organizationId?: string;
+  channelId?: string;
+  tokenType?: "session" | "trace_agent";
 };
 
 type BridgeAuthTokenPayload = {
@@ -48,6 +50,9 @@ type BridgeAuthTokenPayload = {
 type SessionAuthSubject = {
   kind: "session";
   userId: string;
+  organizationId?: string;
+  channelId?: string;
+  actorType?: "user" | "agent";
 };
 
 export type AccessTokenAuthSubject = SessionAuthSubject | MobileAuthSubject;
@@ -212,6 +217,9 @@ export async function authenticateAccessToken(
     return {
       kind: "session",
       userId: payload.userId,
+      ...(payload.organizationId ? { organizationId: payload.organizationId } : {}),
+      ...(payload.channelId ? { channelId: payload.channelId } : {}),
+      actorType: payload.tokenType === "trace_agent" ? "agent" : "user",
     };
   }
 
@@ -322,6 +330,9 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
   ) {
     throw new AuthenticationError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
   }
+  const sessionOrganizationId =
+    authSubject.kind === "session" ? authSubject.organizationId : undefined;
+  const actorType = authSubject.kind === "session" ? (authSubject.actorType ?? "user") : "user";
 
   const user = await prisma.user.findUnique({
     where: { id: authSubject.userId },
@@ -344,12 +355,16 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
-  } else if (input.requestedOrgId) {
-    const membership = await resolveOrgMembership(user.id, input.requestedOrgId);
+  } else if (input.requestedOrgId ?? sessionOrganizationId) {
+    const requestedOrganizationId = input.requestedOrgId ?? sessionOrganizationId;
+    if (!requestedOrganizationId) {
+      throw new AuthenticationError("Not a member of this organization");
+    }
+    const membership = await resolveOrgMembership(user.id, requestedOrganizationId);
     if (!membership) {
       throw new AuthenticationError("Not a member of this organization");
     }
-    organizationId = input.requestedOrgId;
+    organizationId = requestedOrganizationId;
     role = membership.role;
   } else {
     const firstMembership = await getFirstOrgMembership(user.id);
@@ -368,7 +383,7 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
     organizationId,
     clientSource: input.clientSource,
     role,
-    actorType: "user",
+    actorType,
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),
     sessionGroupLoader: createSessionGroupLoader(),
