@@ -65,6 +65,7 @@ COPY --from=build /app/apps/mcp/dist/ apps/mcp/dist/
 COPY --from=build /app/apps/server/dist/ apps/server/dist/
 COPY --from=build /app/apps/server/prisma/ apps/server/prisma/
 COPY --from=build /app/apps/web/dist/ apps/web/dist/
+COPY --from=build /app/apps/web/serve.mjs apps/web/serve.mjs
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh

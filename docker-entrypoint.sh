@@ -15,7 +15,7 @@ case "$ROLE" in
     ;;
   web)
     echo "[trace] Serving frontend on port 3000..."
-    exec serve /app/apps/web/dist --single --listen 3000 --no-clipboard
+    exec node /app/apps/web/serve.mjs
     ;;
   *)
     echo "[trace] ERROR: Unknown ROLE '$ROLE'. Use: backend, web"
