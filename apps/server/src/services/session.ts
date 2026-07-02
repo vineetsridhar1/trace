@@ -18,6 +18,7 @@ import {
 } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
+import { repoApplicationConfigService } from "./repo-application-config.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionApplicationService } from "./session-applications.js";
@@ -1194,6 +1195,15 @@ export class SessionService {
 
     void (async () => {
       const environment = params.environment ?? (await this.resolveProvisioningEnvironment(params));
+      let runtimeProfile: string | undefined;
+      if (params.repo?.id) {
+        const repoRecord = await prisma.repo.findUnique({
+          where: { id: params.repo.id },
+          select: { setupConfig: true },
+        });
+        runtimeProfile =
+          repoApplicationConfigService.parseRuntimeProfile(repoRecord?.setupConfig) ?? undefined;
+      }
       let slug = params.slug ?? undefined;
       if (!slug && params.sessionGroupId && params.repo?.id) {
         const runtimeUsedSlugs = await this.loadRuntimeWorkspaceSlugs({
@@ -1228,6 +1238,7 @@ export class SessionService {
               defaultBranch: params.repo.defaultBranch,
             }
           : null,
+        runtimeProfile,
         branch: params.branch ?? undefined,
         checkpointSha: params.checkpointSha ?? undefined,
         createdById: params.createdById,

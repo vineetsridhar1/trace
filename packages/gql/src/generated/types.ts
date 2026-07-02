@@ -1700,6 +1700,7 @@ export type Repo = {
   name: Scalars["String"]["output"];
   projects: Array<Project>;
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
+  runtimeProfile?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
 };
@@ -2283,6 +2284,11 @@ export type UpdateRepoInput = {
   applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+  /**
+   * Named launcher runtime profile for cloud sessions on this repo (e.g. a
+   * larger image/resources preset). Empty string clears the profile.
+   */
+  runtimeProfile?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateSessionDefaultsInput = {

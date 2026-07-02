@@ -18,6 +18,7 @@ const EMPTY_APPLICATION_CONFIG: RepoApplicationConfig = {
 };
 
 const ID_RE = /^[a-z0-9_-]+$/;
+const RUNTIME_PROFILE_RE = /^[a-z0-9][a-z0-9-]*$/;
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HTTP_PROTOCOLS = new Set(["http"]);
 
@@ -202,6 +203,31 @@ export class RepoApplicationConfigService {
       ...root,
       applications: this.normalize(applicationConfig),
     } as Prisma.InputJsonValue;
+  }
+
+  parseRuntimeProfile(setupConfig: unknown): string | null {
+    const root = this.parseSetupConfig(setupConfig);
+    const profile = root.runtimeProfile;
+    return typeof profile === "string" && profile ? profile : null;
+  }
+
+  /** Empty string clears the profile; the launcher falls back to its default runtime. */
+  mergeRuntimeProfileIntoSetupConfig(
+    existingSetupConfig: unknown,
+    runtimeProfile: string,
+  ): Prisma.InputJsonValue {
+    const root = this.parseSetupConfig(existingSetupConfig);
+    const trimmed = runtimeProfile.trim();
+    if (!trimmed) {
+      const { runtimeProfile: _cleared, ...rest } = root;
+      return rest as Prisma.InputJsonValue;
+    }
+    if (!RUNTIME_PROFILE_RE.test(trimmed)) {
+      throw new ValidationError(
+        "Runtime profile must use lowercase letters, numbers, or hyphens",
+      );
+    }
+    return { ...root, runtimeProfile: trimmed } as Prisma.InputJsonValue;
   }
 }
 

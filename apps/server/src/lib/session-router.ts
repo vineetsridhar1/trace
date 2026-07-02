@@ -134,6 +134,8 @@ export interface SessionAdapterCreateOptions {
   model?: string;
   reasoningEffort?: string;
   repo?: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
+  /** Named launcher runtime profile from the repo's setup config. */
+  runtimeProfile?: string;
   branch?: string;
   checkpointSha?: string;
   createdById: string;
@@ -1945,6 +1947,7 @@ export class SessionRouter {
           model: options.model,
           reasoningEffort: options.reasoningEffort,
           repo: options.repo,
+          runtimeProfile: options.runtimeProfile,
           branch: options.branch,
           checkpointSha: options.checkpointSha,
           readOnly: options.readOnly,
@@ -2267,6 +2270,7 @@ export class SessionRouter {
           tool: true,
           model: true,
           reasoningEffort: true,
+          repo: { select: { setupConfig: true } },
         },
       });
       const conn = connectionRecord(session.connection);
@@ -2279,6 +2283,7 @@ export class SessionRouter {
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
+        runtimeProfile: runtimeProfileFromSetupConfig(session.repo?.setupConfig),
       });
       const runtimeId =
         startResult.runtimeInstanceId ??
@@ -2288,6 +2293,14 @@ export class SessionRouter {
 
     return this.send(sessionId, { type: command, sessionId });
   }
+}
+
+function runtimeProfileFromSetupConfig(setupConfig: unknown): string | undefined {
+  if (!setupConfig || typeof setupConfig !== "object" || Array.isArray(setupConfig)) {
+    return undefined;
+  }
+  const profile = (setupConfig as Record<string, unknown>).runtimeProfile;
+  return typeof profile === "string" && profile ? profile : undefined;
 }
 
 export const sessionRouter = new SessionRouter();
