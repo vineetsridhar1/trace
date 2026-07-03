@@ -144,6 +144,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@trace/bridge-host':
+        specifier: workspace:*
+        version: link:../../packages/bridge-host
       '@trace/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -637,6 +640,31 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)
+
+  packages/bridge-host:
+    dependencies:
+      '@trace/shared':
+        specifier: workspace:*
+        version: link:../shared
+      node-pty:
+        specifier: ^1.1.0
+        version: 1.1.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.5.2
+        version: 24.12.0
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(msw@2.12.10(@types/node@24.12.0)(typescript@5.9.3))(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/client-core:
     dependencies:

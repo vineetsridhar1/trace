@@ -30,8 +30,8 @@ import {
   getRepoHookStatus,
   installOrRepairRepoHooks,
   installOrRepairRepoHooksBestEffort,
-} from "./repo-hooks.js";
-import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
+  ensureHookRunnerEntrypoint,
+} from "@trace/bridge-host";
 import { getGitInfo } from "./git-info.js";
 import { createLocalProjectOnDisk } from "./local-project.js";
 import { hydrateLoginShellPath } from "./shell-path.js";
@@ -343,7 +343,7 @@ app.whenReady().then(() => {
 
   ensureHookRunnerEntrypoint({
     electronBinaryPath: process.execPath,
-    runnerScriptPath: path.join(__dirname, "hook-runner.js"),
+    runnerScriptPath: require.resolve("@trace/bridge-host/hook-runner"),
   });
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
