@@ -13,6 +13,8 @@ import {
   type PendingAuthorization,
 } from "../lib/oauth/store.js";
 
+const DEFAULT_CALLBACK_PATH = "/oauth/github/callback";
+
 function redirectWithError(
   res: Response,
   pending: PendingAuthorization,
@@ -26,6 +28,11 @@ function redirectWithError(
   res.redirect(url.toString());
 }
 
+function callbackPaths(): string[] {
+  const configuredPath = new URL(githubCallbackUrl()).pathname;
+  return Array.from(new Set([DEFAULT_CALLBACK_PATH, configuredPath]));
+}
+
 /**
  * GitHub web-flow callback for the MCP OAuth authorization endpoint. GitHub
  * redirects here after the user authorizes; we resolve the Trace user, mint a
@@ -34,7 +41,7 @@ function redirectWithError(
 export function createOAuthGithubRouter(): RouterType {
   const router: RouterType = Router();
 
-  router.get("/oauth/github/callback", async (req: Request, res: Response) => {
+  router.get(callbackPaths(), async (req: Request, res: Response) => {
     const code = typeof req.query.code === "string" ? req.query.code : "";
     const state = typeof req.query.state === "string" ? req.query.state : "";
 
