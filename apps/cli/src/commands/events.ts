@@ -43,12 +43,15 @@ async function resolveTailSubscription(
   field: string;
   clientTypes: string[] | null;
 }> {
+  // The schema declares `types` on orgEvents/channelEvents/chatEvents but only
+  // the chatEvents resolver filters server-side today, so the CLI also filters
+  // client-side (defense in depth; harmless once the server honors the arg).
   if (!scope) {
     return {
       document: ORG_EVENTS_TAIL_SUBSCRIPTION,
       variables: { organizationId: orgId, types },
       field: "orgEvents",
-      clientTypes: null,
+      clientTypes: types ?? null,
     };
   }
   const [scopeType, ...rest] = scope.split(":");
@@ -58,7 +61,6 @@ async function resolveTailSubscription(
   }
   switch (scopeType) {
     case "session":
-      // sessionEvents has no server-side types argument; filter client-side.
       return {
         document: SESSION_EVENTS_SUBSCRIPTION,
         variables: { sessionId: scopeId, organizationId: orgId },
@@ -73,7 +75,7 @@ async function resolveTailSubscription(
         document: CHANNEL_EVENTS_SUBSCRIPTION,
         variables: { channelId, organizationId: orgId, types },
         field: "channelEvents",
-        clientTypes: null,
+        clientTypes: types ?? null,
       };
     }
     case "chat":
@@ -81,7 +83,7 @@ async function resolveTailSubscription(
         document: CHAT_EVENTS_SUBSCRIPTION,
         variables: { chatId: scopeId, types },
         field: "chatEvents",
-        clientTypes: null,
+        clientTypes: types ?? null,
       };
     default:
       throw new Error(`Unknown scope type "${scopeType}". Valid: session, channel, chat.`);

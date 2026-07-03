@@ -121,7 +121,7 @@ async function followChannel(
       }
       const event = (result.data as { channelEvents?: Event } | undefined)?.channelEvents;
       const payload = asJsonObject(event?.payload);
-      if (!event || typeof payload?.text !== "string") return;
+      if (!event || event.eventType !== "message_sent" || typeof payload?.text !== "string") return;
       const message: ChannelMessageItem = {
         id: typeof payload.messageId === "string" ? payload.messageId : event.id,
         text: payload.text,
