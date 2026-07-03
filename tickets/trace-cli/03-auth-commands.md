@@ -29,11 +29,11 @@ Owns plan lines:
 ## Completion requirements
 
 - [ ] Device-flow login obtains and stores a working token against a GitHub-OAuth server
-- [ ] `--local` login works against `pnpm dev:local`
-- [ ] `whoami` prints user + active org; `--json` shape is stable
-- [ ] `org switch` persists, and subsequent commands send the new org header
-- [ ] `logout` clears credentials and subsequent commands fail with the login hint
-- [ ] Poll loop respects `interval`, backs off on `slow_down`, and terminates on `denied`/`expired`
+- [x] `--local` login works against `pnpm dev:local`
+- [x] `whoami` prints user + active org; `--json` shape is stable
+- [x] `org switch` persists, and subsequent commands send the new org header
+- [x] `logout` clears credentials and subsequent commands fail with the login hint
+- [x] Poll loop respects `interval`, backs off on `slow_down`, and terminates on `denied`/`expired`
 
 ## Implementation notes
 
