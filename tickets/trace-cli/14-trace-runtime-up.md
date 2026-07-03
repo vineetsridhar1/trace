@@ -33,12 +33,13 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `trace runtime up` appears as a connected local runtime (`myBridgeRuntimes` / bridge access UI)
-- [ ] A session created from web/nvim against this runtime runs end to end: `prepare` → `workspace_ready` → `run` → streamed output
+- [x] `trace runtime up` appears as a connected local runtime (`myBridgeRuntimes` / bridge access UI)
+- [x] A session created from web/nvim against this runtime runs end to end: `prepare` → `workspace_ready` → `run` → streamed output
 - [ ] Terminals attach and multiplex against CLI-hosted sessions
-- [ ] Token refresh keeps the runtime connected across bridge-token expiry and server restarts
-- [ ] SIGINT with active sessions warns and cleans up worktree/process state correctly
-- [ ] Sessions execute with no Electron app installed
+  - The terminal machinery is byte-identical to desktop's (ticket 13 diff review); a live attach through the web terminal relay remains for a human run
+- [x] Token refresh keeps the runtime connected across bridge-token expiry and server restarts
+- [x] SIGINT with active sessions warns and cleans up worktree/process state correctly
+- [x] Sessions execute with no Electron app installed
 
 ## Implementation notes
 

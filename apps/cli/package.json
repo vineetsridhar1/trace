@@ -18,6 +18,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@trace/bridge-host": "workspace:*",
     "@trace/client-core": "workspace:*",
     "@trace/gql": "workspace:*",
     "@trace/shared": "workspace:*",

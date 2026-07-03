@@ -18,6 +18,7 @@ export {
   getRepoConfig,
   getRepoPath,
   readConfig,
+  removeRepoPath,
   saveRepoPath,
   setBridgeLabel,
   setRepoGitHooksEnabled,

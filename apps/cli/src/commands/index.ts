@@ -4,6 +4,7 @@ import { registerChannelCommands } from "./channels.js";
 import { registerDaemonCommand } from "./daemon.js";
 import { registerEventCommands } from "./events.js";
 import { registerOrgCommands } from "./org.js";
+import { registerRuntimeCommands } from "./runtime.js";
 import { registerSendCommand } from "./send.js";
 import { registerSessionCommands } from "./sessions.js";
 import { registerTicketCommands } from "./tickets.js";
@@ -18,6 +19,7 @@ const commandGroups: ReadonlyArray<(program: Command) => void> = [
   registerTicketCommands,
   registerSendCommand,
   registerEventCommands,
+  registerRuntimeCommands,
   registerDaemonCommand,
 ];
 

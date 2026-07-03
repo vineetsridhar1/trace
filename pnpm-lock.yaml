@@ -79,6 +79,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@trace/bridge-host':
+        specifier: workspace:*
+        version: link:../../packages/bridge-host
       '@trace/client-core':
         specifier: workspace:*
         version: link:../../packages/client-core

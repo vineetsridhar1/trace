@@ -618,6 +618,10 @@ export class BridgeClient implements IBridgeClient {
     return payload.token;
   }
 
+  getActiveSessionIds(): string[] {
+    return [...this.activeRuns.keys()];
+  }
+
   getStatus(): BridgeConnectionStatus {
     return this.status;
   }

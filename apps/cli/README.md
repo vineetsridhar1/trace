@@ -89,9 +89,23 @@ notification with payload shapes — is [PROTOCOL.md](./PROTOCOL.md).
 
 ## Local runtime hosting (`trace runtime up`)
 
-Not shipped yet (milestone M3, tickets 13–14): sessions currently execute on
-runtimes hosted by the desktop app or the cloud. `trace runtime up` will let
-this machine host sessions with no Electron involved.
+Host sessions on this machine with no Electron involved:
+
+```sh
+trace runtime add-repo ~/code/myrepo      # match by origin URL, or pass --repo <name>
+trace runtime list-repos
+trace runtime up [--label "my laptop"]    # stays resident; Ctrl-C to stop
+trace runtime remove-repo <path-or-name>  # unregisters only; never deletes files
+```
+
+`runtime up` registers this machine over `/bridge` (powered by
+`packages/bridge-host`, the same host the desktop app uses): sessions created
+against a registered repo get a Trace-managed worktree, the coding tool runs
+locally, and output streams back through events. Supported tools are detected
+from your `$PATH` (claude, codex, pi). The registry lives in
+`~/.config/trace/runtime.json`; bridge tokens auto-refresh and the connection
+survives server restarts. SIGINT warns about active sessions and keeps
+worktrees on disk.
 
 ## Distribution
 

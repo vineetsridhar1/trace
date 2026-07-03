@@ -199,6 +199,14 @@ export function setRepoGitHooksEnabled(
   });
 }
 
+export function removeRepoPath(repoId: string): Promise<boolean> {
+  return mutate((config) => {
+    if (!config.repos[repoId]) return false;
+    delete config.repos[repoId];
+    return true;
+  });
+}
+
 export function setRepoLinkedCheckout(
   repoId: string,
   linkedCheckout: LinkedCheckoutConfig | null,

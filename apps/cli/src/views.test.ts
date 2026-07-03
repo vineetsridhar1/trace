@@ -135,3 +135,14 @@ describe("findByName", () => {
     expect(() => findByName(channels, "zzz", "channel")).toThrow(/general/);
   });
 });
+
+describe("normalizeRemoteUrl", () => {
+  it("matches https, ssh, and .git-suffixed remotes", async () => {
+    const { normalizeRemoteUrl } = await import("./commands/runtime.js");
+    const expected = "github.com/acme/widgets";
+    expect(normalizeRemoteUrl("https://github.com/acme/widgets.git")).toBe(expected);
+    expect(normalizeRemoteUrl("git@github.com:acme/widgets.git")).toBe(expected);
+    expect(normalizeRemoteUrl("ssh://github.com/acme/widgets/")).toBe(expected);
+    expect(normalizeRemoteUrl("HTTPS://GitHub.com/Acme/Widgets")).toBe(expected);
+  });
+});
