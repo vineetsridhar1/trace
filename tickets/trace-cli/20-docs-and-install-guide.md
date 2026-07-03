@@ -34,11 +34,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] A fresh user on a clean machine reaches a working nvim session view following only the READMEs
-- [ ] Every daemon method/notification is documented with its payload shape and the protocol version policy
-- [ ] LunarVim install snippet verified in an actual LunarVim config
-- [ ] Keymap and `setup()` references match the implementation (spot-checked, not aspirational)
-- [ ] Distribution decision recorded with revisit triggers
+- [x] A fresh user on a clean machine reaches a working nvim session view following only the READMEs
+- [x] Every daemon method/notification is documented with its payload shape and the protocol version policy
+- [x] LunarVim install snippet verified in an actual LunarVim config
+- [x] Keymap and `setup()` references match the implementation (spot-checked, not aspirational)
+- [x] Distribution decision recorded with revisit triggers
 
 ## Implementation notes
 

@@ -198,3 +198,13 @@ Hosted Trace requires an organization invite. Self-hosted Trace can create and
 manage its own organizations once authentication and the database are configured.
 For local development, `pnpm dev:local` is still the fastest path because it
 uses local auth and creates the local workspace services for you.
+
+## Terminal and Neovim clients
+
+Trace also runs in the terminal and inside Neovim:
+
+- **`trace` CLI** — login, session/channel/ticket commands, event tailing, and
+  the editor daemon. See [apps/cli/README.md](../apps/cli/README.md) and the
+  daemon protocol reference in [apps/cli/PROTOCOL.md](../apps/cli/PROTOCOL.md).
+- **trace.nvim** — session switcher, transcripts, prompting, and channels in
+  Neovim. See [apps/nvim/README.md](../apps/nvim/README.md).
