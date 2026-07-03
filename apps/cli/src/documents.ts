@@ -54,16 +54,24 @@ export const SESSION_EVENTS_SUBSCRIPTION = gql`
 `;
 
 export const CHANNEL_EVENTS_SUBSCRIPTION = gql`
-  subscription ChannelEventsLive($channelId: ID!, $organizationId: ID!) {
-    channelEvents(channelId: $channelId, organizationId: $organizationId) {
+  subscription ChannelEventsLive($channelId: ID!, $organizationId: ID!, $types: [String!]) {
+    channelEvents(channelId: $channelId, organizationId: $organizationId, types: $types) {
       ${EVENT_FIELDS}
     }
   }
 `;
 
 export const CHAT_EVENTS_SUBSCRIPTION = gql`
-  subscription ChatEventsLive($chatId: ID!) {
-    chatEvents(chatId: $chatId) {
+  subscription ChatEventsLive($chatId: ID!, $types: [String!]) {
+    chatEvents(chatId: $chatId, types: $types) {
+      ${EVENT_FIELDS}
+    }
+  }
+`;
+
+export const ORG_EVENTS_TAIL_SUBSCRIPTION = gql`
+  subscription OrgEventsTail($organizationId: ID!, $types: [String!]) {
+    orgEvents(organizationId: $organizationId, types: $types) {
       ${EVENT_FIELDS}
     }
   }
