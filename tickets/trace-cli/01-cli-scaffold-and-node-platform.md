@@ -33,12 +33,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `pnpm --filter @trace/cli build` produces a runnable `trace` bin
-- [ ] `trace --help` lists command groups; `trace --version` prints the package version
-- [ ] Config and credential files are created lazily; `credentials.json` has `0600` permissions
-- [ ] `TRACE_SERVER` / `TRACE_TOKEN` take precedence over files
-- [ ] The platform implementation type-checks against client-core's `Platform` interface
-- [ ] `react` is not in the CLI dependency graph
+- [x] `pnpm --filter @trace/cli build` produces a runnable `trace` bin
+- [x] `trace --help` lists command groups; `trace --version` prints the package version
+- [x] Config and credential files are created lazily; `credentials.json` has `0600` permissions
+- [x] `TRACE_SERVER` / `TRACE_TOKEN` take precedence over files
+- [x] The platform implementation type-checks against client-core's `Platform` interface
+- [x] `react` is not in the CLI dependency graph
 
 ## Implementation notes
 
