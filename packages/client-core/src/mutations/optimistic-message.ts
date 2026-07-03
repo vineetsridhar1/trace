@@ -60,7 +60,12 @@ function sweepStalePending(): void {
   }
 }
 
-setInterval(sweepStalePending, PENDING_TTL_MS);
+const sweepTimer = setInterval(sweepStalePending, PENDING_TTL_MS);
+// In Node (CLI/daemon) a referenced interval pins the event loop and prevents
+// one-shot processes from exiting; browsers return a number, which skips this.
+if (typeof sweepTimer === "object" && "unref" in sweepTimer) {
+  sweepTimer.unref();
+}
 
 function enqueue<T>(map: Map<string, T[]>, key: string, item: T): void {
   const queue = map.get(key);

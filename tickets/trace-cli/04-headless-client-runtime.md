@@ -30,11 +30,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] A one-shot command can boot the runtime, run a query, and exit cleanly (no hung socket)
-- [ ] Events arriving on `orgEvents` upsert entities via `handleOrgEvent`
-- [ ] Killing and restarting the server mid-run produces `reconnecting` → `connected` transitions and the subscription resumes
-- [ ] All imports come from `@trace/client-core/headless`; `react` remains absent from the dependency graph
-- [ ] No code path updates the store from a mutation result
+- [x] A one-shot command can boot the runtime, run a query, and exit cleanly (no hung socket)
+- [x] Events arriving on `orgEvents` upsert entities via `handleOrgEvent`
+- [x] Killing and restarting the server mid-run produces `reconnecting` → `connected` transitions and the subscription resumes
+- [x] All imports come from `@trace/client-core/headless`; `react` remains absent from the dependency graph
+- [x] No code path updates the store from a mutation result
 
 ## Implementation notes
 
