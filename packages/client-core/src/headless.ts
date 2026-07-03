@@ -31,6 +31,7 @@ export type {
 export { buildSessionNodes } from "./session/nodes.js";
 
 export {
+  isOptimisticEvent,
   optimisticallyInsertSessionMessage,
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,

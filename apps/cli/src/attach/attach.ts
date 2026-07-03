@@ -6,6 +6,7 @@ import {
   eventScopeKey,
   handleSessionEvent,
   optimisticallyInsertSessionMessage,
+  reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
 } from "@trace/client-core/headless";
 import { SESSION_EVENTS_SUBSCRIPTION, SESSION_TIMELINE_QUERY } from "../documents.js";
@@ -132,9 +133,10 @@ export async function attachToSession(options: AttachOptions): Promise<void> {
         }
         const optimistic = optimisticallyInsertSessionMessage(resolved.id, text);
         try {
-          await sendSessionPrompt(runtime.gql, resolved.id, text, {
+          const sent = await sendSessionPrompt(runtime.gql, resolved.id, text, {
             clientMutationId: optimistic.clientMutationId,
           });
+          reconcileOptimisticSessionMessage(resolved.id, optimistic.eventId, sent.id);
         } catch (error) {
           removeOptimisticSessionMessage(resolved.id, optimistic.eventId);
           throw error;

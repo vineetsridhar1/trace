@@ -88,6 +88,44 @@ class FakeRuntime implements ClientRuntime {
         HydrateSessions: { sessions: fixtures.sessions },
         HydrateTickets: { tickets: [] },
         HydrateRepos: { repos: [{ id: "repo-1", name: "trace" }] },
+        SessionTimeline: {
+          sessionTimeline: {
+            hasOlder: true,
+            items: [
+              {
+                kind: "event",
+                event: {
+                  id: "evt-old-2",
+                  scopeType: "session",
+                  scopeId: "sess-1",
+                  eventType: "message_sent",
+                  payload: { text: "older prompt" },
+                  actor: { type: "user", id: "user-1", name: "Alex", avatarUrl: null },
+                  parentId: null,
+                  timestamp: "2026-07-02T09:00:01.000Z",
+                  metadata: null,
+                },
+              },
+              {
+                kind: "event",
+                event: {
+                  id: "evt-old-1",
+                  scopeType: "session",
+                  scopeId: "sess-1",
+                  eventType: "session_output",
+                  payload: {
+                    type: "assistant",
+                    message: { content: [{ type: "text", text: "older answer" }] },
+                  },
+                  actor: { type: "agent", id: "agent-1", name: null, avatarUrl: null },
+                  parentId: null,
+                  timestamp: "2026-07-02T09:00:02.000Z",
+                  metadata: null,
+                },
+              },
+            ],
+          },
+        },
       };
       return { toPromise: () => Promise.resolve({ data: data[opName(doc)] ?? {} }) };
     },
@@ -431,13 +469,16 @@ describe("snapshot, scope, and action methods", () => {
     });
     expect(ack.result).toEqual({ accepted: true, id: "evt-ack", queued: false });
 
+    // Only the optimistic echo lands in the store — never the mutation result.
     const scopeKey = "session:sess-1";
-    expect(useEntityStore.getState().eventsByScope[scopeKey]).toBeUndefined();
+    const afterAck = Object.keys(useEntityStore.getState().eventsByScope[scopeKey] ?? {});
+    expect(afterAck).toHaveLength(1);
+    expect(afterAck[0]).toMatch(/^optimistic:/);
 
     const subscription = harness.runtime().subscriptions.find((s) => s.op === "SessionEventsLive");
     subscription?.push({
       sessionEvents: {
-        id: "evt-real",
+        id: "evt-ack",
         scopeType: "session",
         scopeId: "sess-1",
         eventType: "message_sent",
@@ -448,8 +489,9 @@ describe("snapshot, scope, and action methods", () => {
         metadata: null,
       },
     });
+    // The canonical event replaced the optimistic one — no duplicates.
     expect(Object.keys(useEntityStore.getState().eventsByScope[scopeKey] ?? {})).toEqual([
-      "evt-real",
+      "evt-ack",
     ]);
 
     const created = await harness.request(4, "session/create", { repoId: "repo-1" });
@@ -492,5 +534,128 @@ describe("snapshot, scope, and action methods", () => {
     const same = await harness.request(5, "org/switch", { org: "org-2" });
     expect(same.result).toEqual({ org: { id: "org-2", name: "Org Two" } });
     expect(harness.state.runtimes).toHaveLength(2);
+  });
+});
+
+describe("normalized deltas", () => {
+  async function initializedHarness() {
+    const harness = startHarness();
+    harness.send(init);
+    await harness.frames();
+    return harness;
+  }
+
+  function pushSessionEvent(
+    harness: Harness,
+    overrides: Partial<Record<string, unknown>> & { id: string },
+  ) {
+    const subscription = harness.runtime().subscriptions.find((s) => s.op === "SessionEventsLive");
+    subscription?.push({
+      sessionEvents: {
+        scopeType: "session",
+        scopeId: "sess-1",
+        eventType: "message_sent",
+        payload: { text: "hello" },
+        actor: { type: "user", id: "user-1", name: "Alex", avatarUrl: null },
+        parentId: null,
+        timestamp: "2026-07-03T12:00:00.000Z",
+        metadata: null,
+        ...overrides,
+      },
+    });
+  }
+
+  it("streams session/nodes appends and reconciliation patches for subscribed scopes", async () => {
+    const harness = await initializedHarness();
+    await harness.request(2, "scope/subscribe", { scopeType: "session", scopeId: "sess-1" });
+
+    // Live event → appended user_prompt node.
+    pushSessionEvent(harness, { id: "evt-1", payload: { text: "first prompt" } });
+    let frames = await harness.frames();
+    const appendFrame = frames.find((f) => f.method === "session/nodes");
+    expect(appendFrame?.params).toMatchObject({
+      sessionId: "sess-1",
+      appended: [{ id: "evt-1", kind: "user_prompt", text: "first prompt", optimistic: false }],
+      patched: [],
+      count: 1,
+    });
+
+    // Optimistic prompt → immediate append with optimistic:true (notification
+    // lands in the same frame batch as the ack).
+    harness.send({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "session/prompt",
+      params: { sessionId: "sess-1", text: "do the thing" },
+    });
+    frames = await harness.frames();
+    expect(frames.find((f) => f.id === 3)?.result).toMatchObject({
+      accepted: true,
+      queued: false,
+    });
+    const optimisticAppend = frames.find(
+      (f) =>
+        f.method === "session/nodes" &&
+        (((f.params as Record<string, unknown>).appended as unknown[]) ?? []).length > 0,
+    );
+    expect(optimisticAppend?.params).toMatchObject({
+      appended: [{ kind: "user_prompt", text: "do the thing", optimistic: true }],
+      count: 2,
+    });
+
+    // Canonical event (the acked id) patches the optimistic node in place.
+    pushSessionEvent(harness, { id: "evt-ack", payload: { text: "do the thing" } });
+    frames = await harness.frames();
+    const patchFrame = frames.find((f) => f.method === "session/nodes");
+    expect(patchFrame?.params).toMatchObject({
+      patched: [{ index: 1, node: { id: "evt-ack", optimistic: false } }],
+      appended: [],
+      count: 2,
+    });
+  });
+
+  it("emits no session/nodes for unsubscribed scopes", async () => {
+    const harness = await initializedHarness();
+    await harness.request(2, "scope/subscribe", { scopeType: "session", scopeId: "sess-1" });
+    await harness.request(3, "scope/unsubscribe", { scopeType: "session", scopeId: "sess-1" });
+
+    pushSessionEvent(harness, { id: "evt-quiet" });
+    const frames = await harness.frames();
+    expect(frames.filter((f) => f.method === "session/nodes")).toEqual([]);
+  });
+
+  it("emits entity/upserted and badge/update when events change the store", async () => {
+    const harness = await initializedHarness();
+    // Simulate what an org event would do: flip the hydrated session out of needs_input.
+    useEntityStore.getState().patch("sessions", "sess-1", { sessionStatus: "in_progress" });
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const frames = await harness.frames();
+    const upserted = frames.find((f) => f.method === "entity/upserted");
+    expect(upserted?.params).toMatchObject({
+      type: "sessions",
+      entity: { id: "sess-1", sessionStatus: "in_progress" },
+    });
+    const badge = frames.find((f) => f.method === "badge/update");
+    expect(badge?.params).toEqual({ needsInputCount: 0, mentionCount: 0 });
+  });
+
+  it("pages session/timeline backward without touching live state", async () => {
+    const harness = await initializedHarness();
+    const response = await harness.request(2, "session/timeline", {
+      sessionId: "sess-1",
+      beforeEventId: "evt-1",
+      limit: 50,
+    });
+    expect(response.result).toMatchObject({
+      sessionId: "sess-1",
+      hasOlder: true,
+      oldestEventId: "evt-old-2",
+      nodes: [
+        { id: "evt-old-2", kind: "user_prompt", text: "older prompt" },
+        { id: "evt-old-1:0", kind: "agent_text", text: "older answer" },
+      ],
+    });
+    expect(useEntityStore.getState().eventsByScope["session:sess-1"]).toBeUndefined();
   });
 });

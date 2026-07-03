@@ -1,7 +1,14 @@
 import { format } from "node:util";
 import type { Readable, Writable } from "node:stream";
 import type { Event } from "@trace/gql";
-import { handleOrgEvent, handleSessionEvent } from "@trace/client-core/headless";
+import {
+  HIDDEN_SESSION_PAYLOAD_TYPES,
+  handleOrgEvent,
+  handleSessionEvent,
+  optimisticallyInsertSessionMessage,
+  reconcileOptimisticSessionMessage,
+  removeOptimisticSessionMessage,
+} from "@trace/client-core/headless";
 import { readCliVersion } from "../version.js";
 import {
   createClientRuntime,
@@ -13,8 +20,17 @@ import {
   CHANNEL_EVENTS_SUBSCRIPTION,
   CHAT_EVENTS_SUBSCRIPTION,
   SESSION_EVENTS_SUBSCRIPTION,
+  SESSION_TIMELINE_QUERY,
 } from "../documents.js";
-import { promptSession, sendToChannel, startNewSession, stopSession } from "../mutations.js";
+import {
+  queueSessionPrompt,
+  sendSessionPrompt,
+  sendToChannel,
+  startNewSession,
+  stopSession,
+} from "../mutations.js";
+import { StoreNotifications } from "./notifications.js";
+import { toProtocolNodes } from "./protocol-nodes.js";
 import { hydrateOrg } from "./hydrate.js";
 import { PROTOCOL_VERSION, RPC_ERROR_CODES, RpcError, RpcServer } from "./rpc.js";
 import { ScopeRegistry } from "./scope-registry.js";
@@ -64,6 +80,7 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
 
   let runtime: ClientRuntime | null = null;
   let scopes: ScopeRegistry | null = null;
+  let notifications: StoreNotifications | null = null;
   let orgId: string | null = null;
   let initialized = false;
   let shuttingDown = false;
@@ -114,7 +131,15 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
         const event = (result.data as Record<string, Event & { id: string }> | undefined)?.[field];
         if (event) handleEvent(event);
       });
-      return () => subscription.unsubscribe();
+      if (scopeType === "session") {
+        notifications?.trackSession(scopeId);
+      }
+      return () => {
+        if (scopeType === "session") {
+          notifications?.untrackSession(scopeId);
+        }
+        subscription.unsubscribe();
+      };
     });
 
   const startRuntime = async (): Promise<void> => {
@@ -139,6 +164,10 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
       throw new RpcError(RPC_ERROR_CODES.UNAUTHENTICATED, "No active organization");
     }
     await hydrateOrg(next, orgId);
+    // The store watcher starts only after hydration so the initial fill never
+    // floods the editor with entity/upserted notifications.
+    notifications = new StoreNotifications(next, rpc);
+    notifications.start();
     scopes = buildScopeRegistry(next, orgId);
   };
 
@@ -146,6 +175,7 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     try {
+      notifications?.stop();
       scopes?.disposeAll();
       await runtime?.dispose();
     } catch (error) {
@@ -255,6 +285,8 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
       // Tear down the old org's world, persist the switch, rebuild.
       scopes?.disposeAll();
       scopes = null;
+      notifications?.stop();
+      notifications = null;
       auth.setActiveOrg(membership.organizationId);
       active.stores.entity.getState().reset();
       await active.dispose();
@@ -287,12 +319,23 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
     const text = requireString(params, "text");
     const active = requireRuntime();
     const session = active.stores.entity.getState().sessions[sessionId];
-    const result = await promptSession(
-      active.gql,
-      { id: sessionId, agentStatus: session?.agentStatus ?? "not_started" },
-      text,
-    );
-    return { accepted: true, id: result.id, queued: result.queued };
+    const agentStatus = session?.agentStatus ?? "not_started";
+    if (agentStatus === "active") {
+      const queued = await queueSessionPrompt(active.gql, sessionId, text);
+      return { accepted: true, id: queued.id, queued: true };
+    }
+    // Optimistic node append now; the canonical event patches it in place.
+    const optimistic = optimisticallyInsertSessionMessage(sessionId, text);
+    try {
+      const sent = await sendSessionPrompt(active.gql, sessionId, text, {
+        clientMutationId: optimistic.clientMutationId,
+      });
+      reconcileOptimisticSessionMessage(sessionId, optimistic.eventId, sent.id);
+      return { accepted: true, id: sent.id, queued: false };
+    } catch (error) {
+      removeOptimisticSessionMessage(sessionId, optimistic.eventId);
+      throw error;
+    }
   });
 
   rpc.register("session/create", async (params) => {
@@ -325,6 +368,50 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
     return { accepted: true, id: message.id };
   });
 
-  // Ticket 12 registers the normalized-delta notifications here.
+  rpc.register("session/timeline", async (params) => {
+    const sessionId = requireString(params, "sessionId");
+    const beforeEventId = optionalString(params, "beforeEventId");
+    const limitRaw = params.limit;
+    const limit = typeof limitRaw === "number" && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
+    const active = requireRuntime();
+    const result = await active.gql
+      .query(SESSION_TIMELINE_QUERY, {
+        organizationId: orgId,
+        sessionId,
+        limit,
+        beforeEventId,
+        excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
+      })
+      .toPromise();
+    if (result.error) {
+      throw new RpcError(RPC_ERROR_CODES.INTERNAL_ERROR, result.error.message);
+    }
+    const timeline = (
+      result.data as
+        | {
+            sessionTimeline?: {
+              hasOlder?: boolean;
+              items?: Array<{ kind: string; event: (Event & { id: string }) | null }>;
+            };
+          }
+        | undefined
+    )?.sessionTimeline;
+    const events = (timeline?.items ?? [])
+      .filter((item) => item.kind === "event" && item.event)
+      .map((item) => item.event as Event & { id: string })
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.id.localeCompare(b.id));
+    // Normalized off to the side — the live store and node trackers are untouched.
+    const nodes = toProtocolNodes(
+      events.map((event) => event.id),
+      Object.fromEntries(events.map((event) => [event.id, event])),
+    );
+    return {
+      sessionId,
+      nodes,
+      hasOlder: timeline?.hasOlder ?? false,
+      oldestEventId: events[0]?.id ?? null,
+    };
+  });
+
   return new Promise(() => {});
 }

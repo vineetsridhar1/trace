@@ -22,14 +22,19 @@ export const SESSION_TIMELINE_QUERY = gql`
     $organizationId: ID!
     $sessionId: ID!
     $limit: Int
+    $before: DateTime
+    $beforeEventId: ID
     $excludePayloadTypes: [String!]
   ) {
     sessionTimeline(
       organizationId: $organizationId
       sessionId: $sessionId
       limit: $limit
+      before: $before
+      beforeEventId: $beforeEventId
       excludePayloadTypes: $excludePayloadTypes
     ) {
+      hasOlder
       items {
         kind
         event {
