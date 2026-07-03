@@ -7,8 +7,8 @@ import {
   messageScopeKey,
   removeEventIdByScope,
   upsertEventIdByScope,
-} from "../stores/entity.js";
-import { useAuthStore } from "../stores/auth.js";
+} from "../stores/entity-store.js";
+import { useAuthStore } from "../stores/auth-store.js";
 import { generateUUID } from "../utils/uuid.js";
 
 type EntityStoreState = {

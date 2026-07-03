@@ -8,7 +8,11 @@ import type {
   ScopeType,
   SessionStatus,
 } from "@trace/gql";
-import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
+import {
+  StoreBatchWriter,
+  type SessionEntity,
+  type SessionGroupEntity,
+} from "../stores/entity-store.js";
 import type { OrgEventUIBindings } from "./ui-bindings.js";
 
 const CONNECTION_EVENT_TYPES = new Set([
