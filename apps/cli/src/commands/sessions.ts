@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import type { AgentStatus, CodingTool, SessionStatus } from "@trace/gql";
+import { attachToSession } from "../attach/attach.js";
 import { resolveServerUrl } from "../config.js";
 import { graphqlRequest } from "../http.js";
 import { promptSession, startNewSession, stopSession, withGqlClient } from "../mutations.js";
@@ -156,6 +157,16 @@ export function registerSessionCommands(program: Command): void {
           ? `Queued prompt for busy session ${session.id} (${result.id})`
           : `Prompted session ${session.id} (event ${result.id})`,
       );
+    });
+
+  sessions
+    .command("attach")
+    .description("Stream a session transcript; stdin lines send prompts; Ctrl-C detaches")
+    .argument("<id>", "session ID or unique prefix")
+    .action(async (idPrefix: string, _opts: unknown, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const serverUrl = resolveServerUrl(globals.server as string | undefined);
+      await attachToSession({ serverUrl, idPrefix, json: Boolean(globals.json) });
     });
 
   sessions

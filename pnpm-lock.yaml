@@ -85,6 +85,9 @@ importers:
       '@trace/gql':
         specifier: workspace:*
         version: link:../../packages/gql
+      '@trace/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@urql/core':
         specifier: ^5.1.1
         version: 5.2.0(graphql@16.13.1)

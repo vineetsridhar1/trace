@@ -107,6 +107,33 @@ export async function startNewSession(
   return data.startSession;
 }
 
+export async function sendSessionPrompt(
+  client: GqlClient,
+  sessionId: string,
+  text: string,
+  options?: { clientMutationId?: string },
+): Promise<{ id: string }> {
+  const data = await runMutation<{ sendSessionMessage: { id: string } }>(
+    client,
+    SEND_SESSION_MESSAGE_MUTATION,
+    { sessionId, text, clientMutationId: options?.clientMutationId },
+  );
+  return data.sendSessionMessage;
+}
+
+export async function queueSessionPrompt(
+  client: GqlClient,
+  sessionId: string,
+  text: string,
+): Promise<{ id: string }> {
+  const data = await runMutation<{ queueSessionMessage: { id: string } }>(
+    client,
+    QUEUE_SESSION_MESSAGE_MUTATION,
+    { sessionId, text },
+  );
+  return data.queueSessionMessage;
+}
+
 /** Mirror the web composer: queue while the agent is busy (`active`),
  *  send otherwise. The service handles pending-runtime provisioning itself. */
 export async function promptSession(
@@ -115,19 +142,11 @@ export async function promptSession(
   text: string,
 ): Promise<{ id: string; queued: boolean }> {
   if (session.agentStatus === "active") {
-    const data = await runMutation<{ queueSessionMessage: { id: string } }>(
-      client,
-      QUEUE_SESSION_MESSAGE_MUTATION,
-      { sessionId: session.id, text },
-    );
-    return { id: data.queueSessionMessage.id, queued: true };
+    const queued = await queueSessionPrompt(client, session.id, text);
+    return { id: queued.id, queued: true };
   }
-  const data = await runMutation<{ sendSessionMessage: { id: string } }>(
-    client,
-    SEND_SESSION_MESSAGE_MUTATION,
-    { sessionId: session.id, text },
-  );
-  return { id: data.sendSessionMessage.id, queued: false };
+  const sent = await sendSessionPrompt(client, session.id, text);
+  return { id: sent.id, queued: false };
 }
 
 export async function stopSession(client: GqlClient, sessionId: string): Promise<{ id: string }> {

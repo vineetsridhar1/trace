@@ -28,12 +28,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Attaching mid-session shows recent history and then streams live output
-- [ ] Prompts sent from stdin appear optimistically and reconcile without duplication
-- [ ] Node kinds (prompt, agent text, tool use, plan, question) render distinguishably
-- [ ] Ctrl-C detaches cleanly without affecting the session
-- [ ] `--json` emits NDJSON nodes only
-- [ ] Pagination: attaching to a long session does not fetch the full history
+- [x] Attaching mid-session shows recent history and then streams live output
+- [x] Prompts sent from stdin appear optimistically and reconcile without duplication
+- [x] Node kinds (prompt, agent text, tool use, plan, question) render distinguishably
+- [x] Ctrl-C detaches cleanly without affecting the session
+- [x] `--json` emits NDJSON nodes only
+- [x] Pagination: attaching to a long session does not fetch the full history
 
 ## Implementation notes
 

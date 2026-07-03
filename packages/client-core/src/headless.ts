@@ -33,7 +33,15 @@ export { buildSessionNodes } from "./session/nodes.js";
 export {
   optimisticallyInsertSessionMessage,
   reconcileOptimisticSessionMessage,
+  removeOptimisticSessionMessage,
 } from "./mutations/optimistic-message.js";
+export type { OptimisticSessionIds } from "./mutations/optimistic-message.js";
+
+export {
+  HIDDEN_SESSION_PAYLOAD_TYPES,
+  HIDDEN_SESSION_PAYLOAD_TYPE_SET,
+} from "./session/event-filters.js";
+export { stripPromptWrapping } from "./session/messages.js";
 
 export {
   QUEUE_SESSION_MESSAGE_MUTATION,
