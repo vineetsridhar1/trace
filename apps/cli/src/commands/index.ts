@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { registerAuthCommands } from "./auth.js";
 import { registerChannelCommands } from "./channels.js";
 import { registerOrgCommands } from "./org.js";
+import { registerSendCommand } from "./send.js";
 import { registerSessionCommands } from "./sessions.js";
 import { registerTicketCommands } from "./tickets.js";
 
@@ -13,6 +14,7 @@ const commandGroups: ReadonlyArray<(program: Command) => void> = [
   registerSessionCommands,
   registerChannelCommands,
   registerTicketCommands,
+  registerSendCommand,
 ];
 
 export function registerCommands(program: Command): void {

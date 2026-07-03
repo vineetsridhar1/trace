@@ -1,4 +1,4 @@
-import type { AgentStatus, SessionStatus, TicketStatus } from "@trace/gql";
+import type { AgentStatus, CodingTool, SessionStatus, TicketStatus } from "@trace/gql";
 import { relativeTime, shortId } from "./output.js";
 
 // Runtime value lists for the schema's type-only enums; `satisfies` keeps them
@@ -17,6 +17,13 @@ export const SESSION_STATUSES = [
   "in_review",
   "merged",
 ] as const satisfies readonly SessionStatus[];
+
+export const CODING_TOOLS = [
+  "claude_code",
+  "codex",
+  "custom",
+  "pi",
+] as const satisfies readonly CodingTool[];
 
 export const TICKET_STATUSES = [
   "backlog",

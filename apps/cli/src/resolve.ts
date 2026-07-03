@@ -64,19 +64,25 @@ export async function resolveRepoByName(
   return findByName(data.repos, name, "repo");
 }
 
+export interface ResolvedSession {
+  id: string;
+  name: string;
+  agentStatus: string;
+}
+
 /** Resolve a session by full ID or unique ID prefix (as printed by `sessions list`). */
 export async function resolveSessionByIdPrefix(
   serverUrl: string,
   orgId: string,
   idPrefix: string,
-): Promise<{ id: string; name: string }> {
-  const data = await graphqlRequest<{ sessions: Array<{ id: string; name: string }> }>(
+): Promise<ResolvedSession> {
+  const data = await graphqlRequest<{ sessions: ResolvedSession[] }>(
     serverUrl,
-    "query($orgId: ID!) { sessions(organizationId: $orgId, filters: { includeArchived: true }) { id name } }",
+    "query($orgId: ID!) { sessions(organizationId: $orgId, filters: { includeArchived: true }) { id name agentStatus } }",
     { orgId },
   );
   const matches = data.sessions.filter((session) => session.id.startsWith(idPrefix));
-  if (matches.length === 1) return matches[0] as { id: string; name: string };
+  if (matches.length === 1) return matches[0] as ResolvedSession;
   if (matches.length > 1) {
     const ids = matches
       .slice(0, 5)

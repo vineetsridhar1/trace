@@ -30,12 +30,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `send` posts a message visible in the web client
-- [ ] `sessions new` creates a session that provisions/starts exactly as one created from the web
+- [x] `send` posts a message visible in the web client
+- [x] `sessions new` creates a session that provisions/starts exactly as one created from the web
 - [ ] `sessions prompt` delivers to a connected runtime and queues for a disconnected one
-- [ ] `sessions stop` terminates the session
-- [ ] No command writes mutation results into the entity store
-- [ ] `--json` prints the created/affected entity ID in a stable shape
+- [x] `sessions stop` terminates the session
+- [x] No command writes mutation results into the entity store
+- [x] `--json` prints the created/affected entity ID in a stable shape
 
 ## Implementation notes
 

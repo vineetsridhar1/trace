@@ -34,3 +34,10 @@ export {
   optimisticallyInsertSessionMessage,
   reconcileOptimisticSessionMessage,
 } from "./mutations/optimistic-message.js";
+
+export {
+  QUEUE_SESSION_MESSAGE_MUTATION,
+  SEND_SESSION_MESSAGE_MUTATION,
+  START_SESSION_MUTATION,
+  TERMINATE_SESSION_MUTATION,
+} from "./mutations/index.js";
