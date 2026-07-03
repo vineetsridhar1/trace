@@ -103,7 +103,8 @@ during initial hydration.
 
 ### badge/update `{ needsInputCount, mentionCount }`
 
-Debounced (100ms); emitted only when the counts change. `needsInputCount` is
+Emitted once with the post-hydration baseline right after `initialize`, then
+debounced (100ms) and only when the counts change. `needsInputCount` is
 sessions with `sessionStatus == "needs_input"`; `mentionCount` is unresolved
 inbox items.
 

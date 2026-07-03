@@ -13,8 +13,23 @@ local leave_autocmd = nil
 local starting = false
 local waiting = {}
 
+local function map_key(lhs, fn, desc)
+  if type(lhs) == "string" and lhs ~= "" then
+    vim.keymap.set("n", lhs, fn, { desc = desc, silent = true })
+  end
+end
+
 function M.setup(opts)
   config.setup(opts)
+  local keymaps = config.options.keymaps
+  if keymaps.enabled then
+    map_key(keymaps.switcher, function()
+      M.command({ fargs = { "sessions" } })
+    end, "Trace: session switcher")
+    map_key(keymaps.next_needs_input, function()
+      M.command({ fargs = { "next" } })
+    end, "Trace: jump to needs-input session")
+  end
 end
 
 local function log_line(line)
@@ -126,6 +141,7 @@ function M.ensure_started(callback)
     M.initialized = true
     respawn_attempts = 0
     state.on_initialized(result)
+    require("trace.ui.notify").attach()
     -- Seed snapshots so the switcher has data immediately.
     rpc.request("sessions/list", {}, function(list_err, list_result)
       if not list_err and list_result then
@@ -141,8 +157,25 @@ function M.ensure_started(callback)
   end)
 end
 
+--- Open a session view. Ticket 17 supplies the implementation; the switcher
+--- and jump mapping route through here.
+function M.open_session(session_id)
+  local ok, session_view = pcall(require, "trace.ui.session")
+  if ok and session_view.open then
+    session_view.open(session_id)
+    return
+  end
+  vim.notify("trace.nvim: session view not available yet (ticket 17)", vim.log.levels.WARN)
+end
+
 -- :Trace subcommands; UI tickets register theirs here.
 M.subcommands = {
+  sessions = function()
+    require("trace.ui.switcher").open()
+  end,
+  next = function()
+    require("trace.ui.switcher").jump_needs_input()
+  end,
   status = function()
     local state = require("trace.state")
     local rpc = require("trace.rpc")

@@ -9,6 +9,12 @@ M.defaults = {
   protocol_version = 1,
   -- Respawn attempts after unexpected daemon death before going inert.
   respawn_max_attempts = 3,
+  -- Status glyphs: "unicode" or "ascii" (for unpatched fonts / plain terminals).
+  icons = "unicode",
+  notify = {
+    -- vim.notify when a session enters needs_input or mentions arrive.
+    enabled = true,
+  },
   keymaps = {
     enabled = true,
     switcher = "<leader>tt",

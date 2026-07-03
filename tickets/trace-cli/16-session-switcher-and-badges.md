@@ -30,12 +30,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Switcher opens in <50ms from state (no RPC round-trip on open after hydration)
-- [ ] Sorting and glyphs correct across all status combinations
-- [ ] Jump mapping opens the right session and cycles through multiple needs-input sessions
-- [ ] Statusline component updates live as badges change
-- [ ] Notifications fire once per transition (debounced), with opt-out respected
-- [ ] All keymaps configurable/disable-able via `setup()`
+- [x] Switcher opens in <50ms from state (no RPC round-trip on open after hydration)
+- [x] Sorting and glyphs correct across all status combinations
+- [x] Jump mapping opens the right session and cycles through multiple needs-input sessions
+- [x] Statusline component updates live as badges change
+- [x] Notifications fire once per transition (debounced), with opt-out respected
+- [x] All keymaps configurable/disable-able via `setup()`
 
 ## Implementation notes
 

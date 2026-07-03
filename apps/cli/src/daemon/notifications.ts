@@ -37,6 +37,10 @@ export class StoreNotifications {
       this.flushSessionNodes(state);
       this.scheduleBadgeUpdate(state);
     });
+    // Post-hydration baseline so editors always know the current counts.
+    const badge = this.computeBadge(this.runtime.stores.entity.getState());
+    this.lastBadge = JSON.stringify(badge);
+    this.notifier.notify("badge/update", badge);
   }
 
   stop(): void {

@@ -241,9 +241,11 @@ function startHarness(overrides: { startError?: Error; slowStartMs?: number } = 
         .map((line) => JSON.parse(line) as Record<string, unknown>);
     },
     nextFrame: async () => {
+      // First *response* frame — notifications (no id key) interleave freely.
       const all = await harness.frames();
-      if (all.length === 0) throw new Error("no frame received");
-      return all[0] as Record<string, unknown>;
+      const response = all.find((frame) => Object.prototype.hasOwnProperty.call(frame, "id"));
+      if (!response) throw new Error("no response frame received");
+      return response;
     },
     request: async (id, method, params) => {
       harness.send({ jsonrpc: "2.0", id, method, params });
@@ -302,7 +304,7 @@ describe("daemon rpc core", () => {
 
     harness.send({ jsonrpc: "2.0", id: 2, method: "shutdown" });
     const shutdownFrames = await harness.frames();
-    expect(shutdownFrames[0]).toMatchObject({ id: 2, result: null });
+    expect(shutdownFrames.find((f) => f.id === 2)).toMatchObject({ id: 2, result: null });
     expect(harness.exits).toEqual([0]);
     expect(harness.runtime().disposed).toBe(true);
   });
@@ -380,9 +382,10 @@ describe("daemon rpc core", () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 150));
     const frames = await harness.frames();
-    expect(frames.map((frame) => frame.id)).toEqual([1, 2]);
-    expect(frames[0]?.error).toBeUndefined();
-    expect(frames[1]).toMatchObject({ id: 2, result: null });
+    const responses = frames.filter((frame) => Object.prototype.hasOwnProperty.call(frame, "id"));
+    expect(responses.map((frame) => frame.id)).toEqual([1, 2]);
+    expect(responses[0]?.error).toBeUndefined();
+    expect(responses[1]).toMatchObject({ id: 2, result: null });
     expect(harness.exits).toEqual([0]);
   });
 
