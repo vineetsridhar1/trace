@@ -19,6 +19,9 @@ local function send_split(obj)
   io.flush()
 end
 
+local scope_subs = 0
+local scope_unsubs = 0
+
 local INIT_RESULT = {
   cliVersion = "stub",
   protocolVersion = 1,
@@ -60,6 +63,84 @@ for line in io.lines() do
       send({ jsonrpc = "2.0", id = frame.id, result = { sessions = {} } })
     elseif frame.method == "channels/list" then
       send({ jsonrpc = "2.0", id = frame.id, result = { channels = {} } })
+    elseif frame.method == "scope/subscribe" then
+      scope_subs = scope_subs + 1
+      send({ jsonrpc = "2.0", id = frame.id, result = { count = 1 } })
+    elseif frame.method == "scope/unsubscribe" then
+      scope_unsubs = scope_unsubs + 1
+      send({ jsonrpc = "2.0", id = frame.id, result = { count = 0 } })
+    elseif frame.method == "scope/stats" then
+      send({
+        jsonrpc = "2.0",
+        id = frame.id,
+        result = { subscribes = scope_subs, unsubscribes = scope_unsubs },
+      })
+    elseif frame.method == "session/timeline" then
+      local before = frame.params and frame.params.beforeEventId
+      if before == nil or before == vim.NIL then
+        send({
+          jsonrpc = "2.0",
+          id = frame.id,
+          result = {
+            sessionId = frame.params.sessionId,
+            hasOlder = true,
+            oldestEventId = "evt-old-1",
+            nodes = {
+              {
+                id = "evt-old-1",
+                kind = "user_prompt",
+                text = "seed prompt",
+                timestamp = "t1",
+                optimistic = false,
+              },
+              { id = "evt-old-2", kind = "agent_text", text = "seed answer", timestamp = "t2" },
+            },
+          },
+        })
+      else
+        send({
+          jsonrpc = "2.0",
+          id = frame.id,
+          result = {
+            sessionId = frame.params.sessionId,
+            hasOlder = false,
+            oldestEventId = "evt-ancient",
+            nodes = {
+              {
+                id = "evt-ancient",
+                kind = "user_prompt",
+                text = "ancient prompt",
+                timestamp = "t0",
+                optimistic = false,
+              },
+            },
+          },
+        })
+      end
+    elseif frame.method == "session/prompt" then
+      send({ jsonrpc = "2.0", id = frame.id, result = { accepted = true, id = "evt-ack", queued = false } })
+      send({
+        jsonrpc = "2.0",
+        method = "session/nodes",
+        params = {
+          sessionId = frame.params.sessionId,
+          patched = {},
+          appended = {
+            {
+              id = "optimistic:tmp",
+              kind = "user_prompt",
+              text = frame.params.text,
+              timestamp = "tnow",
+              optimistic = true,
+            },
+          },
+          count = 1,
+        },
+      })
+    elseif frame.method == "emit" then
+      -- Test hook: replay an arbitrary notification through the real pipeline.
+      send({ jsonrpc = "2.0", id = frame.id, result = vim.NIL })
+      send({ jsonrpc = "2.0", method = frame.params.method, params = frame.params.params })
     elseif frame.method == "die" then
       os.exit(7)
     elseif frame.method == "shutdown" then

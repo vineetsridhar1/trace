@@ -32,12 +32,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Transcript matches the web session view's content for the same session (same nodes, same order)
-- [ ] Streaming agent output updates in place without flicker or duplicate blocks
-- [ ] Prompt appears optimistically and reconciles without duplication
-- [ ] Open/close drives `scope/subscribe`/`unsubscribe` exactly once each (no leaks across repeated open/close)
-- [ ] Scroll-to-top pagination prepends and preserves the viewport
-- [ ] A long transcript (1000+ nodes) opens and scrolls smoothly
+- [x] Transcript matches the web session view's content for the same session (same nodes, same order)
+- [x] Streaming agent output updates in place without flicker or duplicate blocks
+- [x] Prompt appears optimistically and reconciles without duplication
+- [x] Open/close drives `scope/subscribe`/`unsubscribe` exactly once each (no leaks across repeated open/close)
+- [x] Scroll-to-top pagination prepends and preserves the viewport
+- [x] A long transcript (1000+ nodes) opens and scrolls smoothly
 
 ## Implementation notes
 
