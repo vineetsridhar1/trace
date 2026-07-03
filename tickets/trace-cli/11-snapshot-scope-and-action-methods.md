@@ -27,11 +27,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] After `initialize`, `sessions/list` returns the org's sessions without further round-trips
-- [ ] Subscribe/unsubscribe opens/closes the underlying GraphQL subscription (verify by observing server-side subscription lifecycles or ws frames)
-- [ ] Refcounting: two subscribes + one unsubscribe keeps the subscription alive
-- [ ] Action methods ack immediately and the store updates only when the event arrives
-- [ ] `org/switch` re-hydrates and subsequent snapshots reflect the new org
+- [x] After `initialize`, `sessions/list` returns the org's sessions without further round-trips
+- [x] Subscribe/unsubscribe opens/closes the underlying GraphQL subscription (verify by observing server-side subscription lifecycles or ws frames)
+- [x] Refcounting: two subscribes + one unsubscribe keeps the subscription alive
+- [x] Action methods ack immediately and the store updates only when the event arrives
+- [x] `org/switch` re-hydrates and subsequent snapshots reflect the new org
 
 ## Implementation notes
 

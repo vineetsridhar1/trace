@@ -6,6 +6,15 @@
     "module": "CommonJS",
     "moduleResolution": "node"
   },
-  "include": ["src"],
-  "references": [{ "path": "../../packages/shared" }]
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/bridge-host"
+    }
+  ]
 }

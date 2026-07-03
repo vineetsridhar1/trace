@@ -1,4 +1,4 @@
-import type { SessionEntity, SessionGroupEntity } from "../stores/entity.js";
+import type { SessionEntity, SessionGroupEntity } from "../stores/entity-store.js";
 
 type ChannelRef = { id: string } | null | undefined;
 

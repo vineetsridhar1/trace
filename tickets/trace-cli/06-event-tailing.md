@@ -28,11 +28,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `events tail` streams org events live against `dev:local`
-- [ ] `--scope` and `--types` filter server-side via subscription arguments
-- [ ] `--json` output is strict NDJSON with nothing else on stdout
-- [ ] SIGINT exits cleanly; reconnects resume the stream and are reported on stderr
-- [ ] `channel --follow` appends messages sent from another client in real time
+- [x] `events tail` streams org events live against `dev:local`
+- [x] `--scope` and `--types` filter server-side via subscription arguments
+  - Verified: only the `chatEvents` resolver honors `types` today; `orgEvents`/`channelEvents` declare but ignore it, so the CLI passes the argument through *and* filters client-side (server fix is out of scope per the no-server-changes guardrail)
+- [x] `--json` output is strict NDJSON with nothing else on stdout
+- [x] SIGINT exits cleanly; reconnects resume the stream and are reported on stderr
+- [x] `channel --follow` appends messages sent from another client in real time
 
 ## Implementation notes
 

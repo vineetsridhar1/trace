@@ -27,12 +27,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Driving a session from another client produces a correct `session/nodes` stream (append + patch, no duplicates) for a subscribed daemon
-- [ ] Prompting through the daemon shows the optimistic node immediately and reconciles cleanly
-- [ ] `badge/update` fires when a session enters/leaves `needs_input`
-- [ ] `session/timeline` pages backward without corrupting the live stream
-- [ ] Unsubscribed scopes emit no `session/nodes` traffic
-- [ ] The protocol document specifies every notification and node payload shape
+- [x] Driving a session from another client produces a correct `session/nodes` stream (append + patch, no duplicates) for a subscribed daemon
+- [x] Prompting through the daemon shows the optimistic node immediately and reconciles cleanly
+- [x] `badge/update` fires when a session enters/leaves `needs_input`
+- [x] `session/timeline` pages backward without corrupting the live stream
+- [x] Unsubscribed scopes emit no `session/nodes` traffic
+- [x] The protocol document specifies every notification and node payload shape
 
 ## Implementation notes
 

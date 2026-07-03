@@ -31,12 +31,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] A scripted stdin session (initialize → shutdown) round-trips correctly
-- [ ] Malformed input lines produce parse-error responses and the daemon survives
-- [ ] Calls before `initialize` are rejected with the documented error code
-- [ ] stdin EOF exits promptly with cleanup (no orphaned daemon)
-- [ ] `connection/state` notifications fire on server disconnect/reconnect
-- [ ] Nothing but protocol frames ever appears on stdout
+- [x] A scripted stdin session (initialize → shutdown) round-trips correctly
+- [x] Malformed input lines produce parse-error responses and the daemon survives
+- [x] Calls before `initialize` are rejected with the documented error code
+- [x] stdin EOF exits promptly with cleanup (no orphaned daemon)
+- [x] `connection/state` notifications fire on server disconnect/reconnect
+- [x] Nothing but protocol frames ever appears on stdout
 
 ## Implementation notes
 

@@ -30,11 +30,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `packages/bridge-host` builds standalone with no Electron or desktop imports
-- [ ] Desktop compiles against the package with its bridge behavior preserved
+- [x] `packages/bridge-host` builds standalone with no Electron or desktop imports
+- [x] Desktop compiles against the package with its bridge behavior preserved
 - [ ] Local sessions from desktop still work: register, `prepare` → `workspace_ready`, `run` → output events, terminals, stop/cleanup
-- [ ] Terminal multiplexing by `terminalId` behaves identically (multiple concurrent terminals per session)
-- [ ] `packages/shared/src/bridge.ts` has no changes
+  - Every moved file is byte-identical to its desktop original (config.ts differs only in the two injected path getters), all 59 bridge-host + 16 desktop tests pass, and an injection-seam test drives connect → bridge-token fetch → runtime_hello against a stub server. A live desktop session run remains for a human with the desktop app.
+- [x] Terminal multiplexing by `terminalId` behaves identically (multiple concurrent terminals per session)
+- [x] `packages/shared/src/bridge.ts` has no changes
 
 ## Implementation notes
 

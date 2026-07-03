@@ -32,10 +32,11 @@ Owns plan lines:
 ## Completion requirements
 
 - [ ] `:Trace new` creates and opens a session end to end against a local runtime (desktop bridge or `trace runtime up`)
-- [ ] Tool/branch defaults come from user settings and repo metadata, not hardcoded values
-- [ ] Worktree terminal opens in the correct directory and toggles per session
-- [ ] Non-local / not-ready sessions show the explanatory message instead of a broken terminal
-- [ ] `repos/list` is documented in the protocol doc alongside the other snapshot methods
+  - Verified live against dev:local with a deferred runtime (create → entity/upserted → view opens, defaults applied); execution on a connected local runtime awaits a bridge (ticket 14)
+- [x] Tool/branch defaults come from user settings and repo metadata, not hardcoded values
+- [x] Worktree terminal opens in the correct directory and toggles per session
+- [x] Non-local / not-ready sessions show the explanatory message instead of a broken terminal
+- [x] `repos/list` is documented in the protocol doc alongside the other snapshot methods
 
 ## Implementation notes
 

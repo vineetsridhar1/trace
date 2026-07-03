@@ -35,12 +35,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Plugin loads under plain Neovim >= 0.10 and under LunarVim with a `dir =` local install
-- [ ] `initialize` handshake completes against a real daemon; `:checkhealth trace` reports OK
-- [ ] Handshake/auth failures produce actionable checkhealth output, not errors on startup
-- [ ] Daemon crash triggers respawn with notice; repeated failure degrades gracefully (plugin inert, health explains)
-- [ ] RPC layer survives split/joined stdout chunks (unit-tested with a stub daemon)
-- [ ] No state writes from anywhere except notification/snapshot handlers
+- [x] Plugin loads under plain Neovim >= 0.10 and under LunarVim with a `dir =` local install
+- [x] `initialize` handshake completes against a real daemon; `:checkhealth trace` reports OK
+- [x] Handshake/auth failures produce actionable checkhealth output, not errors on startup
+- [x] Daemon crash triggers respawn with notice; repeated failure degrades gracefully (plugin inert, health explains)
+- [x] RPC layer survives split/joined stdout chunks (unit-tested with a stub daemon)
+- [x] No state writes from anywhere except notification/snapshot handlers
 
 ## Implementation notes
 

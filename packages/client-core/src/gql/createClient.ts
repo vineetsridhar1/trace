@@ -5,7 +5,7 @@ import {
   type Client,
 } from "@urql/core";
 import { createClient as createWSClient } from "graphql-ws";
-import { getAuthHeaders, useAuthStore } from "../stores/auth.js";
+import { getAuthHeaders, useAuthStore } from "../stores/auth-store.js";
 import { getPlatform, type Platform } from "../platform.js";
 
 export interface CreateGqlClientOptions {

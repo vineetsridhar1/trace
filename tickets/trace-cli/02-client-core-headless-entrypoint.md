@@ -32,10 +32,10 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `@trace/client-core/headless` resolves with types from a Node ESM consumer
-- [ ] The headless module graph contains no `react` import (guard test enforces this)
-- [ ] The root entrypoint is unchanged; `apps/web` builds and type-checks with no changes
-- [ ] `apps/mobile` requires no changes
+- [x] `@trace/client-core/headless` resolves with types from a Node ESM consumer
+- [x] The headless module graph contains no `react` import (guard test enforces this)
+- [x] The root entrypoint is unchanged; `apps/web` builds and type-checks with no changes
+- [x] `apps/mobile` requires no changes
 
 ## Implementation notes
 

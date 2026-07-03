@@ -28,11 +28,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] All four commands work against a seeded `pnpm dev:local` org
-- [ ] `--json` output is snapshot-tested and documented
-- [ ] Filters map to server-side query arguments, not client-side filtering, wherever the schema supports it
-- [ ] Name resolution errors list near-matches instead of failing silently
-- [ ] Commands exit promptly (runtime disposed, no hanging socket)
+- [x] All four commands work against a seeded `pnpm dev:local` org
+- [x] `--json` output is snapshot-tested and documented
+- [x] Filters map to server-side query arguments, not client-side filtering, wherever the schema supports it
+- [x] Name resolution errors list near-matches instead of failing silently
+- [x] Commands exit promptly (runtime disposed, no hanging socket)
 
 ## Implementation notes
 
