@@ -272,7 +272,13 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
       cliVersion: readCliVersion(),
       protocolVersion: PROTOCOL_VERSION,
       user: auth.user
-        ? { id: auth.user.id, name: auth.user.name ?? null, email: auth.user.email ?? null }
+        ? {
+            id: auth.user.id,
+            name: auth.user.name ?? null,
+            email: auth.user.email ?? null,
+            defaultSessionTool: auth.user.defaultSessionTool ?? null,
+            defaultSessionModel: auth.user.defaultSessionModel ?? null,
+          }
         : null,
       org: activeOrg ? { id: activeOrg.id, name: activeOrg.name } : null,
       connectionState,

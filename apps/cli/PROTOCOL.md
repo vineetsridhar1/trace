@@ -37,7 +37,7 @@ Boots the client runtime, hydrates the entity store for the active org
 switcher has data immediately), and opens the always-on ambient `orgEvents`
 subscription.
 
-→ `{ cliVersion, protocolVersion, user: { id, name, email } | null, org: { id, name } | null, connectionState }`
+→ `{ cliVersion, protocolVersion, user: { id, name, email, defaultSessionTool, defaultSessionModel } | null, org: { id, name } | null, connectionState }`
 
 ### shutdown
 
@@ -49,7 +49,7 @@ triggers the same path.
 - `sessions/list` → `{ sessions: SessionSnapshot[] }`
 - `channels/list` → `{ channels: [{ id, name, type, memberCount, repo }] }`
 - `tickets/list` → `{ tickets: [{ id, title, status, priority, updatedAt }] }`
-- `repos/list` → `{ repos: [{ id, name }] }`
+- `repos/list` → `{ repos: [{ id, name, defaultBranch }] }`
 - `orgs/list` → `{ orgs: [{ id, name, role, active }] }`
 
 `SessionSnapshot`:

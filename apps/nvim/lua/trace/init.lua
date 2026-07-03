@@ -29,6 +29,9 @@ function M.setup(opts)
     map_key(keymaps.next_needs_input, function()
       M.command({ fargs = { "next" } })
     end, "Trace: jump to needs-input session")
+    map_key(keymaps.worktree_terminal, function()
+      M.command({ fargs = { "worktree" } })
+    end, "Trace: toggle worktree terminal")
   end
 end
 
@@ -175,6 +178,12 @@ M.subcommands = {
   end,
   channels = function()
     require("trace.ui.channel").pick()
+  end,
+  new = function()
+    require("trace.ui.create").start()
+  end,
+  worktree = function()
+    require("trace.ui.worktree").toggle_current()
   end,
   next = function()
     require("trace.ui.switcher").jump_needs_input()

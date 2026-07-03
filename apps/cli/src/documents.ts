@@ -138,6 +138,7 @@ export const HYDRATE_REPOS_QUERY = gql`
     repos(organizationId: $orgId) {
       id
       name
+      defaultBranch
     }
   }
 `;

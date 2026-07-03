@@ -137,6 +137,37 @@ for line in io.lines() do
           count = 1,
         },
       })
+    elseif frame.method == "repos/list" then
+      send({
+        jsonrpc = "2.0",
+        id = frame.id,
+        result = {
+          repos = { { id = "repo-1", name = "trace", defaultBranch = "main" } },
+        },
+      })
+    elseif frame.method == "session/create" then
+      send({
+        jsonrpc = "2.0",
+        id = frame.id,
+        result = { accepted = true, id = "sess-created", sessionGroupId = "group-x" },
+      })
+      send({
+        jsonrpc = "2.0",
+        method = "entity/upserted",
+        params = {
+          type = "sessions",
+          entity = {
+            id = "sess-created",
+            name = frame.params.prompt or "New session",
+            sessionStatus = "in_progress",
+            agentStatus = "not_started",
+            tool = frame.params.tool,
+            branch = frame.params.branch,
+            workdir = vim.NIL,
+            updatedAt = "2026-07-03T12:00:00.000Z",
+          },
+        },
+      })
     elseif frame.method == "channel/messages" then
       local before = frame.params and frame.params.before
       if before == nil or before == vim.NIL then

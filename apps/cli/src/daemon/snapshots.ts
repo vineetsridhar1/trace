@@ -69,5 +69,9 @@ export function ticketSnapshots(state: EntityState) {
 }
 
 export function repoSnapshots(state: EntityState) {
-  return Object.values(state.repos).map((repo) => ({ id: repo.id, name: repo.name }));
+  return Object.values(state.repos).map((repo) => ({
+    id: repo.id,
+    name: repo.name,
+    defaultBranch: repo.defaultBranch ?? null,
+  }));
 }

@@ -85,6 +85,7 @@ end
 
 local views = {} -- session_id -> view
 local handlers_attached = false
+local last_opened = nil
 
 local function buf_set(view, start_line, end_line, lines)
   view_helpers.buf_set(view.buf, start_line, end_line, lines)
@@ -358,6 +359,7 @@ function M.open(session_id)
     end),
   }
   views[session_id] = view
+  last_opened = session_id
   update_winbar(view)
 
   -- Viewport enters: live subscription first, then seed history behind it.
@@ -381,6 +383,18 @@ end
 
 function M.close(session_id)
   close_view(session_id)
+end
+
+--- The session under the cursor (a trace-session buffer), else the most
+--- recently opened session view. Used by the worktree terminal mapping.
+function M.current_session_id()
+  local buf = vim.api.nvim_get_current_buf()
+  for session_id, view in pairs(views) do
+    if view.buf == buf or view.input_buf == buf then
+      return session_id
+    end
+  end
+  return last_opened
 end
 
 --- Test seams.
