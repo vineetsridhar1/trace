@@ -17,6 +17,13 @@ import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
 import { uploadRouter } from "./routes/upload.js";
 import { createMcpRouter } from "./routes/mcp.js";
+import { createOAuthGithubRouter } from "./routes/oauth-github.js";
+import {
+  mcpAuthRouter,
+  getOAuthProtectedResourceMetadataUrl,
+} from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { traceOAuthProvider } from "./lib/oauth/provider.js";
+import { mcpResourceServerUrl, oauthIssuerUrl } from "./lib/oauth/config.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
@@ -206,7 +213,28 @@ async function main() {
   });
   app.use(authRouter);
   app.use(uploadRouter);
-  app.use(createMcpRouter({ loopbackBaseUrl: `http://127.0.0.1:${PORT}` }));
+
+  // MCP OAuth: Trace acts as the authorization server for the hosted /mcp
+  // endpoint. mcpAuthRouter serves discovery metadata, dynamic client
+  // registration, /authorize, /token, and /revoke; the GitHub router handles
+  // the web-flow callback that resolves the Trace user.
+  const mcpResourceUrl = mcpResourceServerUrl();
+  app.use(
+    mcpAuthRouter({
+      provider: traceOAuthProvider,
+      issuerUrl: oauthIssuerUrl(),
+      resourceServerUrl: mcpResourceUrl,
+      resourceName: "Trace MCP",
+    }),
+  );
+  app.use(createOAuthGithubRouter());
+  app.use(
+    createMcpRouter({
+      loopbackBaseUrl: `http://127.0.0.1:${PORT}`,
+      verifier: traceOAuthProvider,
+      resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(mcpResourceUrl),
+    }),
+  );
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });

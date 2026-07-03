@@ -386,6 +386,7 @@ model User {
   channelMemberships   ChannelMember[]
   participants         Participant[]
   apiTokens         ApiToken[]
+  oauthRefreshTokens OAuthRefreshToken[]
   pushTokens        PushToken[]
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
@@ -875,6 +876,38 @@ model ApiToken {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, provider])
+}
+
+// Dynamically-registered OAuth clients (RFC 7591) for the hosted MCP endpoint.
+// One row per MCP client that registers itself; metadata is stored verbatim so
+// the SDK's registration response can be reconstructed faithfully.
+model OAuthClient {
+  id           String   @id
+  clientName   String?
+  redirectUris String[]
+  metadata     Json
+  createdAt    DateTime @default(now())
+
+  refreshTokens OAuthRefreshToken[]
+}
+
+// Long-lived, revocable, rotated refresh tokens for the MCP OAuth flow. Only the
+// SHA-256 hash of the token is stored. Access tokens remain stateless JWTs.
+model OAuthRefreshToken {
+  id             String      @id @default(uuid())
+  tokenHash      String      @unique
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  organizationId String
+  scopes         String[]
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime    @default(now())
+
+  @@index([userId])
+  @@index([clientId])
 }
 
 model PushToken {

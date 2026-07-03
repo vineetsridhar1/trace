@@ -1,16 +1,21 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import type { OAuthTokenVerifier } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import {
   registerObserveTools,
   registerDriveTools,
   StaticTraceClient,
 } from "@trace/mcp/server";
-import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
 
 type McpRouterOptions = {
   /** Loopback base URL the per-request client uses to reach GraphQL / auth. */
   loopbackBaseUrl: string;
+  /** Verifies bearer access tokens (OAuth access tokens and agent/session JWTs). */
+  verifier: OAuthTokenVerifier;
+  /** Protected-resource metadata URL advertised in 401 WWW-Authenticate headers. */
+  resourceMetadataUrl: string;
 };
 
 function jsonRpcError(res: Response, status: number, code: number, message: string): void {
@@ -21,34 +26,40 @@ function jsonRpcError(res: Response, status: number, code: number, message: stri
   });
 }
 
+function readAuthString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 /**
  * Hosted Streamable-HTTP MCP endpoint. Any MCP client (cloud pod, laptop,
  * future local Electron session) connects with a Trace bearer token exactly
- * like any other remote MCP server. Runs stateless: a fresh MCP server and
- * transport are built per request, and tool execution loops back through the
- * server's own `/graphql` so it takes the real auth path.
+ * like any other remote MCP server. `requireBearerAuth` validates the token and
+ * advertises the OAuth resource metadata on 401 so clients can self-authorize.
+ * Runs stateless: a fresh MCP server and transport are built per request, and
+ * tool execution loops back through the server's own `/graphql` so it takes the
+ * real auth path.
  */
 export function createMcpRouter(options: McpRouterOptions): RouterType {
   const router: RouterType = Router();
 
-  router.post("/mcp", async (req: Request, res: Response) => {
-    const token = getRequestToken(req);
-    if (!token) {
+  const bearerAuth = requireBearerAuth({
+    verifier: options.verifier,
+    resourceMetadataUrl: options.resourceMetadataUrl,
+  });
+
+  router.post("/mcp", bearerAuth, async (req: Request, res: Response) => {
+    const auth = req.auth;
+    if (!auth) {
       jsonRpcError(res, 401, -32001, "Missing Trace bearer token");
       return;
     }
 
-    const subject = await authenticateAccessToken(token);
-    if (!subject || subject.kind !== "session") {
-      jsonRpcError(res, 401, -32001, "Invalid Trace bearer token");
-      return;
-    }
-
+    const extra = auth.extra ?? {};
     const client = new StaticTraceClient({
       baseUrl: options.loopbackBaseUrl,
-      token,
-      organizationId: subject.organizationId,
-      channelId: subject.channelId,
+      token: auth.token,
+      organizationId: readAuthString(extra.organizationId),
+      channelId: readAuthString(extra.channelId),
     });
 
     const server = new McpServer({ name: "trace-mcp", version: "0.1.0" });

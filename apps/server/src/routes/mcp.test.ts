@@ -11,8 +11,10 @@ vi.mock("../lib/db.js", async () => {
 
 import { prisma } from "../lib/db.js";
 import { createMcpRouter } from "./mcp.js";
+import { traceOAuthProvider } from "../lib/oauth/provider.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const RESOURCE_METADATA_URL = "http://127.0.0.1/.well-known/oauth-protected-resource/mcp";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 
 describe("MCP HTTP endpoint auth", () => {
@@ -24,7 +26,13 @@ describe("MCP HTTP endpoint auth", () => {
 
     const app = express();
     app.use(express.json());
-    app.use(createMcpRouter({ loopbackBaseUrl: "http://127.0.0.1:1" }));
+    app.use(
+      createMcpRouter({
+        loopbackBaseUrl: "http://127.0.0.1:1",
+        verifier: traceOAuthProvider,
+        resourceMetadataUrl: RESOURCE_METADATA_URL,
+      }),
+    );
 
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -59,8 +67,11 @@ describe("MCP HTTP endpoint auth", () => {
       body: JSON.stringify(initialize),
     });
     expect(res.status).toBe(401);
-    const body = (await res.json()) as { error?: { code: number } };
-    expect(body.error?.code).toBe(-32001);
+    // The bearer-auth middleware advertises the OAuth resource metadata so
+    // clients can discover the authorization server and self-authorize.
+    expect(res.headers.get("www-authenticate")).toContain("resource_metadata");
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toBe("invalid_token");
   });
 
   it("rejects an invalid bearer token", async () => {
@@ -75,8 +86,8 @@ describe("MCP HTTP endpoint auth", () => {
       body: JSON.stringify(initialize),
     });
     expect(res.status).toBe(401);
-    const body = (await res.json()) as { error?: { code: number } };
-    expect(body.error?.code).toBe(-32001);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toBe("invalid_token");
   });
 
   it("returns 405 for GET and DELETE", async () => {

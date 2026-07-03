@@ -7,9 +7,9 @@ AI coding sessions over Trace's GraphQL API.
 ## How to connect
 
 The Trace backend hosts this server as a **Streamable-HTTP MCP endpoint** at
-`POST /mcp` (e.g. `https://trace.infra.opendoor.com/mcp`). Any MCP client
-connects with a bearer token, exactly like any other remote MCP server — there
-is nothing to install or bundle.
+`POST /mcp` (e.g. `https://trace.infra.opendoor.com/mcp`). There is nothing to
+install or bundle — point any MCP client at the URL and it authorizes over
+OAuth.
 
 **Claude Code** (`.mcp.json` / `claude mcp add`):
 
@@ -18,14 +18,47 @@ is nothing to install or bundle.
   "mcpServers": {
     "trace": {
       "type": "http",
-      "url": "https://trace.infra.opendoor.com/mcp",
-      "headers": { "Authorization": "Bearer <your-trace-jwt>" }
+      "url": "https://trace.infra.opendoor.com/mcp"
     }
   }
 }
 ```
 
+No token in the config. On first use the client discovers Trace's OAuth
+authorization server, opens a browser once for GitHub sign-in, and stores the
+resulting access + refresh tokens itself. Access tokens are short-lived (1h) and
+the client refreshes them silently — you never paste or rotate a token by hand.
+
 **Codex** (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.trace]
+url = "https://trace.infra.opendoor.com/mcp"
+```
+
+The endpoint is stateless — each request authenticates its own bearer, resolves
+the caller's organization, and serves the same tool set.
+
+### OAuth flow
+
+Trace is both the OAuth authorization server and the resource server for `/mcp`,
+delegating identity to GitHub:
+
+1. An unauthenticated `POST /mcp` returns `401` with a `WWW-Authenticate` header
+   pointing at `/.well-known/oauth-protected-resource/mcp`.
+2. The client reads the resource + authorization-server metadata and registers
+   itself via dynamic client registration (`POST /register`).
+3. The client opens `/authorize`, which redirects to GitHub. After you approve,
+   GitHub calls back to `/oauth/github/callback`, Trace resolves your user and
+   organization, and issues a one-time authorization code.
+4. The client exchanges the code at `/token` (PKCE-verified) for a short-lived
+   access token and a long-lived, rotating refresh token. Expired access tokens
+   are refreshed transparently; `/revoke` invalidates a refresh token.
+
+### Pre-minted token (fallback / CI)
+
+For non-interactive use (CI, scripts, Codex without a browser), a raw Trace JWT
+still works as a plain bearer token:
 
 ```toml
 [mcp_servers.trace]
@@ -33,9 +66,8 @@ url = "https://trace.infra.opendoor.com/mcp"
 bearer_token_env_var = "TRACE_TOKEN"
 ```
 
-The bearer token is any Trace JWT — e.g. a personal token from the GitHub
-device-flow login below. The endpoint is stateless — each request authenticates
-its own bearer, resolves the caller's organization, and serves the same tool set.
+Get a token from the GitHub device-flow `login` command below. This path has no
+automatic refresh — the token expires on its own schedule.
 
 A stdio entrypoint (`node dist/index.js`) is still shipped for local
 development and the device-flow `login` command, but the hosted HTTP endpoint is
