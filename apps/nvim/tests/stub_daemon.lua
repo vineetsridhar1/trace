@@ -137,6 +137,74 @@ for line in io.lines() do
           count = 1,
         },
       })
+    elseif frame.method == "channel/messages" then
+      local before = frame.params and frame.params.before
+      if before == nil or before == vim.NIL then
+        send({
+          jsonrpc = "2.0",
+          id = frame.id,
+          result = {
+            channelId = frame.params.channelId,
+            hasMore = true,
+            oldestCreatedAt = "2026-07-03T09:00:00.000Z",
+            messages = {
+              {
+                id = "m1",
+                text = "morning all",
+                createdAt = "2026-07-03T09:00:00.000Z",
+                parentMessageId = vim.NIL,
+                mentionsMe = false,
+                actor = { type = "user", id = "u2", name = "Sam" },
+              },
+              {
+                id = "m2",
+                text = "hey @you check this",
+                createdAt = "2026-07-03T09:05:00.000Z",
+                parentMessageId = vim.NIL,
+                mentionsMe = true,
+                actor = { type = "agent", id = "a1", name = "Codex" },
+              },
+            },
+          },
+        })
+      else
+        send({
+          jsonrpc = "2.0",
+          id = frame.id,
+          result = {
+            channelId = frame.params.channelId,
+            hasMore = false,
+            oldestCreatedAt = "2026-07-03T08:00:00.000Z",
+            messages = {
+              {
+                id = "m0",
+                text = "ancient message",
+                createdAt = "2026-07-03T08:00:00.000Z",
+                parentMessageId = vim.NIL,
+                mentionsMe = false,
+                actor = { type = "user", id = "u2", name = "Sam" },
+              },
+            },
+          },
+        })
+      end
+    elseif frame.method == "channel/send" then
+      send({ jsonrpc = "2.0", id = frame.id, result = { accepted = true, id = "m-sent" } })
+      send({
+        jsonrpc = "2.0",
+        method = "channel/message",
+        params = {
+          channelId = frame.params.channelId,
+          message = {
+            id = "m-sent",
+            text = frame.params.text,
+            createdAt = "2026-07-03T10:00:00.000Z",
+            parentMessageId = vim.NIL,
+            mentionsMe = false,
+            actor = { type = "user", id = "user-1", name = "Stub User" },
+          },
+        },
+      })
     elseif frame.method == "emit" then
       -- Test hook: replay an arbitrary notification through the real pipeline.
       send({ jsonrpc = "2.0", id = frame.id, result = vim.NIL })

@@ -27,11 +27,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Channel view shows recent messages and streams new ones live
-- [ ] Sending from the compose input appears in web clients (and vice versa)
-- [ ] Open/close drives channel scope subscribe/unsubscribe with no leaks
-- [ ] Shared view machinery is extracted, not duplicated, and ticket 17's specs still pass
-- [ ] Mentions are visually distinct
+- [x] Channel view shows recent messages and streams new ones live
+- [x] Sending from the compose input appears in web clients (and vice versa)
+- [x] Open/close drives channel scope subscribe/unsubscribe with no leaks
+- [x] Shared view machinery is extracted, not duplicated, and ticket 17's specs still pass
+- [x] Mentions are visually distinct
 
 ## Implementation notes
 

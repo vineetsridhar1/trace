@@ -79,6 +79,20 @@ trackers are untouched. Page backward by passing the previous `oldestEventId`.
 
 → `{ sessionId, nodes: ProtocolNode[], hasOlder, oldestEventId }`
 
+### channel/messages `{ channelId, before?, limit? }`
+
+The recent message page for a channel (the web's `channelMessages` read path),
+normalized off to the side. Page backward with `before = oldestCreatedAt`.
+
+→ `{ channelId, messages: ChannelMessage[], hasMore, oldestCreatedAt }`
+
+`ChannelMessage`:
+
+```
+{ id, text, createdAt, parentMessageId, mentionsMe,
+  actor: { type, id, name } }
+```
+
 ### Actions (fire-and-forget; store updates arrive via events)
 
 - `session/prompt { sessionId, text }` → `{ accepted, id, queued }` — queues when
@@ -107,6 +121,12 @@ Emitted once with the post-hydration baseline right after `initialize`, then
 debounced (100ms) and only when the counts change. `needsInputCount` is
 sessions with `sessionStatus == "needs_input"`; `mentionCount` is unresolved
 inbox items.
+
+### channel/message `{ channelId, message }`
+
+Pushed for `message_sent` events on subscribed channel scopes; `message` is a
+`ChannelMessage`. `mentionsMe` is computed daemon-side against the signed-in
+user.
 
 ### session/nodes `{ sessionId, patched, appended, truncateFrom?, count }`
 

@@ -21,8 +21,10 @@ const CHANNELS_QUERY = `query($orgId: ID!) {
   channels(organizationId: $orgId) { id name type memberCount }
 }`;
 
-const CHANNEL_MESSAGES_QUERY = `query($channelId: ID!, $limit: Int) {
-  channelMessages(channelId: $channelId, limit: $limit) {
+// Without `before` the server returns the OLDEST page (asc take N); passing
+// now() flips it to the most-recent page in ascending order.
+const CHANNEL_MESSAGES_QUERY = `query($channelId: ID!, $before: DateTime, $limit: Int) {
+  channelMessages(channelId: $channelId, before: $before, limit: $limit) {
     id text createdAt actor { type id name }
   }
 }`;
@@ -70,7 +72,11 @@ export function registerChannelCommands(program: Command): void {
       const data = await graphqlRequest<{ channelMessages: ChannelMessageItem[] }>(
         serverUrl,
         CHANNEL_MESSAGES_QUERY,
-        { channelId: channel.id, limit: Number.isFinite(limit) ? limit : 20 },
+        {
+          channelId: channel.id,
+          before: new Date().toISOString(),
+          limit: Number.isFinite(limit) ? limit : 20,
+        },
       );
       if (globals.json) {
         console.log(

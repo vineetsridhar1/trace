@@ -173,6 +173,9 @@ M.subcommands = {
   sessions = function()
     require("trace.ui.switcher").open()
   end,
+  channels = function()
+    require("trace.ui.channel").pick()
+  end,
   next = function()
     require("trace.ui.switcher").jump_needs_input()
   end,

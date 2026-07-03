@@ -141,3 +141,21 @@ export const HYDRATE_REPOS_QUERY = gql`
     }
   }
 `;
+
+export const DAEMON_CHANNEL_MESSAGES_QUERY = gql`
+  query DaemonChannelMessages($channelId: ID!, $before: DateTime, $limit: Int) {
+    channelMessages(channelId: $channelId, before: $before, limit: $limit) {
+      id
+      text
+      createdAt
+      parentMessageId
+      mentions
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
+    }
+  }
+`;

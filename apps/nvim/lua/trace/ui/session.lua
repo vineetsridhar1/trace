@@ -4,6 +4,8 @@
 -- keeps patches surgical; appends never re-render the whole buffer.
 local M = {}
 
+local view_helpers = require("trace.ui.view")
+
 local ns = vim.api.nvim_create_namespace("trace-session")
 
 local HIGHLIGHTS = {
@@ -85,9 +87,7 @@ local views = {} -- session_id -> view
 local handlers_attached = false
 
 local function buf_set(view, start_line, end_line, lines)
-  vim.bo[view.buf].modifiable = true
-  vim.api.nvim_buf_set_lines(view.buf, start_line, end_line, false, lines)
-  vim.bo[view.buf].modifiable = false
+  view_helpers.buf_set(view.buf, start_line, end_line, lines)
 end
 
 local function highlight_range(view, node, start_line, count)
@@ -121,18 +121,11 @@ local function live_start(view, index)
 end
 
 local function at_bottom(view)
-  local win = view.win
-  if not (win and vim.api.nvim_win_is_valid(win)) then
-    return false
-  end
-  local cursor = vim.api.nvim_win_get_cursor(win)[1]
-  return cursor >= vim.api.nvim_buf_line_count(view.buf) - 1
+  return view_helpers.at_bottom(view.win, view.buf)
 end
 
 local function scroll_to_bottom(view)
-  if view.win and vim.api.nvim_win_is_valid(view.win) then
-    vim.api.nvim_win_set_cursor(view.win, { vim.api.nvim_buf_line_count(view.buf), 0 })
-  end
+  view_helpers.scroll_to_bottom(view.win, view.buf)
 end
 
 --- Apply a session/nodes delta { patched, appended, truncateFrom, count }.
@@ -298,10 +291,8 @@ local function close_view(session_id)
     scopeType = "session",
     scopeId = session_id,
   }, nil)
-  for _, win in ipairs({ view.input_win, view.win }) do
-    if win and vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
-    end
+  if view.pair then
+    view.pair.close()
   end
 end
 
@@ -336,46 +327,20 @@ function M.open(session_id)
   local state = require("trace.state")
   local rpc = require("trace.rpc")
 
-  local width = math.min(vim.o.columns - 8, 110)
-  local height = vim.o.lines - 8
-  local col = math.floor((vim.o.columns - width) / 2)
-  local row = math.floor((vim.o.lines - height) / 2) - 1
-
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.bo[buf].bufhidden = "wipe"
-  vim.bo[buf].filetype = "trace-session"
-  vim.bo[buf].modifiable = false
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    row = row,
-    col = col,
-    width = width,
-    height = height - 3,
-    style = "minimal",
-    border = "rounded",
+  local pair = view_helpers.open_pair({
+    filetype = "trace-session",
+    on_submit = function(text)
+      send_prompt(session_id, text)
+    end,
+    on_close = function()
+      close_view(session_id)
+    end,
   })
-  vim.wo[win].wrap = true
-  vim.wo[win].linebreak = true
-
-  local input_buf = vim.api.nvim_create_buf(false, true)
-  vim.bo[input_buf].bufhidden = "wipe"
-  vim.bo[input_buf].buftype = "prompt"
-  vim.fn.prompt_setprompt(input_buf, "> ")
-  local input_win = vim.api.nvim_open_win(input_buf, false, {
-    relative = "editor",
-    row = row + height - 2,
-    col = col,
-    width = width,
-    height = 1,
-    style = "minimal",
-    border = "rounded",
-  })
-  vim.fn.prompt_setcallback(input_buf, function(text)
-    send_prompt(session_id, text)
-  end)
+  local buf, win, input_buf, input_win = pair.buf, pair.win, pair.input_buf, pair.input_win
 
   local view = {
     session_id = session_id,
+    pair = pair,
     buf = buf,
     win = win,
     input_buf = input_buf,
@@ -399,23 +364,6 @@ function M.open(session_id)
   rpc.request("scope/subscribe", { scopeType = "session", scopeId = session_id }, nil)
   load_older(view)
 
-  local function focus_input()
-    if vim.api.nvim_win_is_valid(input_win) then
-      vim.api.nvim_set_current_win(input_win)
-      vim.cmd.startinsert({ bang = true })
-    end
-  end
-  vim.keymap.set("n", "i", focus_input, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "q", function()
-    close_view(session_id)
-  end, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "<Esc>", function()
-    close_view(session_id)
-  end, { buffer = buf, nowait = true })
-  vim.keymap.set("n", "<Esc>", function()
-    close_view(session_id)
-  end, { buffer = input_buf, nowait = true })
-
   -- Scroll-to-top pagination.
   vim.api.nvim_create_autocmd("WinScrolled", {
     pattern = tostring(win),
@@ -428,15 +376,6 @@ function M.open(session_id)
       end
     end,
   })
-  -- Viewport leaves: closing either window tears the whole view down.
-  vim.api.nvim_create_autocmd("WinClosed", {
-    pattern = tostring(win),
-    once = true,
-    callback = function()
-      close_view(session_id)
-    end,
-  })
-
   scroll_to_bottom(view)
 end
 

@@ -80,10 +80,25 @@ class FakeRuntime implements ClientRuntime {
   constructor(private readonly shared: HarnessState) {}
 
   readonly gql = {
-    query: (doc: unknown) => {
+    query: (doc: unknown, variables?: Record<string, unknown>) => {
       this.queryCount += 1;
       const fixtures = ORG_FIXTURES[this.shared.activeOrgId] ?? { sessions: [], channels: [] };
       const data: Record<string, unknown> = {
+        DaemonChannelMessages: {
+          channelMessages:
+            variables?.before === "2026-07-03T10:00:00.000Z"
+              ? []
+              : [
+                  {
+                    id: "msg-1",
+                    text: "hello @Alex",
+                    createdAt: "2026-07-03T10:00:00.000Z",
+                    parentMessageId: null,
+                    mentions: [{ id: "user-1" }],
+                    actor: { type: "user", id: "user-2", name: "Sam", avatarUrl: null },
+                  },
+                ],
+        },
         HydrateChannels: { channels: fixtures.channels },
         HydrateSessions: { sessions: fixtures.sessions },
         HydrateTickets: { tickets: [] },
@@ -660,5 +675,67 @@ describe("normalized deltas", () => {
       ],
     });
     expect(useEntityStore.getState().eventsByScope["session:sess-1"]).toBeUndefined();
+  });
+});
+
+describe("channel messages", () => {
+  it("channel/messages returns normalized shapes with mentionsMe", async () => {
+    const harness = startHarness();
+    harness.send(init);
+    await harness.frames();
+
+    const response = await harness.request(2, "channel/messages", { channelId: "chan-1" });
+    expect(response.result).toMatchObject({
+      channelId: "chan-1",
+      messages: [
+        {
+          id: "msg-1",
+          text: "hello @Alex",
+          mentionsMe: true,
+          actor: { type: "user", id: "user-2", name: "Sam" },
+        },
+      ],
+      oldestCreatedAt: "2026-07-03T10:00:00.000Z",
+    });
+
+    const older = await harness.request(3, "channel/messages", {
+      channelId: "chan-1",
+      before: "2026-07-03T10:00:00.000Z",
+    });
+    expect(older.result).toMatchObject({ messages: [], hasMore: false });
+  });
+
+  it("channel scope subscriptions emit channel/message notifications", async () => {
+    const harness = startHarness();
+    harness.send(init);
+    await harness.frames();
+    await harness.request(2, "scope/subscribe", { scopeType: "channel", scopeId: "chan-1" });
+
+    const subscription = harness.runtime().subscriptions.find((s) => s.op === "ChannelEventsLive");
+    expect(subscription).toBeDefined();
+    subscription?.push({
+      channelEvents: {
+        id: "evt-chan",
+        scopeType: "channel",
+        scopeId: "chan-1",
+        eventType: "message_sent",
+        payload: { text: "live one", messageId: "msg-live" },
+        actor: { type: "user", id: "user-2", name: "Sam", avatarUrl: null },
+        parentId: null,
+        timestamp: "2026-07-03T12:00:00.000Z",
+        metadata: null,
+      },
+    });
+    const frames = await harness.frames();
+    const notification = frames.find((f) => f.method === "channel/message");
+    expect(notification?.params).toMatchObject({
+      channelId: "chan-1",
+      message: {
+        id: "msg-live",
+        text: "live one",
+        mentionsMe: false,
+        actor: { name: "Sam" },
+      },
+    });
   });
 });

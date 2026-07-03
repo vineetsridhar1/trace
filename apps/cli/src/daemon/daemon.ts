@@ -16,9 +16,11 @@ import {
   type ConnectionState,
   type CreateClientRuntimeOptions,
 } from "../runtime.js";
+import { asJsonObject } from "@trace/shared";
 import {
   CHANNEL_EVENTS_SUBSCRIPTION,
   CHAT_EVENTS_SUBSCRIPTION,
+  DAEMON_CHANNEL_MESSAGES_QUERY,
   SESSION_EVENTS_SUBSCRIPTION,
   SESSION_TIMELINE_QUERY,
 } from "../documents.js";
@@ -69,6 +71,39 @@ function optionalString(params: Record<string, unknown>, key: string): string | 
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+/** Normalized channel message crossing the RPC boundary (documented shape). */
+interface ChannelMessage {
+  id: string;
+  text: string;
+  createdAt: string;
+  parentMessageId: string | null;
+  mentionsMe: boolean;
+  actor: { type: string; id: string; name: string | null };
+}
+
+function mentionsUser(mentions: unknown, userId: string | null): boolean {
+  if (!mentions || !userId) return false;
+  return JSON.stringify(mentions).includes(userId);
+}
+
+function channelMessageFromEvent(event: Event, userId: string | null): ChannelMessage | null {
+  if (event.eventType !== "message_sent") return null;
+  const payload = asJsonObject(event.payload);
+  if (typeof payload?.text !== "string") return null;
+  return {
+    id: typeof payload.messageId === "string" ? payload.messageId : event.id,
+    text: payload.text,
+    createdAt: event.timestamp,
+    parentMessageId: typeof payload.parentMessageId === "string" ? payload.parentMessageId : null,
+    mentionsMe: mentionsUser(payload.mentions, userId),
+    actor: {
+      type: event.actor.type,
+      id: event.actor.id,
+      name: event.actor.name ?? null,
+    },
+  };
+}
+
 export async function runDaemon(options: DaemonOptions): Promise<void> {
   const input = options.input ?? process.stdin;
   const output = options.output ?? process.stdout;
@@ -95,10 +130,19 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
 
   const buildScopeRegistry = (active: ClientRuntime, activeOrgId: string): ScopeRegistry =>
     new ScopeRegistry((scopeType, scopeId) => {
+      const userId = active.stores.auth.getState().user?.id ?? null;
       const handleEvent =
         scopeType === "session"
           ? (event: Event & { id: string }) => handleSessionEvent(scopeId, event)
-          : (event: Event) => handleOrgEvent(event);
+          : (event: Event) => {
+              handleOrgEvent(event);
+              if (scopeType === "channel") {
+                const message = channelMessageFromEvent(event, userId);
+                if (message) {
+                  rpc.notify("channel/message", { channelId: scopeId, message });
+                }
+              }
+            };
       const { document, variables, field } =
         scopeType === "session"
           ? {
@@ -366,6 +410,51 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
     }
     const message = await sendToChannel(active.gql, { id: channelId, type: channel.type }, text);
     return { accepted: true, id: message.id };
+  });
+
+  rpc.register("channel/messages", async (params) => {
+    const channelId = requireString(params, "channelId");
+    // Server semantics: only a `before` cursor yields the most-recent page.
+    const before = optionalString(params, "before") ?? new Date().toISOString();
+    const limitRaw = params.limit;
+    const limit = typeof limitRaw === "number" && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
+    const active = requireRuntime();
+    const result = await active.gql
+      .query(DAEMON_CHANNEL_MESSAGES_QUERY, { channelId, before, limit })
+      .toPromise();
+    if (result.error) {
+      throw new RpcError(RPC_ERROR_CODES.INTERNAL_ERROR, result.error.message);
+    }
+    const userId = active.stores.auth.getState().user?.id ?? null;
+    const rows =
+      (
+        result.data as
+          | {
+              channelMessages?: Array<{
+                id: string;
+                text: string;
+                createdAt: string;
+                parentMessageId: string | null;
+                mentions: unknown;
+                actor: { type: string; id: string; name: string | null };
+              }>;
+            }
+          | undefined
+      )?.channelMessages ?? [];
+    const messages: ChannelMessage[] = rows.map((row) => ({
+      id: row.id,
+      text: row.text,
+      createdAt: row.createdAt,
+      parentMessageId: row.parentMessageId ?? null,
+      mentionsMe: mentionsUser(row.mentions, userId),
+      actor: { type: row.actor.type, id: row.actor.id, name: row.actor.name ?? null },
+    }));
+    return {
+      channelId,
+      messages,
+      hasMore: rows.length >= limit,
+      oldestCreatedAt: messages[0]?.createdAt ?? null,
+    };
   });
 
   rpc.register("session/timeline", async (params) => {
