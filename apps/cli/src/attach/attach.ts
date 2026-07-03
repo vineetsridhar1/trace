@@ -1,5 +1,4 @@
 import { createInterface } from "node:readline";
-import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
@@ -9,69 +8,13 @@ import {
   optimisticallyInsertSessionMessage,
   removeOptimisticSessionMessage,
 } from "@trace/client-core/headless";
+import { SESSION_EVENTS_SUBSCRIPTION, SESSION_TIMELINE_QUERY } from "../documents.js";
 import { queueSessionPrompt, sendSessionPrompt } from "../mutations.js";
 import { requireActiveOrg, resolveSessionByIdPrefix } from "../resolve.js";
 import { createClientRuntime } from "../runtime.js";
 import { appendDelta, renderTranscriptLines } from "./render.js";
 
 const SEED_PAGE_SIZE = 50;
-
-const SESSION_TIMELINE_QUERY = gql`
-  query SessionTimeline(
-    $organizationId: ID!
-    $sessionId: ID!
-    $limit: Int
-    $excludePayloadTypes: [String!]
-  ) {
-    sessionTimeline(
-      organizationId: $organizationId
-      sessionId: $sessionId
-      limit: $limit
-      excludePayloadTypes: $excludePayloadTypes
-    ) {
-      items {
-        kind
-        event {
-          id
-          scopeType
-          scopeId
-          eventType
-          payload
-          actor {
-            type
-            id
-            name
-            avatarUrl
-          }
-          parentId
-          timestamp
-          metadata
-        }
-      }
-    }
-  }
-`;
-
-const SESSION_EVENTS_SUBSCRIPTION = gql`
-  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {
-    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {
-      id
-      scopeType
-      scopeId
-      eventType
-      payload
-      actor {
-        type
-        id
-        name
-        avatarUrl
-      }
-      parentId
-      timestamp
-      metadata
-    }
-  }
-`;
 
 interface TimelineItem {
   kind: string;

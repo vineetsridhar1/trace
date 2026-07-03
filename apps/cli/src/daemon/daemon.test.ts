@@ -1,34 +1,133 @@
 import { PassThrough } from "node:stream";
-import { describe, expect, it, vi } from "vitest";
-import type { AuthState, EntityState } from "@trace/client-core/headless";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useEntityStore, type AuthState } from "@trace/client-core/headless";
 import type { ClientRuntime, ConnectionState, CreateClientRuntimeOptions } from "../runtime.js";
 import { runDaemon } from "./daemon.js";
 import { PROTOCOL_VERSION, RPC_ERROR_CODES } from "./rpc.js";
 
-interface Harness {
-  send: (frame: unknown) => void;
-  sendRaw: (raw: string) => void;
-  endInput: () => void;
-  frames: () => Promise<Array<Record<string, unknown>>>;
-  nextFrame: () => Promise<Record<string, unknown>>;
-  exits: number[];
-  runtime: FakeRuntime | null;
-  connection: (state: ConnectionState) => void;
+function opName(doc: unknown): string {
+  const definitions = (doc as { definitions?: Array<{ name?: { value?: string } }> }).definitions;
+  return definitions?.[0]?.name?.value ?? "unknown";
+}
+
+interface FakeSubscription {
+  op: string;
+  variables: Record<string, unknown>;
+  push: (data: Record<string, unknown>) => void;
+  unsubscribed: boolean;
+}
+
+const ORG_FIXTURES: Record<string, { sessions: unknown[]; channels: unknown[] }> = {
+  "org-1": {
+    sessions: [
+      {
+        id: "sess-1",
+        name: "Fix login",
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        tool: "claude_code",
+        model: null,
+        branch: "fix/login",
+        workdir: "/tmp/worktrees/fix-login",
+        prUrl: null,
+        worktreeDeleted: false,
+        sessionGroupId: "group-1",
+        lastMessageAt: "2026-07-03T10:00:00.000Z",
+        updatedAt: "2026-07-03T10:00:00.000Z",
+        repo: { id: "repo-1", name: "trace" },
+        connection: { state: "connected", runtimeInstanceId: "rt-1", runtimeLabel: "MacBook" },
+      },
+    ],
+    channels: [{ id: "chan-1", name: "general", type: "text", memberCount: 2, repo: null }],
+  },
+  "org-2": {
+    sessions: [
+      {
+        id: "sess-9",
+        name: "Other org session",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        tool: "codex",
+        model: null,
+        branch: null,
+        workdir: null,
+        prUrl: null,
+        worktreeDeleted: false,
+        sessionGroupId: null,
+        lastMessageAt: null,
+        updatedAt: "2026-07-01T00:00:00.000Z",
+        repo: null,
+        connection: null,
+      },
+    ],
+    channels: [],
+  },
+};
+
+interface HarnessState {
+  activeOrgId: string;
+  runtimes: FakeRuntime[];
+  connection?: (state: ConnectionState) => void;
 }
 
 class FakeRuntime implements ClientRuntime {
   disposed = false;
   startError: Error | null = null;
   slowStartMs = 0;
+  queryCount = 0;
+  subscriptions: FakeSubscription[] = [];
 
-  readonly gql = {} as ClientRuntime["gql"];
+  constructor(private readonly shared: HarnessState) {}
+
+  readonly gql = {
+    query: (doc: unknown) => {
+      this.queryCount += 1;
+      const fixtures = ORG_FIXTURES[this.shared.activeOrgId] ?? { sessions: [], channels: [] };
+      const data: Record<string, unknown> = {
+        HydrateChannels: { channels: fixtures.channels },
+        HydrateSessions: { sessions: fixtures.sessions },
+        HydrateTickets: { tickets: [] },
+        HydrateRepos: { repos: [{ id: "repo-1", name: "trace" }] },
+      };
+      return { toPromise: () => Promise.resolve({ data: data[opName(doc)] ?? {} }) };
+    },
+    mutation: (doc: unknown, variables: Record<string, unknown>) => {
+      const op = opName(doc);
+      const data: Record<string, unknown> = {
+        SendSessionMessage: { sendSessionMessage: { id: "evt-ack" } },
+        QueueSessionMessage: { queueSessionMessage: { id: "queued-ack" } },
+        StartSession: { startSession: { id: "sess-new", sessionGroupId: "group-new" } },
+        TerminateSession: { terminateSession: { id: variables.id } },
+        SendChannelMessage: { sendChannelMessage: { id: "msg-ack" } },
+        SendCodingChannelMessage: { sendMessage: { id: "evt-msg-ack" } },
+      };
+      return { toPromise: () => Promise.resolve({ data: data[op] }) };
+    },
+    subscription: (doc: unknown, variables: Record<string, unknown>) => ({
+      subscribe: (callback: (result: { data?: unknown; error?: unknown }) => void) => {
+        const entry: FakeSubscription = {
+          op: opName(doc),
+          variables,
+          push: (data) => callback({ data }),
+          unsubscribed: false,
+        };
+        this.subscriptions.push(entry);
+        return {
+          unsubscribe: () => {
+            entry.unsubscribed = true;
+          },
+        };
+      },
+    }),
+  } as unknown as ClientRuntime["gql"];
+
   readonly stores = {
-    entity: { getState: () => ({}) as EntityState, subscribe: () => () => {} },
+    entity: { getState: useEntityStore.getState, subscribe: useEntityStore.subscribe },
     auth: {
       getState: () =>
         ({
           user: { id: "user-1", name: "Alex", email: "a@b.c" },
-          activeOrgId: "org-1",
+          activeOrgId: this.shared.activeOrgId,
           orgMemberships: [
             {
               organizationId: "org-1",
@@ -36,9 +135,18 @@ class FakeRuntime implements ClientRuntime {
               joinedAt: "2026-01-01T00:00:00.000Z",
               organization: { id: "org-1", name: "Test Org" },
             },
+            {
+              organizationId: "org-2",
+              role: "member",
+              joinedAt: "2026-01-01T00:00:00.000Z",
+              organization: { id: "org-2", name: "Org Two" },
+            },
           ],
           loading: false,
           token: "tok",
+          setActiveOrg: (orgId: string) => {
+            this.shared.activeOrgId = orgId;
+          },
         }) as unknown as AuthState,
       subscribe: () => () => {},
     },
@@ -56,18 +164,35 @@ class FakeRuntime implements ClientRuntime {
   });
 }
 
+interface Harness {
+  send: (frame: unknown) => void;
+  sendRaw: (raw: string) => void;
+  endInput: () => void;
+  frames: () => Promise<Array<Record<string, unknown>>>;
+  nextFrame: () => Promise<Record<string, unknown>>;
+  request: (id: number, method: string, params?: unknown) => Promise<Record<string, unknown>>;
+  exits: number[];
+  state: HarnessState;
+  runtime: () => FakeRuntime;
+}
+
 function startHarness(overrides: { startError?: Error; slowStartMs?: number } = {}): Harness {
   const input = new PassThrough();
   const output = new PassThrough();
   const exits: number[] = [];
-  let connectionCallback: ((state: ConnectionState) => void) | undefined;
+  const state: HarnessState = { activeOrgId: "org-1", runtimes: [] };
+
   const harness: Harness = {
     send: (frame) => input.write(`${JSON.stringify(frame)}\n`),
     sendRaw: (raw) => input.write(raw),
     endInput: () => input.end(),
     exits,
-    runtime: null,
-    connection: (state) => connectionCallback?.(state),
+    state,
+    runtime: () => {
+      const runtime = state.runtimes.at(-1);
+      if (!runtime) throw new Error("no runtime created yet");
+      return runtime;
+    },
     frames: async () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
       const raw = output.read() as Buffer | null;
@@ -82,6 +207,13 @@ function startHarness(overrides: { startError?: Error; slowStartMs?: number } = 
       if (all.length === 0) throw new Error("no frame received");
       return all[0] as Record<string, unknown>;
     },
+    request: async (id, method, params) => {
+      harness.send({ jsonrpc: "2.0", id, method, params });
+      const all = await harness.frames();
+      const response = all.find((frame) => frame.id === id);
+      if (!response) throw new Error(`no response for ${method}`);
+      return response;
+    },
   };
 
   void runDaemon({
@@ -90,11 +222,11 @@ function startHarness(overrides: { startError?: Error; slowStartMs?: number } = 
     output,
     exit: (code) => exits.push(code),
     createRuntime: (options: CreateClientRuntimeOptions) => {
-      const runtime = new FakeRuntime();
+      const runtime = new FakeRuntime(state);
       if (overrides.startError) runtime.startError = overrides.startError;
       if (overrides.slowStartMs) runtime.slowStartMs = overrides.slowStartMs;
-      connectionCallback = options.onConnectionChange;
-      harness.runtime = runtime;
+      state.connection = options.onConnectionChange;
+      state.runtimes.push(runtime);
       return runtime;
     },
   });
@@ -108,6 +240,10 @@ const init = {
   method: "initialize",
   params: { protocolVersion: PROTOCOL_VERSION, clientInfo: { name: "test" } },
 };
+
+beforeEach(() => {
+  useEntityStore.getState().reset();
+});
 
 describe("daemon rpc core", () => {
   it("round-trips initialize → shutdown", async () => {
@@ -130,14 +266,12 @@ describe("daemon rpc core", () => {
     const shutdownFrames = await harness.frames();
     expect(shutdownFrames[0]).toMatchObject({ id: 2, result: null });
     expect(harness.exits).toEqual([0]);
-    expect(harness.runtime?.disposed).toBe(true);
+    expect(harness.runtime().disposed).toBe(true);
   });
 
   it("rejects calls before initialize with NOT_INITIALIZED", async () => {
     const harness = startHarness();
-    harness.send({ jsonrpc: "2.0", id: 5, method: "sessions/list" });
-    expect(await harness.nextFrame()).toMatchObject({
-      id: 5,
+    expect(await harness.request(5, "sessions/list")).toMatchObject({
       error: { code: RPC_ERROR_CODES.NOT_INITIALIZED },
     });
   });
@@ -150,7 +284,6 @@ describe("daemon rpc core", () => {
       error: { code: RPC_ERROR_CODES.PARSE_ERROR },
     });
 
-    // Split one frame across chunks, then join two frames in one chunk.
     const frame = JSON.stringify(init);
     harness.sendRaw(frame.slice(0, 20));
     harness.sendRaw(`${frame.slice(20)}\n`);
@@ -168,9 +301,7 @@ describe("daemon rpc core", () => {
 
   it("rejects protocol version mismatches with structured data", async () => {
     const harness = startHarness();
-    harness.send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 99 } });
-    expect(await harness.nextFrame()).toMatchObject({
-      id: 1,
+    expect(await harness.request(1, "initialize", { protocolVersion: 99 })).toMatchObject({
       error: {
         code: RPC_ERROR_CODES.VERSION_MISMATCH,
         data: { expected: PROTOCOL_VERSION, received: 99 },
@@ -187,7 +318,7 @@ describe("daemon rpc core", () => {
       id: 1,
       error: { code: RPC_ERROR_CODES.UNAUTHENTICATED },
     });
-    expect(harness.runtime?.disposed).toBe(true);
+    expect(harness.runtime().disposed).toBe(true);
   });
 
   it("forwards connection state changes as notifications", async () => {
@@ -195,8 +326,8 @@ describe("daemon rpc core", () => {
     harness.send(init);
     await harness.frames();
 
-    harness.connection("reconnecting");
-    harness.connection("connected");
+    harness.state.connection?.("reconnecting");
+    harness.state.connection?.("connected");
     const frames = await harness.frames();
     expect(frames).toEqual([
       { jsonrpc: "2.0", method: "connection/state", params: { state: "reconnecting" } },
@@ -225,6 +356,141 @@ describe("daemon rpc core", () => {
     harness.endInput();
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(harness.exits).toEqual([0]);
-    expect(harness.runtime?.disposed).toBe(true);
+    expect(harness.runtime().disposed).toBe(true);
+  });
+});
+
+describe("snapshot, scope, and action methods", () => {
+  it("hydrates on initialize and answers sessions/list from the store", async () => {
+    const harness = startHarness();
+    harness.send(init);
+    await harness.frames();
+    expect(harness.runtime().queryCount).toBe(4);
+
+    const response = await harness.request(2, "sessions/list");
+    expect(response.result).toMatchObject({
+      sessions: [
+        {
+          id: "sess-1",
+          name: "Fix login",
+          agentStatus: "done",
+          sessionStatus: "needs_input",
+          tool: "claude_code",
+          repo: { id: "repo-1", name: "trace" },
+          branch: "fix/login",
+          workdir: "/tmp/worktrees/fix-login",
+          runtimeLabel: "MacBook",
+          connectionState: "connected",
+        },
+      ],
+    });
+    // Snapshots never trigger further round-trips.
+    expect(harness.runtime().queryCount).toBe(4);
+
+    const channels = await harness.request(3, "channels/list");
+    expect(channels.result).toMatchObject({
+      channels: [{ id: "chan-1", name: "general", type: "text", memberCount: 2 }],
+    });
+    const orgs = await harness.request(4, "orgs/list");
+    expect(orgs.result).toMatchObject({
+      orgs: [
+        { id: "org-1", name: "Test Org", active: true },
+        { id: "org-2", name: "Org Two", active: false },
+      ],
+    });
+  });
+
+  it("refcounts scope subscriptions over the wire", async () => {
+    const harness = startHarness();
+    harness.send(init);
+    await harness.frames();
+
+    const scope = { scopeType: "session", scopeId: "sess-1" };
+    expect((await harness.request(2, "scope/subscribe", scope)).result).toEqual({ count: 1 });
+    expect((await harness.request(3, "scope/subscribe", scope)).result).toEqual({ count: 2 });
+
+    const subs = harness.runtime().subscriptions.filter((s) => s.op === "SessionEventsLive");
+    expect(subs).toHaveLength(1);
+    expect(subs[0]?.variables).toEqual({ sessionId: "sess-1", organizationId: "org-1" });
+
+    expect((await harness.request(4, "scope/unsubscribe", scope)).result).toEqual({ count: 1 });
+    expect(subs[0]?.unsubscribed).toBe(false);
+    expect((await harness.request(5, "scope/unsubscribe", scope)).result).toEqual({ count: 0 });
+    expect(subs[0]?.unsubscribed).toBe(true);
+  });
+
+  it("acks actions immediately; the store only changes when events arrive", async () => {
+    const harness = startHarness();
+    harness.send(init);
+    await harness.frames();
+    await harness.request(2, "scope/subscribe", { scopeType: "session", scopeId: "sess-1" });
+
+    const ack = await harness.request(3, "session/prompt", {
+      sessionId: "sess-1",
+      text: "do the thing",
+    });
+    expect(ack.result).toEqual({ accepted: true, id: "evt-ack", queued: false });
+
+    const scopeKey = "session:sess-1";
+    expect(useEntityStore.getState().eventsByScope[scopeKey]).toBeUndefined();
+
+    const subscription = harness.runtime().subscriptions.find((s) => s.op === "SessionEventsLive");
+    subscription?.push({
+      sessionEvents: {
+        id: "evt-real",
+        scopeType: "session",
+        scopeId: "sess-1",
+        eventType: "message_sent",
+        payload: { text: "do the thing" },
+        actor: { type: "user", id: "user-1", name: "Alex", avatarUrl: null },
+        parentId: null,
+        timestamp: "2026-07-03T12:00:00.000Z",
+        metadata: null,
+      },
+    });
+    expect(Object.keys(useEntityStore.getState().eventsByScope[scopeKey] ?? {})).toEqual([
+      "evt-real",
+    ]);
+
+    const created = await harness.request(4, "session/create", { repoId: "repo-1" });
+    expect(created.result).toEqual({
+      accepted: true,
+      id: "sess-new",
+      sessionGroupId: "group-new",
+    });
+    const stopped = await harness.request(5, "session/stop", { sessionId: "sess-1" });
+    expect(stopped.result).toEqual({ accepted: true, id: "sess-1" });
+    const sent = await harness.request(6, "channel/send", {
+      channelId: "chan-1",
+      text: "hello",
+    });
+    expect(sent.result).toEqual({ accepted: true, id: "msg-ack" });
+    expect(
+      (await harness.request(7, "channel/send", { channelId: "nope", text: "x" })).error,
+    ).toMatchObject({ code: RPC_ERROR_CODES.INVALID_PARAMS });
+  });
+
+  it("org/switch re-hydrates and snapshots reflect the new org", async () => {
+    const harness = startHarness();
+    harness.send(init);
+    await harness.frames();
+    await harness.request(2, "scope/subscribe", { scopeType: "session", scopeId: "sess-1" });
+    const firstRuntime = harness.runtime();
+
+    const switched = await harness.request(3, "org/switch", { org: "Org Two" });
+    expect(switched.result).toEqual({ org: { id: "org-2", name: "Org Two" } });
+    expect(firstRuntime.disposed).toBe(true);
+    expect(firstRuntime.subscriptions[0]?.unsubscribed).toBe(true);
+    expect(harness.state.runtimes).toHaveLength(2);
+
+    const sessions = await harness.request(4, "sessions/list");
+    expect(sessions.result).toMatchObject({
+      sessions: [{ id: "sess-9", name: "Other org session" }],
+    });
+
+    // Switching to the already-active org is a no-op.
+    const same = await harness.request(5, "org/switch", { org: "org-2" });
+    expect(same.result).toEqual({ org: { id: "org-2", name: "Org Two" } });
+    expect(harness.state.runtimes).toHaveLength(2);
   });
 });
