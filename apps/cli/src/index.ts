@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
 import { Command } from "commander";
 import { registerCommands } from "./commands/index.js";
+import { readCliVersion } from "./version.js";
 
-const { version } = JSON.parse(
-  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-) as { version: string };
+const version = readCliVersion();
 
 const program = new Command();
 
