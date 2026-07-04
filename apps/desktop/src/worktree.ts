@@ -124,7 +124,47 @@ async function setUpstreamIfRemote(
   baseRef: string,
 ): Promise<void> {
   if (!branch || !baseRef.startsWith("origin/")) return;
-  await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
+  // Upstream tracking is cosmetic for a session worktree (Trace pushes
+  // explicitly), so a failure here must never abort worktree creation.
+  try {
+    await ensureRemoteTracksBranch(repoPath, baseRef.slice("origin/".length));
+    await execFileAsync("git", ["branch", "--set-upstream-to", baseRef, branch], { cwd: repoPath });
+  } catch (error) {
+    console.warn(
+      `[worktree] failed to set upstream for ${branch} -> ${baseRef}: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+/**
+ * Ensure `remote.origin.fetch` covers `branch` so upstream tracking resolves.
+ *
+ * A `--single-branch` clone only writes a fetch refspec for its clone branch, so
+ * a branch whose remote-tracking ref was created ad-hoc isn't reverse-mappable
+ * through the configured refspec. Both `git branch --set-upstream-to` and
+ * `@{upstream}` reject such a ref ("cannot set up tracking information; starting
+ * point '...' is not a branch"). Registering the one branch keeps fetches scoped
+ * while making tracking work. No fetch is needed: callers only reach this for an
+ * `origin/<branch>` baseRef, which `resolveBaseBranch` returns only after
+ * confirming the remote-tracking ref already exists locally.
+ */
+async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promise<void> {
+  const desired = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
+  const wildcard = "+refs/heads/*:refs/remotes/origin/*";
+  const refspecs = await execFileAsync("git", ["config", "--get-all", "remote.origin.fetch"], {
+    cwd: repoPath,
+  })
+    .then(({ stdout }) =>
+      stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0),
+    )
+    .catch(() => [] as string[]);
+  if (refspecs.includes(desired) || refspecs.includes(wildcard)) return;
+  await execFileAsync("git", ["remote", "set-branches", "--add", "origin", branch], {
+    cwd: repoPath,
+  });
 }
 
 async function hasRemoteOrigin(repoPath: string): Promise<boolean> {
