@@ -1,5 +1,6 @@
+import { promisify } from "util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ensureRepo, getRepoPath } from "./workspace.js";
+import { createWorktree, ensureRepo, getRepoPath } from "./workspace.js";
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
 
@@ -11,9 +12,21 @@ const mocks = vi.hoisted(() => ({
   rmSync: vi.fn(),
 }));
 
-vi.mock("child_process", () => ({
-  execFile: mocks.execFile,
-}));
+vi.mock("child_process", () => {
+  // Mirror real execFile's promisify behavior: resolve to { stdout, stderr }
+  // (a plain vi.fn would make promisify resolve with the raw stdout string).
+  // The wrapper still invokes mocks.execFile with a callback, so call args and
+  // the callback-based test mocks keep working.
+  (mocks.execFile as unknown as Record<symbol, unknown>)[promisify.custom] = (
+    ...callArgs: unknown[]
+  ) =>
+    new Promise((resolve, reject) => {
+      mocks.execFile(...callArgs, (err: Error | null, stdout: string, stderr: string) =>
+        err ? reject(err) : resolve({ stdout, stderr }),
+      );
+    });
+  return { execFile: mocks.execFile };
+});
 
 vi.mock("fs", () => ({
   default: {
@@ -278,6 +291,141 @@ describe("workspace repo setup", () => {
     expect(mocks.rmSync).toHaveBeenCalledWith("/repos/repo-1", {
       recursive: true,
       force: true,
+    });
+  });
+});
+
+describe("createWorktree upstream tracking", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.existsSync.mockReturnValue(false);
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      callbackFrom(args)(null, "", "");
+    });
+  });
+
+  function gitCallIndex(predicate: (args: string[]) => boolean): number {
+    return mocks.execFile.mock.calls.findIndex((call) => {
+      const args = call?.[1];
+      return Array.isArray(args) && args.every((a) => typeof a === "string") && predicate(args);
+    });
+  }
+
+  it("registers the branch in the fetch refspec before setting upstream (single-branch clone)", async () => {
+    // Default mock: `git config --get-all remote.origin.fetch` returns "" — i.e. a
+    // single-branch clone whose refspec does not cover the session branch.
+    await createWorktree({
+      repoId: "repo-1",
+      sessionId: "session-1",
+      defaultBranch: "main",
+      branch: "feature/work",
+      preserveBranchName: true,
+      slug: "otter",
+    });
+
+    const setBranchesIdx = gitCallIndex(
+      (args) =>
+        args[0] === "remote" &&
+        args[1] === "set-branches" &&
+        args[2] === "--add" &&
+        args[3] === "origin" &&
+        args[4] === "feature/work",
+    );
+    const setUpstreamIdx = gitCallIndex(
+      (args) => args[0] === "branch" && args[1] === "--set-upstream-to",
+    );
+
+    expect(setBranchesIdx).toBeGreaterThanOrEqual(0);
+    expect(setUpstreamIdx).toBeGreaterThanOrEqual(0);
+    // The refspec must be registered before git validates the upstream.
+    expect(setBranchesIdx).toBeLessThan(setUpstreamIdx);
+    expect(gitArgsAt(setUpstreamIdx)).toEqual([
+      "branch",
+      "--set-upstream-to",
+      "origin/feature/work",
+      "feature/work",
+    ]);
+  });
+
+  it("does not touch the fetch refspec when it already covers the branch", async () => {
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const callback = callbackFrom(args);
+      const cmd = Array.isArray(args[1]) ? (args[1] as string[]) : [];
+      if (cmd[0] === "config" && cmd.includes("remote.origin.fetch")) {
+        callback(null, "+refs/heads/*:refs/remotes/origin/*\n", "");
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await createWorktree({
+      repoId: "repo-1",
+      sessionId: "session-1",
+      defaultBranch: "main",
+      branch: "feature/work",
+      preserveBranchName: true,
+      slug: "otter",
+    });
+
+    expect(gitCallIndex((args) => args[0] === "remote" && args[1] === "set-branches")).toBe(-1);
+    expect(
+      gitCallIndex((args) => args[0] === "branch" && args[1] === "--set-upstream-to"),
+    ).toBeGreaterThanOrEqual(0);
+  });
+
+  it("does not re-add a refspec entry that already lists the exact branch (idempotent on resume)", async () => {
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const callback = callbackFrom(args);
+      const cmd = Array.isArray(args[1]) ? (args[1] as string[]) : [];
+      if (cmd[0] === "config" && cmd.includes("remote.origin.fetch")) {
+        callback(
+          null,
+          "+refs/heads/main:refs/remotes/origin/main\n" +
+            "+refs/heads/feature/work:refs/remotes/origin/feature/work\n",
+          "",
+        );
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await createWorktree({
+      repoId: "repo-1",
+      sessionId: "session-1",
+      defaultBranch: "main",
+      branch: "feature/work",
+      preserveBranchName: true,
+      slug: "otter",
+    });
+
+    expect(gitCallIndex((args) => args[0] === "remote" && args[1] === "set-branches")).toBe(-1);
+  });
+
+  it("does not fail worktree creation when setting upstream errors", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const callback = callbackFrom(args);
+      const cmd = Array.isArray(args[1]) ? (args[1] as string[]) : [];
+      if (cmd[0] === "branch" && cmd[1] === "--set-upstream-to") {
+        callback(new Error("fatal: cannot set up tracking information"), "", "");
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await expect(
+      createWorktree({
+        repoId: "repo-1",
+        sessionId: "session-1",
+        defaultBranch: "main",
+        branch: "feature/work",
+        preserveBranchName: true,
+        slug: "otter",
+      }),
+    ).resolves.toEqual({
+      workdir: "/workspaces/otter",
+      branch: "feature/work",
+      slug: "otter",
     });
   });
 });
