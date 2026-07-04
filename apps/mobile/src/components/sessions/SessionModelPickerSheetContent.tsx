@@ -76,7 +76,7 @@ export function SessionModelPickerSheetContent({
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
 
   const currentTool: CodingTool =
-    tool === "codex" || tool === "pi" || tool === "antigravity"
+    tool === "codex" || tool === "pi" || tool === "antigravity" || tool === "cursor_composer"
       ? (tool as CodingTool)
       : "claude_code";
   const effectiveTool = pendingTool ?? currentTool;

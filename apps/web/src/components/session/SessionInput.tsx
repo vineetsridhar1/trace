@@ -37,6 +37,7 @@ import {
 } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
+import { showToolNotInstalledToast } from "../../lib/coding-tool-install";
 import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type FileAttachment } from "./ImageAttachmentBar";
 import { uploadFile } from "../../lib/upload";
@@ -355,7 +356,9 @@ export function SessionInput({
             ...savedImages.map((img) => ({ ...img, uploading: false })),
             ...prev,
           ]);
-          toast.error(error instanceof Error ? error.message : "Failed to send message");
+          if (!showToolNotInstalledToast(error)) {
+            toast.error(error instanceof Error ? error.message : "Failed to send message");
+          }
           throw error;
         }
       } finally {
