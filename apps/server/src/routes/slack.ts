@@ -989,6 +989,7 @@ type ParsedSlackPrompt = {
   model?: string;
   reasoningEffort?: string;
   hosting?: "cloud" | "local";
+  yolo?: boolean;
 };
 
 function parseSlackPrompt(text: string): ParsedSlackPrompt {
@@ -1028,6 +1029,11 @@ function parseSlackPrompt(text: string): ParsedSlackPrompt {
       continue;
     }
     promptParts.push(clean(token));
+  }
+
+  if (promptParts.length > 0 && promptParts[promptParts.length - 1]!.toLowerCase() === "yolo") {
+    result.yolo = true;
+    promptParts.pop();
   }
 
   result.prompt = promptParts.join(" ").trim();
@@ -2037,13 +2043,13 @@ async function openAdvancedStartModal(input: {
   return true;
 }
 
-function claimMentionEvent(teamId: string, channel: string, threadTs: string): boolean {
+function claimMentionEvent(teamId: string, channel: string, messageTs: string): boolean {
   const now = Date.now();
   for (const [key, expiresAt] of recentMentionKeys) {
     if (expiresAt <= now) recentMentionKeys.delete(key);
   }
 
-  const key = `${teamId}:${channel}:${threadTs}`;
+  const key = `${teamId}:${channel}:${messageTs}`;
   if (recentMentionKeys.has(key)) return false;
   recentMentionKeys.set(key, now + RECENT_MENTION_TTL_MS);
   return true;
@@ -2062,7 +2068,7 @@ async function handleAppMention(input: {
     console.warn("[slack] app_mention missing required fields", { teamId, slackUserId, channel, ts, threadTs });
     return;
   }
-  if (!claimMentionEvent(teamId, channel, threadTs)) {
+  if (!claimMentionEvent(teamId, channel, ts)) {
     console.info("[slack] ignoring duplicate mention event", { teamId, channel, threadTs });
     return;
   }
@@ -2181,6 +2187,22 @@ async function handleAppMention(input: {
     prompt,
     fileRefs: files.refs,
   });
+  if (parsed.yolo) {
+    try {
+      const settings = await recommendedSettingsForDraft(draftId, slackUserId);
+      await startSlackSessionFromDraft({ draftId, slackUserId, settings });
+    } catch (err: unknown) {
+      await postMentionFeedback({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackUserId,
+        threadTs,
+        text: `Could not start with recommended settings: ${errorMessage(err)}`,
+      });
+    }
+    return;
+  }
+
   const settingsSummary = await recommendedSettingsSummaryForDraft(draftId, slackUserId);
   const posted = await postStartDraftPrompt({
     slackTeamId: teamId,
