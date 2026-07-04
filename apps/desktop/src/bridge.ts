@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
 import path from "path";
-import { execFile, execFileSync } from "child_process";
+import { execFile } from "child_process";
 import crypto from "crypto";
 import { promisify } from "util";
 import type {
@@ -45,7 +45,9 @@ import {
   AntigravityAdapter,
   ClaudeCodeAdapter,
   CodexAdapter,
+  CursorComposerAdapter,
   PiAdapter,
+  resolveExecutable,
 } from "@trace/shared/adapters";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
@@ -93,13 +95,14 @@ const detectedExecutables = new Set<string>();
 
 function hasExecutable(command: string): boolean {
   if (detectedExecutables.has(command)) return true;
-  try {
-    execFileSync(command, ["--version"], { stdio: "ignore", timeout: 5_000 });
+  // Resolve against PATH + common install dirs instead of executing the binary:
+  // GUI-launched processes often have a narrower PATH than the user's shell, and
+  // executing `--version` is fragile (slow cold starts, non-interactive hangs).
+  if (resolveExecutable(command) !== null) {
     detectedExecutables.add(command);
     return true;
-  } catch {
-    return false;
   }
+  return false;
 }
 
 async function inspectGitCheckpoint(
@@ -700,6 +703,7 @@ export class BridgeClient implements IBridgeClient {
     if (hasExecutable("codex")) supportedTools.push("codex");
     if (hasExecutable("pi")) supportedTools.push("pi");
     if (hasExecutable("agy")) supportedTools.push("antigravity");
+    if (hasExecutable("cursor-agent")) supportedTools.push("cursor_composer");
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
       label,
@@ -760,6 +764,8 @@ export class BridgeClient implements IBridgeClient {
         return new PiAdapter();
       case "codex":
         return new CodexAdapter();
+      case "cursor_composer":
+        return new CursorComposerAdapter();
       case "claude_code":
       default:
         return new ClaudeCodeAdapter();
