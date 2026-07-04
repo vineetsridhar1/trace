@@ -18,7 +18,9 @@ import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import { CODING_TOOL_IDS } from "@trace/shared";
 
 const CODING_TOOLS = new Set(CODING_TOOL_IDS);
+const DEFAULT_STARTUP_TIMEOUT_SECONDS = 180;
 const PROVISIONED_DEPROVISION_POLICIES = new Set(["on_session_end", "manual"]);
+const DEFAULT_DEPROVISION_POLICY = "on_session_end";
 const PROVISIONED_STATUS_VALUES = new Set([
   "unknown",
   "provisioning",
@@ -141,16 +143,6 @@ function assertCompatibilityConstraints(config: Record<string, unknown>): void {
       }
     }
   }
-
-  const startupTimeoutSeconds = config.startupTimeoutSeconds;
-  if (
-    startupTimeoutSeconds !== undefined &&
-    (typeof startupTimeoutSeconds !== "number" ||
-      !Number.isInteger(startupTimeoutSeconds) ||
-      startupTimeoutSeconds < 1)
-  ) {
-    throw new Error("Agent environment startupTimeoutSeconds must be a positive integer");
-  }
 }
 
 function assertHttpsUrl(value: unknown, key: string): string {
@@ -194,26 +186,20 @@ function assertProvisionedAuthConfig(value: unknown): ProvisionedAuthConfig {
 function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedConfig {
   assertCompatibilityConstraints(config);
 
-  const startupTimeoutSeconds = config.startupTimeoutSeconds;
-  if (
-    typeof startupTimeoutSeconds !== "number" ||
-    !Number.isInteger(startupTimeoutSeconds) ||
-    startupTimeoutSeconds < 1
-  ) {
-    throw new Error(
-      "Provisioned agent environment startupTimeoutSeconds must be a positive integer",
-    );
-  }
+  const rawStartupTimeoutSeconds = config.startupTimeoutSeconds;
+  const startupTimeoutSeconds =
+    typeof rawStartupTimeoutSeconds === "number" &&
+    Number.isInteger(rawStartupTimeoutSeconds) &&
+    rawStartupTimeoutSeconds >= 1
+      ? rawStartupTimeoutSeconds
+      : DEFAULT_STARTUP_TIMEOUT_SECONDS;
 
-  const deprovisionPolicy = config.deprovisionPolicy;
-  if (
-    typeof deprovisionPolicy !== "string" ||
-    !PROVISIONED_DEPROVISION_POLICIES.has(deprovisionPolicy)
-  ) {
-    throw new Error(
-      "Provisioned agent environment deprovisionPolicy must be on_session_end or manual",
-    );
-  }
+  const rawDeprovisionPolicy = config.deprovisionPolicy;
+  const deprovisionPolicy =
+    typeof rawDeprovisionPolicy === "string" &&
+    PROVISIONED_DEPROVISION_POLICIES.has(rawDeprovisionPolicy)
+      ? rawDeprovisionPolicy
+      : DEFAULT_DEPROVISION_POLICY;
 
   const launcherMetadata = config.launcherMetadata;
   if (
