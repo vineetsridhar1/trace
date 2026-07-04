@@ -71,6 +71,9 @@ describe("EventService", () => {
     });
     expect(redisMock.xadd).toHaveBeenCalledWith(
       "stream:org:org-1:events",
+      "MAXLEN",
+      "~",
+      10000,
       "*",
       "event",
       JSON.stringify(event),
@@ -111,6 +114,9 @@ describe("EventService", () => {
     });
     expect(redisMock.xadd).toHaveBeenCalledWith(
       "stream:org:org-1:events",
+      "MAXLEN",
+      "~",
+      10000,
       "*",
       "event",
       JSON.stringify(event),
