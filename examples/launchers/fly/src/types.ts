@@ -18,7 +18,7 @@ export type StartSessionRequest = {
   runtimeTokenScope: "session";
   bridgeUrl: string;
   repo: TraceRepo | null;
-  tool: "claude_code" | "codex" | "pi";
+  tool: "claude_code" | "codex" | "cursor_composer" | "pi";
   model: string | null;
   reasoningEffort: string | null;
   bootstrapEnv: Record<string, string>;

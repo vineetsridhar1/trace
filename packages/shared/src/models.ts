@@ -44,6 +44,48 @@ const PI_MODELS: readonly ModelOption[] = [
   { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
 ];
 
+const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
+  { value: "auto", label: "Auto" },
+  { value: "gpt-5.5", label: "GPT-5.5" },
+  { value: "opus-4.8", label: "Opus 4.8" },
+  { value: "sonnet-5", label: "Sonnet 5" },
+];
+
+// Cursor encodes the thinking level in the model id (e.g. gpt-5.5-high,
+// claude-opus-4-8-thinking-high) rather than accepting a separate flag, so the
+// effort selector maps to those id suffixes in resolveCursorComposerModel.
+const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra high" },
+  { value: "max", label: "Max" },
+];
+
+/**
+ * Compose the concrete Cursor model id from the selected family + thinking level.
+ * `auto` ignores the level. GPT-5.5 has no "max"/"xhigh" tiers, so both clamp to
+ * its top "extra-high"; Claude families expose the level as a thinking variant.
+ */
+const CURSOR_COMPOSER_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
+
+export function resolveCursorComposerModel(
+  model: string | undefined,
+  effort: string | undefined,
+): string | undefined {
+  if (!model || model === "auto") return model ?? undefined;
+  // Clamp to a known level: a stale/foreign effort (e.g. "auto" carried over
+  // from Claude) must never produce an invalid id like `...-thinking-auto`.
+  const level = effort && CURSOR_COMPOSER_LEVELS.has(effort) ? effort : "medium";
+  if (model === "gpt-5.5") {
+    const gptLevel = level === "xhigh" || level === "max" ? "extra-high" : level;
+    return `gpt-5.5-${gptLevel}`;
+  }
+  if (model === "opus-4.8") return `claude-opus-4-8-thinking-${level}`;
+  if (model === "sonnet-5") return `claude-sonnet-5-thinking-${level}`;
+  return model;
+}
+
 const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
   {
     value: "openai",
@@ -68,6 +110,7 @@ const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
 const MODEL_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ModelOption[]>> = {
   claude_code: CLAUDE_CODE_MODELS,
   codex: CODEX_MODELS,
+  cursor_composer: CURSOR_COMPOSER_MODELS,
   pi: PI_MODELS,
 };
 
@@ -91,18 +134,21 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
   {
     claude_code: CLAUDE_CODE_REASONING_EFFORTS,
     codex: CODEX_REASONING_EFFORTS,
+    cursor_composer: CURSOR_COMPOSER_REASONING_EFFORTS,
     pi: CODEX_REASONING_EFFORTS,
   };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "claude-opus-4-8[1m]",
   codex: "gpt-5.5",
+  cursor_composer: "auto",
   pi: "openai/gpt-5.5",
 };
 
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "auto",
   codex: "medium",
+  cursor_composer: "medium",
   pi: "medium",
 };
 

@@ -11,7 +11,10 @@ describe("buildChildProcessEnv", () => {
     });
 
     expect(env.HOME).toBe("/home/coder");
-    expect(env.PATH).toBe("/usr/bin");
+    // PATH is augmented with common install dirs so spawned CLIs resolve even
+    // when the launching process has a narrower PATH than the user's shell.
+    expect(env.PATH?.split(":")).toContain("/usr/bin");
+    expect(env.PATH?.split(":")).toContain("/home/coder/.local/bin");
     expect(env.OPENAI_API_KEY).toBe("sk-test");
     expect(env.HUGE_PAYLOAD).toBeUndefined();
   });
@@ -30,7 +33,7 @@ describe("buildChildProcessEnv", () => {
     });
 
     expect(env.HOME).toBe("/home/coder");
-    expect(env.PATH).toBe("/usr/bin");
+    expect(env.PATH?.split(":")).toContain("/usr/bin");
     expect(env.OPENAI_API_KEY).toBe("sk-test");
     expect(env.KEEP_ME).toBe("short");
     expect(Object.keys(env).some((key) => key.startsWith("LARGE_"))).toBe(true);

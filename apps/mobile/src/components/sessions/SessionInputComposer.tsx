@@ -160,7 +160,7 @@ export function SessionInputComposer({
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const currentTool: CodingTool =
-    tool === "codex" || tool === "pi" || tool === "antigravity"
+    tool === "codex" || tool === "pi" || tool === "antigravity" || tool === "cursor_composer"
       ? (tool as CodingTool)
       : "claude_code";
   const isTerminal =

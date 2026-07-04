@@ -88,6 +88,7 @@ enum CodingTool {
   antigravity
   claude_code
   codex
+  cursor_composer
   custom
   pi
 }
