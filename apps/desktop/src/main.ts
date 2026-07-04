@@ -205,6 +205,46 @@ function createWindow() {
     }
   });
 
+  // Native right-click context menu with spellcheck suggestions and edit actions.
+  // Electron enables the spell checker by default but does not render a context
+  // menu for it — we have to build one from the context-menu event params.
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    const template: MenuItemConstructorOptions[] = [];
+
+    if (params.misspelledWord) {
+      for (const suggestion of params.dictionarySuggestions) {
+        template.push({
+          label: suggestion,
+          click: () => mainWindow?.webContents.replaceMisspelling(suggestion),
+        });
+      }
+      if (params.dictionarySuggestions.length === 0) {
+        template.push({ label: "No suggestions", enabled: false });
+      }
+      template.push({
+        label: "Add to Dictionary",
+        click: () =>
+          mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      });
+      template.push({ type: "separator" });
+    }
+
+    if (params.isEditable) {
+      template.push(
+        { role: "cut", enabled: params.editFlags.canCut },
+        { role: "copy", enabled: params.editFlags.canCopy },
+        { role: "paste", enabled: params.editFlags.canPaste },
+        { role: "selectAll" },
+      );
+    } else if (params.selectionText) {
+      template.push({ role: "copy", enabled: params.editFlags.canCopy });
+    }
+
+    if (template.length > 0) {
+      Menu.buildFromTemplate(template).popup({ window: mainWindow ?? undefined });
+    }
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
