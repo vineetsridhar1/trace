@@ -104,6 +104,7 @@ vi.mock("@trace/shared", () => {
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
     MAX_WORKSPACE_NAME_LENGTH: 80,
+    CODING_TOOL_IDS: ["claude_code", "codex", "pi", "antigravity", "cursor_composer", "custom"],
   };
 });
 
