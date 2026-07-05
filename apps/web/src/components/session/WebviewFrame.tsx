@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 export interface WebviewHandle {
   openDevTools: () => void;
@@ -24,6 +24,7 @@ export const WebviewFrame = forwardRef<WebviewHandle, { url: string }>(function 
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const webviewRef = useRef<ElectronWebview | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useImperativeHandle(
     ref,
@@ -42,6 +43,11 @@ export const WebviewFrame = forwardRef<WebviewHandle, { url: string }>(function 
     const el = document.createElement("webview") as ElectronWebview;
     el.setAttribute("src", url);
     el.setAttribute("allowpopups", "true");
+    if (typeof el.openDevTools !== "function") {
+      setError("Electron webviews are not available. Restart the desktop app after rebuilding.");
+    } else {
+      setError(null);
+    }
     // Fill the container without relying on the webview's default flex layout.
     el.style.position = "absolute";
     el.style.inset = "0";
@@ -61,5 +67,13 @@ export const WebviewFrame = forwardRef<WebviewHandle, { url: string }>(function 
     if (el && el.getAttribute("src") !== url) el.setAttribute("src", url);
   }, [url]);
 
-  return <div ref={containerRef} className="absolute inset-0" />;
+  return (
+    <div ref={containerRef} className="absolute inset-0">
+      {error ? (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background px-6 text-center text-sm text-muted-foreground">
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
 });

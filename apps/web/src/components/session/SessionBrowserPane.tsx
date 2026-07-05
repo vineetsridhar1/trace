@@ -41,7 +41,13 @@ export function SessionBrowserPane({ tab, active }: { tab: BrowserTabEntry; acti
   };
 
   return (
-    <div className={cn("absolute inset-0 flex flex-col bg-background", !active && "hidden")}>
+    <div
+      className={cn(
+        "absolute inset-0 flex flex-col bg-background",
+        active ? "z-10 opacity-100" : "pointer-events-none opacity-0",
+      )}
+      aria-hidden={!active}
+    >
       <form
         onSubmit={handleSubmit}
         className="flex items-center gap-1 border-b border-border/70 bg-surface-mid px-2 py-1.5"
