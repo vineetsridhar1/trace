@@ -590,6 +590,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       tool: input.tool,
       model: input.model ?? null,
       reasoningEffort: input.reasoningEffort ?? null,
+      runtimeProfile: input.runtimeProfile ?? null,
       bootstrapEnv: {
         TRACE_SESSION_ID: input.sessionId,
         TRACE_ORG_ID: input.organizationId,

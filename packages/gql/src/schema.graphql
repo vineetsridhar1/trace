@@ -412,6 +412,7 @@ type Repo {
   remoteUrl: String
   defaultBranch: String!
   webhookActive: Boolean!
+  runtimeProfile: String
   applicationConfig: RepoApplicationConfig!
   projects: [Project!]!
   sessions: [Session!]!
@@ -1200,6 +1201,11 @@ input UpdateRepoInput {
   name: String
   defaultBranch: String
   applicationConfig: RepoApplicationConfigInput
+  """
+  Named launcher runtime profile for cloud sessions on this repo (e.g. a
+  larger image/resources preset). Empty string clears the profile.
+  """
+  runtimeProfile: String
 }
 
 input RepoApplicationConfigInput {

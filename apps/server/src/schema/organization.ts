@@ -152,6 +152,8 @@ export const organizationTypeResolvers = {
 export const repoResolvers = {
   Repo: {
     webhookActive: (repo: { webhookId?: string | null }) => !!repo.webhookId,
+    runtimeProfile: (repo: { setupConfig?: unknown }) =>
+      repoApplicationConfigService.parseRuntimeProfile(repo.setupConfig),
     applicationConfig: (repo: {
       name?: string | null;
       remoteUrl?: string | null;

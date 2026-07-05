@@ -224,17 +224,26 @@ export class OrganizationService {
         );
       }
 
+      let setupConfig: Prisma.InputJsonValue | undefined;
+      if (input.applicationConfig != null) {
+        setupConfig = repoApplicationConfigService.mergeIntoSetupConfig(
+          existing.setupConfig,
+          input.applicationConfig,
+        );
+      }
+      if (input.runtimeProfile != null) {
+        setupConfig = repoApplicationConfigService.mergeRuntimeProfileIntoSetupConfig(
+          setupConfig ?? existing.setupConfig,
+          input.runtimeProfile,
+        );
+      }
+
       const repo = await tx.repo.update({
         where: { id },
         data: {
           ...(input.name != null && { name: input.name }),
           ...(input.defaultBranch != null && { defaultBranch: input.defaultBranch }),
-          ...(input.applicationConfig != null && {
-            setupConfig: repoApplicationConfigService.mergeIntoSetupConfig(
-              existing.setupConfig,
-              input.applicationConfig,
-            ),
-          }),
+          ...(setupConfig !== undefined && { setupConfig }),
         },
         include: { projects: true, sessions: true },
       });
@@ -256,6 +265,7 @@ export class OrganizationService {
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
               webhookActive: !!repo.webhookId,
+              runtimeProfile: repoApplicationConfigService.parseRuntimeProfile(repo.setupConfig),
               applicationConfig,
             },
           },

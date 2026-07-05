@@ -21,6 +21,8 @@ export type RuntimeStartInput = {
   model?: string;
   reasoningEffort?: string;
   repo?: { id: string; name: string; remoteUrl: string | null; defaultBranch: string } | null;
+  /** Named launcher runtime profile from the repo's setup config. */
+  runtimeProfile?: string;
   branch?: string;
   checkpointSha?: string;
   readOnly?: boolean;

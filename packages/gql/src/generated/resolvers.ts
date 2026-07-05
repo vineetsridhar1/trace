@@ -1715,6 +1715,7 @@ export type Repo = {
   name: Scalars["String"]["output"];
   projects: Array<Project>;
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
+  runtimeProfile?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
 };
@@ -2324,6 +2325,11 @@ export type UpdateRepoInput = {
   applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+  /**
+   * Named launcher runtime profile for cloud sessions on this repo (e.g. a
+   * larger image/resources preset). Empty string clears the profile.
+   */
+  runtimeProfile?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateSessionDefaultsInput = {
@@ -4336,6 +4342,7 @@ export type RepoResolvers<
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes["Project"]>, ParentType, ContextType>;
   remoteUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  runtimeProfile?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
   webhookActive?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
