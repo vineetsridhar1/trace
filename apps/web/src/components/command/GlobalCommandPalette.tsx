@@ -18,7 +18,7 @@ import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { useUIStore } from "../../stores/ui";
-import { navigateToSessionGroup } from "../../stores/ui";
+import { navigateToSession, navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 import {
   formatShortcut,
@@ -163,6 +163,10 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   );
 
   const channelLabel = useMemo(() => new Map(channels.map((c) => [c.id, c.name])), [channels]);
+  const sessionGroupLabel = useMemo(
+    () => new Map(sessionGroups.map((g) => [g.id, g.name])),
+    [sessionGroups],
+  );
 
   // Slack-style: wrapping the query in quotes means "search only" — jump-to items
   // are suppressed and the search page is the only option. The search term drops
@@ -176,11 +180,22 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const messageItems = useMemo<PaletteItem[]>(
     () =>
       messageResults.map((m) => {
-        const conversation = m.chatId
-          ? (chatLabel.get(m.chatId) ?? "Direct Message")
-          : m.channelId
-            ? (channelLabel.get(m.channelId) ?? "Channel")
-            : undefined;
+        let conversation: string | undefined;
+        let onSelect: () => void = () => {};
+        if (m.sessionId && m.sessionGroupId) {
+          conversation = sessionGroupLabel.get(m.sessionGroupId) ?? "Session";
+          const groupId = m.sessionGroupId;
+          const sessionId = m.sessionId;
+          onSelect = () => navigateToSession(null, groupId, sessionId);
+        } else if (m.chatId) {
+          conversation = chatLabel.get(m.chatId) ?? "Direct Message";
+          const chatId = m.chatId;
+          onSelect = () => setActiveChatId(chatId);
+        } else if (m.channelId) {
+          conversation = channelLabel.get(m.channelId) ?? "Channel";
+          const channelId = m.channelId;
+          onSelect = () => setActiveChannelId(channelId);
+        }
         return {
           key: `message-${m.id}`,
           group: "Messages",
@@ -188,13 +203,10 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
           sublabel: conversation,
           search: "",
           icon: <MessageSquareText size={16} />,
-          onSelect: () => {
-            if (m.chatId) setActiveChatId(m.chatId);
-            else if (m.channelId) setActiveChannelId(m.channelId);
-          },
+          onSelect,
         };
       }),
-    [messageResults, chatLabel, channelLabel, setActiveChatId, setActiveChannelId],
+    [messageResults, chatLabel, channelLabel, sessionGroupLabel, setActiveChatId, setActiveChannelId],
   );
 
   const items = useMemo<PaletteItem[]>(() => {

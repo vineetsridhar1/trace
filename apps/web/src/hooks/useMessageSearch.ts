@@ -8,6 +8,8 @@ const SEARCH_MESSAGES_QUERY = gql`
       id
       chatId
       channelId
+      sessionId
+      sessionGroupId
       text
     }
   }
@@ -17,6 +19,8 @@ export interface MessageSearchResult {
   id: string;
   chatId: string | null;
   channelId: string | null;
+  sessionId: string | null;
+  sessionGroupId: string | null;
   text: string;
 }
 

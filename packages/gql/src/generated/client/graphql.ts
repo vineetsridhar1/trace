@@ -608,6 +608,22 @@ export type Message = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
+/**
+ * A search hit spanning chat/channel messages and session conversation events.
+ * Exactly one of chatId / channelId / sessionId identifies where the hit lives.
+ */
+export type MessageSearchHit = {
+  __typename?: "MessageSearchHit";
+  actor: Actor;
+  channelId?: Maybe<Scalars["ID"]["output"]>;
+  chatId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  sessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  text: Scalars["String"]["output"];
+};
+
 export type MoveChannelInput = {
   channelId: Scalars["ID"]["input"];
   groupId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1368,7 +1384,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
-  searchMessages: Array<Message>;
+  searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
@@ -3804,7 +3820,7 @@ export type SearchMessagesQueryVariables = Exact<{
 export type SearchMessagesQuery = {
   __typename?: "Query";
   searchMessages: Array<{
-    __typename?: "Message";
+    __typename?: "MessageSearchHit";
     id: string;
     chatId?: string | null;
     channelId?: string | null;
@@ -3836,6 +3852,30 @@ export type OrgEventsSubscription = {
       avatarUrl?: string | null;
     };
   };
+};
+
+export type SearchMessagesPageQueryVariables = Exact<{
+  query: Scalars["String"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type SearchMessagesPageQuery = {
+  __typename?: "Query";
+  searchMessages: Array<{
+    __typename?: "MessageSearchHit";
+    id: string;
+    chatId?: string | null;
+    channelId?: string | null;
+    text: string;
+    createdAt: string;
+    actor: {
+      __typename?: "Actor";
+      type: ActorType;
+      id: string;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  }>;
 };
 
 export type SessionTimelineQueryVariables = Exact<{
@@ -9102,6 +9142,75 @@ export const OrgEventsDocument = {
     },
   ],
 } as unknown as DocumentNode<OrgEventsSubscription, OrgEventsSubscriptionVariables>;
+export const SearchMessagesPageDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SearchMessagesPage" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "query" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "searchMessages" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "query" },
+                value: { kind: "Variable", name: { kind: "Name", value: "query" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "chatId" } },
+                { kind: "Field", name: { kind: "Name", value: "channelId" } },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SearchMessagesPageQuery, SearchMessagesPageQueryVariables>;
 export const SessionTimelineDocument = {
   kind: "Document",
   definitions: [

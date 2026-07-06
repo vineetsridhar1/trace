@@ -1,8 +1,9 @@
 import { useMemo, type ReactNode } from "react";
-import { Hash, MessageCircle, Search } from "lucide-react";
+import { GitBranch, Hash, MessageCircle, Search } from "lucide-react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
+import type { SessionGroupEntity } from "@trace/client-core";
 import type { Channel, Chat } from "@trace/gql";
-import { useUIStore } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
 import { useSearchMessages, type SearchMessageResult } from "../../hooks/useSearchMessages";
 import { SmallMessageAvatar } from "../chat/MessageAvatar";
 import { ConnectionStatus } from "../ConnectionStatus";
@@ -96,11 +97,24 @@ export function SearchResultsView() {
 
   const channelsTable = useEntityStore((s: { channels: Record<string, Channel> }) => s.channels);
   const chatsTable = useEntityStore((s: { chats: Record<string, Chat> }) => s.chats);
+  const sessionGroupsTable = useEntityStore(
+    (s: { sessionGroups: Record<string, SessionGroupEntity> }) => s.sessionGroups,
+  );
 
   const { results, loading } = useSearchMessages(query);
 
   const resolveConversation = useMemo(() => {
     return (result: SearchMessageResult): Conversation | null => {
+      if (result.sessionId && result.sessionGroupId) {
+        const group = sessionGroupsTable[result.sessionGroupId];
+        const groupId = result.sessionGroupId;
+        const sessionId = result.sessionId;
+        return {
+          label: group?.name ?? group?.slug ?? "Session",
+          icon: <GitBranch size={12} />,
+          onOpen: () => navigateToSession(null, groupId, sessionId),
+        };
+      }
       if (result.channelId) {
         const channel = channelsTable[result.channelId];
         return {
@@ -120,7 +134,14 @@ export function SearchResultsView() {
       }
       return null;
     };
-  }, [channelsTable, chatsTable, currentUserId, setActiveChannelId, setActiveChatId]);
+  }, [
+    channelsTable,
+    chatsTable,
+    sessionGroupsTable,
+    currentUserId,
+    setActiveChannelId,
+    setActiveChatId,
+  ]);
 
   const hasQuery = query.trim().length >= 2;
 

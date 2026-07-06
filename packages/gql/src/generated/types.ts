@@ -606,6 +606,22 @@ export type Message = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
+/**
+ * A search hit spanning chat/channel messages and session conversation events.
+ * Exactly one of chatId / channelId / sessionId identifies where the hit lives.
+ */
+export type MessageSearchHit = {
+  __typename?: "MessageSearchHit";
+  actor: Actor;
+  channelId?: Maybe<Scalars["ID"]["output"]>;
+  chatId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  sessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  text: Scalars["String"]["output"];
+};
+
 export type MoveChannelInput = {
   channelId: Scalars["ID"]["input"];
   groupId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1366,7 +1382,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
-  searchMessages: Array<Message>;
+  searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;

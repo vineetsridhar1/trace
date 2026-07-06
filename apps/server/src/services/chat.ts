@@ -11,7 +11,47 @@ import {
   type MessageWithSummary,
 } from "./message-utils.js";
 import { normalizeMembers } from "./member-utils.js";
-import { visibleChannelWhere } from "./access.js";
+import { visibleChannelWhere, visibleSessionWhere } from "./access.js";
+
+/** A search hit spanning both chat/channel messages and session conversation events. */
+export interface MessageSearchHit {
+  id: string;
+  text: string;
+  createdAt: Date;
+  actorType: string;
+  actorId: string;
+  chatId: string | null;
+  channelId: string | null;
+  sessionId: string | null;
+  sessionGroupId: string | null;
+}
+
+/** Pull the human-readable text out of a session conversation event payload. */
+function extractSessionEventText(eventType: string, payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (eventType === "message_sent") {
+    return typeof p.text === "string" ? p.text : null;
+  }
+  // Assistant output: { type: "assistant", message: { content: [{ type: "text", text }] } }
+  const message = p.message;
+  if (message && typeof message === "object") {
+    const content = (message as Record<string, unknown>).content;
+    if (Array.isArray(content)) {
+      const parts = content
+        .filter(
+          (c): c is { text: string } =>
+            !!c &&
+            typeof c === "object" &&
+            (c as Record<string, unknown>).type === "text" &&
+            typeof (c as Record<string, unknown>).text === "string",
+        )
+        .map((c) => c.text);
+      if (parts.length) return parts.join("\n");
+    }
+  }
+  return null;
+}
 
 function buildMemberKey(...userIds: string[]) {
   return userIds.sort().join(":");
@@ -486,14 +526,36 @@ export class ChatService {
   }
 
   /**
-   * Full-text-ish search over message bodies the user can see — chats they are an
-   * active member of and channels visible to them. Used by the command palette.
+   * Full-text-ish search over everything the user can read: chat/channel messages
+   * (the Message table) and session conversation events (user prompts + assistant
+   * output). Used by the command palette and the search results page.
    */
-  async searchMessages(query: string, userId: string, organizationId: string, limit?: number) {
+  async searchMessages(
+    query: string,
+    userId: string,
+    organizationId: string,
+    limit?: number,
+  ): Promise<MessageSearchHit[]> {
     const trimmed = query.trim().slice(0, 200);
     if (trimmed.length < 2) return [];
 
     const take = Math.min(Math.max(limit ?? 20, 1), 100);
+    const [messageHits, sessionHits] = await Promise.all([
+      this.searchMessageTable(trimmed, userId, organizationId, take),
+      this.searchSessionEvents(trimmed, userId, organizationId, take),
+    ]);
+
+    return [...messageHits, ...sessionHits]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, take);
+  }
+
+  private async searchMessageTable(
+    trimmed: string,
+    userId: string,
+    organizationId: string,
+    take: number,
+  ): Promise<MessageSearchHit[]> {
     const messages = await prisma.message.findMany({
       where: {
         deletedAt: null,
@@ -514,7 +576,78 @@ export class ChatService {
       take,
     });
 
-    return hydrateMessages(messages);
+    return messages.map((m) => ({
+      id: m.id,
+      text: m.text,
+      createdAt: m.createdAt,
+      actorType: m.actorType,
+      actorId: m.actorId,
+      chatId: m.chatId,
+      channelId: m.channelId,
+      sessionId: null,
+      sessionGroupId: null,
+    }));
+  }
+
+  private async searchSessionEvents(
+    trimmed: string,
+    userId: string,
+    organizationId: string,
+    take: number,
+  ): Promise<MessageSearchHit[]> {
+    // Scope to sessions the user can view, then match the query against the raw
+    // event payload (case-insensitive). ILIKE can over-match on JSON structure,
+    // so we re-check the extracted display text below.
+    const sessions = await prisma.session.findMany({
+      where: { organizationId, ...visibleSessionWhere(userId) },
+      select: { id: true, sessionGroupId: true },
+    });
+    if (sessions.length === 0) return [];
+
+    const groupBySession = new Map(sessions.map((s) => [s.id, s.sessionGroupId]));
+    const sessionIds = sessions.map((s) => s.id);
+
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        eventType: string;
+        actorType: string;
+        actorId: string;
+        scopeId: string;
+        timestamp: Date;
+        payload: unknown;
+      }>
+    >(Prisma.sql`
+      SELECT id, "eventType", "actorType", "actorId", "scopeId", "timestamp", payload
+      FROM "Event"
+      WHERE "organizationId" = ${organizationId}
+        AND "scopeType" = 'session'
+        AND "eventType" IN ('message_sent', 'session_output')
+        AND "scopeId" IN (${Prisma.join(sessionIds)})
+        AND payload::text ILIKE ${`%${trimmed}%`}
+      ORDER BY "timestamp" DESC
+      LIMIT ${take * 4}
+    `);
+
+    const needle = trimmed.toLowerCase();
+    const hits: MessageSearchHit[] = [];
+    for (const row of rows) {
+      const text = extractSessionEventText(row.eventType, row.payload);
+      if (!text || !text.toLowerCase().includes(needle)) continue;
+      hits.push({
+        id: row.id,
+        text,
+        createdAt: row.timestamp,
+        actorType: row.actorType,
+        actorId: row.actorId,
+        chatId: null,
+        channelId: null,
+        sessionId: row.scopeId,
+        sessionGroupId: groupBySession.get(row.scopeId) ?? null,
+      });
+      if (hits.length >= take) break;
+    }
+    return hits;
   }
 
   async getReplies(rootMessageId: string, userId: string, opts?: { after?: Date; limit?: number }) {

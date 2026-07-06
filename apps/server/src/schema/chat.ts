@@ -146,6 +146,10 @@ export const chatTypeResolvers = {
     actor: (message: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
       resolveActor(message, ctx.userLoader),
   },
+  MessageSearchHit: {
+    actor: (hit: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
+      resolveActor(hit, ctx.userLoader),
+  },
   ChatMember: {
     user: async (member: { userId: string }, _args: unknown, ctx: Context) => {
       const user = await ctx.userLoader.load(member.userId);

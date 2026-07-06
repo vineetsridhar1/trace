@@ -8,6 +8,8 @@ const SEARCH_MESSAGES_QUERY = gql`
       id
       chatId
       channelId
+      sessionId
+      sessionGroupId
       text
       createdAt
       actor {
@@ -24,6 +26,8 @@ export interface SearchMessageResult {
   id: string;
   chatId: string | null;
   channelId: string | null;
+  sessionId: string | null;
+  sessionGroupId: string | null;
   text: string;
   createdAt: string;
   actor: { type: string; id: string; name: string | null; avatarUrl: string | null };

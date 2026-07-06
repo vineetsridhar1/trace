@@ -350,32 +350,35 @@ describe("ChatService", () => {
   });
 
   it("searches messages scoped to visible chats and channels", async () => {
-    prismaMock.message.findMany
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          chatId: "chat-1",
-          channelId: null,
-          parentMessageId: null,
-          actorType: "user",
-          actorId: "user-2",
-          text: "hello world",
-          html: null,
-          mentions: null,
-          editedAt: null,
-          deletedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ])
-      // hydrateMessages looks up replies for root messages.
-      .mockResolvedValueOnce([]);
+    prismaMock.message.findMany.mockResolvedValueOnce([
+      {
+        id: "m1",
+        chatId: "chat-1",
+        channelId: null,
+        parentMessageId: null,
+        actorType: "user",
+        actorId: "user-2",
+        text: "hello world",
+        html: null,
+        mentions: null,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    prismaMock.session.findMany.mockResolvedValueOnce([]);
 
     const service = new ChatService();
     const results = await service.searchMessages("hello", "user-1", "org-1");
 
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ id: "m1", text: "hello world", replyCount: 0 });
+    expect(results[0]).toMatchObject({
+      id: "m1",
+      text: "hello world",
+      chatId: "chat-1",
+      sessionId: null,
+    });
 
     const where = prismaMock.message.findMany.mock.calls[0][0].where;
     expect(where).toMatchObject({
@@ -393,5 +396,49 @@ describe("ChatService", () => {
         channel: expect.objectContaining({ organizationId: "org-1" }),
       }),
     ]);
+    // No visible sessions => the raw event search is skipped entirely.
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("searches session conversation events and maps them to hits", async () => {
+    prismaMock.message.findMany.mockResolvedValueOnce([]);
+    prismaMock.session.findMany.mockResolvedValueOnce([
+      { id: "session-1", sessionGroupId: "group-1" },
+    ]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([
+      {
+        id: "evt-1",
+        eventType: "message_sent",
+        actorType: "user",
+        actorId: "user-1",
+        scopeId: "session-1",
+        timestamp: new Date(),
+        payload: { text: "hello world from a session" },
+      },
+      {
+        id: "evt-2",
+        eventType: "session_output",
+        actorType: "agent",
+        actorId: "agent-1",
+        scopeId: "session-1",
+        timestamp: new Date(),
+        // ILIKE matched JSON structure, but the visible text does not contain the
+        // query, so this hit must be filtered out.
+        payload: { type: "assistant", message: { content: [{ type: "text", text: "unrelated" }] } },
+      },
+    ]);
+
+    const service = new ChatService();
+    const results = await service.searchMessages("hello world", "user-1", "org-1");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      id: "evt-1",
+      text: "hello world from a session",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      chatId: null,
+      channelId: null,
+    });
   });
 });
