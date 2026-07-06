@@ -8,6 +8,7 @@ import {
   MessageCircle,
   MessageSquareText,
   Plus,
+  Search,
   Settings,
   Ticket,
 } from "lucide-react";
@@ -40,6 +41,9 @@ interface PaletteItem {
   shortcut?: CommandShortcut;
   onSelect: () => void;
 }
+
+/** Cap message hits shown inline in the palette; the rest live on the search page. */
+const MAX_INLINE_MESSAGES = 6;
 
 const SETTINGS_TABS: { id: string; label: string }[] = [
   { id: "repositories", label: "Repositories" },
@@ -80,6 +84,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
 
   const setActivePage = useUIStore((s) => s.setActivePage);
+  const openSearch = useUIStore((s) => s.openSearch);
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
@@ -159,7 +164,15 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
 
   const channelLabel = useMemo(() => new Map(channels.map((c) => [c.id, c.name])), [channels]);
 
-  const messageResults = useMessageSearch(query);
+  // Slack-style: wrapping the query in quotes means "search only" — jump-to items
+  // are suppressed and the search page is the only option. The search term drops
+  // the surrounding quotes.
+  const trimmedQuery = query.trim();
+  const isQuoted =
+    trimmedQuery.length >= 2 && trimmedQuery.startsWith('"') && trimmedQuery.endsWith('"');
+  const searchTerm = isQuoted ? trimmedQuery.slice(1, -1).trim() : trimmedQuery;
+
+  const messageResults = useMessageSearch(isQuoted ? "" : searchTerm);
   const messageItems = useMemo<PaletteItem[]>(
     () =>
       messageResults.map((m) => {
@@ -314,7 +327,28 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   ]);
 
   const groups = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    // The search page is always the last option when there's a query, so Enter
+    // falls through to it when nothing else matches.
+    const searchGroup: { name: string; items: PaletteItem[] } | null = searchTerm
+      ? {
+          name: "Search",
+          items: [
+            {
+              key: "__search-page__",
+              group: "Search",
+              label: `Search for “${searchTerm}”`,
+              search: "",
+              icon: <Search size={16} />,
+              onSelect: () => openSearch(searchTerm),
+            },
+          ],
+        }
+      : null;
+
+    // Quoted query => search only, no jump-to items.
+    if (isQuoted) return searchGroup ? [searchGroup] : [];
+
+    const q = trimmedQuery.toLowerCase();
     const visible = q ? items.filter((item) => item.search.toLowerCase().includes(q)) : items;
     const ordered: { name: string; items: PaletteItem[] }[] = [];
     const index = new Map<string, PaletteItem[]>();
@@ -328,10 +362,14 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       bucket.push(item);
     }
     // Message results are already filtered server-side, so they bypass the
-    // client-side query filter and are appended as their own group.
-    if (messageItems.length) ordered.push({ name: "Messages", items: messageItems });
+    // client-side query filter and are appended as their own group (capped;
+    // the full set lives on the search page).
+    if (messageItems.length) {
+      ordered.push({ name: "Messages", items: messageItems.slice(0, MAX_INLINE_MESSAGES) });
+    }
+    if (searchGroup) ordered.push(searchGroup);
     return ordered;
-  }, [items, query, messageItems]);
+  }, [items, trimmedQuery, isQuoted, searchTerm, messageItems, openSearch]);
 
   return (
     <Command shouldFilter={false} loop className="rounded-lg bg-[#111111]">

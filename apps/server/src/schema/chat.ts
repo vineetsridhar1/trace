@@ -25,8 +25,13 @@ export const chatQueries = {
       limit: args.limit,
     });
   },
-  searchMessages: (_: unknown, args: { query: string }, ctx: Context) => {
-    return chatService.searchMessages(args.query, ctx.userId, requireOrgContext(ctx));
+  searchMessages: (_: unknown, args: { query: string; limit?: number }, ctx: Context) => {
+    return chatService.searchMessages(
+      args.query,
+      ctx.userId,
+      requireOrgContext(ctx),
+      args.limit ?? undefined,
+    );
   },
 };
 

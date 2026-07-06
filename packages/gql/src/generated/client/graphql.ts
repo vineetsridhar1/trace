@@ -1546,6 +1546,7 @@ export type QueryReposArgs = {
 };
 
 export type QuerySearchMessagesArgs = {
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
   query: Scalars["String"]["input"];
 };
 
@@ -3794,6 +3795,21 @@ export type ChatEventsSubscriptionSubscription = {
       avatarUrl?: string | null;
     };
   };
+};
+
+export type SearchMessagesQueryVariables = Exact<{
+  query: Scalars["String"]["input"];
+}>;
+
+export type SearchMessagesQuery = {
+  __typename?: "Query";
+  searchMessages: Array<{
+    __typename?: "Message";
+    id: string;
+    chatId?: string | null;
+    channelId?: string | null;
+    text: string;
+  }>;
 };
 
 export type OrgEventsSubscriptionVariables = Exact<{
@@ -8979,6 +8995,51 @@ export const ChatEventsSubscriptionDocument = {
   ChatEventsSubscriptionSubscription,
   ChatEventsSubscriptionSubscriptionVariables
 >;
+export const SearchMessagesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SearchMessages" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "query" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "searchMessages" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "query" },
+                value: { kind: "Variable", name: { kind: "Name", value: "query" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "chatId" } },
+                { kind: "Field", name: { kind: "Name", value: "channelId" } },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SearchMessagesQuery, SearchMessagesQueryVariables>;
 export const OrgEventsDocument = {
   kind: "Document",
   definitions: [

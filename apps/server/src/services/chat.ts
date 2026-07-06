@@ -489,10 +489,11 @@ export class ChatService {
    * Full-text-ish search over message bodies the user can see — chats they are an
    * active member of and channels visible to them. Used by the command palette.
    */
-  async searchMessages(query: string, userId: string, organizationId: string) {
+  async searchMessages(query: string, userId: string, organizationId: string, limit?: number) {
     const trimmed = query.trim().slice(0, 200);
     if (trimmed.length < 2) return [];
 
+    const take = Math.min(Math.max(limit ?? 20, 1), 100);
     const messages = await prisma.message.findMany({
       where: {
         deletedAt: null,
@@ -510,7 +511,7 @@ export class ChatService {
         ],
       },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take,
     });
 
     return hydrateMessages(messages);

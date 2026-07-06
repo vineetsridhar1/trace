@@ -1544,6 +1544,7 @@ export type QueryReposArgs = {
 };
 
 export type QuerySearchMessagesArgs = {
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
   query: Scalars["String"]["input"];
 };
 
