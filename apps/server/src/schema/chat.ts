@@ -165,9 +165,10 @@ export const chatTypeResolvers = {
       ctx: Context,
     ) => {
       const actor = await resolveActor(hit, ctx.userLoader);
-      // Agent messages often lack a display name — label them by their coding
-      // tool (e.g. "Claude Code"), falling back to a generic "AI".
-      if (hit.actorType === "agent" && !actor.name) {
+      // Agent messages usually lack a real display name — label them by their
+      // coding tool (e.g. "Claude Code"), falling back to a generic "AI".
+      // resolveActor returns "Trace AI" for unknown agents; treat that as unnamed.
+      if (hit.actorType === "agent" && (!actor.name || actor.name === "Trace AI")) {
         actor.name = codingToolLabel(hit.agentTool);
       }
       return actor;

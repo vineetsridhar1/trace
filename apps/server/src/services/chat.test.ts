@@ -412,16 +412,27 @@ describe("ChatService", () => {
         actorType: "user",
         actorId: "user-1",
         scopeId: "session-1",
-        timestamp: new Date(),
+        timestamp: new Date("2026-01-01T00:00:01Z"),
         payload: { text: "hello world from a session" },
       },
       {
         id: "evt-2",
+        // Assistant output is stored with a "system" actor; search surfaces it as
+        // an agent so it can be labeled by coding tool.
         eventType: "session_output",
-        actorType: "agent",
-        actorId: "agent-1",
+        actorType: "system",
+        actorId: "system",
         scopeId: "session-1",
-        timestamp: new Date(),
+        timestamp: new Date("2026-01-01T00:00:00Z"),
+        payload: { type: "assistant", message: { content: [{ type: "text", text: "hello world back" }] } },
+      },
+      {
+        id: "evt-3",
+        eventType: "session_output",
+        actorType: "system",
+        actorId: "system",
+        scopeId: "session-1",
+        timestamp: new Date("2026-01-01T00:00:02Z"),
         // ILIKE matched JSON structure, but the visible text does not contain the
         // query, so this hit must be filtered out.
         payload: { type: "assistant", message: { content: [{ type: "text", text: "unrelated" }] } },
@@ -431,16 +442,21 @@ describe("ChatService", () => {
     const service = new ChatService();
     const results = await service.searchMessages("hello world", "user-1", "org-1");
 
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
-      id: "evt-1",
+    expect(results).toHaveLength(2);
+    const byId = Object.fromEntries(results.map((r) => [r.id, r]));
+    expect(byId["evt-1"]).toMatchObject({
       text: "hello world from a session",
       sessionId: "session-1",
       sessionGroupId: "group-1",
-      chatId: null,
-      channelId: null,
-      // Carries the session's coding tool so agent hits can be labeled.
+      actorType: "user",
       agentTool: "claude_code",
     });
+    // Assistant output becomes an agent hit carrying the session's tool.
+    expect(byId["evt-2"]).toMatchObject({
+      text: "hello world back",
+      actorType: "agent",
+      agentTool: "claude_code",
+    });
+    expect(byId["evt-3"]).toBeUndefined();
   });
 });

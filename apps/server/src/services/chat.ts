@@ -642,7 +642,9 @@ export class ChatService {
         id: row.id,
         text,
         createdAt: row.timestamp,
-        actorType: row.actorType,
+        // Assistant output is persisted with a "system" actor; surface it as the
+        // agent so it can be labeled by coding tool rather than showing "Unknown".
+        actorType: row.eventType === "session_output" ? "agent" : row.actorType,
         actorId: row.actorId,
         chatId: null,
         channelId: null,
