@@ -6,7 +6,6 @@ import {
   Hash,
   Inbox,
   MessageCircle,
-  MessageSquareText,
   Plus,
   Search,
   Settings,
@@ -18,7 +17,7 @@ import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { useUIStore } from "../../stores/ui";
-import { navigateToSession, navigateToSessionGroup } from "../../stores/ui";
+import { navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 import {
   formatShortcut,
@@ -29,21 +28,16 @@ import {
 import { features } from "../../lib/features";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
-import { useMessageSearch } from "../../hooks/useMessageSearch";
 
 interface PaletteItem {
   key: string;
   group: string;
   label: string;
-  sublabel?: string;
   search: string;
   icon: ReactNode;
   shortcut?: CommandShortcut;
   onSelect: () => void;
 }
-
-/** Cap message hits shown inline in the palette; the rest live on the search page. */
-const MAX_INLINE_MESSAGES = 6;
 
 const SETTINGS_TABS: { id: string; label: string }[] = [
   { id: "repositories", label: "Repositories" },
@@ -162,12 +156,6 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     [chats],
   );
 
-  const channelLabel = useMemo(() => new Map(channels.map((c) => [c.id, c.name])), [channels]);
-  const sessionGroupLabel = useMemo(
-    () => new Map(sessionGroups.map((g) => [g.id, g.name])),
-    [sessionGroups],
-  );
-
   // Slack-style: wrapping the query in quotes means "search only" — jump-to items
   // are suppressed and the search page is the only option. The search term drops
   // the surrounding quotes.
@@ -175,39 +163,6 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const isQuoted =
     trimmedQuery.length >= 2 && trimmedQuery.startsWith('"') && trimmedQuery.endsWith('"');
   const searchTerm = isQuoted ? trimmedQuery.slice(1, -1).trim() : trimmedQuery;
-
-  const messageResults = useMessageSearch(isQuoted ? "" : searchTerm);
-  const messageItems = useMemo<PaletteItem[]>(
-    () =>
-      messageResults.map((m) => {
-        let conversation: string | undefined;
-        let onSelect: () => void = () => {};
-        if (m.sessionId && m.sessionGroupId) {
-          conversation = sessionGroupLabel.get(m.sessionGroupId) ?? "Session";
-          const groupId = m.sessionGroupId;
-          const sessionId = m.sessionId;
-          onSelect = () => navigateToSession(null, groupId, sessionId);
-        } else if (m.chatId) {
-          conversation = chatLabel.get(m.chatId) ?? "Direct Message";
-          const chatId = m.chatId;
-          onSelect = () => setActiveChatId(chatId);
-        } else if (m.channelId) {
-          conversation = channelLabel.get(m.channelId) ?? "Channel";
-          const channelId = m.channelId;
-          onSelect = () => setActiveChannelId(channelId);
-        }
-        return {
-          key: `message-${m.id}`,
-          group: "Messages",
-          label: m.text,
-          sublabel: conversation,
-          search: "",
-          icon: <MessageSquareText size={16} />,
-          onSelect,
-        };
-      }),
-    [messageResults, chatLabel, channelLabel, sessionGroupLabel, setActiveChatId, setActiveChannelId],
-  );
 
   const items = useMemo<PaletteItem[]>(() => {
     const list: PaletteItem[] = [];
@@ -373,15 +328,11 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       }
       bucket.push(item);
     }
-    // Message results are already filtered server-side, so they bypass the
-    // client-side query filter and are appended as their own group (capped;
-    // the full set lives on the search page).
-    if (messageItems.length) {
-      ordered.push({ name: "Messages", items: messageItems.slice(0, MAX_INLINE_MESSAGES) });
-    }
+    // Message hits intentionally live only on the dedicated search page — running
+    // a live search per keystroke here would be slow with lots of messages.
     if (searchGroup) ordered.push(searchGroup);
     return ordered;
-  }, [items, trimmedQuery, isQuoted, searchTerm, messageItems, openSearch]);
+  }, [items, trimmedQuery, isQuoted, searchTerm, openSearch]);
 
   return (
     <Command shouldFilter={false} loop className="rounded-lg bg-[#111111]">
@@ -401,11 +352,6 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
                 <CommandItem key={item.key} value={item.key} onSelect={() => run(item.onSelect)}>
                   {item.icon}
                   <span className="truncate">{item.label}</span>
-                  {item.sublabel && (
-                    <span className="ml-2 shrink-0 truncate text-xs text-muted-foreground">
-                      {item.sublabel}
-                    </span>
-                  )}
                   {item.shortcut && (
                     <span className="ml-auto flex items-center gap-1">
                       {formatShortcut(item.shortcut).map((key, i) => (
