@@ -403,7 +403,7 @@ describe("ChatService", () => {
   it("searches session conversation events and maps them to hits", async () => {
     prismaMock.message.findMany.mockResolvedValueOnce([]);
     prismaMock.session.findMany.mockResolvedValueOnce([
-      { id: "session-1", sessionGroupId: "group-1" },
+      { id: "session-1", sessionGroupId: "group-1", tool: "claude_code" },
     ]);
     prismaMock.$queryRaw.mockResolvedValueOnce([
       {
@@ -439,6 +439,8 @@ describe("ChatService", () => {
       sessionGroupId: "group-1",
       chatId: null,
       channelId: null,
+      // Carries the session's coding tool so agent hits can be labeled.
+      agentTool: "claude_code",
     });
   });
 });

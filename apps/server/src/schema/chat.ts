@@ -7,6 +7,18 @@ import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { isActiveChatMember } from "../services/access.js";
 import { requireOrgContext } from "../lib/require-org.js";
 
+const CODING_TOOL_LABELS: Record<string, string> = {
+  claude_code: "Claude Code",
+  codex: "Codex",
+  pi: "Pi",
+  antigravity: "Antigravity",
+};
+
+/** Human label for an agent's coding tool, or a generic "AI" fallback. */
+function codingToolLabel(tool: string | null | undefined): string {
+  return (tool && CODING_TOOL_LABELS[tool]) || "AI";
+}
+
 export const chatQueries = {
   chats: (_: unknown, _args: Record<string, never>, ctx: Context) => {
     return chatService.getChats(ctx.userId, requireOrgContext(ctx));
@@ -147,8 +159,19 @@ export const chatTypeResolvers = {
       resolveActor(message, ctx.userLoader),
   },
   MessageSearchHit: {
-    actor: (hit: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
-      resolveActor(hit, ctx.userLoader),
+    actor: async (
+      hit: { actorType: string; actorId: string; agentTool?: string | null },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      const actor = await resolveActor(hit, ctx.userLoader);
+      // Agent messages often lack a display name — label them by their coding
+      // tool (e.g. "Claude Code"), falling back to a generic "AI".
+      if (hit.actorType === "agent" && !actor.name) {
+        actor.name = codingToolLabel(hit.agentTool);
+      }
+      return actor;
+    },
   },
   ChatMember: {
     user: async (member: { userId: string }, _args: unknown, ctx: Context) => {

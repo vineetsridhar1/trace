@@ -24,6 +24,8 @@ export interface MessageSearchHit {
   channelId: string | null;
   sessionId: string | null;
   sessionGroupId: string | null;
+  /** Coding tool of the source session, used to label agent hits (e.g. "Claude Code"). */
+  agentTool: string | null;
 }
 
 /** Pull the human-readable text out of a session conversation event payload. */
@@ -586,6 +588,7 @@ export class ChatService {
       channelId: m.channelId,
       sessionId: null,
       sessionGroupId: null,
+      agentTool: null,
     }));
   }
 
@@ -600,11 +603,12 @@ export class ChatService {
     // so we re-check the extracted display text below.
     const sessions = await prisma.session.findMany({
       where: { organizationId, ...visibleSessionWhere(userId) },
-      select: { id: true, sessionGroupId: true },
+      select: { id: true, sessionGroupId: true, tool: true },
     });
     if (sessions.length === 0) return [];
 
     const groupBySession = new Map(sessions.map((s) => [s.id, s.sessionGroupId]));
+    const toolBySession = new Map(sessions.map((s) => [s.id, s.tool]));
     const sessionIds = sessions.map((s) => s.id);
 
     const rows = await prisma.$queryRaw<
@@ -644,6 +648,7 @@ export class ChatService {
         channelId: null,
         sessionId: row.scopeId,
         sessionGroupId: groupBySession.get(row.scopeId) ?? null,
+        agentTool: toolBySession.get(row.scopeId) ?? null,
       });
       if (hits.length >= take) break;
     }

@@ -56,21 +56,19 @@ function SearchResultRow({
   query: string;
   conversation: Conversation | null;
 }) {
+  // The server labels agent hits by coding tool (or "AI"); never show "Unknown".
+  const authorName =
+    result.actor.name ?? (result.actor.type === "agent" ? "AI" : "Unknown");
   return (
     <button
       type="button"
       onClick={() => conversation?.onOpen()}
-      className="flex w-full gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-border hover:bg-surface-raised"
+      className="flex w-full cursor-pointer gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-border hover:bg-surface-raised"
     >
-      <SmallMessageAvatar
-        actorName={result.actor.name ?? "Unknown"}
-        avatarUrl={result.actor.avatarUrl}
-      />
+      <SmallMessageAvatar actorName={authorName} avatarUrl={result.actor.avatarUrl} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold text-foreground">
-            {result.actor.name ?? "Unknown"}
-          </span>
+          <span className="truncate text-sm font-semibold text-foreground">{authorName}</span>
           {conversation && (
             <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
               {conversation.icon}
