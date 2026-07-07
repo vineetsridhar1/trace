@@ -46,11 +46,18 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const handleOpenTerminal = useCallback(
     async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
       if (!session || session._optimistic || !terminalAllowed) return;
-      const existing = await ensureSessionTerminals(session.id);
-      if (existing.length > 0) {
-        setActiveSessionId(session.id);
-        setActiveTerminalId(existing[0].id);
-        return;
+
+      // On the first open for a session, restore terminals that already exist
+      // on the server instead of spawning a duplicate. Once terminals are
+      // loaded locally, every open request creates a new terminal.
+      const loadedLocally = terminals.some((t) => t.sessionId === session.id);
+      if (!loadedLocally) {
+        const existing = await ensureSessionTerminals(session.id);
+        if (existing.length > 0) {
+          setActiveSessionId(session.id);
+          setActiveTerminalId(existing[0].id);
+          return;
+        }
       }
 
       const result = await client
@@ -63,7 +70,14 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         setActiveTerminalId(id);
       }
     },
-    [addTerminal, ensureSessionTerminals, sessionGroupId, setActiveSessionId, setActiveTerminalId],
+    [
+      addTerminal,
+      ensureSessionTerminals,
+      sessionGroupId,
+      setActiveSessionId,
+      setActiveTerminalId,
+      terminals,
+    ],
   );
 
   const handleCloseTerminal = useCallback(
