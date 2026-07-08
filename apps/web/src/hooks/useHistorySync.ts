@@ -12,6 +12,7 @@ function parseNavFromPath(path: string): {
   chatId: string | null;
   page: ActivePage;
   channelSubPage: ChannelSubPage;
+  searchQuery: string;
 } {
   if (path.startsWith("/settings")) {
     return {
@@ -21,6 +22,18 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "settings",
       channelSubPage: null,
+      searchQuery: "",
+    };
+  }
+  if (path.startsWith("/search")) {
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "search",
+      channelSubPage: null,
+      searchQuery: new URLSearchParams(window.location.search).get("q") ?? "",
     };
   }
   if (path.startsWith("/inbox")) {
@@ -31,6 +44,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "inbox",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
   if (path.startsWith("/connections")) {
@@ -41,6 +55,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "settings",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
   if (path.startsWith("/tickets")) {
@@ -51,6 +66,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "tickets",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
 
@@ -63,6 +79,7 @@ function parseNavFromPath(path: string): {
       chatId: chatMatch[1],
       page: "main",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
 
@@ -75,6 +92,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "main",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
 
@@ -87,6 +105,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "main",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
 
@@ -99,6 +118,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "main",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
 
@@ -111,6 +131,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "main",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
 
@@ -123,6 +144,7 @@ function parseNavFromPath(path: string): {
       chatId: null,
       page: "main",
       channelSubPage: null,
+      searchQuery: "",
     };
   }
 
@@ -133,6 +155,7 @@ function parseNavFromPath(path: string): {
     chatId: null,
     page: "main",
     channelSubPage: null,
+    searchQuery: "",
   };
 }
 
@@ -146,6 +169,7 @@ export function useHistorySync() {
         page?: ActivePage,
         chatId?: string | null,
         channelSubPage?: ChannelSubPage,
+        searchQuery?: string,
       ) => void;
     }) => s._restoreNav,
   );
@@ -161,7 +185,8 @@ export function useHistorySync() {
       parsedNav.sessionId,
     );
     const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
-    const isTopLevelPage = page === "settings" || page === "inbox" || page === "tickets";
+    const isTopLevelPage =
+      page === "settings" || page === "inbox" || page === "tickets" || page === "search";
     const initialChat =
       isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
@@ -177,13 +202,11 @@ export function useHistorySync() {
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 
-    const path = buildPath(
-      initialChannel,
-      initialSessionGroupId,
-      initialSessionId,
-      page,
-      initialChat,
-    );
+    const searchQuery = page === "search" ? parsedNav.searchQuery : "";
+    const path =
+      page === "search"
+        ? `/search?q=${encodeURIComponent(searchQuery)}`
+        : buildPath(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat);
 
     history.replaceState(
       {
@@ -193,12 +216,21 @@ export function useHistorySync() {
         page,
         chatId: initialChat,
         channelSubPage: null,
+        searchQuery,
       },
       "",
       path,
     );
 
-    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat, null);
+    restoreNav(
+      initialChannel,
+      initialSessionGroupId,
+      initialSessionId,
+      page,
+      initialChat,
+      null,
+      searchQuery,
+    );
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
@@ -208,6 +240,7 @@ export function useHistorySync() {
         chatId?: string | null;
         page?: LegacyActivePage;
         channelSubPage?: ChannelSubPage;
+        searchQuery?: string;
       } | null;
 
       if (state) {
@@ -247,6 +280,7 @@ export function useHistorySync() {
           state.page,
           state.chatId,
           state.channelSubPage,
+          state.searchQuery,
         );
         return;
       }
@@ -285,6 +319,7 @@ export function useHistorySync() {
         nav.page,
         nav.chatId,
         nav.channelSubPage,
+        nav.searchQuery,
       );
     }
 

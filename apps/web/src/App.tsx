@@ -11,6 +11,7 @@ import { NoOrgWelcome } from "./components/onboarding/NoOrgWelcome";
 import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
+import { SearchResultsView } from "./components/search/SearchResultsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { GlobalCommandPalette } from "./components/command/GlobalCommandPalette";
 import { KeyboardShortcutsDialog } from "./components/command/KeyboardShortcutsDialog";
@@ -163,6 +164,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               <SettingsPage />
             ) : activePage === "inbox" ? (
               <InboxView />
+            ) : activePage === "search" ? (
+              <SearchResultsView />
             ) : activePage === "tickets" && features.tickets ? (
               <TicketsView />
             ) : shouldRenderChatView ? (

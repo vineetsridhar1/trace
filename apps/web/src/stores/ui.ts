@@ -7,13 +7,14 @@ import {
   persistActiveChatId,
   persistActiveSessionNav,
   pushNav,
+  pushSearchNav,
   replaceNav,
   resolveChannelIdForSession,
   resolveChannelIdForSessionGroup,
   resolveSessionGroupIdForSession,
 } from "./ui-navigation";
 
-export type ActivePage = "main" | "settings" | "inbox" | "tickets";
+export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "search";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
 export interface NavigationState {
   channelId: string | null;
@@ -33,6 +34,8 @@ function optimisticSessionRedirectKey(sessionGroupId: string, sessionId: string)
 export interface UIState {
   activePage: ActivePage;
   setActivePage: (page: ActivePage) => void;
+  activeSearchQuery: string;
+  openSearch: (query: string) => void;
   activeChannelId: string | null;
   setActiveChannelId: (id: string | null) => void;
   activeChatId: string | null;
@@ -76,6 +79,7 @@ export interface UIState {
     page?: ActivePage,
     chatId?: string | null,
     channelSubPage?: ChannelSubPage,
+    searchQuery?: string,
   ) => void;
 }
 
@@ -94,6 +98,7 @@ type GetState<T> = () => T;
 
 const initialNavigationState = {
   activePage: "main" as ActivePage,
+  activeSearchQuery: "",
   activeChannelId: null as string | null,
   activeChatId: null as string | null,
   activeSessionGroupId: null as string | null,
@@ -217,6 +222,25 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
       get().activeChatId,
       null,
     );
+  },
+
+  openSearch: (query: string) => {
+    const trimmed = query.trim();
+    persistActiveChannelId(null);
+    persistActiveChatId(null);
+    persistActiveSessionNav(null, null);
+    set({
+      activePage: "search" as ActivePage,
+      activeSearchQuery: trimmed,
+      activeChannelId: null,
+      activeChatId: null,
+      activeSessionGroupId: null,
+      activeSessionId: null,
+      activeTerminalId: null,
+      activeThreadId: null,
+      channelSubPage: null,
+    });
+    pushSearchNav(trimmed);
   },
 
   setActiveChannelId: (id: string | null) => {
@@ -462,6 +486,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     page?: ActivePage,
     chatId?: string | null,
     channelSubPage?: ChannelSubPage,
+    searchQuery?: string,
   ) => {
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
@@ -484,6 +509,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
       }
       return {
         activePage: page ?? "main",
+        activeSearchQuery: page === "search" ? (searchQuery ?? "") : "",
         activeChannelId: channelId,
         activeSessionGroupId: sessionGroupId,
         activeSessionId: sessionId,

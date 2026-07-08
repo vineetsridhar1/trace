@@ -13,6 +13,7 @@ export function buildPath(
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
   if (page === "tickets") return "/tickets";
+  if (page === "search") return "/search";
   if (chatId) return `/dm/${chatId}`;
   if (channelId && sessionGroupId && sessionId) {
     return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
@@ -37,6 +38,22 @@ export function pushNav(
     { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
     "",
     path,
+  );
+}
+
+export function pushSearchNav(query: string): void {
+  history.pushState(
+    {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      page: "search" as ActivePage,
+      chatId: null,
+      channelSubPage: null,
+      searchQuery: query,
+    },
+    "",
+    `/search?q=${encodeURIComponent(query)}`,
   );
 }
 

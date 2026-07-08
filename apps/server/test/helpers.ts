@@ -45,6 +45,7 @@ export function createPrismaMock() {
     },
     $transaction: vi.fn(),
     $executeRaw: vi.fn(),
+    $queryRaw: vi.fn(),
     user: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),

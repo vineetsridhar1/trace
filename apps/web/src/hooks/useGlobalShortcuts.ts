@@ -13,11 +13,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-/** Registers app-wide keyboard shortcuts: command palette (⌘K) and help (?). */
+/** Registers app-wide keyboard shortcuts: command palette (⌘K / ⌘F) and help (?). */
 export function useGlobalShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      const key = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && (key === "k" || key === "f")) {
         event.preventDefault();
         useCommandPaletteStore.getState().togglePalette();
         return;

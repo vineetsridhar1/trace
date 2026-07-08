@@ -609,6 +609,22 @@ export type Message = {
   updatedAt: Scalars["DateTime"]["output"];
 };
 
+/**
+ * A search hit spanning chat/channel messages and session conversation events.
+ * Exactly one of chatId / channelId / sessionId identifies where the hit lives.
+ */
+export type MessageSearchHit = {
+  __typename?: "MessageSearchHit";
+  actor: Actor;
+  channelId?: Maybe<Scalars["ID"]["output"]>;
+  chatId?: Maybe<Scalars["ID"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  sessionGroupId?: Maybe<Scalars["ID"]["output"]>;
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  text: Scalars["String"]["output"];
+};
+
 export type MoveChannelInput = {
   channelId: Scalars["ID"]["input"];
   groupId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1370,6 +1386,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
   repos: Array<Repo>;
+  searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
@@ -1545,6 +1562,11 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QuerySearchMessagesArgs = {
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  query: Scalars["String"]["input"];
 };
 
 export type QuerySearchSessionsArgs = {
@@ -2530,6 +2552,7 @@ export type ResolversTypes = ResolversObject<{
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
   Message: ResolverTypeWrapper<Message>;
+  MessageSearchHit: ResolverTypeWrapper<MessageSearchHit>;
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
@@ -2666,6 +2689,7 @@ export type ResolversParentTypes = ResolversObject<{
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   LinkedCheckoutStatus: LinkedCheckoutStatus;
   Message: Message;
+  MessageSearchHit: MessageSearchHit;
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
   Notification: Notification;
@@ -3216,6 +3240,22 @@ export type MessageResolvers<
   text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   threadRepliers?: Resolver<Array<ResolversTypes["Actor"]>, ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type MessageSearchHitResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["MessageSearchHit"] =
+    ResolversParentTypes["MessageSearchHit"],
+> = ResolversObject<{
+  actor?: Resolver<ResolversTypes["Actor"], ParentType, ContextType>;
+  channelId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  chatId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  sessionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4147,6 +4187,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryReposArgs, "organizationId">
   >;
+  searchMessages?: Resolver<
+    Array<ResolversTypes["MessageSearchHit"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QuerySearchMessagesArgs, "query">
+  >;
   searchSessions?: Resolver<
     ResolversTypes["SessionSearchResults"],
     ParentType,
@@ -4977,6 +5023,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
+  MessageSearchHit?: MessageSearchHitResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;

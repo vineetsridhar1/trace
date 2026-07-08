@@ -7,6 +7,7 @@ import {
   Inbox,
   MessageCircle,
   Plus,
+  Search,
   Settings,
   Ticket,
 } from "lucide-react";
@@ -77,6 +78,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
 
   const setActivePage = useUIStore((s) => s.setActivePage);
+  const openSearch = useUIStore((s) => s.openSearch);
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
@@ -153,6 +155,14 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       ),
     [chats],
   );
+
+  // Slack-style: wrapping the query in quotes means "search only" — jump-to items
+  // are suppressed and the search page is the only option. The search term drops
+  // the surrounding quotes.
+  const trimmedQuery = query.trim();
+  const isQuoted =
+    trimmedQuery.length >= 2 && trimmedQuery.startsWith('"') && trimmedQuery.endsWith('"');
+  const searchTerm = isQuoted ? trimmedQuery.slice(1, -1).trim() : trimmedQuery;
 
   const items = useMemo<PaletteItem[]>(() => {
     const list: PaletteItem[] = [];
@@ -284,7 +294,28 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   ]);
 
   const groups = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    // The search page is always the last option when there's a query, so Enter
+    // falls through to it when nothing else matches.
+    const searchGroup: { name: string; items: PaletteItem[] } | null = searchTerm
+      ? {
+          name: "Search",
+          items: [
+            {
+              key: "__search-page__",
+              group: "Search",
+              label: `Search for “${searchTerm}”`,
+              search: "",
+              icon: <Search size={16} />,
+              onSelect: () => openSearch(searchTerm),
+            },
+          ],
+        }
+      : null;
+
+    // Quoted query => search only, no jump-to items.
+    if (isQuoted) return searchGroup ? [searchGroup] : [];
+
+    const q = trimmedQuery.toLowerCase();
     const visible = q ? items.filter((item) => item.search.toLowerCase().includes(q)) : items;
     const ordered: { name: string; items: PaletteItem[] }[] = [];
     const index = new Map<string, PaletteItem[]>();
@@ -297,15 +328,18 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       }
       bucket.push(item);
     }
+    // Message hits intentionally live only on the dedicated search page — running
+    // a live search per keystroke here would be slow with lots of messages.
+    if (searchGroup) ordered.push(searchGroup);
     return ordered;
-  }, [items, query]);
+  }, [items, trimmedQuery, isQuoted, searchTerm, openSearch]);
 
   return (
     <Command shouldFilter={false} loop className="rounded-lg bg-[#111111]">
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder="Jump to a channel, conversation, or run a command…"
+        placeholder="Search messages, or jump to a channel, conversation, or session…"
         autoFocus
       />
       <CommandList>
