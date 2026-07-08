@@ -129,13 +129,6 @@ vi.mock("../services/inbox.js", () => ({
   },
 }));
 
-vi.mock("../services/aiConversation.js", () => ({
-  aiConversationService: {
-    getConversations: vi.fn(),
-    createConversation: vi.fn(),
-  },
-}));
-
 import { ticketMutations, ticketQueries, ticketSubscriptions } from "./ticket.js";
 import { sessionQueries, sessionSubscriptions } from "./session.js";
 import { sessionMutations } from "./session.js";
@@ -143,7 +136,6 @@ import { channelGroupQueries } from "./channelGroup.js";
 import { channelSubscriptions } from "./channel.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
-import { aiConversationQueries, aiConversationMutations } from "./ai-conversation.js";
 import { assertChannelAccess, assertScopeAccess } from "../services/access.js";
 import { eventService } from "../services/event.js";
 import { ticketService } from "../services/ticket.js";
@@ -154,7 +146,6 @@ import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { channelGroupService } from "../services/channelGroup.js";
 import { inboxService } from "../services/inbox.js";
-import { aiConversationService } from "../services/aiConversation.js";
 
 const ctx = {
   userId: "user-1",
@@ -201,17 +192,6 @@ describe("GraphQL authz guards", () => {
       "Not authorized for this organization",
     );
     expect(inboxService.listForUser).not.toHaveBeenCalled();
-  });
-
-  it("rejects cross-org AI conversation entry points", async () => {
-    expect(() =>
-      aiConversationQueries.aiConversations({}, { organizationId: "org-2" }, ctx),
-    ).toThrow("Not authorized for this organization");
-    expect(() =>
-      aiConversationMutations.createAiConversation({}, { organizationId: "org-2", input: {} }, ctx),
-    ).toThrow("Not authorized for this organization");
-    expect(aiConversationService.getConversations).not.toHaveBeenCalled();
-    expect(aiConversationService.createConversation).not.toHaveBeenCalled();
   });
 
   it("guards session mutations by active org and scope", async () => {

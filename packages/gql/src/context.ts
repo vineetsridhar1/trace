@@ -18,9 +18,6 @@ export interface Context {
   sessionGroupLoader: DataLoader<string, unknown | null>;
   repoLoader: DataLoader<string, unknown | null>;
   eventLoader: DataLoader<string, unknown | null>;
-  conversationLoader: DataLoader<string, unknown | null>;
-  branchLoader: DataLoader<string, unknown | null>;
-  turnLoader: DataLoader<string, unknown | null>;
   chatMembersLoader: DataLoader<string, Array<{ userId: string; joinedAt: Date }>>;
   sessionTicketsLoader: DataLoader<string, unknown[]>;
   channelMembershipLoader: DataLoader<string, boolean>;
