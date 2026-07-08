@@ -13,13 +13,22 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-/** Registers app-wide keyboard shortcuts: command palette (⌘K) and help (?). */
+/** Registers app-wide keyboard shortcuts: command palette (⌘K / ⌘F) and help (?). */
 export function useGlobalShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      const key = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && key === "k") {
         event.preventDefault();
         useCommandPaletteStore.getState().togglePalette();
+        return;
+      }
+      // ⌘F opens the palette in search mode, seeded with the current selection so
+      // "select text → ⌘F" searches it (overriding the browser's find-in-page).
+      if ((event.metaKey || event.ctrlKey) && key === "f") {
+        event.preventDefault();
+        const selection = window.getSelection()?.toString().trim() ?? "";
+        useCommandPaletteStore.getState().openForSearch(selection);
         return;
       }
 

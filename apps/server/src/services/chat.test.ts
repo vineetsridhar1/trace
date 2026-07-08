@@ -341,4 +341,122 @@ describe("ChatService", () => {
       prismaMock,
     );
   });
+
+  it("skips the query for searches shorter than two characters", async () => {
+    const service = new ChatService();
+
+    await expect(service.searchMessages("a", "user-1", "org-1")).resolves.toEqual([]);
+    expect(prismaMock.message.findMany).not.toHaveBeenCalled();
+  });
+
+  it("searches messages scoped to visible chats and channels", async () => {
+    prismaMock.message.findMany.mockResolvedValueOnce([
+      {
+        id: "m1",
+        chatId: "chat-1",
+        channelId: null,
+        parentMessageId: null,
+        actorType: "user",
+        actorId: "user-2",
+        text: "hello world",
+        html: null,
+        mentions: null,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    prismaMock.session.findMany.mockResolvedValueOnce([]);
+
+    const service = new ChatService();
+    const results = await service.searchMessages("hello", "user-1", "org-1");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      id: "m1",
+      text: "hello world",
+      chatId: "chat-1",
+      sessionId: null,
+    });
+
+    const where = prismaMock.message.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({
+      deletedAt: null,
+      text: { contains: "hello", mode: "insensitive" },
+    });
+    // Restricts to chats the user belongs to and channels visible to them.
+    expect(where.OR).toEqual([
+      expect.objectContaining({
+        chat: expect.objectContaining({
+          members: { some: { userId: "user-1", leftAt: null } },
+        }),
+      }),
+      expect.objectContaining({
+        channel: expect.objectContaining({ organizationId: "org-1" }),
+      }),
+    ]);
+    // No visible sessions => the raw event search is skipped entirely.
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("searches session conversation events and maps them to hits", async () => {
+    prismaMock.message.findMany.mockResolvedValueOnce([]);
+    prismaMock.session.findMany.mockResolvedValueOnce([
+      { id: "session-1", sessionGroupId: "group-1", tool: "claude_code" },
+    ]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([
+      {
+        id: "evt-1",
+        eventType: "message_sent",
+        actorType: "user",
+        actorId: "user-1",
+        scopeId: "session-1",
+        timestamp: new Date("2026-01-01T00:00:01Z"),
+        payload: { text: "hello world from a session" },
+      },
+      {
+        id: "evt-2",
+        // Assistant output is stored with a "system" actor; search surfaces it as
+        // an agent so it can be labeled by coding tool.
+        eventType: "session_output",
+        actorType: "system",
+        actorId: "system",
+        scopeId: "session-1",
+        timestamp: new Date("2026-01-01T00:00:00Z"),
+        payload: { type: "assistant", message: { content: [{ type: "text", text: "hello world back" }] } },
+      },
+      {
+        id: "evt-3",
+        eventType: "session_output",
+        actorType: "system",
+        actorId: "system",
+        scopeId: "session-1",
+        timestamp: new Date("2026-01-01T00:00:02Z"),
+        // ILIKE matched JSON structure, but the visible text does not contain the
+        // query, so this hit must be filtered out.
+        payload: { type: "assistant", message: { content: [{ type: "text", text: "unrelated" }] } },
+      },
+    ]);
+
+    const service = new ChatService();
+    const results = await service.searchMessages("hello world", "user-1", "org-1");
+
+    expect(results).toHaveLength(2);
+    const byId = Object.fromEntries(results.map((r) => [r.id, r]));
+    expect(byId["evt-1"]).toMatchObject({
+      text: "hello world from a session",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      actorType: "user",
+      agentTool: "claude_code",
+    });
+    // Assistant output becomes an agent hit carrying the session's tool.
+    expect(byId["evt-2"]).toMatchObject({
+      text: "hello world back",
+      actorType: "agent",
+      agentTool: "claude_code",
+    });
+    expect(byId["evt-3"]).toBeUndefined();
+  });
 });

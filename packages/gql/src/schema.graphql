@@ -641,6 +641,21 @@ type SessionPromptIndexItem {
   imageCount: Int!
 }
 
+"""
+A search hit spanning chat/channel messages and session conversation events.
+Exactly one of chatId / channelId / sessionId identifies where the hit lives.
+"""
+type MessageSearchHit {
+  id: ID!
+  text: String!
+  actor: Actor!
+  createdAt: DateTime!
+  chatId: ID
+  channelId: ID
+  sessionId: ID
+  sessionGroupId: ID
+}
+
 type Message {
   id: ID!
   chatId: ID
@@ -1300,6 +1315,7 @@ type Query {
   chat(id: ID!): Chat
   chatMessages(chatId: ID!, after: DateTime, before: DateTime, limit: Int): [Message!]!
   channelMessages(channelId: ID!, after: DateTime, before: DateTime, limit: Int): [Message!]!
+  searchMessages(query: String!, limit: Int): [MessageSearchHit!]!
   threadReplies(rootMessageId: ID!, after: DateTime, limit: Int): [Message!]!
   threadSummary(rootMessageId: ID!): ThreadSummary
   participants(scopeType: String!, scopeId: ID!): [Participant!]!

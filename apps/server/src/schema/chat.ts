@@ -6,6 +6,12 @@ import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { isActiveChatMember } from "../services/access.js";
 import { requireOrgContext } from "../lib/require-org.js";
+import { getCodingToolCli } from "@trace/shared";
+
+/** Human label for an agent's coding tool, or a generic "AI" fallback. */
+function codingToolLabel(tool: string | null | undefined): string {
+  return (tool && getCodingToolCli(tool)?.label) || "AI";
+}
 
 export const chatQueries = {
   chats: (_: unknown, _args: Record<string, never>, ctx: Context) => {
@@ -24,6 +30,14 @@ export const chatQueries = {
       before: args.before,
       limit: args.limit,
     });
+  },
+  searchMessages: (_: unknown, args: { query: string; limit?: number }, ctx: Context) => {
+    return chatService.searchMessages(
+      args.query,
+      ctx.userId,
+      requireOrgContext(ctx),
+      args.limit ?? undefined,
+    );
   },
 };
 
@@ -137,6 +151,22 @@ export const chatTypeResolvers = {
   Message: {
     actor: (message: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
       resolveActor(message, ctx.userLoader),
+  },
+  MessageSearchHit: {
+    actor: async (
+      hit: { actorType: string; actorId: string; agentTool?: string | null },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      const actor = await resolveActor(hit, ctx.userLoader);
+      // Agent messages usually lack a real display name — label them by their
+      // coding tool (e.g. "Claude Code"), falling back to a generic "AI".
+      // resolveActor returns "Trace AI" for unknown agents; treat that as unnamed.
+      if (hit.actorType === "agent" && (!actor.name || actor.name === "Trace AI")) {
+        actor.name = codingToolLabel(hit.agentTool);
+      }
+      return actor;
+    },
   },
   ChatMember: {
     user: async (member: { userId: string }, _args: unknown, ctx: Context) => {
