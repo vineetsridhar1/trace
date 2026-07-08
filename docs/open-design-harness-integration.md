@@ -95,6 +95,12 @@ stays inside the adapter per the architecture rules). Add `open_design` to the
   | `error` event | `ErrorEvent` |
   | `end` event | `onComplete()` |
 
+- Create the project with `skipDiscoveryBrief: true` — Open Design's discovery layer
+  otherwise opens runs with an interactive `<question-form>` brief that only its own UI
+  renders. v1 treats the first message as the brief; a later enhancement can translate
+  question-forms into Trace's existing `QuestionBlock`/`AskUserQuestionBar` instead.
+- Critique panel (roles: designer/critic/brand/a11y/copy, scored rounds, `ship_best`
+  fallback) is off by default; enable per run later as the pre-checkpoint quality gate.
 - **getSessionId()** → serialize `projectId:conversationId` into `toolSessionId`;
   subsequent runs reuse the conversation (the daemon's claude adapter handles `--resume`
   internally, so agent working memory carries across turns).
