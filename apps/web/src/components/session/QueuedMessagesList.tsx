@@ -17,6 +17,8 @@ import {
   STEER_QUEUED_MESSAGE_MUTATION,
   UPDATE_QUEUED_MESSAGE_MUTATION,
   StoreBatchWriter,
+  dropStaleQueuedMessage,
+  isMissingQueuedMessageError,
   useEntityField,
   useEntityStore,
   useQueuedMessageIdsForSession,
@@ -25,7 +27,7 @@ import { client } from "../../lib/urql";
 import { toast } from "sonner";
 import { stripPromptWrapping, wrapPrompt, type InteractionMode } from "./interactionModes";
 
-function QueuedMessageItem({ id }: { id: string }) {
+function QueuedMessageItem({ id, sessionId }: { id: string; sessionId: string }) {
   const text = useEntityField("queuedMessages", id, "text") as string | undefined;
   const imageKeys = useEntityField("queuedMessages", id, "imageKeys") as string[] | undefined;
   const interactionMode = useEntityField("queuedMessages", id, "interactionMode") as
@@ -57,6 +59,13 @@ function QueuedMessageItem({ id }: { id: string }) {
     client
       .mutation(REMOVE_QUEUED_MESSAGE_MUTATION, { id })
       .toPromise()
+      .then((result) => {
+        if (isMissingQueuedMessageError(result.error)) {
+          dropStaleQueuedMessage(sessionId, id);
+        } else if (result.error) {
+          toast.error("Failed to remove queued message");
+        }
+      })
       .catch(() => toast.error("Failed to remove queued message"));
   };
 
@@ -86,6 +95,11 @@ function QueuedMessageItem({ id }: { id: string }) {
       .mutation(UPDATE_QUEUED_MESSAGE_MUTATION, { id, text: nextStoredText })
       .toPromise()
       .then((result) => {
+        if (isMissingQueuedMessageError(result.error)) {
+          dropStaleQueuedMessage(sessionId, id);
+          setIsEditing(false);
+          return;
+        }
         if (result.error) {
           toast.error("Failed to edit queued message");
           return;
@@ -102,7 +116,11 @@ function QueuedMessageItem({ id }: { id: string }) {
       .mutation(STEER_QUEUED_MESSAGE_MUTATION, { id })
       .toPromise()
       .then((result) => {
-        if (result.error) throw result.error;
+        if (isMissingQueuedMessageError(result.error)) {
+          dropStaleQueuedMessage(sessionId, id);
+        } else if (result.error) {
+          toast.error("Failed to steer queued message");
+        }
       })
       .catch(() => toast.error("Failed to steer queued message"))
       .finally(() => setIsBusy(false));
@@ -289,7 +307,7 @@ export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           <div className="flex flex-col gap-1">
             {ids.map((id) => (
-              <QueuedMessageItem key={id} id={id} />
+              <QueuedMessageItem key={id} id={id} sessionId={sessionId} />
             ))}
           </div>
         </SortableContext>

@@ -6,6 +6,8 @@ import {
   REMOVE_QUEUED_MESSAGE_MUTATION,
   STEER_QUEUED_MESSAGE_MUTATION,
   UPDATE_QUEUED_MESSAGE_MUTATION,
+  dropStaleQueuedMessage,
+  isMissingQueuedMessageError,
   stripPromptWrapping,
   useEntityField,
   useQueuedMessageIdsForSession,
@@ -92,6 +94,7 @@ export function QueuedMessagesStrip({
           <QueuedMessageChip
             key={id}
             id={id}
+            sessionId={sessionId}
             tint={theme.colors.accent}
             selected={editingId === id}
             onEdit={onEditMessage}
@@ -104,11 +107,13 @@ export function QueuedMessagesStrip({
 
 function QueuedMessageChip({
   id,
+  sessionId,
   tint,
   selected,
   onEdit,
 }: {
   id: string;
+  sessionId: string;
   tint: string;
   selected: boolean;
   onEdit?: (id: string) => void;
@@ -121,8 +126,15 @@ function QueuedMessageChip({
 
   const handleRemove = useCallback(() => {
     void haptic.light();
-    void getClient().mutation(REMOVE_QUEUED_MESSAGE_MUTATION, { id }).toPromise();
-  }, [id]);
+    void getClient()
+      .mutation(REMOVE_QUEUED_MESSAGE_MUTATION, { id })
+      .toPromise()
+      .then((result) => {
+        if (isMissingQueuedMessageError(result.error)) {
+          dropStaleQueuedMessage(sessionId, id);
+        }
+      });
+  }, [id, sessionId]);
 
   const handleSteer = useCallback(() => {
     void haptic.medium();
@@ -131,11 +143,15 @@ function QueuedMessageChip({
       .toPromise()
       .then((result) => {
         if (result.error) {
+          if (isMissingQueuedMessageError(result.error)) {
+            dropStaleQueuedMessage(sessionId, id);
+            return;
+          }
           Alert.alert("Couldn't steer", result.error.message);
         }
       })
       .catch(() => Alert.alert("Couldn't steer", "Please try again."));
-  }, [id]);
+  }, [id, sessionId]);
 
   if (!text && imageCount === 0) return null;
 
@@ -208,10 +224,15 @@ function QueuedMessageChip({
 
 interface QueuedMessageComposerEditorProps {
   id: string;
+  sessionId: string;
   onClose: () => void;
 }
 
-export function QueuedMessageComposerEditor({ id, onClose }: QueuedMessageComposerEditorProps) {
+export function QueuedMessageComposerEditor({
+  id,
+  sessionId,
+  onClose,
+}: QueuedMessageComposerEditorProps) {
   const theme = useTheme();
   const text = useEntityField("queuedMessages", id, "text") as string | undefined;
   const imageKeys = useEntityField("queuedMessages", id, "imageKeys") as string[] | undefined;
@@ -261,17 +282,18 @@ export function QueuedMessageComposerEditor({ id, onClose }: QueuedMessageCompos
     setBusy(true);
     try {
       const result = await getClient().mutation(REMOVE_QUEUED_MESSAGE_MUTATION, { id }).toPromise();
-      if (result.error) {
+      if (result.error && !isMissingQueuedMessageError(result.error)) {
         Alert.alert("Couldn't remove queued message", result.error.message);
         return;
       }
+      if (result.error) dropStaleQueuedMessage(sessionId, id);
       onClose();
     } catch {
       Alert.alert("Couldn't remove queued message", "Please try again.");
     } finally {
       setBusy(false);
     }
-  }, [id, onClose]);
+  }, [id, onClose, sessionId]);
 
   const steer = useCallback(async () => {
     setBusy(true);
@@ -286,6 +308,11 @@ export function QueuedMessageComposerEditor({ id, onClose }: QueuedMessageCompos
           .mutation(UPDATE_QUEUED_MESSAGE_MUTATION, { id, text: nextStoredText })
           .toPromise();
         if (updateResult.error) {
+          if (isMissingQueuedMessageError(updateResult.error)) {
+            dropStaleQueuedMessage(sessionId, id);
+            onClose();
+            return;
+          }
           Alert.alert("Couldn't edit queued message", updateResult.error.message);
           return;
         }
@@ -294,6 +321,11 @@ export function QueuedMessageComposerEditor({ id, onClose }: QueuedMessageCompos
         .mutation(STEER_QUEUED_MESSAGE_MUTATION, { id })
         .toPromise();
       if (steerResult.error) {
+        if (isMissingQueuedMessageError(steerResult.error)) {
+          dropStaleQueuedMessage(sessionId, id);
+          onClose();
+          return;
+        }
         Alert.alert("Couldn't steer", steerResult.error.message);
         return;
       }
@@ -303,7 +335,7 @@ export function QueuedMessageComposerEditor({ id, onClose }: QueuedMessageCompos
     } finally {
       setBusy(false);
     }
-  }, [displayText, draft, id, imageCount, interactionMode, onClose]);
+  }, [displayText, draft, id, imageCount, interactionMode, onClose, sessionId]);
 
   if (!text && imageCount === 0) return null;
 

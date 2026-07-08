@@ -95,7 +95,8 @@ vi.mock("../lib/storage/index.js", () => ({
   },
 }));
 
-vi.mock("@trace/shared", () => {
+vi.mock("@trace/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@trace/shared")>();
   return {
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
     getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
@@ -104,6 +105,7 @@ vi.mock("@trace/shared", () => {
     hasQuestionBlock: vi.fn().mockReturnValue(false),
     hasPlanBlock: vi.fn().mockReturnValue(false),
     MAX_WORKSPACE_NAME_LENGTH: 80,
+    CODING_TOOL_IDS: actual.CODING_TOOL_IDS,
   };
 });
 
@@ -5502,7 +5504,7 @@ describe("SessionService", () => {
         organizationId: "org-1",
         createdAt: new Date("2024-01-01T00:00:00.000Z"),
       };
-      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce({
+      prismaMock.queuedMessage.findUnique.mockResolvedValueOnce({
         sessionId: "session-1",
         organizationId: "org-1",
         imageKeys: [],
@@ -5541,7 +5543,7 @@ describe("SessionService", () => {
         organizationId: "org-1",
         createdAt: new Date("2024-01-01T00:00:00.000Z"),
       };
-      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce({
+      prismaMock.queuedMessage.findUnique.mockResolvedValueOnce({
         sessionId: "session-1",
         organizationId: "org-1",
         imageKeys: ["uploads/org-1/file.png"],
@@ -5557,7 +5559,7 @@ describe("SessionService", () => {
     });
 
     it("rejects empty text edits without attachments", async () => {
-      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce({
+      prismaMock.queuedMessage.findUnique.mockResolvedValueOnce({
         sessionId: "session-1",
         organizationId: "org-1",
         imageKeys: [],
@@ -5584,7 +5586,7 @@ describe("SessionService", () => {
       };
       const sentEvent = { id: "sent-event" } as Awaited<ReturnType<SessionService["sendMessage"]>>;
       const sendSpy = vi.spyOn(service, "sendMessage").mockResolvedValueOnce(sentEvent);
-      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce(queuedMessage);
+      prismaMock.queuedMessage.findUnique.mockResolvedValueOnce(queuedMessage);
       eventServiceMock.create.mockResolvedValueOnce({ id: "removed-event" });
 
       const result = await service.steerQueuedMessage("queued-1", "user-1", "org-1");
@@ -5625,7 +5627,7 @@ describe("SessionService", () => {
       };
       const sendError = new Error("send failed");
       vi.spyOn(service, "sendMessage").mockRejectedValueOnce(sendError);
-      prismaMock.queuedMessage.findUniqueOrThrow.mockResolvedValueOnce(queuedMessage);
+      prismaMock.queuedMessage.findUnique.mockResolvedValueOnce(queuedMessage);
       prismaMock.queuedMessage.create.mockResolvedValueOnce(queuedMessage);
       eventServiceMock.create
         .mockResolvedValueOnce({ id: "removed-event" })
@@ -5661,6 +5663,26 @@ describe("SessionService", () => {
       );
       expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "removed-event" });
       expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "restored-event" });
+    });
+
+    it("throws NotFoundError when steering an already-drained queued message", async () => {
+      prismaMock.queuedMessage.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.steerQueuedMessage("queued-1", "user-1", "org-1")).rejects.toThrow(
+        "Queued message not found: queued-1",
+      );
+
+      expect(prismaMock.queuedMessage.delete).not.toHaveBeenCalled();
+    });
+
+    it("throws NotFoundError when removing an already-drained queued message", async () => {
+      prismaMock.queuedMessage.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.removeQueuedMessage("queued-1", "user-1", "org-1")).rejects.toThrow(
+        "Queued message not found: queued-1",
+      );
+
+      expect(prismaMock.queuedMessage.delete).not.toHaveBeenCalled();
     });
   });
 

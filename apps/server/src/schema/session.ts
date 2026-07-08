@@ -649,21 +649,33 @@ export const sessionMutations = {
   },
   removeQueuedMessage: async (_: unknown, args: { id: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
-    await assertScopeAccess("session", sessionId, ctx.userId, orgId);
-    return sessionService.removeQueuedMessage(args.id, ctx.userId, orgId);
+    try {
+      const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
+      await assertScopeAccess("session", sessionId, ctx.userId, orgId);
+      return await sessionService.removeQueuedMessage(args.id, ctx.userId, orgId);
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   steerQueuedMessage: async (_: unknown, args: { id: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
-    await assertScopeAccess("session", sessionId, ctx.userId, orgId);
-    return sessionService.steerQueuedMessage(args.id, ctx.userId, orgId);
+    try {
+      const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
+      await assertScopeAccess("session", sessionId, ctx.userId, orgId);
+      return await sessionService.steerQueuedMessage(args.id, ctx.userId, orgId);
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   updateQueuedMessage: async (_: unknown, args: { id: string; text: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
-    await assertScopeAccess("session", sessionId, ctx.userId, orgId);
-    return sessionService.updateQueuedMessage(args.id, args.text, ctx.userId, orgId);
+    try {
+      const sessionId = await sessionService.getQueuedMessageSessionId(args.id, orgId);
+      await assertScopeAccess("session", sessionId, ctx.userId, orgId);
+      return await sessionService.updateQueuedMessage(args.id, args.text, ctx.userId, orgId);
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   clearQueuedMessages: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);

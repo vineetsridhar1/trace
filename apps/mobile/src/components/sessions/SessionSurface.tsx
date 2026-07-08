@@ -285,6 +285,7 @@ export function SessionSurface({
               {editingQueuedMessageId ? (
                 <QueuedMessageComposerEditor
                   id={editingQueuedMessageId}
+                  sessionId={sessionId}
                   onClose={() => setEditingQueuedMessageId(null)}
                 />
               ) : (

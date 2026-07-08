@@ -34,6 +34,7 @@ export { generateUUID } from "./utils/uuid.js";
 export { getSessionChannelId, getSessionGroupChannelId } from "./lib/session-group.js";
 
 export * from "./mutations/index.js";
+export { dropStaleQueuedMessage, isMissingQueuedMessageError } from "./mutations/queued-message.js";
 export {
   isOptimisticEvent,
   optimisticallyInsertChatMessage,

@@ -19,7 +19,12 @@ import {
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
-import { AuthorizationError, ToolNotInstalledError, ValidationError } from "../lib/errors.js";
+import {
+  AuthorizationError,
+  NotFoundError,
+  ToolNotInstalledError,
+  ValidationError,
+} from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionApplicationService } from "./session-applications.js";
 import {
@@ -5808,10 +5813,13 @@ export class SessionService {
   }
 
   async getQueuedMessageSessionId(id: string, organizationId: string): Promise<string> {
-    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+    const queuedMessage = await prisma.queuedMessage.findUnique({
       where: { id },
       select: { sessionId: true, organizationId: true },
     });
+    if (!queuedMessage) {
+      throw new NotFoundError("Queued message", id);
+    }
     if (queuedMessage.organizationId !== organizationId) {
       throw new Error("Queued message does not belong to this organization");
     }
@@ -5819,10 +5827,13 @@ export class SessionService {
   }
 
   async removeQueuedMessage(id: string, actorId: string, organizationId: string) {
-    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+    const queuedMessage = await prisma.queuedMessage.findUnique({
       where: { id },
       select: { sessionId: true, organizationId: true },
     });
+    if (!queuedMessage) {
+      throw new NotFoundError("Queued message", id);
+    }
     if (queuedMessage.organizationId !== organizationId) {
       throw new Error("Queued message does not belong to this organization");
     }
@@ -5843,10 +5854,13 @@ export class SessionService {
   }
 
   async updateQueuedMessage(id: string, text: string, actorId: string, organizationId: string) {
-    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+    const queuedMessage = await prisma.queuedMessage.findUnique({
       where: { id },
       select: { sessionId: true, organizationId: true, imageKeys: true },
     });
+    if (!queuedMessage) {
+      throw new NotFoundError("Queued message", id);
+    }
     if (queuedMessage.organizationId !== organizationId) {
       throw new Error("Queued message does not belong to this organization");
     }
@@ -5885,9 +5899,12 @@ export class SessionService {
   }
 
   async steerQueuedMessage(id: string, actorId: string, organizationId: string) {
-    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+    const queuedMessage = await prisma.queuedMessage.findUnique({
       where: { id },
     });
+    if (!queuedMessage) {
+      throw new NotFoundError("Queued message", id);
+    }
     if (queuedMessage.organizationId !== organizationId) {
       throw new Error("Queued message does not belong to this organization");
     }
