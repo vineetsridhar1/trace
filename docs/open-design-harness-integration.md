@@ -98,8 +98,14 @@ Org-custom `DESIGN.md` directories mount alongside the shipped content later.
 2. Image build stage: clone pinned tag, copy content dirs; loader reads a `SKILL.md` and a
    design-system manifest correctly.
 3. Wire `appendSystemPrompt` through run command → `RunOptions` → `--append-system-prompt`.
-4. End-to-end on a cloud machine: design prompt → scaffold → dev server → preview; A/B the
-   same prompt against bare claude to confirm the quality delta justifies the port.
+4. End-to-end on a cloud machine: design prompt → scaffold → dev server → preview; A/B/C
+   the same prompt across (a) bare claude, (b) claude + a static design prompt
+   ([claude-design-system-prompt](https://github.com/Trystan-SA/claude-design-system-prompt),
+   MIT — reverse-engineered, so benchmark-only pending a provenance check), (c) the full
+   composed OD stack. (b)-vs-(c) measures what the composition machinery adds over prompt
+   text alone; if the gap is small, v1 can ship (b) while the port proceeds. Its
+   review-flavored skills (AI-trope detection, a11y audit) are cherry-pick candidates for
+   our content dir regardless.
 
 ## Risks
 
