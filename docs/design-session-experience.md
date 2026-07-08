@@ -72,24 +72,21 @@ spawns coding-agent CLIs bound to `SKILL.md` workflows (100+ design skills — p
 dashboards, decks) and `DESIGN.md` brand systems (150+ shipped: Linear, Stripe, Apple, …),
 with a critique-before-emit loop. Its skills protocol is Claude Code's, adopted verbatim.
 
-**Integration shape — it's a `CodingToolAdapter`, not a platform swap.** Open Design also
-ships its own web UI, Electron shell, SQLite project store, and artifact viewer; Trace
-adopts none of that. Trace's service layer, event stream, and preview pane stay
-authoritative. What we take is the agent-harness layer, inserted at the sanctioned seam:
+**Integration shape — extract the prompt layer, not the daemon.** Open Design's daemon
+does three jobs; Trace already owns two (spawning/normalizing agent CLIs, persisting
+conversations). What Trace lacks — and what we take — is the third: the layered prompt
+composer (`composeSystemPrompt()`) and the content libraries. Its web UI, Electron shell,
+SQLite store, and daemon process are all skipped; Trace's service layer, event stream, and
+preview pane stay authoritative.
 
-- The **cloud runtime image bakes in Open Design** (pinned version — it's a fast-moving
-  0.x project) alongside the coding-tool CLIs.
-- A new **`OpenDesignAdapter implements CodingToolAdapter`** (`tool: open_design` in the
-  enum) drives it headless on the runtime and normalizes its stream into `ToolOutput`,
-  exactly like `ClaudeCodeAdapter` does for `claude -p --output-format stream-json`. Open
-  Design remains model/CLI-agnostic underneath, which matches Trace's adapter philosophy —
-  the design session's tool picker can still choose which agent CLI Open Design spawns.
-- Integration mechanics — vendoring, daemon lifecycle on the runtime, the adapter's
-  HTTP/SSE → `ToolOutput` mapping, and the spike checklist — are in
-  `open-design-harness-integration.md`. (A skills-only stepping stone was considered and
-  dropped: the daemon's HTTP surface is purpose-built for external orchestrators —
-  folder-import with `writeback: external`, one-call run+SSE — so driving it directly is
-  the simpler path and keeps prompt composition + critique inside the harness.)
+- The **composer is vendored** (Apache-2.0, attribution kept) into `packages/shared`, with
+  Trace-specific additions in an overlay module so vendored files never diverge.
+- The **skills + design-systems content** is baked into the runtime image from a pinned
+  upstream tag — content sync is a pin bump, formats stay upstream-compatible.
+- **No new tool**: design sessions run plain `claude_code`; the bridge composes the design
+  prompt and passes it via `--append-system-prompt` (a small `RunOptions` extension).
+- Full plan, spike checklist, and the daemon-embed alternative (still the fastest demo
+  path) are in `open-design-harness-integration.md`.
 
 What this buys beyond raw quality:
 - **`DESIGN.md` as the org's brand system** — a design session can bind the org's own
@@ -102,9 +99,10 @@ What this buys beyond raw quality:
 - **A path beyond apps** — Open Design's deck/image/video artifact skills give future
   session kinds (`deck_design`, …) the same harness for free.
 
-Open question: how much of the daemon's surface (plugins, exports, design-system
-management) to expose in Trace v1 vs. keeping the daemon as a pure execution detail behind
-the adapter. Recommendation: pure execution detail first.
+Open question: when to build the critique panel (Open Design's weighted multi-role review
+is orchestration we'd implement Trace-side) and whether v1 parses the discovery
+question-form syntax into `QuestionBlock` or skips the brief entirely. Recommendation:
+skip both in v1; first message is the brief.
 
 ## Mapping the mock to the architecture
 
@@ -198,15 +196,17 @@ Server:
 - Checkpoint capture step (screenshot per checkpoint)
 - Token-edit service method (validate against template schema → bridge write)
 - `design_comment_added` event type
-- `OpenDesignAdapter` (`tool: open_design`) driving the Open Design daemon over HTTP/SSE —
-  see `open-design-harness-integration.md`; permissive sandbox auto-run (cloud machine is
+- Vendored Open Design prompt composer + overlay in `packages/shared`;
+  `RunOptions.appendSystemPrompt` → `--append-system-prompt` in `ClaudeCodeAdapter` — see
+  `open-design-harness-integration.md`; permissive sandbox auto-run (cloud machine is
   disposable)
 
 Runtime/template:
 - Starter kit baked into the runtime image (Vite + React + Tailwind + shadcn,
   `trace.tokens.json`, source-location Vite plugin, pre-warmed node_modules) — used by the
   agent by default, not a fixed pipeline
-- Open Design (pinned) + its skills and `DESIGN.md` library baked into the runtime image
+- Open Design skills + design-systems content baked into the runtime image from a pinned
+  upstream tag
 - Listening-port detection in the container bridge (reports new ports so the service layer
   can register endpoints)
 - Proxy HTML injection for the picker/comments overlay (dev responses only)
@@ -219,7 +219,7 @@ Runtime/template:
    iframe auth. Useful for coding sessions today; zero schema change.
 2. **Design kind**: `kind` on SessionGroup (cloud-only, repo-less, enforced at
    `startSession`), `DesignSessionView` shell, starter kit + agent-run bootstrap + port
-   auto-detection, `OpenDesignAdapter` + daemon in the runtime image (per
+   auto-detection, vendored Open Design prompt composer + content in the image (per
    `open-design-harness-integration.md`), lazy managed repo (per git-hosting doc), version
    strip from checkpoints (code diff only).
 3. **The magic**: element picker + chips, Tweaks/token edits, checkpoint captures + visual
