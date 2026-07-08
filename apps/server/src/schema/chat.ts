@@ -6,17 +6,11 @@ import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { isActiveChatMember } from "../services/access.js";
 import { requireOrgContext } from "../lib/require-org.js";
-
-const CODING_TOOL_LABELS: Record<string, string> = {
-  claude_code: "Claude Code",
-  codex: "Codex",
-  pi: "Pi",
-  antigravity: "Antigravity",
-};
+import { getCodingToolCli } from "@trace/shared";
 
 /** Human label for an agent's coding tool, or a generic "AI" fallback. */
 function codingToolLabel(tool: string | null | undefined): string {
-  return (tool && CODING_TOOL_LABELS[tool]) || "AI";
+  return (tool && getCodingToolCli(tool)?.label) || "AI";
 }
 
 export const chatQueries = {

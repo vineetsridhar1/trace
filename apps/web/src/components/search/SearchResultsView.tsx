@@ -7,6 +7,7 @@ import { navigateToSession, useUIStore } from "../../stores/ui";
 import { useSearchMessages, type SearchMessageResult } from "../../hooks/useSearchMessages";
 import { SmallMessageAvatar } from "../chat/MessageAvatar";
 import { ConnectionStatus } from "../ConnectionStatus";
+import { cn } from "@/lib/utils";
 
 /** Wraps case-insensitive occurrences of the query in a highlight mark. */
 function highlightMatches(text: string, query: string): ReactNode {
@@ -44,7 +45,8 @@ function formatTimestamp(iso: string): string {
 interface Conversation {
   label: string;
   icon: ReactNode;
-  onOpen: () => void;
+  /** Absent when the hit's conversation can't be navigated to (e.g. a group-less session). */
+  onOpen?: () => void;
 }
 
 function SearchResultRow({
@@ -59,11 +61,15 @@ function SearchResultRow({
   // The server labels agent hits by coding tool (or "AI"); never show "Unknown".
   const authorName =
     result.actor.name ?? (result.actor.type === "agent" ? "AI" : "Unknown");
+  const onOpen = conversation?.onOpen;
+  const Wrapper = onOpen ? "button" : "div";
   return (
-    <button
-      type="button"
-      onClick={() => conversation?.onOpen()}
-      className="flex w-full cursor-pointer gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors hover:border-border hover:bg-surface-raised"
+    <Wrapper
+      {...(onOpen ? { type: "button" as const, onClick: onOpen } : {})}
+      className={cn(
+        "flex w-full gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-colors",
+        onOpen && "cursor-pointer hover:border-border hover:bg-surface-raised",
+      )}
     >
       <SmallMessageAvatar actorName={authorName} avatarUrl={result.actor.avatarUrl} />
       <div className="min-w-0 flex-1">
@@ -83,7 +89,7 @@ function SearchResultRow({
           {highlightMatches(result.text, query)}
         </p>
       </div>
-    </button>
+    </Wrapper>
   );
 }
 
@@ -99,18 +105,20 @@ export function SearchResultsView() {
     (s: { sessionGroups: Record<string, SessionGroupEntity> }) => s.sessionGroups,
   );
 
-  const { results, loading } = useSearchMessages(query);
+  const { results, loading, error } = useSearchMessages(query);
 
   const resolveConversation = useMemo(() => {
     return (result: SearchMessageResult): Conversation | null => {
-      if (result.sessionId && result.sessionGroupId) {
-        const group = sessionGroupsTable[result.sessionGroupId];
+      if (result.sessionId) {
         const groupId = result.sessionGroupId;
+        const group = groupId ? sessionGroupsTable[groupId] : undefined;
         const sessionId = result.sessionId;
         return {
           label: group?.name ?? group?.slug ?? "Session",
           icon: <GitBranch size={12} />,
-          onOpen: () => navigateToSession(null, groupId, sessionId),
+          // Navigation needs a session group; group-less sessions render as a
+          // labeled, non-clickable row rather than a dead button.
+          onOpen: groupId ? () => navigateToSession(null, groupId, sessionId) : undefined,
         };
       }
       if (result.channelId) {
@@ -158,6 +166,13 @@ export function SearchResultsView() {
           <div className="flex h-full flex-col items-center justify-center gap-2">
             <Search size={40} className="text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">Type at least 2 characters to search.</p>
+          </div>
+        ) : error && results.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2">
+            <Search size={40} className="text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">
+              Something went wrong searching. Try again.
+            </p>
           </div>
         ) : loading && results.length === 0 ? (
           <div className="flex h-full items-center justify-center">

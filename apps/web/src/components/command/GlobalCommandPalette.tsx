@@ -74,7 +74,9 @@ export function GlobalCommandPalette() {
 }
 
 function CommandPaletteBody({ onClose }: { onClose: () => void }) {
-  const [query, setQuery] = useState("");
+  // Seed from pendingQuery so ⌘F can open the palette pre-filled in search mode.
+  // The body only mounts while open, so this initializer runs fresh each time.
+  const [query, setQuery] = useState(() => useCommandPaletteStore.getState().pendingQuery);
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
 
   const setActivePage = useUIStore((s) => s.setActivePage);

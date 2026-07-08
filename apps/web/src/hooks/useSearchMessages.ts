@@ -43,20 +43,23 @@ const DEBOUNCE_MS = 200;
 export function useSearchMessages(
   query: string,
   limit = 50,
-): { results: SearchMessageResult[]; loading: boolean } {
+): { results: SearchMessageResult[]; loading: boolean; error: boolean } {
   const [results, setResults] = useState<SearchMessageResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < MIN_QUERY_LENGTH) {
       setResults([]);
       setLoading(false);
+      setError(false);
       return;
     }
 
     let cancelled = false;
     setLoading(true);
+    setError(false);
     const handle = setTimeout(() => {
       void client
         .query(
@@ -67,7 +70,19 @@ export function useSearchMessages(
         .toPromise()
         .then((result) => {
           if (cancelled) return;
-          setResults((result.data?.searchMessages ?? []) as SearchMessageResult[]);
+          if (result.error) {
+            setResults([]);
+            setError(true);
+          } else {
+            setResults((result.data?.searchMessages ?? []) as SearchMessageResult[]);
+          }
+          setLoading(false);
+        })
+        .catch(() => {
+          // Guard against an unexpected rejection so loading never hangs.
+          if (cancelled) return;
+          setResults([]);
+          setError(true);
           setLoading(false);
         });
     }, DEBOUNCE_MS);
@@ -78,5 +93,5 @@ export function useSearchMessages(
     };
   }, [query, limit]);
 
-  return { results, loading };
+  return { results, loading, error };
 }
