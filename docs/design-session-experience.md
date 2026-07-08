@@ -84,10 +84,12 @@ authoritative. What we take is the agent-harness layer, inserted at the sanction
   exactly like `ClaudeCodeAdapter` does for `claude -p --output-format stream-json`. Open
   Design remains model/CLI-agnostic underneath, which matches Trace's adapter philosophy —
   the design session's tool picker can still choose which agent CLI Open Design spawns.
-- **Stepping stone if the full daemon integration is heavy:** because the skills protocol
-  is Claude Code's, v1 can bake Open Design's skills + `DESIGN.md` library into the image
-  as installed skills and run the existing `ClaudeCodeAdapter` with the design profile;
-  graduate to the daemon-backed adapter when we want plugin pipelines and exports.
+- Integration mechanics — vendoring, daemon lifecycle on the runtime, the adapter's
+  HTTP/SSE → `ToolOutput` mapping, and the spike checklist — are in
+  `open-design-harness-integration.md`. (A skills-only stepping stone was considered and
+  dropped: the daemon's HTTP surface is purpose-built for external orchestrators —
+  folder-import with `writeback: external`, one-call run+SSE — so driving it directly is
+  the simpler path and keeps prompt composition + critique inside the harness.)
 
 What this buys beyond raw quality:
 - **`DESIGN.md` as the org's brand system** — a design session can bind the org's own
@@ -196,9 +198,9 @@ Server:
 - Checkpoint capture step (screenshot per checkpoint)
 - Token-edit service method (validate against template schema → bridge write)
 - `design_comment_added` event type
-- `OpenDesignAdapter` (`tool: open_design`) — or, as the stepping stone, the design agent
-  profile: Open Design skills + `DESIGN.md` bound to `ClaudeCodeAdapter`, system prompt
-  tuned for visual iteration, permissive sandbox auto-run (cloud machine is disposable)
+- `OpenDesignAdapter` (`tool: open_design`) driving the Open Design daemon over HTTP/SSE —
+  see `open-design-harness-integration.md`; permissive sandbox auto-run (cloud machine is
+  disposable)
 
 Runtime/template:
 - Starter kit baked into the runtime image (Vite + React + Tailwind + shadcn,
@@ -217,10 +219,9 @@ Runtime/template:
    iframe auth. Useful for coding sessions today; zero schema change.
 2. **Design kind**: `kind` on SessionGroup (cloud-only, repo-less, enforced at
    `startSession`), `DesignSessionView` shell, starter kit + agent-run bootstrap + port
-   auto-detection, Open Design skills layer on `ClaudeCodeAdapter` (stepping stone), lazy
-   managed repo (per git-hosting doc), version strip from checkpoints (code diff only).
-   The daemon-backed `OpenDesignAdapter` lands here or in phase 3, whichever proves
-   necessary first.
+   auto-detection, `OpenDesignAdapter` + daemon in the runtime image (per
+   `open-design-harness-integration.md`), lazy managed repo (per git-hosting doc), version
+   strip from checkpoints (code diff only).
 3. **The magic**: element picker + chips, Tweaks/token edits, checkpoint captures + visual
    diff, comments.
 4. **Distribution**: Publish (public endpoint → real deploy), Spotlight/share mode,
