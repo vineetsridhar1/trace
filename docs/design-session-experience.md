@@ -36,13 +36,42 @@ Enforcement is at session creation, not scattered checks: when `kind === "web_de
 render the hosting/runtime picker for design sessions. Local support, if ever wanted, is a
 later adapter-level project — nothing in this design precludes it.
 
+## Standalone apps, agent-run
+
+A design session does **not** run in the context of an existing org repo. It always starts
+a brand-new application:
+
+- **No `repoId` at creation.** Creation is prompt-first: `startSession(kind: web_design, prompt)`.
+  Design sessions don't inherit the channel's default repo the way quick-create coding
+  sessions do. The workspace begins as an empty directory on the cloud machine; the managed
+  repo appears lazily at the first checkpoint (per the git-hosting doc).
+- **The agent scaffolds and runs the app itself.** Repo `setupConfig`, setup scripts, and
+  configured application processes are repo concepts — design sessions have none of them.
+  The design agent profile owns the whole loop: pick the stack, scaffold, install, start
+  the dev server, keep it alive. The runtime image bakes in a **starter kit** (Vite + React
+  + Tailwind + shadcn, `trace.tokens.json`, the source-location plugin, pre-warmed
+  node_modules) that the agent uses by default so first-preview is fast — but it's the
+  agent's choice, not a fixed pipeline, so "make me a Next.js app" or a second app in the
+  same workspace still works.
+- **Port auto-detection replaces config-driven process start.** Since no config says what
+  to run or on which port, the container bridge watches for new listening ports. When the
+  dev server comes up, the bridge reports it, the service layer auto-creates and enables a
+  `SessionEndpoint`, and the preview pane lights up — no user or config involvement. (The
+  agent can also register explicitly via a tool call; detection is the fallback that makes
+  it feel automatic.)
+
+Template-dependent features degrade gracefully off-template: the Tweaks panel renders only
+if `trace.tokens.json` exists; the element picker falls back to DOM selectors + screenshots
+when source stamps are absent.
+
 ## Mapping the mock to the architecture
 
-Almost every element maps to an existing primitive. Two are genuinely new (marked ★).
+Almost every element maps to an existing primitive. Three are genuinely new (marked ★).
 
 | Mock element | Backing primitive | Status |
 |---|---|---|
 | Live preview iframe | `SessionEndpoint` + endpoint proxy | exists — needs iframe embed + auth |
+| App boots with no config | agent-run scaffold + port auto-detection | ★ new |
 | Versions v1…v4 | `GitCheckpoint` per run | exists — needs UI + per-version capture |
 | Diff v3 | checkpoint diff / screenshot pair | exists (code diff); visual diff new |
 | Element chip ("ApprovalTable › Row 2") | proxy-injected picker script | ★ new |
@@ -74,7 +103,7 @@ Trace owns the endpoint proxy, which is the unfair advantage: inject a small ove
 into proxied HTML responses (dev-mode only). Clicking an element captures:
 
 - DOM selector + bounding box + cropped screenshot
-- React component name and source location — the scaffold template includes a Vite plugin
+- React component name and source location — the starter kit includes a Vite plugin
   that stamps `data-trace-source="src/components/ApprovalTable.tsx:42"` on elements in dev
   builds, so the picker reads component identity directly from the DOM
 
@@ -85,7 +114,7 @@ guess — this is what makes "click the thing, say the change" reliable.
 
 ### ★ Tweaks: no-prompt design token edits
 
-The scaffold template exposes design tokens in one well-known file (`trace.tokens.json` →
+The starter kit exposes design tokens in one well-known file (`trace.tokens.json` →
 CSS variables / Tailwind theme). The Tweaks panel edits token values through a service-layer
 method that sends a `write_file`-style bridge command patching that file directly — **no
 model round trip**. Vite HMR reflects it in <1s.
@@ -122,7 +151,8 @@ Frontend (`apps/web/src/components/design/`):
 
 Server:
 - `SessionGroup.kind` (`coding | web_design`) + `StartSessionInput.kind`; the kind forces
-  `hosting: cloud` (see "Cloud-only in v1")
+  `hosting: cloud` (see "Cloud-only in v1") and takes no `repoId`
+- Auto-create + enable a `SessionEndpoint` from bridge port-detection reports
 - Checkpoint capture step (screenshot per checkpoint)
 - Token-edit service method (validate against template schema → bridge write)
 - `design_comment_added` event type
@@ -130,8 +160,11 @@ Server:
   auto-run (cloud machine is disposable)
 
 Runtime/template:
-- Scaffold template (Vite + React + Tailwind + shadcn) with `trace.tokens.json` and the
-  source-location Vite plugin
+- Starter kit baked into the runtime image (Vite + React + Tailwind + shadcn,
+  `trace.tokens.json`, source-location Vite plugin, pre-warmed node_modules) — used by the
+  agent by default, not a fixed pipeline
+- Listening-port detection in the container bridge (reports new ports so the service layer
+  can register endpoints)
 - Proxy HTML injection for the picker/comments overlay (dev responses only)
 - Iframe auth for private endpoints: short-lived signed cookie minted by the server when
   the preview pane loads, so previews are not world-readable
@@ -140,9 +173,10 @@ Runtime/template:
 
 1. **Preview pane**: iframe embed of existing endpoints in the group view + private-endpoint
    iframe auth. Useful for coding sessions today; zero schema change.
-2. **Design kind**: `kind` on SessionGroup (cloud-only enforced at `startSession`),
-   `DesignSessionView` shell, scaffold template, design agent profile, lazy managed repo
-   (per git-hosting doc), version strip from checkpoints (code diff only).
+2. **Design kind**: `kind` on SessionGroup (cloud-only, repo-less, enforced at
+   `startSession`), `DesignSessionView` shell, starter kit + agent-run bootstrap + port
+   auto-detection, design agent profile, lazy managed repo (per git-hosting doc), version
+   strip from checkpoints (code diff only).
 3. **The magic**: element picker + chips, Tweaks/token edits, checkpoint captures + visual
    diff, comments.
 4. **Distribution**: Publish (public endpoint → real deploy), Spotlight/share mode,

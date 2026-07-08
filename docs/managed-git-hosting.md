@@ -108,10 +108,13 @@ Almost nothing changes on the runtime side:
 ## Session kinds (follow-on)
 
 `SessionGroup.kind: coding | web_design` selects the UI shell and creation flow. A design
-session = managed repo (lazy) + template scaffold via `TRACE_RUNTIME_SETUP_COMMANDS` +
-dev-server application process + auto-enabled `SessionEndpoint` + iframe preview pane as the
-dominant pane. The endpoints/applications subsystem and the tool adapters need no changes.
-Detailed in a separate spec when picked up.
+session runs cloud-only, is standalone (never attached to an existing org repo — no
+`repoId` at creation, no `setupConfig`/setup scripts), and the agent scaffolds and runs the
+app itself from a starter kit baked into the runtime image. The dev server is picked up via
+listening-port detection on the bridge → auto-enabled `SessionEndpoint` → iframe preview
+pane as the dominant pane. The managed repo appears lazily at the first checkpoint. The
+endpoints subsystem and tool adapters need no changes. Detailed in
+`design-session-experience.md`.
 
 ## Open questions
 
