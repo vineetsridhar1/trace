@@ -15,6 +15,27 @@ version strip (v1…v4, visual diff), device-width toggles, zoom, pinned **comme
 **Tweaks** panel for no-prompt design-token changes. The composer supports **element
 references** — click a component in the preview, it becomes a chip attached to the prompt.
 
+## Cloud-only in v1
+
+Design sessions run **only on cloud (provisioned) runtimes** to start. This matches gates
+that already exist — application/endpoint forwarding is cloud-only today
+(`resolveCloudRuntime()` rejects local runtimes) — and buys a lot of simplification:
+
+- **One runtime image.** The scaffold template, dev-server tooling, source-location Vite
+  plugin, and headless-capture dependencies live in the cloud runtime image. No "does the
+  user's laptop have node/playwright" story.
+- **Permissive agent sandbox is safe.** The disposable machine is what makes aggressive
+  auto-run (the fast prompt-to-preview loop) acceptable. A local design session would need
+  a different, more conservative permission profile.
+- **No local preview plumbing.** The iframe, proxy injection, and endpoint auth all ride
+  the existing server-side proxy; a local variant would need a whole separate path.
+
+Enforcement is at session creation, not scattered checks: when `kind === "web_design"`,
+`SessionService.startSession` forces `hosting: cloud`, requires an environment with
+`adapterType: provisioned`, and rejects local runtime selection. The UI simply doesn't
+render the hosting/runtime picker for design sessions. Local support, if ever wanted, is a
+later adapter-level project — nothing in this design precludes it.
+
 ## Mapping the mock to the architecture
 
 Almost every element maps to an existing primitive. Two are genuinely new (marked ★).
@@ -100,7 +121,8 @@ Frontend (`apps/web/src/components/design/`):
 - Chat rail reuses `SessionInput` / `SessionMessageList` as-is
 
 Server:
-- `SessionGroup.kind` (`coding | web_design`) + `StartSessionInput.kind`
+- `SessionGroup.kind` (`coding | web_design`) + `StartSessionInput.kind`; the kind forces
+  `hosting: cloud` (see "Cloud-only in v1")
 - Checkpoint capture step (screenshot per checkpoint)
 - Token-edit service method (validate against template schema → bridge write)
 - `design_comment_added` event type
@@ -118,9 +140,9 @@ Runtime/template:
 
 1. **Preview pane**: iframe embed of existing endpoints in the group view + private-endpoint
    iframe auth. Useful for coding sessions today; zero schema change.
-2. **Design kind**: `kind` on SessionGroup, `DesignSessionView` shell, scaffold template,
-   design agent profile, lazy managed repo (per git-hosting doc), version strip from
-   checkpoints (code diff only).
+2. **Design kind**: `kind` on SessionGroup (cloud-only enforced at `startSession`),
+   `DesignSessionView` shell, scaffold template, design agent profile, lazy managed repo
+   (per git-hosting doc), version strip from checkpoints (code diff only).
 3. **The magic**: element picker + chips, Tweaks/token edits, checkpoint captures + visual
    diff, comments.
 4. **Distribution**: Publish (public endpoint → real deploy), Spotlight/share mode,
