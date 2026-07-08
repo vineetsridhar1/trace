@@ -64,29 +64,6 @@ export type AgentEnvironmentTestResult = {
 
 export type AgentStatus = "active" | "done" | "failed" | "not_started" | "stopped";
 
-export type AiConversation = {
-  __typename?: "AiConversation";
-  branchCount: Scalars["Int"]["output"];
-  branches: Array<Branch>;
-  createdAt: Scalars["DateTime"]["output"];
-  createdBy: User;
-  id: Scalars["ID"]["output"];
-  rootBranch: Branch;
-  title?: Maybe<Scalars["String"]["output"]>;
-  updatedAt: Scalars["DateTime"]["output"];
-  visibility: AiConversationVisibility;
-};
-
-export type AiConversationEvent = {
-  __typename?: "AiConversationEvent";
-  conversationId: Scalars["ID"]["output"];
-  payload: Scalars["JSON"]["output"];
-  timestamp: Scalars["DateTime"]["output"];
-  type: Scalars["String"]["output"];
-};
-
-export type AiConversationVisibility = "ORG" | "PRIVATE";
-
 export type ApiTokenProvider = "anthropic" | "github" | "openai" | "ssh_key";
 
 export type ApiTokenStatus = {
@@ -103,21 +80,6 @@ export type ApplicationProcessStatus =
   | "starting"
   | "stopped"
   | "stopping";
-
-export type Branch = {
-  __typename?: "Branch";
-  childBranches: Array<Branch>;
-  conversation: AiConversation;
-  createdAt: Scalars["DateTime"]["output"];
-  createdBy: User;
-  depth: Scalars["Int"]["output"];
-  forkTurn?: Maybe<Turn>;
-  id: Scalars["ID"]["output"];
-  label?: Maybe<Scalars["String"]["output"]>;
-  parentBranch?: Maybe<Branch>;
-  turnCount: Scalars["Int"]["output"];
-  turns: Array<Turn>;
-};
 
 export type BranchDiffFile = {
   __typename?: "BranchDiffFile";
@@ -312,11 +274,6 @@ export type CreateAgentEnvironmentInput = {
   isDefault?: InputMaybe<Scalars["Boolean"]["input"]>;
   name: Scalars["String"]["input"];
   orgId: Scalars["ID"]["input"];
-};
-
-export type CreateAiConversationInput = {
-  title?: InputMaybe<Scalars["String"]["input"]>;
-  visibility?: InputMaybe<AiConversationVisibility>;
 };
 
 export type CreateChannelGroupInput = {
@@ -626,7 +583,6 @@ export type Mutation = {
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
   createAgentEnvironment: AgentEnvironment;
-  createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
@@ -689,7 +645,6 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
-  sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
@@ -710,7 +665,6 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars["Boolean"]["output"];
   updateAgentEnvironment: AgentEnvironment;
-  updateAiConversationTitle: AiConversation;
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
@@ -782,11 +736,6 @@ export type MutationCommitSessionGroupFileChangesArgs = {
 
 export type MutationCreateAgentEnvironmentArgs = {
   input: CreateAgentEnvironmentInput;
-};
-
-export type MutationCreateAiConversationArgs = {
-  input: CreateAiConversationInput;
-  organizationId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateChannelArgs = {
@@ -1092,11 +1041,6 @@ export type MutationSendSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
-export type MutationSendTurnArgs = {
-  branchId: Scalars["ID"]["input"];
-  content: Scalars["String"]["input"];
-};
-
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
 };
@@ -1197,11 +1141,6 @@ export type MutationUnsubscribeArgs = {
 
 export type MutationUpdateAgentEnvironmentArgs = {
   input: UpdateAgentEnvironmentInput;
-};
-
-export type MutationUpdateAiConversationTitleArgs = {
-  conversationId: Scalars["ID"]["input"];
-  title: Scalars["String"]["input"];
 };
 
 export type MutationUpdateBridgeAccessGrantArgs = {
@@ -1334,11 +1273,8 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
-  aiConversation?: Maybe<AiConversation>;
-  aiConversations: Array<AiConversation>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
-  branch?: Maybe<Branch>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
@@ -1399,15 +1335,6 @@ export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
 };
 
-export type QueryAiConversationArgs = {
-  id: Scalars["ID"]["input"];
-};
-
-export type QueryAiConversationsArgs = {
-  organizationId: Scalars["ID"]["input"];
-  visibility?: InputMaybe<AiConversationVisibility>;
-};
-
 export type QueryAvailableRuntimesArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   tool: CodingTool;
@@ -1415,10 +1342,6 @@ export type QueryAvailableRuntimesArgs = {
 
 export type QueryAvailableSessionRuntimesArgs = {
   sessionId: Scalars["ID"]["input"];
-};
-
-export type QueryBranchArgs = {
-  id: Scalars["ID"]["input"];
 };
 
 export type QueryBridgeRuntimeAccessArgs = {
@@ -2133,20 +2056,14 @@ export type StartSessionInput = {
 
 export type Subscription = {
   __typename?: "Subscription";
-  branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
-  conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
   userNotifications: Notification;
-};
-
-export type SubscriptionBranchTurnsArgs = {
-  branchId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionChannelEventsArgs = {
@@ -2158,10 +2075,6 @@ export type SubscriptionChannelEventsArgs = {
 export type SubscriptionChatEventsArgs = {
   chatId: Scalars["ID"]["input"];
   types?: InputMaybe<Array<Scalars["String"]["input"]>>;
-};
-
-export type SubscriptionConversationEventsArgs = {
-  conversationId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionOrgEventsArgs = {
@@ -2248,20 +2161,6 @@ export type TicketLink = {
 };
 
 export type TicketStatus = "backlog" | "cancelled" | "done" | "in_progress" | "in_review" | "todo";
-
-export type Turn = {
-  __typename?: "Turn";
-  branch: Branch;
-  branchCount: Scalars["Int"]["output"];
-  childBranches: Array<Branch>;
-  content: Scalars["String"]["output"];
-  createdAt: Scalars["DateTime"]["output"];
-  id: Scalars["ID"]["output"];
-  parentTurn?: Maybe<Turn>;
-  role: TurnRole;
-};
-
-export type TurnRole = "ASSISTANT" | "USER";
 
 export type UpdateAgentEnvironmentInput = {
   adapterType?: InputMaybe<AgentEnvironmentAdapterType>;

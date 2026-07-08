@@ -233,16 +233,6 @@ enum PushPlatform {
   android
 }
 
-enum AiConversationVisibility {
-  PRIVATE
-  ORG
-}
-
-enum TurnRole {
-  USER
-  ASSISTANT
-}
-
 enum EventType {
   message_sent
   message_edited
@@ -985,52 +975,6 @@ type Notification {
   timestamp: DateTime!
 }
 
-# --- AI Conversation Types ---
-
-type AiConversation {
-  id: ID!
-  title: String
-  visibility: AiConversationVisibility!
-  createdBy: User!
-  rootBranch: Branch!
-  branches: [Branch!]!
-  branchCount: Int!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-type Branch {
-  id: ID!
-  conversation: AiConversation!
-  label: String
-  parentBranch: Branch
-  forkTurn: Turn
-  turns: [Turn!]!
-  childBranches: [Branch!]!
-  depth: Int!
-  turnCount: Int!
-  createdBy: User!
-  createdAt: DateTime!
-}
-
-type Turn {
-  id: ID!
-  branch: Branch!
-  role: TurnRole!
-  content: String!
-  parentTurn: Turn
-  branchCount: Int!
-  childBranches: [Branch!]!
-  createdAt: DateTime!
-}
-
-type AiConversationEvent {
-  conversationId: ID!
-  type: String!
-  payload: JSON!
-  timestamp: DateTime!
-}
-
 # --- Inputs ---
 
 input CreateChannelInput {
@@ -1231,11 +1175,6 @@ input SetApiTokenInput {
   token: String!
 }
 
-input CreateAiConversationInput {
-  title: String
-  visibility: AiConversationVisibility
-}
-
 input CreateAgentEnvironmentInput {
   orgId: ID!
   name: String!
@@ -1372,9 +1311,6 @@ type Query {
   sessionApplicationLogs(processId: ID!, limit: Int, beforeSequence: Int): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
-  aiConversations(organizationId: ID!, visibility: AiConversationVisibility): [AiConversation!]!
-  aiConversation(id: ID!): AiConversation
-  branch(id: ID!): Branch
   searchUsers(query: String!): [User!]!
 }
 
@@ -1610,9 +1546,6 @@ type Mutation {
   addOrgMember(organizationId: ID!, userId: ID!, role: UserRole): OrgMember!
   removeOrgMember(organizationId: ID!, userId: ID!): Boolean!
   updateOrgMemberRole(organizationId: ID!, userId: ID!, role: UserRole!): OrgMember!
-  createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
-  sendTurn(branchId: ID!, content: String!): Turn!
-  updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
 }
 
 enum LinkedCheckoutSyncConflictStrategy {
@@ -1632,7 +1565,5 @@ type Subscription {
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
-  branchTurns(branchId: ID!): Turn!
   sessionEvents(sessionId: ID!, organizationId: ID!): Event!
-  conversationEvents(conversationId: ID!): AiConversationEvent!
 }

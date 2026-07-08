@@ -141,7 +141,5 @@ export const topics = {
   orgEvents: (orgId: string) => `org:${orgId}:events`,
   sessionStatus: (sessionId: string) => `session:${sessionId}:status`,
   sessionPorts: (sessionId: string) => `session:${sessionId}:ports`,
-  branchTurns: (branchId: string) => `branch:${branchId}:turns`,
-  conversationEvents: (conversationId: string) => `conversation:${conversationId}:events`,
   sessionEvents: (sessionId: string) => `session:${sessionId}:events`,
 } as const;

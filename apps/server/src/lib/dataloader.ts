@@ -88,30 +88,6 @@ export function createEventLoader() {
   );
 }
 
-export function createConversationLoader() {
-  return createPrismaLoader(
-    prisma.aiConversation.findMany.bind(prisma.aiConversation) as unknown as Parameters<
-      typeof createPrismaLoader
-    >[0],
-  );
-}
-
-export function createBranchLoader() {
-  return createPrismaLoader(
-    prisma.aiBranch.findMany.bind(prisma.aiBranch) as unknown as Parameters<
-      typeof createPrismaLoader
-    >[0],
-  );
-}
-
-export function createTurnLoader() {
-  return createPrismaLoader(
-    prisma.aiTurn.findMany.bind(prisma.aiTurn) as unknown as Parameters<
-      typeof createPrismaLoader
-    >[0],
-  );
-}
-
 /** Batch-load chat members by chatId */
 export function createChatMembersLoader() {
   return new DataLoader<string, Array<{ userId: string; joinedAt: Date }>>(
