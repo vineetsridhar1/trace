@@ -64,6 +64,46 @@ Template-dependent features degrade gracefully off-template: the Tweaks panel re
 if `trace.tokens.json` exists; the element picker falls back to DOM selectors + screenshots
 when source stamps are absent.
 
+## Harness: Open Design, not bare Claude Code
+
+Bare Claude Code produces functional-but-generic UI. The design quality layer comes from
+[Open Design](https://github.com/nexu-io/open-design) (Apache-2.0): a design harness that
+spawns coding-agent CLIs bound to `SKILL.md` workflows (100+ design skills — prototypes,
+dashboards, decks) and `DESIGN.md` brand systems (150+ shipped: Linear, Stripe, Apple, …),
+with a critique-before-emit loop. Its skills protocol is Claude Code's, adopted verbatim.
+
+**Integration shape — it's a `CodingToolAdapter`, not a platform swap.** Open Design also
+ships its own web UI, Electron shell, SQLite project store, and artifact viewer; Trace
+adopts none of that. Trace's service layer, event stream, and preview pane stay
+authoritative. What we take is the agent-harness layer, inserted at the sanctioned seam:
+
+- The **cloud runtime image bakes in Open Design** (pinned version — it's a fast-moving
+  0.x project) alongside the coding-tool CLIs.
+- A new **`OpenDesignAdapter implements CodingToolAdapter`** (`tool: open_design` in the
+  enum) drives it headless on the runtime and normalizes its stream into `ToolOutput`,
+  exactly like `ClaudeCodeAdapter` does for `claude -p --output-format stream-json`. Open
+  Design remains model/CLI-agnostic underneath, which matches Trace's adapter philosophy —
+  the design session's tool picker can still choose which agent CLI Open Design spawns.
+- **Stepping stone if the full daemon integration is heavy:** because the skills protocol
+  is Claude Code's, v1 can bake Open Design's skills + `DESIGN.md` library into the image
+  as installed skills and run the existing `ClaudeCodeAdapter` with the design profile;
+  graduate to the daemon-backed adapter when we want plugin pipelines and exports.
+
+What this buys beyond raw quality:
+- **`DESIGN.md` as the org's brand system** — a design session can bind the org's own
+  `DESIGN.md` (or one of the 150 presets), which is how outputs stop looking like every
+  other AI-generated app. This pairs naturally with `trace.tokens.json`: `DESIGN.md`
+  states intent, tokens carry the concrete values the Tweaks panel manipulates.
+- **Critique loop** — the self-assessment pass before emitting fits the checkpoint model:
+  critique runs before the checkpoint/capture, so versions in the strip are already
+  vetted.
+- **A path beyond apps** — Open Design's deck/image/video artifact skills give future
+  session kinds (`deck_design`, …) the same harness for free.
+
+Open question: how much of the daemon's surface (plugins, exports, design-system
+management) to expose in Trace v1 vs. keeping the daemon as a pure execution detail behind
+the adapter. Recommendation: pure execution detail first.
+
 ## Mapping the mock to the architecture
 
 Almost every element maps to an existing primitive. Three are genuinely new (marked ★).
@@ -156,13 +196,15 @@ Server:
 - Checkpoint capture step (screenshot per checkpoint)
 - Token-edit service method (validate against template schema → bridge write)
 - `design_comment_added` event type
-- Design agent profile: system prompt tuned for visual iteration + permissive sandbox
-  auto-run (cloud machine is disposable)
+- `OpenDesignAdapter` (`tool: open_design`) — or, as the stepping stone, the design agent
+  profile: Open Design skills + `DESIGN.md` bound to `ClaudeCodeAdapter`, system prompt
+  tuned for visual iteration, permissive sandbox auto-run (cloud machine is disposable)
 
 Runtime/template:
 - Starter kit baked into the runtime image (Vite + React + Tailwind + shadcn,
   `trace.tokens.json`, source-location Vite plugin, pre-warmed node_modules) — used by the
   agent by default, not a fixed pipeline
+- Open Design (pinned) + its skills and `DESIGN.md` library baked into the runtime image
 - Listening-port detection in the container bridge (reports new ports so the service layer
   can register endpoints)
 - Proxy HTML injection for the picker/comments overlay (dev responses only)
@@ -175,8 +217,10 @@ Runtime/template:
    iframe auth. Useful for coding sessions today; zero schema change.
 2. **Design kind**: `kind` on SessionGroup (cloud-only, repo-less, enforced at
    `startSession`), `DesignSessionView` shell, starter kit + agent-run bootstrap + port
-   auto-detection, design agent profile, lazy managed repo (per git-hosting doc), version
-   strip from checkpoints (code diff only).
+   auto-detection, Open Design skills layer on `ClaudeCodeAdapter` (stepping stone), lazy
+   managed repo (per git-hosting doc), version strip from checkpoints (code diff only).
+   The daemon-backed `OpenDesignAdapter` lands here or in phase 3, whichever proves
+   necessary first.
 3. **The magic**: element picker + chips, Tweaks/token edits, checkpoint captures + visual
    diff, comments.
 4. **Distribution**: Publish (public endpoint → real deploy), Spotlight/share mode,
