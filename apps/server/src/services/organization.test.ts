@@ -148,6 +148,18 @@ describe("OrganizationService", () => {
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
+  it("hides managed repos from ordinary repo lists", async () => {
+    const service = new OrganizationService();
+    prismaMock.repo.findMany.mockResolvedValueOnce([]);
+
+    await service.listRepos("org-1");
+
+    expect(prismaMock.repo.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", provider: "github" },
+      include: { projects: true, sessions: true },
+    });
+  });
+
   it("creates repos, creates a coding channel, and emits events", async () => {
     const joinedAt = new Date("2026-04-03T00:00:00.000Z");
     prismaMock.repo.findUnique.mockResolvedValueOnce(null);
@@ -362,6 +374,7 @@ describe("OrganizationService", () => {
     expect(prismaMock.repo.create).toHaveBeenCalledWith({
       data: {
         name: "local-only",
+        provider: "github",
         remoteUrl: null,
         defaultBranch: "main",
         organizationId: "org-1",

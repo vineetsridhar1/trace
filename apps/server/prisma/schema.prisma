@@ -49,6 +49,11 @@ enum SessionGroupKind {
   app
 }
 
+enum RepoProvider {
+  github
+  managed
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -389,6 +394,7 @@ model User {
 model Repo {
   id             String       @id @default(uuid())
   name           String
+  provider       RepoProvider @default(github)
   remoteUrl      String?
   defaultBranch  String       @default("main")
   setupConfig    Json         @default("{}")

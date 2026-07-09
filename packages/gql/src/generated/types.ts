@@ -1713,6 +1713,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
+  provider: RepoProvider;
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
@@ -1792,6 +1793,8 @@ export type RepoProcessDefinitionInput = {
   required?: InputMaybe<Scalars["Boolean"]["input"]>;
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
+
+export type RepoProvider = "github" | "managed";
 
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";

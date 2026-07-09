@@ -27,6 +27,11 @@ enum SessionGroupKind {
   app
 }
 
+enum RepoProvider {
+  github
+  managed
+}
+
 enum SessionGroupStatus {
   in_progress
   needs_input
@@ -387,6 +392,7 @@ type User {
 type Repo {
   id: ID!
   name: String!
+  provider: RepoProvider!
   remoteUrl: String
   defaultBranch: String!
   webhookActive: Boolean!

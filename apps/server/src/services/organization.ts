@@ -45,7 +45,7 @@ export class OrganizationService {
 
   async listRepos(organizationId: string) {
     return prisma.repo.findMany({
-      where: { organizationId },
+      where: { organizationId, provider: "github" },
       include: { projects: true, sessions: true },
     });
   }
@@ -214,6 +214,7 @@ export class OrganizationService {
         const repo = await tx.repo.create({
           data: {
             name: input.name,
+            provider: "github",
             remoteUrl,
             defaultBranch: input.defaultBranch ?? "main",
             organizationId: input.organizationId,
@@ -241,6 +242,7 @@ export class OrganizationService {
               repo: {
                 id: repo.id,
                 name: repo.name,
+                provider: repo.provider,
                 remoteUrl: repo.remoteUrl,
                 defaultBranch: repo.defaultBranch,
                 webhookActive: !!repo.webhookId,
@@ -322,6 +324,7 @@ export class OrganizationService {
             repo: {
               id: repo.id,
               name: repo.name,
+              provider: repo.provider,
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
               webhookActive: !!repo.webhookId,
