@@ -16,9 +16,17 @@ through a browser from prompt to published URL.
 
 Implemented:
 
+- The Open Design prompt composer is vendored under `packages/shared/src/design/vendor`
+  with Apache-2.0 `LICENSE`, `NOTICE`, and `VENDOR.md` rebase metadata.
+- `composeTraceDesignPrompt` wraps the vendored composer with Trace overlays for both
+  `design` and `app` session kinds.
+- `TRACE_DESIGN_CONTENT_DIRS` loads upstream-shaped design-system and skill content for
+  prompt composition.
 - `startSession(kind: design)` creates a serverless design group without runtime
   provisioning.
 - Initial and fan-out artifact generation call the LLM-backed design generation service.
+- Design generation passes the composed Open Design prompt into the configured
+  `LLMAdapter` and persists returned HTML artifacts through the service layer.
 - Artifacts preserve lineage through `parentArtifactId` and event payloads include full
   artifact data.
 - The design canvas uses the existing session/chat shell, renders artifact variants on a
@@ -47,6 +55,8 @@ Implemented:
 
 Verified:
 
+- `packages/shared/test/design.test.ts`
+- `design-content.test.ts`
 - `artifact.test.ts`
 - `design-generation.test.ts`
 - `design-artifact-serving.test.ts`
@@ -74,6 +84,8 @@ Implemented:
 - Managed repos are marked with `Repo.provider = managed` and hidden from ordinary repo
   lists.
 - Managed smart-HTTP runtime auth is wired for Trace-managed remotes.
+- Archived app managed repos are garbage-collected after the configured retention window,
+  and already-collected managed repos reject clone/export credentials.
 - The app starter config targets Next.js App Router, Tailwind, shadcn-compatible UI, pnpm,
   and port 3000.
 - The generated app starter pins its framework/dependency versions and has a smoke script
@@ -109,6 +121,8 @@ Verified:
 - `session.test.ts`
 - `session-applications.test.ts`
 - `organization.test.ts`
+- `managed-git.test.ts`
+- `managed-git.integration.test.ts`
 - `app-checkpoint-capture.test.ts`
 - `endpoint-proxy.test.ts`
 - `endpoint-proxy.integration.test.ts` with `TRACE_RUN_APP_STARTER_PROXY_SMOKE=1`
