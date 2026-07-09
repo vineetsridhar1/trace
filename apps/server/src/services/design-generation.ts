@@ -234,8 +234,7 @@ export const designGenerationService = {
         scopeId: input.sessionId,
         eventType: "design_generation_failed",
         payload: {
-          sessionGroupId: input.sessionGroupId,
-          parentArtifactId: input.parentArtifactId ?? null,
+          ...streamPayloadBase,
           model,
           error: message,
         } as Prisma.InputJsonValue,

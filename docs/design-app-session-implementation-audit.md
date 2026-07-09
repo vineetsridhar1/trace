@@ -211,3 +211,9 @@ During this continuation, PDF export completion events were found to be emitted 
 rendered as a first-class timeline item. `buildSessionNodes` now maps
 `design_export_completed` into a typed design-export node, and the web session renderer
 shows completed/failed exports with download metadata.
+
+During this continuation, failed design-generation directions were found to lose their
+fan-out identity and disappear from the canvas. Failure events now include the same
+generation/direction metadata as started and streamed events, and the canvas renders a
+visible failed artifact card with escaped error text so partial fan-out failures are
+observable.

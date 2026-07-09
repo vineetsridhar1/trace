@@ -152,6 +152,7 @@ type CanvasArtifact = Pick<
 type StreamingArtifact = CanvasArtifact & {
   streaming: true;
   generationId: string;
+  failed?: boolean;
 };
 
 export type DesignAnchor = {
@@ -313,6 +314,15 @@ function objectField(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function normalizeDesignAnchor(value: unknown): DesignAnchor | null {
   const anchor = objectField(value);
   if (!anchor) return null;
@@ -375,6 +385,39 @@ function streamingArtifactFromPayload(payload: Record<string, unknown>): Streami
   };
 }
 
+function failedGenerationArtifactFromPayload(
+  payload: Record<string, unknown>,
+): StreamingArtifact | null {
+  const generationId = stringField(payload.generationId);
+  const sessionGroupId = stringField(payload.sessionGroupId);
+  if (!generationId || !sessionGroupId) return null;
+  const directionIndex = numberField(payload.directionIndex);
+  const directionLabel = stringField(payload.directionLabel);
+  const error = stringField(payload.error) ?? "Design generation failed.";
+  const escapedError = escapeHtml(error);
+  const title =
+    directionLabel ??
+    (directionIndex != null ? `Direction ${directionIndex + 1}` : "Generation failed");
+  const now = new Date().toISOString();
+  return {
+    id: `failed:${generationId}`,
+    generationId,
+    streaming: true,
+    failed: true,
+    sessionGroupId,
+    parentArtifactId: stringField(payload.parentArtifactId),
+    prompt: stringField(payload.prompt),
+    title,
+    contentType: "text/html+trace-design",
+    html: `<!doctype html><html><body><main style="font:14px system-ui;padding:24px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"><strong>Design generation failed</strong><p>${escapedError}</p></main></body></html>`,
+    metadata: { streaming: true, failed: true, error },
+    publishedAt: null,
+    publicUrl: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function artifactGenerationId(artifact: CanvasArtifact): string | null {
   const metadata = objectField(artifact.metadata);
   return stringField(metadata?.generationId);
@@ -390,7 +433,7 @@ function commentsByArtifact(events: Record<string, Event>): Record<string, Desig
   return comments;
 }
 
-function streamingArtifactsFromEvents(
+export function streamingArtifactsFromEvents(
   events: Record<string, Event>,
   persistedArtifacts: CanvasArtifact[],
 ): Record<string, StreamingArtifact> {
@@ -402,6 +445,12 @@ function streamingArtifactsFromEvents(
   const streaming: Record<string, StreamingArtifact> = {};
   for (const event of Object.values(events)) {
     const payload = eventPayload(event);
+    if (payload && event.eventType === "design_generation_failed") {
+      const artifact = failedGenerationArtifactFromPayload(payload);
+      if (!artifact || persistedGenerationIds.has(artifact.generationId)) continue;
+      streaming[artifact.generationId] = artifact;
+      continue;
+    }
     if (
       !payload ||
       event.eventType !== "session_output" ||

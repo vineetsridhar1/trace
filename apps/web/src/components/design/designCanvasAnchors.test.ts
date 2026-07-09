@@ -6,6 +6,7 @@ import {
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
   normalizeDesignAnchor,
+  streamingArtifactsFromEvents,
 } from "./DesignCanvas";
 
 describe("design canvas anchors", () => {
@@ -97,5 +98,50 @@ describe("design canvas anchors", () => {
         "https://traceusercontent.test",
       ),
     ).toBe("https://cdn.trace.test/artifact-1/");
+  });
+
+  it("shows failed design generations as visible canvas artifacts", () => {
+    const event = {
+      id: "event-failed",
+      scopeType: "session",
+      scopeId: "session-1",
+      eventType: "design_generation_failed",
+      payload: {
+        generationId: "generation-1",
+        sessionGroupId: "group-1",
+        parentArtifactId: null,
+        prompt: "Make three dashboards",
+        directionIndex: 1,
+        directionCount: 3,
+        directionLabel: "Operational dashboard",
+        error: 'Model failed <script>alert("x")</script>',
+      },
+      actor: {
+        __typename: "User",
+        id: "user-1",
+        name: "Designer",
+        avatarUrl: null,
+      },
+      timestamp: "2026-07-09T10:00:00.000Z",
+    } as unknown as Event;
+
+    const artifacts = streamingArtifactsFromEvents({ [event.id]: event }, []);
+
+    expect(artifacts["generation-1"]).toMatchObject({
+      id: "failed:generation-1",
+      generationId: "generation-1",
+      failed: true,
+      title: "Operational dashboard",
+      prompt: "Make three dashboards",
+      metadata: {
+        failed: true,
+        error: 'Model failed <script>alert("x")</script>',
+      },
+    });
+    expect(artifacts["generation-1"]?.html).toContain("Design generation failed");
+    expect(artifacts["generation-1"]?.html).toContain(
+      "Model failed &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;",
+    );
+    expect(artifacts["generation-1"]?.html).not.toContain("<script>");
   });
 });

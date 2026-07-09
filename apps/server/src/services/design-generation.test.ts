@@ -188,6 +188,10 @@ describe("designGenerationService", () => {
         sessionGroupId: "group-1",
         prompt: "Design a dashboard",
         model: "anthropic/test",
+        generationId: "generation-1",
+        directionIndex: 1,
+        directionCount: 3,
+        directionLabel: "Operational dashboard",
       }),
     ).rejects.toThrow("model unavailable");
 
@@ -196,7 +200,12 @@ describe("designGenerationService", () => {
         eventType: "design_generation_failed",
         scopeId: "session-1",
         payload: expect.objectContaining({
+          generationId: "generation-1",
           sessionGroupId: "group-1",
+          directionIndex: 1,
+          directionCount: 3,
+          directionLabel: "Operational dashboard",
+          prompt: "Design a dashboard",
           error: "model unavailable",
         }),
       }),
