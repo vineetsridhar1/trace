@@ -92,6 +92,21 @@ const SESSION_USAGE = `
   }
 `;
 
+const SESSION_EVENTS = `
+  query SmokeSessionEvents($organizationId: ID!, $sessionId: ID!, $types: [String!]) {
+    events(
+      organizationId: $organizationId
+      scope: { type: session, id: $sessionId }
+      types: $types
+      limit: 20
+    ) {
+      id
+      eventType
+      payload
+    }
+  }
+`;
+
 const GENERATE_DESIGN_ARTIFACTS = `
   mutation SmokeGenerateDesignArtifacts($sessionGroupId: ID!, $prompt: String!, $directionCount: Int) {
     generateDesignArtifacts(sessionGroupId: $sessionGroupId, prompt: $prompt, directionCount: $directionCount) {
@@ -245,6 +260,23 @@ async function waitForDesignUsage(sessionId) {
       };
     }
     return { ok: true, value: session };
+  });
+}
+
+async function waitForPromotedBrief(sessionId) {
+  return pollUntil("promoted coding session brief", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      sessionId,
+      types: ["session_started"],
+    });
+    const started = data.events?.find((event) => event.eventType === "session_started");
+    const payload = started?.payload;
+    const prompt = payload && typeof payload === "object" ? payload.prompt : null;
+    if (typeof prompt !== "string") {
+      return { ok: false, detail: "session_started prompt not found" };
+    }
+    return { ok: true, value: prompt };
   });
 }
 
@@ -528,6 +560,13 @@ if (promoted.sessionGroup?.kind !== "coding") {
 }
 if (promoted.sessionGroup?.forkedFromSessionGroupId !== session.sessionGroupId) {
   throw new Error("Promoted coding session is not linked to the source design group");
+}
+const promotedBrief = await waitForPromotedBrief(promoted.id);
+if (!promotedBrief.includes("Implement the smoke-verified design artifact.")) {
+  throw new Error("Promoted coding session brief did not include the implementation prompt");
+}
+if (!promotedBrief.includes(expectedText) || !promotedBrief.includes("--trace-smoke-accent")) {
+  throw new Error("Promoted coding session brief did not include the selected artifact HTML");
 }
 
 process.stdout.write(

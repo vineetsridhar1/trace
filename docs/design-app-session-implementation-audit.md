@@ -456,3 +456,8 @@ During this continuation, the hosted `pnpm smoke:cloud-app-session` script was t
 to prove app sessions use the adapter path that can receive the Open Design app harness.
 The smoke now requests `tool` from `startSession` and requires fresh and restored app
 sessions to start with `claude_code`.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove promotion carries the selected artifact into the coding-session brief. After
+promotion, the smoke now reads the promoted session's `session_started` event and requires
+the custom implementation prompt plus the selected artifact HTML/text to be present.
