@@ -218,6 +218,7 @@ artifacts/<artifactId>/metadata.json
 artifacts/<artifactId>/tokens.css        # optional extracted token file
 artifacts/<artifactId>/assets/*          # later, if multi-file assets are supported
 canvas/layout.json                       # section/group layout and artifact placement
+canvas/source.html                       # optional full-board source/export source
 ```
 
 Rules:
@@ -237,6 +238,10 @@ Rules:
   the parent artifact file.
 - Canvas sections and placement metadata are committed with the artifacts so the managed
   repo can reconstruct the whole design board, not only individual HTML files.
+- If the model produces a single full-board artifact using a DSL such as
+  `<DesignCanvas>`, `<DCSection>`, and `<DCArtboard>`, store that source as
+  `canvas/source.html` or `canvas/source.jsx` and extract normalized section/artifact
+  metadata into `canvas/layout.json`.
 - Blob/object storage may still be used as a read-through cache for large HTML or
   published serving, but managed git is the durable source of truth for generated design
   files.
@@ -324,6 +329,29 @@ The model should be able to return both artifact HTML and canvas organization me
 This is the behavior shown in Claude Design: the AI creates narrative sections with a
 heading, a short explanation, and grouped canvases underneath.
 
+The downloaded Claude Design artifact in `/Users/vineet/trace/design.html` is a useful
+reference shape. The source inside that bundle uses a small canvas DSL:
+
+```jsx
+<DesignCanvas>
+  <DCSection id="current" title="Current" subtitle="Today's dashboard...">
+    <DCArtboard id="cur" label="Today" width={1380} height={1640}>
+      <BorrowerDashboard />
+    </DCArtboard>
+  </DCSection>
+</DesignCanvas>
+```
+
+Trace does not need to copy these exact component names, but the product should support
+the same concept:
+
+- A board-level container.
+- Section components/records with `id`, `title`, and `subtitle`/`description`.
+- Artboard/frame components/records with `id`, `label`, `width`, `height`, and child
+  artifact content.
+- A parser or generation contract that can normalize those sections/artboards into
+  Trace's event-backed `CanvasSection` and `Artifact` entities.
+
 Suggested section shape:
 
 ```ts
@@ -361,6 +389,35 @@ Generation contract:
 - PDF/export/publish can target a single artifact, a section, or the whole canvas later;
   v1 PDF may remain artifact-only if section export is not implemented yet, but the data
   model should not prevent section export.
+
+### Downloaded Artifact Bundle
+
+The Claude Design `design.html` export is also useful as a packaging reference. It is not
+just raw page HTML; it is a self-contained bundle that includes a thumbnail/loading shell,
+compressed base64 asset manifest, template HTML, asset unpacker, blob URL replacement,
+font handling, and a small runtime error sink.
+
+Trace should support a similar **download/export format**, separate from the canonical
+managed-git source:
+
+- Canonical source remains diffable managed-git files (`artifacts/*`, `canvas/layout.json`,
+  optional `canvas/source.html`/`source.jsx`).
+- Downloaded output can be a single `design.html` bundle that runs offline from `file://`.
+- The bundle may embed:
+  - a thumbnail or placeholder preview
+  - loading status such as "Unpacking..."
+  - asset manifest with compressed/base64 JS, CSS, fonts, images, or generated files
+  - template HTML with stable asset placeholders
+  - unpacker script that creates blob URLs or data URLs, with special handling for fonts
+  - runtime error sink visible to the user
+  - no external network requirements
+- If the source uses React/JSX or a canvas DSL, the exporter should either precompile it
+  or include the minimal runtime needed for offline display. Prefer precompiled output for
+  Trace-generated exports unless preserving source interactivity requires otherwise.
+- Do not use the self-unpacking bundle as the internal authoring source of truth. It is
+  optimized for portability, not reviewable diffs or service-layer state.
+- User-content preview/publish can serve canonical artifact HTML directly; the download
+  bundle is for explicit "Download HTML" or archival export.
 
 ### Token Tweaks
 
@@ -780,6 +837,8 @@ work end to end.
 - Service/store test: design generation can persist AI-authored canvas sections with
   titles, descriptions, and artifact membership.
 - UI test: canvas renders sections with headings/descriptions and grouped artifact cards.
+- Parser/service test: a board source using `DesignCanvas`/section/artboard-style markup
+  normalizes into `CanvasSection` and `Artifact` state.
 - Service/integration test: first successful design artifact creates one hidden managed
   repo and commits artifact HTML/metadata files.
 - Retry test: a failed design artifact commit/push reuses the same managed repo on retry.
@@ -794,6 +853,8 @@ work end to end.
   after upload.
 - Route test: published artifact root serves stored HTML; unpublished root does not.
 - Git test: published/exported artifact HTML resolves from the artifact commit pointer.
+- Export test: "Download HTML" produces a self-contained `design.html` bundle that opens
+  offline, unpacks embedded assets, and shows runtime errors visibly if unpacking fails.
 - Service/UI test: promotion creates linked coding session with artifact references.
 
 ### Required App Evidence
