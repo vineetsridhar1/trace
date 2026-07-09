@@ -173,9 +173,9 @@ const STOP_PROCESS_MUTATION = gql`
   }
 `;
 
-const ENABLE_ENDPOINT_MUTATION = gql`
+export const ENABLE_ENDPOINT_MUTATION = gql`
   mutation EnableSessionEndpointForwarding($endpointId: ID!) {
-    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {
+    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: private) {
       id
     }
   }

@@ -691,3 +691,9 @@ did not handle their event types. The session timeline now shows system badges f
 design artifact creation/updates, comments, generation failures, preview errors, export
 requests, and promotion events while keeping PDF export completions as first-class
 download rows.
+
+During this audit pass, the Applications panel's manual endpoint forwarding action was
+found to request `accessMode: public`, which blurred the documented boundary between
+private live preview and explicit publish/share. Manual forwarding now requests private
+access; `publishAppSession` remains the only app-session UI action that flips the primary
+endpoint public.

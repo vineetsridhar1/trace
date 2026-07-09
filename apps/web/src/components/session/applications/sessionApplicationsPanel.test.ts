@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENABLE_ENDPOINT_MUTATION,
   appCodingSessionTarget,
   parseAppTokenPatchInput,
   parseTrustedAppOverlayMessage,
@@ -103,6 +104,15 @@ describe("publishedAppShareUrl", () => {
       publishedAppShareUrl({ accessMode: "private", url: "https://app.trace.test" }),
     ).toBeNull();
     expect(publishedAppShareUrl(null)).toBeNull();
+  });
+});
+
+describe("ENABLE_ENDPOINT_MUTATION", () => {
+  it("keeps manual forwarding private until publish/share", () => {
+    const source = ENABLE_ENDPOINT_MUTATION.loc?.source.body ?? "";
+
+    expect(source).toContain("accessMode: private");
+    expect(source).not.toContain("accessMode: public");
   });
 });
 
