@@ -26,37 +26,54 @@ describe("model catalog", () => {
     expect(isSupportedModel("claude_code", "claude-opus-4-7")).toBe(false);
   });
 
-  it("exposes GPT-5.6 as the default Codex model", () => {
-    expect(getDefaultModel("codex")).toBe("gpt-5.6");
+  it("exposes GPT-5.6 Sol as the default Codex model", () => {
+    expect(getDefaultModel("codex")).toBe("gpt-5.6-sol");
     expect(getModelsForTool("codex")).toContainEqual({
-      value: "gpt-5.6",
-      label: "GPT-5.6",
+      value: "gpt-5.6-sol",
+      label: "GPT-5.6 Sol",
     });
-    expect(isSupportedModel("codex", "gpt-5.6")).toBe(true);
+    expect(getModelsForTool("codex")).toContainEqual({
+      value: "gpt-5.6-terra",
+      label: "GPT-5.6 Terra",
+    });
+    expect(getModelsForTool("codex")).toContainEqual({
+      value: "gpt-5.6-luna",
+      label: "GPT-5.6 Luna",
+    });
+    expect(isSupportedModel("codex", "gpt-5.6-sol")).toBe(true);
+    expect(isSupportedModel("codex", "gpt-5.5")).toBe(false);
   });
 
   it("exposes Pi-backed API and subscription models and defaults to API OpenAI", () => {
-    expect(getDefaultModel("pi")).toBe("openai/gpt-5.6");
+    expect(getDefaultModel("pi")).toBe("openai/gpt-5.6-sol");
     expect(getDefaultReasoningEffort("pi")).toBe("medium");
     expect(getModelsForTool("pi")).toContainEqual({
-      value: "openai/gpt-5.6",
-      label: "OpenAI GPT-5.6",
+      value: "openai/gpt-5.6-sol",
+      label: "OpenAI GPT-5.6 Sol",
     });
     expect(getModelsForTool("pi")).toContainEqual({
-      value: "openai/gpt-5.5",
-      label: "OpenAI GPT-5.5",
+      value: "openai/gpt-5.6-terra",
+      label: "OpenAI GPT-5.6 Terra",
+    });
+    expect(getModelsForTool("pi")).toContainEqual({
+      value: "openai/gpt-5.6-luna",
+      label: "OpenAI GPT-5.6 Luna",
     });
     expect(getModelsForTool("pi")).toContainEqual({
       value: "openai/gpt-5.4",
       label: "OpenAI GPT-5.4",
     });
     expect(getModelsForTool("pi")).toContainEqual({
-      value: "openai-codex/gpt-5.6",
-      label: "Codex GPT-5.6 (ChatGPT)",
+      value: "openai-codex/gpt-5.6-sol",
+      label: "Codex GPT-5.6 Sol (ChatGPT)",
     });
     expect(getModelsForTool("pi")).toContainEqual({
-      value: "openai-codex/gpt-5.5",
-      label: "Codex GPT-5.5 (ChatGPT)",
+      value: "openai-codex/gpt-5.6-terra",
+      label: "Codex GPT-5.6 Terra (ChatGPT)",
+    });
+    expect(getModelsForTool("pi")).toContainEqual({
+      value: "openai-codex/gpt-5.6-luna",
+      label: "Codex GPT-5.6 Luna (ChatGPT)",
     });
     expect(getModelsForTool("pi")).toContainEqual({
       value: "openai-codex/gpt-5.4",
@@ -70,10 +87,10 @@ describe("model catalog", () => {
       value: "anthropic/claude-sonnet-4-6",
       label: "Claude Sonnet 4.6",
     });
-    expect(getModelsForTool("pi")).toHaveLength(9);
+    expect(getModelsForTool("pi")).toHaveLength(11);
     expect(isSupportedModel("pi", "openai-codex/gpt-5.4-mini")).toBe(false);
-    expect(isSupportedModel("pi", "openai/gpt-5.6")).toBe(true);
-    expect(isSupportedModel("pi", "openai/gpt-5.5")).toBe(true);
+    expect(isSupportedModel("pi", "openai/gpt-5.6-sol")).toBe(true);
+    expect(isSupportedModel("pi", "openai/gpt-5.5")).toBe(false);
     expect(isSupportedModel("pi", "anthropic/claude-fable-5")).toBe(true);
     expect(isSupportedReasoningEffort("pi", "high")).toBe(true);
     expect(getModelProviderGroupsForTool("pi")).toEqual([
@@ -81,8 +98,9 @@ describe("model catalog", () => {
         value: "openai",
         label: "OpenAI API",
         models: [
-          { value: "openai/gpt-5.6", label: "OpenAI GPT-5.6" },
-          { value: "openai/gpt-5.5", label: "OpenAI GPT-5.5" },
+          { value: "openai/gpt-5.6-sol", label: "OpenAI GPT-5.6 Sol" },
+          { value: "openai/gpt-5.6-terra", label: "OpenAI GPT-5.6 Terra" },
+          { value: "openai/gpt-5.6-luna", label: "OpenAI GPT-5.6 Luna" },
           { value: "openai/gpt-5.4", label: "OpenAI GPT-5.4" },
         ],
       }),
@@ -90,8 +108,9 @@ describe("model catalog", () => {
         value: "openai-codex",
         label: "ChatGPT",
         models: [
-          { value: "openai-codex/gpt-5.6", label: "Codex GPT-5.6 (ChatGPT)" },
-          { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5 (ChatGPT)" },
+          { value: "openai-codex/gpt-5.6-sol", label: "Codex GPT-5.6 Sol (ChatGPT)" },
+          { value: "openai-codex/gpt-5.6-terra", label: "Codex GPT-5.6 Terra (ChatGPT)" },
+          { value: "openai-codex/gpt-5.6-luna", label: "Codex GPT-5.6 Luna (ChatGPT)" },
           { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 (ChatGPT)" },
         ],
       }),
@@ -106,11 +125,11 @@ describe("model catalog", () => {
         ],
       }),
     ]);
-    expect(getModelProviderForModel("pi", "openai-codex/gpt-5.5")?.value).toBe(
+    expect(getModelProviderForModel("pi", "openai-codex/gpt-5.6-terra")?.value).toBe(
       "openai-codex",
     );
-    expect(getModelProviderForModel("pi", "openai-codex/gpt-5.6")?.value).toBe(
-      "openai-codex",
+    expect(getModelProviderForModel("pi", "openai/gpt-5.6-sol")?.value).toBe(
+      "openai",
     );
   });
 });
@@ -128,14 +147,11 @@ describe("resolveCursorComposerModel", () => {
   });
 
   it("maps GPT-5 levels and clamps xhigh/max to extra-high", () => {
-    expect(resolveCursorComposerModel("gpt-5.6", "low")).toBe("gpt-5.6-low");
-    expect(resolveCursorComposerModel("gpt-5.6", "high")).toBe("gpt-5.6-high");
-    expect(resolveCursorComposerModel("gpt-5.6", "xhigh")).toBe("gpt-5.6-extra-high");
-    expect(resolveCursorComposerModel("gpt-5.6", "max")).toBe("gpt-5.6-extra-high");
-    expect(resolveCursorComposerModel("gpt-5.5", "low")).toBe("gpt-5.5-low");
-    expect(resolveCursorComposerModel("gpt-5.5", "high")).toBe("gpt-5.5-high");
-    expect(resolveCursorComposerModel("gpt-5.5", "xhigh")).toBe("gpt-5.5-extra-high");
-    expect(resolveCursorComposerModel("gpt-5.5", "max")).toBe("gpt-5.5-extra-high");
+    expect(resolveCursorComposerModel("gpt-5.6-sol", "low")).toBe("gpt-5.6-sol-low");
+    expect(resolveCursorComposerModel("gpt-5.6-sol", "high")).toBe("gpt-5.6-sol-high");
+    expect(resolveCursorComposerModel("gpt-5.6-sol", "xhigh")).toBe("gpt-5.6-sol-extra-high");
+    expect(resolveCursorComposerModel("gpt-5.6-sol", "max")).toBe("gpt-5.6-sol-extra-high");
+    expect(resolveCursorComposerModel("gpt-5.6-luna", "high")).toBe("gpt-5.6-luna-high");
   });
 
   it("defaults to medium when the level is missing or foreign", () => {

@@ -25,8 +25,9 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
 ];
 
 const CODEX_MODELS: readonly ModelOption[] = [
-  { value: "gpt-5.6", label: "GPT-5.6" },
-  { value: "gpt-5.5", label: "GPT-5.5" },
+  { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+  { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
   { value: "gpt-5.4", label: "GPT-5.4" },
   { value: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
   { value: "gpt-5.2-codex", label: "GPT-5.2 Codex" },
@@ -36,11 +37,13 @@ const CODEX_MODELS: readonly ModelOption[] = [
 ];
 
 const PI_MODELS: readonly ModelOption[] = [
-  { value: "openai/gpt-5.6", label: "OpenAI GPT-5.6" },
-  { value: "openai/gpt-5.5", label: "OpenAI GPT-5.5" },
+  { value: "openai/gpt-5.6-sol", label: "OpenAI GPT-5.6 Sol" },
+  { value: "openai/gpt-5.6-terra", label: "OpenAI GPT-5.6 Terra" },
+  { value: "openai/gpt-5.6-luna", label: "OpenAI GPT-5.6 Luna" },
   { value: "openai/gpt-5.4", label: "OpenAI GPT-5.4" },
-  { value: "openai-codex/gpt-5.6", label: "Codex GPT-5.6 (ChatGPT)" },
-  { value: "openai-codex/gpt-5.5", label: "Codex GPT-5.5 (ChatGPT)" },
+  { value: "openai-codex/gpt-5.6-sol", label: "Codex GPT-5.6 Sol (ChatGPT)" },
+  { value: "openai-codex/gpt-5.6-terra", label: "Codex GPT-5.6 Terra (ChatGPT)" },
+  { value: "openai-codex/gpt-5.6-luna", label: "Codex GPT-5.6 Luna (ChatGPT)" },
   { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 (ChatGPT)" },
   { value: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5" },
   { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
@@ -49,8 +52,9 @@ const PI_MODELS: readonly ModelOption[] = [
 
 const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
   { value: "auto", label: "Auto" },
-  { value: "gpt-5.6", label: "GPT-5.6" },
-  { value: "gpt-5.5", label: "GPT-5.5" },
+  { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+  { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
   { value: "opus-4.8", label: "Opus 4.8" },
   { value: "sonnet-5", label: "Sonnet 5" },
 ];
@@ -81,7 +85,7 @@ export function resolveCursorComposerModel(
   // Clamp to a known level: a stale/foreign effort (e.g. "auto" carried over
   // from Claude) must never produce an invalid id like `...-thinking-auto`.
   const level = effort && CURSOR_COMPOSER_LEVELS.has(effort) ? effort : "medium";
-  if (/^gpt-5\.\d+$/.test(model)) {
+  if (/^gpt-5\.\d+(-[a-z]+)?$/.test(model)) {
     const gptLevel = level === "xhigh" || level === "max" ? "extra-high" : level;
     return `${model}-${gptLevel}`;
   }
@@ -95,19 +99,19 @@ const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
     value: "openai",
     label: "OpenAI API",
     description: "Uses an OpenAI API key",
-    models: PI_MODELS.slice(0, 3),
+    models: PI_MODELS.slice(0, 4),
   },
   {
     value: "openai-codex",
     label: "ChatGPT",
     description: "Uses a ChatGPT Plus or Pro subscription",
-    models: PI_MODELS.slice(3, 6),
+    models: PI_MODELS.slice(4, 8),
   },
   {
     value: "anthropic",
     label: "Claude",
     description: "Uses a Claude subscription",
-    models: PI_MODELS.slice(6),
+    models: PI_MODELS.slice(8),
   },
 ];
 
@@ -144,9 +148,9 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "claude-opus-4-8[1m]",
-  codex: "gpt-5.6",
+  codex: "gpt-5.6-sol",
   cursor_composer: "auto",
-  pi: "openai/gpt-5.6",
+  pi: "openai/gpt-5.6-sol",
 };
 
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {
