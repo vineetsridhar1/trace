@@ -205,6 +205,25 @@ describe("handleOrgEvent", () => {
     });
   });
 
+  it("keeps design comment events in the scoped bucket for the canvas", () => {
+    const event = makeEvent({
+      eventType: "design_comment_added",
+      scopeId: "session-1",
+      payload: {
+        artifactId: "artifact-1",
+        body: "Tighten the hero spacing",
+        anchor: { type: "element", dataEl: "hero" },
+        sendToAgent: true,
+      },
+    });
+
+    handleOrgEvent(event);
+
+    const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
+    expect(bucket?.[event.id]).toEqual(event);
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
+  });
+
   it("upserts app process logs from append events", () => {
     handleOrgEvent(
       makeEvent({
@@ -1064,5 +1083,24 @@ describe("handleSessionEvent", () => {
       data: "warning",
       sequence: 2,
     });
+  });
+
+  it("keeps design comment events from full session subscriptions for the canvas", () => {
+    const event = makeEvent({
+      eventType: "design_comment_added",
+      scopeId: "session-1",
+      payload: {
+        artifactId: "artifact-1",
+        body: "Pin this to the hero",
+        anchor: { type: "element", dataEl: "hero", text: "Ready" },
+        sendToAgent: false,
+      },
+    });
+
+    handleSessionEvent("session-1", event);
+
+    const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
+    expect(bucket?.[event.id]).toEqual(event);
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
   });
 });

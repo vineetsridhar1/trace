@@ -748,3 +748,9 @@ During this audit continuation, the cloud app smoke still used `git ls-remote` a
 only hosted managed-git durability proof. It now also performs a fresh `git clone` from
 the credentialed managed remote, requires clone `HEAD` to equal the checkpoint SHA, and
 checks the generated app `package.json` exists in the cloned worktree.
+
+During this audit continuation, design comments were derived from scoped session events
+in the canvas but the client-core reducer coverage only asserted artifact upserts. The
+handler tests now prove `design_comment_added` is retained in the session-scoped event
+bucket from both org-wide and full session subscriptions, matching the event-backed
+comment/pin model.
