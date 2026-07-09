@@ -419,3 +419,8 @@ During this continuation, the hosted `pnpm smoke:cloud-app-session` script was t
 to prove app publish v1 flips the existing primary preview endpoint. The smoke now checks
 that `publishAppSession` returns the same endpoint id used for the private preview before
 rendering the public URL.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove real design generation records session usage. After the initial fan-out generation,
+the smoke now polls the `session(id:)` token counters and requires positive input/output
+token totals before continuing.

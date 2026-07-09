@@ -79,6 +79,19 @@ const DESIGN_ARTIFACTS = `
   }
 `;
 
+const SESSION_USAGE = `
+  query SmokeSessionUsage($sessionId: ID!) {
+    session(id: $sessionId) {
+      id
+      inputTokens
+      outputTokens
+      cacheReadTokens
+      cacheCreationTokens
+      costUsd
+    }
+  }
+`;
+
 const GENERATE_DESIGN_ARTIFACTS = `
   mutation SmokeGenerateDesignArtifacts($sessionGroupId: ID!, $prompt: String!, $directionCount: Int) {
     generateDesignArtifacts(sessionGroupId: $sessionGroupId, prompt: $prompt, directionCount: $directionCount) {
@@ -215,6 +228,23 @@ async function waitForChildArtifact(sessionGroupId, parentArtifactId, label) {
       return { ok: false, detail: `no child artifact for ${parentArtifactId}` };
     }
     return { ok: true, value: child };
+  });
+}
+
+async function waitForDesignUsage(sessionId) {
+  return pollUntil("design generation usage", async () => {
+    const data = await graphql(SESSION_USAGE, { sessionId });
+    const session = data.session;
+    if (!session) return { ok: false, detail: "session not found" };
+    const inputTokens = Number(session.inputTokens ?? 0);
+    const outputTokens = Number(session.outputTokens ?? 0);
+    if (inputTokens <= 0 || outputTokens <= 0) {
+      return {
+        ok: false,
+        detail: `input=${inputTokens} output=${outputTokens}`,
+      };
+    }
+    return { ok: true, value: session };
   });
 }
 
@@ -357,6 +387,7 @@ for (const artifact of generatedArtifacts) {
   }
   assertArtifactHtml(artifact, "Generated direction");
 }
+const usage = await waitForDesignUsage(session.id);
 
 const selected = generatedArtifacts[0];
 const commentData = await graphql(COMMENT_DESIGN_ARTIFACT, {
@@ -437,6 +468,7 @@ process.stdout.write(
     "Trace design session smoke passed.",
     `Design session: ${session.id}`,
     `Design group: ${session.sessionGroupId}`,
+    `Design usage: ${usage.inputTokens} input / ${usage.outputTokens} output tokens`,
     `Generated artifacts: ${generatedArtifacts.map((artifact) => artifact.id).join(", ")}`,
     `Tweaked artifact: ${tweaked.id}`,
     `PDF export: ${exportPayload.fileUrl}`,
