@@ -1,3 +1,4 @@
+import type { Response } from "express";
 import jwt from "jsonwebtoken";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -27,9 +28,12 @@ import {
   createBridgeAuthToken,
   isLoopbackRequest,
   parseCookieToken,
+  refreshSessionCookieIfNeeded,
   verifyBridgeAuthToken,
   verifyToken,
 } from "./auth.js";
+
+const OLD_IAT_SECONDS = () => Math.floor(Date.now() / 1000) - 2 * 24 * 60 * 60;
 
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
@@ -144,6 +148,77 @@ describe("auth helpers", () => {
       pairedOrganizationId: "org-1",
       deviceId: "device-1",
     });
+  });
+
+  it("re-issues the session cookie for tokens older than the refresh threshold", () => {
+    const token = jwt.sign({ userId: "user-1", iat: OLD_IAT_SECONDS() }, JWT_SECRET);
+    const cookie = vi.fn();
+    refreshSessionCookieIfNeeded({ cookie } as unknown as Response, token);
+
+    expect(cookie).toHaveBeenCalledTimes(1);
+    const [name, freshToken, options] = cookie.mock.calls[0];
+    expect(name).toBe("trace_token");
+    expect(verifyToken(freshToken as string)).toBe("user-1");
+    expect(options).toMatchObject({ httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+  });
+
+  it("leaves freshly-issued session cookies untouched", () => {
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const cookie = vi.fn();
+    refreshSessionCookieIfNeeded({ cookie } as unknown as Response, token);
+
+    expect(cookie).not.toHaveBeenCalled();
+  });
+
+  it("never refreshes bridge or invalid tokens", () => {
+    const { token: bridgeToken } = createBridgeAuthToken({
+      userId: "user-1",
+      organizationId: "org-1",
+      instanceId: "bridge-1",
+    });
+    const cookie = vi.fn();
+    refreshSessionCookieIfNeeded({ cookie } as unknown as Response, bridgeToken);
+    refreshSessionCookieIfNeeded({ cookie } as unknown as Response, "not-a-jwt");
+
+    expect(cookie).not.toHaveBeenCalled();
+  });
+
+  it("slides the session expiry for old cookie-based requests", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce({
+      organizationId: "org-1",
+      role: "admin",
+    });
+
+    const token = jwt.sign({ userId: "user-1", iat: OLD_IAT_SECONDS() }, JWT_SECRET);
+    const cookie = vi.fn();
+    await buildContext({
+      req: { headers: { cookie: `trace_token=${token}` }, cookies: { trace_token: token } },
+      res: { cookie },
+    } as unknown as Parameters<typeof buildContext>[0]);
+
+    expect(cookie).toHaveBeenCalledWith(
+      "trace_token",
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true }),
+    );
+  });
+
+  it("does not slide the expiry for bearer-token requests", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce({
+      organizationId: "org-1",
+      role: "admin",
+    });
+
+    const token = jwt.sign({ userId: "user-1", iat: OLD_IAT_SECONDS() }, JWT_SECRET);
+    const cookie = vi.fn();
+    await buildContext({
+      req: { headers: { authorization: `Bearer ${token}` }, cookies: {} },
+      res: { cookie },
+    } as unknown as Parameters<typeof buildContext>[0]);
+
+    expect(cookie).not.toHaveBeenCalled();
   });
 
   it("builds a context from a bearer token", async () => {
