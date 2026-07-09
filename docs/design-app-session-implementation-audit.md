@@ -909,3 +909,9 @@ During this audit continuation, the hosted cloud app smoke proved managed-git cl
 now also requires the public remote URL to be uncredentialed and repo-scoped, the
 credentialed URL to differ while staying scoped to the same managed repo, and the expiry
 to be future-dated but no more than the short-lived ten-minute token window.
+
+During this audit continuation, the hosted design smoke checked the promoted coding
+session result and brief, but did not inspect the promoted session's own
+`session_started` snapshot. It now requires that payload to contain the promoted session
+id, promoted group id, `kind: "coding"`, and `forkedFromSessionGroupId` pointing back to
+the source design group before checking the implementation brief.

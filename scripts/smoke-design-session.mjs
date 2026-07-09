@@ -273,8 +273,8 @@ async function waitForDesignUsage(sessionId) {
   });
 }
 
-async function waitForPromotedBrief(sessionId) {
-  return pollUntil("promoted coding session brief", async () => {
+async function waitForPromotedStartPayload(sessionId) {
+  return pollUntil("promoted coding session start payload", async () => {
     const data = await graphql(SESSION_EVENTS, {
       organizationId,
       sessionId,
@@ -286,7 +286,7 @@ async function waitForPromotedBrief(sessionId) {
     if (typeof prompt !== "string") {
       return { ok: false, detail: "session_started prompt not found" };
     }
-    return { ok: true, value: prompt };
+    return { ok: true, value: payload };
   });
 }
 
@@ -1093,7 +1093,23 @@ if (promoted.sessionGroup?.kind !== "coding") {
 if (promoted.sessionGroup?.forkedFromSessionGroupId !== session.sessionGroupId) {
   throw new Error("Promoted coding session is not linked to the source design group");
 }
-const promotedBrief = await waitForPromotedBrief(promoted.id);
+const promotedStartPayload = await waitForPromotedStartPayload(promoted.id);
+const promotedBrief = promotedStartPayload.prompt;
+const promotedStartSession = asObject(promotedStartPayload.session, "Promoted start session");
+const promotedStartGroup = asObject(promotedStartPayload.sessionGroup, "Promoted start group");
+if (
+  promotedStartSession.id !== promoted.id ||
+  promotedStartSession.sessionGroupId !== promoted.sessionGroupId
+) {
+  throw new Error("Promoted session_started payload did not include the promoted session");
+}
+if (
+  promotedStartGroup.id !== promoted.sessionGroupId ||
+  promotedStartGroup.kind !== "coding" ||
+  promotedStartGroup.forkedFromSessionGroupId !== session.sessionGroupId
+) {
+  throw new Error("Promoted session_started payload did not link coding group to design group");
+}
 if (!promotedBrief.includes("Implement the smoke-verified design artifact.")) {
   throw new Error("Promoted coding session brief did not include the implementation prompt");
 }
