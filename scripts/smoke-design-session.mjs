@@ -404,6 +404,20 @@ function assertDesignArtifactHeaders(response, label, { cacheControl }) {
   }
 }
 
+function assertPublishedArtifactUrl(url, artifactId) {
+  const parsed = new URL(url);
+  if (parsed.pathname !== "/") {
+    throw new Error(`Published artifact URL path is ${parsed.pathname}`);
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (!hostname.startsWith(`${artifactId.toLowerCase()}.`)) {
+    throw new Error(`Published artifact URL host ${hostname} is not scoped to ${artifactId}`);
+  }
+  if (hostname === new URL(serverUrl).hostname.toLowerCase()) {
+    throw new Error("Published artifact URL used the Trace app host");
+  }
+}
+
 async function assertPdfDownload(url, label) {
   const response = await fetch(url, { redirect: "follow" });
   const bytes = new Uint8Array(await response.arrayBuffer());
@@ -565,6 +579,7 @@ const published = publishData.publishDesignArtifact;
 if (!published.publishedAt) throw new Error("Published artifact is missing publishedAt");
 if (!published.publicUrl) throw new Error("Published artifact publicUrl is missing");
 assertArtifactHtml(published, "Published");
+assertPublishedArtifactUrl(published.publicUrl, tweaked.id);
 await assertUrlRenders(published.publicUrl, "published design artifact URL");
 await assertBootstrapDoesNotLeakContent(published.publicUrl, "published design artifact URL");
 

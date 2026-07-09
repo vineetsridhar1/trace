@@ -484,3 +484,8 @@ prove PDF export completion events carry the timeline/share metadata required by
 design docs. The smoke now checks artifact id, session group id, export type, status,
 `.pdf` file name, file URL, byte size, and optional positive page count before downloading
 the PDF bytes.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove published artifacts use the wildcard user-content host model. After publish, the
+smoke now requires the public URL host to be scoped as `<artifactId>.<domain>`, not the
+Trace app host, before rendering the artifact and checking `_bootstrap`.
