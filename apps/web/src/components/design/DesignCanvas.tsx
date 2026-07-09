@@ -9,7 +9,6 @@ import {
 } from "react";
 import { gql } from "@urql/core";
 import {
-  FileDown,
   GitBranchPlus,
   Loader2,
   Maximize2,
@@ -36,6 +35,10 @@ import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { DesignHarnessSettingsPopover } from "./DesignHarnessSettingsPopover";
+import {
+  DesignPdfExportPopover,
+  type DesignPdfPageOptions,
+} from "./DesignPdfExportPopover";
 import { DesignTweaksPopover } from "./DesignTweaksPopover";
 import { navigateToSession } from "../../stores/ui";
 
@@ -136,8 +139,8 @@ const PUBLISH_DESIGN_ARTIFACT_MUTATION = gql`
 `;
 
 const EXPORT_DESIGN_ARTIFACT_PDF_MUTATION = gql`
-  mutation ExportDesignArtifactPdf($artifactId: ID!) {
-    exportDesignArtifactPdf(artifactId: $artifactId) {
+  mutation ExportDesignArtifactPdf($artifactId: ID!, $pageOptions: DesignPdfPageOptionsInput) {
+    exportDesignArtifactPdf(artifactId: $artifactId, pageOptions: $pageOptions) {
       id
     }
   }
@@ -1263,14 +1266,17 @@ export function DesignCanvas({
     );
   }, [mutateSelectedArtifact, selectedAnchor, selectedPersistedArtifact]);
 
-  const handleExportPdf = useCallback(() => {
-    if (!selectedPersistedArtifact) return;
-    void mutateSelectedArtifact(
-      EXPORT_DESIGN_ARTIFACT_PDF_MUTATION,
-      { artifactId: selectedPersistedArtifact.id },
-      "PDF export queued",
-    );
-  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
+  const handleExportPdf = useCallback(
+    async (pageOptions: DesignPdfPageOptions | null) => {
+      if (!selectedPersistedArtifact) return;
+      await mutateSelectedArtifact(
+        EXPORT_DESIGN_ARTIFACT_PDF_MUTATION,
+        { artifactId: selectedPersistedArtifact.id, pageOptions },
+        "PDF export queued",
+      );
+    },
+    [mutateSelectedArtifact, selectedPersistedArtifact],
+  );
 
   const handlePromote = useCallback(() => {
     if (!selectedPersistedArtifact) return;
@@ -1368,16 +1374,7 @@ export function DesignCanvas({
         >
           <Upload size={14} />
         </button>
-        <button
-          type="button"
-          onClick={handleExportPdf}
-          disabled={!selectedPersistedArtifact}
-          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
-          aria-label="Export PDF"
-          title="Export PDF"
-        >
-          <FileDown size={14} />
-        </button>
+        <DesignPdfExportPopover disabled={!selectedPersistedArtifact} onExport={handleExportPdf} />
         <button
           type="button"
           onClick={handlePromote}

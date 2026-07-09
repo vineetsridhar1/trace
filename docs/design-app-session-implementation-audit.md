@@ -660,3 +660,9 @@ to that same runtime instance. Both paths now require
 `endpoint.currentRuntimeInstanceId` to match the running process `runtimeInstanceId`
 before minting a preview credential or publishing the endpoint, preventing stale
 forwarding rows from being treated as live app previews.
+
+During this audit pass, PDF page-size and margin options were implemented in the service
+and hosted smoke but the design canvas still called `exportDesignArtifactPdf` with only
+the artifact id. The canvas now uses a dedicated PDF export popover, validates explicit
+page dimensions and margins client-side, and passes `DesignPdfPageOptionsInput` through
+the GraphQL mutation so print-fidelity controls are available in the product UI.
