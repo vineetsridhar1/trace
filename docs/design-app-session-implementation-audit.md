@@ -648,3 +648,8 @@ model streaming began. If design-system content loading or prompt composition fa
 first, a requested fan-out direction could disappear without a `design_generation_failed`
 event. The generator now wraps setup and streaming in the same failure boundary so every
 requested direction keeps its generation and direction metadata on failure.
+
+During this audit pass, the design PDF renderer blocked network and scripts but still
+left Chromium profile isolation implicit. Each render now passes a fresh
+`--user-data-dir` inside the per-render temp directory, so PDF export runs without the
+server's default browser profile or any ambient Trace credentials.

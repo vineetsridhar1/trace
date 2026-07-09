@@ -103,6 +103,7 @@ describe("designPdfRenderer", () => {
       expect.arrayContaining([
         "--headless=new",
         "--host-resolver-rules=MAP * 0.0.0.0",
+        expect.stringMatching(/^--user-data-dir=.*profile$/),
         expect.stringMatching(/^--print-to-pdf=/),
       ]),
       expect.objectContaining({ timeout: 30_000 }),

@@ -80,7 +80,7 @@ function chromiumExecutable(): string {
   );
 }
 
-function chromeArgs(inputPath: string, outputPath: string): string[] {
+function chromeArgs(input: { inputPath: string; outputPath: string; userDataDir: string }): string[] {
   return [
     "--headless=new",
     "--disable-gpu",
@@ -91,11 +91,12 @@ function chromeArgs(inputPath: string, outputPath: string): string[] {
     "--hide-scrollbars",
     "--no-first-run",
     "--no-default-browser-check",
+    `--user-data-dir=${input.userDataDir}`,
     "--host-resolver-rules=MAP * 0.0.0.0",
     "--run-all-compositor-stages-before-draw",
     "--virtual-time-budget=1000",
-    `--print-to-pdf=${outputPath}`,
-    `file://${inputPath}`,
+    `--print-to-pdf=${input.outputPath}`,
+    `file://${input.inputPath}`,
   ];
 }
 
@@ -168,6 +169,7 @@ export const designPdfRenderer = {
       const workdir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-design-pdf-"));
       const inputPath = path.join(workdir, `${input.artifactId}.html`);
       const outputPath = path.join(workdir, `${input.artifactId}.pdf`);
+      const userDataDir = path.join(workdir, "profile");
 
       try {
         await fs.promises.writeFile(
@@ -175,13 +177,17 @@ export const designPdfRenderer = {
           wrapPrintHtml(input.html, input.pageOptions ?? null),
           "utf8",
         );
-        await execFileAsync(chromiumExecutable(), chromeArgs(inputPath, outputPath), {
-          timeout: readPositiveInt(
-            process.env.TRACE_DESIGN_PDF_RENDER_TIMEOUT_MS,
-            DEFAULT_RENDER_TIMEOUT_MS,
-          ),
-          maxBuffer: 1024 * 1024,
-        });
+        await execFileAsync(
+          chromiumExecutable(),
+          chromeArgs({ inputPath, outputPath, userDataDir }),
+          {
+            timeout: readPositiveInt(
+              process.env.TRACE_DESIGN_PDF_RENDER_TIMEOUT_MS,
+              DEFAULT_RENDER_TIMEOUT_MS,
+            ),
+            maxBuffer: 1024 * 1024,
+          },
+        );
         const pdf = await fs.promises.readFile(outputPath);
         if (pdf.byteLength === 0) {
           throw new Error("Chromium produced an empty PDF");
