@@ -555,6 +555,22 @@ async function renderUrl(url, label, options = {}) {
   }
 }
 
+async function assertPrivateEndpointRequiresPreviewAuth(url, label) {
+  const response = await fetch(url, { redirect: "follow" });
+  const html = await response.text();
+  if (response.ok) {
+    throw new Error(`${label} raw endpoint URL was publicly fetchable before publish`);
+  }
+  if (response.status !== 401 && response.status !== 403) {
+    throw new Error(`${label} raw endpoint URL returned HTTP ${response.status}`);
+  }
+  if (html.includes(expectedText)) {
+    throw new Error(`${label} raw endpoint URL leaked app HTML before publish`);
+  }
+  assertOverlayState(html, `${label} raw endpoint URL`, false);
+  assertSourceStamp(html, `${label} raw endpoint URL`, false);
+}
+
 function assertOverlayState(html, label, expected) {
   const hasOverlay = html.includes("data-trace-app-overlay");
   if (expected && !hasOverlay) {
@@ -1063,6 +1079,7 @@ await waitForCodingHandoffBrief(
   initial.checkpoint.commitSha,
 );
 const terminalOutput = await verifyTerminalWorkdir(session.id);
+await assertPrivateEndpointRequiresPreviewAuth(initial.endpoint.url, "private preview endpoint");
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", {
   requireFetch: false,
@@ -1093,6 +1110,10 @@ const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored",
 if (restoredReady.state.sessionGroup.repo?.id !== managedRepoId) {
   throw new Error("Restored app group did not use the source managed repo");
 }
+await assertPrivateEndpointRequiresPreviewAuth(
+  restoredReady.endpoint.url,
+  "restored private preview endpoint",
+);
 const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
 await renderUrl(restoredPreviewUrl, "restored preview URL", {
   requireFetch: false,

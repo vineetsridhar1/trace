@@ -897,3 +897,9 @@ runtime behavior and terminal `HEAD`, but did not prove the restored session's o
 `session_started` event carried the restore context. It now polls the restored session
 stream for `restoreCheckpointId`, `restoreCheckpointSha`, the fresh session id, and
 `kind: "app"` on the restored group before accepting the restore path.
+
+During this audit continuation, the hosted cloud app smoke rendered signed private
+preview URLs and the published public URL, but did not directly prove the raw endpoint
+host was private before publish. It now fetches the initial and restored endpoint URLs
+before minting preview credentials, requires an auth rejection, and verifies neither app
+HTML nor authoring overlay/source stamps leak from the unauthenticated endpoint.
