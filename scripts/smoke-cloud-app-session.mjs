@@ -362,7 +362,7 @@ async function publishApp(sessionGroupId) {
     throw new Error(`Published endpoint access mode is ${endpoint.accessMode}`);
   }
   if (!endpoint.url) throw new Error("Published endpoint URL is missing");
-  return endpoint.url;
+  return endpoint;
 }
 
 function terminalWebSocketUrl() {
@@ -517,8 +517,11 @@ const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", { requireFetch: false, expectOverlay: true });
 
-const publicUrl = await publishApp(session.sessionGroupId);
-await renderUrl(publicUrl, "published public URL", { expectOverlay: false });
+const publicEndpoint = await publishApp(session.sessionGroupId);
+if (publicEndpoint.id !== initial.endpoint.id) {
+  throw new Error("Published endpoint did not match the primary preview endpoint");
+}
+await renderUrl(publicEndpoint.url, "published public URL", { expectOverlay: false });
 
 const restored = await startAppSession({
   restoreCheckpointId: initial.checkpoint.id,
@@ -548,7 +551,7 @@ process.stdout.write(
     `Initial group: ${session.sessionGroupId}`,
     `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
     `Terminal: ${terminalOutput.match(/TRACE_SMOKE_TERMINAL_READY:[^\r\n]+/)?.[0] ?? "verified"}`,
-    `Published URL: ${publicUrl}`,
+    `Published URL: ${publicEndpoint.url}`,
     `Restored session: ${restored.id}`,
     `Restored group: ${restored.sessionGroupId}`,
   ].join("\n") + "\n",

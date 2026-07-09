@@ -414,3 +414,8 @@ During this continuation, the hosted `pnpm smoke:cloud-app-session` script was t
 to prove checkpoint restore uses managed-git durability correctly. After the first
 checkpoint links a managed repo, the smoke now verifies restore creates a fresh app
 session group and that the restored group is bound to the same managed repo.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove app publish v1 flips the existing primary preview endpoint. The smoke now checks
+that `publishAppSession` returns the same endpoint id used for the private preview before
+rendering the public URL.
