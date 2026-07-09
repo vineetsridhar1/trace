@@ -571,6 +571,15 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManagedGitCredential = {
+  __typename?: "ManagedGitCredential";
+  credentialedRemoteUrl: Scalars["String"]["output"];
+  expiresAt: Scalars["DateTime"]["output"];
+  remoteUrl: Scalars["String"]["output"];
+  repoId: Scalars["ID"]["output"];
+  token: Scalars["String"]["output"];
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -632,6 +641,7 @@ export type Mutation = {
   createChannelTerminal: Terminal;
   createChat: Chat;
   createDesignArtifact: Artifact;
+  createManagedGitCredential: ManagedGitCredential;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -820,6 +830,10 @@ export type MutationCreateDesignArtifactArgs = {
   html?: InputMaybe<Scalars["String"]["input"]>;
   prompt: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCreateManagedGitCredentialArgs = {
+  repoId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateOrganizationArgs = {

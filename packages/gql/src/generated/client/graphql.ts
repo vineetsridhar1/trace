@@ -573,6 +573,15 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManagedGitCredential = {
+  __typename?: "ManagedGitCredential";
+  credentialedRemoteUrl: Scalars["String"]["output"];
+  expiresAt: Scalars["DateTime"]["output"];
+  remoteUrl: Scalars["String"]["output"];
+  repoId: Scalars["ID"]["output"];
+  token: Scalars["String"]["output"];
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -634,6 +643,7 @@ export type Mutation = {
   createChannelTerminal: Terminal;
   createChat: Chat;
   createDesignArtifact: Artifact;
+  createManagedGitCredential: ManagedGitCredential;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -822,6 +832,10 @@ export type MutationCreateDesignArtifactArgs = {
   html?: InputMaybe<Scalars["String"]["input"]>;
   prompt: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCreateManagedGitCredentialArgs = {
+  repoId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateOrganizationArgs = {
@@ -2620,24 +2634,6 @@ export type DesignArtifactsQuery = {
     updatedAt: string;
     createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
   }>;
-};
-
-export type DesignSessionEventsSubscriptionVariables = Exact<{
-  sessionId: Scalars["ID"]["input"];
-  organizationId: Scalars["ID"]["input"];
-}>;
-
-export type DesignSessionEventsSubscription = {
-  __typename?: "Subscription";
-  sessionEvents: {
-    __typename?: "Event";
-    id: string;
-    scopeType: ScopeType;
-    scopeId: string;
-    eventType: EventType;
-    payload: JsonValue;
-    timestamp: string;
-  };
 };
 
 export type IterateDesignArtifactMutationVariables = Exact<{
@@ -5159,69 +5155,6 @@ export const DesignArtifactsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignArtifactsQuery, DesignArtifactsQueryVariables>;
-export const DesignSessionEventsDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "subscription",
-      name: { kind: "Name", value: "DesignSessionEvents" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionEvents" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "scopeType" } },
-                { kind: "Field", name: { kind: "Name", value: "scopeId" } },
-                { kind: "Field", name: { kind: "Name", value: "eventType" } },
-                { kind: "Field", name: { kind: "Name", value: "payload" } },
-                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  DesignSessionEventsSubscription,
-  DesignSessionEventsSubscriptionVariables
->;
 export const IterateDesignArtifactDocument = {
   kind: "Document",
   definitions: [

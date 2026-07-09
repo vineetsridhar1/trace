@@ -574,6 +574,15 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManagedGitCredential = {
+  __typename?: "ManagedGitCredential";
+  credentialedRemoteUrl: Scalars["String"]["output"];
+  expiresAt: Scalars["DateTime"]["output"];
+  remoteUrl: Scalars["String"]["output"];
+  repoId: Scalars["ID"]["output"];
+  token: Scalars["String"]["output"];
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -635,6 +644,7 @@ export type Mutation = {
   createChannelTerminal: Terminal;
   createChat: Chat;
   createDesignArtifact: Artifact;
+  createManagedGitCredential: ManagedGitCredential;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -823,6 +833,10 @@ export type MutationCreateDesignArtifactArgs = {
   html?: InputMaybe<Scalars["String"]["input"]>;
   prompt: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCreateManagedGitCredentialArgs = {
+  repoId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateOrganizationArgs = {
@@ -2502,6 +2516,7 @@ export type ResolversTypes = ResolversObject<{
   LinkedCheckoutErrorCode: LinkedCheckoutErrorCode;
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
+  ManagedGitCredential: ResolverTypeWrapper<ManagedGitCredential>;
   Message: ResolverTypeWrapper<Message>;
   MessageSearchHit: ResolverTypeWrapper<MessageSearchHit>;
   MoveChannelInput: MoveChannelInput;
@@ -2632,6 +2647,7 @@ export type ResolversParentTypes = ResolversObject<{
   LinkedCheckoutActionResult: LinkedCheckoutActionResult;
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   LinkedCheckoutStatus: LinkedCheckoutStatus;
+  ManagedGitCredential: ManagedGitCredential;
   Message: Message;
   MessageSearchHit: MessageSearchHit;
   MoveChannelInput: MoveChannelInput;
@@ -3136,6 +3152,19 @@ export type LinkedCheckoutStatusResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type ManagedGitCredentialResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ManagedGitCredential"] =
+    ResolversParentTypes["ManagedGitCredential"],
+> = ResolversObject<{
+  credentialedRemoteUrl?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  expiresAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  remoteUrl?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  repoId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  token?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type MessageResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Message"] = ResolversParentTypes["Message"],
@@ -3288,6 +3317,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateDesignArtifactArgs, "prompt" | "sessionGroupId">
+  >;
+  createManagedGitCredential?: Resolver<
+    ResolversTypes["ManagedGitCredential"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateManagedGitCredentialArgs, "repoId">
   >;
   createOrganization?: Resolver<
     ResolversTypes["OrgMember"],
@@ -4891,6 +4926,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
+  ManagedGitCredential?: ManagedGitCredentialResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   MessageSearchHit?: MessageSearchHitResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;

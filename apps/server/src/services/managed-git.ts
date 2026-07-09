@@ -2,22 +2,44 @@ import { execFile, spawn } from "child_process";
 import { randomUUID } from "crypto";
 import type { Request, Response } from "express";
 import fs from "fs";
+import jwt from "jsonwebtoken";
 import path from "path";
 import { promisify } from "util";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "../lib/db.js";
+import { AuthorizationError, ValidationError } from "../lib/errors.js";
+import { resolveJwtSecret } from "../lib/jwt-secret.js";
 import { authenticateProvisionedRuntimeToken } from "../lib/runtime-adapters.js";
 import { buildDefaultAppSetupConfig } from "./app-starter-config.js";
 import { eventService } from "./event.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_BRANCH = "main";
+const USER_TOKEN_TTL_SECONDS = 10 * 60;
+const JWT_SECRET = resolveJwtSecret();
 const GIT_SERVICE_COMMANDS = {
   "git-upload-pack": "upload-pack",
   "git-receive-pack": "receive-pack",
 } as const;
 
 type GitService = keyof typeof GIT_SERVICE_COMMANDS;
+type ManagedGitUserTokenPayload = {
+  tokenType: "managed_git_user";
+  userId: string;
+  organizationId: string;
+  repoId: string;
+};
+type ManagedGitAuth =
+  | {
+      kind: "runtime";
+      userId: string;
+      sessionId: string;
+    }
+  | {
+      kind: "user";
+      userId: string;
+      sessionId: null;
+    };
 type ManagedRepoHead = {
   ref: string;
   branch: string;
@@ -59,6 +81,17 @@ function buildManagedRemoteUrl(organizationId: string, repoId: string): string {
   return url.toString();
 }
 
+function buildCredentialedManagedRemoteUrl(input: {
+  organizationId: string;
+  repoId: string;
+  token: string;
+}): string {
+  const url = new URL(buildManagedRemoteUrl(input.organizationId, input.repoId));
+  url.username = "x-token";
+  url.password = input.token;
+  return url.toString();
+}
+
 function pktLine(value: string): Buffer {
   const payload = Buffer.from(value, "utf8");
   const length = (payload.length + 4).toString(16).padStart(4, "0");
@@ -79,10 +112,56 @@ function parseBasicPassword(header: string | undefined): string | null {
   return decoded.slice(separatorIndex + 1);
 }
 
-async function ensureAuthorizedRuntime(req: Request, organizationId: string, repoId: string) {
+function createManagedGitUserToken(input: {
+  userId: string;
+  organizationId: string;
+  repoId: string;
+  ttlSeconds?: number | null;
+}): { token: string; expiresAt: Date } {
+  const ttlSeconds =
+    typeof input.ttlSeconds === "number" && Number.isFinite(input.ttlSeconds)
+      ? Math.min(Math.max(Math.floor(input.ttlSeconds), 60), USER_TOKEN_TTL_SECONDS)
+      : USER_TOKEN_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+  const token = jwt.sign(
+    {
+      tokenType: "managed_git_user",
+      userId: input.userId,
+      organizationId: input.organizationId,
+      repoId: input.repoId,
+    } satisfies ManagedGitUserTokenPayload,
+    JWT_SECRET,
+    { expiresIn: ttlSeconds },
+  );
+  return { token, expiresAt };
+}
+
+function authenticateManagedGitUserToken(token: string): ManagedGitUserTokenPayload | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as ManagedGitUserTokenPayload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      payload.tokenType !== "managed_git_user" ||
+      typeof payload.userId !== "string" ||
+      typeof payload.organizationId !== "string" ||
+      typeof payload.repoId !== "string"
+    ) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureAuthorizedClient(
+  req: Request,
+  organizationId: string,
+  repoId: string,
+): Promise<ManagedGitAuth | null> {
   const token = parseBasicPassword(req.headers.authorization);
-  const auth = token ? authenticateProvisionedRuntimeToken(token) : null;
-  if (!auth || auth.organizationId !== organizationId) return null;
+  if (!token) return null;
 
   const repo = await prisma.repo.findFirst({
     where: { id: repoId, organizationId, provider: "managed" },
@@ -90,15 +169,31 @@ async function ensureAuthorizedRuntime(req: Request, organizationId: string, rep
   });
   if (!repo) return null;
 
-  const session = await prisma.session.findFirst({
-    where: {
-      id: auth.sessionId,
-      organizationId,
-      OR: [{ repoId }, { sessionGroup: { repoId } }],
-    },
-    select: { id: true },
+  const runtimeAuth = authenticateProvisionedRuntimeToken(token);
+  if (runtimeAuth) {
+    if (runtimeAuth.organizationId !== organizationId) return null;
+    const session = await prisma.session.findFirst({
+      where: {
+        id: runtimeAuth.sessionId,
+        organizationId,
+        OR: [{ repoId }, { sessionGroup: { repoId } }],
+      },
+      select: { id: true },
+    });
+    return session
+      ? { kind: "runtime", userId: runtimeAuth.userId, sessionId: runtimeAuth.sessionId }
+      : null;
+  }
+
+  const userAuth = authenticateManagedGitUserToken(token);
+  if (!userAuth || userAuth.organizationId !== organizationId || userAuth.repoId !== repoId) {
+    return null;
+  }
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId: userAuth.userId, organizationId } },
+    select: { userId: true },
   });
-  return session ? auth : null;
+  return membership ? { kind: "user", userId: userAuth.userId, sessionId: null } : null;
 }
 
 async function initBareRepo(repoPath: string): Promise<void> {
@@ -224,7 +319,8 @@ export const managedGitService = {
   async recordManagedRepoPush(input: {
     organizationId: string;
     repoId: string;
-    sessionId: string;
+    sessionId?: string | null;
+    actorId?: string | null;
     repoPath?: string;
     heads?: ManagedRepoHead[];
   }) {
@@ -237,12 +333,53 @@ export const managedGitService = {
       eventType: "repo_branch_pushed",
       payload: {
         repoId: input.repoId,
-        sessionId: input.sessionId,
+        sessionId: input.sessionId ?? null,
         heads,
       } as Prisma.InputJsonValue,
       actorType: "system",
-      actorId: "managed-git",
+      actorId: input.actorId ?? "managed-git",
     });
+  },
+
+  async createUserCloneCredential(input: {
+    organizationId: string;
+    repoId: string;
+    userId: string;
+    ttlSeconds?: number | null;
+  }) {
+    const repo = await prisma.repo.findFirst({
+      where: { id: input.repoId, organizationId: input.organizationId, provider: "managed" },
+      select: { id: true, name: true, remoteUrl: true },
+    });
+    if (!repo) {
+      throw new ValidationError("Managed repo not found.");
+    }
+    const membership = await prisma.orgMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: input.userId,
+          organizationId: input.organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+    if (!membership) {
+      throw new AuthorizationError("Not authorized for this managed repo.");
+    }
+
+    const credential = createManagedGitUserToken(input);
+    const remoteUrl = repo.remoteUrl ?? buildManagedRemoteUrl(input.organizationId, repo.id);
+    return {
+      repoId: repo.id,
+      remoteUrl,
+      credentialedRemoteUrl: buildCredentialedManagedRemoteUrl({
+        organizationId: input.organizationId,
+        repoId: repo.id,
+        token: credential.token,
+      }),
+      token: credential.token,
+      expiresAt: credential.expiresAt,
+    };
   },
 
   async handleInfoRefs(req: Request, res: Response, params: { orgId: string; repoId: string }) {
@@ -251,7 +388,7 @@ export const managedGitService = {
       res.status(400).json({ error: "Unsupported git service" });
       return;
     }
-    const auth = await ensureAuthorizedRuntime(req, params.orgId, params.repoId);
+    const auth = await ensureAuthorizedClient(req, params.orgId, params.repoId);
     if (!auth) {
       res.set("WWW-Authenticate", 'Basic realm="Trace managed git"');
       res.status(401).end("Unauthorized");
@@ -272,7 +409,7 @@ export const managedGitService = {
     res: Response,
     params: { orgId: string; repoId: string; service: GitService },
   ) {
-    const auth = await ensureAuthorizedRuntime(req, params.orgId, params.repoId);
+    const auth = await ensureAuthorizedClient(req, params.orgId, params.repoId);
     if (!auth) {
       res.set("WWW-Authenticate", 'Basic realm="Trace managed git"');
       res.status(401).end("Unauthorized");
@@ -293,6 +430,7 @@ export const managedGitService = {
                 organizationId: params.orgId,
                 repoId: params.repoId,
                 sessionId: auth.sessionId,
+                actorId: auth.kind === "user" ? auth.userId : "managed-git",
                 repoPath: managedRepoPath(params.repoId),
               })
           : undefined,

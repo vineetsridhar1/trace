@@ -405,6 +405,14 @@ type Repo {
   sessions: [Session!]!
 }
 
+type ManagedGitCredential {
+  repoId: ID!
+  remoteUrl: String!
+  credentialedRemoteUrl: String!
+  token: String!
+  expiresAt: DateTime!
+}
+
 type RepoApplicationConfig {
   setupScripts: [RepoSetupScript!]!
   applications: [RepoApplicationDefinition!]!
@@ -1574,6 +1582,7 @@ type Mutation {
   createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
+  createManagedGitCredential(repoId: ID!): ManagedGitCredential!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
