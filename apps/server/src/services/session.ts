@@ -9307,7 +9307,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true } },
+        sessionGroup: { select: { kind: true, designSystemId: true, designSkillIds: true } },
       },
     });
 
