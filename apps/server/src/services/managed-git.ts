@@ -4,10 +4,11 @@ import type { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import { promisify } from "util";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { authenticateProvisionedRuntimeToken } from "../lib/runtime-adapters.js";
 import { buildDefaultAppSetupConfig } from "./app-starter-config.js";
+import { eventService } from "./event.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_BRANCH = "main";
@@ -17,6 +18,11 @@ const GIT_SERVICE_COMMANDS = {
 } as const;
 
 type GitService = keyof typeof GIT_SERVICE_COMMANDS;
+type ManagedRepoHead = {
+  ref: string;
+  branch: string;
+  commitSha: string;
+};
 type PrismaTx = Omit<
   PrismaClient,
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
@@ -101,12 +107,45 @@ async function initBareRepo(repoPath: string): Promise<void> {
   await execFileAsync("git", ["init", "--bare", "--initial-branch", DEFAULT_BRANCH, repoPath]);
 }
 
+function parseBareRepoHeads(stdout: string): ManagedRepoHead[] {
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const separatorIndex = line.lastIndexOf(":");
+      if (separatorIndex < 0) return [];
+      const ref = line.slice(0, separatorIndex);
+      const commitSha = line.slice(separatorIndex + 1);
+      if (!ref.startsWith("refs/heads/") || !/^[0-9a-f]{40,64}$/i.test(commitSha)) return [];
+      return [
+        {
+          ref,
+          branch: ref.slice("refs/heads/".length),
+          commitSha,
+        },
+      ];
+    });
+}
+
+async function listBareRepoHeads(repoPath: string): Promise<ManagedRepoHead[]> {
+  const { stdout } = await execFileAsync("git", [
+    "--git-dir",
+    repoPath,
+    "for-each-ref",
+    "--format=%(refname):%(objectname)",
+    "refs/heads",
+  ]);
+  return parseBareRepoHeads(stdout);
+}
+
 function runGitHttpService(input: {
   reqBody?: Buffer;
   res: Response;
   service: GitService;
   repoPath: string;
   advertiseRefs?: boolean;
+  onSuccess?: () => Promise<void> | void;
 }) {
   const command = GIT_SERVICE_COMMANDS[input.service];
   const args = [
@@ -124,7 +163,14 @@ function runGitHttpService(input: {
     input.res.end(error.message);
   });
   child.on("close", (code) => {
-    if (code === 0 || input.res.writableEnded) return;
+    if (code === 0) {
+      void Promise.resolve(input.onSuccess?.()).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[managed-git] post-receive side effect failed: ${message}`);
+      });
+      return;
+    }
+    if (input.res.writableEnded) return;
     const message = Buffer.concat(stderr).toString("utf8") || `git ${command} failed`;
     if (!input.res.headersSent) input.res.status(500);
     input.res.end(message);
@@ -175,6 +221,30 @@ export const managedGitService = {
     return { id: repoId, name: repoName, remoteUrl, defaultBranch: DEFAULT_BRANCH };
   },
 
+  async recordManagedRepoPush(input: {
+    organizationId: string;
+    repoId: string;
+    sessionId: string;
+    repoPath?: string;
+    heads?: ManagedRepoHead[];
+  }) {
+    const heads =
+      input.heads ?? (await listBareRepoHeads(input.repoPath ?? managedRepoPath(input.repoId)));
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: input.repoId,
+      eventType: "repo_branch_pushed",
+      payload: {
+        repoId: input.repoId,
+        sessionId: input.sessionId,
+        heads,
+      } as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: "managed-git",
+    });
+  },
+
   async handleInfoRefs(req: Request, res: Response, params: { orgId: string; repoId: string }) {
     const service = typeof req.query.service === "string" ? req.query.service : "";
     if (service !== "git-upload-pack" && service !== "git-receive-pack") {
@@ -216,6 +286,16 @@ export const managedGitService = {
       res,
       service: params.service,
       repoPath: managedRepoPath(params.repoId),
+      onSuccess:
+        params.service === "git-receive-pack"
+          ? () =>
+              this.recordManagedRepoPush({
+                organizationId: params.orgId,
+                repoId: params.repoId,
+                sessionId: auth.sessionId,
+                repoPath: managedRepoPath(params.repoId),
+              })
+          : undefined,
     });
   },
 };

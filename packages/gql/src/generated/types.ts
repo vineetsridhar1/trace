@@ -435,6 +435,7 @@ export type EventType =
   | "queued_messages_cleared"
   | "queued_messages_drained"
   | "queued_messages_reordered"
+  | "repo_branch_pushed"
   | "repo_created"
   | "repo_updated"
   | "session_application_log_appended"

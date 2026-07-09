@@ -269,6 +269,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  repo_branch_pushed
   channel_created
   channel_updated
   channel_member_added

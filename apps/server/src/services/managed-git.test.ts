@@ -5,10 +5,18 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
+vi.mock("./event.js", () => ({
+  eventService: {
+    create: vi.fn(),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
+import { eventService } from "./event.js";
 import { managedGitService } from "./managed-git.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
+const eventServiceMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
 
 describe("managedGitService", () => {
   beforeEach(() => {
@@ -68,6 +76,41 @@ describe("managedGitService", () => {
           }),
         }),
       }),
+    });
+  });
+
+  it("records managed repo push events with branch heads", async () => {
+    await managedGitService.recordManagedRepoPush({
+      organizationId: "org-1",
+      repoId: "repo-1",
+      sessionId: "session-1",
+      heads: [
+        {
+          ref: "refs/heads/main",
+          branch: "main",
+          commitSha: "0123456789abcdef0123456789abcdef01234567",
+        },
+      ],
+    });
+
+    expect(eventServiceMock.create).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      scopeType: "system",
+      scopeId: "repo-1",
+      eventType: "repo_branch_pushed",
+      payload: {
+        repoId: "repo-1",
+        sessionId: "session-1",
+        heads: [
+          {
+            ref: "refs/heads/main",
+            branch: "main",
+            commitSha: "0123456789abcdef0123456789abcdef01234567",
+          },
+        ],
+      },
+      actorType: "system",
+      actorId: "managed-git",
     });
   });
 });
