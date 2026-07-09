@@ -35,6 +35,8 @@ Implemented:
 - Token tweaks create a child artifact version without a model call.
 - PDF export renders a real PDF through a bounded headless-Chromium pool, stores it, and
   emits completion/failure events.
+- A renderer integration smoke uses a real local Chromium/Chrome binary when available to
+  verify artifact HTML produces a non-empty PDF with page metadata.
 - Promotion creates a coding session using the selected artifact HTML as the implementation
   brief.
 
@@ -43,6 +45,7 @@ Verified:
 - `artifact.test.ts`
 - `design-generation.test.ts`
 - `design-artifact-serving.test.ts`
+- `design-pdf-renderer.integration.test.ts`
 - `designCanvasAnchors.test.ts`
 - `@trace/server lint`
 - `@trace/server build`
