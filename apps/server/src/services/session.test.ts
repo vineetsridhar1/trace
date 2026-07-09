@@ -7760,6 +7760,104 @@ describe("SessionService", () => {
     });
   });
 
+  describe("updateDesignHarnessSettings", () => {
+    it("updates design harness settings and emits a session group snapshot", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        kind: "design",
+        sessions: [{ id: "session-1" }],
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce({
+        id: "group-1",
+        designSystemId: "trace-core",
+        designSkillIds: ["forms", "audit"],
+      });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({
+          id: "group-1",
+          kind: "design",
+          designSystemId: "trace-core",
+          designSkillIds: ["forms", "audit"],
+        }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      eventServiceMock.create.mockResolvedValueOnce({ id: "event-harness" });
+
+      const result = await service.updateDesignHarnessSettings(
+        "group-1",
+        "org-1",
+        { designSystemId: " trace-core ", designSkillIds: ["forms", "audit"] },
+        "user",
+        "user-1",
+      );
+
+      expect(result).toMatchObject({
+        id: "group-1",
+        kind: "design",
+        designSystemId: "trace-core",
+        designSkillIds: ["forms", "audit"],
+      });
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: {
+          designSystemId: "trace-core",
+          designSkillIds: ["forms", "audit"],
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          scopeId: "session-1",
+          deferPublish: true,
+          payload: expect.objectContaining({
+            type: "design_harness_settings_updated",
+            sessionGroupId: "group-1",
+            designSystemId: "trace-core",
+            designSkillIds: ["forms", "audit"],
+            sessionGroup: expect.objectContaining({
+              id: "group-1",
+              designSystemId: "trace-core",
+              designSkillIds: ["forms", "audit"],
+            }),
+          }),
+        }),
+        prismaMock,
+      );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-harness" });
+    });
+
+    it("rejects design harness settings on coding session groups", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        kind: "coding",
+        sessions: [{ id: "session-1" }],
+      });
+
+      await expect(
+        service.updateDesignHarnessSettings(
+          "group-1",
+          "org-1",
+          { designSystemId: "trace-core", designSkillIds: ["forms"] },
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow("Design harness settings are only available for design and app sessions.");
+
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe("delete", () => {
     it("removes the session group when the last session is deleted", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());

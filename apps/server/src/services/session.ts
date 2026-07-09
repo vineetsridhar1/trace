@@ -2801,6 +2801,75 @@ export class SessionService {
     return result.sessionGroup;
   }
 
+  async updateDesignHarnessSettings(
+    groupId: string,
+    organizationId: string,
+    settings: { designSystemId?: unknown; designSkillIds?: unknown },
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    if (actorId !== "system") {
+      await assertSessionGroupAccess(groupId, actorId, organizationId);
+    }
+
+    const harnessSettings = designHarnessSettings(settings);
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const group = await tx.sessionGroup.findFirst({
+        where: { id: groupId, organizationId },
+        select: {
+          id: true,
+          kind: true,
+          sessions: {
+            select: { id: true },
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+          },
+        },
+      });
+      if (!group) throw new Error("Session group not found");
+      if (group.kind !== "design" && group.kind !== "app") {
+        throw new ValidationError(
+          "Design harness settings are only available for design and app sessions.",
+        );
+      }
+
+      await tx.sessionGroup.update({
+        where: { id: groupId },
+        data: {
+          designSystemId: harnessSettings.designSystemId,
+          designSkillIds: harnessSettings.designSkillIds,
+        },
+      });
+
+      const sessionGroup = await this.loadSessionGroupSnapshot(groupId, tx);
+      if (!sessionGroup) throw new Error("Session group not found");
+
+      const event = await eventService.create(
+        {
+          organizationId,
+          scopeType: "session",
+          scopeId: group.sessions[0]?.id ?? groupId,
+          eventType: "session_output",
+          payload: {
+            type: "design_harness_settings_updated",
+            sessionGroupId: groupId,
+            designSystemId: harnessSettings.designSystemId,
+            designSkillIds: harnessSettings.designSkillIds,
+            sessionGroup,
+          },
+          actorType,
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+      return { sessionGroup, event };
+    });
+
+    eventService.publishCreated(result.event);
+    return result.sessionGroup;
+  }
+
   async list(
     organizationId: string,
     userId: string,

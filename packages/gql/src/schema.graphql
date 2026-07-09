@@ -1510,6 +1510,11 @@ type Mutation {
   archiveSessionGroup(id: ID!): SessionGroup
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
   updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
+  updateDesignHarnessSettings(
+    sessionGroupId: ID!
+    designSystemId: String
+    designSkillIds: [String!]
+  ): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!

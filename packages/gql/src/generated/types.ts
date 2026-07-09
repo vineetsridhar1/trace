@@ -759,6 +759,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignHarnessSettings: SessionGroup;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -1312,6 +1313,12 @@ export type MutationUpdateChannelArgs = {
 export type MutationUpdateChannelGroupArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateChannelGroupInput;
+};
+
+export type MutationUpdateDesignHarnessSettingsArgs = {
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationUpdateOrgMemberRoleArgs = {

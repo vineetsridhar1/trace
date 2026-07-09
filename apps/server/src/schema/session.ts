@@ -499,6 +499,26 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  updateDesignHarnessSettings: (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      designSystemId?: string | null;
+      designSkillIds?: string[] | null;
+    },
+    ctx: Context,
+  ) => {
+    return sessionService.updateDesignHarnessSettings(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      {
+        designSystemId: args.designSystemId ?? null,
+        designSkillIds: args.designSkillIds ?? [],
+      },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
   deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },

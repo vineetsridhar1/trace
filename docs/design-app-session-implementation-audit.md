@@ -26,6 +26,9 @@ Implemented:
   prompt composition.
 - The same content roots expose a GraphQL-backed design prompt content catalog so clients
   can populate design-system and skill pickers from configured Open Design content.
+- Design/app harness settings can be updated after session creation through the service
+  layer and GraphQL API, with validation that only `design` and `app` session groups can
+  change `designSystemId` and `designSkillIds`.
 - `startSession(kind: design)` creates a serverless design group without runtime
   provisioning.
 - Initial and fan-out artifact generation call the LLM-backed design generation service.
@@ -175,6 +178,10 @@ The remaining gap found by this audit is:
 - Run a real cloud `app` session end to end: prompt, starter boot, port detection, preview
   iframe, checkpoint, restore from checkpoint, capture thumbnail, publish public endpoint,
   and open the published URL.
+- Add the visible design-system/skill picker UI that consumes
+  `designPromptContentCatalog` and persists selections through
+  `updateDesignHarnessSettings`. The service/API and catalog are present; the UI control
+  is not yet wired.
 
 This smoke is executable via `pnpm smoke:cloud-app-session` against a configured Trace
 server with `TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and `TRACE_SMOKE_ORG_ID`.
@@ -267,3 +274,9 @@ had no API to discover valid configured design-system or skill IDs. The server n
 `designPromptContentCatalog` from the same `TRACE_DESIGN_CONTENT_DIRS` roots used for
 prompt composition, with service coverage for upstream-shaped catalog discovery and
 de-duplication across roots.
+
+During this audit continuation, existing design/app sessions could store harness settings
+at creation time but had no service/API path to change them later. `updateDesignHarnessSettings`
+now updates `designSystemId` and `designSkillIds` through the service layer, rejects
+ordinary coding session groups, emits a session-scoped snapshot event, and has focused
+session-service coverage.
