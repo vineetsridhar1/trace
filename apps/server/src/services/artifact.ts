@@ -93,6 +93,24 @@ function patchRootCssVariables(html: string, tokens: Record<string, unknown>): s
   return `${html}\n<style>\n${nextRoot}\n</style>`;
 }
 
+function buildCommentIterationPrompt(input: {
+  body: string;
+  anchor?: Record<string, unknown> | null;
+  originalPrompt?: string | null;
+}) {
+  return [
+    "Apply this design review comment as the next artifact iteration.",
+    "",
+    `Comment: ${input.body}`,
+    input.anchor ? `Anchor context: ${JSON.stringify(input.anchor)}` : null,
+    input.originalPrompt ? `Original design brief: ${input.originalPrompt}` : null,
+    "",
+    "Return a complete updated HTML artifact that preserves the strongest parts of the current version while addressing the comment.",
+  ]
+    .filter((part): part is string => part !== null)
+    .join("\n");
+}
+
 async function getDesignArtifactForWrite(
   artifactId: string,
   organizationId: string,
@@ -433,7 +451,7 @@ export const artifactService = {
       input.actorId,
     );
 
-    return eventService.create({
+    const commentEvent = await eventService.create({
       organizationId: input.organizationId,
       scopeType: "session",
       scopeId: sessionId,
@@ -449,6 +467,22 @@ export const artifactService = {
       actorType: input.actorType ?? "user",
       actorId: input.actorId,
     });
+
+    if (input.sendToAgent) {
+      await artifactService.iterateDesignArtifact({
+        artifactId: artifact.id,
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        actorType: input.actorType,
+        prompt: buildCommentIterationPrompt({
+          body: trimmedBody,
+          anchor: input.anchor,
+          originalPrompt: artifact.prompt,
+        }),
+      });
+    }
+
+    return commentEvent;
   },
 
   async promoteDesignArtifactToCodingSession(input: {

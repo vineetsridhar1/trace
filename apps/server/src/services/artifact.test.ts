@@ -210,7 +210,7 @@ describe("artifactService", () => {
       actorId: "user-1",
       body: " Tighten the header spacing. ",
       anchor: { type: "artifact", x: 0.4, y: 0.2 },
-      sendToAgent: true,
+      sendToAgent: false,
     });
 
     expect(eventServiceMock.create).toHaveBeenCalledWith({
@@ -224,10 +224,56 @@ describe("artifactService", () => {
         parentArtifactId: null,
         body: "Tighten the header spacing.",
         anchor: { type: "artifact", x: 0.4, y: 0.2 },
-        sendToAgent: true,
+        sendToAgent: false,
       },
       actorType: "user",
       actorId: "user-1",
     });
+  });
+
+  it("creates an artifact iteration when a comment is sent to the agent", async () => {
+    const parent = designArtifact();
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(parent).mockResolvedValueOnce(parent);
+    prismaMock.artifact.create.mockImplementationOnce(
+      async (args: { data: Record<string, unknown> }) => ({
+        ...parent,
+        ...args.data,
+        id: "artifact-from-comment",
+        parentArtifactId: parent.id,
+        createdBy: parent.createdBy,
+        createdAt: new Date("2026-07-09T10:02:00.000Z"),
+        updatedAt: new Date("2026-07-09T10:02:00.000Z"),
+      }),
+    );
+
+    await artifactService.commentDesignArtifact({
+      artifactId: "artifact-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      body: " Tighten the header spacing. ",
+      anchor: { type: "element", dataEl: "hero-title" },
+      sendToAgent: true,
+    });
+
+    expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentArtifactId: "artifact-1",
+        parentHtml: parent.html,
+        prompt: expect.stringContaining("Tighten the header spacing."),
+      }),
+    );
+    expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('"dataEl":"hero-title"'),
+      }),
+    );
+    expect(prismaMock.artifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          parentArtifactId: "artifact-1",
+          title: expect.stringContaining("Apply this design review comment"),
+        }),
+      }),
+    );
   });
 });
