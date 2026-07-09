@@ -43,6 +43,12 @@ enum SessionGroupVisibility {
   private
 }
 
+enum SessionGroupKind {
+  coding
+  design
+  app
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -222,6 +228,8 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  design_artifact_created
+  design_artifact_updated
 }
 
 enum SessionApplicationProcessStatus {
@@ -279,6 +287,7 @@ model Organization {
   sessionSetupScriptRuns SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints SessionEndpoint[]
+  artifacts Artifact[]
   agentEnvironments AgentEnvironment[]
   orgSecrets    OrgSecret[]
   slackInstalls SlackInstall[]
@@ -368,6 +377,7 @@ model User {
   slackInstalls     SlackInstall[]   @relation("SlackInstallInstaller")
   slackAccounts     SlackAccount[]
   slackChannelBindings SlackChannelBinding[]
+  createdArtifacts  Artifact[]       @relation("ArtifactCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -491,6 +501,7 @@ model ChannelMember {
 model SessionGroup {
   id             String       @id @default(uuid())
   name           String
+  kind           SessionGroupKind @default(coding)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   ownerUserId    String
@@ -522,6 +533,7 @@ model SessionGroup {
   setupScriptRuns SessionSetupScriptRun[]
   applicationProcesses SessionApplicationProcess[]
   endpoints SessionEndpoint[]
+  artifacts Artifact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -532,6 +544,33 @@ model SessionGroup {
   @@index([forkedFromSessionGroupId])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
+}
+
+model Artifact {
+  id               String       @id @default(uuid())
+  sessionGroupId   String
+  sessionGroup     SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  parentArtifactId String?
+  parentArtifact   Artifact?    @relation("ArtifactLineage", fields: [parentArtifactId], references: [id], onDelete: SetNull)
+  childArtifacts   Artifact[]   @relation("ArtifactLineage")
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  createdById      String
+  createdBy        User         @relation("ArtifactCreator", fields: [createdById], references: [id])
+  promptEventId    String?
+  prompt           String?
+  title            String
+  contentType      String
+  html             String
+  metadata         Json?
+  publishedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, sessionGroupId, createdAt])
+  @@index([parentArtifactId])
+  @@index([promptEventId])
 }
 
 model Session {

@@ -65,6 +65,10 @@ import {
   type GitHubRepoRef,
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
+import {
+  DESIGN_ARTIFACT_CONTENT_TYPE,
+  buildPlaceholderDesignArtifactHtml,
+} from "./design-artifact-html.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -541,6 +545,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
   slug: true,
+  kind: true,
   ownerUserId: true,
   ownerUser: true,
   visibility: true,
@@ -715,6 +720,38 @@ function serializeSession(session: {
     costUsd: session.costUsd ?? 0,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+  };
+}
+
+function serializeArtifact(artifact: {
+  id: string;
+  sessionGroupId: string;
+  parentArtifactId: string | null;
+  promptEventId: string | null;
+  prompt: string | null;
+  title: string;
+  contentType: string;
+  html: string;
+  metadata: Prisma.JsonValue | null;
+  publishedAt: Date | null;
+  createdBy: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: artifact.id,
+    sessionGroupId: artifact.sessionGroupId,
+    parentArtifactId: artifact.parentArtifactId,
+    promptEventId: artifact.promptEventId,
+    prompt: artifact.prompt,
+    title: artifact.title,
+    contentType: artifact.contentType,
+    html: artifact.html,
+    metadata: artifact.metadata,
+    publishedAt: artifact.publishedAt,
+    createdBy: artifact.createdBy,
+    createdAt: artifact.createdAt,
+    updatedAt: artifact.updatedAt,
   };
 }
 
@@ -2846,8 +2883,159 @@ export class SessionService {
     });
   }
 
+  private async startDesignSession(input: StartSessionServiceInput) {
+    if (input.repoId || input.sourceSessionId || input.restoreCheckpointId || input.sessionGroupId) {
+      throw new ValidationError("Design sessions must start as standalone artifact sessions.");
+    }
+    if (input.environmentId || input.runtimeInstanceId || input.hosting) {
+      throw new ValidationError("Design sessions do not use runtimes or hosting options.");
+    }
+
+    const resolvedChannelId = input.channelId ?? undefined;
+    const resolvedChannel = resolvedChannelId
+      ? await prisma.channel.findUnique({
+          where: { id: resolvedChannelId },
+          select: { id: true, organizationId: true },
+        })
+      : null;
+
+    if (resolvedChannelId && !resolvedChannel) {
+      throw new Error("Channel not found");
+    }
+    if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
+      throw new Error("Channel does not belong to this organization");
+    }
+
+    const requestedVisibility = input.visibility ?? "public";
+    const visibility = requestedVisibility === "private" ? "private" : "public";
+    const name = input.name
+      ? input.name.slice(0, MAX_SESSION_NAME_LENGTH)
+      : input.prompt
+        ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
+        : "Untitled design";
+    const now = new Date();
+    const html = buildPlaceholderDesignArtifactHtml(input.prompt);
+
+    let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
+    let artifactEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
+
+    const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const sessionGroup = await tx.sessionGroup.create({
+        data: {
+          name,
+          kind: "design",
+          organizationId: input.organizationId,
+          ownerUserId: input.createdById,
+          visibility,
+          channelId: resolvedChannelId,
+          connection: Prisma.JsonNull,
+        },
+        select: SESSION_GROUP_SUMMARY_SELECT,
+      });
+
+      const session = await tx.session.create({
+        data: {
+          name,
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          tool: input.tool ?? FALLBACK_SESSION_TOOL,
+          model: input.model ?? undefined,
+          reasoningEffort: input.reasoningEffort ?? undefined,
+          hosting: "local",
+          organizationId: input.organizationId,
+          createdById: input.createdById,
+          channelId: resolvedChannelId,
+          sessionGroupId: sessionGroup.id,
+          connection: Prisma.JsonNull,
+          lastUserMessageAt: input.prompt ? now : undefined,
+          lastMessageAt: now,
+        },
+        include: SESSION_INCLUDE,
+      });
+
+      const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
+        { agentStatus: "done", sessionStatus: "in_progress" },
+      ]);
+      const startEventId = input.startEventId ?? randomUUID();
+      const artifact = await tx.artifact.create({
+        data: {
+          sessionGroupId: sessionGroup.id,
+          organizationId: input.organizationId,
+          createdById: input.createdById,
+          promptEventId: startEventId,
+          prompt: input.prompt ?? null,
+          title: name,
+          contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
+          html,
+          metadata: {
+            generator: "placeholder",
+            source: "startSession",
+          },
+        },
+        include: { createdBy: true },
+      });
+      const serializedArtifact = serializeArtifact(artifact);
+
+      startEventToPublish = await eventService.create(
+        {
+          id: startEventId,
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "session_started",
+          payload: {
+            session: serializeSession(session),
+            sessionGroup: sessionGroupSnapshot,
+            artifact: serializedArtifact,
+            prompt: input.prompt ?? null,
+            clientSource: normalizeClientSource(input.clientSource),
+            sourceSessionId: null,
+            restoreCheckpointId: null,
+            restoreCheckpointSha: null,
+          } as Prisma.InputJsonValue,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+          deferPublish: true,
+        },
+        tx,
+      );
+
+      artifactEventToPublish = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "design_artifact_created",
+          payload: {
+            artifact: serializedArtifact,
+            sessionGroupId: sessionGroup.id,
+          } as Prisma.InputJsonValue,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+          deferPublish: true,
+        },
+        tx,
+      );
+
+      return session;
+    });
+
+    if (startEventToPublish) {
+      eventService.publishCreated(startEventToPublish);
+    }
+    if (artifactEventToPublish) {
+      eventService.publishCreated(artifactEventToPublish);
+    }
+
+    return session;
+  }
+
   async start(input: StartSessionServiceInput) {
     validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
+
+    if (input.kind === "design") {
+      return this.startDesignSession(input);
+    }
 
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
@@ -2944,6 +3132,7 @@ export class SessionService {
       : input.restoreCheckpointId
         ? null
         : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
+    const requestedGroupKind = input.kind === "app" ? "app" : "coding";
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
@@ -2956,6 +3145,9 @@ export class SessionService {
     }
     if (existingGroup) {
       this.assertPrivateGroupOwner(existingGroup, input.createdById);
+      if (existingGroup.kind !== requestedGroupKind) {
+        throw new ValidationError("Cannot add a session with a different kind to this group.");
+      }
     }
 
     const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
@@ -3443,6 +3635,7 @@ export class SessionService {
         : await tx.sessionGroup.create({
             data: {
               name,
+              kind: requestedGroupKind,
               organizationId: input.organizationId,
               ownerUserId: input.createdById,
               visibility: newGroupVisibility,

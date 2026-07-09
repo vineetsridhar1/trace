@@ -8,6 +8,7 @@ import type {
 } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { artifactService } from "../services/artifact.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
@@ -40,6 +41,14 @@ export const sessionQueries = {
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
+  },
+  designArtifacts: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.listForSessionGroup(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      ctx.userId,
+    );
   },
   sessions: (
     _: unknown,
@@ -297,6 +306,21 @@ export const sessionMutations = {
       createdById: ctx.userId,
       actorType: ctx.actorType,
       clientSource: ctx.clientSource,
+    });
+  },
+  createDesignArtifact: (
+    _: unknown,
+    args: { sessionGroupId: string; prompt: string; html?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.createDesignArtifact({
+      sessionGroupId: args.sessionGroupId,
+      prompt: args.prompt,
+      html: args.html ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
     });
   },
   forkSession: (_: unknown, args: { eventId: string }, ctx: Context) => {

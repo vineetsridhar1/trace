@@ -4,6 +4,7 @@ import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import { FileScopedAiInput } from "./FileScopedAiInput";
 import { SessionEndpointTrafficPanel } from "./applications/SessionEndpointTrafficPanel";
+import { DesignCanvas } from "../design/DesignCanvas";
 import type { OpenFileTab } from "./GroupTabStrip";
 import type { FileEditorBuffer } from "./file-editor-buffer";
 
@@ -22,6 +23,7 @@ const UploadedAttachmentViewer = lazy(() =>
 
 interface SessionGroupContentAreaProps {
   sessionGroupId: string;
+  sessionGroupKind?: string | null;
   activeFilePath: string | null;
   openFiles: OpenFileTab[];
   activeTerminalId: string | null;
@@ -41,6 +43,7 @@ interface SessionGroupContentAreaProps {
 
 export function SessionGroupContentArea({
   sessionGroupId,
+  sessionGroupKind,
   activeFilePath,
   openFiles,
   activeTerminalId,
@@ -58,6 +61,10 @@ export function SessionGroupContentArea({
   setFileBuffer,
 }: SessionGroupContentAreaProps) {
   const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
+
+  if (sessionGroupKind === "design") {
+    return <DesignCanvas sessionGroupId={sessionGroupId} />;
+  }
 
   if (activeFile?.isUploadedAttachment && activeFile.attachmentKey) {
     return (

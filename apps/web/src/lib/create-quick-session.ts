@@ -26,20 +26,22 @@ export function getChannelRepoId(channelId: string): string | undefined {
  */
 export async function createQuickSession(
   channelId: string,
-  options: { visibility?: "public" | "private" } = {},
+  options: { visibility?: "public" | "private"; kind?: "coding" | "design" | "app" } = {},
 ): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
   const channelRepoId = getChannelRepoId(channelId);
+  const kind = options.kind ?? "coding";
 
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
-          deferRuntimeSelection: true,
+          kind,
+          ...(kind === "design" ? {} : { deferRuntimeSelection: true }),
           channelId,
-          repoId: channelRepoId ?? undefined,
+          repoId: kind === "design" ? undefined : (channelRepoId ?? undefined),
           visibility: options.visibility,
         },
       })

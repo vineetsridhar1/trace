@@ -67,6 +67,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
     sessionGroup(id: $id) {
       id
       name
+      kind
       slug
       forkedFromSessionGroupId
       status
@@ -174,6 +175,10 @@ export function SessionGroupDetailView({
   panelMode?: boolean;
 }) {
   const groupName = useEntityField("sessionGroups", sessionGroupId, "name");
+  const groupKind = useEntityField("sessionGroups", sessionGroupId, "kind") as
+    | string
+    | null
+    | undefined;
   const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
     | { id: string; name: string; remoteUrl?: string | null; defaultBranch?: string }
     | null
@@ -930,9 +935,10 @@ export function SessionGroupDetailView({
 
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                  <SessionGroupContentArea
-                    sessionGroupId={sessionGroupId}
-                    activeFilePath={activeFilePath}
+      <SessionGroupContentArea
+        sessionGroupId={sessionGroupId}
+        sessionGroupKind={groupKind}
+        activeFilePath={activeFilePath}
                     openFiles={openFiles}
                     activeTerminalId={activeTerminal?.id ?? null}
                     activeTrafficEndpointId={

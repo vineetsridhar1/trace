@@ -100,6 +100,7 @@ const SIDEBAR_SESSION_GROUPS_QUERY = gql`
     ) {
       id
       name
+      kind
       slug
       status
       visibility
