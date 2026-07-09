@@ -64,6 +64,7 @@ import { eventService } from "./event.js";
 import { designGenerationService } from "./design-generation.js";
 import { designPdfRenderer } from "./design-pdf-renderer.js";
 import { storage } from "../lib/storage/index.js";
+import { sessionService } from "./session.js";
 import { artifactService } from "./artifact.js";
 
 type MockedDeep<T> = {
@@ -81,6 +82,7 @@ const designGenerationServiceMock = designGenerationService as unknown as Mocked
 >;
 const designPdfRendererMock = designPdfRenderer as unknown as MockedDeep<typeof designPdfRenderer>;
 const storageMock = storage as unknown as MockedDeep<typeof storage>;
+const sessionServiceMock = sessionService as unknown as MockedDeep<typeof sessionService>;
 
 function designArtifact(overrides: Record<string, unknown> = {}) {
   return {
@@ -483,6 +485,74 @@ describe("artifactService", () => {
           parentArtifactId: "artifact-1",
           title: expect.stringContaining("Apply this design review comment"),
         }),
+      }),
+    );
+  });
+
+  it("promotes a stored design artifact into a deferred coding session", async () => {
+    const htmlStorageKey = "uploads/org-1/design-artifacts/artifact-1.html";
+    storageObjects.set(
+      htmlStorageKey,
+      Buffer.from(
+        '<!doctype html><html><body><main data-el="stored">Stored artifact</main></body></html>',
+        "utf8",
+      ),
+    );
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(
+      designArtifact({
+        html: "",
+        htmlStorageKey,
+      }),
+    );
+    sessionServiceMock.start.mockResolvedValueOnce({
+      id: "session-promoted",
+      sessionGroupId: "group-promoted",
+    });
+
+    const promotedSession = await artifactService.promoteDesignArtifactToCodingSession({
+      artifactId: "artifact-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      prompt: "Build this into the app.",
+    });
+
+    expect(promotedSession).toMatchObject({
+      id: "session-promoted",
+      sessionGroupId: "group-promoted",
+    });
+    expect(storageMock.getObject).toHaveBeenCalledWith(htmlStorageKey);
+    expect(sessionServiceMock.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        createdById: "user-1",
+        actorType: "user",
+        kind: "coding",
+        channelId: "channel-1",
+        forkedFromSessionGroupId: "group-1",
+        deferRuntimeSelection: true,
+        name: "Implement Dashboard",
+        prompt: expect.stringContaining("Build this into the app."),
+      }),
+    );
+    expect(sessionServiceMock.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('data-el="stored"'),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "design_artifact_promoted",
+        payload: expect.objectContaining({
+          artifactId: "artifact-1",
+          sessionGroupId: "group-1",
+          promotedSessionId: "session-promoted",
+          promotedSessionGroupId: "group-promoted",
+        }),
+        actorType: "user",
+        actorId: "user-1",
       }),
     );
   });

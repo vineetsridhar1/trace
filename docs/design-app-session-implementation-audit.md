@@ -201,3 +201,8 @@ found to lack implementation evidence. `graduateManagedRepoToGitHub` now mirrors
 managed bare repo to a GitHub remote before flipping provider state, emits the normal repo
 update event, and has regression coverage that a failed mirror leaves the managed repo
 unchanged.
+
+During this audit continuation, design artifact promotion was found to be implemented but
+not directly covered by a focused service regression. `artifact.test.ts` now verifies that
+promotion hydrates stored artifact HTML, starts a deferred coding session linked to the
+source design group, and emits `design_artifact_promoted`.
