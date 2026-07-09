@@ -926,3 +926,9 @@ During this audit continuation, the hosted design smoke rendered the published a
 URL but did not explicitly fail if that direct public response contained the authoring
 bootstrap/comment overlay markers. It now checks both the fetched HTML and browser DOM
 for bootstrap protocol and comment-pin markers so published artifacts stay clean output.
+
+During this audit continuation, the hosted cloud app smoke checked for a
+`session_endpoint_access_updated` publish event, but accepted any non-empty endpoint URL
+in that event. It now requires the event payload to match the exact published endpoint
+URL, source app session group id, enabled public state, and port 3000 endpoint rendered by
+the smoke.

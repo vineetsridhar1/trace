@@ -794,7 +794,7 @@ async function publishApp(sessionGroupId) {
   return endpoint;
 }
 
-async function waitForPublishedEndpointEvent(sessionId, sessionGroupId, endpointId) {
+async function waitForPublishedEndpointEvent(sessionId, sessionGroupId, endpointId, publicUrl) {
   return pollUntil("published endpoint access event", async () => {
     const data = await graphql(SESSION_EVENTS, {
       organizationId,
@@ -813,10 +813,11 @@ async function waitForPublishedEndpointEvent(sessionId, sessionGroupId, endpoint
         typeof endpoint === "object" &&
         !Array.isArray(endpoint) &&
         endpoint.id === endpointId &&
+        endpoint.sessionGroupId === sessionGroupId &&
         endpoint.accessMode === "public" &&
         endpoint.status === "enabled" &&
-        typeof endpoint.url === "string" &&
-        endpoint.url.length > 0
+        endpoint.targetPort === 3000 &&
+        endpoint.url === publicUrl
       );
     });
     if (!event) {
@@ -1108,7 +1109,12 @@ const publicEndpoint = await publishApp(session.sessionGroupId);
 if (publicEndpoint.id !== initial.endpoint.id) {
   throw new Error("Published endpoint did not match the primary preview endpoint");
 }
-await waitForPublishedEndpointEvent(session.id, session.sessionGroupId, publicEndpoint.id);
+await waitForPublishedEndpointEvent(
+  session.id,
+  session.sessionGroupId,
+  publicEndpoint.id,
+  publicEndpoint.url,
+);
 await renderUrl(publicEndpoint.url, "published public URL", { expectOverlay: false });
 
 const restored = await startAppSession({
