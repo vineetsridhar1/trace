@@ -45,7 +45,7 @@ trial and error what upstream's 2,700 commits already encode. Vendor, don't rewr
 - Ship `LICENSE` + `NOTICE` (Apache-2.0 attribution) and a `VENDOR.md` recording the
   pinned upstream tag and the rebase procedure (diff `prompts/` between tags, re-apply).
 
-### 2. The content → deploy artifacts, not our git repo
+### 2. The content → deployment assets, not our git repo
 
 - `skills/` and `design-systems/` (~320 directories) stay out of the Trace repo. Both
   consumers fetch them from the pinned upstream tag at build time: the **server image**

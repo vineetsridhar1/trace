@@ -85,11 +85,11 @@ Rationale and consequences:
 - **Publish = flip to served mode.** Publishing an artifact makes the same subdomain URL
   return the stored HTML directly (public flag; optionally signed-token serving later for
   private "open in new tab"). Preview and publish share the domain and headers, not the
-  delivery path. The PDF render pool reads from artifact storage directly, not through
-  the public URL.
-- **Overlay symmetry**: the picker/comments overlay is injected at this serving layer for
-  design artifacts, exactly as the endpoint proxy injects it for app-kind dev servers —
-  one overlay script, two injection points.
+  delivery path. Published view is clean output by default; authoring preview keeps the
+  bootstrap channel and overlay.
+- **Overlay symmetry**: the picker/comments overlay is injected only for authoring
+  previews at this serving layer, exactly as the endpoint proxy injects it for app-kind
+  dev servers — one overlay script, two injection points.
 - Ops: wildcard DNS + TLS on a dedicated domain (never a subdomain of the app domain —
   cookie scoping is the point); can share infrastructure with the endpoint-proxy URLs.
 
@@ -116,10 +116,12 @@ The workspace is a pan/zoom spatial surface (Figma mental model):
 ### Exports and exits
 
 - **PDF export**: a server-side headless Chromium worker (not per-session — a small
-  render pool the server owns) loads the stored artifact and prints it; decks paginate
-  correctly because the vendored deck-framework contract mandates print-ready structure.
-  Output flows through the upload pipeline + `design_export_completed` event → timeline,
-  shareable to channels; agents can call the same service method. v1: PDF only.
+  render pool the server owns) loads the stored artifact and prints it in an isolated
+  browser context with no Trace credentials and the same network/CSP policy as preview;
+  decks paginate correctly because the vendored deck-framework contract mandates
+  print-ready structure. Output flows through the upload pipeline +
+  `design_export_completed` event → timeline, shareable to channels; agents can call the
+  same service method. v1: PDF only.
 - **Publish/share**: artifacts are already stored server-side — a public artifact URL is
   a read endpoint with an access flag. Spotlight presentation mode later.
 - **Promote to app session**: selected artifact(s) become the brief + visual reference of
@@ -178,10 +180,10 @@ Server:
 - `SessionGroup.kind` (`coding | design | app`) + `StartSessionInput.kind`
 - Design kind: `Artifact` entity (lineage DAG, blob refs), generation service on
   `LLMAdapter` (streaming, parallel variants), user-content-domain serving (wildcard
-  subdomains, `_bootstrap` + `postMessage` push for preview, direct serving on publish,
-  overlay injection), token-patch method (CSS-variable string edit), headless-Chromium
-  render pool (PDF + card thumbnails), `design_export_completed` + `design_comment_added`
-  events
+  subdomains, `_bootstrap` + `postMessage` push for authoring preview, direct serving on
+  publish, overlay injection only in authoring preview), token-patch method
+  (CSS-variable string edit), headless-Chromium render pool (PDF + card thumbnails),
+  `design_export_completed` + `design_comment_added` events
 - App kind: cloud-only enforcement, port-detection endpoint auto-registration, checkpoint
   captures, bridge token-file write, `RunOptions.appendSystemPrompt`, endpoint-proxy
   overlay injection + private-endpoint iframe auth (signed cookie)
@@ -216,7 +218,8 @@ cheap, independently useful win for coding sessions — it now rides with phase 
    than DOM paths.
 3. Fan-out defaults — always offer N directions on the first brief vs. only when asked;
    cost/latency vs. wow. Likely: 3 directions on first brief, single-path after.
-4. PDF fidelity — page size/margins UI; render-pool sizing and isolation on the server.
+4. PDF fidelity — page size/margins UI; render-pool sizing, isolation, and external
+   network policy on the server.
 5. Whether design sessions eventually want an *optional* tool-using agent mode (e.g.
    "research competitors then design") — if so, it's an escalation to a runtime-backed
    run, not the default path.
