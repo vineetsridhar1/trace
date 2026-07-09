@@ -1289,6 +1289,28 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  private readonly appManagedRepoLocks = new Map<string, Promise<void>>();
+
+  private async withAppManagedRepoLock<T>(
+    sessionGroupId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.appManagedRepoLocks.get(sessionGroupId) ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(fn);
+    const sentinel = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.appManagedRepoLocks.set(sessionGroupId, sentinel);
+    try {
+      return await run;
+    } finally {
+      if (this.appManagedRepoLocks.get(sessionGroupId) === sentinel) {
+        this.appManagedRepoLocks.delete(sessionGroupId);
+      }
+    }
+  }
+
   /**
    * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
    * Resolves repo/branch/hosting and delegates to the session router.
@@ -7323,56 +7345,147 @@ export class SessionService {
       null;
 
     if (!repoId && session.sessionGroup?.kind === "app") {
-      managedRepo = await managedGitService.createAppRepo({
-        organizationId: session.organizationId,
-        name: session.sessionGroup.name,
-      });
-      repoId = managedRepo.id;
-
-      await prisma.$transaction([
-        prisma.sessionGroup.update({
-          where: { id: session.sessionGroupId },
-          data: {
-            repoId,
-            branch: session.sessionGroup.branch ?? managedRepo.defaultBranch,
-          },
-        }),
-        prisma.session.update({
+      return this.withAppManagedRepoLock(session.sessionGroupId, async () => {
+        const current = await prisma.session.findUnique({
           where: { id: sessionId },
-          data: {
-            repoId,
-            branch: session.branch ?? session.sessionGroup.branch ?? managedRepo.defaultBranch,
+          select: {
+            id: true,
+            organizationId: true,
+            sessionGroupId: true,
+            repoId: true,
+            workdir: true,
+            branch: true,
+            sessionGroup: {
+              select: {
+                id: true,
+                name: true,
+                kind: true,
+                repoId: true,
+                branch: true,
+                repo: {
+                  select: {
+                    id: true,
+                    name: true,
+                    provider: true,
+                    remoteUrl: true,
+                    defaultBranch: true,
+                  },
+                },
+              },
+            },
+            repo: {
+              select: {
+                id: true,
+                name: true,
+                provider: true,
+                remoteUrl: true,
+                defaultBranch: true,
+              },
+            },
           },
-        }),
-      ]);
-
-      const branch = session.branch ?? session.sessionGroup.branch ?? managedRepo.defaultBranch;
-      const deliveryResult = sessionRouter.send(sessionId, {
-        type: "configure_managed_git_remote",
-        sessionId,
-        repoId: managedRepo.id,
-        repoName: managedRepo.name,
-        repoRemoteUrl: managedRepo.remoteUrl,
-        branch,
-        workdir: session.workdir ?? undefined,
-        checkpoint,
-      });
-      if (deliveryResult !== "delivered") {
-        await eventService.create({
-          organizationId: session.organizationId,
-          scopeType: "session",
-          scopeId: sessionId,
-          eventType: "session_output",
-          payload: {
-            type: "managed_git_remote_push_failed",
-            repoId: managedRepo.id,
-            reason: deliveryResult,
-          } as Prisma.InputJsonValue,
-          actorType: "system",
-          actorId: "system",
         });
-      }
-      return null;
+        if (!current?.sessionGroupId || current.sessionGroup?.kind !== "app") return null;
+
+        const currentRepoId = current.repoId ?? current.sessionGroup.repoId ?? null;
+        const currentManagedRepo =
+          current.repo?.provider === "managed"
+            ? current.repo
+            : current.sessionGroup.repo?.provider === "managed"
+              ? current.sessionGroup.repo
+              : null;
+
+        if (currentRepoId && currentManagedRepo) {
+          const branch =
+            current.branch ??
+            current.sessionGroup.branch ??
+            currentManagedRepo.defaultBranch ??
+            managedGitService.defaultBranch;
+          const deliveryResult = sessionRouter.send(sessionId, {
+            type: "configure_managed_git_remote",
+            sessionId,
+            repoId: currentManagedRepo.id,
+            repoName: currentManagedRepo.name,
+            repoRemoteUrl:
+              currentManagedRepo.remoteUrl ??
+              managedGitService.buildManagedRemoteUrl(
+                current.organizationId,
+                currentManagedRepo.id,
+              ),
+            branch,
+            workdir: current.workdir ?? undefined,
+            checkpoint,
+          });
+          if (deliveryResult !== "delivered") {
+            await eventService.create({
+              organizationId: current.organizationId,
+              scopeType: "session",
+              scopeId: sessionId,
+              eventType: "session_output",
+              payload: {
+                type: "managed_git_remote_push_failed",
+                repoId: currentManagedRepo.id,
+                reason: deliveryResult,
+              } as Prisma.InputJsonValue,
+              actorType: "system",
+              actorId: "system",
+            });
+          }
+          return null;
+        }
+
+        if (currentRepoId) return null;
+
+        managedRepo = await managedGitService.createAppRepo({
+          organizationId: current.organizationId,
+          name: current.sessionGroup.name,
+        });
+        repoId = managedRepo.id;
+
+        await prisma.$transaction([
+          prisma.sessionGroup.update({
+            where: { id: current.sessionGroupId },
+            data: {
+              repoId,
+              branch: current.sessionGroup.branch ?? managedRepo.defaultBranch,
+            },
+          }),
+          prisma.session.update({
+            where: { id: sessionId },
+            data: {
+              repoId,
+              branch: current.branch ?? current.sessionGroup.branch ?? managedRepo.defaultBranch,
+            },
+          }),
+        ]);
+
+        const branch = current.branch ?? current.sessionGroup.branch ?? managedRepo.defaultBranch;
+        const deliveryResult = sessionRouter.send(sessionId, {
+          type: "configure_managed_git_remote",
+          sessionId,
+          repoId: managedRepo.id,
+          repoName: managedRepo.name,
+          repoRemoteUrl: managedRepo.remoteUrl,
+          branch,
+          workdir: current.workdir ?? undefined,
+          checkpoint,
+        });
+        if (deliveryResult !== "delivered") {
+          await eventService.create({
+            organizationId: current.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "managed_git_remote_push_failed",
+              repoId: managedRepo.id,
+              reason: deliveryResult,
+            } as Prisma.InputJsonValue,
+            actorType: "system",
+            actorId: "system",
+          });
+        }
+        return null;
+      });
     }
 
     if (!repoId) return;

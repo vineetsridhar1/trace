@@ -636,3 +636,9 @@ During this audit pass, private app preview URL minting still trusted an enabled
 endpoint row without rechecking that the backing process was currently running. The
 preview service now requires the endpoint's app/process pair to be `running` before
 issuing signed iframe credentials, matching the live-process guard used by app publish.
+
+During this audit pass, first-checkpoint managed repo creation was retry-safe but not
+concurrency-safe inside a single service process: two simultaneous first checkpoint
+events could both observe a repo-less app group and create duplicate hidden repos. The
+checkpoint service now serializes first managed-repo creation by session group and
+re-reads the group after waiting, so concurrent checkpoint events reuse the linked repo.
