@@ -445,3 +445,9 @@ During this continuation, the hosted `pnpm smoke:cloud-app-session` script was t
 to prove managed app repos stay hidden from ordinary repository lists. After the first
 checkpoint creates the managed repo, the smoke now queries `repos(organizationId:)` and
 fails if the app repo, or any repo with `provider: "managed"`, appears in that picker path.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove anchored design comments carry the payload needed by the canvas and iteration
+service. The smoke now checks the emitted `design_comment_added` payload for artifact id,
+body, `sendToAgent`, and the selected element anchor before polling for the child
+iteration artifact.

@@ -448,6 +448,24 @@ const commentData = await graphql(COMMENT_DESIGN_ARTIFACT, {
 if (commentData.commentDesignArtifact.eventType !== "design_comment_added") {
   throw new Error(`Unexpected comment event ${commentData.commentDesignArtifact.eventType}`);
 }
+const commentPayload = asPayload(commentData.commentDesignArtifact, "Comment");
+if (commentPayload.artifactId !== selected.id) {
+  throw new Error(`Comment artifact id is ${commentPayload.artifactId ?? "missing"}`);
+}
+if (commentPayload.body !== "Smoke comment pinned to the hero") {
+  throw new Error("Comment body was not preserved in the event payload");
+}
+if (commentPayload.sendToAgent !== true) {
+  throw new Error("Comment sendToAgent flag was not preserved in the event payload");
+}
+const commentAnchor = asObject(commentPayload.anchor, "Comment anchor");
+if (
+  commentAnchor.type !== "element" ||
+  commentAnchor.dataEl !== "hero" ||
+  commentAnchor.text !== expectedText
+) {
+  throw new Error("Comment element anchor was not preserved in the event payload");
+}
 const commentIteration = await waitForChildArtifact(
   session.sessionGroupId,
   selected.id,
