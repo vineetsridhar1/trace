@@ -5,6 +5,20 @@ This plan completes the `app` session kind from `design-session-experience.md` a
 managed git durability, starter kit, live preview, logs, terminal, checkpoints,
 publish/share, and verified working output.
 
+## Current Status Note
+
+This document records the original app-session gap plan. Most listed implementation gaps
+have since been closed: app sessions are standalone/cloud-only, use the app starter and
+Open Design `appendSystemPrompt`, expose process logs/endpoints/terminal/checkpoints in
+the app shell, publish endpoint URLs, lazily create managed repos on first checkpoint,
+capture checkpoint thumbnails, restore from checkpoint, and support managed repo
+graduation/retention. The current evidence is summarized in
+`design-app-session-implementation-audit.md`.
+
+The remaining completion evidence is a hosted end-to-end app smoke:
+`pnpm smoke:cloud-app-session` with `TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`,
+and `TRACE_SMOKE_ORG_ID`.
+
 ## Target Product Contract
 
 A complete app session must support:
@@ -23,7 +37,7 @@ A complete app session must support:
 - Publish/share through endpoint access mode.
 - Optional graduation to GitHub or coding session.
 
-## Current Implementation Baseline
+## Original Implementation Baseline
 
 Implemented foundations:
 
@@ -36,17 +50,13 @@ Implemented foundations:
   remotes.
 - Existing process/log/endpoint services can be reused for app sessions.
 
-Known gaps:
+Remaining verification gap:
 
-- App sessions create a managed repo at start, not lazily at first checkpoint.
-- Managed git lacks user clone tokens, retention, quotas, garbage collection, backup, and
-  push-event inspection.
-- The runtime image does not yet guarantee a Next.js + Tailwind + shadcn starter.
-- The agent prompt asks for app behavior, but there is no starter bootstrap command or
-  deterministic first-run contract.
-- UI shell does not yet expose an app-focused preview/logs/terminal/checkpoint layout.
-- Publish/share is not wired as an app-specific affordance.
-- Restore flow exists at the session level, but app checkpoint UX/captures are incomplete.
+- The original implementation gaps above are now covered in the current audit. The final
+  app-session completion evidence is a hosted `pnpm smoke:cloud-app-session` run that
+  proves a fresh cloud app session boots the starter, renders preview, exposes logs and
+  terminal, checkpoints to managed git, restores, captures, publishes, and opens the
+  public endpoint.
 
 ## Gap 1: Managed Git Needs Production Hardening
 
@@ -225,4 +235,3 @@ Verification:
 - Service test: graduation changes provider only after mirror succeeds.
 - Git test: GitHub remote has the same refs as managed repo.
 - UI test: graduated app appears as a normal coding repo flow.
-

@@ -6,6 +6,18 @@ no runtime, no git, direct `LLMAdapter` generation, artifact cards rendered on a
 origin-isolated user-content domain, comments/tweaks/exports/publish, and promotion into
 coding sessions.
 
+## Current Status Note
+
+This document records the original design-session gap plan. Most listed gaps have since
+been implemented: LLM-backed generation, Open Design prompt composition, object-storage
+artifact HTML, user-content bootstrap/publish serving, comment anchors/pins, token
+tweaks, real PDF export, and promotion coverage are summarized in
+`design-app-session-implementation-audit.md`.
+
+The remaining completion evidence is a hosted end-to-end design smoke:
+`pnpm smoke:design-session` with `TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and
+`TRACE_SMOKE_ORG_ID`.
+
 ## Target Product Contract
 
 A complete design session must support:
@@ -24,7 +36,7 @@ A complete design session must support:
 
 ## Gap 1: Placeholder HTML Instead of LLM Generation
 
-Current state:
+Original baseline at plan time:
 
 - `startDesignSession`, `createDesignArtifact`, and `iterateDesignArtifact` can create
   placeholder HTML.
@@ -68,7 +80,7 @@ Verification:
 
 ## Gap 2: No Open Design Harness
 
-Current state:
+Original baseline at plan time:
 
 - App sessions have a hand-written appended system prompt.
 - Design sessions do not use the Open Design prompt composer.
@@ -92,7 +104,7 @@ Verification:
 
 ## Gap 3: `srcDoc` Preview Instead of User-Content Domain
 
-Current state:
+Original baseline at plan time:
 
 - `DesignCanvas` renders artifact HTML with `iframe srcDoc`.
 
@@ -129,7 +141,7 @@ Verification:
 
 ## Gap 4: Canvas State Bypasses Event Store
 
-Current state:
+Original baseline at plan time:
 
 - `DesignCanvas` queries urql directly and stores artifacts in component state.
 - Mutations refetch after completion.
@@ -158,7 +170,7 @@ Verification:
 
 ## Gap 5: Comments Need Pins, Anchors, and Agent Queueing
 
-Current state:
+Original baseline at plan time:
 
 - `commentDesignArtifact` records a body, optional anchor, and `sendToAgent`.
 - The UI only uses a prompt dialog and does not render comments.
@@ -181,7 +193,7 @@ Verification:
 
 ## Gap 6: PDF Export Is Only Requested
 
-Current state:
+Original baseline at plan time:
 
 - Export emits `design_export_requested`.
 - There is no renderer or downloadable PDF.
@@ -212,7 +224,7 @@ Verification:
 
 ## Gap 7: Publish Does Not Serve a URL
 
-Current state:
+Original baseline at plan time:
 
 - Publish sets `publishedAt` and metadata.
 
@@ -231,7 +243,7 @@ Verification:
 
 ## Gap 8: Promotion Needs Better Brief Links
 
-Current state:
+Original baseline at plan time:
 
 - Promotion embeds full HTML in the initial coding prompt.
 
@@ -246,4 +258,3 @@ Verification:
 
 - Service test: promoted session links back to artifact/session group.
 - UI test: coding session shows the promoted reference and can open the artifact.
-

@@ -5,6 +5,16 @@ This plan completes the Open Design harness integration described in
 server-side `LLMAdapter` generation for `design`, and app-builder prompt overlays for
 `app`.
 
+## Current Status Note
+
+This document records the original harness gap plan. The composer has since been vendored
+under `packages/shared/src/design/vendor`, Trace overlays live outside vendor files,
+content loading reads `TRACE_DESIGN_CONTENT_DIRS`, design generation uses the composed
+prompt through `LLMAdapter`, app sessions receive it through `RunOptions.appendSystemPrompt`,
+and both design/app prompt contracts are snapshot-tested. See
+`design-app-session-implementation-audit.md` for current evidence and remaining hosted
+smoke requirements.
+
 ## Target Contract
 
 - Trace vendors the Open Design prompt composer, not the daemon.
@@ -115,7 +125,7 @@ Verification:
 
 Implementation:
 
-1. Replace the current hand-written app prompt with `composeTraceAppSystemPrompt`.
+1. Replace the original app prompt overlay with the composed Trace app prompt.
 2. Keep `RunOptions.appendSystemPrompt` as the delivery mechanism.
 3. For unsupported tool adapters:
    - either reject app sessions for that tool,
@@ -143,4 +153,3 @@ Verification:
 - GraphQL/service test: settings update emits event.
 - Generation test: selected design system changes composed prompt.
 - UI test: picker state survives navigation.
-

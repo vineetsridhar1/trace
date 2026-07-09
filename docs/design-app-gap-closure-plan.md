@@ -1,11 +1,18 @@
 # Design and App Session Gap Closure Plan
 
-Status: implementation plan. This document turns the target experience in
+Status: historical implementation plan with current status notes. This document turns the target experience in
 `design-session-experience.md`, `open-design-harness-integration.md`, and
 `managed-git-hosting.md` into an executable checklist. It is intentionally scoped to the
 ultimate goal: serverless design canvases with artifact variants/comments/tweaks/PDF/
 publish/promotion, and standalone cloud-run app builders with managed git durability,
 preview, logs, terminal, checkpoints, publish/share, and verified working output.
+
+## Current Status Note
+
+Most implementation gaps in this original plan have since been closed. The authoritative
+current-state audit is `design-app-session-implementation-audit.md`; the remaining
+completion gate is hosted end-to-end verification via `pnpm smoke:design-session` and
+`pnpm smoke:cloud-app-session` against a configured Trace server.
 
 ## Current Implementation Baseline
 
@@ -13,31 +20,28 @@ Implemented foundations:
 
 - `SessionGroup.kind` supports `coding`, `design`, and `app`.
 - Design sessions are standalone and do not provision runtimes.
+- Design artifact generation uses the LLM-backed design generation service and the
+  vendored Open Design prompt composer.
 - Design artifacts have lineage through `parentArtifactId`.
 - Artifact create/iterate/tweak/publish/promote mutations exist.
 - Design comments emit `design_comment_added`.
 - Token tweaks create a new artifact version and preserve unpatched CSS variables.
-- PDF export now emits `design_export_requested`; `design_export_completed` remains
-  reserved for the real renderer.
+- PDF export renders through the server-owned headless Chromium renderer and emits
+  `design_export_completed` only after a valid PDF is available.
+- Artifact previews use the user-content bootstrap route when configured, and published
+  artifact URLs serve stored HTML only after publish.
 - App sessions are cloud-only and reject user-linked repos at creation.
-- App sessions create an internal managed repo in the current branch work, and the
+- App sessions lazily create/link a hidden managed repo on first checkpoint, and the
   provisioned bridge can inject `TRACE_RUNTIME_TOKEN` for Trace-managed git remotes.
 - Managed repo rows are hidden from ordinary repo list and organization hydration paths.
 - `RunOptions.appendSystemPrompt` reaches Claude Code through `--append-system-prompt`.
 
-Known major gaps:
+Remaining verification gap:
 
-- Design artifact HTML is still placeholder-generated unless raw HTML is injected.
-- The Open Design composer/content stack is not vendored or loaded.
-- Design previews still use `srcDoc` rather than the user-content bootstrap domain.
-- Design canvas state is local/refetch-based rather than event/Zustand-backed.
-- Artifact comments are recorded but not rendered as pins or queued into generation.
-- PDF export has no render worker, upload artifact, or completion event.
-- Publish marks an artifact but does not serve a public artifact URL.
-- App sessions need a starter kit, process/log/terminal shell, publish/share affordances,
-  checkpoint captures, restore UX, and stronger managed-git operational hardening.
-- App sessions should produce and verify a running full-stack application, not just a
-  provisioned workspace.
+- Run `pnpm smoke:design-session` and `pnpm smoke:cloud-app-session` against a configured
+  hosted Trace server with `TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and
+  `TRACE_SMOKE_ORG_ID`. Local unit/integration coverage is not enough to claim the full
+  product goal complete.
 
 ## Completion Definition
 
@@ -106,4 +110,3 @@ The goal is complete only when all of these are true:
   flows.
 - Treat generated artifact HTML as untrusted content at all times.
 - Add tests at the service boundary first, then UI/runtime tests for product flows.
-
