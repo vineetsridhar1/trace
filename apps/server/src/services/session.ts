@@ -69,6 +69,7 @@ import { orgSecretService } from "./org-secret.js";
 import { DESIGN_ARTIFACT_CONTENT_TYPE } from "./design-artifact-html.js";
 import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
 import { managedGitService } from "./managed-git.js";
+import { loadTraceDesignPromptContent } from "./design-content.js";
 import { designGenerationService } from "./design-generation.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
@@ -948,6 +949,10 @@ function appendSystemPromptForSession(session: { sessionGroup?: unknown }): stri
         kind: "app",
         designSystemId: typedGroup.designSystemId ?? null,
         skillIds: typedGroup.designSkillIds ?? [],
+        content: loadTraceDesignPromptContent({
+          designSystemId: typedGroup.designSystemId ?? null,
+          skillIds: typedGroup.designSkillIds ?? [],
+        }),
         appStarterContext:
           "Next.js App Router, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, default port 3000, managed git checkpoints, endpoint publish/share.",
       })

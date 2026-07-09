@@ -34,6 +34,39 @@ describe("composeTraceDesignPrompt", () => {
     expect(prompt).toContain('"dataEl":"hero-title"');
   });
 
+  it("includes loaded design system and skill content when provided", () => {
+    const prompt = composeTraceDesignPrompt({
+      kind: "design",
+      userBrief: "Create a settings screen.",
+      designSystemId: "trace-core",
+      skillIds: ["forms"],
+      content: {
+        designSystem: {
+          id: "trace-core",
+          name: "Trace Core",
+          manifest: { id: "trace-core", name: "Trace Core" },
+          design: "Use compact operational layouts.",
+          tokensCss: ":root { --trace-primary: #2563eb; }",
+          usage: "Prefer dense tables for admin workflows.",
+          componentsManifest: { components: ["Button"] },
+        },
+        skills: [
+          {
+            id: "forms",
+            title: "Forms",
+            body: "Use explicit labels and validation messages.",
+          },
+        ],
+      },
+    });
+
+    expect(prompt).toContain("Design System Content: trace-core");
+    expect(prompt).toContain("Use compact operational layouts.");
+    expect(prompt).toContain("--trace-primary");
+    expect(prompt).toContain("### Forms");
+    expect(prompt).toContain("Use explicit labels and validation messages.");
+  });
+
   it("composes an app-session prompt with starter and checkpoint expectations", () => {
     const prompt = composeTraceDesignPrompt({
       kind: "app",

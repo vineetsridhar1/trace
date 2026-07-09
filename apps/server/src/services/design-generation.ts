@@ -4,6 +4,7 @@ import { composeTraceDesignPrompt, getDefaultModel, type LLMResponse } from "@tr
 import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
 import { buildPlaceholderDesignArtifactHtml } from "./design-artifact-html.js";
+import { loadTraceDesignPromptContent } from "./design-content.js";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 
@@ -79,6 +80,7 @@ export const designGenerationService = {
     });
     const designSystemId = group?.designSystemId ?? null;
     const skillIds = stringList(group?.designSkillIds);
+    const content = loadTraceDesignPromptContent({ designSystemId, skillIds });
     const artifactContext = input.parentHtml
       ? `Previous artifact HTML:\n${input.parentHtml}`
       : input.directionLabel
@@ -118,6 +120,7 @@ export const designGenerationService = {
           userBrief: input.prompt,
           designSystemId,
           skillIds,
+          content,
           artifactContext,
           elementAnchors: input.elementAnchors ?? null,
         }),

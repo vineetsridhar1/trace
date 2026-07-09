@@ -1,8 +1,15 @@
 import {
   composeOpenDesignSystemPrompt,
+  type OpenDesignDesignSystemContent,
   type OpenDesignPromptKind,
+  type OpenDesignSkillContent,
 } from "./design/vendor/compose-system.js";
 import { composeTraceOverlay } from "./design/trace-overlay.js";
+
+export type TraceDesignPromptContent = {
+  designSystem?: OpenDesignDesignSystemContent | null;
+  skills?: OpenDesignSkillContent[] | null;
+};
 
 export type TraceDesignPromptInput = {
   kind?: OpenDesignPromptKind;
@@ -10,6 +17,7 @@ export type TraceDesignPromptInput = {
   artifactContext?: string | null;
   elementAnchors?: Array<Record<string, unknown>> | null;
   appStarterContext?: string | null;
+  content?: TraceDesignPromptContent | null;
   parentHtml?: string | null;
   designSystemId?: string | null;
   skillIds?: string[] | null;
@@ -22,6 +30,8 @@ export function composeTraceDesignPrompt(input: TraceDesignPromptInput = {}) {
     userBrief: input.userBrief ?? null,
     designSystemId: input.designSystemId ?? null,
     skillIds: input.skillIds ?? null,
+    designSystem: input.content?.designSystem ?? null,
+    skills: input.content?.skills ?? null,
     artifactContext: input.artifactContext ?? input.parentHtml ?? null,
     elementAnchors: input.elementAnchors ?? input.selectedAnchors ?? null,
     appStarterContext: input.appStarterContext ?? null,
