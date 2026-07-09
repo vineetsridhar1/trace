@@ -386,6 +386,7 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
 async function renderUrl(url, label, options = {}) {
   const requireFetch = options.requireFetch !== false;
   const expectOverlay = options.expectOverlay === true;
+  const requireSourceStamp = options.requireSourceStamp === true;
   if (requireFetch) {
     const response = await fetch(url, { redirect: "follow" });
     const html = await response.text();
@@ -396,6 +397,7 @@ async function renderUrl(url, label, options = {}) {
       throw new Error(`${label} fetch did not contain ${expectedText}`);
     }
     assertOverlayState(html, label, expectOverlay);
+    assertSourceStamp(html, label, requireSourceStamp);
   }
 
   if (skipBrowser) {
@@ -427,6 +429,7 @@ async function renderUrl(url, label, options = {}) {
       throw new Error(`${label} browser DOM did not contain ${expectedText}`);
     }
     assertOverlayState(stdout, `${label} browser DOM`, expectOverlay);
+    assertSourceStamp(stdout, `${label} browser DOM`, requireSourceStamp);
   } finally {
     await fsp.rm(profileDir, { recursive: true, force: true });
   }
@@ -439,6 +442,13 @@ function assertOverlayState(html, label, expected) {
   }
   if (!expected && hasOverlay) {
     throw new Error(`${label} unexpectedly included the authoring overlay`);
+  }
+}
+
+function assertSourceStamp(html, label, expected) {
+  const hasSourceStamp = html.includes("data-trace-source=");
+  if (expected && !hasSourceStamp) {
+    throw new Error(`${label} did not include data-trace-source stamps for the element picker`);
   }
 }
 
@@ -696,7 +706,11 @@ await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.comm
 const codingSession = await openAppAsCodingSession(session.sessionGroupId, managedRepoId);
 const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
-await renderUrl(previewUrl, "private preview URL", { requireFetch: false, expectOverlay: true });
+await renderUrl(previewUrl, "private preview URL", {
+  requireFetch: false,
+  expectOverlay: true,
+  requireSourceStamp: true,
+});
 
 const publicEndpoint = await publishApp(session.sessionGroupId);
 if (publicEndpoint.id !== initial.endpoint.id) {

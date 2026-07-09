@@ -457,8 +457,12 @@ describe("EndpointProxyService generated app starter smoke", () => {
               "window.addEventListener('message', function(event) {",
               "  if (event.origin !== 'http://endpointkey1.preview.localhost:' + location.port) return;",
               "  if (!event.data || event.data.type !== 'trace:app:overlay') return;",
-              "  statusEl.textContent += '|' + event.data.event + ':' +",
-              "    (event.data.sourceLocation || event.data.message || 'missing');",
+              "  var suffix = event.data.sourceLocation || event.data.message || 'missing';",
+              "  if (event.data.event === 'element-selected') {",
+              "    suffix += ':' + (event.data.text || 'missing-text') + ':' +",
+              "      (event.data.bounds && typeof event.data.bounds.width === 'number' ? 'bounds' : 'missing-bounds');",
+              "  }",
+              "  statusEl.textContent += '|' + event.data.event + ':' + suffix;",
               "});",
               "</script>",
               `<iframe src="${endpointUrl}"></iframe>`,
@@ -483,7 +487,7 @@ describe("EndpointProxyService generated app starter smoke", () => {
 
       try {
         const browserHtml = await dumpParentHarnessDom({ chromeExecutable, proxyPort });
-        expect(browserHtml).toContain("pending|element-selected:app/page.tsx:42");
+        expect(browserHtml).toContain("pending|element-selected:app/page.tsx:42:Select source:bounds");
         expect(browserHtml).toContain("|error:Uncaught Error: overlay smoke error");
       } finally {
         await close(proxyServer);

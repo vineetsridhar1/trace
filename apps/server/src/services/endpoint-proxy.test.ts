@@ -178,6 +178,9 @@ describe("EndpointProxyService", () => {
     expect(res.statusCodeValue).toBe(200);
     expect(res.bodyValue).toContain("data-trace-app-overlay");
     expect(res.bodyValue).toContain("data-trace-source");
+    expect(res.bodyValue).toContain("var rect = element.getBoundingClientRect()");
+    expect(res.bodyValue).toContain("bounds: {");
+    expect(res.bodyValue).toContain("x: rect.left / viewportWidth");
     expect(res.headersValue["content-length"]).toBeUndefined();
   });
 

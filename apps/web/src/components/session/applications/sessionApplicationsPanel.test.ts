@@ -38,6 +38,7 @@ describe("parseTrustedAppOverlayMessage", () => {
           event: "element-selected",
           sourceLocation: "app/page.tsx:34",
           text: "Start building",
+          bounds: { left: 8, top: 16, width: 120, height: 32, x: 0.1, y: 0.2 },
         },
         "https://endpointkey.preview.trace.test",
         previewUrl,
@@ -46,6 +47,7 @@ describe("parseTrustedAppOverlayMessage", () => {
       kind: "element",
       sourceLocation: "app/page.tsx:34",
       text: "Start building",
+      bounds: { left: 8, top: 16, width: 120, height: 32, x: 0.1, y: 0.2 },
     });
   });
 

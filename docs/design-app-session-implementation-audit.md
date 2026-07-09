@@ -563,3 +563,10 @@ selected element anchors. The user-content bootstrap now includes a `bounds` obj
 `getBoundingClientRect()` with pixel and normalized viewport coordinates, the design
 canvas preserves those bounds through anchor normalization/comment payloads, and focused
 server/web tests cover the protocol and normalization behavior.
+
+During this audit pass, the app authoring overlay and hosted smoke were still weaker than
+the app element-picker contract. The endpoint proxy overlay now includes bounding-box
+context on `trace:app:overlay` element-selection messages, the Applications panel parser
+preserves that optional geometry, local endpoint-proxy browser coverage asserts
+source/text/bounds are posted from a real private preview, and the hosted cloud app smoke
+now requires `data-trace-source` stamps in the private preview DOM.

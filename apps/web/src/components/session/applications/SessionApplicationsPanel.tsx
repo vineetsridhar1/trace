@@ -252,6 +252,14 @@ type AppOverlaySelection =
       kind: "element";
       sourceLocation: string;
       text: string | null;
+      bounds: {
+        left: number;
+        top: number;
+        width: number;
+        height: number;
+        x?: number;
+        y?: number;
+      } | null;
     }
   | {
       kind: "error";
@@ -266,6 +274,39 @@ function previewOrigin(previewUrl: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+function numberField(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function objectField(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function parseAppOverlayBounds(value: unknown): Extract<
+  AppOverlaySelection,
+  { kind: "element" }
+>["bounds"] {
+  const bounds = objectField(value);
+  if (!bounds) return null;
+  const left = numberField(bounds.left);
+  const top = numberField(bounds.top);
+  const width = numberField(bounds.width);
+  const height = numberField(bounds.height);
+  if (left == null || top == null || width == null || height == null) return null;
+  const x = numberField(bounds.x);
+  const y = numberField(bounds.y);
+  return {
+    left,
+    top,
+    width,
+    height,
+    ...(x != null ? { x } : {}),
+    ...(y != null ? { y } : {}),
+  };
 }
 
 export function parseTrustedAppOverlayMessage(
@@ -288,6 +329,7 @@ export function parseTrustedAppOverlayMessage(
       kind: "element",
       sourceLocation,
       text: text || null,
+      bounds: parseAppOverlayBounds(message.bounds),
     };
   }
 

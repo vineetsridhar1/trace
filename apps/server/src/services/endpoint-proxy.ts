@@ -106,10 +106,21 @@ function appAuthoringOverlayScript(): string {
     if (!target || !target.closest) return;
     var element = target.closest("[data-trace-source]");
     if (!element) return;
+    var rect = element.getBoundingClientRect();
+    var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
     post({
       event: "element-selected",
       sourceLocation: element.getAttribute("data-trace-source"),
-      text: (element.textContent || "").trim().slice(0, 500)
+      text: (element.textContent || "").trim().slice(0, 500),
+      bounds: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        x: rect.left / viewportWidth,
+        y: rect.top / viewportHeight
+      }
     });
   }, true);
   window.addEventListener("error", function (event) {
