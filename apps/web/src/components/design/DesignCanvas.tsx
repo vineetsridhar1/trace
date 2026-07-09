@@ -57,6 +57,18 @@ const ITERATE_DESIGN_ARTIFACT_MUTATION = gql`
   }
 `;
 
+const GENERATE_DESIGN_ARTIFACTS_MUTATION = gql`
+  mutation GenerateDesignArtifacts($sessionGroupId: ID!, $prompt: String!, $directionCount: Int) {
+    generateDesignArtifacts(
+      sessionGroupId: $sessionGroupId
+      prompt: $prompt
+      directionCount: $directionCount
+    ) {
+      id
+    }
+  }
+`;
+
 const PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION = gql`
   mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {
     patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {
@@ -414,6 +426,16 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
     );
   }, [mutateSelectedArtifact, selectedArtifact]);
 
+  const handleGenerateDirections = useCallback(() => {
+    const prompt = window.prompt("Describe the design directions");
+    if (!prompt?.trim()) return;
+    void mutateSelectedArtifact(
+      GENERATE_DESIGN_ARTIFACTS_MUTATION,
+      { sessionGroupId, prompt: prompt.trim(), directionCount: 3 },
+      "Directions generated",
+    );
+  }, [mutateSelectedArtifact, sessionGroupId]);
+
   const handleTweak = useCallback(() => {
     if (!selectedArtifact) return;
     const name = window.prompt("CSS variable name", "--trace-accent");
@@ -501,6 +523,15 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         className="absolute right-3 top-3 z-10 flex items-center overflow-hidden rounded-md border bg-background shadow-sm"
         onPointerDown={(event) => event.stopPropagation()}
       >
+        <button
+          type="button"
+          onClick={handleGenerateDirections}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground"
+          aria-label="Generate directions"
+          title="Generate directions"
+        >
+          <Wand2 size={14} />
+        </button>
         <button
           type="button"
           onClick={handleIterate}

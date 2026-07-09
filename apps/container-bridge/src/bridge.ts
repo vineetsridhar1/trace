@@ -47,6 +47,7 @@ import {
   resolveExecutable,
 } from "@trace/shared/adapters";
 import {
+  configureManagedGitRemote,
   ensureRepo,
   createWorktree,
   getWorkspaceSlugs,
@@ -445,6 +446,41 @@ export class ContainerBridge implements IBridgeClient {
               requestId: cmd.requestId,
               slugs: [],
               error: err.message,
+            });
+          });
+        break;
+      }
+
+      case "configure_managed_git_remote": {
+        const workdir = cmd.workdir ?? this.sessionWorkdirs.get(cmd.sessionId) ?? os.homedir();
+        configureManagedGitRemote({
+          workdir,
+          remoteUrl: cmd.repoRemoteUrl,
+          branch: cmd.branch,
+        })
+          .then(() => {
+            this.send({ type: "repo_linked", repoId: cmd.repoId });
+            this.send({
+              type: "session_output",
+              sessionId: cmd.sessionId,
+              data: {
+                type: "assistant",
+                message: {
+                  content: [
+                    { type: "text", text: `Managed git remote configured for ${cmd.repoName}.` },
+                  ],
+                },
+              },
+            });
+          })
+          .catch((err: Error) => {
+            this.send({
+              type: "session_output",
+              sessionId: cmd.sessionId,
+              data: {
+                type: "error",
+                message: `Failed to configure managed git remote: ${err.message}`,
+              },
             });
           });
         break;

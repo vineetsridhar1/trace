@@ -658,6 +658,7 @@ export type Mutation = {
   enableSessionEndpointForwarding: SessionEndpoint;
   exportDesignArtifactPdf: Event;
   forkSession: Session;
+  generateDesignArtifacts: Array<Artifact>;
   iterateDesignArtifact: Artifact;
   joinChannel: Channel;
   leaveChannel: Channel;
@@ -923,6 +924,12 @@ export type MutationExportDesignArtifactPdfArgs = {
 
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationGenerateDesignArtifactsArgs = {
+  directionCount?: InputMaybe<Scalars["Int"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationIterateDesignArtifactArgs = {
@@ -3420,6 +3427,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationForkSessionArgs, "eventId">
+  >;
+  generateDesignArtifacts?: Resolver<
+    Array<ResolversTypes["Artifact"]>,
+    ParentType,
+    ContextType,
+    RequireFields<MutationGenerateDesignArtifactsArgs, "prompt" | "sessionGroupId">
   >;
   iterateDesignArtifact?: Resolver<
     ResolversTypes["Artifact"],

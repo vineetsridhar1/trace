@@ -24,7 +24,7 @@ vi.mock("./session.js", () => ({
 vi.mock("./design-generation.js", () => ({
   designGenerationService: {
     generateHtml: vi.fn().mockResolvedValue({
-      html: "<!doctype html><html><body><main data-el=\"generated\">Generated</main></body></html>",
+      html: '<!doctype html><html><body><main data-el="generated">Generated</main></body></html>',
       metadata: { generator: "llm", model: "test-model" },
     }),
   },
@@ -117,6 +117,102 @@ describe("artifactService", () => {
       generator: "llm",
       source: "createDesignArtifact",
     });
+  });
+
+  it("generates sibling design artifact variants with fan-out metadata", async () => {
+    const parent = designArtifact();
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "design",
+      sessions: [{ id: "session-1" }],
+    });
+    prismaMock.artifact.create.mockImplementation(
+      async (args: { data: Record<string, unknown> }) => ({
+        ...parent,
+        ...args.data,
+        id: `artifact-${String(args.data.metadata && typeof args.data.metadata === "object" && "directionIndex" in args.data.metadata ? (args.data.metadata as Record<string, unknown>).directionIndex : "x")}`,
+        parentArtifactId: null,
+        createdBy: parent.createdBy,
+        createdAt: new Date("2026-07-09T10:01:00.000Z"),
+        updatedAt: new Date("2026-07-09T10:01:00.000Z"),
+      }),
+    );
+
+    const artifacts = await artifactService.generateDesignArtifacts({
+      sessionGroupId: "group-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      prompt: "Make three dashboards",
+      directionCount: 3,
+    });
+
+    expect(artifacts).toHaveLength(3);
+    expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledTimes(3);
+    expect(designGenerationServiceMock.generateHtml).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        prompt: expect.stringContaining("variant 1 of 3"),
+      }),
+    );
+    expect(prismaMock.artifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prompt: "Make three dashboards",
+          metadata: expect.objectContaining({
+            source: "generateDesignArtifacts",
+            directionIndex: 0,
+            directionCount: 3,
+            directionLabel: "Refined product direction",
+          }),
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_artifact_created",
+        payload: expect.objectContaining({
+          directionIndex: 0,
+          directionCount: 3,
+        }),
+      }),
+    );
+  });
+
+  it("keeps successful design variants when a sibling direction fails", async () => {
+    const parent = designArtifact();
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "design",
+      sessions: [{ id: "session-1" }],
+    });
+    designGenerationServiceMock.generateHtml
+      .mockResolvedValueOnce({
+        html: "<!doctype html><html><body>First</body></html>",
+        metadata: { generator: "llm" },
+      })
+      .mockRejectedValueOnce(new Error("direction failed"));
+    prismaMock.artifact.create.mockImplementationOnce(
+      async (args: { data: Record<string, unknown> }) => ({
+        ...parent,
+        ...args.data,
+        id: "artifact-success",
+        createdBy: parent.createdBy,
+        createdAt: new Date("2026-07-09T10:01:00.000Z"),
+        updatedAt: new Date("2026-07-09T10:01:00.000Z"),
+      }),
+    );
+
+    const artifacts = await artifactService.generateDesignArtifacts({
+      sessionGroupId: "group-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      prompt: "Make two dashboards",
+      directionCount: 2,
+    });
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0]?.html).toContain("First");
+    expect(prismaMock.artifact.create).toHaveBeenCalledTimes(1);
   });
 
   it("generates iterations with parent HTML context", async () => {

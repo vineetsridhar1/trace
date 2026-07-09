@@ -21,6 +21,24 @@ type EnsureRepoResult = {
   warning?: BridgeWorkspaceWarning;
 };
 
+function withRuntimeAuth(remoteUrl: string): string {
+  const runtimeToken = process.env.TRACE_RUNTIME_TOKEN;
+  const tracePublicUrl = process.env.TRACE_SERVER_PUBLIC_URL;
+  if (!runtimeToken || !tracePublicUrl) return remoteUrl;
+
+  const traceOrigin = new URL(tracePublicUrl);
+  const parsed = new URL(remoteUrl);
+  if (
+    parsed.origin === traceOrigin.origin &&
+    parsed.pathname.startsWith(`${traceOrigin.pathname.replace(/\/$/, "")}/git/`)
+  ) {
+    parsed.username = "x-token";
+    parsed.password = runtimeToken;
+    return parsed.toString();
+  }
+  return remoteUrl;
+}
+
 /** Get the local path for a repo by ID. Returns undefined if not cloned yet. */
 export function getRepoPath(repoId: string): string | undefined {
   const p = `${REPOS_DIR}/${repoId}`;
@@ -61,20 +79,7 @@ export async function ensureRepo(
       `https://x-access-token:${githubToken}@github.com`,
     );
   } else {
-    const runtimeToken = process.env.TRACE_RUNTIME_TOKEN;
-    const tracePublicUrl = process.env.TRACE_SERVER_PUBLIC_URL;
-    if (runtimeToken && tracePublicUrl) {
-      const traceOrigin = new URL(tracePublicUrl);
-      const parsed = new URL(remoteUrl);
-      if (
-        parsed.origin === traceOrigin.origin &&
-        parsed.pathname.startsWith(`${traceOrigin.pathname.replace(/\/$/, "")}/git/`)
-      ) {
-        parsed.username = "x-token";
-        parsed.password = runtimeToken;
-        authUrl = parsed.toString();
-      }
-    }
+    authUrl = withRuntimeAuth(remoteUrl);
   }
 
   if (fs.existsSync(repoPath)) {
@@ -124,6 +129,29 @@ export async function ensureRepo(
   }
   await detachRepoHead(repoPath);
   return { repoPath };
+}
+
+export async function configureManagedGitRemote(input: {
+  workdir: string;
+  remoteUrl: string;
+  branch: string;
+}): Promise<void> {
+  const authUrl = withRuntimeAuth(input.remoteUrl);
+  const remotes = await execFileAsync("git", ["remote"], { cwd: input.workdir });
+  const hasOrigin = remotes.stdout
+    .split("\n")
+    .map((remote) => remote.trim())
+    .includes("origin");
+
+  if (hasOrigin) {
+    await execFileAsync("git", ["remote", "set-url", "origin", authUrl], { cwd: input.workdir });
+  } else {
+    await execFileAsync("git", ["remote", "add", "origin", authUrl], { cwd: input.workdir });
+  }
+
+  await execFileAsync("git", ["push", "-u", "origin", `HEAD:${input.branch}`], {
+    cwd: input.workdir,
+  });
 }
 
 async function cloneRepo(

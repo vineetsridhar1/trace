@@ -137,6 +137,7 @@ vi.mock("./github-repo.js", async () => {
 
 vi.mock("./managed-git.js", () => ({
   managedGitService: {
+    defaultBranch: "main",
     createAppRepo: vi.fn().mockResolvedValue({
       id: "repo-managed-1",
       name: "Managed app",
@@ -149,7 +150,7 @@ vi.mock("./managed-git.js", () => ({
 vi.mock("./design-generation.js", () => ({
   designGenerationService: {
     generateHtml: vi.fn().mockResolvedValue({
-      html: "<!doctype html><html><body><main data-el=\"generated\">Generated</main></body></html>",
+      html: '<!doctype html><html><body><main data-el="generated">Generated</main></body></html>',
       metadata: { generator: "llm", model: "test-model" },
     }),
   },
@@ -762,32 +763,22 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
-    it("creates app sessions with an internal managed repo", async () => {
-      const managedRepo = {
-        id: "repo-managed-1",
-        name: "Managed app",
-        remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
-        defaultBranch: "main",
-      };
+    it("creates app sessions without a repo until the first checkpoint", async () => {
       const sessionGroup = makeSessionGroup({
         kind: "app",
-        repoId: managedRepo.id,
-        repo: managedRepo,
+        repoId: null,
+        repo: null,
         channelId: "channel-1",
       });
       const session = makeSession({
         sessionGroup,
         hosting: "cloud",
-        repoId: managedRepo.id,
-        repo: managedRepo,
+        repoId: null,
+        repo: null,
         channelId: "channel-1",
       });
 
       prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(makeAgentEnvironment());
-      prismaMock.repo.findFirst.mockResolvedValueOnce({
-        id: managedRepo.id,
-        remoteUrl: managedRepo.remoteUrl,
-      });
       prismaMock.channel.findUnique.mockResolvedValueOnce({
         id: "channel-1",
         organizationId: "org-1",
@@ -809,7 +800,7 @@ describe("SessionService", () => {
         data: expect.objectContaining({
           kind: "app",
           channelId: "channel-1",
-          repoId: managedRepo.id,
+          repoId: undefined,
         }),
         select: expect.any(Object),
       });
@@ -817,14 +808,11 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             hosting: "cloud",
-            repoId: managedRepo.id,
+            repoId: undefined,
           }),
         }),
       );
-      expect(managedGitServiceMock.createAppRepo).toHaveBeenCalledWith({
-        organizationId: "org-1",
-        name: "Trace app",
-      });
+      expect(managedGitServiceMock.createAppRepo).not.toHaveBeenCalled();
     });
 
     it("creates design sessions and generates the initial artifact through the design generator", async () => {
@@ -2703,6 +2691,79 @@ describe("SessionService", () => {
       );
     });
 
+    it("creates and pushes a managed repo for the first app checkpoint", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: null,
+        workdir: "/home/coder",
+        branch: null,
+        sessionGroup: {
+          id: "group-1",
+          name: "App builder",
+          kind: "app",
+          repoId: null,
+          branch: null,
+        },
+      });
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-1" });
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          repoId: "repo-managed-1",
+          promptEventId: "prompt-1",
+        }),
+      );
+
+      const result = await service.recordGitCheckpoint("session-1", {
+        trigger: "commit",
+        command: "git commit -m 'checkpoint'",
+        observedAt: "2024-01-02T00:00:02.000Z",
+        commitSha: "abcdef1234567890",
+        parentShas: ["1234567890abcdef"],
+        treeSha: "feedface12345678",
+        subject: "Add checkpoint support",
+        author: "Test User <test@example.com>",
+        committedAt: "2024-01-02T00:00:00.000Z",
+        filesChanged: 3,
+      });
+
+      expect(result).toEqual(
+        makeGitCheckpoint({
+          repoId: "repo-managed-1",
+          promptEventId: "prompt-1",
+        }),
+      );
+      expect(managedGitServiceMock.createAppRepo).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        name: "App builder",
+      });
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { repoId: "repo-managed-1", branch: "main" },
+      });
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { repoId: "repo-managed-1", branch: "main" },
+      });
+      expect(prismaMock.gitCheckpoint.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          repoId: "repo-managed-1",
+          sessionGroupId: "group-1",
+        }),
+      });
+      expect(sessionRouterMock.send).toHaveBeenCalledWith("session-1", {
+        type: "configure_managed_git_remote",
+        sessionId: "session-1",
+        repoId: "repo-managed-1",
+        repoName: "Managed app",
+        repoRemoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+        branch: "main",
+        workdir: "/home/coder",
+      });
+    });
+
     it("deduplicates checkpoints by session group and commit sha", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         id: "session-1",
@@ -4153,7 +4214,10 @@ describe("SessionService", () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
       prismaMock.session.update.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValue("delivered");
-      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
 
       await service.sendMessage({
         sessionId: "session-1",
@@ -4190,7 +4254,10 @@ describe("SessionService", () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
       prismaMock.session.update.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValue("delivered");
-      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
 
       await service.sendMessage({
         sessionId: "session-1",
@@ -4224,7 +4291,10 @@ describe("SessionService", () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
       prismaMock.session.update.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValue("delivered");
-      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
 
       await service.sendMessage({
         sessionId: "session-1",

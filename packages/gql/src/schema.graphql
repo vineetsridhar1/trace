@@ -1453,6 +1453,7 @@ type Mutation {
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
   createDesignArtifact(sessionGroupId: ID!, prompt: String!, html: String): Artifact!
+  generateDesignArtifacts(sessionGroupId: ID!, prompt: String!, directionCount: Int): [Artifact!]!
   iterateDesignArtifact(artifactId: ID!, prompt: String!, html: String): Artifact!
   patchDesignArtifactTokens(artifactId: ID!, tokens: JSON!): Artifact!
   commentDesignArtifact(artifactId: ID!, body: String!, anchor: JSON, sendToAgent: Boolean): Event!

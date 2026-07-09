@@ -1,6 +1,6 @@
 import { promisify } from "util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createWorktree, ensureRepo, getRepoPath } from "./workspace.js";
+import { configureManagedGitRemote, createWorktree, ensureRepo, getRepoPath } from "./workspace.js";
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
 
@@ -130,6 +130,63 @@ describe("workspace repo setup", () => {
     expect(gitArgsAt(0)).toContain(
       "https://x-token:runtime-token@trace.example/git/org-1/repo-1.git",
     );
+  });
+
+  it("configures and pushes a managed remote with the runtime token", async () => {
+    process.env.TRACE_RUNTIME_TOKEN = "runtime-token";
+    process.env.TRACE_SERVER_PUBLIC_URL = "https://trace.example";
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      callbackFrom(args)(null, Array.isArray(gitArgs) && gitArgs[0] === "remote" ? "" : "", "");
+    });
+
+    await configureManagedGitRemote({
+      workdir: "/home/coder",
+      remoteUrl: "https://trace.example/git/org-1/repo-1.git",
+      branch: "main",
+    });
+
+    expect(mocks.execFile).toHaveBeenNthCalledWith(
+      1,
+      "git",
+      ["remote"],
+      {
+        cwd: "/home/coder",
+      },
+      expect.any(Function),
+    );
+    expect(gitArgsAt(1)).toEqual([
+      "remote",
+      "add",
+      "origin",
+      "https://x-token:runtime-token@trace.example/git/org-1/repo-1.git",
+    ]);
+    expect(gitArgsAt(2)).toEqual(["push", "-u", "origin", "HEAD:main"]);
+  });
+
+  it("replaces an existing origin before pushing a managed remote", async () => {
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      callbackFrom(args)(
+        null,
+        Array.isArray(gitArgs) && gitArgs[0] === "remote" ? "origin\n" : "",
+        "",
+      );
+    });
+
+    await configureManagedGitRemote({
+      workdir: "/home/coder",
+      remoteUrl: "https://trace.example/git/org-1/repo-1.git",
+      branch: "trace-app",
+    });
+
+    expect(gitArgsAt(1)).toEqual([
+      "remote",
+      "set-url",
+      "origin",
+      "https://trace.example/git/org-1/repo-1.git",
+    ]);
+    expect(gitArgsAt(2)).toEqual(["push", "-u", "origin", "HEAD:trace-app"]);
   });
 
   it("adds a cache reference when the repo cache mirror exists", async () => {

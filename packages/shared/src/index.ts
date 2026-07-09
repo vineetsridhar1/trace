@@ -28,6 +28,7 @@ export type {
   BridgeRunCommand,
   BridgeSendCommand,
   BridgePrepareCommand,
+  BridgeConfigureManagedGitRemoteCommand,
   BridgeTerminateCommand,
   BridgePauseCommand,
   BridgeResumeCommand,
@@ -203,10 +204,7 @@ export {
 } from "./session-content.js";
 export type { TraceDesignPromptInput } from "./design.js";
 export { composeTraceDesignPrompt } from "./design.js";
-export {
-  PROVISIONED_RUNTIME_PREFIX,
-  isProvisionedRuntimeId,
-} from "./runtime-ids.js";
+export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export {
   branchNameFromGitRef,
   branchNamesFromGitRefsOutput,

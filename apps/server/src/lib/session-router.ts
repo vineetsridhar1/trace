@@ -7,6 +7,7 @@ import type {
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgeConfigureManagedGitRemoteCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeWriteFileCommand,
@@ -56,6 +57,7 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgeConfigureManagedGitRemoteCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand

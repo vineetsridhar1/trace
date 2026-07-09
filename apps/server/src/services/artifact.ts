@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import { ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
@@ -109,6 +110,29 @@ function buildCommentIterationPrompt(input: {
   ]
     .filter((part): part is string => part !== null)
     .join("\n");
+}
+
+const DESIGN_DIRECTION_LABELS = [
+  "Refined product direction",
+  "Bold editorial direction",
+  "Dense workflow direction",
+  "Calm executive direction",
+] as const;
+
+function normalizeDirectionCount(value: number | null | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 3;
+  return Math.min(Math.max(Math.floor(value), 1), 4);
+}
+
+function buildDirectionPrompt(prompt: string, index: number, count: number): string {
+  if (count === 1) return prompt;
+  const label = DESIGN_DIRECTION_LABELS[index] ?? `Direction ${index + 1}`;
+  return [
+    prompt,
+    "",
+    `Create variant ${index + 1} of ${count}: ${label}.`,
+    "Make this direction meaningfully distinct while preserving the user brief and Trace design artifact requirements.",
+  ].join("\n");
 }
 
 async function getDesignArtifactForWrite(
@@ -242,6 +266,110 @@ export const artifactService = {
     });
 
     return artifact;
+  },
+
+  async generateDesignArtifacts(input: {
+    sessionGroupId: string;
+    organizationId: string;
+    actorId: string;
+    actorType?: ActorType;
+    prompt: string;
+    directionCount?: number | null;
+  }) {
+    await assertSessionGroupAccess(input.sessionGroupId, input.actorId, input.organizationId);
+
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: input.sessionGroupId, organizationId: input.organizationId },
+      select: {
+        id: true,
+        kind: true,
+        sessions: {
+          select: { id: true },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+        },
+      },
+    });
+
+    if (!group) {
+      throw new Error("Session group not found");
+    }
+    if (group.kind !== "design") {
+      throw new ValidationError("Artifacts can only be generated for design sessions.");
+    }
+
+    const sessionId = group.sessions[0]?.id;
+    if (!sessionId) {
+      throw new ValidationError("Design session group has no session timeline.");
+    }
+
+    const directionCount = normalizeDirectionCount(input.directionCount);
+    const fanoutId = randomUUID();
+    const results = await Promise.allSettled(
+      Array.from({ length: directionCount }, (_, index) =>
+        designGenerationService.generateHtml({
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          actorType: input.actorType,
+          sessionId,
+          sessionGroupId: input.sessionGroupId,
+          prompt: buildDirectionPrompt(input.prompt, index, directionCount),
+        }),
+      ),
+    );
+
+    const artifacts = [];
+    for (const [index, result] of results.entries()) {
+      if (result.status !== "fulfilled") continue;
+      const label = DESIGN_DIRECTION_LABELS[index] ?? `Direction ${index + 1}`;
+      const artifact = await prisma.artifact.create({
+        data: {
+          sessionGroupId: input.sessionGroupId,
+          organizationId: input.organizationId,
+          createdById: input.actorId,
+          prompt: input.prompt,
+          title: `${input.prompt.trim().slice(0, 96) || "Untitled design"} - ${label}`.slice(
+            0,
+            120,
+          ),
+          contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
+          html: result.value.html,
+          metadata: {
+            ...result.value.metadata,
+            source: "generateDesignArtifacts",
+            fanoutId,
+            directionIndex: index,
+            directionCount,
+            directionLabel: label,
+          },
+        },
+        include: { createdBy: true },
+      });
+      const serialized = serializeArtifact(artifact);
+      artifacts.push(artifact);
+
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "design_artifact_created",
+        payload: {
+          artifact: serialized,
+          sessionGroupId: input.sessionGroupId,
+          fanoutId,
+          directionIndex: index,
+          directionCount,
+        } as Prisma.InputJsonValue,
+        actorType: input.actorType ?? "user",
+        actorId: input.actorId,
+      });
+    }
+
+    if (artifacts.length === 0) {
+      throw new Error("Design generation failed for every direction.");
+    }
+
+    return artifacts;
   },
 
   async iterateDesignArtifact(input: {

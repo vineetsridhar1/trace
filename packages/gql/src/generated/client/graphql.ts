@@ -657,6 +657,7 @@ export type Mutation = {
   enableSessionEndpointForwarding: SessionEndpoint;
   exportDesignArtifactPdf: Event;
   forkSession: Session;
+  generateDesignArtifacts: Array<Artifact>;
   iterateDesignArtifact: Artifact;
   joinChannel: Channel;
   leaveChannel: Channel;
@@ -922,6 +923,12 @@ export type MutationExportDesignArtifactPdfArgs = {
 
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationGenerateDesignArtifactsArgs = {
+  directionCount?: InputMaybe<Scalars["Int"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationIterateDesignArtifactArgs = {
@@ -2618,6 +2625,17 @@ export type IterateDesignArtifactMutationVariables = Exact<{
 export type IterateDesignArtifactMutation = {
   __typename?: "Mutation";
   iterateDesignArtifact: { __typename?: "Artifact"; id: string };
+};
+
+export type GenerateDesignArtifactsMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
+  directionCount?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type GenerateDesignArtifactsMutation = {
+  __typename?: "Mutation";
+  generateDesignArtifacts: Array<{ __typename?: "Artifact"; id: string }>;
 };
 
 export type PatchDesignArtifactTokensMutationVariables = Exact<{
@@ -5170,6 +5188,72 @@ export const IterateDesignArtifactDocument = {
     },
   ],
 } as unknown as DocumentNode<IterateDesignArtifactMutation, IterateDesignArtifactMutationVariables>;
+export const GenerateDesignArtifactsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "GenerateDesignArtifacts" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "directionCount" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "generateDesignArtifacts" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "prompt" },
+                value: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "directionCount" },
+                value: { kind: "Variable", name: { kind: "Name", value: "directionCount" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  GenerateDesignArtifactsMutation,
+  GenerateDesignArtifactsMutationVariables
+>;
 export const PatchDesignArtifactTokensDocument = {
   kind: "Document",
   definitions: [

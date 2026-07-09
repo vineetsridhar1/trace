@@ -324,6 +324,21 @@ export const sessionMutations = {
       actorType: ctx.actorType,
     });
   },
+  generateDesignArtifacts: (
+    _: unknown,
+    args: { sessionGroupId: string; prompt: string; directionCount?: number | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.generateDesignArtifacts({
+      sessionGroupId: args.sessionGroupId,
+      prompt: args.prompt,
+      directionCount: args.directionCount ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
   iterateDesignArtifact: (
     _: unknown,
     args: { artifactId: string; prompt: string; html?: string | null },

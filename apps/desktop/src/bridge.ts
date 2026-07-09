@@ -1216,6 +1216,17 @@ export class BridgeClient implements IBridgeClient {
           });
         break;
       }
+      case "configure_managed_git_remote": {
+        this.send({
+          type: "session_output",
+          sessionId: cmd.sessionId,
+          data: {
+            type: "error",
+            message: "Managed git remotes are only supported by cloud app sessions.",
+          },
+        });
+        break;
+      }
       case "list_workspace_slugs": {
         const repoConfig = getRepoConfig(cmd.repoId);
         const repoPath = repoConfig?.path;

@@ -71,6 +71,16 @@ export interface BridgeUpgradeWorkspaceCommand {
   preserveBranchName?: boolean;
 }
 
+export interface BridgeConfigureManagedGitRemoteCommand {
+  type: "configure_managed_git_remote";
+  sessionId: string;
+  repoId: string;
+  repoName: string;
+  repoRemoteUrl: string;
+  branch: string;
+  workdir?: string;
+}
+
 export interface BridgeTerminateCommand {
   type: "terminate";
   sessionId: string;
@@ -359,6 +369,7 @@ export type BridgeCommand =
   | BridgeSendCommand
   | BridgePrepareCommand
   | BridgeUpgradeWorkspaceCommand
+  | BridgeConfigureManagedGitRemoteCommand
   | BridgeTerminateCommand
   | BridgePauseCommand
   | BridgeResumeCommand

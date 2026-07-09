@@ -898,14 +898,17 @@ If the user asks you to stop auto-saving or disable auto-save, stop doing this f
 
 const APP_SESSION_SYSTEM_PROMPT = `You are building a standalone Trace app session.
 
-Use a production-shaped full-stack starter as the default target: Next.js, Tailwind CSS, and shadcn/ui unless the user explicitly asks for another stack.
+The cloud workspace starts from the Trace app starter: Next.js app router, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, and Trace app metadata. Use that starter as the default target unless the user explicitly asks for another stack.
 
 Requirements:
 - Build a working application, not a static mock or landing page.
+- Run pnpm install before first use if dependencies are missing.
+- Run pnpm build or an equivalent verification before declaring the app done.
+- Start the preview with pnpm dev --hostname 0.0.0.0 so Trace can detect port 3000.
 - Keep the dev server running so Trace can detect the preview port.
 - Stamp interactive UI with data-trace-source="path:line" when practical so element picking can map preview elements back to code.
 - Use Tailwind tokens and shadcn components for UI primitives.
-- Create checkpoints with git commits when meaningful app milestones work.
+- Create meaningful git commits as app milestones; Trace creates the managed remote lazily on the first checkpoint and pushes your HEAD there.
 - Treat publish/share as exposing the running app endpoint, not generating a design artifact.`;
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
@@ -3081,11 +3084,6 @@ export class SessionService {
       }
       input.hosting = "cloud";
       input.provisionWithoutPrompt = true;
-      const managedRepo = await managedGitService.createAppRepo({
-        organizationId: input.organizationId,
-        name: input.name ?? input.prompt ?? "Trace app",
-      });
-      input.repoId = managedRepo.id;
     }
 
     if (input.restoreCheckpointId && input.sessionGroupId) {
@@ -7007,9 +7005,51 @@ export class SessionService {
         organizationId: true,
         sessionGroupId: true,
         repoId: true,
+        workdir: true,
+        branch: true,
+        sessionGroup: {
+          select: {
+            id: true,
+            name: true,
+            kind: true,
+            repoId: true,
+            branch: true,
+          },
+        },
       },
     });
-    if (!session?.sessionGroupId || !session.repoId) return;
+    if (!session?.sessionGroupId) return;
+
+    let repoId = session.repoId ?? session.sessionGroup?.repoId ?? null;
+    let managedRepo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null =
+      null;
+
+    if (!repoId && session.sessionGroup?.kind === "app") {
+      managedRepo = await managedGitService.createAppRepo({
+        organizationId: session.organizationId,
+        name: session.sessionGroup.name,
+      });
+      repoId = managedRepo.id;
+
+      await prisma.$transaction([
+        prisma.sessionGroup.update({
+          where: { id: session.sessionGroupId },
+          data: {
+            repoId,
+            branch: session.sessionGroup.branch ?? managedRepo.defaultBranch,
+          },
+        }),
+        prisma.session.update({
+          where: { id: sessionId },
+          data: {
+            repoId,
+            branch: session.branch ?? session.sessionGroup.branch ?? managedRepo.defaultBranch,
+          },
+        }),
+      ]);
+    }
+
+    if (!repoId) return;
 
     const existing = await prisma.gitCheckpoint.findUnique({
       where: {
@@ -7062,7 +7102,7 @@ export class SessionService {
           data: {
             sessionId,
             sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
+            repoId,
             promptEventId,
             commitSha: checkpoint.commitSha,
             parentShas: checkpoint.parentShas,
@@ -7093,6 +7133,35 @@ export class SessionService {
         actorType: "system",
         actorId: "system",
       });
+
+      if (managedRepo) {
+        const branch =
+          session.branch ?? session.sessionGroup?.branch ?? managedGitService.defaultBranch;
+        const deliveryResult = sessionRouter.send(sessionId, {
+          type: "configure_managed_git_remote",
+          sessionId,
+          repoId: managedRepo.id,
+          repoName: managedRepo.name,
+          repoRemoteUrl: managedRepo.remoteUrl,
+          branch,
+          workdir: session.workdir ?? undefined,
+        });
+        if (deliveryResult !== "delivered") {
+          await eventService.create({
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "managed_git_remote_push_failed",
+              repoId: managedRepo.id,
+              reason: deliveryResult,
+            } as Prisma.InputJsonValue,
+            actorType: "system",
+            actorId: "system",
+          });
+        }
+      }
     }
 
     if (rewrittenCheckpoint && rewrittenCheckpoint.id !== persisted.id) {
