@@ -189,7 +189,7 @@ type Viewport = {
   scale: number;
 };
 
-type ArtifactPlacement = {
+export type ArtifactPlacement = {
   artifact: CanvasArtifact;
   x: number;
   y: number;
@@ -199,16 +199,41 @@ function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 }
 
-function getArtifactPlacements(artifacts: CanvasArtifact[]): ArtifactPlacement[] {
-  return artifacts.map((artifact, index) => {
-    const column = index % 2;
-    const row = Math.floor(index / 2);
-    return {
-      artifact,
-      x: column * (CARD_WIDTH + CARD_GAP),
-      y: row * (CARD_HEIGHT + CARD_GAP),
-    };
+export function getArtifactPlacements(artifacts: CanvasArtifact[]): ArtifactPlacement[] {
+  const artifactIds = new Set(artifacts.map((artifact) => artifact.id));
+  const childrenByParentId = new Map<string, CanvasArtifact[]>();
+  const roots: CanvasArtifact[] = [];
+
+  for (const artifact of artifacts) {
+    const parentId = artifact.parentArtifactId;
+    if (parentId && artifactIds.has(parentId)) {
+      childrenByParentId.set(parentId, [...(childrenByParentId.get(parentId) ?? []), artifact]);
+    } else {
+      roots.push(artifact);
+    }
+  }
+
+  const placements: ArtifactPlacement[] = [];
+  const verticalStep = CARD_HEIGHT + CARD_GAP;
+
+  const placeDescendants = (artifact: CanvasArtifact, x: number, y: number): number => {
+    let cursorY = y;
+    const children = childrenByParentId.get(artifact.id) ?? [];
+    for (const child of children) {
+      cursorY += verticalStep;
+      placements.push({ artifact: child, x, y: cursorY });
+      cursorY = placeDescendants(child, x, cursorY);
+    }
+    return cursorY;
+  };
+
+  roots.forEach((artifact, index) => {
+    const x = index * (CARD_WIDTH + CARD_GAP);
+    placements.push({ artifact, x, y: 0 });
+    placeDescendants(artifact, x, 0);
   });
+
+  return placements;
 }
 
 function getCanvasBounds(placements: ArtifactPlacement[]) {

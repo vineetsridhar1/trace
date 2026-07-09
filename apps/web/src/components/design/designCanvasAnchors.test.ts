@@ -6,6 +6,7 @@ import {
   designCommentsForPreview,
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
+  getArtifactPlacements,
   normalizeDesignAnchor,
   promotedSessionTarget,
   streamingArtifactsFromEvents,
@@ -141,6 +142,41 @@ describe("design canvas anchors", () => {
     ).toBe("https://cdn.trace.test/artifact-1/");
   });
 
+  it("places sibling variants side-by-side and iterations as vertical lineage", () => {
+    const placements = getArtifactPlacements([
+      makeCanvasArtifact("direction-a"),
+      makeCanvasArtifact("direction-b"),
+      makeCanvasArtifact("a-child", "direction-a"),
+      makeCanvasArtifact("a-grandchild", "a-child"),
+      makeCanvasArtifact("b-child", "direction-b"),
+    ]);
+    const byId = new Map(placements.map((placement) => [placement.artifact.id, placement]));
+
+    expect(byId.get("direction-a")).toMatchObject({ x: 0, y: 0 });
+    expect(byId.get("direction-b")?.x).toBeGreaterThan(byId.get("direction-a")?.x ?? 0);
+    expect(byId.get("direction-b")?.y).toBe(0);
+
+    expect(byId.get("a-child")?.x).toBe(byId.get("direction-a")?.x);
+    expect(byId.get("a-child")?.y).toBeGreaterThan(byId.get("direction-a")?.y ?? 0);
+    expect(byId.get("a-grandchild")?.x).toBe(byId.get("direction-a")?.x);
+    expect(byId.get("a-grandchild")?.y).toBeGreaterThan(byId.get("a-child")?.y ?? 0);
+
+    expect(byId.get("b-child")?.x).toBe(byId.get("direction-b")?.x);
+    expect(byId.get("b-child")?.y).toBeGreaterThan(byId.get("direction-b")?.y ?? 0);
+  });
+
+  it("places artifacts with missing parents as root variants", () => {
+    const placements = getArtifactPlacements([
+      makeCanvasArtifact("direction-a"),
+      makeCanvasArtifact("orphan", "missing-parent"),
+    ]);
+
+    expect(placements.map((placement) => placement.artifact.id)).toEqual(["direction-a", "orphan"]);
+    expect(placements[0]?.y).toBe(0);
+    expect(placements[1]?.y).toBe(0);
+    expect(placements[1]?.x).toBeGreaterThan(placements[0]?.x ?? 0);
+  });
+
   it("shows failed design generations as visible canvas artifacts", () => {
     const event = {
       id: "event-failed",
@@ -201,3 +237,20 @@ describe("design canvas anchors", () => {
     expect(promotedSessionTarget(null)).toBeNull();
   });
 });
+
+function makeCanvasArtifact(id: string, parentArtifactId: string | null = null) {
+  return {
+    id,
+    sessionGroupId: "group-1",
+    parentArtifactId,
+    title: id,
+    prompt: `Prompt for ${id}`,
+    contentType: "text/html",
+    html: "<!doctype html><html><body></body></html>",
+    metadata: {},
+    publishedAt: null,
+    publicUrl: null,
+    createdAt: "2026-07-09T10:00:00.000Z",
+    updatedAt: "2026-07-09T10:00:00.000Z",
+  };
+}

@@ -489,3 +489,9 @@ During this continuation, the hosted `pnpm smoke:design-session` script was tigh
 prove published artifacts use the wildcard user-content host model. After publish, the
 smoke now requires the public URL host to be scoped as `<artifactId>.<domain>`, not the
 Trace app host, before rendering the artifact and checking `_bootstrap`.
+
+During this continuation, the design canvas placement model was corrected to match the
+documented lineage UX. Root artifacts and fan-out directions now lay out as side-by-side
+columns, while child iterations stay in their parent column and stack vertically as a
+lineage strip; focused web tests cover sibling variants, nested iterations, and orphaned
+parent references.
