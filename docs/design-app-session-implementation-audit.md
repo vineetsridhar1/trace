@@ -731,3 +731,9 @@ During this audit continuation, the cloud app smoke required `data-trace-source`
 for the initial private preview but not for a restored checkpoint preview. Restored app
 previews now use the same browser acceptance gate, so checkpoint restore must preserve
 the source-mapped authoring surface as well as the runtime and managed repo binding.
+
+During this audit continuation, the cloud app smoke proved managed-git checkpoint
+reachability with `git ls-remote` but did not require the service-layer push event
+specified by `managed-git-hosting.md`. It now also polls the repo-scoped
+`repo_branch_pushed` event and requires `refs/heads/main` to point at the checkpoint SHA
+with the app runtime session id in the payload.

@@ -137,6 +137,17 @@ const PROCESS_LOGS = `
   }
 `;
 
+const SESSION_EVENTS = `
+  query SmokeSessionEvents($organizationId: ID!, $scope: ScopeInput, $types: [String!]) {
+    events(organizationId: $organizationId, scope: $scope, types: $types, limit: 100) {
+      id
+      eventType
+      payload
+      timestamp
+    }
+  }
+`;
+
 const CREATE_PREVIEW = `
   mutation SmokeCreatePreview($endpointId: ID!) {
     createSessionEndpointPreview(endpointId: $endpointId) {
@@ -469,7 +480,7 @@ async function assertImageDownload(url, label) {
   }
 }
 
-async function assertManagedGitCheckpointReachable(repoId, commitSha) {
+async function assertManagedGitCheckpointReachable(repoId, commitSha, sessionId) {
   const data = await graphql(CREATE_MANAGED_GIT_CREDENTIAL, { repoId });
   const credential = data.createManagedGitCredential;
   if (!credential?.remoteUrl || !credential.credentialedRemoteUrl) {
@@ -505,6 +516,33 @@ async function assertManagedGitCheckpointReachable(repoId, commitSha) {
   if (!stdout.includes(commitSha)) {
     throw new Error(`Managed git remote did not expose checkpoint ${commitSha} on refs/heads/main`);
   }
+
+  await pollUntil("managed git push event", async () => {
+    const eventData = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "system", id: repoId },
+      types: ["repo_branch_pushed"],
+    });
+    const matchingEvent = (eventData.events ?? []).find((event) => {
+      if (event.eventType !== "repo_branch_pushed") return false;
+      const payload = event.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      if (payload.repoId !== repoId || payload.sessionId !== sessionId) return false;
+      const heads = Array.isArray(payload.heads) ? payload.heads : [];
+      return heads.some(
+        (head) =>
+          head &&
+          typeof head === "object" &&
+          head.ref === "refs/heads/main" &&
+          head.branch === "main" &&
+          head.commitSha === commitSha,
+      );
+    });
+    if (!matchingEvent) {
+      return { ok: false, detail: `no repo_branch_pushed event for ${commitSha}` };
+    }
+    return { ok: true, value: matchingEvent };
+  });
 }
 
 async function assertManagedRepoHiddenFromRepoList(repoId) {
@@ -702,7 +740,7 @@ if (requireCapture) {
   await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
 }
 await assertManagedRepoHiddenFromRepoList(managedRepoId);
-await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha);
+await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha, session.id);
 const codingSession = await openAppAsCodingSession(session.sessionGroupId, managedRepoId);
 const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
