@@ -7064,7 +7064,11 @@ export class SessionService {
     });
   }
 
-  async recordGitCheckpoint(sessionId: string, checkpoint: GitCheckpointBridgePayload) {
+  async recordGitCheckpoint(
+    sessionId: string,
+    checkpoint: GitCheckpointBridgePayload,
+    options: { managedRemoteConfigured?: boolean } = {},
+  ) {
     if (Number.isNaN(new Date(checkpoint.committedAt).getTime())) {
       console.warn(
         `[checkpoint] invalid committedAt for session ${sessionId}: ${checkpoint.committedAt}`,
@@ -7088,6 +7092,24 @@ export class SessionService {
             kind: true,
             repoId: true,
             branch: true,
+            repo: {
+              select: {
+                id: true,
+                name: true,
+                provider: true,
+                remoteUrl: true,
+                defaultBranch: true,
+              },
+            },
+          },
+        },
+        repo: {
+          select: {
+            id: true,
+            name: true,
+            provider: true,
+            remoteUrl: true,
+            defaultBranch: true,
           },
         },
       },
@@ -7161,6 +7183,7 @@ export class SessionService {
         },
       },
     });
+
     const rewrittenCommitSha =
       typeof checkpoint.rewrittenFromCommitSha === "string"
         ? checkpoint.rewrittenFromCommitSha.trim()
@@ -7176,6 +7199,54 @@ export class SessionService {
             },
           })
         : null;
+    if (existing && !rewrittenCheckpoint) return existing;
+
+    const existingManagedRepo =
+      session.repo?.provider === "managed"
+        ? session.repo
+        : session.sessionGroup?.repo?.provider === "managed"
+          ? session.sessionGroup.repo
+          : null;
+    const checkpointNeedsManagedPush =
+      session.sessionGroup?.kind === "app" &&
+      existingManagedRepo &&
+      !options.managedRemoteConfigured &&
+      (checkpoint.trigger === "commit" || checkpoint.trigger === "rewrite");
+    if (checkpointNeedsManagedPush) {
+      const branch =
+        session.branch ??
+        session.sessionGroup?.branch ??
+        existingManagedRepo.defaultBranch ??
+        managedGitService.defaultBranch;
+      const deliveryResult = sessionRouter.send(sessionId, {
+        type: "configure_managed_git_remote",
+        sessionId,
+        repoId: existingManagedRepo.id,
+        repoName: existingManagedRepo.name,
+        repoRemoteUrl:
+          existingManagedRepo.remoteUrl ??
+          managedGitService.buildManagedRemoteUrl(session.organizationId, existingManagedRepo.id),
+        branch,
+        workdir: session.workdir ?? undefined,
+        checkpoint,
+      });
+      if (deliveryResult !== "delivered") {
+        await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "managed_git_remote_push_failed",
+            repoId: existingManagedRepo.id,
+            reason: deliveryResult,
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      }
+      return null;
+    }
 
     let persisted = existing;
     let didPersistCheckpoint = false;

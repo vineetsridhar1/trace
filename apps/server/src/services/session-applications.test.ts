@@ -316,6 +316,185 @@ describe("SessionApplicationService", () => {
     );
   });
 
+  it("runs the app preview lifecycle and publishes the live endpoint on the session timeline", async () => {
+    const service = new SessionApplicationService();
+    prismaMock.sessionGroup.findFirstOrThrow.mockReset();
+    prismaMock.sessionApplicationProcess.upsert.mockReset();
+    prismaMock.sessionApplicationProcess.findFirst.mockReset();
+    prismaMock.sessionApplicationProcess.update.mockReset();
+    prismaMock.sessionEndpoint.findUnique.mockReset();
+    prismaMock.sessionEndpoint.findFirst.mockReset();
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockReset();
+    prismaMock.sessionEndpoint.create.mockReset();
+    prismaMock.sessionEndpoint.update.mockReset();
+    prismaMock.sessionApplicationLogEntry.findFirst.mockReset();
+    prismaMock.sessionApplicationLogEntry.create.mockReset();
+
+    const appGroup = {
+      id: "group-1",
+      organizationId: "org-1",
+      kind: "app",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: null,
+      workdir: "/home/coder",
+      repo: null,
+      sessions: [
+        {
+          id: "session-1",
+          workdir: "/home/coder",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ],
+    };
+    const startingProcess = {
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      appConfigId: "web",
+      processConfigId: "dev",
+      label: "Next.js dev server",
+      command: "pnpm dev --hostname 0.0.0.0",
+      workingDirectory: ".",
+      status: "starting",
+      runtimeInstanceId: "runtime-1",
+      bridgeProcessId: null,
+      exitCode: null,
+      lastError: null,
+      startedByUserId: "user-1",
+      startedAt: new Date("2026-06-07T00:00:00.000Z"),
+      stoppedAt: null,
+      lastHeartbeatAt: null,
+      createdAt: new Date("2026-06-07T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-07T00:00:00.000Z"),
+    };
+    const runningProcess = {
+      ...startingProcess,
+      status: "running",
+      bridgeProcessId: "bridge-process-1",
+      lastHeartbeatAt: new Date("2026-06-07T00:00:01.000Z"),
+    };
+    const disabledEndpoint = {
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      protocol: "http",
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: null,
+      disabledAt: null,
+      revokedAt: null,
+    };
+    const enabledEndpoint = {
+      ...disabledEndpoint,
+      status: "enabled",
+      enabledAt: new Date("2026-06-07T00:00:02.000Z"),
+      currentRuntimeInstanceId: "runtime-1",
+    };
+    const publicEndpoint = {
+      ...enabledEndpoint,
+      accessMode: "public",
+    };
+
+    prismaMock.sessionGroup.findFirstOrThrow
+      .mockResolvedValueOnce(appGroup)
+      .mockResolvedValueOnce(appGroup)
+      .mockResolvedValueOnce({
+        id: "group-1",
+        kind: "app",
+        ownerUserId: "user-1",
+        sessions: [{ id: "session-1" }],
+      });
+    prismaMock.sessionApplicationProcess.upsert.mockResolvedValueOnce(startingProcess);
+    prismaMock.sessionEndpoint.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "endpoint-1" });
+    prismaMock.sessionEndpoint.create.mockResolvedValueOnce(disabledEndpoint);
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce(disabledEndpoint);
+    prismaMock.sessionEndpoint.update
+      .mockResolvedValueOnce(enabledEndpoint)
+      .mockResolvedValueOnce(publicEndpoint);
+    prismaMock.sessionApplicationProcess.findFirst
+      .mockResolvedValueOnce({ id: "process-1" })
+      .mockResolvedValueOnce({
+        id: "process-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+      });
+    prismaMock.sessionApplicationProcess.update.mockResolvedValueOnce(runningProcess);
+    prismaMock.sessionApplicationLogEntry.findFirst.mockResolvedValueOnce(null);
+    prismaMock.sessionApplicationLogEntry.create.mockResolvedValueOnce({
+      id: "log-1",
+      organizationId: "org-1",
+      processId: "process-1",
+      stream: "stdout",
+      data: "ready on 3000",
+      sequence: 1,
+      timestamp: new Date("2026-06-07T00:00:03.000Z"),
+    });
+    prismaMock.sessionEndpoint.findFirst.mockResolvedValueOnce(enabledEndpoint);
+
+    await service.startApplication("group-1", "web", "org-1", "user-1");
+    await service.markProcessRunning("process-1", "org-1", "bridge-process-1");
+    await service.appendProcessLog("process-1", "org-1", "stdout", "ready on 3000");
+    const endpoint = await service.publishAppSession("group-1", "org-1", "user-1");
+
+    expect(endpoint.accessMode).toBe("public");
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "runtime-1",
+      expect.objectContaining({
+        type: "app_process_start",
+        command: "pnpm dev --hostname 0.0.0.0",
+        ports: [expect.objectContaining({ port: 3000 })],
+      }),
+      "org-1",
+    );
+    expect(prismaMock.sessionApplicationLogEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        processId: "process-1",
+        stream: "stdout",
+        data: "ready on 3000",
+        sequence: 1,
+      }),
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_endpoint_created",
+        scopeId: "session-1",
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_endpoint_forwarding_enabled",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          endpoint: expect.objectContaining({ status: "enabled" }),
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_endpoint_access_updated",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          published: true,
+          endpoint: expect.objectContaining({ accessMode: "public" }),
+        }),
+      }),
+    );
+  });
+
   it("requires a running process before enabling forwarding", async () => {
     prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
       id: "endpoint-1",
@@ -341,6 +520,7 @@ describe("SessionApplicationService", () => {
       id: "group-1",
       kind: "app",
       ownerUserId: "user-1",
+      sessions: [{ id: "session-1" }],
     });
     prismaMock.sessionEndpoint.findFirst.mockResolvedValueOnce({
       id: "endpoint-1",

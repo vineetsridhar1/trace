@@ -974,7 +974,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       } else if (msg.type === "managed_git_remote_configured" && msg.sessionId && msg.checkpoint) {
         const checkpoint = msg.checkpoint;
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.recordGitCheckpoint(sessionId, checkpoint);
+          await sessionService.recordGitCheckpoint(sessionId, checkpoint, {
+            managedRemoteConfigured: true,
+          });
         });
       }
     } catch (err) {

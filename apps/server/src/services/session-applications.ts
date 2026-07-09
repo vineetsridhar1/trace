@@ -333,7 +333,14 @@ export class SessionApplicationService {
           lastError: null,
         },
       });
-      await this.ensureEndpoints(tx, group, appConfigId, processConfigId, processConfig.ports);
+      await this.ensureEndpoints(
+        tx,
+        group,
+        sessionId,
+        appConfigId,
+        processConfigId,
+        processConfig.ports,
+      );
       return process;
     });
 
@@ -392,7 +399,13 @@ export class SessionApplicationService {
         },
       });
       if (endpoint) {
-        await this.enableEndpointForProcess(endpoint.id, process, organizationId, userId);
+        await this.enableEndpointForProcess(
+          endpoint.id,
+          process,
+          sessionId,
+          organizationId,
+          userId,
+        );
       }
     }
 
@@ -510,7 +523,7 @@ export class SessionApplicationService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: endpoint.sessionGroupId,
+      scopeId: await this.latestSessionIdForGroup(endpoint.sessionGroupId, organizationId),
       eventType: "session_endpoint_forwarding_enabled",
       payload: { endpoint: publicEndpoint(updated) },
       actorType: "user",
@@ -522,6 +535,7 @@ export class SessionApplicationService {
   private async enableEndpointForProcess(
     endpointId: string,
     process: PrismaSessionApplicationProcess,
+    sessionId: string,
     organizationId: string,
     userId: string,
     accessMode?: SessionEndpointAccessMode | null,
@@ -543,7 +557,7 @@ export class SessionApplicationService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: endpoint.sessionGroupId,
+      scopeId: sessionId,
       eventType: "session_endpoint_forwarding_enabled",
       payload: { endpoint: publicEndpoint(updated) },
       actorType: "user",
@@ -564,7 +578,7 @@ export class SessionApplicationService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: endpoint.sessionGroupId,
+      scopeId: await this.latestSessionIdForGroup(endpoint.sessionGroupId, organizationId),
       eventType: "session_endpoint_forwarding_disabled",
       payload: { endpoint: publicEndpoint(updated) },
       actorType: "user",
@@ -586,7 +600,7 @@ export class SessionApplicationService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: endpoint.sessionGroupId,
+      scopeId: await this.latestSessionIdForGroup(endpoint.sessionGroupId, organizationId),
       eventType: "session_endpoint_rotated",
       payload: { endpoint: publicEndpoint(updated) },
       actorType: "user",
@@ -612,7 +626,7 @@ export class SessionApplicationService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: endpoint.sessionGroupId,
+      scopeId: await this.latestSessionIdForGroup(endpoint.sessionGroupId, organizationId),
       eventType: "session_endpoint_traffic_capture_updated",
       payload: { endpoint: publicEndpoint(updated) },
       actorType: "user",
@@ -634,7 +648,16 @@ export class SessionApplicationService {
   async publishAppSession(sessionGroupId: string, organizationId: string, userId: string) {
     const group = await prisma.sessionGroup.findFirstOrThrow({
       where: { id: sessionGroupId, organizationId },
-      select: { id: true, kind: true, ownerUserId: true },
+      select: {
+        id: true,
+        kind: true,
+        ownerUserId: true,
+        sessions: {
+          select: { id: true },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
     });
     await this.assertCanManage(group.id, organizationId, userId, group);
     if (group.kind !== "app") {
@@ -664,7 +687,7 @@ export class SessionApplicationService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: sessionGroupId,
+      scopeId: group.sessions[0]?.id ?? sessionGroupId,
       eventType: "session_endpoint_access_updated",
       payload: {
         endpoint: publicEndpoint(updated),
@@ -973,6 +996,7 @@ export class SessionApplicationService {
   private async ensureEndpoints(
     tx: Tx,
     group: ManagedSessionGroup,
+    sessionId: string,
     appConfigId: string,
     processConfigId: string,
     ports: Array<{ id: string; label: string; port: number; protocol: string }>,
@@ -1007,7 +1031,7 @@ export class SessionApplicationService {
         {
           organizationId: group.organizationId,
           scopeType: "session",
-          scopeId: group.id,
+          scopeId: sessionId,
           eventType: "session_endpoint_created",
           payload: { endpoint: publicEndpoint(endpoint) },
           actorType: "system",
@@ -1028,6 +1052,15 @@ export class SessionApplicationService {
       if (!existing) return key;
     }
     throw new Error("Could not generate unique endpoint key");
+  }
+
+  private async latestSessionIdForGroup(sessionGroupId: string, organizationId: string) {
+    const session = await prisma.session.findFirst({
+      where: { sessionGroupId, organizationId },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    });
+    return session?.id ?? sessionGroupId;
   }
 
   // Env vars in the repo config reference org secrets by name; the plaintext
