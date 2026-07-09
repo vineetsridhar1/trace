@@ -763,6 +763,12 @@ export interface BridgeAppProcessStarted {
   bridgeProcessId: string;
 }
 
+export interface BridgeAppProcessPortsDetected {
+  type: "app_process_ports_detected";
+  processInstanceId: string;
+  ports: Array<{ port: number; protocol: "http" }>;
+}
+
 export interface BridgeAppProcessLog {
   type: "app_process_log";
   processInstanceId: string;
@@ -853,6 +859,7 @@ export type BridgeMessage =
   | BridgeSetupScriptResult
   | BridgeSetupScriptLog
   | BridgeAppProcessStarted
+  | BridgeAppProcessPortsDetected
   | BridgeAppProcessLog
   | BridgeAppProcessExited
   | BridgeAppProcessError

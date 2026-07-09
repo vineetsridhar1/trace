@@ -96,10 +96,7 @@ describe("ManagedProcessManager", () => {
       messages,
       (message) => message.type === "setup_script_log" && message.data.includes("setup-ok"),
     );
-    const result = await waitFor(
-      messages,
-      (message) => message.type === "setup_script_result",
-    );
+    const result = await waitFor(messages, (message) => message.type === "setup_script_result");
     expect(result).toMatchObject({
       type: "setup_script_result",
       requestId: "setup-1",
@@ -133,6 +130,38 @@ describe("ManagedProcessManager", () => {
     );
     const exit = await waitFor(messages, (message) => message.type === "app_process_exited");
     expect(exit).toMatchObject({ type: "app_process_exited", processInstanceId: "process-1" });
+  });
+
+  it("reports newly detected listening ports for managed app processes", async () => {
+    const messages: BridgeMessage[] = [];
+    const detectPorts = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([5173]);
+    const manager = new ManagedProcessManager(
+      new Map([["session-1", process.cwd()]]),
+      (message) => messages.push(message),
+      detectPorts,
+    );
+
+    void manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: 'node -e "setInterval(() => {}, 1000)"',
+      cwd: ".",
+    });
+
+    const detected = await waitFor(
+      messages,
+      (message) => message.type === "app_process_ports_detected",
+    );
+    expect(detected).toMatchObject({
+      type: "app_process_ports_detected",
+      processInstanceId: "process-1",
+      ports: [{ port: 5173, protocol: "http" }],
+    });
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
   });
 
   it("stops the full process tree so ports can be reused", async () => {

@@ -203,6 +203,106 @@ describe("SessionApplicationService", () => {
     );
   });
 
+  it("creates and enables endpoints for runtime-detected listening ports", async () => {
+    const process = {
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      label: "Dev",
+      command: "pnpm dev",
+      workingDirectory: ".",
+      status: "running",
+      runtimeInstanceId: "runtime-1",
+      bridgeProcessId: "bridge-process-1",
+      exitCode: null,
+      lastError: null,
+      startedByUserId: "user-1",
+      startedAt: new Date("2026-06-07T00:00:00.000Z"),
+      stoppedAt: null,
+      lastHeartbeatAt: null,
+      createdAt: new Date("2026-06-07T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-07T00:00:00.000Z"),
+    };
+    const endpoint = {
+      id: "endpoint-detected",
+      key: "endpointkey2",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "detected-5173",
+      label: "Port 5173",
+      targetPort: 5173,
+      protocol: "http",
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: null,
+      disabledAt: null,
+      revokedAt: null,
+    };
+
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce(process);
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValueOnce(null);
+    prismaMock.sessionEndpoint.create.mockResolvedValueOnce(endpoint);
+    prismaMock.sessionEndpoint.findMany.mockResolvedValueOnce([endpoint]);
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce(endpoint);
+    prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
+      ...endpoint,
+      status: "enabled",
+      enabledByUserId: "user-1",
+      enabledAt: new Date("2026-06-07T00:00:01.000Z"),
+      currentRuntimeInstanceId: "runtime-1",
+    });
+
+    const endpoints = await new SessionApplicationService().recordDetectedPorts(
+      "process-1",
+      "org-1",
+      [
+        { port: 5173, protocol: "http" },
+        { port: 5173, protocol: "http" },
+        { port: 22, protocol: "http" },
+      ],
+    );
+
+    expect(endpoints).toEqual([endpoint]);
+    expect(prismaMock.sessionEndpoint.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sessionGroupId: "group-1",
+          appConfigId: "web",
+          processConfigId: "dev",
+          portConfigId: "detected-5173",
+          label: "Port 5173",
+          targetPort: 5173,
+        }),
+      }),
+    );
+    expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith({
+      where: { id: "endpoint-detected" },
+      data: expect.objectContaining({
+        status: "enabled",
+        enabledByUserId: "user-1",
+        currentRuntimeInstanceId: "runtime-1",
+      }),
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "session_endpoint_created" }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_endpoint_forwarding_enabled",
+        actorType: "system",
+        actorId: "bridge",
+      }),
+    );
+  });
+
   it("starts the default app preview before a managed repo exists", async () => {
     const repoLessAppGroup = {
       id: "group-1",

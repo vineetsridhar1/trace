@@ -26,6 +26,7 @@ const PROCESS_LOG_PRUNE_INTERVAL = 50;
 const PROCESS_LOG_PRUNE_BATCH = 200;
 const PROCESS_LOG_TRUNCATION_SUFFIX = "\n[trace] log chunk truncated";
 const APP_TOKENS_PATH = "trace.tokens.json";
+const DETECTED_PORT_PREFIX = "detected";
 
 type ManagedSessionGroup = {
   id: string;
@@ -571,8 +572,10 @@ export class SessionApplicationService {
     process: PrismaSessionApplicationProcess,
     sessionId: string,
     organizationId: string,
-    userId: string,
+    userId: string | null,
     accessMode?: SessionEndpointAccessMode | null,
+    actorType: "user" | "system" = "user",
+    actorId: string = userId ?? "system",
   ) {
     const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
       where: { id: endpointId, organizationId },
@@ -594,8 +597,8 @@ export class SessionApplicationService {
       scopeId: sessionId,
       eventType: "session_endpoint_forwarding_enabled",
       payload: { endpoint: publicEndpoint(updated) },
-      actorType: "user",
-      actorId: userId,
+      actorType,
+      actorId,
     });
     return updated;
   }
@@ -898,6 +901,91 @@ export class SessionApplicationService {
       actorId: "bridge",
     });
     return process;
+  }
+
+  async recordDetectedPorts(
+    processId: string,
+    organizationId: string,
+    ports: Array<{ port?: unknown; protocol?: unknown }>,
+  ) {
+    const detectedPorts = [
+      ...new Set(
+        ports
+          .filter((port) => port.protocol === "http" || port.protocol == null)
+          .map((port) => (typeof port.port === "number" ? Math.floor(port.port) : NaN))
+          .filter((port) => Number.isInteger(port) && port > 1024 && port <= 65535),
+      ),
+    ];
+    if (detectedPorts.length === 0) return [];
+
+    const process = await prisma.sessionApplicationProcess.findFirst({
+      where: { id: processId, organizationId },
+    });
+    if (!process) return [];
+
+    const group = await prisma.sessionGroup.findFirstOrThrow({
+      where: { id: process.sessionGroupId, organizationId },
+      select: {
+        id: true,
+        organizationId: true,
+        kind: true,
+        ownerUserId: true,
+        visibility: true,
+        repoId: true,
+        workdir: true,
+        repo: { select: { id: true, setupConfig: true } },
+        sessions: {
+          select: { id: true, workdir: true, connection: true },
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+    });
+    const sessionId = group.sessions[0]?.id ?? process.sessionGroupId;
+
+    const endpointInputs = detectedPorts.map((port) => ({
+      id: `${DETECTED_PORT_PREFIX}-${port}`,
+      label: `Port ${port}`,
+      port,
+      protocol: "http",
+    }));
+
+    await prisma.$transaction(async (tx) => {
+      await this.ensureEndpoints(
+        tx,
+        group as ManagedSessionGroup,
+        sessionId,
+        process.appConfigId,
+        process.processConfigId,
+        endpointInputs,
+      );
+    });
+
+    const endpoints = await prisma.sessionEndpoint.findMany({
+      where: {
+        organizationId,
+        sessionGroupId: process.sessionGroupId,
+        appConfigId: process.appConfigId,
+        processConfigId: process.processConfigId,
+        portConfigId: { in: endpointInputs.map((port) => port.id) },
+      },
+      orderBy: { targetPort: "asc" },
+    });
+
+    for (const endpoint of endpoints) {
+      if (endpoint.status === "enabled") continue;
+      await this.enableEndpointForProcess(
+        endpoint.id,
+        process,
+        sessionId,
+        organizationId,
+        process.startedByUserId,
+        endpoint.accessMode,
+        "system",
+        "bridge",
+      );
+    }
+
+    return endpoints;
   }
 
   async completeSetupScriptRun(
