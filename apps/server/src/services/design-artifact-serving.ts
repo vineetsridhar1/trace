@@ -71,6 +71,8 @@ export function buildDesignArtifactBootstrapHtml() {
     }
 
     function installOverlay() {
+      if (window.__traceDesignOverlayInstalled) return;
+      window.__traceDesignOverlayInstalled = true;
       document.addEventListener("click", function(event) {
         var target = event.target;
         if (!target || !target.closest) return;
@@ -84,6 +86,52 @@ export function buildDesignArtifactBootstrapHtml() {
           },
         });
       }, true);
+    }
+
+    function renderCommentPins(comments) {
+      document.querySelectorAll("[data-trace-comment-layer]").forEach(function(existing) {
+        existing.remove();
+      });
+      if (!Array.isArray(comments) || comments.length === 0) return 0;
+
+      var style = document.createElement("style");
+      style.setAttribute("data-trace-comment-layer", "style");
+      style.textContent = "[data-trace-comment-layer='root']{position:fixed;inset:0;z-index:2147483647;pointer-events:none}[data-trace-comment-pin]{position:absolute;max-width:220px;transform:translate(-50%,-100%);background:#111827;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 8px;font:12px/1.35 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.24)}[data-trace-comment-pin]::after{content:'';position:absolute;left:50%;bottom:-6px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);background:#111827;border-bottom:1px solid rgba(255,255,255,.25);border-right:1px solid rgba(255,255,255,.25)}";
+      document.head.appendChild(style);
+
+      var layer = document.createElement("div");
+      layer.setAttribute("data-trace-comment-layer", "root");
+      document.body.appendChild(layer);
+
+      var pinCount = 0;
+      comments.forEach(function(comment) {
+        if (!comment || !comment.anchor) return;
+        var anchor = comment.anchor;
+        var left = null;
+        var top = null;
+        if (anchor.type === "element" && anchor.dataEl) {
+          var target = null;
+          document.querySelectorAll("[data-el]").forEach(function(candidate) {
+            if (!target && candidate.getAttribute("data-el") === anchor.dataEl) target = candidate;
+          });
+          if (!target) return;
+          var rect = target.getBoundingClientRect();
+          left = rect.left + rect.width / 2;
+          top = rect.top;
+        } else if (anchor.type === "artifact" && typeof anchor.x === "number" && typeof anchor.y === "number") {
+          left = Math.max(0, Math.min(window.innerWidth, anchor.x * window.innerWidth));
+          top = Math.max(0, Math.min(window.innerHeight, anchor.y * window.innerHeight));
+        }
+        if (left == null || top == null) return;
+        var pin = document.createElement("div");
+        pin.setAttribute("data-trace-comment-pin", comment.id || "");
+        pin.style.left = left + "px";
+        pin.style.top = top + "px";
+        pin.textContent = comment.body || "Comment";
+        layer.appendChild(pin);
+        pinCount += 1;
+      });
+      return pinCount;
     }
 
     window.addEventListener("error", function(event) {
@@ -106,7 +154,18 @@ export function buildDesignArtifactBootstrapHtml() {
         document.write(data.html);
         document.close();
         if (data.overlayEnabled !== false) installOverlay();
-        postToParent({ type: "trace:artifact:rendered" });
+        setTimeout(function() {
+          try {
+            var pinCount = renderCommentPins(data.comments);
+            postToParent({ type: "trace:artifact:rendered", pinCount: pinCount });
+          } catch (error) {
+            postToParent({
+              type: "trace:artifact:error",
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error && error.stack ? error.stack : null,
+            });
+          }
+        }, 0);
       } catch (error) {
         postToParent({
           type: "trace:artifact:error",

@@ -3,10 +3,12 @@ import type { Event } from "@trace/gql";
 import {
   buildDesignArtifactBootstrapUrl,
   buildDesignArtifactPublicUrlFromOrigin,
+  designCommentsForPreview,
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
   normalizeDesignAnchor,
   streamingArtifactsFromEvents,
+  type DesignComment,
 } from "./DesignCanvas";
 
 describe("design canvas anchors", () => {
@@ -55,6 +57,44 @@ describe("design canvas anchors", () => {
       sendToAgent: true,
       timestamp: "2026-07-09T10:00:00.000Z",
     });
+  });
+
+  it("preserves artifact coordinates for preview comment pins", () => {
+    const comment: DesignComment = {
+      id: "event-1",
+      artifactId: "artifact-1",
+      body: "Move this lower",
+      anchor: normalizeDesignAnchor({ type: "artifact", x: 0.4, y: 0.2 }),
+      sendToAgent: false,
+      timestamp: "2026-07-09T10:00:00.000Z",
+    };
+
+    expect(designCommentsForPreview([comment])).toEqual([
+      {
+        id: "event-1",
+        body: "Move this lower",
+        anchor: { type: "artifact", x: 0.4, y: 0.2 },
+      },
+    ]);
+  });
+
+  it("passes element anchors through the preview comment payload", () => {
+    const comment: DesignComment = {
+      id: "event-2",
+      artifactId: "artifact-1",
+      body: "Tighten the headline",
+      anchor: normalizeDesignAnchor({ type: "element", dataEl: "hero-title", text: "Hero" }),
+      sendToAgent: true,
+      timestamp: "2026-07-09T10:00:00.000Z",
+    };
+
+    expect(designCommentsForPreview([comment])).toEqual([
+      {
+        id: "event-2",
+        body: "Tighten the headline",
+        anchor: { type: "element", dataEl: "hero-title", text: "Hero" },
+      },
+    ]);
   });
 
   it("uses srcDoc only as an explicit development fallback", () => {

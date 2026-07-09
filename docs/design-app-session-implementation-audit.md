@@ -217,3 +217,9 @@ fan-out identity and disappear from the canvas. Failure events now include the s
 generation/direction metadata as started and streamed events, and the canvas renders a
 visible failed artifact card with escaped error text so partial fan-out failures are
 observable.
+
+During this continuation, design comments were visible in card chrome but not pinned
+inside the origin-isolated artifact preview. The canvas now sends comment anchors to the
+`_bootstrap` authoring frame, the bootstrap overlay renders element/artifact pins with
+safe text insertion, and the browser smoke verifies a rendered preview reports
+`pinCount: 1`.

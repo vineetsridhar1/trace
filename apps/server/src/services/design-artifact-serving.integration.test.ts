@@ -71,6 +71,13 @@ function parentHarnessHtml(port: number) {
 </html>`;
 
   const serializedArtifactHtml = JSON.stringify(artifactHtml).replace(/<\/script/gi, "<\\/script");
+  const serializedComments = JSON.stringify([
+    {
+      id: "comment-1",
+      body: "Check the hero spacing",
+      anchor: { type: "element", dataEl: "hero" },
+    },
+  ]);
 
   return `<!doctype html>
 <html>
@@ -92,6 +99,7 @@ function parentHarnessHtml(port: number) {
         type: "trace:artifact:render",
         html: artifactHtml,
         overlayEnabled: true,
+        comments: ${serializedComments},
         nonce: nonce
       }, artifactOrigin);
     }
@@ -103,7 +111,7 @@ function parentHarnessHtml(port: number) {
         mark("ready");
         renderArtifact();
       } else if (event.data.type === "trace:artifact:rendered") {
-        mark("rendered");
+        mark("rendered:pins=" + event.data.pinCount);
       } else if (event.data.type === "trace:artifact:self-check") {
         mark("self-check:" + event.data.text);
       } else if (event.data.type === "trace:artifact:error") {
@@ -206,7 +214,7 @@ describe("design artifact user-content browser integration", () => {
         ).finally(() => fs.rmSync(profileDir, { recursive: true, force: true }));
 
         expect(stdout).toContain("pending|ready");
-        expect(stdout).toContain("|rendered");
+        expect(stdout).toContain("|rendered:pins=1");
         expect(stdout).toContain("self-check:Browser rendered design artifact");
       } finally {
         await close(server);

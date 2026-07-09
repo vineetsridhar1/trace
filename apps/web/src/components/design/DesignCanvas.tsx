@@ -159,9 +159,11 @@ export type DesignAnchor = {
   type: "artifact" | "element";
   dataEl?: string;
   text?: string;
+  x?: number;
+  y?: number;
 };
 
-type DesignComment = {
+export type DesignComment = {
   id: string;
   artifactId: string;
   body: string;
@@ -330,12 +332,15 @@ export function normalizeDesignAnchor(value: unknown): DesignAnchor | null {
   const type = anchor.type === "artifact" || anchor.type === "element" ? anchor.type : "element";
   const dataEl = stringField(anchor.dataEl) ?? stringField(anchor.id);
   const text = stringField(anchor.text);
+  const x = numberField(anchor.x);
+  const y = numberField(anchor.y);
   if (type === "element" && !dataEl) return null;
 
   return {
     type,
     ...(dataEl ? { dataEl } : {}),
     ...(text ? { text } : {}),
+    ...(type === "artifact" && x != null && y != null ? { x, y } : {}),
   };
 }
 
@@ -471,6 +476,14 @@ function anchorLabel(anchor: DesignAnchor | null): string {
   return anchor.dataEl ? `[data-el="${anchor.dataEl}"]` : "Element";
 }
 
+export function designCommentsForPreview(comments: DesignComment[]) {
+  return comments.map((comment) => ({
+    id: comment.id,
+    body: comment.body,
+    anchor: comment.anchor,
+  }));
+}
+
 function ArtifactCard({
   artifact,
   selected,
@@ -506,11 +519,12 @@ function ArtifactCard({
         type: "trace:artifact:render",
         html: artifact.html,
         overlayEnabled: true,
+        comments: designCommentsForPreview(comments),
         nonce: nonceRef.current,
       },
       bootstrapOrigin,
     );
-  }, [artifact.html, bootstrapOrigin]);
+  }, [artifact.html, bootstrapOrigin, comments]);
 
   useEffect(() => {
     if (bootstrapUrl) postArtifactHtml();

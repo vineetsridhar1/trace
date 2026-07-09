@@ -134,6 +134,17 @@ describe("design artifact user-content serving", () => {
     expect(html).not.toContain("{{artifact");
   });
 
+  it("serves a bootstrap shell that renders authoring comment pins", () => {
+    const html = buildDesignArtifactBootstrapHtml();
+
+    expect(html).toContain("renderCommentPins(data.comments)");
+    expect(html).toContain("data-trace-comment-layer");
+    expect(html).toContain("data-trace-comment-pin");
+    expect(html).toContain('candidate.getAttribute("data-el") === anchor.dataEl');
+    expect(html).toContain('pin.textContent = comment.body || "Comment"');
+    expect(html).toContain('type: "trace:artifact:rendered", pinCount: pinCount');
+  });
+
   it("404s unpublished or missing artifacts", async () => {
     prismaMock.artifact.findFirst.mockResolvedValueOnce(null);
     const response = makeResponse();
