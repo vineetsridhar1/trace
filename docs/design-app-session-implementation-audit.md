@@ -607,3 +607,10 @@ member for a hidden managed repo. Managed app repos now require both org members
 visibility of a session group linked to that repo before minting clone/export credentials,
 and smart-HTTP user-token auth re-checks the same session-group visibility before serving
 git-upload-pack or git-receive-pack.
+
+During this audit pass, the hosted design smoke still exercised only the default PDF
+export path and an element anchor without geometry. The smoke now sends explicit
+page-size and margin options to `exportDesignArtifactPdf` and asserts they round trip on
+the completion event, and it stores/asserts element-anchor bounds on the comment payload.
+That keeps the hosted acceptance check aligned with the documented print-fidelity and
+selection-anchor contracts.

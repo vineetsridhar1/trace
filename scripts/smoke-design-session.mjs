@@ -141,8 +141,8 @@ const PATCH_DESIGN_ARTIFACT_TOKENS = `
 `;
 
 const EXPORT_DESIGN_ARTIFACT_PDF = `
-  mutation SmokeExportDesignArtifactPdf($artifactId: ID!) {
-    exportDesignArtifactPdf(artifactId: $artifactId) {
+  mutation SmokeExportDesignArtifactPdf($artifactId: ID!, $pageOptions: DesignPdfPageOptionsInput) {
+    exportDesignArtifactPdf(artifactId: $artifactId, pageOptions: $pageOptions) {
       id
       eventType
       payload
@@ -490,10 +490,11 @@ for (const artifact of generatedArtifacts) {
 const usage = await waitForDesignUsage(session.id);
 
 const selected = generatedArtifacts[0];
+const commentBounds = { left: 24, top: 32, width: 480, height: 160, x: 0.1, y: 0.15 };
 const commentData = await graphql(COMMENT_DESIGN_ARTIFACT, {
   artifactId: selected.id,
   body: "Smoke comment pinned to the hero",
-  anchor: { type: "element", dataEl: "hero", text: expectedText },
+  anchor: { type: "element", dataEl: "hero", text: expectedText, bounds: commentBounds },
   sendToAgent: true,
 });
 if (commentData.commentDesignArtifact.eventType !== "design_comment_added") {
@@ -516,6 +517,12 @@ if (
   commentAnchor.text !== expectedText
 ) {
   throw new Error("Comment element anchor was not preserved in the event payload");
+}
+const preservedBounds = asObject(commentAnchor.bounds, "Comment anchor bounds");
+for (const key of ["left", "top", "width", "height", "x", "y"]) {
+  if (preservedBounds[key] !== commentBounds[key]) {
+    throw new Error(`Comment anchor bound ${key} is ${preservedBounds[key] ?? "missing"}`);
+  }
 }
 const commentIteration = await waitForChildArtifact(
   session.sessionGroupId,
@@ -545,7 +552,18 @@ if (patchedTokens["--trace-smoke-accent"] !== "#0f766e") {
   throw new Error("Token tweak metadata does not include the requested CSS variable");
 }
 
-const exportData = await graphql(EXPORT_DESIGN_ARTIFACT_PDF, { artifactId: tweaked.id });
+const pageOptions = {
+  widthPx: 1440,
+  heightPx: 1080,
+  marginTopPx: 0,
+  marginRightPx: 12,
+  marginBottomPx: 24,
+  marginLeftPx: 12,
+};
+const exportData = await graphql(EXPORT_DESIGN_ARTIFACT_PDF, {
+  artifactId: tweaked.id,
+  pageOptions,
+});
 if (exportData.exportDesignArtifactPdf.eventType !== "design_export_completed") {
   throw new Error(`Unexpected export event ${exportData.exportDesignArtifactPdf.eventType}`);
 }
@@ -567,6 +585,12 @@ if (typeof exportPayload.fileName !== "string" || !exportPayload.fileName.endsWi
 }
 if (typeof exportPayload.fileId !== "string" || !exportPayload.fileId.startsWith("uploads/")) {
   throw new Error(`PDF export fileId is ${exportPayload.fileId ?? "missing"}`);
+}
+const exportPageOptions = asObject(exportPayload.pageOptions, "PDF export page options");
+for (const key of Object.keys(pageOptions)) {
+  if (exportPageOptions[key] !== pageOptions[key]) {
+    throw new Error(`PDF export page option ${key} is ${exportPageOptions[key] ?? "missing"}`);
+  }
 }
 if (typeof exportPayload.fileUrl !== "string" || !exportPayload.fileUrl.trim()) {
   throw new Error("PDF export fileUrl is missing");
