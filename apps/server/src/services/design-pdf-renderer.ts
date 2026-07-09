@@ -11,6 +11,15 @@ const DEFAULT_RENDER_QUEUE_SIZE = 16;
 
 type RenderTask<T> = () => Promise<T>;
 
+export type DesignPdfPageOptions = {
+  widthPx?: number | null;
+  heightPx?: number | null;
+  marginTopPx?: number | null;
+  marginRightPx?: number | null;
+  marginBottomPx?: number | null;
+  marginLeftPx?: number | null;
+};
+
 class BoundedRenderPool {
   private active = 0;
   private readonly queue: Array<() => void> = [];
@@ -90,7 +99,21 @@ function printRenderCsp(): string {
   ].join("; ");
 }
 
-function wrapPrintHtml(html: string): string {
+function pageCss(options?: DesignPdfPageOptions | null): string {
+  const size =
+    options?.widthPx && options.heightPx
+      ? ` size: ${options.widthPx}px ${options.heightPx}px;`
+      : "";
+  const margins = [
+    options?.marginTopPx ?? 0,
+    options?.marginRightPx ?? 0,
+    options?.marginBottomPx ?? 0,
+    options?.marginLeftPx ?? 0,
+  ];
+  return `@page {${size} margin: ${margins.map((value) => `${value}px`).join(" ")}; }`;
+}
+
+function wrapPrintHtml(html: string, pageOptions?: DesignPdfPageOptions | null): string {
   return `<!doctype html>
 <html>
 <head>
@@ -98,7 +121,7 @@ function wrapPrintHtml(html: string): string {
   <meta http-equiv="Content-Security-Policy" content="${printRenderCsp()}" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    @page { margin: 0; }
+    ${pageCss(pageOptions)}
     html, body { margin: 0; background: white; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   </style>
@@ -122,14 +145,22 @@ export function countPdfPages(pdf: Buffer): number | null {
 const renderPool = new BoundedRenderPool();
 
 export const designPdfRenderer = {
-  async renderHtmlToPdf(input: { html: string; artifactId: string }): Promise<Buffer> {
+  async renderHtmlToPdf(input: {
+    html: string;
+    artifactId: string;
+    pageOptions?: DesignPdfPageOptions | null;
+  }): Promise<Buffer> {
     return renderPool.run(async () => {
       const workdir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-design-pdf-"));
       const inputPath = path.join(workdir, `${input.artifactId}.html`);
       const outputPath = path.join(workdir, `${input.artifactId}.pdf`);
 
       try {
-        await fs.promises.writeFile(inputPath, wrapPrintHtml(input.html), "utf8");
+        await fs.promises.writeFile(
+          inputPath,
+          wrapPrintHtml(input.html, input.pageOptions ?? null),
+          "utf8",
+        );
         await execFileAsync(chromiumExecutable(), chromeArgs(inputPath, outputPath), {
           timeout: readPositiveInt(
             process.env.TRACE_DESIGN_PDF_RENDER_TIMEOUT_MS,

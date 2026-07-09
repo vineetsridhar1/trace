@@ -455,10 +455,12 @@ describe("artifactService", () => {
       actorType: "user",
       actorId: "user-1",
     });
-    expect(designPdfRendererMock.renderHtmlToPdf).toHaveBeenCalledWith({
-      html: expect.stringContaining("--trace-accent"),
-      artifactId: "artifact-1",
-    });
+    expect(designPdfRendererMock.renderHtmlToPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining("--trace-accent"),
+        artifactId: "artifact-1",
+      }),
+    );
     expect(storageMock.putObject).toHaveBeenCalledWith(
       expect.stringMatching(/^uploads\/org-1\/.+-Dashboard\.pdf$/),
       pdfBuffer,
@@ -482,6 +484,63 @@ describe("artifactService", () => {
         actorId: "system",
       }),
     );
+  });
+
+  it("passes PDF page options through rendering and export events", async () => {
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(designArtifact());
+
+    await artifactService.exportDesignArtifactPdf({
+      artifactId: "artifact-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      pageOptions: {
+        widthPx: 1920,
+        heightPx: 1080,
+        marginTopPx: 24,
+        marginRightPx: 32,
+        marginBottomPx: 40,
+        marginLeftPx: 48,
+      },
+    });
+
+    const pageOptions = {
+      widthPx: 1920,
+      heightPx: 1080,
+      marginTopPx: 24,
+      marginRightPx: 32,
+      marginBottomPx: 40,
+      marginLeftPx: 48,
+    };
+    expect(designPdfRendererMock.renderHtmlToPdf).toHaveBeenCalledWith(
+      expect.objectContaining({ artifactId: "artifact-1", pageOptions }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_export_requested",
+        payload: expect.objectContaining({ pageOptions }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_export_completed",
+        payload: expect.objectContaining({ pageOptions }),
+      }),
+    );
+  });
+
+  it("rejects incomplete PDF page dimensions", async () => {
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(designArtifact());
+
+    await expect(
+      artifactService.exportDesignArtifactPdf({
+        artifactId: "artifact-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        pageOptions: { widthPx: 1920 },
+      }),
+    ).rejects.toThrow("PDF page width and height must be provided together.");
+
+    expect(designPdfRendererMock.renderHtmlToPdf).not.toHaveBeenCalled();
   });
 
   it("emits failed PDF export completions when rendering fails", async () => {

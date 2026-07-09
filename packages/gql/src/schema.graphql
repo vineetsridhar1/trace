@@ -414,6 +414,15 @@ type ManagedGitCredential {
   expiresAt: DateTime!
 }
 
+input DesignPdfPageOptionsInput {
+  widthPx: Int
+  heightPx: Int
+  marginTopPx: Int
+  marginRightPx: Int
+  marginBottomPx: Int
+  marginLeftPx: Int
+}
+
 type RepoApplicationConfig {
   setupScripts: [RepoSetupScript!]!
   applications: [RepoApplicationDefinition!]!
@@ -1505,7 +1514,7 @@ type Mutation {
   patchDesignArtifactTokens(artifactId: ID!, tokens: JSON!): Artifact!
   commentDesignArtifact(artifactId: ID!, body: String!, anchor: JSON, sendToAgent: Boolean): Event!
   publishDesignArtifact(artifactId: ID!): Artifact!
-  exportDesignArtifactPdf(artifactId: ID!): Event!
+  exportDesignArtifactPdf(artifactId: ID!, pageOptions: DesignPdfPageOptionsInput): Event!
   promoteDesignArtifactToCodingSession(
     artifactId: ID!
     prompt: String

@@ -355,6 +355,15 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPdfPageOptionsInput = {
+  heightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginBottomPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginLeftPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginRightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginTopPx?: InputMaybe<Scalars["Int"]["input"]>;
+  widthPx?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
 export type DesignPromptContentCatalog = {
   __typename?: "DesignPromptContentCatalog";
   designSystems: Array<DesignSystemOption>;
@@ -969,6 +978,7 @@ export type MutationEnableSessionEndpointForwardingArgs = {
 
 export type MutationExportDesignArtifactPdfArgs = {
   artifactId: Scalars["ID"]["input"];
+  pageOptions?: InputMaybe<DesignPdfPageOptionsInput>;
 };
 
 export type MutationForkSessionArgs = {
@@ -2556,6 +2566,7 @@ export type ResolversTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
+  DesignPdfPageOptionsInput: DesignPdfPageOptionsInput;
   DesignPromptContentCatalog: ResolverTypeWrapper<DesignPromptContentCatalog>;
   DesignSkillOption: ResolverTypeWrapper<DesignSkillOption>;
   DesignSystemOption: ResolverTypeWrapper<DesignSystemOption>;
@@ -2699,6 +2710,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
+  DesignPdfPageOptionsInput: DesignPdfPageOptionsInput;
   DesignPromptContentCatalog: DesignPromptContentCatalog;
   DesignSkillOption: DesignSkillOption;
   DesignSystemOption: DesignSystemOption;

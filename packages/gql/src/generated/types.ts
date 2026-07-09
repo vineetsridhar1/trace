@@ -352,6 +352,15 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPdfPageOptionsInput = {
+  heightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginBottomPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginLeftPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginRightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginTopPx?: InputMaybe<Scalars["Int"]["input"]>;
+  widthPx?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
 export type DesignPromptContentCatalog = {
   __typename?: "DesignPromptContentCatalog";
   designSystems: Array<DesignSystemOption>;
@@ -966,6 +975,7 @@ export type MutationEnableSessionEndpointForwardingArgs = {
 
 export type MutationExportDesignArtifactPdfArgs = {
   artifactId: Scalars["ID"]["input"];
+  pageOptions?: InputMaybe<DesignPdfPageOptionsInput>;
 };
 
 export type MutationForkSessionArgs = {

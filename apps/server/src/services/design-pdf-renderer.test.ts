@@ -100,6 +100,31 @@ describe("designPdfRenderer", () => {
     expect(renderedInput).toContain("img-src data: blob:");
   });
 
+  it("applies requested page size and margins in print CSS", async () => {
+    let renderedInput = "";
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      renderedInput = fs.readFileSync(inputPathFrom(args), "utf8");
+      fs.writeFileSync(outputPathFrom(args), Buffer.from("%PDF-1.7\n"));
+      callbackFrom(args)(null, "", "");
+      return null as never;
+    });
+
+    await designPdfRenderer.renderHtmlToPdf({
+      artifactId: "artifact-1",
+      html: "<main>Deck</main>",
+      pageOptions: {
+        widthPx: 1920,
+        heightPx: 1080,
+        marginTopPx: 24,
+        marginRightPx: 32,
+        marginBottomPx: 40,
+        marginLeftPx: 48,
+      },
+    });
+
+    expect(renderedInput).toContain("@page { size: 1920px 1080px; margin: 24px 32px 40px 48px; }");
+  });
+
   it("rejects empty Chromium PDF output", async () => {
     execFileMock.mockImplementation((...args: unknown[]) => {
       fs.writeFileSync(outputPathFrom(args), Buffer.alloc(0));

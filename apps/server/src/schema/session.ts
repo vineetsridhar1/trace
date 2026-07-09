@@ -418,10 +418,25 @@ export const sessionMutations = {
       actorType: ctx.actorType,
     });
   },
-  exportDesignArtifactPdf: (_: unknown, args: { artifactId: string }, ctx: Context) => {
+  exportDesignArtifactPdf: (
+    _: unknown,
+    args: {
+      artifactId: string;
+      pageOptions?: {
+        widthPx?: number | null;
+        heightPx?: number | null;
+        marginTopPx?: number | null;
+        marginRightPx?: number | null;
+        marginBottomPx?: number | null;
+        marginLeftPx?: number | null;
+      } | null;
+    },
+    ctx: Context,
+  ) => {
     if (!ctx.userId) throw new AuthenticationError();
     return artifactService.exportDesignArtifactPdf({
       artifactId: args.artifactId,
+      pageOptions: args.pageOptions ?? null,
       organizationId: requireOrgContext(ctx),
       actorId: ctx.userId,
       actorType: ctx.actorType,

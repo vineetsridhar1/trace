@@ -535,3 +535,10 @@ accepts `referenceArtifactIds`, validates them against the same design session, 
 their hydrated HTML in the coding-session brief, records them in
 `design_artifact_promoted`, and the canvas passes the secondary selected artifact when
 two-card selection is active.
+
+During this audit pass, PDF export still had no page-options contract even though the
+docs call for page size and margin fidelity. `exportDesignArtifactPdf` now accepts
+`DesignPdfPageOptionsInput`, validates dimensions and margins, passes them into the
+bounded Chromium renderer, emits them on export events, and the renderer applies them via
+print `@page` CSS. Focused service and renderer tests cover option propagation,
+validation, and generated print CSS.

@@ -14,7 +14,11 @@ import {
 } from "./design-artifact-storage.js";
 import { designGenerationService } from "./design-generation.js";
 import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
-import { countPdfPages, designPdfRenderer } from "./design-pdf-renderer.js";
+import {
+  countPdfPages,
+  designPdfRenderer,
+  type DesignPdfPageOptions,
+} from "./design-pdf-renderer.js";
 import { sessionService } from "./session.js";
 
 function serializeArtifact(artifact: {
@@ -150,6 +154,46 @@ function sanitizeFilename(value: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
   return sanitized || "design";
+}
+
+function normalizePdfPageOptions(
+  value: DesignPdfPageOptions | null | undefined,
+): DesignPdfPageOptions | null {
+  if (!value) return null;
+  const normalized: DesignPdfPageOptions = {};
+  const assignDimension = (key: "widthPx" | "heightPx", raw: number | null | undefined) => {
+    if (raw == null) return;
+    if (!Number.isFinite(raw) || raw < 100 || raw > 10000) {
+      throw new ValidationError("PDF page dimensions must be between 100 and 10000 pixels.");
+    }
+    normalized[key] = Math.floor(raw);
+  };
+  const assignMargin = (
+    key: "marginTopPx" | "marginRightPx" | "marginBottomPx" | "marginLeftPx",
+    raw: number | null | undefined,
+  ) => {
+    if (raw == null) return;
+    if (!Number.isFinite(raw) || raw < 0 || raw > 1000) {
+      throw new ValidationError("PDF page margins must be between 0 and 1000 pixels.");
+    }
+    normalized[key] = Math.floor(raw);
+  };
+
+  assignDimension("widthPx", value.widthPx);
+  assignDimension("heightPx", value.heightPx);
+  assignMargin("marginTopPx", value.marginTopPx);
+  assignMargin("marginRightPx", value.marginRightPx);
+  assignMargin("marginBottomPx", value.marginBottomPx);
+  assignMargin("marginLeftPx", value.marginLeftPx);
+
+  if (
+    (normalized.widthPx == null && normalized.heightPx != null) ||
+    (normalized.widthPx != null && normalized.heightPx == null)
+  ) {
+    throw new ValidationError("PDF page width and height must be provided together.");
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
 async function getDesignArtifactForWrite(
@@ -643,12 +687,14 @@ export const artifactService = {
     organizationId: string;
     actorId: string;
     actorType?: ActorType;
+    pageOptions?: DesignPdfPageOptions | null;
   }) {
     const { artifact, sessionId } = await getDesignArtifactForWrite(
       input.artifactId,
       input.organizationId,
       input.actorId,
     );
+    const pageOptions = normalizePdfPageOptions(input.pageOptions);
     const fileName = `${sanitizeFilename(artifact.title || "design")}.pdf`;
     const fileKey = `uploads/${input.organizationId}/${randomUUID()}-${fileName}`;
 
@@ -663,6 +709,7 @@ export const artifactService = {
         exportType: "pdf",
         status: "requested",
         fileName,
+        ...(pageOptions ? { pageOptions } : {}),
       } as Prisma.InputJsonValue,
       actorType: input.actorType ?? "user",
       actorId: input.actorId,
@@ -672,6 +719,7 @@ export const artifactService = {
       const pdf = await designPdfRenderer.renderHtmlToPdf({
         html: await resolveDesignArtifactHtml(artifact),
         artifactId: artifact.id,
+        pageOptions,
       });
       const pageCount = countPdfPages(pdf);
       await storage.putObject(fileKey, pdf, "application/pdf");
@@ -692,6 +740,7 @@ export const artifactService = {
           fileUrl,
           byteSize: pdf.byteLength,
           ...(pageCount !== null ? { pageCount } : {}),
+          ...(pageOptions ? { pageOptions } : {}),
         } as Prisma.InputJsonValue,
         actorType: "system",
         actorId: "system",
@@ -710,6 +759,7 @@ export const artifactService = {
           status: "failed",
           fileName,
           error: message,
+          ...(pageOptions ? { pageOptions } : {}),
         } as Prisma.InputJsonValue,
         actorType: "system",
         actorId: "system",
