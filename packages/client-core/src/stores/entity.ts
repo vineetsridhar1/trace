@@ -18,6 +18,7 @@ import type {
   AgentEnvironment,
   SessionApplicationProcess,
   SessionEndpoint,
+  SessionApplicationLogEntry,
   Artifact,
 } from "@trace/gql";
 
@@ -53,6 +54,7 @@ export type EntityTableMap = {
   agentEnvironments: AgentEnvironment;
   sessionApplicationProcesses: SessionApplicationProcess;
   sessionEndpoints: SessionEndpoint;
+  sessionApplicationLogs: SessionApplicationLogEntry;
   artifacts: ArtifactEntity;
 };
 
@@ -121,6 +123,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   agentEnvironments: {},
   sessionApplicationProcesses: {},
   sessionEndpoints: {},
+  sessionApplicationLogs: {},
   artifacts: {},
   eventsByScope: {},
   _eventIdsByScope: {},
@@ -361,6 +364,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       agentEnvironments: {},
       sessionApplicationProcesses: {},
       sessionEndpoints: {},
+      sessionApplicationLogs: {},
       artifacts: {},
       eventsByScope: {},
       _eventIdsByScope: {},
@@ -695,6 +699,7 @@ const ENTITY_KEYS: EntityType[] = [
   "agentEnvironments",
   "sessionApplicationProcesses",
   "sessionEndpoints",
+  "sessionApplicationLogs",
   "artifacts",
 ];
 

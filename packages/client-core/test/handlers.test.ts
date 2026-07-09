@@ -20,6 +20,10 @@ function resetStores() {
     inboxItems: {},
     messages: {},
     queuedMessages: {},
+    agentEnvironments: {},
+    sessionApplicationProcesses: {},
+    sessionEndpoints: {},
+    sessionApplicationLogs: {},
     artifacts: {},
     eventsByScope: {},
     _eventIdsByScope: {},
@@ -198,6 +202,32 @@ describe("handleOrgEvent", () => {
       id: "artifact-1",
       sessionGroupId: "group-1",
       title: "Dashboard direction",
+    });
+  });
+
+  it("upserts app process logs from append events", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_application_log_appended",
+        scopeId: "session-1",
+        payload: {
+          logEntry: {
+            id: "log-1",
+            processId: "process-1",
+            stream: "stdout",
+            data: "ready on 3000",
+            sequence: 7,
+            timestamp: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationLogs["log-1"]).toMatchObject({
+      id: "log-1",
+      processId: "process-1",
+      data: "ready on 3000",
+      sequence: 7,
     });
   });
 
@@ -1005,6 +1035,34 @@ describe("handleSessionEvent", () => {
       id: "artifact-1",
       title: "Published dashboard",
       publicUrl: "https://artifact-1.traceusercontent.test/",
+    });
+  });
+
+  it("upserts app process logs from full session events", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_application_log_appended",
+        scopeId: "session-1",
+        payload: {
+          logEntry: {
+            id: "log-1",
+            processId: "process-1",
+            stream: "stderr",
+            data: "warning",
+            sequence: 2,
+            timestamp: "2026-01-01T00:00:02.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationLogs["log-1"]).toMatchObject({
+      id: "log-1",
+      processId: "process-1",
+      stream: "stderr",
+      data: "warning",
+      sequence: 2,
     });
   });
 });

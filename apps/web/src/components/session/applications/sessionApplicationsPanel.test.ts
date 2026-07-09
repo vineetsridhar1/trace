@@ -4,6 +4,7 @@ import {
   appCodingSessionTarget,
   parseAppTokenPatchInput,
   parseTrustedAppOverlayMessage,
+  processLogsByProcessId,
   publishedAppShareUrl,
 } from "./SessionApplicationsPanel";
 import { defaultAppTokenPatchJson } from "./AppTokenTweaksPopover";
@@ -104,6 +105,40 @@ describe("publishedAppShareUrl", () => {
       publishedAppShareUrl({ accessMode: "private", url: "https://app.trace.test" }),
     ).toBeNull();
     expect(publishedAppShareUrl(null)).toBeNull();
+  });
+});
+
+describe("processLogsByProcessId", () => {
+  it("groups event-backed process logs by process id and sorts by sequence", () => {
+    const logs = processLogsByProcessId({
+      "log-2": {
+        id: "log-2",
+        processId: "process-1",
+        stream: "stderr",
+        data: "second",
+        sequence: 2,
+        timestamp: "2026-01-01T00:00:02.000Z",
+      },
+      "log-1": {
+        id: "log-1",
+        processId: "process-1",
+        stream: "stdout",
+        data: "first",
+        sequence: 1,
+        timestamp: "2026-01-01T00:00:01.000Z",
+      },
+      "log-3": {
+        id: "log-3",
+        processId: "process-2",
+        stream: "stdout",
+        data: "other",
+        sequence: 1,
+        timestamp: "2026-01-01T00:00:03.000Z",
+      },
+    });
+
+    expect(logs["process-1"]?.map((entry) => entry.id)).toEqual(["log-1", "log-2"]);
+    expect(logs["process-2"]?.map((entry) => entry.id)).toEqual(["log-3"]);
   });
 });
 

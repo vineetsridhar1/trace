@@ -710,3 +710,10 @@ toggles through the command palette. Session shell capabilities are now centrali
 tested helper: design groups suppress coding chrome commands, while cloud app sessions
 retain applications and terminal command surfaces and ordinary coding sessions preserve
 their existing guards.
+
+During this audit continuation, app process logs were persisted and queryable but did
+not emit `session_application_log_appended`, so the Applications panel could only see
+new log output after a network refetch. App log writes now emit a session-scoped event
+after the durable row exists, client-core stores `SessionApplicationLogEntry` entities
+from both org-wide and session-scoped subscriptions, and the Applications panel renders
+logs from the shared Zustand entity table while keeping manual refresh for history.

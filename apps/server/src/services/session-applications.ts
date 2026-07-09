@@ -1,5 +1,6 @@
 import type {
   EndpointTrafficCaptureMode,
+  SessionApplicationLogEntry as PrismaSessionApplicationLogEntry,
   SessionEndpointAccessMode,
   SessionApplicationProcess as PrismaSessionApplicationProcess,
   Prisma,
@@ -105,6 +106,17 @@ function publicProcess(process: PrismaSessionApplicationProcess) {
     stoppedAt: process.stoppedAt?.toISOString() ?? null,
     exitCode: process.exitCode,
     lastError: process.lastError,
+  };
+}
+
+function publicLogEntry(entry: PrismaSessionApplicationLogEntry) {
+  return {
+    id: entry.id,
+    processId: entry.processId,
+    stream: entry.stream,
+    data: entry.data,
+    sequence: entry.sequence,
+    timestamp: entry.timestamp.toISOString(),
   };
 }
 
@@ -1210,6 +1222,15 @@ export class SessionApplicationService {
         await pruneProcessLogs(tx, processId);
       }
       return created;
+    });
+    await eventService.create({
+      organizationId: process.organizationId,
+      scopeType: "session",
+      scopeId: await this.latestSessionIdForGroup(process.sessionGroupId, process.organizationId),
+      eventType: "session_application_log_appended",
+      payload: { logEntry: publicLogEntry(entry) },
+      actorType: "system",
+      actorId: "bridge",
     });
     return entry;
   }

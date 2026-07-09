@@ -12,6 +12,7 @@ import type {
   QueuedMessage,
   Repo,
   ScopeType,
+  SessionApplicationLogEntry,
   SessionApplicationProcess,
   SessionEndpoint,
   SessionStatus,
@@ -158,6 +159,17 @@ function upsertArtifactFromPayload(batch: StoreBatchWriter, payload: JsonObject)
   );
 }
 
+function upsertApplicationLogFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const logEntry = asJsonObject(payload.logEntry);
+  if (!logEntry || typeof logEntry.id !== "string") return;
+  const existing = batch.get("sessionApplicationLogs", logEntry.id);
+  batch.upsert(
+    "sessionApplicationLogs",
+    logEntry.id,
+    (existing ? { ...existing, ...logEntry } : logEntry) as unknown as SessionApplicationLogEntry,
+  );
+}
+
 /**
  * Apply an event from the org-wide subscription to the entity store and
  * fire any registered notification handlers. The pure data work runs
@@ -215,6 +227,10 @@ export function handleOrgEvent(event: Event): void {
         (existing ? { ...existing, ...process } : process) as unknown as SessionApplicationProcess,
       );
     }
+  }
+
+  if (event.eventType === "session_application_log_appended") {
+    upsertApplicationLogFromPayload(batch, payload);
   }
 
   const endpointEventTypes = new Set<EventType>([
@@ -747,6 +763,12 @@ export function handleSessionEvent(sessionId: string, event: Event & { id: strin
   ) {
     const batch = new StoreBatchWriter();
     upsertArtifactFromPayload(batch, payload);
+    batch.flush();
+  }
+
+  if (event.eventType === "session_application_log_appended") {
+    const batch = new StoreBatchWriter();
+    upsertApplicationLogFromPayload(batch, payload);
     batch.flush();
   }
 

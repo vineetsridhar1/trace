@@ -103,6 +103,7 @@ describe("SessionApplicationService", () => {
     sessionRouterMock.sendToRuntime.mockReturnValue("delivered");
     sessionRouterMock.readFile.mockResolvedValue("{}");
     sessionRouterMock.writeFile.mockResolvedValue(undefined);
+    prismaMock.session.findFirst.mockResolvedValue({ id: "session-1" });
     prismaMock.sessionEndpoint.findUnique.mockResolvedValue(null);
     prismaMock.sessionEndpoint.create.mockResolvedValue({
       id: "endpoint-1",
@@ -581,6 +582,22 @@ describe("SessionApplicationService", () => {
     });
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
+        eventType: "session_application_log_appended",
+        scopeId: "session-1",
+        payload: {
+          logEntry: {
+            id: "log-1",
+            processId: "process-1",
+            stream: "stdout",
+            data: "ready on 3000",
+            sequence: 1,
+            timestamp: "2026-06-07T00:00:03.000Z",
+          },
+        },
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
         eventType: "session_endpoint_created",
         scopeId: "session-1",
       }),
@@ -1042,7 +1059,21 @@ describe("SessionApplicationService", () => {
         }),
       }),
     );
-    expect(eventServiceMock.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_application_log_appended",
+        payload: {
+          logEntry: expect.objectContaining({
+            id: "log-1",
+            processId: "process-1",
+            stream: "stdout",
+            data: expect.stringContaining("[trace] log chunk truncated"),
+            sequence: 5,
+            timestamp: "2026-06-07T00:00:00.000Z",
+          }),
+        },
+      }),
+    );
   });
 
   it("prunes old app process logs as a rolling tail", async () => {

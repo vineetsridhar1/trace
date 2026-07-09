@@ -143,6 +143,19 @@ function displayStatus(status: string): string {
   return status.length > 0 ? `${status[0]?.toUpperCase()}${status.slice(1)}` : status;
 }
 
+export function processLogsByProcessId(
+  logTable: Record<string, SessionApplicationLogEntry>,
+): Record<string, SessionApplicationLogEntry[]> {
+  const logs: Record<string, SessionApplicationLogEntry[]> = {};
+  for (const entry of Object.values(logTable)) {
+    logs[entry.processId] = [...(logs[entry.processId] ?? []), entry];
+  }
+  for (const entries of Object.values(logs)) {
+    entries.sort((a, b) => a.sequence - b.sequence || a.id.localeCompare(b.id));
+  }
+  return logs;
+}
+
 const RUN_SETUP_MUTATION = gql`
   mutation RunSessionGroupSetupScript($sessionGroupId: ID!, $scriptId: ID!) {
     runSessionGroupSetupScript(sessionGroupId: $sessionGroupId, scriptId: $scriptId)
@@ -375,11 +388,9 @@ export function SessionApplicationsPanel({
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
+  const logTable = useEntityStore((s) => s.sessionApplicationLogs);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
-  const [processLogsById, setProcessLogsById] = useState<
-    Record<string, SessionApplicationLogEntry[]>
-  >({});
   const [refreshingProcessLogIds, setRefreshingProcessLogIds] = useState<Record<string, boolean>>(
     {},
   );
@@ -443,12 +454,13 @@ export function SessionApplicationsPanel({
     if (result.error) {
       throw new Error(result.error.message);
     }
-    setProcessLogsById((current) => ({
-      ...current,
-      [processId]:
-        (result.data?.sessionApplicationLogs as SessionApplicationLogEntry[] | undefined) ?? [],
-    }));
-  }, []);
+    upsertMany(
+      "sessionApplicationLogs",
+      ((result.data?.sessionApplicationLogs as SessionApplicationLogEntry[] | undefined) ?? []).map(
+        (entry) => ({ ...entry, id: entry.id }),
+      ),
+    );
+  }, [upsertMany]);
 
   const refreshProcessLogs = useCallback(
     async (processId: string) => {
@@ -470,6 +482,7 @@ export function SessionApplicationsPanel({
       Object.values(processTable).filter((process) => process.sessionGroupId === sessionGroupId),
     [processTable, sessionGroupId],
   );
+  const processLogsById = useMemo(() => processLogsByProcessId(logTable), [logTable]);
 
   useEffect(() => {
     for (const process of processes) {
@@ -478,21 +491,21 @@ export function SessionApplicationsPanel({
   }, [loadProcessLogs, processes]);
 
   useEffect(() => {
-    const activeProcesses = processes.filter(
-      (process) =>
-        process.status === "starting" ||
-        process.status === "running" ||
-        process.status === "stopping",
-    );
-    if (activeProcesses.length === 0) return;
+    if (
+      !processes.some(
+        (process) =>
+          process.status === "starting" ||
+          process.status === "running" ||
+          process.status === "stopping",
+      )
+    ) {
+      return;
+    }
     const interval = window.setInterval(() => {
       void refresh();
-      for (const process of activeProcesses) {
-        void loadProcessLogs(process.id).catch(() => undefined);
-      }
     }, 1500);
     return () => window.clearInterval(interval);
-  }, [loadProcessLogs, processes, refresh]);
+  }, [processes, refresh]);
 
   const endpoints = useMemo(
     () =>
