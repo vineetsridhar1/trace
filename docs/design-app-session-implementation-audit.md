@@ -697,3 +697,9 @@ found to request `accessMode: public`, which blurred the documented boundary bet
 private live preview and explicit publish/share. Manual forwarding now requests private
 access; `publishAppSession` remains the only app-session UI action that flips the primary
 endpoint public.
+
+During this audit pass, `pnpm --filter @trace/gql build` found the generated GraphQL
+client was stale after the PDF export options and private manual forwarding changes. The
+generated client now includes `DesignPdfPageOptionsInput` on `exportDesignArtifactPdf`
+and `accessMode: private` on `enableSessionEndpointForwarding`, so typed GraphQL
+documents match the source queries.

@@ -2790,6 +2790,7 @@ export type PublishDesignArtifactMutation = {
 
 export type ExportDesignArtifactPdfMutationVariables = Exact<{
   artifactId: Scalars["ID"]["input"];
+  pageOptions?: InputMaybe<DesignPdfPageOptionsInput>;
 }>;
 
 export type ExportDesignArtifactPdfMutation = {
@@ -5727,6 +5728,11 @@ export const ExportDesignArtifactPdfDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "pageOptions" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "DesignPdfPageOptionsInput" } },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -5739,6 +5745,11 @@ export const ExportDesignArtifactPdfDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "artifactId" },
                 value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "pageOptions" },
+                value: { kind: "Variable", name: { kind: "Name", value: "pageOptions" } },
               },
             ],
             selectionSet: {
@@ -7540,7 +7551,7 @@ export const EnableSessionEndpointForwardingDocument = {
               {
                 kind: "Argument",
                 name: { kind: "Name", value: "accessMode" },
-                value: { kind: "EnumValue", value: "public" },
+                value: { kind: "EnumValue", value: "private" },
               },
             ],
             selectionSet: {

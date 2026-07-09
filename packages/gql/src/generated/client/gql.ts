@@ -30,7 +30,7 @@ type Documents = {
   "\n  mutation CommentDesignArtifact(\n    $artifactId: ID!\n    $body: String!\n    $anchor: JSON\n    $sendToAgent: Boolean\n  ) {\n    commentDesignArtifact(\n      artifactId: $artifactId\n      body: $body\n      anchor: $anchor\n      sendToAgent: $sendToAgent\n    ) {\n      id\n    }\n  }\n": typeof types.CommentDesignArtifactDocument;
   "\n  mutation ReportDesignArtifactError($artifactId: ID!, $message: String!, $stack: String) {\n    reportDesignArtifactError(artifactId: $artifactId, message: $message, stack: $stack) {\n      id\n    }\n  }\n": typeof types.ReportDesignArtifactErrorDocument;
   "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n      publicUrl\n    }\n  }\n": typeof types.PublishDesignArtifactDocument;
-  "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n": typeof types.ExportDesignArtifactPdfDocument;
+  "\n  mutation ExportDesignArtifactPdf($artifactId: ID!, $pageOptions: DesignPdfPageOptionsInput) {\n    exportDesignArtifactPdf(artifactId: $artifactId, pageOptions: $pageOptions) {\n      id\n    }\n  }\n": typeof types.ExportDesignArtifactPdfDocument;
   "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!, $referenceArtifactIds: [ID!]) {\n    promoteDesignArtifactToCodingSession(\n      artifactId: $artifactId\n      referenceArtifactIds: $referenceArtifactIds\n    ) {\n      id\n      sessionGroupId\n    }\n  }\n": typeof types.PromoteDesignArtifactToCodingSessionDocument;
   "\n  query DesignPromptContentCatalog {\n    designPromptContentCatalog {\n      designSystems {\n        id\n        name\n        description\n      }\n      skills {\n        id\n        title\n        description\n      }\n    }\n  }\n": typeof types.DesignPromptContentCatalogDocument;
   "\n  mutation UpdateDesignHarnessSettings(\n    $sessionGroupId: ID!\n    $designSystemId: String\n    $designSkillIds: [String!]\n  ) {\n    updateDesignHarnessSettings(\n      sessionGroupId: $sessionGroupId\n      designSystemId: $designSystemId\n      designSkillIds: $designSkillIds\n    ) {\n      id\n    }\n  }\n": typeof types.UpdateDesignHarnessSettingsDocument;
@@ -50,7 +50,7 @@ type Documents = {
   "\n  mutation RunSessionGroupSetupScript($sessionGroupId: ID!, $scriptId: ID!) {\n    runSessionGroupSetupScript(sessionGroupId: $sessionGroupId, scriptId: $scriptId)\n  }\n": typeof types.RunSessionGroupSetupScriptDocument;
   "\n  mutation StartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {\n    startSessionProcess(\n      sessionGroupId: $sessionGroupId\n      appConfigId: $appConfigId\n      processConfigId: $processConfigId\n    ) {\n      id\n    }\n  }\n": typeof types.StartSessionProcessDocument;
   "\n  mutation StopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {\n    stopSessionProcess(\n      sessionGroupId: $sessionGroupId\n      appConfigId: $appConfigId\n      processConfigId: $processConfigId\n    ) {\n      id\n    }\n  }\n": typeof types.StopSessionProcessDocument;
-  "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n": typeof types.EnableSessionEndpointForwardingDocument;
+  "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: private) {\n      id\n    }\n  }\n": typeof types.EnableSessionEndpointForwardingDocument;
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n": typeof types.DisableSessionEndpointForwardingDocument;
   "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n      url\n      accessMode\n    }\n  }\n": typeof types.PublishAppSessionDocument;
   "\n  mutation OpenAppSessionAsCodingSession($sessionGroupId: ID!) {\n    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n    }\n  }\n": typeof types.OpenAppSessionAsCodingSessionDocument;
@@ -145,7 +145,7 @@ const documents: Documents = {
     types.ReportDesignArtifactErrorDocument,
   "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n      publicUrl\n    }\n  }\n":
     types.PublishDesignArtifactDocument,
-  "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n":
+  "\n  mutation ExportDesignArtifactPdf($artifactId: ID!, $pageOptions: DesignPdfPageOptionsInput) {\n    exportDesignArtifactPdf(artifactId: $artifactId, pageOptions: $pageOptions) {\n      id\n    }\n  }\n":
     types.ExportDesignArtifactPdfDocument,
   "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!, $referenceArtifactIds: [ID!]) {\n    promoteDesignArtifactToCodingSession(\n      artifactId: $artifactId\n      referenceArtifactIds: $referenceArtifactIds\n    ) {\n      id\n      sessionGroupId\n    }\n  }\n":
     types.PromoteDesignArtifactToCodingSessionDocument,
@@ -185,7 +185,7 @@ const documents: Documents = {
     types.StartSessionProcessDocument,
   "\n  mutation StopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {\n    stopSessionProcess(\n      sessionGroupId: $sessionGroupId\n      appConfigId: $appConfigId\n      processConfigId: $processConfigId\n    ) {\n      id\n    }\n  }\n":
     types.StopSessionProcessDocument,
-  "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n":
+  "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: private) {\n      id\n    }\n  }\n":
     types.EnableSessionEndpointForwardingDocument,
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n":
     types.DisableSessionEndpointForwardingDocument,
@@ -423,8 +423,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n"];
+  source: "\n  mutation ExportDesignArtifactPdf($artifactId: ID!, $pageOptions: DesignPdfPageOptionsInput) {\n    exportDesignArtifactPdf(artifactId: $artifactId, pageOptions: $pageOptions) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation ExportDesignArtifactPdf($artifactId: ID!, $pageOptions: DesignPdfPageOptionsInput) {\n    exportDesignArtifactPdf(artifactId: $artifactId, pageOptions: $pageOptions) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -543,8 +543,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n"];
+  source: "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: private) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: private) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
