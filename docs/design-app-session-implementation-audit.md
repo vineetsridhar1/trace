@@ -327,3 +327,8 @@ During this continuation, managed-git smart HTTP had user-token coverage but no 
 service test for provisioned runtime tokens. `managed-git.test.ts` now proves runtime
 tokens authorize only when their session is bound to the requested managed repo and reject
 unbound sessions before spawning git.
+
+During this continuation, app-session prompt composition was covered at the session layer
+but not at the Claude Code adapter boundary. The shared adapter test now verifies
+`RunOptions.appendSystemPrompt` is passed as `--append-system-prompt` while the user prompt
+continues to be delivered over stdin.
