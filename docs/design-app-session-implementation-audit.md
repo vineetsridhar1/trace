@@ -73,6 +73,9 @@ Implemented:
   authoring overlay injection.
 - Checkpoints are persisted as `GitCheckpoint` rows after managed remote push confirmation.
 - Restore by checkpoint provisions from the checkpoint SHA in a fresh session group.
+- A container-bridge integration smoke bootstraps the app starter, commits a checkpoint,
+  pushes it to a bare managed remote, clones it, and restores a worktree by checkpoint
+  SHA.
 - App checkpoint captures render the live endpoint with headless Chromium, upload a PNG,
   store capture metadata on `GitCheckpoint`, and show thumbnails in the checkpoint panel.
 - Rewritten app checkpoints clear stale capture metadata when no fresh capture is
@@ -85,6 +88,7 @@ Verified:
 - `organization.test.ts`
 - `app-checkpoint-capture.test.ts`
 - `endpoint-proxy.test.ts`
+- `workspace.integration.test.ts`
 - `managed-process-manager.test.ts`
 - `@trace/container-bridge build`
 - `@trace/desktop build`
