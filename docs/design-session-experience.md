@@ -17,7 +17,7 @@ as two `SessionGroup.kind`s:
   spatial canvas where the AI generates **multiple options in parallel**. You compare,
   comment, iterate, export (PDF), and hand off as *intent*. **No cloud machine, no coding
   agent** — generation is direct model calls through the `LLMAdapter`; rendering is
-  sandboxed iframes in the browser.
+  origin-isolated iframes on a user-content domain.
 - **`app` — the app builder** (Replit shape). Output is a running application: React
   starter on a cloud runtime, dev server + HMR, live endpoint preview, graduation to a
   code session on the same worktree.
@@ -54,13 +54,16 @@ param; the model streams a self-contained HTML artifact back. Consequences:
   HTML + element context in the request); structured edit-ops are a later optimization if
   regen cost/fidelity warrants.
 - Sessions/timeline still work as today — prompts, streams, and completions are session
-  events; a design session is a session with no runtime attached.
+  events; a design session is a session with no runtime attached. Generation usage
+  records into the existing session token/cost fields (the mock's `$1.12 · 2.1M tok`
+  badge), summed across fan-out calls.
 
 ### Artifact serving: user-content domain
 
 Artifacts render in iframes pointed at a **wildcard user-content domain** —
-`https://<artifactId>.<trace-usercontent-domain>/` — served by the server's artifact read
-endpoint (the claudeusercontent.com pattern). Rationale and consequences:
+`https://<artifactId>.<trace-usercontent-domain>/` — which serves a bootstrap shell for
+previews and artifact content only once published (the claudeusercontent.com pattern).
+Rationale and consequences:
 
 - **Real origin isolation.** AI-generated HTML/JS is untrusted; a unique subdomain per
   artifact gives each one a genuine origin — full web platform inside (localStorage,
@@ -94,9 +97,10 @@ endpoint (the claudeusercontent.com pattern). Rationale and consequences:
 
 The workspace is a pan/zoom spatial surface (Figma mental model):
 
-- **Cards** are artifacts — each an iframe on its user-content origin (see above),
-  rendering stored HTML. Variants sit side-by-side; iterations stack as
-  lineage (expandable history per card). Device-frame and zoom per card.
+- **Cards** are artifacts — each an iframe on its user-content origin (see above), with
+  the canvas pushing the artifact HTML in over the bootstrap channel. Variants sit
+  side-by-side; iterations stack as lineage (expandable history per card). Device-frame
+  and zoom per card.
 - **Selection drives the composer.** Select a card → prompts iterate on it ("darker,
   same layout"); select two → comparative prompts ("merge A's header with B's palette");
   select none → new artifacts. Element-level selection inside a card (DOM anchors — no
@@ -173,17 +177,19 @@ Frontend (`apps/web/src/components/design/`):
 Server:
 - `SessionGroup.kind` (`coding | design | app`) + `StartSessionInput.kind`
 - Design kind: `Artifact` entity (lineage DAG, blob refs), generation service on
-  `LLMAdapter` (streaming, parallel variants), user-content-domain artifact serving
-  (wildcard subdomains, `_bootstrap` + `postMessage`, signed-token access, overlay
-  injection), token-patch method (CSS-variable string edit), headless-Chromium render
-  pool (PDF + card thumbnails), `design_export_completed` + `design_comment_added` events
+  `LLMAdapter` (streaming, parallel variants), user-content-domain serving (wildcard
+  subdomains, `_bootstrap` + `postMessage` push for preview, direct serving on publish,
+  overlay injection), token-patch method (CSS-variable string edit), headless-Chromium
+  render pool (PDF + card thumbnails), `design_export_completed` + `design_comment_added`
+  events
 - App kind: cloud-only enforcement, port-detection endpoint auto-registration, checkpoint
-  captures, bridge token-file write, `RunOptions.appendSystemPrompt`
+  captures, bridge token-file write, `RunOptions.appendSystemPrompt`, endpoint-proxy
+  overlay injection + private-endpoint iframe auth (signed cookie)
 - Vendored Open Design composer + overlay in `packages/shared` (used by both delivery
   paths)
 
-Runtime image (app kind only): starter kit, harness content, headless Chromium,
-port detection, proxy overlay injection, iframe endpoint auth.
+Runtime image (app kind only): starter kit, harness content, headless Chromium (checkpoint
+captures), listening-port detection in the container bridge.
 
 ## Phasing
 

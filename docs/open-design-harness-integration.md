@@ -39,7 +39,9 @@ trial and error what upstream's 2,700 commits already encode. Vendor, don't rewr
 - Keep upstream file structure and names so rebases stay diffable. **Trace-specific
   additions never edit vendored files** — they live in a sibling overlay module
   (`packages/shared/src/design/trace-overlay.ts`) appended after the vendored stack:
-  `trace.tokens.json` contract, element-chip context format, anything session-specific.
+  token conventions (CSS-variable block + stable `data-el` ids for design artifacts;
+  `trace.tokens.json` for the app starter), element-chip context format, anything
+  session-specific.
 - Ship `LICENSE` + `NOTICE` (Apache-2.0 attribution) and a `VENDOR.md` recording the
   pinned upstream tag and the rebase procedure (diff `prompts/` between tags, re-apply).
 
@@ -55,8 +57,8 @@ trial and error what upstream's 2,700 commits already encode. Vendor, don't rewr
   content drops in untouched and org-custom design systems follow a documented, stable
   format.
 - A small loader in `packages/shared/src/design/` (ported subset of the daemon's
-  `skills.ts` scanning logic) reads content from `TRACE_DESIGN_CONTENT_DIR` into
-  `composeSystemPrompt()` inputs.
+  `skills.ts` scanning logic) reads content from `TRACE_DESIGN_CONTENT_DIRS` (multi-root
+  from day one — see the org-design-systems section) into `composeSystemPrompt()` inputs.
 
 ### 3. Delivery — two paths, one composer, no new CodingTool
 
@@ -76,10 +78,12 @@ model differently per session kind:
   question-form syntax and parse it into Trace's existing `QuestionBlock` /
   `AskUserQuestionBar` so the "quick brief" UX renders natively.
 
-### 4. Trace-side plumbing (unchanged from v1 plan)
+### 4. Trace-side plumbing
 
-`designSystemId` / `skillIds` are design-session settings on the `SessionGroup`, passed
-through the run command into `RunOptions`. UI: design-system picker in the design shell.
+`designSystemId` / `skillIds` are settings on the `SessionGroup` with a design-system
+picker in the shell. The design-kind generation service reads them directly at compose
+time; the app kind passes them through the run command into `RunOptions` for the bridge
+to compose.
 
 ### Org design systems and repo extraction (explicitly out of scope, explicitly enabled)
 
@@ -98,11 +102,12 @@ constraints on what we build anyway:
 2. **Multi-root loader.** The content loader takes a list of roots
    (`TRACE_DESIGN_CONTENT_DIRS`), not a single baked-in path — image content and an
    org-content mount read identically. Trivial now, painful to retrofit.
-3. **A durable org home.** Org design systems need org-scoped storage the runtime can
-   fetch at session start; the natural fit is a managed repo per org (`provider: managed`,
-   same machinery as design projects — see `managed-git-hosting.md`), which also gives
-   versioning and review of brand changes for free. Decide the exact home when the feature
-   lands; v1 just avoids assuming content is image-only.
+3. **A durable org home.** Org design systems need org-scoped storage that the server
+   (design kind) and runtime (app kind) can read at compose time; the natural fit is a
+   managed repo per org (`provider: managed`, same machinery as app projects — see
+   `managed-git-hosting.md`), which also gives versioning and review of brand changes for
+   free. Decide the exact home when the feature lands; v1 just avoids assuming content is
+   image-only.
 
 The extraction flow itself, when built, is just a session: an agent run over the connected
 repo whose deliverable is the design-system directory — no new infrastructure.
@@ -151,7 +156,7 @@ repo whose deliverable is the design-system directory — no new infrastructure.
   plugins, craft sections). v1 passes `undefined` for those; verify the composed output
   degrades cleanly (upstream already treats them as optional).
 - **License hygiene** — Apache-2.0 requires attribution: NOTICE file in the vendored dir
-  and in the runtime image with the content.
+  and alongside the content in both the server and runtime images.
 
 ---
 
