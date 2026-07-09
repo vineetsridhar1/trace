@@ -58,6 +58,7 @@ describe("managed git smart HTTP", () => {
         : null,
     }));
     prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.sessionGroup.findFirst.mockResolvedValue({ id: "group-1" });
   });
 
   afterEach(async () => {
@@ -90,6 +91,14 @@ describe("managed git smart HTTP", () => {
       organizationId: "org-1",
       repoId: "repo-1",
       userId: "user-1",
+    });
+    expect(prismaMock.sessionGroup.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        repoId: "repo-1",
+        OR: [{ visibility: "public" }, { ownerUserId: "user-1" }],
+      },
+      select: { id: true },
     });
     const cloneDir = path.join(tempDir, "clone");
     await execFileAsync("git", ["clone", credential.credentialedRemoteUrl, cloneDir]);
