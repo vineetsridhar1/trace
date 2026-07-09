@@ -385,6 +385,23 @@ function assertLlmArtifactMetadata(artifact, label, expectedSource) {
   }
 }
 
+function assertDirectionMetadata(artifact, label, expectedIndex, expectedCount) {
+  const metadata = asObject(artifact.metadata, `${label} metadata`);
+  if (metadata.directionIndex !== expectedIndex) {
+    throw new Error(
+      `${label} directionIndex is ${metadata.directionIndex ?? "missing"}, expected ${expectedIndex}`,
+    );
+  }
+  if (metadata.directionCount !== expectedCount) {
+    throw new Error(
+      `${label} directionCount is ${metadata.directionCount ?? "missing"}, expected ${expectedCount}`,
+    );
+  }
+  if (typeof metadata.directionLabel !== "string" || !metadata.directionLabel.trim()) {
+    throw new Error(`${label} directionLabel is ${metadata.directionLabel ?? "missing"}`);
+  }
+}
+
 function assertUnpublishedArtifact(artifact, label) {
   if (artifact.publishedAt) {
     throw new Error(`${label} artifact ${artifact.id} was published before explicit publish`);
@@ -561,13 +578,24 @@ const generatedArtifacts = generatedData.generateDesignArtifacts ?? [];
 if (generatedArtifacts.length !== 3) {
   throw new Error(`Expected 3 generated directions, got ${generatedArtifacts.length}`);
 }
-for (const artifact of generatedArtifacts) {
+const directionIndexes = new Set();
+const directionLabels = new Set();
+for (const [index, artifact] of generatedArtifacts.entries()) {
   if (artifact.parentArtifactId !== null) {
     throw new Error(`Generated direction ${artifact.id} unexpectedly has a parent artifact`);
   }
   assertArtifactHtml(artifact, "Generated direction");
   assertLlmArtifactMetadata(artifact, "Generated direction", "generateDesignArtifacts");
+  assertDirectionMetadata(artifact, "Generated direction", index, generatedArtifacts.length);
+  directionIndexes.add(artifact.metadata.directionIndex);
+  directionLabels.add(artifact.metadata.directionLabel);
   assertUnpublishedArtifact(artifact, "Generated direction");
+}
+if (directionIndexes.size !== generatedArtifacts.length) {
+  throw new Error("Generated directions did not preserve unique direction indexes");
+}
+if (directionLabels.size !== generatedArtifacts.length) {
+  throw new Error("Generated directions did not preserve unique direction labels");
 }
 await waitForGeneratedArtifactCompletionEvents(session.id, generatedArtifacts, "Generated direction");
 const usage = await waitForDesignUsage(session.id);

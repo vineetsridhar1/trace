@@ -766,3 +766,8 @@ During this audit continuation, checkpoint reducer coverage proved org-wide
 session view. The handler tests now prove full session `session_output` events update
 session and group `gitCheckpoints` for both checkpoint creation and checkpoint rewrite,
 keeping the checkpoint panel event-backed when scoped events arrive first.
+
+During this audit continuation, the hosted design smoke counted fan-out directions but
+did not require the direction metadata that the canvas uses to explain variants. It now
+asserts each generated artifact carries the expected `directionIndex`, `directionCount`,
+and a unique non-empty `directionLabel` through the real GraphQL/service/storage path.
