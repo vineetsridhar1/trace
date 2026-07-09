@@ -3118,7 +3118,7 @@ export class SessionService {
       return this.startDesignSession(input);
     }
     if (input.kind === "app") {
-      if (input.repoId || input.sourceSessionId || input.restoreCheckpointId) {
+      if (input.repoId || input.sourceSessionId) {
         throw new ValidationError("App sessions must start standalone without a linked repo.");
       }
       if (input.hosting && input.hosting !== "cloud") {
@@ -3182,6 +3182,18 @@ export class SessionService {
     if (restoreCheckpoint && !restoreGroup) {
       throw new Error("Checkpoint session group not found");
     }
+    if (input.kind === "app" && restoreGroup && restoreGroup.kind !== "app") {
+      throw new ValidationError("Only app checkpoints can be restored as app sessions.");
+    }
+    if (input.restoreCheckpointId) {
+      input.provisionWithoutPrompt = true;
+    }
+    if (restoreGroup?.kind === "app") {
+      if (input.hosting && input.hosting !== "cloud") {
+        throw new ValidationError("App sessions are cloud-only.");
+      }
+      input.hosting = "cloud";
+    }
 
     const sourceSessionId = input.sourceSessionId ?? restoreCheckpoint?.sessionId ?? null;
 
@@ -3226,7 +3238,8 @@ export class SessionService {
       : input.restoreCheckpointId
         ? null
         : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
-    const requestedGroupKind = input.kind === "app" ? "app" : "coding";
+    const requestedGroupKind =
+      input.kind === "app" || restoreGroup?.kind === "app" ? "app" : "coding";
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },

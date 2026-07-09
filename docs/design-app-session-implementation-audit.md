@@ -108,6 +108,9 @@ Implemented:
   authoring overlay injection.
 - Checkpoints are persisted as `GitCheckpoint` rows after managed remote push confirmation.
 - Restore by checkpoint provisions from the checkpoint SHA in a fresh session group.
+- App checkpoint restore preserves the source `app` session kind even when the UI starts
+  the restore without passing `kind`, and provisions the restored runtime without
+  requiring a new prompt.
 - A container-bridge integration smoke bootstraps the app starter, commits a checkpoint,
   pushes it to a bare managed remote, clones it, and restores a worktree by checkpoint
   SHA.
@@ -162,3 +165,9 @@ bootstrap the starter workspace without necessarily preserving that prompt for r
 after `workspace_ready`. `startSession(kind: app)` now queues the initial run until the
 workspace is ready, and pending app command replay includes the Open Design app harness
 settings in `appendSystemPrompt`.
+
+During the audit continuation, app checkpoint restores were found to inherit the generic
+coding default when the UI omitted `kind` from the restore mutation. Checkpoint restores
+now infer `app` from the source session group, keep app restores cloud-only, provision
+without requiring a prompt, and reject attempts to restore coding checkpoints as app
+sessions.

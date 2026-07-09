@@ -2418,6 +2418,148 @@ describe("SessionService", () => {
       );
     });
 
+    it("restores an app checkpoint into a fresh app session group without requiring a prompt", async () => {
+      const managedRepo = {
+        id: "repo-managed-1",
+        name: "Managed app",
+        provider: "managed",
+        remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+        defaultBranch: "main",
+      };
+      const appSourceGroup = makeSessionGroup({
+        id: "group-source-app",
+        kind: "app",
+        name: "App builder",
+        channelId: null,
+        repoId: "repo-managed-1",
+        repo: managedRepo,
+        branch: "main",
+      });
+      const appRestoredGroup = makeSessionGroup({
+        id: "group-restored-app",
+        kind: "app",
+        name: "Restore abcdef1 Restore app",
+        channelId: null,
+        repoId: "repo-managed-1",
+        repo: managedRepo,
+        branch: "main",
+      });
+
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          sessionId: "source-app-1",
+          sessionGroupId: "group-source-app",
+          repoId: "repo-managed-1",
+          commitSha: "abcdef1234567890",
+          subject: "Restore app",
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(appSourceGroup);
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "source-app-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-source-app",
+        repoId: "repo-managed-1",
+        branch: "main",
+        hosting: "cloud",
+        channelId: null,
+        projects: [],
+        sessionGroup: appSourceGroup,
+      });
+      prismaMock.repo.findFirst.mockResolvedValueOnce({
+        id: "repo-managed-1",
+        remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+      });
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(appRestoredGroup);
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-restored-app",
+          sessionGroupId: "group-restored-app",
+          channelId: null,
+          repoId: "repo-managed-1",
+          repo: managedRepo,
+          branch: "main",
+          sessionGroup: appRestoredGroup,
+        }),
+      );
+
+      const result = await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        restoreCheckpointId: "checkpoint-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(result.id).toBe("session-restored-app");
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          kind: "app",
+          organizationId: "org-1",
+          repoId: "repo-managed-1",
+          branch: "main",
+        }),
+        select: expect.any(Object),
+      });
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "cloud",
+            repoId: "repo-managed-1",
+            branch: "main",
+            pendingRun: undefined,
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            restoreCheckpointId: "checkpoint-1",
+            restoreCheckpointSha: "abcdef1234567890",
+          }),
+        }),
+        expect.anything(),
+      );
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-restored-app",
+          checkpointSha: "abcdef1234567890",
+          bootstrapAppWorkspace: true,
+          repo: expect.objectContaining({ id: "repo-managed-1" }),
+        }),
+      );
+    });
+
+    it("rejects restoring a coding checkpoint as an app session", async () => {
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          sessionId: "source-1",
+          sessionGroupId: "group-source",
+          repoId: "repo-1",
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-source",
+          kind: "coding",
+        }),
+      );
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          kind: "app",
+          restoreCheckpointId: "checkpoint-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Only app checkpoints can be restored as app sessions.");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    });
+
     it("forks a visible session into a new owned group and records source group ancestry", async () => {
       const sourceGroup = makeSessionGroup({
         id: "source-group",
