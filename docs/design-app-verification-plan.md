@@ -98,6 +98,24 @@ Run this only after automated checks pass:
 13. Publish/share the app endpoint and open the public URL unauthenticated.
 14. Stop/delete the runtime, reclone the managed repo, and verify commits remain.
 
+## Cloud App Smoke Command
+
+The app-session runtime/browser gate can be exercised against a configured Trace server:
+
+```bash
+TRACE_SMOKE_SERVER_URL=https://gettrace.org \
+TRACE_SMOKE_AUTH_TOKEN=<session-token> \
+TRACE_SMOKE_ORG_ID=<organization-id> \
+pnpm smoke:cloud-app-session
+```
+
+The smoke starts a fresh `app` session, waits for the cloud runtime, process logs, enabled
+endpoint, managed-git checkpoint, and checkpoint capture, opens the private preview URL in
+a real browser, publishes the endpoint, opens the public URL unauthenticated, restores the
+checkpoint into a fresh app session, and opens the restored preview. It is strict by
+default: Chrome/Chromium and checkpoint capture are required. `TRACE_SMOKE_SKIP_BROWSER=1`
+or `TRACE_SMOKE_REQUIRE_CAPTURE=0` may be used only for debugging, not final acceptance.
+
 ## Completion Gate
 
 The goal is not complete until:
@@ -109,4 +127,3 @@ The goal is not complete until:
   a fresh design session.
 - Remaining limitations are explicitly out of scope for v1 and do not contradict the
   target product contract.
-

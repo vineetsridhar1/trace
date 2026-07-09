@@ -150,8 +150,10 @@ unproven in this environment:
   iframe, checkpoint, restore from checkpoint, capture thumbnail, publish public endpoint,
   and open the published URL.
 
-This smoke is the final evidence needed before claiming the larger product goal is fully
-verified as a working application flow.
+This smoke is executable via `pnpm smoke:cloud-app-session` against a configured Trace
+server with `TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and `TRACE_SMOKE_ORG_ID`.
+It is the final evidence needed before claiming the larger product goal is fully verified
+as a working application flow.
 
 ## Audit Fix Applied
 
