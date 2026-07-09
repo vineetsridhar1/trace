@@ -737,3 +737,9 @@ reachability with `git ls-remote` but did not require the service-layer push eve
 specified by `managed-git-hosting.md`. It now also polls the repo-scoped
 `repo_branch_pushed` event and requires `refs/heads/main` to point at the checkpoint SHA
 with the app runtime session id in the payload.
+
+During this audit continuation, the hosted design smoke proved published artifact
+rendering but did not explicitly fail if generated artifacts exposed `publishedAt` or
+`publicUrl` before the publish mutation. It now asserts initial artifacts, fan-out
+variants, comment-driven iterations, and token-tweak versions remain unpublished until
+`publishDesignArtifact` runs.

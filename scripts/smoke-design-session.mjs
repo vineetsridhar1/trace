@@ -116,6 +116,8 @@ const GENERATE_DESIGN_ARTIFACTS = `
       parentArtifactId
       html
       metadata
+      publishedAt
+      publicUrl
     }
   }
 `;
@@ -137,6 +139,8 @@ const PATCH_DESIGN_ARTIFACT_TOKENS = `
       parentArtifactId
       html
       metadata
+      publishedAt
+      publicUrl
     }
   }
 `;
@@ -381,6 +385,15 @@ function assertLlmArtifactMetadata(artifact, label, expectedSource) {
   }
 }
 
+function assertUnpublishedArtifact(artifact, label) {
+  if (artifact.publishedAt) {
+    throw new Error(`${label} artifact ${artifact.id} was published before explicit publish`);
+  }
+  if (artifact.publicUrl) {
+    throw new Error(`${label} artifact ${artifact.id} exposed publicUrl before explicit publish`);
+  }
+}
+
 async function assertUrlRenders(url, label) {
   const response = await fetch(url, { redirect: "follow" });
   const body = await response.text();
@@ -536,6 +549,7 @@ if (session.sessionGroup?.connection) {
 const initialArtifacts = await waitForArtifacts(session.sessionGroupId, 1);
 assertArtifactHtml(initialArtifacts[0], "Initial");
 assertLlmArtifactMetadata(initialArtifacts[0], "Initial", "startSession");
+assertUnpublishedArtifact(initialArtifacts[0], "Initial");
 await waitForGeneratedArtifactCompletionEvents(session.id, [initialArtifacts[0]], "Initial");
 
 const generatedData = await graphql(GENERATE_DESIGN_ARTIFACTS, {
@@ -553,6 +567,7 @@ for (const artifact of generatedArtifacts) {
   }
   assertArtifactHtml(artifact, "Generated direction");
   assertLlmArtifactMetadata(artifact, "Generated direction", "generateDesignArtifacts");
+  assertUnpublishedArtifact(artifact, "Generated direction");
 }
 await waitForGeneratedArtifactCompletionEvents(session.id, generatedArtifacts, "Generated direction");
 const usage = await waitForDesignUsage(session.id);
@@ -598,6 +613,7 @@ const commentIteration = await waitForChildArtifact(
   "comment-driven iteration",
 );
 assertArtifactHtml(commentIteration, "Comment-driven iteration");
+assertUnpublishedArtifact(commentIteration, "Comment-driven iteration");
 await waitForGeneratedArtifactCompletionEvents(
   session.id,
   [commentIteration],
@@ -613,6 +629,7 @@ if (tweaked.parentArtifactId !== selected.id) {
   throw new Error("Token tweak did not create a child artifact version");
 }
 assertArtifactHtml(tweaked, "Tweaked");
+assertUnpublishedArtifact(tweaked, "Tweaked");
 if (!tweaked.html.includes("--trace-smoke-accent: #0f766e;")) {
   throw new Error("Token tweak did not patch the requested CSS variable");
 }
