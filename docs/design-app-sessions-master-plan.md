@@ -26,8 +26,8 @@ session infrastructure: `design` sessions are serverless project-design canvases
 generate React canvas artifacts (rendered as HTML via in-browser transpilation) to
 review, export, publish, and promote into coding sessions, while
 `app` sessions are standalone cloud-run full-stack app builders with live preview,
-logs/terminal, managed git durability, checkpoints, restore, publish/share, and optional
-graduation.
+logs/terminal, managed git durability, checkpoints, restore, and publish/share. They may
+optionally export or hand off to coding, but that is not the default product outcome.
 
 ## Product Split
 
@@ -39,14 +39,15 @@ Trace should support three distinct session kinds:
   artifact itself: screens, mockups, decks, visual directions, PDFs, and reviewable
   design intent. Design sessions primarily promote into coding sessions.
 - **`app`**: standalone runnable software. The output is a live app the user can run,
-  inspect, checkpoint, restore, publish, and optionally graduate. App sessions do not
-  start from the user's repo and should not be forced through the design artifact model.
+  inspect, checkpoint, restore, publish, and share. Many app sessions may be playful,
+  disposable, or shared as-is and never become coding sessions. App sessions do not start
+  from the user's repo and should not be forced through the design artifact model.
 
 The original "web design session" idea split into `design` and `app` because they have
 different success criteria:
 
 - Design answers: "What should this look like?"
-- App answers: "Can you build me a working standalone app?"
+- App answers: "Can you build me a working standalone app I can run and share?"
 - Coding answers: "Can you change this existing codebase?"
 
 ## Key Decisions
@@ -640,7 +641,8 @@ A complete app session supports:
 - Checkpoint capture thumbnails.
 - Restore by checkpoint.
 - Publish/share through endpoint access mode.
-- Optional "open as coding session" or "push to GitHub" graduation.
+- Optional export or handoff actions, such as "open as coding session" or "push to
+  GitHub", when the user explicitly wants to keep developing the app elsewhere.
 
 ### Creation and Runtime
 
@@ -720,7 +722,7 @@ Requirements:
 - Restore by checkpoint provisions a fresh app session from the managed repo and SHA.
 - Restore preserves `kind: app` even if the UI does not explicitly pass kind.
 
-### Publish and Graduation
+### Publish, Share, and Optional Handoff
 
 Publish v1:
 
@@ -728,10 +730,15 @@ Publish v1:
 - Event payload carries endpoint URL and access mode.
 - Public endpoint must render without private session auth or authoring overlay.
 
-Graduation:
+Sharing is a first-class successful outcome. The app may remain a Trace-hosted,
+managed-git-backed creation indefinitely.
 
-- "Open as coding session" links a coding session to the app session group/repo.
-- "Push to GitHub" creates/mirrors to a GitHub repo through existing integration.
+Optional handoff:
+
+- "Open as coding session" links a coding session to the app session group/repo when the
+  user asks to continue implementation as repo-bound coding work.
+- "Push to GitHub" creates/mirrors to a GitHub repo through existing integration when the
+  user asks to own or develop the source outside Trace.
 - Provider flips from `managed` to `github` only after mirror succeeds.
 - Failed mirror leaves the managed repo unchanged.
 
