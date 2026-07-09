@@ -684,3 +684,10 @@ but the endpoint proxy itself still routed any enabled endpoint whose process ro
 running. HTTP and WebSocket proxy entrypoints now also require
 `endpoint.currentRuntimeInstanceId` to match the running process runtime before forwarding,
 so public and private endpoint hosts cannot route through stale forwarding rows.
+
+During this audit pass, design lifecycle events were present in the event stream but
+several rendered as blank rows in the existing left chat rail because `SessionMessage`
+did not handle their event types. The session timeline now shows system badges for
+design artifact creation/updates, comments, generation failures, preview errors, export
+requests, and promotion events while keeping PDF export completions as first-class
+download rows.

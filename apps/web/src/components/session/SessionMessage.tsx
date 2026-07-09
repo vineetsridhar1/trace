@@ -25,6 +25,39 @@ function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+export function designEventBadgeText(
+  eventType: string,
+  payload: JsonObject | null | undefined,
+): string | null {
+  switch (eventType) {
+    case "design_generation_failed": {
+      const label = str(payload?.directionLabel);
+      const error = str(payload?.error, "Design generation failed");
+      return label ? `${label} failed: ${error}` : `Design generation failed: ${error}`;
+    }
+    case "design_artifact_created":
+      return payload?.parentArtifactId
+        ? "Design artifact iteration created"
+        : "Design artifact created";
+    case "design_artifact_updated":
+      if (payload?.published === true) return "Design artifact published";
+      if (payload?.tokens && typeof payload.tokens === "object") return "Design tokens tweaked";
+      return "Design artifact updated";
+    case "design_comment_added":
+      return payload?.sendToAgent === true
+        ? "Design comment sent to agent"
+        : "Design comment added";
+    case "design_artifact_error":
+      return `Artifact preview error: ${str(payload?.message, "Preview failed")}`;
+    case "design_export_requested":
+      return "PDF export requested";
+    case "design_artifact_promoted":
+      return "Design artifact promoted to coding session";
+    default:
+      return null;
+  }
+}
+
 /** Narrow and unwrap tool result content for display in ToolCallRow */
 function asOutput(value: unknown): string | Record<string, unknown> | undefined {
   if (typeof value === "string") return value;
@@ -306,7 +339,9 @@ export const SessionMessage = memo(function SessionMessage({
       return <SystemBadge text="Session terminated" />;
     }
 
-    default:
-      return null;
+    default: {
+      const designText = designEventBadgeText(eventType, payload);
+      return designText ? <SystemBadge text={designText} /> : null;
+    }
   }
 });
