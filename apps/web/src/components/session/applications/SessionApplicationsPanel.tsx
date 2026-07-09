@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import {
   Activity,
+  AlertTriangle,
   ChevronDown,
   Copy,
   ExternalLink,
+  FileCode2,
   Play,
   Power,
   RotateCw,
@@ -217,6 +219,63 @@ export function parseAppTokenPatchInput(value: string): Record<string, unknown> 
   return parsed as Record<string, unknown>;
 }
 
+type AppOverlaySelection =
+  | {
+      kind: "element";
+      sourceLocation: string;
+      text: string | null;
+    }
+  | {
+      kind: "error";
+      message: string;
+      stack: string | null;
+    };
+
+function previewOrigin(previewUrl: string | null | undefined): string | null {
+  if (!previewUrl) return null;
+  try {
+    return new URL(previewUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
+export function parseTrustedAppOverlayMessage(
+  data: unknown,
+  messageOrigin: string,
+  previewUrl: string | null | undefined,
+): AppOverlaySelection | null {
+  if (messageOrigin !== previewOrigin(previewUrl)) return null;
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+
+  const message = data as Record<string, unknown>;
+  if (message.type !== "trace:app:overlay" || message.source !== "endpoint-proxy") return null;
+
+  if (message.event === "element-selected") {
+    const sourceLocation =
+      typeof message.sourceLocation === "string" ? message.sourceLocation.trim() : "";
+    if (!sourceLocation) return null;
+    const text = typeof message.text === "string" ? message.text.trim() : "";
+    return {
+      kind: "element",
+      sourceLocation,
+      text: text || null,
+    };
+  }
+
+  if (message.event === "error") {
+    const errorMessage = typeof message.message === "string" ? message.message.trim() : "";
+    if (!errorMessage) return null;
+    return {
+      kind: "error",
+      message: errorMessage,
+      stack: typeof message.stack === "string" && message.stack.trim() ? message.stack : null,
+    };
+  }
+
+  return null;
+}
+
 export function SessionApplicationsPanel({
   sessionGroupId,
   onOpenTraffic,
@@ -254,6 +313,7 @@ export function SessionApplicationsPanel({
   const [previewFrame, setPreviewFrame] = useState<{ endpointId: string; url: string } | null>(
     null,
   );
+  const [previewSelection, setPreviewSelection] = useState<AppOverlaySelection | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -433,10 +493,12 @@ export function SessionApplicationsPanel({
     const endpoint = primaryEnabledEndpoint;
     if (!endpoint) {
       setPreviewFrame(null);
+      setPreviewSelection(null);
       return;
     }
 
     setPreviewFrame((current) => (current?.endpointId === endpoint.id ? current : null));
+    setPreviewSelection(null);
     void resolveEndpointPreviewUrl(endpoint)
       .then((url) => {
         if (cancelled) return;
@@ -457,6 +519,20 @@ export function SessionApplicationsPanel({
     primaryEnabledEndpoint?.url,
     resolveEndpointPreviewUrl,
   ]);
+
+  useEffect(() => {
+    if (!previewFrame?.url) return;
+
+    const onMessage = (event: MessageEvent<unknown>) => {
+      const selection = parseTrustedAppOverlayMessage(event.data, event.origin, previewFrame.url);
+      if (selection) {
+        setPreviewSelection(selection);
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [previewFrame?.url]);
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setPending(key);
@@ -658,6 +734,39 @@ export function SessionApplicationsPanel({
                 </div>
               )}
             </div>
+            {previewSelection && (
+              <div className="rounded-md border border-border/70 bg-background/50 px-2.5 py-2">
+                {previewSelection.kind === "element" ? (
+                  <div className="flex items-start gap-2">
+                    <FileCode2 size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-[11px] text-foreground">
+                        {previewSelection.sourceLocation}
+                      </p>
+                      {previewSelection.text && (
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                          {previewSelection.text}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0 text-destructive" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-destructive">
+                        {previewSelection.message}
+                      </p>
+                      {previewSelection.stack && (
+                        <p className="mt-1 line-clamp-2 font-mono text-[11px] leading-4 text-muted-foreground">
+                          {previewSelection.stack}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         )}
         {config.setupScripts.length > 0 && (

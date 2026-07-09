@@ -133,6 +133,9 @@ Implemented:
   store capture metadata on `GitCheckpoint`, and show thumbnails in the checkpoint panel.
 - Rewritten app checkpoints clear stale capture metadata when no fresh capture is
   available.
+- The endpoint authoring overlay posts `data-trace-source` selections and script errors
+  from the live preview iframe, and the Applications panel accepts only messages from the
+  active preview origin before surfacing source-location context.
 
 Verified:
 
@@ -234,3 +237,9 @@ HTML content type used by artifact creation, but the route and an older fixture 
 independent literals. Published serving and the focused tests now import
 `DESIGN_ARTIFACT_CONTENT_TYPE` so publish/share eligibility stays aligned with artifact
 creation.
+
+During this continuation, the app endpoint proxy already injected a source-picker overlay
+and the starter emitted `data-trace-source` stamps, but the Applications panel was not
+consuming the resulting iframe messages. The panel now validates overlay messages against
+the active preview origin and displays selected file:line context or app script errors
+from the preview frame.
