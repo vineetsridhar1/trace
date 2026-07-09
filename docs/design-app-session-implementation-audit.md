@@ -877,3 +877,10 @@ and endpoint rows but did not prove the startup lifecycle events reached the ses
 stream. It now requires `session_application_process_started`,
 `session_endpoint_created`, and `session_endpoint_forwarding_enabled` for the running
 process/private port-3000 endpoint before accepting the app as ready.
+
+During this audit continuation, the hosted design smoke validated the returned
+`commentDesignArtifact` event but did not separately prove the anchored comment reached
+the scoped session event stream consumed by the canvas. It now polls
+`design_comment_added` for the selected artifact id, session group id, body,
+`sendToAgent`, element anchor, and persisted bounds before waiting for the generated
+comment-driven iteration.

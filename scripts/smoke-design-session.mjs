@@ -386,6 +386,57 @@ async function waitForPdfExportTimelineEvents(sessionId, artifactId, exportPaylo
   });
 }
 
+async function waitForDesignCommentEvent(
+  sessionId,
+  sessionGroupId,
+  artifactId,
+  body,
+  expectedAnchor,
+) {
+  return pollUntil("design comment session event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      sessionId,
+      types: ["design_comment_added"],
+    });
+    const event = data.events?.find((candidate) => {
+      if (candidate.eventType !== "design_comment_added") return false;
+      const payload = candidate.payload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        payload.artifactId === artifactId &&
+        payload.sessionGroupId === sessionGroupId &&
+        payload.body === body &&
+        payload.sendToAgent === true
+      );
+    });
+    if (!event) {
+      return { ok: false, detail: `no design_comment_added event for ${artifactId}` };
+    }
+
+    const payload = asPayload(event, "Comment session event");
+    const anchor = asObject(payload.anchor, "Comment session event anchor");
+    if (
+      anchor.type !== expectedAnchor.type ||
+      anchor.dataEl !== expectedAnchor.dataEl ||
+      anchor.text !== expectedAnchor.text
+    ) {
+      throw new Error("Comment session event anchor did not match the selected element");
+    }
+    const bounds = asObject(anchor.bounds, "Comment session event anchor bounds");
+    for (const [key, value] of Object.entries(expectedAnchor.bounds)) {
+      if (bounds[key] !== value) {
+        throw new Error(
+          `Comment session event anchor bound ${key} is ${bounds[key] ?? "missing"}, expected ${value}`,
+        );
+      }
+    }
+    return { ok: true, value: event };
+  });
+}
+
 async function waitForPublishedArtifactEvent(sessionId, artifactId, publicUrl) {
   return pollUntil("published design artifact event", async () => {
     const data = await graphql(SESSION_EVENTS, {
@@ -850,10 +901,17 @@ const usage = await waitForDesignUsage(session.id);
 
 const selected = generatedArtifacts[0];
 const commentBounds = { left: 24, top: 32, width: 480, height: 160, x: 0.1, y: 0.15 };
+const commentBody = "Smoke comment pinned to the hero";
+const commentAnchorInput = {
+  type: "element",
+  dataEl: "hero",
+  text: expectedText,
+  bounds: commentBounds,
+};
 const commentData = await graphql(COMMENT_DESIGN_ARTIFACT, {
   artifactId: selected.id,
-  body: "Smoke comment pinned to the hero",
-  anchor: { type: "element", dataEl: "hero", text: expectedText, bounds: commentBounds },
+  body: commentBody,
+  anchor: commentAnchorInput,
   sendToAgent: true,
 });
 if (commentData.commentDesignArtifact.eventType !== "design_comment_added") {
@@ -863,7 +921,7 @@ const commentPayload = asPayload(commentData.commentDesignArtifact, "Comment");
 if (commentPayload.artifactId !== selected.id) {
   throw new Error(`Comment artifact id is ${commentPayload.artifactId ?? "missing"}`);
 }
-if (commentPayload.body !== "Smoke comment pinned to the hero") {
+if (commentPayload.body !== commentBody) {
   throw new Error("Comment body was not preserved in the event payload");
 }
 if (commentPayload.sendToAgent !== true) {
@@ -883,6 +941,13 @@ for (const key of ["left", "top", "width", "height", "x", "y"]) {
     throw new Error(`Comment anchor bound ${key} is ${preservedBounds[key] ?? "missing"}`);
   }
 }
+await waitForDesignCommentEvent(
+  session.id,
+  session.sessionGroupId,
+  selected.id,
+  commentBody,
+  commentAnchorInput,
+);
 const commentIteration = await waitForChildArtifact(
   session.sessionGroupId,
   selected.id,
