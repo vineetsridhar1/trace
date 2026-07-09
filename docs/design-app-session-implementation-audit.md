@@ -478,3 +478,9 @@ to prove checkpoint rows contain durable Git metadata, not just an id. The readi
 now requires the checkpoint repo id to match the managed repo, valid commit/tree/parent
 SHAs, non-empty subject and author, committed timestamp, non-negative file count, and PNG
 capture metadata when capture verification is enabled.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove PDF export completion events carry the timeline/share metadata required by the
+design docs. The smoke now checks artifact id, session group id, export type, status,
+`.pdf` file name, file URL, byte size, and optional positive page count before downloading
+the PDF bytes.

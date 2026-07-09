@@ -531,14 +531,32 @@ if (exportData.exportDesignArtifactPdf.eventType !== "design_export_completed") 
   throw new Error(`Unexpected export event ${exportData.exportDesignArtifactPdf.eventType}`);
 }
 const exportPayload = asPayload(exportData.exportDesignArtifactPdf, "Export");
+if (exportPayload.artifactId !== tweaked.id) {
+  throw new Error(`PDF export artifact id is ${exportPayload.artifactId ?? "missing"}`);
+}
+if (exportPayload.sessionGroupId !== session.sessionGroupId) {
+  throw new Error(`PDF export session group is ${exportPayload.sessionGroupId ?? "missing"}`);
+}
+if (exportPayload.exportType !== "pdf") {
+  throw new Error(`PDF export type is ${exportPayload.exportType ?? "missing"}`);
+}
 if (exportPayload.status !== "completed") {
   throw new Error(`PDF export status is ${exportPayload.status ?? "missing"}`);
+}
+if (typeof exportPayload.fileName !== "string" || !exportPayload.fileName.endsWith(".pdf")) {
+  throw new Error(`PDF export fileName is ${exportPayload.fileName ?? "missing"}`);
 }
 if (typeof exportPayload.fileUrl !== "string" || !exportPayload.fileUrl.trim()) {
   throw new Error("PDF export fileUrl is missing");
 }
 if (typeof exportPayload.byteSize !== "number" || exportPayload.byteSize <= 0) {
   throw new Error("PDF export byteSize is missing or empty");
+}
+if (
+  exportPayload.pageCount !== undefined &&
+  (typeof exportPayload.pageCount !== "number" || exportPayload.pageCount <= 0)
+) {
+  throw new Error(`PDF export pageCount is ${exportPayload.pageCount}`);
 }
 await assertPdfDownload(exportPayload.fileUrl, "PDF export URL");
 
