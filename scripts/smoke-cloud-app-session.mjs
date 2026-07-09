@@ -737,6 +737,7 @@ const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
 await renderUrl(restoredPreviewUrl, "restored preview URL", {
   requireFetch: false,
   expectOverlay: true,
+  requireSourceStamp: true,
 });
 
 process.stdout.write(

@@ -726,3 +726,8 @@ generation service responsible only for started, delta, failure, and usage event
 The hosted design smoke now also validates that initial generation, fan-out variants, and
 comment-driven iterations emit completion only after the matching
 `design_artifact_created` event.
+
+During this audit continuation, the cloud app smoke required `data-trace-source` stamps
+for the initial private preview but not for a restored checkpoint preview. Restored app
+previews now use the same browser acceptance gate, so checkpoint restore must preserve
+the source-mapped authoring surface as well as the runtime and managed repo binding.
