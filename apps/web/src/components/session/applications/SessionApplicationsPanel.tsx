@@ -234,6 +234,9 @@ export function SessionApplicationsPanel({
   const [openProcessLogIds, setOpenProcessLogIds] = useState<Record<string, boolean>>({});
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewFrame, setPreviewFrame] = useState<{ endpointId: string; url: string } | null>(
+    null,
+  );
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -356,6 +359,22 @@ export function SessionApplicationsPanel({
   );
   const appPublished = primaryEnabledEndpoint?.accessMode === "public";
 
+  const resolveEndpointPreviewUrl = useCallback(async (endpoint: SessionEndpoint) => {
+    const endpointUrl = typeof endpoint.url === "string" ? endpoint.url : "";
+    if (!endpointUrl) return null;
+    if (endpoint.accessMode === "public") return endpointUrl;
+
+    const result = await client
+      .mutation<{
+        createSessionEndpointPreview?: { url: string; expiresAt: string };
+      }>(CREATE_ENDPOINT_PREVIEW_MUTATION, { endpointId: endpoint.id })
+      .toPromise();
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+    return result.data?.createSessionEndpointPreview?.url ?? null;
+  }, []);
+
   const processesByKey = useMemo(() => {
     const map = new Map<string, SessionApplicationProcess>();
     for (const process of processes) {
@@ -391,6 +410,36 @@ export function SessionApplicationsPanel({
     }, 1500);
     return () => window.clearInterval(interval);
   }, [refresh, setupRuns]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const endpoint = primaryEnabledEndpoint;
+    if (!endpoint) {
+      setPreviewFrame(null);
+      return;
+    }
+
+    setPreviewFrame((current) => (current?.endpointId === endpoint.id ? current : null));
+    void resolveEndpointPreviewUrl(endpoint)
+      .then((url) => {
+        if (cancelled) return;
+        setPreviewFrame(url ? { endpointId: endpoint.id, url } : null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPreviewFrame(null);
+        setError(err instanceof Error ? err.message : String(err));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    primaryEnabledEndpoint?.accessMode,
+    primaryEnabledEndpoint?.id,
+    primaryEnabledEndpoint?.url,
+    resolveEndpointPreviewUrl,
+  ]);
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setPending(key);
@@ -446,25 +495,10 @@ export function SessionApplicationsPanel({
   };
 
   const openEndpoint = async (endpoint: SessionEndpoint) => {
-    const endpointUrl = typeof endpoint.url === "string" ? endpoint.url : "";
-    if (!endpointUrl) return;
-    if (endpoint.accessMode === "public") {
-      window.open(endpointUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
     setPending(`preview:${endpoint.id}`);
     setError(null);
     try {
-      const result = await client
-        .mutation<{
-          createSessionEndpointPreview?: { url: string; expiresAt: string };
-        }>(CREATE_ENDPOINT_PREVIEW_MUTATION, { endpointId: endpoint.id })
-        .toPromise();
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
-      const previewUrl = result.data?.createSessionEndpointPreview?.url;
+      const previewUrl = await resolveEndpointPreviewUrl(endpoint);
       if (!previewUrl) throw new Error("Endpoint preview URL was not returned");
       window.open(previewUrl, "_blank", "noopener,noreferrer");
     } catch (err) {
@@ -544,6 +578,35 @@ export function SessionApplicationsPanel({
           <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
           </p>
+        )}
+        {primaryEnabledEndpoint && (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between gap-2 px-1">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Live preview
+              </p>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {primaryEnabledEndpoint.label} :{primaryEnabledEndpoint.targetPort}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-md border border-border/70 bg-background">
+              {previewFrame?.endpointId === primaryEnabledEndpoint.id ? (
+                <iframe
+                  key={`${primaryEnabledEndpoint.id}:${previewFrame.url}`}
+                  src={previewFrame.url}
+                  title={`${primaryEnabledEndpoint.label} preview`}
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  referrerPolicy="no-referrer"
+                  className="h-72 w-full bg-white"
+                />
+              ) : (
+                <div className="flex h-72 items-center justify-center text-xs text-muted-foreground">
+                  <TraceLoader size={14} className="mr-2" showLabel={false} />
+                  Loading preview
+                </div>
+              )}
+            </div>
+          </section>
         )}
         {config.setupScripts.length > 0 && (
           <section className="space-y-1.5">
