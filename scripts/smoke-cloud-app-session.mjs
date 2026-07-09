@@ -839,6 +839,52 @@ async function waitForCodingHandoffBrief(codingSessionId, sourceGroupId, managed
   });
 }
 
+async function waitForRestoreStartEvent(restoredSession, checkpoint) {
+  return pollUntil("restored app session start event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: restoredSession.id },
+      types: ["session_started"],
+    });
+    const started = data.events?.find((event) => event.eventType === "session_started");
+    const payload = started?.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return { ok: false, detail: "session_started payload not found" };
+    }
+    const eventSession = payload.session;
+    const eventGroup = payload.sessionGroup;
+    const sessionMatches =
+      eventSession &&
+      typeof eventSession === "object" &&
+      !Array.isArray(eventSession) &&
+      eventSession.id === restoredSession.id &&
+      eventSession.sessionGroupId === restoredSession.sessionGroupId;
+    const groupMatches =
+      eventGroup &&
+      typeof eventGroup === "object" &&
+      !Array.isArray(eventGroup) &&
+      eventGroup.id === restoredSession.sessionGroupId &&
+      eventGroup.kind === "app";
+    if (
+      !sessionMatches ||
+      !groupMatches ||
+      payload.restoreCheckpointId !== checkpoint.id ||
+      payload.restoreCheckpointSha !== checkpoint.commitSha
+    ) {
+      return {
+        ok: false,
+        detail: [
+          `session=${Boolean(sessionMatches)}`,
+          `group=${Boolean(groupMatches)}`,
+          `restoreCheckpointId=${payload.restoreCheckpointId ?? "missing"}`,
+          `restoreCheckpointSha=${payload.restoreCheckpointSha ?? "missing"}`,
+        ].join(" "),
+      };
+    }
+    return { ok: true, value: started };
+  });
+}
+
 function terminalWebSocketUrl() {
   const url = new URL(serverUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -1039,6 +1085,7 @@ const restored = await startAppSession({
 if (restored.sessionGroupId === session.sessionGroupId) {
   throw new Error("Checkpoint restore reused the source app session group");
 }
+await waitForRestoreStartEvent(restored, initial.checkpoint);
 const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored", {
   requireCheckpoint: false,
   requireManagedRepo: true,

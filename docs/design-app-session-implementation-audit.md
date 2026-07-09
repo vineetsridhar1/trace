@@ -891,3 +891,9 @@ user-content domain. After publishing the tweaked artifact, the smoke now derive
 same user-content domain for an unpublished generated sibling, requires the direct root
 URL to reject without leaking artifact HTML, and still verifies that sibling's
 `/_bootstrap` shell contains no artifact content.
+
+During this audit continuation, the hosted cloud app smoke proved checkpoint restore by
+runtime behavior and terminal `HEAD`, but did not prove the restored session's own
+`session_started` event carried the restore context. It now polls the restored session
+stream for `restoreCheckpointId`, `restoreCheckpointSha`, the fresh session id, and
+`kind: "app"` on the restored group before accepting the restore path.
