@@ -908,6 +908,7 @@ export function SessionGroupDetailView({
                 isFullscreen={isFullscreen}
                 showSidebar={isDesignMode ? false : showSidebar}
                 showApplicationsSidebar={isDesignMode ? false : showApplicationsSidebar}
+                canShowSidebar={!isDesignMode}
                 canShowApplications={!isDesignMode && showApplicationsSidebarTab}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={

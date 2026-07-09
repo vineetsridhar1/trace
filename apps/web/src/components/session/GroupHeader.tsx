@@ -41,6 +41,7 @@ interface GroupHeaderProps {
   isFullscreen: boolean;
   showSidebar: boolean;
   showApplicationsSidebar: boolean;
+  canShowSidebar: boolean;
   canShowApplications: boolean;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
@@ -71,6 +72,7 @@ export function GroupHeader({
   isFullscreen,
   showSidebar,
   showApplicationsSidebar,
+  canShowSidebar,
   canShowApplications,
   onToggleFullscreen,
   onToggleSidebar,
@@ -211,19 +213,21 @@ export function GroupHeader({
         </ActionTooltip>
       )}
 
-      <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
-        <button
-          onClick={onToggleSidebar}
-          className={cn(
-            headerIconButtonClass,
-            "hidden sm:flex",
-            showSidebar ? "bg-surface-hover text-foreground" : undefined,
-          )}
-          aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
-        >
-          <PanelRight size={13} />
-        </button>
-      </ActionTooltip>
+      {canShowSidebar && (
+        <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
+          <button
+            onClick={onToggleSidebar}
+            className={cn(
+              headerIconButtonClass,
+              "hidden sm:flex",
+              showSidebar ? "bg-surface-hover text-foreground" : undefined,
+            )}
+            aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
+          >
+            <PanelRight size={13} />
+          </button>
+        </ActionTooltip>
+      )}
     </div>
   );
 }

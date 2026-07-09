@@ -37,6 +37,9 @@ Implemented:
   artifact data.
 - The design canvas uses the existing session/chat shell, renders artifact variants on a
   pan/zoom canvas, and supports focus/fit/zoom controls.
+- Design groups suppress the coding tab strip and right-side repository/application
+  chrome, leaving the existing chat rail on the left and the canvas as the primary work
+  surface.
 - Artifact previews use the user-content `_bootstrap` iframe flow when configured, with a
   dev-only `srcDoc` fallback. GraphQL and event payloads hydrate `Artifact.html` from
   object storage when `htmlStorageKey` is present.
@@ -251,3 +254,8 @@ During this continuation, lazy managed-repo creation had happy-path coverage but
 explicit retry case required by `docs/managed-git-hosting.md`. `session.test.ts` now
 proves that if the first checkpoint links the managed repo but bridge delivery fails, the
 next checkpoint attempt reuses that repo and does not create a duplicate hidden repo.
+
+During this continuation, design groups already forced the sidebars closed but still
+rendered an inactive right-sidebar toggle in the header. The header now receives an
+explicit `canShowSidebar` flag and design mode disables that chrome alongside the
+applications toggle and tab strip.
