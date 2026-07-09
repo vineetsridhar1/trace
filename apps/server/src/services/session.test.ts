@@ -217,6 +217,7 @@ import { designGenerationService } from "./design-generation.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import { orgSecretService } from "./org-secret.js";
 import {
+  composeTraceDesignPrompt,
   getDefaultModel,
   getDefaultReasoningEffort,
   isSupportedReasoningEffort,
@@ -258,6 +259,7 @@ const appCheckpointCaptureServiceMock = appCheckpointCaptureService as unknown a
   typeof appCheckpointCaptureService
 >;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
+const composeTraceDesignPromptMock = vi.mocked(composeTraceDesignPrompt);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
 const isSupportedReasoningEffortMock = vi.mocked(isSupportedReasoningEffort);
@@ -5325,6 +5327,78 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({ type: "send", enableClaudeInChrome: false }),
+        expect.any(Object),
+      );
+    });
+
+    it("appends the Open Design app harness on follow-up app messages", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "cloud",
+        repoId: null,
+        repo: null,
+        workdir: "/home/coder",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Cloud app runtime",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroup: makeSessionGroup({
+          kind: "app",
+          repoId: null,
+          repo: null,
+          designSystemId: "trace-core",
+          designSkillIds: ["forms", "a11y"],
+        }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Cloud app runtime",
+      });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Add an approvals table",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(composeTraceDesignPromptMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "app",
+          designSystemId: "trace-core",
+          skillIds: ["forms", "a11y"],
+          appStarterContext: expect.stringContaining("Next.js App Router"),
+        }),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "send",
+          prompt: expect.stringContaining("Add an approvals table"),
+          cwd: "/home/coder",
+          appendSystemPrompt: expect.stringContaining("full-stack product application"),
+        }),
+        expect.objectContaining({
+          expectedHomeRuntimeId: "runtime-a",
+          organizationId: "org-1",
+        }),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "managed remote lazily on the first checkpoint",
+          ),
+        }),
         expect.any(Object),
       );
     });

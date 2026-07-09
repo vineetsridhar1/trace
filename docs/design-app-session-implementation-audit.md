@@ -788,3 +788,9 @@ During this audit continuation, the hosted design smoke's streaming assertions w
 made less brittle for real model output by raising the session event query window from
 200 to 1000 events, so verbose delta streams do not evict the matching started event from
 the acceptance check.
+
+During this audit continuation, app harness prompt delivery was covered for queued
+initial prompts after starter bootstrap, but not for ordinary follow-up messages once the
+app runtime is ready. `session.test.ts` now proves follow-up app messages compose the
+Open Design app prompt with the session group's design system and skills, then deliver it
+through `RunOptions.appendSystemPrompt`.
