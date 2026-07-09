@@ -1187,6 +1187,99 @@ describe("handleSessionEvent", () => {
     });
   });
 
+  it("routes full session git checkpoint output into checkpoint state", () => {
+    useEntityStore.setState({
+      sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    const checkpoint = {
+      id: "ckpt-1",
+      sessionGroupId: "group-1",
+      commitSha: "abc",
+      committedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: { type: "git_checkpoint", checkpoint },
+      }),
+    );
+
+    const state = useEntityStore.getState();
+    const session = state.sessions["session-1"] as never as {
+      gitCheckpoints: Array<{ id: string }>;
+    };
+    const group = state.sessionGroups["group-1"] as never as {
+      gitCheckpoints: Array<{ id: string }>;
+    };
+    expect(session.gitCheckpoints.map((item) => item.id)).toEqual(["ckpt-1"]);
+    expect(group.gitCheckpoints.map((item) => item.id)).toEqual(["ckpt-1"]);
+  });
+
+  it("routes full session git checkpoint rewrites into checkpoint state", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          gitCheckpoints: [
+            {
+              id: "ckpt-old",
+              sessionGroupId: "group-1",
+              commitSha: "old",
+              committedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        } as never,
+      },
+      sessionGroups: {
+        "group-1": {
+          id: "group-1",
+          gitCheckpoints: [
+            {
+              id: "ckpt-old",
+              sessionGroupId: "group-1",
+              commitSha: "old",
+              committedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        } as never,
+      },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    const checkpoint = {
+      id: "ckpt-new",
+      sessionGroupId: "group-1",
+      commitSha: "new",
+      committedAt: "2026-01-01T00:00:01.000Z",
+    };
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: { type: "git_checkpoint_rewrite", replacedCommitSha: "old", checkpoint },
+      }),
+    );
+
+    const state = useEntityStore.getState();
+    const session = state.sessions["session-1"] as never as {
+      gitCheckpoints: Array<{ commitSha: string }>;
+    };
+    const group = state.sessionGroups["group-1"] as never as {
+      gitCheckpoints: Array<{ commitSha: string }>;
+    };
+    expect(session.gitCheckpoints.map((item) => item.commitSha)).toEqual(["new"]);
+    expect(group.gitCheckpoints.map((item) => item.commitSha)).toEqual(["new"]);
+  });
+
   it("keeps design comment events from full session subscriptions for the canvas", () => {
     const event = makeEvent({
       eventType: "design_comment_added",

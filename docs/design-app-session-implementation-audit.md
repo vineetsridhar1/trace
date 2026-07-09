@@ -760,3 +760,9 @@ Zustand from the org-wide subscription but not from the full session subscriptio
 `handleSessionEvent` now upserts `SessionApplicationProcess` and `SessionEndpoint`
 payloads as well, so live preview, process state, and publish state remain event-backed
 even when the session view receives the canonical scoped event before the org stream.
+
+During this audit continuation, checkpoint reducer coverage proved org-wide
+`git_checkpoint` routing but not the full session subscription path used by an open
+session view. The handler tests now prove full session `session_output` events update
+session and group `gitCheckpoints` for both checkpoint creation and checkpoint rewrite,
+keeping the checkpoint panel event-backed when scoped events arrive first.
