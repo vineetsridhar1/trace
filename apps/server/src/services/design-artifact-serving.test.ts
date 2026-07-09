@@ -22,6 +22,7 @@ import {
   buildDesignArtifactBootstrapHtml,
   handleDesignArtifactUserContent,
 } from "./design-artifact-serving.js";
+import { DESIGN_ARTIFACT_CONTENT_TYPE } from "./design-artifact-html.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const storageMock = storage as { getObject: ReturnType<typeof vi.fn> };
@@ -158,7 +159,7 @@ describe("design artifact user-content serving", () => {
     expect(prismaMock.artifact.findFirst).toHaveBeenCalledWith({
       where: {
         id: "artifact-1",
-        contentType: "text/html",
+        contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
         publishedAt: { not: null },
       },
       select: { id: true, organizationId: true, html: true, htmlStorageKey: true },

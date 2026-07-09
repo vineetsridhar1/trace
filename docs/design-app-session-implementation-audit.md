@@ -228,3 +228,9 @@ During this continuation, app token tweaks were supported by the service/API but
 visible app-session control. The Applications panel now exposes a token tweak action that
 patches `trace.tokens.json` through `patchAppSessionTokens`, with focused coverage for
 JSON-object validation before the mutation is sent.
+
+During this continuation, the published design artifact serving route matched the current
+HTML content type used by artifact creation, but the route and an older fixture used
+independent literals. Published serving and the focused tests now import
+`DESIGN_ARTIFACT_CONTENT_TYPE` so publish/share eligibility stays aligned with artifact
+creation.

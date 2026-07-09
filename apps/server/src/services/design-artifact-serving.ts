@@ -1,5 +1,6 @@
 import type express from "express";
 import { prisma } from "../lib/db.js";
+import { DESIGN_ARTIFACT_CONTENT_TYPE } from "./design-artifact-html.js";
 import { resolveDesignArtifactHtml } from "./design-artifact-storage.js";
 
 const USER_CONTENT_DOMAIN_ENV = "TRACE_USER_CONTENT_DOMAIN";
@@ -222,7 +223,7 @@ export async function handleDesignArtifactUserContent(
   const artifact = await prisma.artifact.findFirst({
     where: {
       id: artifactId,
-      contentType: "text/html",
+      contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
       publishedAt: { not: null },
     },
     select: {

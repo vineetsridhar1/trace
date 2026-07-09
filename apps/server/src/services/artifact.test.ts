@@ -66,6 +66,7 @@ import { designPdfRenderer } from "./design-pdf-renderer.js";
 import { storage } from "../lib/storage/index.js";
 import { sessionService } from "./session.js";
 import { artifactService } from "./artifact.js";
+import { DESIGN_ARTIFACT_CONTENT_TYPE } from "./design-artifact-html.js";
 
 type MockedDeep<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => infer R
@@ -93,7 +94,7 @@ function designArtifact(overrides: Record<string, unknown> = {}) {
     promptEventId: null,
     prompt: "Make a dashboard",
     title: "Dashboard",
-    contentType: "text/html+trace-design",
+    contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
     html: `<html><head><style>
     :root {
       --trace-accent: #0f766e;
