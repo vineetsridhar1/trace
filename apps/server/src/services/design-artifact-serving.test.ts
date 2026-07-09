@@ -97,6 +97,16 @@ describe("design artifact user-content serving", () => {
     );
 
     expect(next).not.toHaveBeenCalled();
+    expect(response.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": expect.stringContaining("default-src 'self'"),
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+      }),
+    );
     expect(response.type).toHaveBeenCalledWith("html");
     expect(response.send).toHaveBeenCalledWith(buildDesignArtifactBootstrapHtml());
     expect(prismaMock.artifact.findFirst).not.toHaveBeenCalled();

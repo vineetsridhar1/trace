@@ -33,6 +33,8 @@ Implemented:
   pan/zoom canvas, and supports focus/fit/zoom controls.
 - Artifact previews use the user-content `_bootstrap` iframe flow when configured, with a
   dev-only `srcDoc` fallback.
+- User-content bootstrap and published artifact responses set CSP, Permissions-Policy,
+  COOP, Referrer-Policy, cache, and content-type isolation headers.
 - The web canvas has focused tests for nonce-bound `_bootstrap` artifact preview URLs and
   published artifact user-content URLs.
 - An opt-in browser smoke verifies a real Chrome iframe can load the user-content
