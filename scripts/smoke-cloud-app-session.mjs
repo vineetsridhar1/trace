@@ -334,6 +334,36 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
     if (!structuredLog) {
       return { ok: false, detail: `no structured runtime log for process ${process.id}` };
     }
+    const latestSessionId = group.sessions[0]?.id;
+    if (!latestSessionId) {
+      return { ok: false, detail: "session group has no session id for scoped log events" };
+    }
+    const eventData = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: latestSessionId },
+      types: ["session_application_log_appended"],
+    });
+    const logEvent = (eventData.events ?? []).find((event) => {
+      if (event.eventType !== "session_application_log_appended") return false;
+      const payload = event.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const logEntry = payload.logEntry;
+      return (
+        logEntry &&
+        typeof logEntry === "object" &&
+        !Array.isArray(logEntry) &&
+        logEntry.processId === process.id &&
+        (logEntry.stream === "stdout" || logEntry.stream === "stderr") &&
+        typeof logEntry.data === "string" &&
+        logEntry.data.trim().length > 0 &&
+        typeof logEntry.sequence === "number" &&
+        typeof logEntry.timestamp === "string" &&
+        logEntry.timestamp.length > 0
+      );
+    });
+    if (!logEvent) {
+      return { ok: false, detail: `no log append event for process ${process.id}` };
+    }
 
     let checkpoint = null;
     if (requireCheckpoint) {

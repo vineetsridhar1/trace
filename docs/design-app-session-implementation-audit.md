@@ -854,3 +854,8 @@ and public user-content URL but did not prove the event-backed canvas state was 
 It now polls for `design_artifact_updated` with `published: true`, the published artifact
 id, a `publishedAt` timestamp, and the exact public URL before rendering the public
 artifact.
+
+During this continuation, the hosted cloud app smoke required persisted runtime logs but
+did not prove those logs reached the session event stream that drives the Applications
+panel. The readiness poll now also requires a `session_application_log_appended` event for
+the running process with stdout/stderr stream, non-empty data, sequence, and timestamp.
