@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import fs from "fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { designPdfRenderer } from "./design-pdf-renderer.js";
+import { countPdfPages, designPdfRenderer } from "./design-pdf-renderer.js";
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
 
@@ -78,5 +78,15 @@ describe("designPdfRenderer", () => {
         html: "<main>Empty</main>",
       }),
     ).rejects.toThrow("Chromium produced an empty PDF");
+  });
+
+  it("counts concrete PDF page objects when available", () => {
+    const pdf = Buffer.from(
+      "%PDF-1.7\n1 0 obj <</Type /Pages /Count 2>> endobj\n2 0 obj <</Type /Page>> endobj\n3 0 obj <</Type /Page>> endobj\n",
+      "latin1",
+    );
+
+    expect(countPdfPages(pdf)).toBe(2);
+    expect(countPdfPages(Buffer.from("%PDF-1.7\n", "latin1"))).toBeNull();
   });
 });

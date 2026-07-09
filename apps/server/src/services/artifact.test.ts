@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const pdfBuffer = vi.hoisted(() =>
+  Buffer.from(
+    "%PDF-1.7\n1 0 obj <</Type /Pages /Count 1>> endobj\n2 0 obj <</Type /Page>> endobj\n",
+    "latin1",
+  ),
+);
+
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
   return { prisma: createPrismaMock() };
@@ -31,8 +38,13 @@ vi.mock("./design-generation.js", () => ({
 }));
 
 vi.mock("./design-pdf-renderer.js", () => ({
+  countPdfPages: (pdf: Buffer) => {
+    const text = pdf.toString("latin1");
+    const matches = text.match(/\/Type\s*\/Page\b/g);
+    return matches && matches.length > 0 ? matches.length : null;
+  },
   designPdfRenderer: {
-    renderHtmlToPdf: vi.fn().mockResolvedValue(Buffer.from("%PDF-1.7\n")),
+    renderHtmlToPdf: vi.fn().mockResolvedValue(pdfBuffer),
   },
 }));
 
@@ -318,7 +330,7 @@ describe("artifactService", () => {
     });
     expect(storageMock.putObject).toHaveBeenCalledWith(
       expect.stringMatching(/^uploads\/org-1\/.+-Dashboard\.pdf$/),
-      Buffer.from("%PDF-1.7\n"),
+      pdfBuffer,
       "application/pdf",
     );
     expect(result).toEqual({ id: "event-1" });
@@ -332,7 +344,8 @@ describe("artifactService", () => {
           fileName: "Dashboard.pdf",
           fileKey: expect.stringMatching(/^uploads\/org-1\/.+-Dashboard\.pdf$/),
           fileUrl: "https://files.example/design.pdf",
-          byteSize: Buffer.from("%PDF-1.7\n").byteLength,
+          byteSize: pdfBuffer.byteLength,
+          pageCount: 1,
         }),
         actorType: "system",
         actorId: "system",

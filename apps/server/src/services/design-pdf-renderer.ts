@@ -93,6 +93,12 @@ ${html}
 </html>`;
 }
 
+export function countPdfPages(pdf: Buffer): number | null {
+  const text = pdf.toString("latin1");
+  const matches = text.match(/\/Type\s*\/Page\b/g);
+  return matches && matches.length > 0 ? matches.length : null;
+}
+
 const renderPool = new BoundedRenderPool();
 
 export const designPdfRenderer = {

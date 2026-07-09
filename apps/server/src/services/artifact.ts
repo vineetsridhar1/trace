@@ -12,7 +12,7 @@ import {
 } from "./design-artifact-html.js";
 import { designGenerationService } from "./design-generation.js";
 import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
-import { designPdfRenderer } from "./design-pdf-renderer.js";
+import { countPdfPages, designPdfRenderer } from "./design-pdf-renderer.js";
 import { sessionService } from "./session.js";
 
 function serializeArtifact(artifact: {
@@ -583,6 +583,7 @@ export const artifactService = {
         html: artifact.html,
         artifactId: artifact.id,
       });
+      const pageCount = countPdfPages(pdf);
       await storage.putObject(fileKey, pdf, "application/pdf");
       const fileUrl = await storage.getGetUrl(fileKey, { downloadFilename: fileName });
 
@@ -600,6 +601,7 @@ export const artifactService = {
           fileKey,
           fileUrl,
           byteSize: pdf.byteLength,
+          ...(pageCount !== null ? { pageCount } : {}),
         } as Prisma.InputJsonValue,
         actorType: "system",
         actorId: "system",
