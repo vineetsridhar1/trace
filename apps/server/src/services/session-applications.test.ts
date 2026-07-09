@@ -748,12 +748,18 @@ describe("SessionApplicationService", () => {
       key: "endpointkey1",
       organizationId: "org-1",
       sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
       status: "enabled",
       revokedAt: null,
     });
     prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
       visibility: "public",
       ownerUserId: "owner-1",
+    });
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "running",
     });
 
     const preview = await new SessionApplicationService().createEndpointPreview(
@@ -783,6 +789,8 @@ describe("SessionApplicationService", () => {
       key: "endpointkey1",
       organizationId: "org-1",
       sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
       status: "disabled",
       revokedAt: null,
     });
@@ -794,6 +802,41 @@ describe("SessionApplicationService", () => {
     await expect(
       new SessionApplicationService().createEndpointPreview("endpoint-1", "org-1", "user-1"),
     ).rejects.toThrow("Start the app preview before opening it.");
+    expect(prismaMock.sessionApplicationProcess.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rejects preview URLs for stale enabled endpoints without a running process", async () => {
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      status: "enabled",
+      revokedAt: null,
+    });
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      visibility: "public",
+      ownerUserId: "owner-1",
+    });
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "stopped",
+    });
+
+    await expect(
+      new SessionApplicationService().createEndpointPreview("endpoint-1", "org-1", "user-1"),
+    ).rejects.toThrow("Start the app preview before opening it.");
+    expect(prismaMock.sessionApplicationProcess.findUnique).toHaveBeenCalledWith({
+      where: {
+        sessionGroupId_appConfigId_processConfigId: {
+          sessionGroupId: "group-1",
+          appConfigId: "web",
+          processConfigId: "dev",
+        },
+      },
+    });
   });
 
   it("patches app token files through the live cloud bridge", async () => {

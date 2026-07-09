@@ -631,3 +631,8 @@ user-content `_bootstrap` frame but only surfaced as local toasts. The canvas no
 deduplicated preview errors through `reportDesignArtifactError`, and the service layer
 emits `design_artifact_error` session events with artifact id, session group id, message,
 and optional stack so agents and clients see the same failure signal.
+
+During this audit pass, private app preview URL minting still trusted an enabled
+endpoint row without rechecking that the backing process was currently running. The
+preview service now requires the endpoint's app/process pair to be `running` before
+issuing signed iframe credentials, matching the live-process guard used by app publish.

@@ -682,6 +682,8 @@ export class SessionApplicationService {
       select: {
         id: true,
         sessionGroupId: true,
+        appConfigId: true,
+        processConfigId: true,
         status: true,
         revokedAt: true,
         key: true,
@@ -692,6 +694,18 @@ export class SessionApplicationService {
       throw new ValidationError("Endpoint has been revoked.");
     }
     if (endpoint.status !== "enabled") {
+      throw new ValidationError("Start the app preview before opening it.");
+    }
+    const process = await prisma.sessionApplicationProcess.findUnique({
+      where: {
+        sessionGroupId_appConfigId_processConfigId: {
+          sessionGroupId: endpoint.sessionGroupId,
+          appConfigId: endpoint.appConfigId,
+          processConfigId: endpoint.processConfigId,
+        },
+      },
+    });
+    if (!process || process.status !== "running") {
       throw new ValidationError("Start the app preview before opening it.");
     }
 
