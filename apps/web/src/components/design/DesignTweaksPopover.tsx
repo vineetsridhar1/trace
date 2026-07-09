@@ -74,9 +74,6 @@ export function DesignTweaksPopover({
       >
         <div>
           <div className="text-sm font-medium">Tweak tokens</div>
-          <div className="text-xs text-muted-foreground">
-            Patch CSS variables without a model run.
-          </div>
         </div>
         <div className="grid gap-1.5">
           <label className="text-xs font-medium text-muted-foreground" htmlFor="design-token-name">

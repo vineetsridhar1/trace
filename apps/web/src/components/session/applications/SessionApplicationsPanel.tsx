@@ -11,7 +11,6 @@ import {
   Power,
   RotateCw,
   Settings,
-  SlidersHorizontal,
   Square,
   Upload,
 } from "lucide-react";
@@ -31,6 +30,7 @@ import { Button } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
 import { DesignHarnessSettingsPopover } from "../../design/DesignHarnessSettingsPopover";
 import { toast } from "sonner";
+import { AppTokenTweaksPopover } from "./AppTokenTweaksPopover";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
@@ -614,11 +614,7 @@ export function SessionApplicationsPanel({
     }
   };
 
-  const patchAppTokens = async () => {
-    const raw = window.prompt(
-      "Patch trace.tokens.json",
-      JSON.stringify({ color: { primary: "#ef4444" } }, null, 2),
-    );
+  const patchAppTokens = async (raw: string) => {
     if (!raw?.trim()) return;
 
     setPending("patch-app-tokens");
@@ -634,6 +630,7 @@ export function SessionApplicationsPanel({
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       setPending(null);
     }
@@ -717,16 +714,10 @@ export function SessionApplicationsPanel({
           >
             <Upload size={14} />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Tweak app tokens"
-            aria-label="Tweak app tokens"
+          <AppTokenTweaksPopover
             disabled={pending === "patch-app-tokens"}
-            onClick={() => void patchAppTokens()}
-          >
-            <SlidersHorizontal size={14} />
-          </Button>
+            onApply={patchAppTokens}
+          />
           <Button
             variant="ghost"
             size="icon-sm"

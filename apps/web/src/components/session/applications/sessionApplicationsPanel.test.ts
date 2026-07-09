@@ -4,6 +4,7 @@ import {
   parseTrustedAppOverlayMessage,
   publishedAppShareUrl,
 } from "./SessionApplicationsPanel";
+import { defaultAppTokenPatchJson } from "./AppTokenTweaksPopover";
 
 describe("parseAppTokenPatchInput", () => {
   it("accepts JSON object token patches", () => {
@@ -15,6 +16,12 @@ describe("parseAppTokenPatchInput", () => {
   it("rejects non-object token patches", () => {
     expect(() => parseAppTokenPatchInput("[]")).toThrow("Token patch must be a JSON object.");
     expect(() => parseAppTokenPatchInput('"bad"')).toThrow("Token patch must be a JSON object.");
+  });
+
+  it("keeps the app token tweak default as valid JSON", () => {
+    expect(parseAppTokenPatchInput(defaultAppTokenPatchJson())).toEqual({
+      color: { primary: "#ef4444" },
+    });
   });
 });
 

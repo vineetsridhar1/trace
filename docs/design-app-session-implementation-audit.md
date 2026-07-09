@@ -522,3 +522,9 @@ browser prompts instead of the Tweaks panel called out by the canvas spec. The c
 uses a `DesignTweaksPopover` with CSS-variable/value inputs, client-side token validation,
 and the existing service-layer `patchDesignArtifactTokens` mutation. Focused web tests
 cover token patch validation.
+
+During this audit pass, app-session token tweaks also still used a raw browser prompt even
+though the docs call for app sessions to reuse the same preview/tweaks chrome. The
+Applications panel now opens an `AppTokenTweaksPopover` for `trace.tokens.json` patches,
+keeps the existing `patchAppSessionTokens` service path, and has focused coverage that
+the default patch payload remains valid JSON.
