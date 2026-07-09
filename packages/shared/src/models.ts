@@ -36,10 +36,11 @@ const CODEX_MODELS: readonly ModelOption[] = [
   { value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
 ];
 
+// The OpenAI API (`openai/`) does not expose the Codex `sol/terra/luna` variants
+// — its newest coding model is gpt-5.5 — so only the Codex-backed ChatGPT
+// subscription path (`openai-codex/`) carries the GPT-5.6 trio.
 const PI_MODELS: readonly ModelOption[] = [
-  { value: "openai/gpt-5.6-sol", label: "OpenAI GPT-5.6 Sol" },
-  { value: "openai/gpt-5.6-terra", label: "OpenAI GPT-5.6 Terra" },
-  { value: "openai/gpt-5.6-luna", label: "OpenAI GPT-5.6 Luna" },
+  { value: "openai/gpt-5.5", label: "OpenAI GPT-5.5" },
   { value: "openai/gpt-5.4", label: "OpenAI GPT-5.4" },
   { value: "openai-codex/gpt-5.6-sol", label: "Codex GPT-5.6 Sol (ChatGPT)" },
   { value: "openai-codex/gpt-5.6-terra", label: "Codex GPT-5.6 Terra (ChatGPT)" },
@@ -59,7 +60,7 @@ const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
   { value: "sonnet-5", label: "Sonnet 5" },
 ];
 
-// Cursor encodes the thinking level in the model id (e.g. gpt-5.6-high,
+// Cursor encodes the thinking level in the model id (e.g. gpt-5.6-sol-high,
 // claude-opus-4-8-thinking-high) rather than accepting a separate flag, so the
 // effort selector maps to those id suffixes in resolveCursorComposerModel.
 const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
@@ -72,8 +73,9 @@ const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
 
 /**
  * Compose the concrete Cursor model id from the selected family + thinking level.
- * `auto` ignores the level. GPT-5 models have no "max"/"xhigh" tiers, so both clamp to
- * its top "extra-high"; Claude families expose the level as a thinking variant.
+ * `auto` ignores the level. The GPT-5.6 families take the level as a plain id
+ * suffix (e.g. gpt-5.6-sol-xhigh, gpt-5.6-sol-max — all five tiers exist in
+ * Cursor's catalog); Claude families expose the level as a thinking variant.
  */
 const CURSOR_COMPOSER_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
@@ -86,8 +88,7 @@ export function resolveCursorComposerModel(
   // from Claude) must never produce an invalid id like `...-thinking-auto`.
   const level = effort && CURSOR_COMPOSER_LEVELS.has(effort) ? effort : "medium";
   if (/^gpt-5\.\d+(-[a-z]+)?$/.test(model)) {
-    const gptLevel = level === "xhigh" || level === "max" ? "extra-high" : level;
-    return `${model}-${gptLevel}`;
+    return `${model}-${level}`;
   }
   if (model === "opus-4.8") return `claude-opus-4-8-thinking-${level}`;
   if (model === "sonnet-5") return `claude-sonnet-5-thinking-${level}`;
@@ -99,19 +100,19 @@ const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
     value: "openai",
     label: "OpenAI API",
     description: "Uses an OpenAI API key",
-    models: PI_MODELS.slice(0, 4),
+    models: PI_MODELS.slice(0, 2),
   },
   {
     value: "openai-codex",
     label: "ChatGPT",
     description: "Uses a ChatGPT Plus or Pro subscription",
-    models: PI_MODELS.slice(4, 8),
+    models: PI_MODELS.slice(2, 6),
   },
   {
     value: "anthropic",
     label: "Claude",
     description: "Uses a Claude subscription",
-    models: PI_MODELS.slice(8),
+    models: PI_MODELS.slice(6),
   },
 ];
 
@@ -150,7 +151,7 @@ const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
   claude_code: "claude-opus-4-8[1m]",
   codex: "gpt-5.6-sol",
   cursor_composer: "auto",
-  pi: "openai/gpt-5.6-sol",
+  pi: "openai/gpt-5.5",
 };
 
 const DEFAULT_REASONING_EFFORT_BY_TOOL: Readonly<Record<string, string>> = {
