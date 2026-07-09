@@ -332,3 +332,9 @@ During this continuation, app-session prompt composition was covered at the sess
 but not at the Claude Code adapter boundary. The shared adapter test now verifies
 `RunOptions.appendSystemPrompt` is passed as `--append-system-prompt` while the user prompt
 continues to be delivered over stdin.
+
+During this audit pass, coding-session preservation had positive evidence through the
+existing session suite but lacked a direct guard against app harness leakage. The
+workspace upgrade regression now proves a normal coding session still replays its queued
+prompt with `appendSystemPrompt: undefined`, while app replay keeps the Open Design app
+harness.

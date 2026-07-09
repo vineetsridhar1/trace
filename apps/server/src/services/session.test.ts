@@ -7024,6 +7024,11 @@ describe("SessionService", () => {
           workdir: "/tmp/trace/worktree",
           toolSessionId: null,
           repoId: "repo-1",
+          sessionGroup: {
+            kind: "coding",
+            designSystemId: null,
+            designSkillIds: [],
+          },
           connection: {
             state: "connected",
             runtimeInstanceId: "runtime-a",
@@ -7060,6 +7065,15 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({ readOnlyWorkspace: false }),
         }),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "send",
+          prompt: expect.stringContaining("Continue in code mode"),
+          appendSystemPrompt: undefined,
+        }),
+        expect.any(Object),
       );
     });
 
