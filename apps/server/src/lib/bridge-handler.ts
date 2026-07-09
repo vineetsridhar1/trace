@@ -7,6 +7,7 @@ import {
   type BridgeLinkedCheckoutChangedFilePreview,
   type BridgeLinkedCheckoutActionResultPayload,
   type BridgeWorkspaceWarning,
+  type BridgeRepoWorktree,
   type GitCheckpointContext,
 } from "@trace/shared";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
@@ -761,6 +762,20 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveWorkspaceSlugRequest(
           msg.requestId,
           slugs,
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeKey,
+        );
+        return;
+      }
+
+      if (
+        msg.type === "worktrees_result" &&
+        typeof msg.requestId === "string" &&
+        Array.isArray(msg.worktrees)
+      ) {
+        sessionRouter.resolveWorktreeListRequest(
+          msg.requestId,
+          msg.worktrees as BridgeRepoWorktree[],
           typeof msg.error === "string" ? msg.error : undefined,
           runtimeKey,
         );

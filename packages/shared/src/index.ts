@@ -97,9 +97,13 @@ export type {
   BridgeLinkedCheckoutActionResult,
   AttachmentDownloadDeps,
   ImageDownloadDeps,
+  BridgeListWorktreesCommand,
+  BridgeRepoWorktree,
+  BridgeWorktreesResult,
 } from "./bridge.js";
 export {
   parseBranchOutput,
+  parseWorktreeListPorcelain,
   walkDir,
   handleListFiles,
   handleReadFile,

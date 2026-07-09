@@ -147,7 +147,7 @@ function SidebarSessionHoverContent({
         {branch && (
           <p className="flex min-w-0 items-start gap-1.5">
             <GitBranch size={11} className="shrink-0" />
-            <span className="min-w-0 break-words">{branch}</span>
+            <span className="min-w-0 break-words font-mono">{branch}</span>
           </p>
         )}
       </div>
@@ -183,9 +183,11 @@ function SidebarSessionHoverContent({
                 </p>
                 {(detail.repoName || detail.branch || detail.currentCommitSha) && (
                   <p className="truncate">
-                    {[detail.repoName, detail.branch, shortSha(detail.currentCommitSha)]
-                      .filter((part): part is string => !!part)
-                      .join(" / ")}
+                    {detail.repoName}
+                    {detail.repoName && detail.branch ? " / " : ""}
+                    {detail.branch && <span className="font-mono">{detail.branch}</span>}
+                    {(detail.repoName || detail.branch) && detail.currentCommitSha ? " / " : ""}
+                    {detail.currentCommitSha ? shortSha(detail.currentCommitSha) : ""}
                   </p>
                 )}
               </div>

@@ -119,7 +119,6 @@ export function SessionHeader({
 
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
-  const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
   const connectionState = typeof connection?.state === "string" ? connection.state : undefined;
   const runtimeStatusLabel =
     connectionState && connectionState !== "connected" ? connectionLabel[connectionState] : null;
@@ -186,6 +185,19 @@ export function SessionHeader({
         </ActionTooltip>
       )}
 
+      <ActionTooltip
+        label={isCloud ? "Cloud" : (runtimeLabel ?? "Local")}
+        className="app-region-no-drag"
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center">
+          {isCloud ? (
+            <Cloud size={14} className="text-sky-400" />
+          ) : (
+            <Monitor size={14} className="text-green-400" />
+          )}
+        </span>
+      </ActionTooltip>
+
       {disconnected ? (
         pastGracePeriod ? (
           <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
@@ -225,13 +237,6 @@ export function SessionHeader({
           <ScrambleText text={name ?? "Session"} />
         </h2>
       </div>
-
-      {runtimeDisplayLabel && (
-        <span className="flex shrink-0 items-center gap-1 rounded-md bg-surface-elevated px-2 py-1 text-xs text-muted-foreground">
-          {isCloud ? <Cloud size={12} /> : <Monitor size={12} />}
-          {runtimeDisplayLabel}
-        </span>
-      )}
 
       <SessionUsageBadge sessionId={sessionId} />
 

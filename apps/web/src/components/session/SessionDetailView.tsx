@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
@@ -565,6 +565,21 @@ export function SessionDetailView({
     !worktreeDeleted &&
     !(isDisconnected(connection) && !isNotStarted);
 
+  // The bottom bar (composer / plan / question / notice) floats over the message
+  // list so content scrolls behind it. Measure its height to pad the scroll area
+  // so the newest message clears the floating input.
+  const bottomBarRef = useRef<HTMLDivElement | null>(null);
+  const [bottomBarHeight, setBottomBarHeight] = useState(0);
+  useEffect(() => {
+    const el = bottomBarRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) setBottomBarHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <EventScopeContext.Provider value={scopeKey}>
       <div className="flex h-full flex-col overflow-hidden">
@@ -580,7 +595,7 @@ export function SessionDetailView({
         )}
 
         <SessionDropzone
-          className="flex flex-1 flex-col overflow-hidden"
+          className="relative flex flex-1 flex-col overflow-hidden bg-background"
           onFileDropped={addAttachments}
           disabled={!composerActive}
         >
@@ -613,6 +628,7 @@ export function SessionDetailView({
                   onForkSession={onForkSession}
                   canForkSession={canForkSession}
                   messageActionsEventIds={messageActionsEventIds}
+                  scrollPaddingBottom={bottomBarHeight}
                 />
               )}
               {initialEventsLoading && (
@@ -675,6 +691,7 @@ export function SessionDetailView({
             )}
           </div>
 
+          <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
           {runtimeLifecycleState ? (
             <RuntimeLifecycleNotice
               sessionId={sessionId}
@@ -682,7 +699,7 @@ export function SessionDetailView({
               connectionState={runtimeLifecycleState}
             />
           ) : !bridgeInteractionAllowed ? (
-            <div className="border-t p-4">
+            <div className="border-t bg-background p-4">
               <BridgeAccessNotice
                 access={bridgeAccess}
                 sessionGroupId={sessionGroupId ?? null}
@@ -726,6 +743,7 @@ export function SessionDetailView({
               />
             </>
           )}
+          </div>
         </SessionDropzone>
       </div>
     </EventScopeContext.Provider>

@@ -9,6 +9,8 @@ import {
   generatedTraceWorktreeBranch,
   resolveGeneratedTraceWorktreeBranch,
   shouldRepairRenamedTraceWorktreeBranch,
+  parseWorktreeListPorcelain,
+  type BridgeRepoWorktree,
 } from "@trace/shared";
 import { installOrRepairRepoHooksBestEffort } from "./repo-hooks.js";
 import { formatGitError, gitEnv } from "./git-utils.js";
@@ -354,4 +356,126 @@ export async function removeWorktree({
   await execFileAsync("git", ["worktree", "remove", worktreePath], {
     cwd: repoPath,
   });
+}
+
+/** Absolute path to the shared git dir backing a repo or worktree, or null. */
+async function gitCommonDir(dir: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+      { cwd: dir },
+    );
+    const resolved = stdout.trim();
+    return resolved ? path.resolve(resolved) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Absolute path to the root of the worktree containing `dir`, or null. */
+async function getWorktreeToplevel(dir: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["rev-parse", "--path-format=absolute", "--show-toplevel"],
+      { cwd: dir },
+    );
+    const resolved = stdout.trim();
+    return resolved ? path.resolve(resolved) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when `workdir` is a Trace-created worktree under ~/trace/sessions/{repoId}. */
+export function isTraceManagedWorktreePath(repoId: string, workdir: string): boolean {
+  const prefix = path.join(os.homedir(), "trace", "sessions", repoId);
+  const resolved = path.resolve(workdir);
+  return resolved === prefix || resolved.startsWith(prefix + path.sep);
+}
+
+/**
+ * Adopt an existing on-disk worktree of the linked repo as a session workspace.
+ * Validates the path is a git worktree sharing the repo's git dir and has a
+ * branch checked out. Never resets, branches, or fetches — the worktree is used
+ * as-is, with its current branch as the session branch.
+ */
+export async function adoptWorktree({
+  repoPath,
+  repoId,
+  worktreePath,
+  slug,
+  gitHooksEnabled,
+}: {
+  repoPath: string;
+  repoId: string;
+  worktreePath: string;
+  /** Pre-assigned group slug to preserve; falls back to the directory name. */
+  slug?: string;
+  gitHooksEnabled?: boolean;
+}): Promise<{ workdir: string; branch: string; slug: string }> {
+  const resolved = path.resolve(worktreePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Worktree path does not exist: ${resolved}`);
+  }
+  if (!(await isUsableWorktree(resolved))) {
+    throw new Error(`Not a git worktree: ${resolved}`);
+  }
+
+  // The adopted worktree must share the linked repo's git directory, otherwise
+  // a session could be pointed at an unrelated repository on disk.
+  const [repoCommonDir, worktreeCommonDir] = await Promise.all([
+    gitCommonDir(repoPath),
+    gitCommonDir(resolved),
+  ]);
+  if (!repoCommonDir || !worktreeCommonDir || repoCommonDir !== worktreeCommonDir) {
+    throw new Error(
+      `${resolved} is not a worktree of the linked repository. ` +
+        "Choose a worktree that belongs to this repo.",
+    );
+  }
+
+  // A session must occupy a dedicated worktree root — never the repo's primary
+  // checkout (which holds the user's working tree and lives outside Trace's
+  // managed dir, so it would never be cleaned up) nor a subdirectory of one.
+  const [repoToplevel, worktreeToplevel] = await Promise.all([
+    getWorktreeToplevel(repoPath),
+    getWorktreeToplevel(resolved),
+  ]);
+  if (!worktreeToplevel || worktreeToplevel !== resolved) {
+    throw new Error(
+      `${resolved} is not the root of a worktree. Choose the worktree's top-level directory.`,
+    );
+  }
+  if (repoToplevel && worktreeToplevel === repoToplevel) {
+    throw new Error(
+      "Cannot import the repository's primary checkout. Create or choose a separate worktree.",
+    );
+  }
+
+  const branch = await getCurrentBranch(resolved);
+  if (!branch) {
+    throw new Error(
+      `${resolved} is in a detached HEAD state. Check out a branch before importing it.`,
+    );
+  }
+
+  if (gitHooksEnabled) {
+    await installOrRepairRepoHooksBestEffort(resolved, "adopted worktree");
+  }
+
+  return { workdir: resolved, branch, slug: slug ?? path.basename(resolved) };
+}
+
+/** List all git worktrees of the linked repo, flagging Trace-managed ones. */
+export async function listRepoWorktrees(
+  repoPath: string,
+  repoId: string,
+): Promise<BridgeRepoWorktree[]> {
+  const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], {
+    cwd: repoPath,
+  });
+  const managedPrefix = path.join(os.homedir(), "trace", "sessions", repoId);
+  return parseWorktreeListPorcelain(stdout, managedPrefix, path.sep);
 }

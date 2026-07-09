@@ -39,7 +39,7 @@ export function ConnectionsRepoRow({
           <div className="text-sm text-muted-foreground">No synced session</div>
         )}
         {branch && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-surface-elevated px-2 py-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded-md bg-surface-elevated px-2 py-1 font-mono text-xs text-muted-foreground">
             <GitBranch size={12} />
             {branch}
           </span>

@@ -630,6 +630,8 @@ export type Mutation = {
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
+  /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
+  importWorktree: SessionGroup;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -873,6 +875,12 @@ export type MutationEnableSessionEndpointForwardingArgs = {
 
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationImportWorktreeArgs = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
+  worktreePath: Scalars["String"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -1321,6 +1329,8 @@ export type Query = {
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
+  /** Existing on-disk worktrees of a repo on a local runtime, available to import. */
+  repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
@@ -1480,6 +1490,11 @@ export type QueryRepoBranchesArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type QueryRepoWorktreesArgs = {
+  repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type QueryReposArgs = {
@@ -1754,6 +1769,17 @@ export type RepoSetupScriptInput = {
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+/** An existing git worktree of a repo on a local runtime, offered for import. */
+export type RepoWorktree = {
+  __typename?: "RepoWorktree";
+  branch?: Maybe<Scalars["String"]["output"]>;
+  head?: Maybe<Scalars["String"]["output"]>;
+  isMain: Scalars["Boolean"]["output"];
+  /** True when the worktree is already managed by Trace (not a candidate for import). */
+  isTraceManaged: Scalars["Boolean"]["output"];
+  path: Scalars["String"]["output"];
+};
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
@@ -1935,6 +1961,8 @@ export type SessionGroup = {
   updatedAt: Scalars["DateTime"]["output"];
   visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
+  /** True when the workspace is a user-owned worktree imported into Trace. */
+  worktreeAdopted: Scalars["Boolean"]["output"];
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
 
@@ -2081,6 +2109,8 @@ export type StartSessionInput = {
   ticketId?: InputMaybe<Scalars["ID"]["input"]>;
   tool?: InputMaybe<CodingTool>;
   visibility?: InputMaybe<SessionGroupVisibility>;
+  /** Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only. */
+  worktreePath?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type Subscription = {
@@ -2437,6 +2467,7 @@ export type ResolversTypes = ResolversObject<{
   RepoProvider: RepoProvider;
   RepoSetupScript: ResolverTypeWrapper<RepoSetupScript>;
   RepoSetupScriptInput: RepoSetupScriptInput;
+  RepoWorktree: ResolverTypeWrapper<RepoWorktree>;
   ScopeInput: ScopeInput;
   ScopeType: ScopeType;
   Session: ResolverTypeWrapper<Session>;
@@ -2562,6 +2593,7 @@ export type ResolversParentTypes = ResolversObject<{
   RepoProcessDefinitionInput: RepoProcessDefinitionInput;
   RepoSetupScript: RepoSetupScript;
   RepoSetupScriptInput: RepoSetupScriptInput;
+  RepoWorktree: RepoWorktree;
   ScopeInput: ScopeInput;
   Session: Session;
   SessionApplicationLogEntry: SessionApplicationLogEntry;
@@ -3296,6 +3328,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationForkSessionArgs, "eventId">
   >;
+  importWorktree?: Resolver<
+    ResolversTypes["SessionGroup"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationImportWorktreeArgs, "sessionId" | "worktreePath">
+  >;
   joinChannel?: Resolver<
     ResolversTypes["Channel"],
     ParentType,
@@ -3941,6 +3979,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryRepoBranchesArgs, "repoId">
   >;
+  repoWorktrees?: Resolver<
+    Array<ResolversTypes["RepoWorktree"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryRepoWorktreesArgs, "repoId">
+  >;
   repos?: Resolver<
     Array<ResolversTypes["Repo"]>,
     ParentType,
@@ -4224,6 +4268,18 @@ export type RepoSetupScriptResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type RepoWorktreeResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoWorktree"] = ResolversParentTypes["RepoWorktree"],
+> = ResolversObject<{
+  branch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  head?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  isMain?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  isTraceManaged?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Session"] = ResolversParentTypes["Session"],
@@ -4392,6 +4448,7 @@ export type SessionGroupResolvers<
   updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   visibility?: Resolver<ResolversTypes["SessionGroupVisibility"], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  worktreeAdopted?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   worktreeDeleted?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
@@ -4727,6 +4784,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   RepoPortDefinition?: RepoPortDefinitionResolvers<ContextType>;
   RepoProcessDefinition?: RepoProcessDefinitionResolvers<ContextType>;
   RepoSetupScript?: RepoSetupScriptResolvers<ContextType>;
+  RepoWorktree?: RepoWorktreeResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionApplicationLogEntry?: SessionApplicationLogEntryResolvers<ContextType>;
   SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;

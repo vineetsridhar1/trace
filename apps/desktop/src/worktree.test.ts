@@ -1134,3 +1134,160 @@ describe("createWorktree", () => {
     ).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("adoptWorktree", () => {
+  beforeEach(() => {
+    existsSyncMock.mockReset();
+    execFileMock.mockReset();
+    installOrRepairRepoHooksBestEffortMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  function mockGit(handlers: {
+    commonDirByCwd: Record<string, string>;
+    toplevelByCwd?: Record<string, string>;
+    branch?: string | null;
+    insideWorkTree?: boolean;
+  }) {
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        args: string[],
+        options: { cwd: string },
+        callback: (error: Error | null, stdout: string) => void,
+      ) => {
+        if (args[0] === "rev-parse" && args[1] === "--is-inside-work-tree") {
+          callback(null, handlers.insideWorkTree === false ? "false\n" : "true\n");
+        } else if (args[0] === "rev-parse" && args.includes("--show-toplevel")) {
+          // Default the toplevel to the cwd itself (i.e. cwd is a worktree root).
+          const top = handlers.toplevelByCwd?.[options.cwd] ?? options.cwd;
+          callback(top ? null : new Error("no toplevel"), top ? `${top}\n` : "");
+        } else if (args[0] === "rev-parse" && args[1] === "--path-format=absolute") {
+          const dir = handlers.commonDirByCwd[options.cwd];
+          callback(dir ? null : new Error("no common dir"), dir ?? "");
+        } else if (args[0] === "symbolic-ref") {
+          if (handlers.branch) callback(null, `${handlers.branch}\n`);
+          else callback(new Error("detached HEAD"), "");
+        } else {
+          callback(new Error(`Unexpected git call: ${args.join(" ")}`), "");
+        }
+        return {} as ReturnType<typeof execFileMock>;
+      },
+    );
+  }
+
+  it("adopts a worktree that shares the repo's git dir, using its current branch", async () => {
+    existsSyncMock.mockReturnValue(true);
+    mockGit({
+      commonDirByCwd: { "/tmp/repo": "/tmp/repo/.git", "/tmp/wt": "/tmp/repo/.git" },
+      branch: "feature/login",
+    });
+
+    const { adoptWorktree } = await import("./worktree.js");
+    const result = await adoptWorktree({
+      repoPath: "/tmp/repo",
+      repoId: "repo-1",
+      worktreePath: "/tmp/wt",
+      slug: "gibbon",
+    });
+
+    expect(result).toEqual({ workdir: "/tmp/wt", branch: "feature/login", slug: "gibbon" });
+    // Never resets or fetches an adopted worktree.
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      "git",
+      expect.arrayContaining(["reset"]),
+      expect.anything(),
+      expect.any(Function),
+    );
+  });
+
+  it("rejects a worktree that belongs to a different repo", async () => {
+    existsSyncMock.mockReturnValue(true);
+    mockGit({
+      commonDirByCwd: { "/tmp/repo": "/tmp/repo/.git", "/tmp/other": "/tmp/other/.git" },
+      branch: "main",
+    });
+
+    const { adoptWorktree } = await import("./worktree.js");
+    await expect(
+      adoptWorktree({ repoPath: "/tmp/repo", repoId: "repo-1", worktreePath: "/tmp/other" }),
+    ).rejects.toThrow("not a worktree of the linked repository");
+  });
+
+  it("rejects a detached-HEAD worktree", async () => {
+    existsSyncMock.mockReturnValue(true);
+    mockGit({
+      commonDirByCwd: { "/tmp/repo": "/tmp/repo/.git", "/tmp/wt": "/tmp/repo/.git" },
+      branch: null,
+    });
+
+    const { adoptWorktree } = await import("./worktree.js");
+    await expect(
+      adoptWorktree({ repoPath: "/tmp/repo", repoId: "repo-1", worktreePath: "/tmp/wt" }),
+    ).rejects.toThrow("detached HEAD");
+  });
+
+  it("rejects the repository's primary checkout", async () => {
+    existsSyncMock.mockReturnValue(true);
+    // repoPath and worktreePath are the same primary checkout, so both resolve to
+    // the same toplevel — adopting it would run the agent in the user's main tree.
+    mockGit({
+      commonDirByCwd: { "/tmp/repo": "/tmp/repo/.git" },
+      branch: "main",
+    });
+
+    const { adoptWorktree } = await import("./worktree.js");
+    await expect(
+      adoptWorktree({ repoPath: "/tmp/repo", repoId: "repo-1", worktreePath: "/tmp/repo" }),
+    ).rejects.toThrow("primary checkout");
+  });
+
+  it("rejects a subdirectory of a worktree", async () => {
+    existsSyncMock.mockReturnValue(true);
+    mockGit({
+      commonDirByCwd: { "/tmp/repo": "/tmp/repo/.git", "/tmp/wt/sub": "/tmp/repo/.git" },
+      // The subdir's toplevel is the worktree root, not the subdir itself.
+      toplevelByCwd: { "/tmp/wt/sub": "/tmp/wt" },
+      branch: "feature/login",
+    });
+
+    const { adoptWorktree } = await import("./worktree.js");
+    await expect(
+      adoptWorktree({ repoPath: "/tmp/repo", repoId: "repo-1", worktreePath: "/tmp/wt/sub" }),
+    ).rejects.toThrow("not the root of a worktree");
+  });
+
+  it("rejects a path that does not exist", async () => {
+    existsSyncMock.mockReturnValue(false);
+    const { adoptWorktree } = await import("./worktree.js");
+    await expect(
+      adoptWorktree({ repoPath: "/tmp/repo", repoId: "repo-1", worktreePath: "/tmp/missing" }),
+    ).rejects.toThrow("does not exist");
+  });
+});
+
+describe("isTraceManagedWorktreePath", () => {
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("recognizes Trace-managed worktree paths and rejects external ones", async () => {
+    const os = (await import("os")).default;
+    const path = (await import("path")).default;
+    const { isTraceManagedWorktreePath } = await import("./worktree.js");
+    const managed = path.join(os.homedir(), "trace", "sessions", "repo-1", "otter");
+    expect(isTraceManagedWorktreePath("repo-1", managed)).toBe(true);
+    expect(isTraceManagedWorktreePath("repo-1", "/Users/me/dev/my-feature")).toBe(false);
+    // A different repo's managed dir is not managed for repo-1.
+    expect(
+      isTraceManagedWorktreePath(
+        "repo-1",
+        path.join(os.homedir(), "trace", "sessions", "repo-2", "otter"),
+      ),
+    ).toBe(false);
+  });
+});

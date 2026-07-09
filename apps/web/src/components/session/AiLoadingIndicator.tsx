@@ -37,11 +37,11 @@ export function AiLoadingIndicator({ model, startedAt }: AiLoadingIndicatorProps
 
   return (
     <motion.div
-      initial={{ height: 0, opacity: 0, y: -4 }}
-      animate={{ height: 28, opacity: 1, y: 0 }}
-      exit={{ height: 0, opacity: 0, y: -4, marginBottom: 0 }}
-      transition={{ duration: 0.16, ease: "easeOut" }}
-      className="mb-2 flex items-center gap-1.5 overflow-hidden"
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 4 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      className="flex items-center gap-1.5 pb-2"
     >
       <TraceLoader size={14} showLabel={false} className="text-white" />
       <span className="text-[11px] text-muted-foreground">

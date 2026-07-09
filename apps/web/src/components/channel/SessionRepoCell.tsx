@@ -7,7 +7,11 @@ export function SessionRepoCell({ row }: { row?: SessionGroupRow }) {
 
   if (!repo && !branch) return null;
 
-  const text = repo && branch ? `${repo.name} / ${branch}` : repo ? repo.name : branch;
-
-  return <span className="truncate text-xs text-muted-foreground">{text}</span>;
+  return (
+    <span className="truncate text-xs text-muted-foreground">
+      {repo?.name}
+      {repo && branch ? " / " : ""}
+      {branch && <span className="font-mono">{branch}</span>}
+    </span>
+  );
 }

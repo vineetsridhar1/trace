@@ -80,6 +80,7 @@ const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
   "git_checkpoint_rewrite",
   "config_changed",
   "branch_renamed",
+  "worktree_imported",
 ]);
 
 // Maps scope types to their pubsub topic builders.

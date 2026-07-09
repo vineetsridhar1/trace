@@ -61,7 +61,13 @@ import {
   syncLinkedCheckout,
 } from "./linked-checkout.js";
 import { LinkedCheckoutAutoSyncManager } from "./linked-checkout-auto-sync.js";
-import { createWorktree, removeWorktree } from "./worktree.js";
+import {
+  createWorktree,
+  removeWorktree,
+  adoptWorktree,
+  listRepoWorktrees,
+  isTraceManagedWorktreePath,
+} from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import {
@@ -1150,6 +1156,7 @@ export class BridgeClient implements IBridgeClient {
           preserveBranchName,
           checkpointSha,
           readOnly,
+          adoptWorktreePath,
         } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
@@ -1160,6 +1167,35 @@ export class BridgeClient implements IBridgeClient {
             sessionId,
             error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
           });
+          break;
+        }
+
+        // Adopting an existing worktree takes precedence: use it as-is (its own
+        // branch, no reset), rather than creating or reusing a Trace worktree.
+        if (adoptWorktreePath) {
+          adoptWorktree({
+            repoPath,
+            repoId,
+            worktreePath: adoptWorktreePath,
+            slug,
+            gitHooksEnabled: repoConfig.gitHooksEnabled,
+          })
+            .then(({ workdir, branch: adoptedBranch, slug: adoptedSlug }) => {
+              this.sessionWorkdirs.set(sessionId, workdir);
+              this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
+              this.readOnlySessions.delete(sessionId);
+              this.send({
+                type: "workspace_ready",
+                sessionId,
+                workdir,
+                branch: adoptedBranch,
+                slug: adoptedSlug,
+              });
+              void this.pollLocalPrStatuses();
+            })
+            .catch((err: Error) => {
+              this.send({ type: "workspace_failed", sessionId, error: err.message });
+            });
           break;
         }
 
@@ -1239,6 +1275,32 @@ export class BridgeClient implements IBridgeClient {
               type: "workspace_slugs_result",
               requestId: cmd.requestId,
               slugs: [],
+              error: err.message,
+            });
+          });
+        break;
+      }
+      case "list_worktrees": {
+        const repoPath = getRepoConfig(cmd.repoId)?.path;
+        if (!repoPath) {
+          this.send({
+            type: "worktrees_result",
+            requestId: cmd.requestId,
+            worktrees: [],
+            error: "Repo not linked",
+          });
+          break;
+        }
+
+        listRepoWorktrees(repoPath, cmd.repoId)
+          .then((worktrees) => {
+            this.send({ type: "worktrees_result", requestId: cmd.requestId, worktrees });
+          })
+          .catch((err: Error) => {
+            this.send({
+              type: "worktrees_result",
+              requestId: cmd.requestId,
+              worktrees: [],
               error: err.message,
             });
           });
@@ -1336,8 +1398,15 @@ export class BridgeClient implements IBridgeClient {
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
-        // Clean up worktree if one exists — skip for read-only sessions (no worktree to remove)
-        if (cmd.workdir && cmd.repoId && !wasReadOnly) {
+        // Clean up worktree if one exists — skip for read-only sessions (no
+        // worktree to remove) and for adopted worktrees the user owns (anything
+        // outside Trace's managed sessions directory).
+        if (
+          cmd.workdir &&
+          cmd.repoId &&
+          !wasReadOnly &&
+          isTraceManagedWorktreePath(cmd.repoId, cmd.workdir)
+        ) {
           const repoPath = getRepoConfig(cmd.repoId)?.path;
           if (repoPath) {
             removeWorktree({ repoPath, worktreePath: cmd.workdir }).catch((err: Error) => {

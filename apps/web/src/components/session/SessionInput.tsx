@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Cloud, Monitor, Paperclip, Send, Square } from "lucide-react";
+import { Paperclip, Send, Square } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import {
   isSessionPreparing,
@@ -21,7 +21,6 @@ import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { getToolLabel } from "./picker/pickerShared";
-import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { cn } from "../../lib/utils";
 import { toast } from "sonner";
@@ -44,6 +43,7 @@ import { uploadFile } from "../../lib/upload";
 import { useAddAttachments, MAX_ATTACHMENTS } from "./useAddAttachments";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
+import { useComposerStore } from "../../stores/composer";
 import { useTerminalStore } from "../../stores/terminal";
 import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
@@ -92,6 +92,8 @@ export function SessionInput({
   const openAttachment = useAttachmentOpen();
   const setDraftImages = useDraftsStore((s) => s.setDraftImages);
   const setDraftText = useDraftsStore((s) => s.setDraftText);
+  const prefill = useComposerStore((s) => s.prefillBySession[sessionId]);
+  const consumePrefill = useComposerStore((s) => s.consumePrefill);
   const [initialDraftHtml] = useState(
     () => useDraftsStore.getState().drafts[sessionId]?.html ?? "",
   );
@@ -138,6 +140,25 @@ export function SessionInput({
     const frame = requestAnimationFrame(() => editorRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [canSend, isSending, sessionId]);
+
+  // Apply a starter prompt requested from elsewhere (e.g. the empty-state chips).
+  // Do the work synchronously, then consume: `submit()` reads the text we just set
+  // straight from the editor, and clearing the request afterward just re-runs this
+  // effect as a no-op. If `send` is set the composer submits immediately; otherwise
+  // the text stays for the user to edit.
+  useEffect(() => {
+    if (!prefill) return;
+    const editor = editorRef.current;
+    if (editor) {
+      editor.setText(prefill.text);
+      if (prefill.send) {
+        void editor.submit();
+      } else {
+        editor.focus();
+      }
+    }
+    consumePrefill(sessionId);
+  }, [prefill, consumePrefill, sessionId]);
 
   const cycleMode = useCallback(() => {
     setMode((prev: InteractionMode) => {
@@ -418,130 +439,97 @@ export function SessionInput({
           : "Send a message...";
 
   return (
-    <div
-      className={cn(
-        "shrink-0 border-t px-4 py-3 transition-colors",
-        MODE_CONFIG[mode as InteractionMode].containerBorder,
-      )}
-    >
+    <div className="shrink-0 bg-background px-4 pb-8">
       {preparing && (
         <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
           <TraceLoader size={12} showLabel={false} className="shrink-0" />
           <span>Preparing workspace…</span>
         </div>
       )}
-      <ImageAttachmentBar
-        attachments={images}
-        onRemove={handleRemoveImage}
-        onOpenAttachment={handleOpenAttachment}
-      />
-      <AnimatePresence initial={false}>
-        {isActive && (
-          <AiLoadingIndicator
-            key="ai-loading-indicator"
-            model={displayModel}
-            startedAt={lastUserMessageAt}
-          />
-        )}
-      </AnimatePresence>
-      <div className="flex items-center gap-2">
-        {!isNotStarted && (
-          <Tooltip>
-            <TooltipTrigger className="flex items-center text-muted-foreground">
-              {hosting === "cloud" ? (
-                <Cloud
-                  size={14}
-                  className={cn(
-                    "transition-colors",
-                    MODE_CONFIG[mode as InteractionMode].iconColor,
-                  )}
-                />
-              ) : (
-                <Monitor
-                  size={14}
-                  className={cn(
-                    "transition-colors",
-                    MODE_CONFIG[mode as InteractionMode].iconColor,
-                  )}
-                />
-              )}
-            </TooltipTrigger>
-            <TooltipContent>
-              {hosting === "cloud"
-                ? "Cloud"
-                : connection && typeof connection === "object" && "runtimeLabel" in connection
-                  ? ((connection.runtimeLabel as string) ?? "Local")
-                  : "Local"}
-            </TooltipContent>
-          </Tooltip>
-        )}
+      <div className="relative mx-auto w-[90%]">
+        <div className="pointer-events-none absolute inset-x-0 bottom-full px-5">
+          <AnimatePresence initial={false}>
+            {isActive && (
+              <AiLoadingIndicator
+                key="ai-loading-indicator"
+                model={displayModel}
+                startedAt={lastUserMessageAt}
+              />
+            )}
+          </AnimatePresence>
+        </div>
         <div
           className={cn(
-            "flex-1 rounded-lg border bg-surface-deep transition-colors",
+            "rounded-2xl border bg-surface-mid px-2 pt-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-border",
             MODE_CONFIG[mode as InteractionMode].inputBorder,
           )}
         >
-          <div className="session-editor">
-            <ChatEditor
-              ref={editorRef}
-              initialHtml={initialDraftHtml}
-              onSubmit={handleSubmit}
-              placeholder={placeholder}
-              disabled={!canSend || isSending}
-              slashCommands={slashCommands.commands}
-              onShiftTab={cycleMode}
-              onPasteFiles={addAttachments}
-              hasAttachments={images.length > 0}
-              onChange={(text: string, html: string) => {
-                setHasContent(text.trim().length > 0);
-                setDraftText(sessionId, text, html);
-              }}
-            />
-          </div>
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={handleFileInputChange}
+        <ImageAttachmentBar
+          attachments={images}
+          onRemove={handleRemoveImage}
+          onOpenAttachment={handleOpenAttachment}
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!canSend || isSending || images.length >= MAX_ATTACHMENTS}
-          className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-50"
-          title="Attach files"
-        >
-          <Paperclip size={16} />
-        </button>
-        {isActive ? (
+        <div className="session-editor">
+          <ChatEditor
+            ref={editorRef}
+            initialHtml={initialDraftHtml}
+            onSubmit={handleSubmit}
+            placeholder={placeholder}
+            disabled={!canSend || isSending}
+            slashCommands={slashCommands.commands}
+            onShiftTab={cycleMode}
+            onPasteFiles={addAttachments}
+            hasAttachments={images.length > 0}
+            onChange={(text: string, html: string) => {
+              setHasContent(text.trim().length > 0);
+              setDraftText(sessionId, text, html);
+            }}
+          />
+        </div>
+        <div className="flex items-center gap-1 pb-2 pl-1 pr-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileInputChange}
+          />
           <button
-            onClick={onStop}
-            className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
-            title="Stop"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!canSend || isSending || images.length >= MAX_ATTACHMENTS}
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            title="Attach files"
           >
-            <Square size={16} />
+            <Paperclip size={16} />
           </button>
-        ) : (
-          <button
-            onClick={handleQueueSubmit}
-            disabled={(!hasContent && images.length === 0) || !canSend || isSending}
-            className={cn(
-              "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-              MODE_CONFIG[mode as InteractionMode].sendButton,
-            )}
-          >
-            <Send size={16} />
-          </button>
-        )}
+          <SessionInputOptions
+            sessionId={sessionId}
+            mode={mode}
+            onModeChange={cycleMode}
+            isActive={isActive}
+          />
+          <div className="flex-1" />
+          {isActive ? (
+            <button
+              onClick={onStop}
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
+              title="Stop"
+            >
+              <Square size={15} />
+            </button>
+          ) : (
+            <button
+              onClick={handleQueueSubmit}
+              disabled={(!hasContent && images.length === 0) || !canSend || isSending}
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Send"
+            >
+              <Send size={15} />
+            </button>
+          )}
+        </div>
+        </div>
       </div>
-
-      <SessionInputOptions
-        sessionId={sessionId}
-        mode={mode}
-        onModeChange={cycleMode}
-        isActive={isActive}
-      />
     </div>
   );
 }
