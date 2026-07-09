@@ -393,3 +393,9 @@ During this continuation, the hosted `pnpm smoke:cloud-app-session` script was t
 to assert the endpoint serving boundary directly: private preview URLs must include the
 authoring overlay in browser-rendered DOM, while the published public URL must not include
 `data-trace-app-overlay`.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove send-comment-to-agent behavior. After adding a `design_comment_added` event with
+`sendToAgent: true`, the smoke now polls for a child artifact whose `parentArtifactId`
+matches the commented artifact and verifies that generated iteration HTML before moving
+on to token tweak, PDF export, publish, and promotion.

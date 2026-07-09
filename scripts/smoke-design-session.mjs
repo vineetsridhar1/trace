@@ -206,6 +206,18 @@ async function waitForArtifacts(sessionGroupId, minimumCount) {
   });
 }
 
+async function waitForChildArtifact(sessionGroupId, parentArtifactId, label) {
+  return pollUntil(`${label} child artifact`, async () => {
+    const data = await graphql(DESIGN_ARTIFACTS, { sessionGroupId });
+    const artifacts = data.designArtifacts ?? [];
+    const child = artifacts.find((artifact) => artifact.parentArtifactId === parentArtifactId);
+    if (!child) {
+      return { ok: false, detail: `no child artifact for ${parentArtifactId}` };
+    }
+    return { ok: true, value: child };
+  });
+}
+
 function assertArtifactHtml(artifact, label) {
   if (!artifact.html?.includes(expectedText)) {
     throw new Error(`${label} artifact ${artifact.id} did not contain ${expectedText}`);
@@ -331,6 +343,12 @@ const commentData = await graphql(COMMENT_DESIGN_ARTIFACT, {
 if (commentData.commentDesignArtifact.eventType !== "design_comment_added") {
   throw new Error(`Unexpected comment event ${commentData.commentDesignArtifact.eventType}`);
 }
+const commentIteration = await waitForChildArtifact(
+  session.sessionGroupId,
+  selected.id,
+  "comment-driven iteration",
+);
+assertArtifactHtml(commentIteration, "Comment-driven iteration");
 
 const tweakData = await graphql(PATCH_DESIGN_ARTIFACT_TOKENS, {
   artifactId: selected.id,
