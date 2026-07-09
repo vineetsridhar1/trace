@@ -823,3 +823,9 @@ artifact browser integration passed with `TRACE_RUN_DESIGN_BOOTSTRAP_BROWSER_SMO
 the generated app starter endpoint proxy/public/private-overlay browser smoke passed with
 `TRACE_RUN_APP_STARTER_PROXY_SMOKE=1`, and the real-Chrome PDF renderer integration
 passed.
+
+During this continuation, the hosted cloud app smoke opened the restored checkpoint
+preview but did not directly prove the restored runtime worktree was checked out at the
+checkpoint SHA. The smoke now opens a terminal in the restored app session, verifies the
+starter `package.json`, runs `git rev-parse HEAD`, and requires it to equal the original
+checkpoint commit.

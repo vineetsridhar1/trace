@@ -660,7 +660,7 @@ function websocketMessageText(data) {
   return String(data);
 }
 
-async function verifyTerminalWorkdir(sessionId) {
+async function verifyTerminalWorkdir(sessionId, options = {}) {
   if (typeof WebSocket !== "function") {
     throw new Error("Global WebSocket support is required for the terminal smoke");
   }
@@ -671,10 +671,22 @@ async function verifyTerminalWorkdir(sessionId) {
 
   let ws = null;
   try {
-    const marker = "TRACE_SMOKE_TERMINAL_READY:";
+    const marker = options.marker ?? "TRACE_SMOKE_TERMINAL_READY:";
+    const expectedHead = options.expectedHead;
     const command = [
       "node -e",
-      `"const p=require('./package.json'); if (!p.scripts || !p.scripts.dev) process.exit(2); process.stdout.write('${marker}'+process.cwd()+':package-json-ok\\\\n')"`,
+      JSON.stringify(
+        [
+          "const cp=require('node:child_process');",
+          "const p=require('./package.json');",
+          "if (!p.scripts || !p.scripts.dev) process.exit(2);",
+          "const head=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();",
+          expectedHead
+            ? `if (head !== ${JSON.stringify(expectedHead)}) { console.error('expected ${expectedHead} got '+head); process.exit(3); }`
+            : "",
+          `process.stdout.write(${JSON.stringify(marker)}+process.cwd()+':package-json-ok:'+head+'\\n');`,
+        ].join(" "),
+      ),
     ].join(" ");
 
     return await new Promise((resolve, reject) => {
@@ -732,7 +744,11 @@ async function verifyTerminalWorkdir(sessionId) {
         if (message.type !== "output" || typeof message.data !== "string") return;
 
         output += message.data;
-        if (output.includes(marker) && output.includes(":package-json-ok")) {
+        if (
+          output.includes(marker) &&
+          output.includes(":package-json-ok") &&
+          (!expectedHead || output.includes(expectedHead))
+        ) {
           pass(output);
         }
       });
@@ -837,6 +853,10 @@ await renderUrl(restoredPreviewUrl, "restored preview URL", {
   expectOverlay: true,
   requireSourceStamp: true,
 });
+const restoredTerminalOutput = await verifyTerminalWorkdir(restored.id, {
+  marker: "TRACE_SMOKE_RESTORED_TERMINAL_READY:",
+  expectedHead: initial.checkpoint.commitSha,
+});
 
 process.stdout.write(
   [
@@ -849,5 +869,6 @@ process.stdout.write(
     `Coding handoff session: ${codingSession.id}`,
     `Restored session: ${restored.id}`,
     `Restored group: ${restored.sessionGroupId}`,
+    `Restored terminal: ${restoredTerminalOutput.match(/TRACE_SMOKE_RESTORED_TERMINAL_READY:[^\r\n]+/)?.[0] ?? "verified"}`,
   ].join("\n") + "\n",
 );
