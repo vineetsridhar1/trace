@@ -9,6 +9,7 @@ import type {
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { artifactService } from "../services/artifact.js";
+import { buildDesignArtifactPublicUrl } from "../services/design-artifact-serving.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
@@ -796,6 +797,20 @@ export const sessionMutations = {
 };
 
 export const sessionTypeResolvers = {
+  Artifact: {
+    publicUrl: (artifact: {
+      id: string;
+      publishedAt?: Date | string | null;
+      publicUrl?: string | null;
+    }) => {
+      if (artifact.publicUrl) return artifact.publicUrl;
+      const publishedAt =
+        typeof artifact.publishedAt === "string"
+          ? new Date(artifact.publishedAt)
+          : artifact.publishedAt;
+      return buildDesignArtifactPublicUrl(artifact.id, publishedAt ?? null);
+    },
+  },
   SessionGroup: {
     status: async (
       group: {

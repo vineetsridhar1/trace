@@ -37,6 +37,7 @@ const DESIGN_ARTIFACTS_QUERY = gql`
       html
       metadata
       publishedAt
+      publicUrl
       createdAt
       updatedAt
       createdBy {
@@ -77,6 +78,7 @@ const PUBLISH_DESIGN_ARTIFACT_MUTATION = gql`
     publishDesignArtifact(artifactId: $artifactId) {
       id
       publishedAt
+      publicUrl
     }
   }
 `;
@@ -168,6 +170,21 @@ function getArtifactBootstrapUrl(artifactId: string) {
     const url = new URL(USER_CONTENT_ORIGIN);
     url.hostname = `${artifactId}.${url.hostname}`;
     url.pathname = "/_bootstrap";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function getArtifactPublicUrl(artifact: Artifact) {
+  if (artifact.publicUrl) return artifact.publicUrl;
+  if (!artifact.publishedAt || !USER_CONTENT_ORIGIN) return null;
+  try {
+    const url = new URL(USER_CONTENT_ORIGIN);
+    url.hostname = `${artifact.id}.${url.hostname}`;
+    url.pathname = "/";
     url.search = "";
     url.hash = "";
     return url.toString();
@@ -412,12 +429,33 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
 
   const handlePublish = useCallback(() => {
     if (!selectedArtifact) return;
-    void mutateSelectedArtifact(
-      PUBLISH_DESIGN_ARTIFACT_MUTATION,
-      { artifactId: selectedArtifact.id },
-      "Artifact published",
-    );
-  }, [mutateSelectedArtifact, selectedArtifact]);
+    void (async () => {
+      const result = await client
+        .mutation<{ publishDesignArtifact?: Artifact }>(PUBLISH_DESIGN_ARTIFACT_MUTATION, {
+          artifactId: selectedArtifact.id,
+        })
+        .toPromise();
+      if (result.error) {
+        toast.error("Design action failed", { description: result.error.message });
+        return;
+      }
+      await loadArtifacts();
+
+      const publishedArtifact = result.data?.publishDesignArtifact ?? selectedArtifact;
+      const publicUrl = getArtifactPublicUrl(publishedArtifact);
+      if (publicUrl) {
+        void navigator.clipboard?.writeText(publicUrl).catch(() => undefined);
+        toast.success("Artifact published", {
+          action: {
+            label: "Open",
+            onClick: () => window.open(publicUrl, "_blank", "noopener,noreferrer"),
+          },
+        });
+        return;
+      }
+      toast.success("Artifact published");
+    })();
+  }, [loadArtifacts, selectedArtifact]);
 
   const handleComment = useCallback(() => {
     if (!selectedArtifact) return;

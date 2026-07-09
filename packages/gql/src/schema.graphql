@@ -525,6 +525,7 @@ type Artifact {
   html: String!
   metadata: JSON
   publishedAt: DateTime
+  publicUrl: String
   createdBy: User!
   createdAt: DateTime!
   updatedAt: DateTime!

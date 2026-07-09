@@ -94,6 +94,7 @@ export type Artifact = {
   parentArtifactId?: Maybe<Scalars["ID"]["output"]>;
   prompt?: Maybe<Scalars["String"]["output"]>;
   promptEventId?: Maybe<Scalars["ID"]["output"]>;
+  publicUrl?: Maybe<Scalars["String"]["output"]>;
   publishedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
   title: Scalars["String"]["output"];
@@ -2597,6 +2598,7 @@ export type DesignArtifactsQuery = {
     html: string;
     metadata?: JsonValue | null;
     publishedAt?: string | null;
+    publicUrl?: string | null;
     createdAt: string;
     updatedAt: string;
     createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
@@ -2640,7 +2642,12 @@ export type PublishDesignArtifactMutationVariables = Exact<{
 
 export type PublishDesignArtifactMutation = {
   __typename?: "Mutation";
-  publishDesignArtifact: { __typename?: "Artifact"; id: string; publishedAt?: string | null };
+  publishDesignArtifact: {
+    __typename?: "Artifact";
+    id: string;
+    publishedAt?: string | null;
+    publicUrl?: string | null;
+  };
 };
 
 export type ExportDesignArtifactPdfMutationVariables = Exact<{
@@ -5068,6 +5075,7 @@ export const DesignArtifactsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "html" } },
                 { kind: "Field", name: { kind: "Name", value: "metadata" } },
                 { kind: "Field", name: { kind: "Name", value: "publishedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "publicUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
@@ -5297,6 +5305,7 @@ export const PublishDesignArtifactDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "publishedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "publicUrl" } },
               ],
             },
           },

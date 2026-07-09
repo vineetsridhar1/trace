@@ -9,6 +9,7 @@ import {
   buildPlaceholderDesignArtifactHtml,
 } from "./design-artifact-html.js";
 import { designGenerationService } from "./design-generation.js";
+import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
 import { sessionService } from "./session.js";
 
 function serializeArtifact(artifact: {
@@ -37,6 +38,7 @@ function serializeArtifact(artifact: {
     html: artifact.html,
     metadata: artifact.metadata,
     publishedAt: artifact.publishedAt,
+    publicUrl: buildDesignArtifactPublicUrl(artifact.id, artifact.publishedAt),
     createdBy: artifact.createdBy,
     createdAt: artifact.createdAt,
     updatedAt: artifact.updatedAt,

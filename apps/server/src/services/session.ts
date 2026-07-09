@@ -65,9 +65,8 @@ import {
   type GitHubRepoRef,
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
-import {
-  DESIGN_ARTIFACT_CONTENT_TYPE,
-} from "./design-artifact-html.js";
+import { DESIGN_ARTIFACT_CONTENT_TYPE } from "./design-artifact-html.js";
+import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
 import { managedGitService } from "./managed-git.js";
 import { designGenerationService } from "./design-generation.js";
 
@@ -750,6 +749,7 @@ function serializeArtifact(artifact: {
     html: artifact.html,
     metadata: artifact.metadata,
     publishedAt: artifact.publishedAt,
+    publicUrl: buildDesignArtifactPublicUrl(artifact.id, artifact.publishedAt),
     createdBy: artifact.createdBy,
     createdAt: artifact.createdAt,
     updatedAt: artifact.updatedAt,

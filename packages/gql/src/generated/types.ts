@@ -92,6 +92,7 @@ export type Artifact = {
   parentArtifactId?: Maybe<Scalars["ID"]["output"]>;
   prompt?: Maybe<Scalars["String"]["output"]>;
   promptEventId?: Maybe<Scalars["ID"]["output"]>;
+  publicUrl?: Maybe<Scalars["String"]["output"]>;
   publishedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
   title: Scalars["String"]["output"];

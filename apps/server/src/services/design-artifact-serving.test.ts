@@ -9,6 +9,7 @@ vi.mock("../lib/db.js", async () => {
 import { prisma } from "../lib/db.js";
 import {
   artifactIdFromUserContentHost,
+  buildDesignArtifactPublicUrl,
   buildDesignArtifactBootstrapHtml,
   handleDesignArtifactUserContent,
 } from "./design-artifact-serving.js";
@@ -60,6 +61,15 @@ describe("design artifact user-content serving", () => {
     );
     expect(artifactIdFromUserContentHost("artifact-1.example.test")).toBeNull();
     expect(artifactIdFromUserContentHost("nested.artifact.traceusercontent.test")).toBeNull();
+  });
+
+  it("builds public URLs only for published artifacts", () => {
+    vi.stubEnv("TRACE_USER_CONTENT_PROTOCOL", "http");
+
+    expect(buildDesignArtifactPublicUrl("artifact-1", null)).toBeNull();
+    expect(buildDesignArtifactPublicUrl("artifact-1", new Date("2026-07-09T10:00:00.000Z"))).toBe(
+      "http://artifact-1.traceusercontent.test/",
+    );
   });
 
   it("passes through non user-content hosts", async () => {

@@ -95,6 +95,7 @@ export type Artifact = {
   parentArtifactId?: Maybe<Scalars["ID"]["output"]>;
   prompt?: Maybe<Scalars["String"]["output"]>;
   promptEventId?: Maybe<Scalars["ID"]["output"]>;
+  publicUrl?: Maybe<Scalars["String"]["output"]>;
   publishedAt?: Maybe<Scalars["DateTime"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
   title: Scalars["String"]["output"];
@@ -2744,6 +2745,7 @@ export type ArtifactResolvers<
   parentArtifactId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   prompt?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   promptEventId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  publicUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   publishedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   title?: Resolver<ResolversTypes["String"], ParentType, ContextType>;

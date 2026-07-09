@@ -2,6 +2,7 @@ import type express from "express";
 import { prisma } from "../lib/db.js";
 
 const USER_CONTENT_DOMAIN_ENV = "TRACE_USER_CONTENT_DOMAIN";
+const USER_CONTENT_PROTOCOL_ENV = "TRACE_USER_CONTENT_PROTOCOL";
 const ARTIFACT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,127}$/i;
 
 function configuredUserContentDomain() {
@@ -26,6 +27,14 @@ export function artifactIdFromUserContentHost(host: string | undefined | null) {
   const artifactId = normalizedHost.slice(0, -suffix.length);
   if (!ARTIFACT_ID_PATTERN.test(artifactId) || artifactId.includes(".")) return null;
   return artifactId;
+}
+
+export function buildDesignArtifactPublicUrl(artifactId: string, publishedAt?: Date | null) {
+  if (!publishedAt || !ARTIFACT_ID_PATTERN.test(artifactId)) return null;
+  const domain = configuredUserContentDomain();
+  if (!domain) return null;
+  const protocol = process.env[USER_CONTENT_PROTOCOL_ENV]?.trim().replace(/:$/, "") || "https";
+  return `${protocol}://${artifactId}.${domain}/`;
 }
 
 export function buildDesignArtifactBootstrapHtml() {
