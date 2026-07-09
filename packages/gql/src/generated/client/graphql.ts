@@ -540,7 +540,7 @@ export type GitCheckpoint = {
   treeSha: Scalars["String"]["output"];
 };
 
-export type HostingMode = "cloud" | "local";
+export type HostingMode = "cloud" | "local" | "serverless";
 
 export type InboxItem = {
   __typename?: "InboxItem";
@@ -717,6 +717,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openAppSessionAsCodingSession: Session;
   patchAppSessionTokens: Event;
   patchDesignArtifactTokens: Artifact;
   promoteDesignArtifactToCodingSession: Session;
@@ -1049,6 +1050,11 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationOpenAppSessionAsCodingSessionArgs = {
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationPatchAppSessionTokensArgs = {
@@ -3368,6 +3374,19 @@ export type PublishAppSessionMutation = {
     id: string;
     url: string;
     accessMode: SessionEndpointAccessMode;
+  };
+};
+
+export type OpenAppSessionAsCodingSessionMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type OpenAppSessionAsCodingSessionMutation = {
+  __typename?: "Mutation";
+  openAppSessionAsCodingSession: {
+    __typename?: "Session";
+    id: string;
+    sessionGroupId?: string | null;
   };
 };
 
@@ -7539,6 +7558,52 @@ export const PublishAppSessionDocument = {
     },
   ],
 } as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
+export const OpenAppSessionAsCodingSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "OpenAppSessionAsCodingSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "openAppSessionAsCodingSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  OpenAppSessionAsCodingSessionMutation,
+  OpenAppSessionAsCodingSessionMutationVariables
+>;
 export const PatchAppSessionTokensDocument = {
   kind: "Document",
   definitions: [

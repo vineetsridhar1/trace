@@ -48,6 +48,7 @@ const START_DESIGN_SESSION = `
     startSession(input: $input) {
       id
       sessionGroupId
+      hosting
       sessionGroup {
         id
         kind
@@ -454,6 +455,9 @@ const startData = await graphql(START_DESIGN_SESSION, {
 const session = startData.startSession;
 if (session.sessionGroup?.kind !== "design") {
   throw new Error(`Started group kind is ${session.sessionGroup?.kind ?? "missing"}`);
+}
+if (session.hosting !== "serverless") {
+  throw new Error(`Design session hosting is ${session.hosting ?? "missing"}`);
 }
 if (session.sessionGroup?.repo) {
   throw new Error("Design sessions must start without a repo");

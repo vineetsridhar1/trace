@@ -890,6 +890,130 @@ describe("SessionService", () => {
       });
     });
 
+    it("requires an app checkpoint before opening the app as a coding session", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "app-group",
+          kind: "app",
+          repoId: null,
+          repo: null,
+          gitCheckpoints: [],
+        }),
+      );
+
+      await expect(
+        service.openAppSessionAsCodingSession({
+          sessionGroupId: "app-group",
+          organizationId: "org-1",
+          createdById: "user-1",
+        }),
+      ).rejects.toThrow("Create a checkpoint before opening this app as a coding session.");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
+    it("opens a checkpointed app session as a forked coding session on the managed repo", async () => {
+      const managedRepo = {
+        id: "repo-managed-1",
+        name: "CRM app",
+        provider: "managed",
+        remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+        defaultBranch: "main",
+      };
+      const appGroup = makeSessionGroup({
+        id: "app-group",
+        name: "CRM app",
+        kind: "app",
+        channelId: "channel-1",
+        repoId: managedRepo.id,
+        repo: managedRepo,
+        branch: "main",
+        gitCheckpoints: [
+          {
+            id: "checkpoint-1",
+            commitSha: "df9a24bc0b0653723657926b83c69926f08ffe44",
+            subject: "Build approval tracker",
+            committedAt: new Date("2024-01-02T00:00:00.000Z"),
+          },
+        ],
+      });
+      const codingGroup = makeSessionGroup({
+        id: "coding-group",
+        name: "Code CRM app",
+        kind: "coding",
+        channelId: null,
+        repoId: managedRepo.id,
+        repo: managedRepo,
+        forkedFromSessionGroupId: "app-group",
+      });
+      const codingSession = makeSession({
+        id: "coding-session",
+        sessionGroupId: codingGroup.id,
+        sessionGroup: codingGroup,
+        repoId: managedRepo.id,
+        repo: managedRepo,
+        channelId: null,
+        hosting: "local",
+      });
+
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(appGroup);
+      prismaMock.repo.findFirst.mockResolvedValueOnce({
+        id: managedRepo.id,
+        remoteUrl: managedRepo.remoteUrl,
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(codingGroup);
+      prismaMock.session.create.mockResolvedValueOnce(codingSession);
+
+      const result = await service.openAppSessionAsCodingSession({
+        sessionGroupId: "app-group",
+        organizationId: "org-1",
+        createdById: "user-1",
+        actorType: "user",
+        prompt: "Debug the approval flow with normal coding tools.",
+      });
+
+      expect(result).toEqual(codingSession);
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: "Code CRM app",
+          kind: "coding",
+          forkedFromSessionGroupId: "app-group",
+          repoId: managedRepo.id,
+          branch: "main",
+          channelId: undefined,
+        }),
+        select: expect.any(Object),
+      });
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sessionGroupId: "coding-group",
+            repoId: managedRepo.id,
+            hosting: "local",
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: expect.stringContaining("Debug the approval flow with normal coding tools."),
+            }),
+          }),
+        }),
+      );
+      const startEventCreate = eventServiceMock.create.mock.calls.find(
+        ([event]) => event.eventType === "session_started",
+      )?.[0];
+      expect(startEventCreate?.payload).toEqual(
+        expect.objectContaining({
+          prompt: expect.stringContaining("Managed repo: CRM app (repo-managed-1)"),
+        }),
+      );
+      expect(startEventCreate?.payload).toEqual(
+        expect.objectContaining({
+          prompt: expect.stringContaining("Latest checkpoint: df9a24b Build approval tracker"),
+        }),
+      );
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    });
+
     it("queues the initial app prompt until the starter workspace is ready", async () => {
       const sessionGroup = makeSessionGroup({
         kind: "app",

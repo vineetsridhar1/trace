@@ -73,6 +73,7 @@ enum Priority {
 enum HostingMode {
   cloud
   local
+  serverless
 }
 
 enum BridgeAccessScopeType {

@@ -457,6 +457,21 @@ export const sessionMutations = {
       actorType: ctx.actorType,
     });
   },
+  openAppSessionAsCodingSession: (
+    _: unknown,
+    args: { sessionGroupId: string; prompt?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.openAppSessionAsCodingSession({
+      sessionGroupId: args.sessionGroupId,
+      prompt: args.prompt ?? null,
+      organizationId: requireOrgContext(ctx),
+      createdById: ctx.userId,
+      actorType: ctx.actorType,
+      clientSource: ctx.clientSource,
+    });
+  },
   forkSession: (_: unknown, args: { eventId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     if (!ctx.userId) throw new AuthenticationError();

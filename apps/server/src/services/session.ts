@@ -3089,7 +3089,7 @@ export class SessionService {
           tool: input.tool ?? FALLBACK_SESSION_TOOL,
           model: input.model ?? undefined,
           reasoningEffort: input.reasoningEffort ?? undefined,
-          hosting: "local",
+          hosting: "serverless",
           organizationId: input.organizationId,
           createdById: input.createdById,
           channelId: resolvedChannelId,
@@ -4016,6 +4016,94 @@ export class SessionService {
     }
 
     return session;
+  }
+
+  async openAppSessionAsCodingSession(input: {
+    sessionGroupId: string;
+    organizationId: string;
+    createdById: string;
+    actorType?: ActorType;
+    prompt?: string | null;
+    clientSource?: string | null;
+  }) {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: input.sessionGroupId, organizationId: input.organizationId },
+      select: {
+        id: true,
+        name: true,
+        kind: true,
+        organizationId: true,
+        ownerUserId: true,
+        visibility: true,
+        repoId: true,
+        branch: true,
+        channelId: true,
+        archivedAt: true,
+        repo: {
+          select: {
+            id: true,
+            name: true,
+            provider: true,
+            remoteUrl: true,
+            defaultBranch: true,
+          },
+        },
+        gitCheckpoints: {
+          select: {
+            id: true,
+            commitSha: true,
+            subject: true,
+            committedAt: true,
+          },
+          orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+        },
+      },
+    });
+
+    if (!group) {
+      throw new Error("Session group not found");
+    }
+    if (!canViewSessionGroup(group, input.createdById)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
+    if (group.kind !== "app") {
+      throw new ValidationError("Only app sessions can be opened as coding sessions.");
+    }
+    if (!group.repoId || !group.repo) {
+      throw new ValidationError("Create a checkpoint before opening this app as a coding session.");
+    }
+
+    const latestCheckpoint = group.gitCheckpoints[0] ?? null;
+    const brief = [
+      input.prompt?.trim() || "Continue this standalone app in a coding session.",
+      "",
+      `Source app session: ${group.name}`,
+      `Source app session group id: ${group.id}`,
+      `Managed repo: ${group.repo.name} (${group.repo.id})`,
+      latestCheckpoint
+        ? `Latest checkpoint: ${shortCommitSha(latestCheckpoint.commitSha)} ${latestCheckpoint.subject}`.trim()
+        : null,
+      "",
+      "Work from the managed app repo and preserve the standalone app behavior, live preview setup, endpoint publish flow, token file, and checkpoint durability.",
+    ]
+      .filter((part): part is string => part !== null)
+      .join("\n");
+
+    return this.start({
+      organizationId: input.organizationId,
+      createdById: input.createdById,
+      actorType: input.actorType ?? "user",
+      clientSource: input.clientSource,
+      kind: "coding",
+      tool: APP_SESSION_TOOL,
+      repoId: group.repoId,
+      branch: group.branch ?? group.repo.defaultBranch ?? undefined,
+      prompt: brief,
+      deferRuntimeSelection: true,
+      forkedFromSessionGroupId: group.id,
+      name: `Code ${group.name}`.slice(0, MAX_SESSION_NAME_LENGTH),
+    });
   }
 
   async forkSession(input: {

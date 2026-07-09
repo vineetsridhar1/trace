@@ -52,6 +52,7 @@ type Documents = {
   "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n": typeof types.EnableSessionEndpointForwardingDocument;
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n": typeof types.DisableSessionEndpointForwardingDocument;
   "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n      url\n      accessMode\n    }\n  }\n": typeof types.PublishAppSessionDocument;
+  "\n  mutation OpenAppSessionAsCodingSession($sessionGroupId: ID!) {\n    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n    }\n  }\n": typeof types.OpenAppSessionAsCodingSessionDocument;
   "\n  mutation PatchAppSessionTokens($sessionGroupId: ID!, $tokens: JSON!) {\n    patchAppSessionTokens(sessionGroupId: $sessionGroupId, tokens: $tokens) {\n      id\n    }\n  }\n": typeof types.PatchAppSessionTokensDocument;
   "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n": typeof types.CreateSessionEndpointPreviewDocument;
   "\n  query SessionEndpointTrafficEndpoints($sessionGroupId: ID!) {\n    sessionEndpoints(sessionGroupId: $sessionGroupId) {\n      id\n      key\n      url\n      sessionGroupId\n      appConfigId\n      processConfigId\n      portConfigId\n      label\n      targetPort\n      status\n      accessMode\n      trafficCaptureMode\n      enabledAt\n      disabledAt\n      revokedAt\n    }\n  }\n": typeof types.SessionEndpointTrafficEndpointsDocument;
@@ -187,6 +188,8 @@ const documents: Documents = {
     types.DisableSessionEndpointForwardingDocument,
   "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n      url\n      accessMode\n    }\n  }\n":
     types.PublishAppSessionDocument,
+  "\n  mutation OpenAppSessionAsCodingSession($sessionGroupId: ID!) {\n    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n    }\n  }\n":
+    types.OpenAppSessionAsCodingSessionDocument,
   "\n  mutation PatchAppSessionTokens($sessionGroupId: ID!, $tokens: JSON!) {\n    patchAppSessionTokens(sessionGroupId: $sessionGroupId, tokens: $tokens) {\n      id\n    }\n  }\n":
     types.PatchAppSessionTokensDocument,
   "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n":
@@ -545,6 +548,12 @@ export function graphql(
 export function graphql(
   source: "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n      url\n      accessMode\n    }\n  }\n",
 ): (typeof documents)["\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n      url\n      accessMode\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation OpenAppSessionAsCodingSession($sessionGroupId: ID!) {\n    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n    }\n  }\n",
+): (typeof documents)["\n  mutation OpenAppSessionAsCodingSession($sessionGroupId: ID!) {\n    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

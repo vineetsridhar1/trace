@@ -68,6 +68,7 @@ enum Priority {
 enum HostingMode {
   cloud
   local
+  serverless
 }
 
 enum SessionConnectionState {
@@ -1677,6 +1678,7 @@ type Mutation {
   patchAppSessionTokens(sessionGroupId: ID!, tokens: JSON!): Event!
   createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
   publishAppSession(sessionGroupId: ID!): SessionEndpoint!
+  openAppSessionAsCodingSession(sessionGroupId: ID!, prompt: String): Session!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

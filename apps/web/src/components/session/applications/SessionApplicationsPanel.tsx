@@ -17,6 +17,7 @@ import {
 import type {
   Repo,
   RepoApplicationConfig,
+  Session,
   SessionApplicationLogEntry,
   SessionApplicationProcess,
   SessionEndpoint,
@@ -25,7 +26,7 @@ import type {
 import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "@/lib/utils";
 import { client } from "../../../lib/urql";
-import { useUIStore } from "../../../stores/ui";
+import { navigateToSession, useUIStore } from "../../../stores/ui";
 import { Button } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
 import { DesignHarnessSettingsPopover } from "../../design/DesignHarnessSettingsPopover";
@@ -198,6 +199,15 @@ const PUBLISH_APP_SESSION_MUTATION = gql`
   }
 `;
 
+const OPEN_APP_AS_CODING_SESSION_MUTATION = gql`
+  mutation OpenAppSessionAsCodingSession($sessionGroupId: ID!) {
+    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {
+      id
+      sessionGroupId
+    }
+  }
+`;
+
 const PATCH_APP_SESSION_TOKENS_MUTATION = gql`
   mutation PatchAppSessionTokens($sessionGroupId: ID!, $tokens: JSON!) {
     patchAppSessionTokens(sessionGroupId: $sessionGroupId, tokens: $tokens) {
@@ -227,6 +237,14 @@ export function publishedAppShareUrl(
   endpoint: Pick<SessionEndpoint, "accessMode" | "url"> | null | undefined,
 ): string | null {
   return endpoint?.accessMode === "public" && endpoint.url ? endpoint.url : null;
+}
+
+export function appCodingSessionTarget(
+  session: Pick<Session, "id" | "sessionGroupId"> | null | undefined,
+): { sessionId: string; sessionGroupId: string } | null {
+  return session?.id && session.sessionGroupId
+    ? { sessionId: session.id, sessionGroupId: session.sessionGroupId }
+    : null;
 }
 
 type AppOverlaySelection =
@@ -614,6 +632,31 @@ export function SessionApplicationsPanel({
     }
   };
 
+  const openAsCodingSession = async () => {
+    setPending("open-coding");
+    setError(null);
+    try {
+      const result = await client
+        .mutation<{ openAppSessionAsCodingSession?: Pick<Session, "id" | "sessionGroupId"> }>(
+          OPEN_APP_AS_CODING_SESSION_MUTATION,
+          { sessionGroupId },
+        )
+        .toPromise();
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      const target = appCodingSessionTarget(result.data?.openAppSessionAsCodingSession);
+      if (!target) {
+        throw new Error("Coding session was not returned.");
+      }
+      navigateToSession(null, target.sessionGroupId, target.sessionId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPending(null);
+    }
+  };
+
   const patchAppTokens = async (raw: string) => {
     if (!raw?.trim()) return;
 
@@ -663,11 +706,23 @@ export function SessionApplicationsPanel({
       <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
           <p className="text-sm font-semibold text-foreground">Applications</p>
-          <DesignHarnessSettingsPopover
-            sessionGroupId={sessionGroupId}
-            designSystemId={designSystemId}
-            designSkillIds={designSkillIds}
-          />
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Open as coding session"
+              aria-label="Open as coding session"
+              disabled={pending === "open-coding"}
+              onClick={() => void openAsCodingSession()}
+            >
+              <FileCode2 size={14} />
+            </Button>
+            <DesignHarnessSettingsPopover
+              sessionGroupId={sessionGroupId}
+              designSystemId={designSystemId}
+              designSkillIds={designSkillIds}
+            />
+          </div>
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6">
           <div className="max-w-64 text-center">
@@ -704,6 +759,16 @@ export function SessionApplicationsPanel({
             designSystemId={designSystemId}
             designSkillIds={designSkillIds}
           />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Open as coding session"
+            aria-label="Open as coding session"
+            disabled={pending === "open-coding"}
+            onClick={() => void openAsCodingSession()}
+          >
+            <FileCode2 size={14} />
+          </Button>
           <Button
             variant={appPublished ? "ghost" : "outline"}
             size="icon-sm"

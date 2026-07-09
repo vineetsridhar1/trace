@@ -538,7 +538,7 @@ export type GitCheckpoint = {
   treeSha: Scalars["String"]["output"];
 };
 
-export type HostingMode = "cloud" | "local";
+export type HostingMode = "cloud" | "local" | "serverless";
 
 export type InboxItem = {
   __typename?: "InboxItem";
@@ -715,6 +715,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openAppSessionAsCodingSession: Session;
   patchAppSessionTokens: Event;
   patchDesignArtifactTokens: Artifact;
   promoteDesignArtifactToCodingSession: Session;
@@ -1047,6 +1048,11 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationOpenAppSessionAsCodingSessionArgs = {
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationPatchAppSessionTokensArgs = {

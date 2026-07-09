@@ -167,6 +167,24 @@ const PUBLISH_APP = `
   }
 `;
 
+const OPEN_APP_AS_CODING = `
+  mutation SmokeOpenAppAsCoding($sessionGroupId: ID!) {
+    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {
+      id
+      hosting
+      repo {
+        id
+        provider
+      }
+      sessionGroup {
+        id
+        kind
+        forkedFromSessionGroupId
+      }
+    }
+  }
+`;
+
 const CREATE_TERMINAL = `
   mutation SmokeCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
     createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
@@ -505,6 +523,23 @@ async function publishApp(sessionGroupId) {
   return endpoint;
 }
 
+async function openAppAsCodingSession(sessionGroupId, managedRepoId) {
+  const data = await graphql(OPEN_APP_AS_CODING, { sessionGroupId });
+  const codingSession = data.openAppSessionAsCodingSession;
+  if (codingSession.sessionGroup?.kind !== "coding") {
+    throw new Error(
+      `Open-as-coding group kind is ${codingSession.sessionGroup?.kind ?? "missing"}`,
+    );
+  }
+  if (codingSession.sessionGroup?.forkedFromSessionGroupId !== sessionGroupId) {
+    throw new Error("Open-as-coding session did not link back to the app session group");
+  }
+  if (codingSession.repo?.id !== managedRepoId || codingSession.repo?.provider !== "managed") {
+    throw new Error("Open-as-coding session did not use the app managed repo");
+  }
+  return codingSession;
+}
+
 function terminalWebSocketUrl() {
   const url = new URL(serverUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -658,6 +693,7 @@ if (requireCapture) {
 }
 await assertManagedRepoHiddenFromRepoList(managedRepoId);
 await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha);
+const codingSession = await openAppAsCodingSession(session.sessionGroupId, managedRepoId);
 const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", { requireFetch: false, expectOverlay: true });
@@ -697,6 +733,7 @@ process.stdout.write(
     `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
     `Terminal: ${terminalOutput.match(/TRACE_SMOKE_TERMINAL_READY:[^\r\n]+/)?.[0] ?? "verified"}`,
     `Published URL: ${publicEndpoint.url}`,
+    `Coding handoff session: ${codingSession.id}`,
     `Restored session: ${restored.id}`,
     `Restored group: ${restored.sessionGroupId}`,
   ].join("\n") + "\n",

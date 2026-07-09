@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  appCodingSessionTarget,
   parseAppTokenPatchInput,
   parseTrustedAppOverlayMessage,
   publishedAppShareUrl,
@@ -100,5 +101,15 @@ describe("publishedAppShareUrl", () => {
       publishedAppShareUrl({ accessMode: "private", url: "https://app.trace.test" }),
     ).toBeNull();
     expect(publishedAppShareUrl(null)).toBeNull();
+  });
+});
+
+describe("appCodingSessionTarget", () => {
+  it("returns navigation ids for app-to-coding handoff sessions", () => {
+    expect(appCodingSessionTarget({ id: "session-1", sessionGroupId: "group-1" })).toEqual({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+    });
+    expect(appCodingSessionTarget(null)).toBeNull();
   });
 });

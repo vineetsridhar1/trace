@@ -17,6 +17,13 @@ export interface RuntimeInfo {
   registeredRepoIds: string[];
 }
 
+function runtimeInfo(runtime: SessionRuntimeInstance | undefined): RuntimeInfo | null {
+  if (!runtime || (runtime.hostingMode !== "cloud" && runtime.hostingMode !== "local")) {
+    return null;
+  }
+  return { hostingMode: runtime.hostingMode, registeredRepoIds: runtime.registeredRepoIds };
+}
+
 interface RuntimeSelectorProps {
   tool: string;
   open: boolean;
@@ -52,7 +59,7 @@ export function RuntimeSelector({
           : connected;
         if (eligible.length === 1 && !value) {
           const rt = eligible[0];
-          onChange(rt.id, { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds });
+          onChange(rt.id, runtimeInfo(rt));
         } else if (eligible.length === 0 && !value) {
           onChange(undefined, null);
         } else if (value === CLOUD_RUNTIME_ID) {
@@ -89,10 +96,7 @@ export function RuntimeSelector({
       onValueChange={(v: string | null) => {
         if (!v) return;
         const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === v);
-        onChange(
-          v,
-          rt ? { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds } : null,
-        );
+        onChange(v, runtimeInfo(rt));
       }}
     >
       <SelectTrigger className="w-full">

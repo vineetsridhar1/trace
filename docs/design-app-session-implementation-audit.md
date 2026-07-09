@@ -542,3 +542,17 @@ docs call for page size and margin fidelity. `exportDesignArtifactPdf` now accep
 bounded Chromium renderer, emits them on export events, and the renderer applies them via
 print `@page` CSS. Focused service and renderer tests cover option propagation,
 validation, and generated print CSS.
+
+During this audit pass, app sessions still lacked the documented "Open as coding
+session" exit path. `openAppSessionAsCodingSession` now validates that the source group is
+an app session with a checkpoint-created managed repo, starts a forked coding session on
+that repo, and records the app group through `forkedFromSessionGroupId`. The Applications
+panel exposes the action, service tests cover both pre-checkpoint validation and managed
+repo handoff, and the hosted cloud app smoke now verifies the returned coding session
+uses the managed repo and links back to the app group.
+
+During this audit pass, design sessions were still persisted with `hosting: "local"` even
+though the design docs require no runtime/hosting. `HostingMode` now includes
+`serverless`, design session creation persists that mode, and the hosted design smoke
+requires fresh design sessions to report `hosting: "serverless"` while still proving no
+repo and no runtime connection are attached.
