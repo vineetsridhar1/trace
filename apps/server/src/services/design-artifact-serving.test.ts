@@ -102,6 +102,18 @@ describe("design artifact user-content serving", () => {
     expect(prismaMock.artifact.findFirst).not.toHaveBeenCalled();
   });
 
+  it("serves a bootstrap shell with nonce-bound render and reply protocol", () => {
+    const html = buildDesignArtifactBootstrapHtml();
+
+    expect(html).toContain("parentOrigin");
+    expect(html).toContain("nonce");
+    expect(html).toContain("trace:artifact:ready");
+    expect(html).toContain("trace:artifact:render");
+    expect(html).toContain("trace:artifact:error");
+    expect(html).toContain("trace:artifact:element-selected");
+    expect(html).not.toContain("{{artifact");
+  });
+
   it("404s unpublished or missing artifacts", async () => {
     prismaMock.artifact.findFirst.mockResolvedValueOnce(null);
     const response = makeResponse();

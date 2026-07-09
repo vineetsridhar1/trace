@@ -176,13 +176,18 @@ function getCanvasBounds(placements: ArtifactPlacement[]) {
   };
 }
 
-function getArtifactBootstrapUrl(artifactId: string) {
+function createProtocolNonce() {
+  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
+}
+
+function getArtifactBootstrapUrl(artifactId: string, nonce: string) {
   if (!USER_CONTENT_ORIGIN) return null;
   try {
     const url = new URL(USER_CONTENT_ORIGIN);
     url.hostname = `${artifactId}.${url.hostname}`;
     url.pathname = "/_bootstrap";
-    url.search = "";
+    url.searchParams.set("parentOrigin", window.location.origin);
+    url.searchParams.set("nonce", nonce);
     url.hash = "";
     return url.toString();
   } catch {
@@ -207,7 +212,11 @@ function getArtifactPublicUrl(artifact: Artifact) {
 
 function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const bootstrapUrl = useMemo(() => getArtifactBootstrapUrl(artifact.id), [artifact.id]);
+  const nonceRef = useRef<string>(createProtocolNonce());
+  const bootstrapUrl = useMemo(
+    () => getArtifactBootstrapUrl(artifact.id, nonceRef.current),
+    [artifact.id],
+  );
   const bootstrapOrigin = useMemo(
     () => (bootstrapUrl ? new URL(bootstrapUrl).origin : null),
     [bootstrapUrl],
@@ -217,8 +226,10 @@ function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: bo
     if (!target || !bootstrapOrigin) return;
     target.postMessage(
       {
-        type: "trace:artifact_html",
+        type: "trace:artifact:render",
         html: artifact.html,
+        overlayEnabled: true,
+        nonce: nonceRef.current,
       },
       bootstrapOrigin,
     );
@@ -227,6 +238,26 @@ function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: bo
   useEffect(() => {
     if (bootstrapUrl) postArtifactHtml();
   }, [bootstrapUrl, postArtifactHtml]);
+
+  useEffect(() => {
+    if (!bootstrapOrigin) return;
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== bootstrapOrigin || event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
+      const data = event.data as { type?: string; nonce?: string; message?: string } | null;
+      if (!data || data.nonce !== nonceRef.current) return;
+      if (data.type === "trace:artifact:ready") {
+        postArtifactHtml();
+      } else if (data.type === "trace:artifact:error") {
+        toast.error(data.message ?? "Artifact preview error");
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [bootstrapOrigin, postArtifactHtml]);
 
   return (
     <article
@@ -250,7 +281,7 @@ function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: bo
           title={artifact.title}
           src={bootstrapUrl}
           sandbox="allow-scripts allow-same-origin"
-          className="pointer-events-none min-h-0 flex-1 bg-white"
+          className="min-h-0 flex-1 bg-white"
           onLoad={postArtifactHtml}
         />
       ) : (
@@ -258,7 +289,7 @@ function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: bo
           title={artifact.title}
           srcDoc={artifact.html}
           sandbox="allow-scripts"
-          className="pointer-events-none min-h-0 flex-1 bg-white"
+          className="min-h-0 flex-1 bg-white"
         />
       )}
     </article>

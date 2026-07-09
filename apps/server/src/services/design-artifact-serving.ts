@@ -54,13 +54,65 @@ export function buildDesignArtifactBootstrapHtml() {
 </head>
 <body>
   <script>
-    window.parent.postMessage({ type: "trace:artifact_bootstrap_ready" }, "*");
+    var params = new URLSearchParams(window.location.search);
+    var parentOrigin = params.get("parentOrigin");
+    var nonce = params.get("nonce");
+
+    function postToParent(message) {
+      if (!parentOrigin) return;
+      window.parent.postMessage(Object.assign({ nonce: nonce }, message), parentOrigin);
+    }
+
+    function isAuthorizedParent(event) {
+      if (!parentOrigin || event.origin !== parentOrigin) return false;
+      if (nonce && (!event.data || event.data.nonce !== nonce)) return false;
+      return true;
+    }
+
+    function installOverlay() {
+      document.addEventListener("click", function(event) {
+        var target = event.target;
+        if (!target || !target.closest) return;
+        var el = target.closest("[data-el]");
+        if (!el) return;
+        postToParent({
+          type: "trace:artifact:element-selected",
+          anchor: {
+            id: el.getAttribute("data-el"),
+            text: (el.textContent || "").trim().slice(0, 500),
+          },
+        });
+      }, true);
+    }
+
+    window.addEventListener("error", function(event) {
+      postToParent({
+        type: "trace:artifact:error",
+        message: event.message || "Artifact script error",
+        stack: event.error && event.error.stack ? String(event.error.stack) : null,
+      });
+    });
+
+    postToParent({ type: "trace:artifact:ready" });
     window.addEventListener("message", function(event) {
+      if (!isAuthorizedParent(event)) return;
       var data = event.data || {};
-      if (data.type !== "trace:artifact_html" || typeof data.html !== "string") return;
-      document.open();
-      document.write(data.html);
-      document.close();
+      var isLegacyRender = data.type === "trace:artifact_html";
+      var isRender = data.type === "trace:artifact:render";
+      if ((!isRender && !isLegacyRender) || typeof data.html !== "string") return;
+      try {
+        document.open();
+        document.write(data.html);
+        document.close();
+        if (data.overlayEnabled !== false) installOverlay();
+        postToParent({ type: "trace:artifact:rendered" });
+      } catch (error) {
+        postToParent({
+          type: "trace:artifact:error",
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error && error.stack ? error.stack : null,
+        });
+      }
     });
   </script>
 </body>
