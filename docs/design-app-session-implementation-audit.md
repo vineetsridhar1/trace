@@ -29,6 +29,9 @@ Implemented:
 - Design/app harness settings can be updated after session creation through the service
   layer and GraphQL API, with validation that only `design` and `app` session groups can
   change `designSystemId` and `designSkillIds`.
+- The design canvas and app Applications panel expose visible design-system/skill pickers
+  that read `designPromptContentCatalog`, display the current `designSystemId` and
+  selected skill count, and persist changes through `updateDesignHarnessSettings`.
 - `startSession(kind: design)` creates a serverless design group without runtime
   provisioning.
 - Initial and fan-out artifact generation call the LLM-backed design generation service.
@@ -178,10 +181,6 @@ The remaining gap found by this audit is:
 - Run a real cloud `app` session end to end: prompt, starter boot, port detection, preview
   iframe, checkpoint, restore from checkpoint, capture thumbnail, publish public endpoint,
   and open the published URL.
-- Add the visible design-system/skill picker UI that consumes
-  `designPromptContentCatalog` and persists selections through
-  `updateDesignHarnessSettings`. The service/API and catalog are present; the UI control
-  is not yet wired.
 
 This smoke is executable via `pnpm smoke:cloud-app-session` against a configured Trace
 server with `TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and `TRACE_SMOKE_ORG_ID`.
@@ -280,3 +279,9 @@ at creation time but had no service/API path to change them later. `updateDesign
 now updates `designSystemId` and `designSkillIds` through the service layer, rejects
 ordinary coding session groups, emits a session-scoped snapshot event, and has focused
 session-service coverage.
+
+During this continuation, the design harness content catalog and update mutation existed
+but were not visible in the product UI. The design canvas toolbar and app Applications
+panel now include a compact settings popover for choosing the design system and skill set,
+hydrate existing harness fields through session-group queries, and have focused coverage
+for skill toggling and selection summaries.

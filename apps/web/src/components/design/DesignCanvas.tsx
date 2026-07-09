@@ -24,6 +24,7 @@ import type { Artifact, Event } from "@trace/gql";
 import {
   eventScopeKey,
   useEntitiesByIds,
+  useEntityField,
   useEntityIds,
   useEntityStore,
   useScopedEvents,
@@ -31,6 +32,7 @@ import {
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
+import { DesignHarnessSettingsPopover } from "./DesignHarnessSettingsPopover";
 
 const DESIGN_ARTIFACTS_QUERY = gql`
   query DesignArtifacts($sessionGroupId: ID!) {
@@ -638,6 +640,14 @@ export function DesignCanvas({
     viewport: Viewport;
   } | null>(null);
 
+  const designSystemId = useEntityField("sessionGroups", sessionGroupId, "designSystemId") as
+    | string
+    | null
+    | undefined;
+  const designSkillIds = useEntityField("sessionGroups", sessionGroupId, "designSkillIds") as
+    | string[]
+    | null
+    | undefined;
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const filterArtifactForGroup = useCallback(
     (artifact: Artifact) => artifact.sessionGroupId === sessionGroupId,
@@ -934,6 +944,12 @@ export function DesignCanvas({
         className="absolute right-3 top-3 z-10 flex items-center overflow-hidden rounded-md border bg-background shadow-sm"
         onPointerDown={(event) => event.stopPropagation()}
       >
+        <DesignHarnessSettingsPopover
+          sessionGroupId={sessionGroupId}
+          designSystemId={designSystemId}
+          designSkillIds={designSkillIds}
+          triggerClassName="border-r"
+        />
         <button
           type="button"
           onClick={handleGenerateDirections}

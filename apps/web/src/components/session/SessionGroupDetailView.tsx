@@ -69,6 +69,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       name
       kind
       slug
+      designSystemId
+      designSkillIds
       forkedFromSessionGroupId
       status
       visibility

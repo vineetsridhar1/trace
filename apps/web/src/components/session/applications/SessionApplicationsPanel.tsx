@@ -29,11 +29,14 @@ import { client } from "../../../lib/urql";
 import { useUIStore } from "../../../stores/ui";
 import { Button } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
+import { DesignHarnessSettingsPopover } from "../../design/DesignHarnessSettingsPopover";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
     sessionGroup(id: $sessionGroupId) {
       id
+      designSystemId
+      designSkillIds
       repo {
         id
         applicationConfig {
@@ -285,6 +288,14 @@ export function SessionApplicationsPanel({
 }) {
   const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
     | { id: string; applicationConfig?: RepoApplicationConfig | null }
+    | null
+    | undefined;
+  const designSystemId = useEntityField("sessionGroups", sessionGroupId, "designSystemId") as
+    | string
+    | null
+    | undefined;
+  const designSkillIds = useEntityField("sessionGroups", sessionGroupId, "designSkillIds") as
+    | string[]
     | null
     | undefined;
   const repoApplicationConfig = useEntityStore((s) =>
@@ -639,6 +650,11 @@ export function SessionApplicationsPanel({
       <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
           <p className="text-sm font-semibold text-foreground">Applications</p>
+          <DesignHarnessSettingsPopover
+            sessionGroupId={sessionGroupId}
+            designSystemId={designSystemId}
+            designSkillIds={designSkillIds}
+          />
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6">
           <div className="max-w-64 text-center">
@@ -670,6 +686,11 @@ export function SessionApplicationsPanel({
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <p className="text-sm font-semibold text-foreground">Applications</p>
         <div className="flex items-center gap-1">
+          <DesignHarnessSettingsPopover
+            sessionGroupId={sessionGroupId}
+            designSystemId={designSystemId}
+            designSkillIds={designSkillIds}
+          />
           <Button
             variant={appPublished ? "ghost" : "outline"}
             size="icon-sm"

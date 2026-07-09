@@ -2772,6 +2772,38 @@ export type PromoteDesignArtifactToCodingSessionMutation = {
   };
 };
 
+export type DesignPromptContentCatalogQueryVariables = Exact<{ [key: string]: never }>;
+
+export type DesignPromptContentCatalogQuery = {
+  __typename?: "Query";
+  designPromptContentCatalog: {
+    __typename?: "DesignPromptContentCatalog";
+    designSystems: Array<{
+      __typename?: "DesignSystemOption";
+      id: string;
+      name?: string | null;
+      description?: string | null;
+    }>;
+    skills: Array<{
+      __typename?: "DesignSkillOption";
+      id: string;
+      title?: string | null;
+      description?: string | null;
+    }>;
+  };
+};
+
+export type UpdateDesignHarnessSettingsMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]> | Scalars["String"]["input"]>;
+}>;
+
+export type UpdateDesignHarnessSettingsMutation = {
+  __typename?: "Mutation";
+  updateDesignHarnessSettings: { __typename?: "SessionGroup"; id: string };
+};
+
 export type SessionGroupBranchDiffQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
 }>;
@@ -3052,6 +3084,8 @@ export type SessionGroupDetailQuery = {
     name: string;
     kind: SessionGroupKind;
     slug?: string | null;
+    designSystemId?: string | null;
+    designSkillIds: Array<string>;
     forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
@@ -3150,6 +3184,8 @@ export type SessionApplicationsStateQuery = {
   sessionGroup?: {
     __typename?: "SessionGroup";
     id: string;
+    designSystemId?: string | null;
+    designSkillIds: Array<string>;
     repo?: {
       __typename?: "Repo";
       id: string;
@@ -4331,6 +4367,8 @@ export type SidebarSessionGroupsQuery = {
     name: string;
     kind: SessionGroupKind;
     slug?: string | null;
+    designSystemId?: string | null;
+    designSkillIds: Array<string>;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
     prUrl?: string | null;
@@ -5628,6 +5666,126 @@ export const PromoteDesignArtifactToCodingSessionDocument = {
   PromoteDesignArtifactToCodingSessionMutation,
   PromoteDesignArtifactToCodingSessionMutationVariables
 >;
+export const DesignPromptContentCatalogDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignPromptContentCatalog" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designPromptContentCatalog" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "designSystems" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "description" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "skills" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "title" } },
+                      { kind: "Field", name: { kind: "Name", value: "description" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DesignPromptContentCatalogQuery,
+  DesignPromptContentCatalogQueryVariables
+>;
+export const UpdateDesignHarnessSettingsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdateDesignHarnessSettings" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "designSystemId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "designSkillIds" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateDesignHarnessSettings" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "designSystemId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "designSystemId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "designSkillIds" },
+                value: { kind: "Variable", name: { kind: "Name", value: "designSkillIds" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpdateDesignHarnessSettingsMutation,
+  UpdateDesignHarnessSettingsMutationVariables
+>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [
@@ -6519,6 +6677,8 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "designSystemId" } },
+                { kind: "Field", name: { kind: "Name", value: "designSkillIds" } },
                 { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
@@ -6724,6 +6884,8 @@ export const SessionApplicationsStateDocument = {
               kind: "SelectionSet",
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "designSystemId" } },
+                { kind: "Field", name: { kind: "Name", value: "designSkillIds" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "repo" },
@@ -10739,6 +10901,8 @@ export const SidebarSessionGroupsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "designSystemId" } },
+                { kind: "Field", name: { kind: "Name", value: "designSkillIds" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 {
