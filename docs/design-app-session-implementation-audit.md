@@ -65,6 +65,8 @@ Implemented:
   that installs, lints, typechecks, and builds the exact emitted files.
 - The container bridge detects app process ports and reports them to the server.
 - Detected HTTP ports create/enable `SessionEndpoint` rows for live preview.
+- A container-bridge process smoke starts a real HTTP app process, detects its preview
+  port, proxies a request, and verifies rendered HTML/source stamps.
 - Logs, process state, endpoint preview, terminal, checkpoint panel, and publish/share
   controls are exposed through the session application UI.
 - `publishAppSession` flips the primary enabled endpoint to public and emits an endpoint

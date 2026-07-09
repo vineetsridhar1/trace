@@ -222,6 +222,66 @@ describe("ManagedProcessManager", () => {
     expect(Buffer.from(response.bodyBase64, "base64").toString("utf8")).toBe("proxied GET /hello");
   });
 
+  it("starts an app process, detects its preview port, and proxies rendered HTML", async () => {
+    const messages: BridgeMessage[] = [];
+    const port = await getFreePort();
+    const detectPorts = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([port]);
+    const manager = new ManagedProcessManager(
+      new Map([["session-1", process.cwd()]]),
+      (message) => messages.push(message),
+      detectPorts,
+    );
+
+    manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: `node -e "require('http').createServer((req,res)=>{res.writeHead(200, {'content-type':'text/html'}); res.end('<main data-trace-source=\\\"app/page.tsx:11\\\">Preview app</main>')}).listen(${port}, '127.0.0.1')"`,
+      cwd: ".",
+    });
+
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+    const detected = await waitFor(
+      messages,
+      (message) => message.type === "app_process_ports_detected",
+    );
+    expect(detected).toMatchObject({
+      type: "app_process_ports_detected",
+      processInstanceId: "process-1",
+      ports: [{ port, protocol: "http" }],
+    });
+
+    manager.proxyHttp({
+      requestId: "http-1",
+      port,
+      method: "GET",
+      path: "/",
+      headers: {},
+    });
+
+    const response = await waitFor(
+      messages,
+      (message) => message.type === "endpoint_http_response",
+    );
+    expect(response).toMatchObject({
+      type: "endpoint_http_response",
+      requestId: "http-1",
+      status: 200,
+    });
+    if (response.type !== "endpoint_http_response" || !response.bodyBase64) {
+      throw new Error("Missing HTTP proxy body");
+    }
+    const body = Buffer.from(response.bodyBase64, "base64").toString("utf8");
+    expect(body).toContain("Preview app");
+    expect(body).toContain('data-trace-source="app/page.tsx:11"');
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+    await waitForPortAvailable(port);
+  });
+
   it("rejects unsafe working directories", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
