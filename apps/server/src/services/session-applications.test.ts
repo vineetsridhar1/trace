@@ -539,6 +539,10 @@ describe("SessionApplicationService", () => {
         sessionGroupId: "group-1",
       });
     prismaMock.sessionApplicationProcess.update.mockResolvedValueOnce(runningProcess);
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "running",
+    });
     prismaMock.sessionApplicationLogEntry.findFirst.mockResolvedValueOnce(null);
     prismaMock.sessionApplicationLogEntry.create.mockResolvedValueOnce({
       id: "log-1",
@@ -648,6 +652,10 @@ describe("SessionApplicationService", () => {
       disabledAt: null,
       revokedAt: null,
     });
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "running",
+    });
     prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
       id: "endpoint-1",
       key: "endpointkey1",
@@ -675,6 +683,15 @@ describe("SessionApplicationService", () => {
     );
 
     expect(endpoint.accessMode).toBe("public");
+    expect(prismaMock.sessionApplicationProcess.findUnique).toHaveBeenCalledWith({
+      where: {
+        sessionGroupId_appConfigId_processConfigId: {
+          sessionGroupId: "group-1",
+          appConfigId: "web",
+          processConfigId: "dev",
+        },
+      },
+    });
     expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith({
       where: { id: "endpoint-1" },
       data: {
@@ -695,6 +712,34 @@ describe("SessionApplicationService", () => {
         }),
       }),
     );
+  });
+
+  it("rejects publishing a stale enabled endpoint when its process is not running", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "app",
+      ownerUserId: "user-1",
+      sessions: [{ id: "session-1" }],
+    });
+    prismaMock.sessionEndpoint.findFirst.mockResolvedValueOnce({
+      id: "endpoint-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      status: "enabled",
+      accessMode: "private",
+    });
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "stopped",
+    });
+
+    await expect(
+      new SessionApplicationService().publishAppSession("group-1", "org-1", "user-1"),
+    ).rejects.toThrow("Start the app preview before publishing.");
+    expect(prismaMock.sessionEndpoint.update).not.toHaveBeenCalled();
   });
 
   it("mints a signed private endpoint preview URL for authorized viewers", async () => {

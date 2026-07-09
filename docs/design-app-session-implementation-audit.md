@@ -584,3 +584,9 @@ existing upload pipeline uses the storage key as the durable file identifier, co
 PDF export events now include `fileId` alongside `fileKey`, the session node parser
 preserves it, and the hosted design smoke requires the identifier before accepting the
 export.
+
+During this audit pass, app publish was found to trust an enabled endpoint without
+re-validating that its backing app process was still running. `publishAppSession` now
+requires the selected endpoint's process to be in `running` state before flipping it
+public, preserving the v1 contract that publish/share exposes a live app endpoint rather
+than a stale forwarding row.

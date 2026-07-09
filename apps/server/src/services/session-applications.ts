@@ -795,6 +795,18 @@ export class SessionApplicationService {
     if (!endpoint) {
       throw new ValidationError("Start the app preview before publishing.");
     }
+    const process = await prisma.sessionApplicationProcess.findUnique({
+      where: {
+        sessionGroupId_appConfigId_processConfigId: {
+          sessionGroupId,
+          appConfigId: endpoint.appConfigId,
+          processConfigId: endpoint.processConfigId,
+        },
+      },
+    });
+    if (!process || process.status !== "running") {
+      throw new ValidationError("Start the app preview before publishing.");
+    }
 
     const updated = await prisma.sessionEndpoint.update({
       where: { id: endpoint.id },
