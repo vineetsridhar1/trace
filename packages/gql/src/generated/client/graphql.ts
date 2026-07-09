@@ -488,6 +488,11 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureKey?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<Scalars["String"]["output"]>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -2912,6 +2917,10 @@ export type SessionDetailQuery = {
         author: string;
         committedAt: string;
         filesChanged: number;
+        captureStatus?: string | null;
+        captureUrl?: string | null;
+        captureContentType?: string | null;
+        capturedAt?: string | null;
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
@@ -2977,6 +2986,10 @@ export type SessionDetailQuery = {
       author: string;
       committedAt: string;
       filesChanged: number;
+      captureStatus?: string | null;
+      captureUrl?: string | null;
+      captureContentType?: string | null;
+      capturedAt?: string | null;
       createdAt: string;
     }>;
     channel?: { __typename?: "Channel"; id: string } | null;
@@ -3028,6 +3041,10 @@ export type SessionGroupDetailQuery = {
       author: string;
       committedAt: string;
       filesChanged: number;
+      captureStatus?: string | null;
+      captureUrl?: string | null;
+      captureContentType?: string | null;
+      capturedAt?: string | null;
       createdAt: string;
     }>;
     repo?: {
@@ -6174,6 +6191,10 @@ export const SessionDetailDocument = {
                             { kind: "Field", name: { kind: "Name", value: "author" } },
                             { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureContentType" } },
+                            { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                           ],
                         },
@@ -6371,6 +6392,10 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "author" } },
                       { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureContentType" } },
+                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -6484,6 +6509,10 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "author" } },
                       { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureContentType" } },
+                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },

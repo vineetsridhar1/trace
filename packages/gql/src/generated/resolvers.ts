@@ -489,6 +489,11 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureKey?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<Scalars["String"]["output"]>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -3072,6 +3077,11 @@ export type GitCheckpointResolvers<
   ParentType extends ResolversParentTypes["GitCheckpoint"] = ResolversParentTypes["GitCheckpoint"],
 > = ResolversObject<{
   author?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  captureContentType?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  captureKey?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  captureStatus?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  captureUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  capturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   committedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;

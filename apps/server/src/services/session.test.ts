@@ -160,6 +160,12 @@ vi.mock("./design-generation.js", () => ({
   },
 }));
 
+vi.mock("./app-checkpoint-capture.js", () => ({
+  appCheckpointCaptureService: {
+    capture: vi.fn().mockResolvedValue({ captureStatus: "unavailable" }),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -170,6 +176,7 @@ import { apiTokenService } from "./api-token.js";
 import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-repo.js";
 import { managedGitService } from "./managed-git.js";
 import { designGenerationService } from "./design-generation.js";
+import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import { orgSecretService } from "./org-secret.js";
 import {
   getDefaultModel,
@@ -203,6 +210,9 @@ const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof 
 const managedGitServiceMock = managedGitService as unknown as MockedDeep<typeof managedGitService>;
 const designGenerationServiceMock = designGenerationService as unknown as MockedDeep<
   typeof designGenerationService
+>;
+const appCheckpointCaptureServiceMock = appCheckpointCaptureService as unknown as MockedDeep<
+  typeof appCheckpointCaptureService
 >;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
@@ -378,6 +388,7 @@ describe("SessionService", () => {
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
     githubRepoServiceMock.listFileTree.mockResolvedValue({ paths: [], truncated: false });
     githubRepoServiceMock.listDirectoryEntries.mockResolvedValue([]);
+    appCheckpointCaptureServiceMock.capture.mockResolvedValue({ captureStatus: "unavailable" });
     githubRepoServiceMock.readFile.mockResolvedValue("file contents");
     githubRepoServiceMock.branchDiff.mockResolvedValue([]);
     parseGitHubRepoMock.mockReturnValue({ owner: "trace", repo: "trace" });
@@ -2902,6 +2913,113 @@ describe("SessionService", () => {
       });
     });
 
+    it("captures app checkpoint previews before emitting the checkpoint event", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-managed-1",
+        workdir: "/home/coder",
+        branch: "main",
+        repo: {
+          id: "repo-managed-1",
+          name: "Managed app",
+          provider: "managed",
+          remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+          defaultBranch: "main",
+        },
+        sessionGroup: {
+          id: "group-1",
+          name: "App builder",
+          kind: "app",
+          ownerUserId: "user-1",
+          repoId: "repo-managed-1",
+          branch: "main",
+          repo: {
+            id: "repo-managed-1",
+            name: "Managed app",
+            provider: "managed",
+            remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+            defaultBranch: "main",
+          },
+        },
+      });
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-1" });
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          repoId: "repo-managed-1",
+          promptEventId: "prompt-1",
+        }),
+      );
+      prismaMock.gitCheckpoint.update.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          repoId: "repo-managed-1",
+          promptEventId: "prompt-1",
+          captureStatus: "captured",
+          captureKey: "uploads/org-1/app-checkpoints/checkpoint-1.png",
+          captureUrl: "https://files.example/checkpoint-1.png",
+          captureContentType: "image/png",
+          capturedAt: new Date("2024-01-02T00:00:03.000Z"),
+        }),
+      );
+      appCheckpointCaptureServiceMock.capture.mockResolvedValueOnce({
+        captureStatus: "captured",
+        captureKey: "uploads/org-1/app-checkpoints/checkpoint-1.png",
+        captureUrl: "https://files.example/checkpoint-1.png",
+        captureContentType: "image/png",
+        capturedAt: new Date("2024-01-02T00:00:03.000Z"),
+      });
+
+      await service.recordGitCheckpoint(
+        "session-1",
+        {
+          trigger: "commit",
+          command: "git commit -m 'checkpoint'",
+          observedAt: "2024-01-02T00:00:02.000Z",
+          commitSha: "abcdef1234567890",
+          parentShas: ["1234567890abcdef"],
+          treeSha: "feedface12345678",
+          subject: "Add checkpoint support",
+          author: "Test User <test@example.com>",
+          committedAt: "2024-01-02T00:00:00.000Z",
+          filesChanged: 3,
+        },
+        { managedRemoteConfigured: true },
+      );
+
+      expect(appCheckpointCaptureServiceMock.capture).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        checkpointId: "checkpoint-1",
+        userId: "user-1",
+      });
+      expect(prismaMock.gitCheckpoint.update).toHaveBeenCalledWith({
+        where: { id: "checkpoint-1" },
+        data: {
+          captureStatus: "captured",
+          captureKey: "uploads/org-1/app-checkpoints/checkpoint-1.png",
+          captureUrl: "https://files.example/checkpoint-1.png",
+          captureContentType: "image/png",
+          capturedAt: new Date("2024-01-02T00:00:03.000Z"),
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "git_checkpoint",
+            checkpoint: expect.objectContaining({
+              captureStatus: "captured",
+              captureUrl: "https://files.example/checkpoint-1.png",
+              captureContentType: "image/png",
+              capturedAt: "2024-01-02T00:00:03.000Z",
+            }),
+          }),
+        }),
+      );
+    });
+
     it("deduplicates checkpoints by session group and commit sha", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         id: "session-1",
@@ -3038,6 +3156,126 @@ describe("SessionService", () => {
             checkpoint: expect.objectContaining({
               id: "checkpoint-old",
               commitSha: "newsha1234567890",
+            }),
+          }),
+        }),
+      );
+    });
+
+    it("clears stale app checkpoint captures when a rewrite capture is unavailable", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-managed-1",
+        repo: {
+          id: "repo-managed-1",
+          name: "Managed app",
+          provider: "managed",
+          remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+          defaultBranch: "main",
+        },
+        sessionGroup: {
+          id: "group-1",
+          name: "App builder",
+          kind: "app",
+          ownerUserId: "user-1",
+          repoId: "repo-managed-1",
+          branch: "main",
+          repo: {
+            id: "repo-managed-1",
+            name: "Managed app",
+            provider: "managed",
+            remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+            defaultBranch: "main",
+          },
+        },
+      });
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(
+        makeGitCheckpoint({
+          id: "checkpoint-old",
+          repoId: "repo-managed-1",
+          commitSha: "oldsha1234567890",
+          promptEventId: "prompt-old",
+          captureStatus: "captured",
+          captureKey: "uploads/org-1/app-checkpoints/checkpoint-old.png",
+          captureUrl: "https://files.example/checkpoint-old.png",
+          captureContentType: "image/png",
+          capturedAt: new Date("2024-01-02T00:00:03.000Z"),
+        }),
+      );
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-new" });
+      prismaMock.gitCheckpoint.update
+        .mockResolvedValueOnce(
+          makeGitCheckpoint({
+            id: "checkpoint-old",
+            repoId: "repo-managed-1",
+            commitSha: "newsha1234567890",
+            promptEventId: "prompt-new",
+            captureStatus: "captured",
+            captureKey: "uploads/org-1/app-checkpoints/checkpoint-old.png",
+            captureUrl: "https://files.example/checkpoint-old.png",
+            captureContentType: "image/png",
+            capturedAt: new Date("2024-01-02T00:00:03.000Z"),
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeGitCheckpoint({
+            id: "checkpoint-old",
+            repoId: "repo-managed-1",
+            commitSha: "newsha1234567890",
+            promptEventId: "prompt-new",
+            captureStatus: "unavailable",
+            captureKey: null,
+            captureUrl: null,
+            captureContentType: null,
+            capturedAt: null,
+          }),
+        );
+      appCheckpointCaptureServiceMock.capture.mockResolvedValueOnce({
+        captureStatus: "unavailable",
+      });
+
+      await service.recordGitCheckpoint(
+        "session-1",
+        {
+          trigger: "rewrite",
+          command: "git post-rewrite amend",
+          observedAt: "2024-01-02T00:00:02.000Z",
+          commitSha: "newsha1234567890",
+          parentShas: ["1234567890abcdef"],
+          treeSha: "feedface12345678",
+          subject: "Add checkpoint support",
+          author: "Test User <test@example.com>",
+          committedAt: "2024-01-02T00:00:00.000Z",
+          filesChanged: 3,
+          source: "git_hook",
+          checkpointContextId: "ctx-2",
+          rewrittenFromCommitSha: "oldsha1234567890",
+        },
+        { managedRemoteConfigured: true },
+      );
+
+      expect(prismaMock.gitCheckpoint.update).toHaveBeenLastCalledWith({
+        where: { id: "checkpoint-old" },
+        data: {
+          captureStatus: "unavailable",
+          captureKey: null,
+          captureUrl: null,
+          captureContentType: null,
+          capturedAt: null,
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "git_checkpoint",
+            checkpoint: expect.objectContaining({
+              id: "checkpoint-old",
+              commitSha: "newsha1234567890",
+              captureStatus: "unavailable",
+              captureUrl: null,
             }),
           }),
         }),

@@ -71,6 +71,7 @@ import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
 import { managedGitService } from "./managed-git.js";
 import { loadTraceDesignPromptContent } from "./design-content.js";
 import { designGenerationService } from "./design-generation.js";
+import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -773,6 +774,11 @@ function serializeGitCheckpoint(checkpoint: {
   author: string;
   committedAt: Date;
   filesChanged: number;
+  captureStatus?: string | null;
+  captureKey?: string | null;
+  captureUrl?: string | null;
+  captureContentType?: string | null;
+  capturedAt?: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -788,6 +794,11 @@ function serializeGitCheckpoint(checkpoint: {
     author: checkpoint.author,
     committedAt: checkpoint.committedAt.toISOString(),
     filesChanged: checkpoint.filesChanged,
+    captureStatus: checkpoint.captureStatus ?? null,
+    captureKey: checkpoint.captureKey ?? null,
+    captureUrl: checkpoint.captureUrl ?? null,
+    captureContentType: checkpoint.captureContentType ?? null,
+    capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
     createdAt: checkpoint.createdAt.toISOString(),
   };
 }
@@ -7090,6 +7101,7 @@ export class SessionService {
             id: true,
             name: true,
             kind: true,
+            ownerUserId: true,
             repoId: true,
             branch: true,
             repo: {
@@ -7292,6 +7304,35 @@ export class SessionService {
     }
 
     if (!persisted) return null;
+
+    if (didPersistCheckpoint && session.sessionGroup?.kind === "app") {
+      const capture = await appCheckpointCaptureService.capture({
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        checkpointId: persisted.id,
+        userId: session.sessionGroup.ownerUserId,
+      });
+      const shouldPersistCapture =
+        capture.captureStatus !== "unavailable" ||
+        checkpoint.trigger === "rewrite" ||
+        persisted.captureStatus != null ||
+        persisted.captureKey != null ||
+        persisted.captureUrl != null ||
+        persisted.captureContentType != null ||
+        persisted.capturedAt != null;
+      if (shouldPersistCapture) {
+        persisted = await prisma.gitCheckpoint.update({
+          where: { id: persisted.id },
+          data: {
+            captureStatus: capture.captureStatus,
+            captureKey: capture.captureKey ?? null,
+            captureUrl: capture.captureUrl ?? null,
+            captureContentType: capture.captureContentType ?? null,
+            capturedAt: capture.capturedAt ?? null,
+          },
+        });
+      }
+    }
 
     if (didPersistCheckpoint) {
       await eventService.create({

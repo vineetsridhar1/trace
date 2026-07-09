@@ -91,6 +91,10 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         author
         committedAt
         filesChanged
+        captureStatus
+        captureUrl
+        captureContentType
+        capturedAt
         createdAt
       }
       repo {
