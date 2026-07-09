@@ -19,9 +19,11 @@ import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-cor
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
+import { DesignCanvas } from "../design/DesignCanvas";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
+import { SessionDetailView } from "./SessionDetailView";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
@@ -179,6 +181,7 @@ export function SessionGroupDetailView({
     | string
     | null
     | undefined;
+  const isDesignMode = groupKind === "design";
   const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
     | { id: string; name: string; remoteUrl?: string | null; defaultBranch?: string }
     | null
@@ -260,6 +263,7 @@ export function SessionGroupDetailView({
   const [forkEventId, setForkEventId] = useState<string | null>(null);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
+
   const handleOpenForkDialog = useCallback((eventId: string) => {
     setForkEventId(eventId);
     setForkDialogOpen(true);
@@ -307,6 +311,15 @@ export function SessionGroupDetailView({
     handleSelectFile,
     handleCloseFile,
   } = useFileActions();
+
+  useEffect(() => {
+    if (!isDesignMode) return;
+    setShowSidebar(false);
+    setShowApplicationsSidebar(false);
+    setActiveTerminalId(null);
+    setActiveFilePath(null);
+    setActiveWorkflowTab("session");
+  }, [isDesignMode, setActiveFilePath, setActiveTerminalId]);
 
   // Fetch full group detail and merge into store
   useEffect(() => {
@@ -891,110 +904,144 @@ export function SessionGroupDetailView({
                 groupPrUrl={groupPrUrl}
                 panelMode={panelMode}
                 isFullscreen={isFullscreen}
-                showSidebar={showSidebar}
-                showApplicationsSidebar={showApplicationsSidebar}
-                canShowApplications={showApplicationsSidebarTab}
+                showSidebar={isDesignMode ? false : showSidebar}
+                showApplicationsSidebar={isDesignMode ? false : showApplicationsSidebar}
+                canShowApplications={!isDesignMode && showApplicationsSidebarTab}
                 onToggleFullscreen={toggleFullscreen}
-                onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+                onToggleSidebar={
+                  selectedSessionIsOptimistic || isDesignMode ? () => {} : handleToggleSidebar
+                }
                 onToggleApplicationsSidebar={
-                  selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
+                  selectedSessionIsOptimistic || isDesignMode
+                    ? () => {}
+                    : handleToggleApplicationsSidebar
                 }
               />
 
-              <GroupTabStrip
-                sessionTabs={sessionTabs}
-                terminals={terminals}
-                groupSessions={groupSessions}
-                selectedSessionId={selectedSession?.id ?? null}
-                activeTerminalId={activeTerminalId}
-                openFiles={openFiles}
-                activeFilePath={activeFilePath}
-                trafficTabOpen={trafficEndpointId !== null}
-                trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
-                onSelectSession={handleSelectSession}
-                onCloseSession={handleCloseSession}
-                canCloseSessions={false}
-                onSelectTerminal={handleSelectTerminalTab}
-                onCloseTerminal={handleCloseTerminal}
-                onRenameTerminal={renameTerminal}
-                onSelectFile={handleSelectFileTab}
-                onCloseFile={handleCloseFile}
-                onSelectTraffic={handleSelectTrafficTab}
-                onCloseTraffic={handleCloseTrafficTab}
-                onNewChat={handleNewChat}
-                onOpenTerminal={() => {
-                  setActiveWorkflowTab("session");
-                  void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
-                }}
-                onOpenFilePalette={handleOpenFilePalette}
-                canNewChat={
-                  !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
-                }
-                canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
-              />
+              {!isDesignMode ? (
+                <GroupTabStrip
+                  sessionTabs={sessionTabs}
+                  terminals={terminals}
+                  groupSessions={groupSessions}
+                  selectedSessionId={selectedSession?.id ?? null}
+                  activeTerminalId={activeTerminalId}
+                  openFiles={openFiles}
+                  activeFilePath={activeFilePath}
+                  trafficTabOpen={trafficEndpointId !== null}
+                  trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
+                  onSelectSession={handleSelectSession}
+                  onCloseSession={handleCloseSession}
+                  canCloseSessions={false}
+                  onSelectTerminal={handleSelectTerminalTab}
+                  onCloseTerminal={handleCloseTerminal}
+                  onRenameTerminal={renameTerminal}
+                  onSelectFile={handleSelectFileTab}
+                  onCloseFile={handleCloseFile}
+                  onSelectTraffic={handleSelectTrafficTab}
+                  onCloseTraffic={handleCloseTrafficTab}
+                  onNewChat={handleNewChat}
+                  onOpenTerminal={() => {
+                    setActiveWorkflowTab("session");
+                    void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+                  }}
+                  onOpenFilePalette={handleOpenFilePalette}
+                  canNewChat={
+                    !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
+                  }
+                  canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
+                />
+              ) : null}
 
               <div className="flex min-h-0 flex-1 overflow-hidden">
-                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-      <SessionGroupContentArea
-        sessionGroupId={sessionGroupId}
-        sessionGroupKind={groupKind}
-        activeFilePath={activeFilePath}
-                    openFiles={openFiles}
-                    activeTerminalId={activeTerminal?.id ?? null}
-                    activeTrafficEndpointId={
-                      activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                    }
-                    selectedSession={selectedSession}
-                    sessionsByRecency={sessionsByRecency}
-                    canStartNewChat={
-                      !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
-                    }
-                    onStartNewChat={handleNewChat}
-                    defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                    getFileBuffer={getFileBuffer}
-                    setFileBuffer={setFileBuffer}
-                    scrollToEventId={scrollToEventId}
-                    onScrollComplete={handleScrollComplete}
-                    onForkSession={handleOpenForkDialog}
-                    canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                  />
-                </div>
-                {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
-                  <div
-                    className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
-                      isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
-                    }`}
-                    style={{ width: sidebarWidth }}
-                  >
-                    <div
-                      onMouseDown={handleSidebarResizeStart}
-                      className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
-                    />
-                    {showApplicationsSidebar ? (
-                      <SessionApplicationsPanel
+                {isDesignMode ? (
+                  <>
+                    <div className="min-h-0 w-[360px] shrink-0 border-r border-border bg-background">
+                      {selectedSession ? (
+                        <SessionDetailView
+                          key={selectedSession.id}
+                          sessionId={selectedSession.id}
+                          hideHeader
+                          scrollToEventId={scrollToEventId}
+                          onScrollComplete={handleScrollComplete}
+                          onForkSession={handleOpenForkDialog}
+                          canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                          Select a chat tab to continue.
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+                      <DesignCanvas sessionGroupId={sessionGroupId} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+                      <SessionGroupContentArea
                         sessionGroupId={sessionGroupId}
-                        onOpenTraffic={handleOpenTrafficTab}
+                        activeFilePath={activeFilePath}
+                        openFiles={openFiles}
+                        activeTerminalId={activeTerminal?.id ?? null}
+                        activeTrafficEndpointId={
+                          activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                        }
+                        selectedSession={selectedSession}
+                        sessionsByRecency={sessionsByRecency}
+                        canStartNewChat={
+                          !!selectedSession &&
+                          !selectedSessionIsOptimistic &&
+                          bridgeInteractionAllowed
+                        }
+                        onStartNewChat={handleNewChat}
+                        defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                        getFileBuffer={getFileBuffer}
+                        setFileBuffer={setFileBuffer}
+                        scrollToEventId={scrollToEventId}
+                        onScrollComplete={handleScrollComplete}
+                        onForkSession={handleOpenForkDialog}
+                        canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       />
-                    ) : (
-                      <SidebarPanel
-                        sessionGroupId={sessionGroupId}
-                        activeSessionId={selectedSession?.id ?? null}
-                        activeTab={sidebarTab}
-                        fileTree={sessionGroupFileTree}
-                        filesLoading={sessionGroupFileTreeLoading}
-                        filesError={sessionGroupFileTreeError}
-                        onTabChange={handleSidebarTabChange}
-                        onFileClick={handleFileClick}
-                        onRefreshFiles={refreshTree}
-                        onLoadDirectory={loadDirectory}
-                        onDiffFileClick={handleDiffFileClick}
-                        highlightCheckpointId={highlightCheckpointId}
-                        onCheckpointClick={handleCheckpointClick}
-                        bridgeAccess={bridgeAccess}
-                        onBridgeAccessRequested={refreshBridgeAccess}
-                      />
+                    </div>
+                    {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
+                      <div
+                        className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
+                          isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
+                        }`}
+                        style={{ width: sidebarWidth }}
+                      >
+                        <div
+                          onMouseDown={handleSidebarResizeStart}
+                          className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
+                        />
+                        {showApplicationsSidebar ? (
+                          <SessionApplicationsPanel
+                            sessionGroupId={sessionGroupId}
+                            onOpenTraffic={handleOpenTrafficTab}
+                          />
+                        ) : (
+                          <SidebarPanel
+                            sessionGroupId={sessionGroupId}
+                            activeSessionId={selectedSession?.id ?? null}
+                            activeTab={sidebarTab}
+                            fileTree={sessionGroupFileTree}
+                            filesLoading={sessionGroupFileTreeLoading}
+                            filesError={sessionGroupFileTreeError}
+                            onTabChange={handleSidebarTabChange}
+                            onFileClick={handleFileClick}
+                            onRefreshFiles={refreshTree}
+                            onLoadDirectory={loadDirectory}
+                            onDiffFileClick={handleDiffFileClick}
+                            highlightCheckpointId={highlightCheckpointId}
+                            onCheckpointClick={handleCheckpointClick}
+                            bridgeAccess={bridgeAccess}
+                            onBridgeAccessRequested={refreshBridgeAccess}
+                          />
+                        )}
+                      </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
               <ForkSessionDialog

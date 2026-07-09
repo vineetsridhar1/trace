@@ -8,7 +8,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { gql } from "@urql/core";
-import { Loader2, Maximize2, Minus, Plus, RefreshCw } from "lucide-react";
+import { Loader2, Maximize2, Minus, Plus } from "lucide-react";
 import type { Artifact } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
@@ -36,35 +36,8 @@ const DESIGN_ARTIFACTS_QUERY = gql`
   }
 `;
 
-const CREATE_DESIGN_ARTIFACT_MUTATION = gql`
-  mutation CreateDesignArtifact($sessionGroupId: ID!, $prompt: String!) {
-    createDesignArtifact(sessionGroupId: $sessionGroupId, prompt: $prompt) {
-      id
-      sessionGroupId
-      parentArtifactId
-      prompt
-      title
-      contentType
-      html
-      metadata
-      publishedAt
-      createdAt
-      updatedAt
-      createdBy {
-        id
-        name
-        avatarUrl
-      }
-    }
-  }
-`;
-
 type ArtifactResult = {
   designArtifacts?: Artifact[];
-};
-
-type CreateArtifactResult = {
-  createDesignArtifact?: Artifact;
 };
 
 const CARD_WIDTH = 720;
@@ -156,8 +129,6 @@ function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: bo
 export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [prompt, setPrompt] = useState("");
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [viewport, setViewport] = useState<Viewport>({ x: 80, y: 60, scale: 0.8 });
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -186,25 +157,6 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
   useEffect(() => {
     loadArtifacts();
   }, [loadArtifacts]);
-
-  const createArtifact = useCallback(async () => {
-    const trimmed = prompt.trim();
-    if (!trimmed || creating) return;
-    setCreating(true);
-    const result = await client
-      .mutation<CreateArtifactResult>(CREATE_DESIGN_ARTIFACT_MUTATION, {
-        sessionGroupId,
-        prompt: trimmed,
-      })
-      .toPromise();
-    const artifact = result.data?.createDesignArtifact;
-    if (artifact) {
-      setArtifacts((current) => [...current, artifact]);
-      setSelectedArtifactId(artifact.id);
-      setPrompt("");
-    }
-    setCreating(false);
-  }, [creating, prompt, sessionGroupId]);
 
   const fitCanvas = useCallback(() => {
     const element = canvasRef.current;
@@ -308,135 +260,85 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 bg-surface-deep">
-      <aside className="flex w-[320px] shrink-0 flex-col border-r bg-background">
-        <div className="border-b p-3">
-          <textarea
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Describe another direction"
-            className="min-h-24 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={createArtifact}
-              disabled={!prompt.trim() || creating}
-              className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              Option
-            </button>
-            <button
-              type="button"
-              onClick={loadArtifacts}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground hover:text-foreground"
-              aria-label="Refresh artifacts"
-              title="Refresh artifacts"
-            >
-              <RefreshCw size={14} />
-            </button>
-          </div>
+    <main
+      ref={canvasRef}
+      onWheel={handleWheel}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className="relative h-full min-h-0 touch-none overflow-hidden bg-surface-deep"
+    >
+      <div
+        className="absolute right-3 top-3 z-10 flex items-center overflow-hidden rounded-md border bg-background shadow-sm"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => zoomBy(0.75)}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground"
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          <Minus size={14} />
+        </button>
+        <div className="w-14 text-center text-xs tabular-nums text-muted-foreground">
+          {Math.round(viewport.scale * 100)}%
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {artifacts.map((artifact) => (
-            <button
-              key={artifact.id}
-              type="button"
-              onClick={() => setSelectedArtifactId(artifact.id)}
-              className={cn(
-                "mb-2 block w-full rounded-md border px-3 py-2 text-left text-sm",
-                selectedArtifact?.id === artifact.id
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:bg-surface-elevated",
-              )}
+        <button
+          type="button"
+          onClick={() => zoomBy(1.25)}
+          className="inline-flex h-8 w-8 items-center justify-center border-l border-r text-muted-foreground hover:text-foreground"
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          <Plus size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={fitCanvas}
+          className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
+          aria-label="Fit canvas"
+          title="Fit canvas"
+        >
+          <Maximize2 size={14} />
+        </button>
+      </div>
+      {loading ? (
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          <Loader2 size={16} className="mr-2 animate-spin" />
+          Loading artifacts
+        </div>
+      ) : selectedArtifact ? (
+        <div
+          className="absolute left-0 top-0 origin-top-left will-change-transform"
+          style={{
+            transform: `translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.scale})`,
+          }}
+        >
+          {placements.map((placement) => (
+            <div
+              key={placement.artifact.id}
+              className="absolute"
+              style={{
+                width: CARD_WIDTH,
+                height: CARD_HEIGHT,
+                transform: `translate3d(${placement.x}px, ${placement.y}px, 0)`,
+              }}
+              onClick={() => setSelectedArtifactId(placement.artifact.id)}
             >
-              <div className="truncate font-medium">{artifact.title}</div>
-              <div className="truncate text-xs text-muted-foreground">{artifact.prompt}</div>
-            </button>
+              <ArtifactCard
+                artifact={placement.artifact}
+                selected={selectedArtifact.id === placement.artifact.id}
+              />
+            </div>
           ))}
         </div>
-      </aside>
-      <main
-        ref={canvasRef}
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        className="relative min-h-0 flex-1 touch-none overflow-hidden bg-surface-deep"
-      >
-        <div
-          className="absolute right-3 top-3 z-10 flex items-center overflow-hidden rounded-md border bg-background shadow-sm"
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={() => zoomBy(0.75)}
-            className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground"
-            aria-label="Zoom out"
-            title="Zoom out"
-          >
-            <Minus size={14} />
-          </button>
-          <div className="w-14 text-center text-xs tabular-nums text-muted-foreground">
-            {Math.round(viewport.scale * 100)}%
-          </div>
-          <button
-            type="button"
-            onClick={() => zoomBy(1.25)}
-            className="inline-flex h-8 w-8 items-center justify-center border-l border-r text-muted-foreground hover:text-foreground"
-            aria-label="Zoom in"
-            title="Zoom in"
-          >
-            <Plus size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={fitCanvas}
-            className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
-            aria-label="Fit canvas"
-            title="Fit canvas"
-          >
-            <Maximize2 size={14} />
-          </button>
+      ) : (
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          No artifacts yet.
         </div>
-        {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            <Loader2 size={16} className="mr-2 animate-spin" />
-            Loading artifacts
-          </div>
-        ) : selectedArtifact ? (
-          <div
-            className="absolute left-0 top-0 origin-top-left will-change-transform"
-            style={{
-              transform: `translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.scale})`,
-            }}
-          >
-            {placements.map((placement) => (
-              <div
-                key={placement.artifact.id}
-                className="absolute"
-                style={{
-                  width: CARD_WIDTH,
-                  height: CARD_HEIGHT,
-                  transform: `translate3d(${placement.x}px, ${placement.y}px, 0)`,
-                }}
-                onClick={() => setSelectedArtifactId(placement.artifact.id)}
-              >
-                <ArtifactCard
-                  artifact={placement.artifact}
-                  selected={selectedArtifact.id === placement.artifact.id}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            No artifacts yet.
-          </div>
-        )}
-      </main>
-    </div>
+      )}
+    </main>
   );
 }
