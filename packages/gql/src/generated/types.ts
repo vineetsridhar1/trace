@@ -668,6 +668,7 @@ export type Mutation = {
   muteScope: Participant;
   patchDesignArtifactTokens: Artifact;
   promoteDesignArtifactToCodingSession: Session;
+  publishAppSession: SessionEndpoint;
   publishDesignArtifact: Artifact;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -984,6 +985,10 @@ export type MutationPatchDesignArtifactTokensArgs = {
 export type MutationPromoteDesignArtifactToCodingSessionArgs = {
   artifactId: Scalars["ID"]["input"];
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationPublishDesignArtifactArgs = {

@@ -670,6 +670,7 @@ export type Mutation = {
   muteScope: Participant;
   patchDesignArtifactTokens: Artifact;
   promoteDesignArtifactToCodingSession: Session;
+  publishAppSession: SessionEndpoint;
   publishDesignArtifact: Artifact;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -986,6 +987,10 @@ export type MutationPatchDesignArtifactTokensArgs = {
 export type MutationPromoteDesignArtifactToCodingSessionArgs = {
   artifactId: Scalars["ID"]["input"];
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationPublishDesignArtifactArgs = {
@@ -3193,6 +3198,20 @@ export type DisableSessionEndpointForwardingMutationVariables = Exact<{
 export type DisableSessionEndpointForwardingMutation = {
   __typename?: "Mutation";
   disableSessionEndpointForwarding: { __typename?: "SessionEndpoint"; id: string };
+};
+
+export type PublishAppSessionMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type PublishAppSessionMutation = {
+  __typename?: "Mutation";
+  publishAppSession: {
+    __typename?: "SessionEndpoint";
+    id: string;
+    url: string;
+    accessMode: SessionEndpointAccessMode;
+  };
 };
 
 export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
@@ -7050,6 +7069,50 @@ export const DisableSessionEndpointForwardingDocument = {
   DisableSessionEndpointForwardingMutation,
   DisableSessionEndpointForwardingMutationVariables
 >;
+export const PublishAppSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PublishAppSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "publishAppSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
 export const SessionEndpointTrafficEndpointsDocument = {
   kind: "Document",
   definitions: [

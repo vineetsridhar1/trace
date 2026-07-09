@@ -10,6 +10,7 @@ import {
   RotateCw,
   Settings,
   Square,
+  Upload,
 } from "lucide-react";
 import type {
   Repo,
@@ -180,6 +181,16 @@ const DISABLE_ENDPOINT_MUTATION = gql`
   }
 `;
 
+const PUBLISH_APP_SESSION_MUTATION = gql`
+  mutation PublishAppSession($sessionGroupId: ID!) {
+    publishAppSession(sessionGroupId: $sessionGroupId) {
+      id
+      url
+      accessMode
+    }
+  }
+`;
+
 export function SessionApplicationsPanel({
   sessionGroupId,
   onOpenTraffic,
@@ -308,6 +319,20 @@ export function SessionApplicationsPanel({
       ),
     [endpointTable, sessionGroupId],
   );
+  const primaryEnabledEndpoint = useMemo(
+    () =>
+      endpoints
+        .filter((endpoint) => endpoint.status === "enabled")
+        .sort((a, b) => {
+          const appCompare = a.appConfigId.localeCompare(b.appConfigId);
+          if (appCompare !== 0) return appCompare;
+          const processCompare = a.processConfigId.localeCompare(b.processConfigId);
+          if (processCompare !== 0) return processCompare;
+          return a.portConfigId.localeCompare(b.portConfigId);
+        })[0] ?? null,
+    [endpoints],
+  );
+  const appPublished = primaryEnabledEndpoint?.accessMode === "public";
 
   const processesByKey = useMemo(() => {
     const map = new Map<string, SessionApplicationProcess>();
@@ -374,6 +399,30 @@ export function SessionApplicationsPanel({
     }
   };
 
+  const publishApp = async () => {
+    setPending("publish-app");
+    setError(null);
+    try {
+      const result = await client
+        .mutation<{ publishAppSession?: SessionEndpoint }>(PUBLISH_APP_SESSION_MUTATION, {
+          sessionGroupId,
+        })
+        .toPromise();
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      await refresh();
+      const url = result.data?.publishAppSession?.url;
+      if (url) {
+        await copyEndpointUrl(url);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPending(null);
+    }
+  };
+
   const toggleSetupLogs = (scriptId: string) => {
     setOpenSetupLogIds((current) => ({ ...current, [scriptId]: !current[scriptId] }));
   };
@@ -417,15 +466,27 @@ export function SessionApplicationsPanel({
     <div className="flex h-full flex-col overflow-hidden bg-surface-deep">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <p className="text-sm font-semibold text-foreground">Applications</p>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title="Refresh applications"
-          aria-label="Refresh applications"
-          onClick={() => void refresh()}
-        >
-          <RotateCw size={14} />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={appPublished ? "ghost" : "outline"}
+            size="icon-sm"
+            title={appPublished ? "App published" : "Publish app"}
+            aria-label={appPublished ? "App published" : "Publish app"}
+            disabled={!primaryEnabledEndpoint || pending === "publish-app"}
+            onClick={() => void publishApp()}
+          >
+            <Upload size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Refresh applications"
+            aria-label="Refresh applications"
+            onClick={() => void refresh()}
+          >
+            <RotateCw size={14} />
+          </Button>
+        </div>
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-3 py-3">
       {error && (

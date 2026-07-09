@@ -536,6 +536,52 @@ export class SessionApplicationService {
     return true;
   }
 
+  async publishAppSession(sessionGroupId: string, organizationId: string, userId: string) {
+    const group = await prisma.sessionGroup.findFirstOrThrow({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, kind: true, ownerUserId: true },
+    });
+    await this.assertCanManage(group.id, organizationId, userId, group);
+    if (group.kind !== "app") {
+      throw new ValidationError("Only app sessions can be published through app publish.");
+    }
+
+    const endpoint = await prisma.sessionEndpoint.findFirst({
+      where: {
+        sessionGroupId,
+        organizationId,
+        status: "enabled",
+      },
+      orderBy: [{ appConfigId: "asc" }, { processConfigId: "asc" }, { portConfigId: "asc" }],
+    });
+    if (!endpoint) {
+      throw new ValidationError("Start the app preview before publishing.");
+    }
+
+    const updated = await prisma.sessionEndpoint.update({
+      where: { id: endpoint.id },
+      data: {
+        accessMode: "public",
+        enabledByUserId: userId,
+        enabledAt: endpoint.enabledAt ?? new Date(),
+      },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionGroupId,
+      eventType: "session_endpoint_access_updated",
+      payload: {
+        endpoint: publicEndpoint(updated),
+        sessionGroupId,
+        published: true,
+      },
+      actorType: "user",
+      actorId: userId,
+    });
+    return updated;
+  }
+
   // Reflect a destroyed runtime (archive, idle cleanup, container loss): mark
   // every live process for the group stopped and disable its endpoints, emitting
   // the same per-entity events the UI already consumes.

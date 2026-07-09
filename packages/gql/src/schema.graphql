@@ -1606,6 +1606,7 @@ type Mutation {
     mode: EndpointTrafficCaptureMode!
   ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
+  publishAppSession(sessionGroupId: ID!): SessionEndpoint!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

@@ -215,6 +215,93 @@ describe("SessionApplicationService", () => {
     ).rejects.toThrow("Start the process first (current status: stopped)");
   });
 
+  it("publishes the primary app endpoint", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "app",
+      ownerUserId: "user-1",
+    });
+    prismaMock.sessionEndpoint.findFirst.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      protocol: "http",
+      status: "enabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: new Date("2026-07-09T10:00:00.000Z"),
+      disabledAt: null,
+      revokedAt: null,
+    });
+    prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      protocol: "http",
+      status: "enabled",
+      accessMode: "public",
+      trafficCaptureMode: "metadata",
+      enabledAt: new Date("2026-07-09T10:00:00.000Z"),
+      disabledAt: null,
+      revokedAt: null,
+    });
+
+    const endpoint = await new SessionApplicationService().publishAppSession(
+      "group-1",
+      "org-1",
+      "user-1",
+    );
+
+    expect(endpoint.accessMode).toBe("public");
+    expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith({
+      where: { id: "endpoint-1" },
+      data: {
+        accessMode: "public",
+        enabledByUserId: "user-1",
+        enabledAt: new Date("2026-07-09T10:00:00.000Z"),
+      },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_endpoint_access_updated",
+        payload: expect.objectContaining({
+          published: true,
+          endpoint: expect.objectContaining({
+            accessMode: "public",
+            url: expect.stringContaining("endpointkey1"),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("rejects publish for non-app sessions", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "coding",
+      ownerUserId: "user-1",
+    });
+
+    await expect(
+      new SessionApplicationService().publishAppSession("group-1", "org-1", "user-1"),
+    ).rejects.toThrow("Only app sessions can be published through app publish.");
+    expect(prismaMock.sessionEndpoint.update).not.toHaveBeenCalled();
+  });
+
   it("ignores stale bridge logs for missing process rows", async () => {
     prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce(null);
 

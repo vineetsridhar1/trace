@@ -155,6 +155,12 @@ export const sessionApplicationMutations = {
     ),
   clearEndpointTraffic: (_parent: unknown, args: { endpointId: string }, ctx: Context) =>
     sessionApplicationService.clearTraffic(args.endpointId, requireOrgContext(ctx), requireUser(ctx)),
+  publishAppSession: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
+    sessionApplicationService.publishAppSession(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
 };
 
 export const sessionApplicationTypeResolvers = {
