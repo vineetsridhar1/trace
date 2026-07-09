@@ -69,6 +69,8 @@ Implemented:
   controls are exposed through the session application UI.
 - `publishAppSession` flips the primary enabled endpoint to public and emits an endpoint
   access update event.
+- Published public endpoints render through the endpoint proxy without session auth or
+  authoring overlay injection.
 - Checkpoints are persisted as `GitCheckpoint` rows after managed remote push confirmation.
 - Restore by checkpoint provisions from the checkpoint SHA in a fresh session group.
 - App checkpoint captures render the live endpoint with headless Chromium, upload a PNG,
@@ -82,6 +84,7 @@ Verified:
 - `session-applications.test.ts`
 - `organization.test.ts`
 - `app-checkpoint-capture.test.ts`
+- `endpoint-proxy.test.ts`
 - `managed-process-manager.test.ts`
 - `@trace/container-bridge build`
 - `@trace/desktop build`

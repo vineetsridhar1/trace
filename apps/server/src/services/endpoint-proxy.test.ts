@@ -180,4 +180,42 @@ describe("EndpointProxyService", () => {
     expect(res.bodyValue).toContain("data-trace-source");
     expect(res.headersValue["content-length"]).toBeUndefined();
   });
+
+  it("renders published public endpoints without auth or authoring overlay injection", async () => {
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValue(
+      endpoint({
+        accessMode: "public",
+      }),
+    );
+    const service = new EndpointProxyService();
+    const res = makeResponse();
+
+    await service.handleHttpRequest(makeRequest({ url: "/" }), res, "endpointkey1");
+
+    expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
+    const command = sessionRouterMock.sendToRuntime.mock.calls[0]?.[1] as
+      | { type?: string; requestId?: string }
+      | undefined;
+    expect(command).toMatchObject({
+      type: "endpoint_http_request",
+      endpointId: "endpoint-1",
+      port: 3000,
+    });
+    if (!command?.requestId) throw new Error("missing proxy request id");
+
+    service.resolveHttpResponse(command.requestId, {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+      },
+      bodyBase64: Buffer.from(
+        '<!doctype html><html><body><main data-trace-source="app/page.tsx:11">Published app</main></body></html>',
+      ).toString("base64"),
+    });
+
+    expect(res.statusCodeValue).toBe(200);
+    expect(res.bodyValue).toContain("Published app");
+    expect(res.bodyValue).toContain('data-trace-source="app/page.tsx:11"');
+    expect(res.bodyValue).not.toContain("data-trace-app-overlay");
+  });
 });
