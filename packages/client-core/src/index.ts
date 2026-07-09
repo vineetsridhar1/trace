@@ -96,6 +96,7 @@ export { formatSessionConnectionError } from "./session/connection-error.js";
 export type {
   AgentToolResult,
   BuildSessionNodesResult,
+  DesignExportNode,
   ReadGlobItem,
   SessionNode,
 } from "./session/nodes.js";

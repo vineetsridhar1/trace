@@ -206,3 +206,8 @@ During this audit continuation, design artifact promotion was found to be implem
 not directly covered by a focused service regression. `artifact.test.ts` now verifies that
 promotion hydrates stored artifact HTML, starts a deferred coding session linked to the
 source design group, and emits `design_artifact_promoted`.
+
+During this continuation, PDF export completion events were found to be emitted but not
+rendered as a first-class timeline item. `buildSessionNodes` now maps
+`design_export_completed` into a typed design-export node, and the web session renderer
+shows completed/failed exports with download metadata.

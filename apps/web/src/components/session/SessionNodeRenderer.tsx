@@ -6,6 +6,7 @@ import { ReadGlobGroup } from "./messages/ReadGlobGroup";
 import { PlanReviewCard } from "./messages/PlanReviewCard";
 import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
+import { DesignExportRow } from "./messages/DesignExportRow";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 
 export interface SessionNodeRendererProps {
@@ -87,6 +88,10 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
 
   if (node.kind === "ask-user-question") {
     return <AskUserQuestionInline questions={node.questions} timestamp={node.timestamp} />;
+  }
+
+  if (node.kind === "design-export") {
+    return <DesignExportRow exportNode={node} />;
   }
 
   return <ReadGlobGroup items={node.items} />;
