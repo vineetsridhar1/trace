@@ -107,6 +107,16 @@ const APP_STATE = `
   }
 `;
 
+const REPOS = `
+  query SmokeRepos($organizationId: ID!) {
+    repos(organizationId: $organizationId) {
+      id
+      provider
+      remoteUrl
+    }
+  }
+`;
+
 const PROCESS_LOGS = `
   query SmokeProcessLogs($processId: ID!, $limit: Int) {
     sessionApplicationLogs(processId: $processId, limit: $limit) {
@@ -398,6 +408,17 @@ async function assertManagedGitCheckpointReachable(repoId, commitSha) {
   }
 }
 
+async function assertManagedRepoHiddenFromRepoList(repoId) {
+  const data = await graphql(REPOS, { organizationId });
+  const repos = data.repos ?? [];
+  const visibleManagedRepo = repos.find(
+    (repo) => repo.id === repoId || repo.provider === "managed",
+  );
+  if (visibleManagedRepo) {
+    throw new Error(`Managed app repo ${visibleManagedRepo.id} appeared in ordinary repo list`);
+  }
+}
+
 async function createPreviewUrl(endpointId) {
   const data = await graphql(CREATE_PREVIEW, { endpointId });
   return data.createSessionEndpointPreview.url;
@@ -561,6 +582,7 @@ if (!managedRepoId) {
 if (requireCapture) {
   await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
 }
+await assertManagedRepoHiddenFromRepoList(managedRepoId);
 await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha);
 const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);

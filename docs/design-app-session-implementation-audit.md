@@ -440,3 +440,8 @@ to prove the first checkpoint is reachable through managed-git smart HTTP. After
 first checkpoint links a managed repo, the smoke now creates a short-lived managed-git
 credential, runs `git ls-remote` against the Trace remote, and requires the checkpoint SHA
 on `refs/heads/main`.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove managed app repos stay hidden from ordinary repository lists. After the first
+checkpoint creates the managed repo, the smoke now queries `repos(organizationId:)` and
+fails if the app repo, or any repo with `provider: "managed"`, appears in that picker path.
