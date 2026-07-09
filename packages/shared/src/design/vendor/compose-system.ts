@@ -1,3 +1,5 @@
+import { composeSystemPrompt } from "./prompts/system.js";
+
 export type OpenDesignPromptKind = "design" | "app";
 
 export type OpenDesignPromptInput = {
@@ -33,66 +35,20 @@ function section(title: string, body: string | null | undefined): string | null 
   return trimmed ? `## ${title}\n${trimmed}` : null;
 }
 
-function listSection(title: string, values: string[] | null | undefined): string | null {
-  const clean = (values ?? []).map((value) => value.trim()).filter(Boolean);
-  return clean.length ? `## ${title}\n${clean.map((value) => `- ${value}`).join("\n")}` : null;
+function combineSkills(skills: OpenDesignSkillContent[] | null | undefined) {
+  const clean = (skills ?? []).filter((skill) => skill.body.trim().length > 0);
+  if (clean.length === 0) return undefined;
+  return clean
+    .map((skill) => [`# ${skill.title?.trim() || skill.id}`, skill.body.trim()].join("\n\n"))
+    .join("\n\n---\n\n");
 }
 
-function designSystemSection(content: OpenDesignDesignSystemContent | null | undefined) {
-  if (!content) return null;
-  const parts = [
-    content.name ? `Name: ${content.name}` : null,
-    content.design ? `DESIGN.md:\n${content.design}` : null,
-    content.tokensCss ? `tokens.css:\n${content.tokensCss}` : null,
-    content.usage ? `USAGE.md:\n${content.usage}` : null,
-    content.componentsManifest
-      ? `components.manifest.json:\n${JSON.stringify(content.componentsManifest, null, 2)}`
-      : null,
-  ].filter((part): part is string => Boolean(part));
-  return parts.length ? section(`Design System Content: ${content.id}`, parts.join("\n\n")) : null;
-}
-
-function skillContentSection(content: OpenDesignSkillContent[] | null | undefined) {
-  const skills = (content ?? []).filter((skill) => skill.body.trim().length > 0);
-  if (skills.length === 0) return null;
-  return section(
-    "Skill Content",
-    skills
-      .map((skill) =>
-        [`### ${skill.title?.trim() || skill.id}`, skill.body.trim()].filter(Boolean).join("\n"),
-      )
-      .join("\n\n"),
-  );
-}
-
-export function composeOpenDesignSystemPrompt(input: OpenDesignPromptInput): string {
-  const charter =
-    input.kind === "app"
-      ? "You are Open Design for a full-stack product application. Translate the brief into a working, production-shaped app."
-      : "You are Open Design for artifact generation. Translate the brief into a high-quality visual product design.";
-  const outputContract =
-    input.kind === "app"
-      ? [
-          "Work inside the existing project files and preserve the starter's conventions.",
-          "Plan routes, components, data flow, and persistence seams before coding.",
-          "Prefer complete, running product behavior over static mock screens.",
-        ].join("\n")
-      : [
-          "Return one complete self-contained HTML document.",
-          "Use strong visual hierarchy, accessible contrast, responsive layout, and realistic product content.",
-          "Make the design direction concrete enough for engineering implementation.",
-        ].join("\n");
-
+function promptInstructions(input: OpenDesignPromptInput) {
   return [
-    "# Open Design System Prompt",
-    charter,
-    "",
-    section("Output Contract", outputContract),
+    section("Trace Session Kind", input.kind),
     section("User Brief", input.userBrief ?? null),
-    input.designSystemId ? section("Design System", input.designSystemId) : null,
-    listSection("Skills", input.skillIds ?? null),
-    designSystemSection(input.designSystem),
-    skillContentSection(input.skills),
+    section("Trace Design System Id", input.designSystemId ?? null),
+    input.skillIds?.length ? section("Trace Skill Ids", input.skillIds.join(", ")) : null,
     section("Artifact Context", input.artifactContext ?? null),
     input.elementAnchors?.length
       ? section("Selected Element Anchors", JSON.stringify(input.elementAnchors))
@@ -101,4 +57,34 @@ export function composeOpenDesignSystemPrompt(input: OpenDesignPromptInput): str
   ]
     .filter((part): part is string => Boolean(part))
     .join("\n\n");
+}
+
+export function composeOpenDesignSystemPrompt(input: OpenDesignPromptInput): string {
+  const designSystem = input.designSystem ?? null;
+  const componentsManifest = designSystem?.componentsManifest
+    ? JSON.stringify(designSystem.componentsManifest, null, 2)
+    : undefined;
+  const prompt = composeSystemPrompt({
+    agentId: "trace",
+    includeCodexImagegenOverride: false,
+    executionProfile: input.kind === "design" ? "text_artifact" : "filesystem",
+    mediaExecution: { mode: "disabled" },
+    metadata: {
+      kind: input.kind === "design" ? "prototype" : "live-artifact",
+      intent: input.kind === "design" ? "prototype" : "live-artifact",
+      skipDiscoveryBrief: true,
+    },
+    skillBody: combineSkills(input.skills),
+    skillName: input.skillIds?.filter(Boolean).join(", ") || undefined,
+    skillMode: "prototype",
+    designSystemBody: designSystem?.design ?? undefined,
+    designSystemTitle: designSystem?.name ?? input.designSystemId ?? undefined,
+    designSystemUsageMd: designSystem?.usage ?? undefined,
+    designSystemTokensCss: designSystem?.tokensCss ?? undefined,
+    designSystemComponentsManifest: componentsManifest,
+    projectInstructions: promptInstructions(input),
+    sessionMode: "design",
+  });
+
+  return ["# Open Design System Prompt", prompt].join("\n\n");
 }

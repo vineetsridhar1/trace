@@ -1,6 +1,5 @@
-Trace includes an Open Design compatible prompt-composer boundary.
+Trace vendors the Open Design prompt composer from `nexu-io/open-design`.
 
-Upstream target: nexu-io/open-design v0.14.1.
-The prompt contract and file layout follow docs/open-design-harness-integration.md so a
-future vendor refresh can replace this compatibility subset with the pinned upstream
-composer without changing Trace service call sites.
+Pinned upstream ref: `release/v0.14.1`
+Pinned upstream commit: `c1b7fcf95dce0869b81aaa75e69f40fd27505c54`
+License: Apache-2.0

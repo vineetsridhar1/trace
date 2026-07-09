@@ -92,7 +92,7 @@ describe("designGenerationService", () => {
     expect(streamInput?.system).toContain("Open Design System Prompt");
     expect(streamInput?.system).toContain("Design a dashboard");
     expect(streamInput?.system).toContain("trace-core");
-    expect(streamInput?.system).toContain("- dashboard");
+    expect(streamInput?.system).toContain("dashboard, a11y");
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "design_generation_started",

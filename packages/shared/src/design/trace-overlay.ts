@@ -5,7 +5,7 @@ export function composeTraceOverlay(input: OpenDesignPromptInput): string {
     return [
       "# Trace App Session Overlay",
       "The workspace starts from the Trace app starter: Next.js App Router, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, and Trace app metadata.",
-      "Build a working application, not a static mock or landing page.",
+      "Build a working full-stack product application, not a static mock or landing page.",
       "Run pnpm install before first use if dependencies are missing.",
       "Run pnpm build or an equivalent verification before declaring the app done.",
       "Start the preview with pnpm dev --hostname 0.0.0.0 and keep it running so Trace can detect port 3000.",

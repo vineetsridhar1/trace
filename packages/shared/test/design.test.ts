@@ -28,9 +28,9 @@ describe("composeTraceDesignPrompt", () => {
     });
 
     expect(prompt).toContain("Previous");
-    expect(prompt).toContain("Design System");
+    expect(prompt).toContain("Trace Design System Id");
     expect(prompt).toContain("trace-core");
-    expect(prompt).toContain("- dashboard");
+    expect(prompt).toContain("dashboard, mobile");
     expect(prompt).toContain('"dataEl":"hero-title"');
   });
 
@@ -60,10 +60,11 @@ describe("composeTraceDesignPrompt", () => {
       },
     });
 
-    expect(prompt).toContain("Design System Content: trace-core");
+    expect(prompt).toContain("Active design system");
     expect(prompt).toContain("Use compact operational layouts.");
     expect(prompt).toContain("--trace-primary");
-    expect(prompt).toContain("### Forms");
+    expect(prompt).toContain("Active skill");
+    expect(prompt).toContain("# Forms");
     expect(prompt).toContain("Use explicit labels and validation messages.");
   });
 
