@@ -1,201 +1,181 @@
 # Session Kinds: Design & App
 
-Status: design exploration (2026-07-08). Companion to `managed-git-hosting.md` (where the
-code lives) and `open-design-harness-integration.md` (the prompt harness). Target mock:
+Status: design exploration (2026-07-08). Companion to `managed-git-hosting.md` (managed
+repos — app kind) and `open-design-harness-integration.md` (the prompt harness). Target
+mock (depicts the focused single-artifact view; the design kind adds a canvas level above
+it):
 
 ![Design session mock](./assets/design-session-mock.png)
 
 ## The split
 
-What started as one "web design session" is two products, and forcing them into one spec
-compromised both (the HTML-vs-React stack tension was the symptom). They share ~80% of
-their substrate, so they ship as two `SessionGroup.kind`s on one foundation:
+What started as one "web design session" is two products sharing one foundation, shipped
+as two `SessionGroup.kind`s:
 
-- **`design` — the artifact tool** (Claude Design shape). Output is the artifact itself:
-  screens, mockups, decks, brand explorations as self-contained HTML. You look at it,
-  comment on it, present it, export it (PDF), and hand it off as *intent*. No dev server,
-  no build step — instant first render, every version permanently live.
+- **`design` — the artifact canvas** (Claude Design shape, Figma-like surface). Output is
+  the artifact itself: screens, mockups, decks as self-contained HTML, laid out on a
+  spatial canvas where the AI generates **multiple options in parallel**. You compare,
+  comment, iterate, export (PDF), and hand off as *intent*. **No cloud machine, no coding
+  agent** — generation is direct model calls through the `LLMAdapter`; rendering is
+  sandboxed iframes in the browser.
 - **`app` — the app builder** (Replit shape). Output is a running application: React
-  starter, dev server + HMR, live endpoint preview. It's supposed to grow up into real
-  code — "To code session" on the same worktree is the differentiator.
+  starter on a cloud runtime, dev server + HMR, live endpoint preview, graduation to a
+  code session on the same worktree.
 
-The boundary case is deliberate: **Promote to app session** takes a design artifact and
-starts a linked `app` session whose first agent task is porting the mockup into the React
-starter. A visible transition between kinds (links in the flat entity model), not an
+The boundary case is deliberate: **Promote to app session** takes a chosen design artifact
+and starts a linked `app` session whose first agent task is porting the mockup into the
+React starter. A visible transition between kinds (links in the flat entity model), not an
 invisible mid-session stack swap.
 
-Sequencing: **design kind first.** It needs strictly less new infrastructure (no port
-detection, no starter-kit hardening, no picker build plugin), runs the Open Design content
-in its native HTML habitat (de-risks the harness spike), and builds the shared shell that
-the app kind then inherits.
-
-## Shared substrate (both kinds)
-
-### Cloud-only in v1
-
-Both kinds run **only on cloud (provisioned) runtimes**. This matches existing gates
-(application/endpoint forwarding is already cloud-only via `resolveCloudRuntime()`) and
-buys: one runtime image (templates, headless Chromium, harness content), a safely
-permissive agent sandbox (disposable machine → aggressive auto-run → fast
-prompt-to-preview loop), and no local preview plumbing. Enforced at one choke point: for
-these kinds `SessionService.startSession` forces `hosting: cloud`, requires a
-`provisioned` environment, rejects local runtime selection; the UI hides the
-hosting/runtime picker. Local support, if ever wanted, is a later adapter-level project.
-
-### Standalone, repo-less, agent-run
-
-Neither kind runs in the context of an existing org repo:
-
-- **No `repoId` at creation.** Prompt-first: `startSession(kind, prompt)`. No inheritance
-  of the channel's default repo. The workspace starts as an empty directory; the managed
-  repo appears lazily at the first checkpoint (per `managed-git-hosting.md`).
-- **The agent owns the bootstrap.** Repo `setupConfig`/setup scripts don't apply. The
-  agent scaffolds from the kind's template in the runtime image and runs whatever needs
-  running. Template-dependent features degrade gracefully off-template.
-
-### Harness
-
-Both kinds compose their system prompt from the vendored Open Design layer stack
-(designer charter + skills + `DESIGN.md` design systems) delivered via
-`--append-system-prompt` on plain `claude_code` — full plan in
-`open-design-harness-integration.md`. `designSystemId` binds the org's brand (or one of
-153 presets); future org-repo design-system extraction is spec'd there. The critique panel
-and discovery-brief parsing stay out of v1 (first message is the brief).
-
-### Versions = checkpoints
-
-Every run produces a `GitCheckpoint`; the version strip is the checkpoint list renamed for
-civilians. Restore = existing `restoreCheckpointId` machinery (restored version becomes
-HEAD). How old versions *render* differs by kind (below).
-
-### Comments, Tweaks, preview shell
-
-- **Preview pane** (iframe + device frames + zoom) with short-lived signed-cookie auth for
-  private endpoints — shared chrome for both kinds.
-- **Comments**: `design_comment_added` events carrying an element anchor (selector +
-  source location + version); "send to agent" wraps into a queued message. Anchors pin to
-  the version they were made on; best-effort re-anchor on HEAD.
-- **Tweaks**: deterministic token edits (`trace.tokens.json` → CSS variables) through a
-  service-layer method + bridge write — no model round trip. Templates for both kinds
-  expose the same token file; the panel's controls are schema-driven.
-- **Element picker**: proxy-injected overlay script captures selector + bbox + cropped
-  screenshot and posts it to the composer as a chip. Source identity differs by kind
-  (below).
+Sequencing: **design kind first** — it now needs no runtime infrastructure at all (no
+machine, no bridge, no port detection), runs the harness content in its native HTML
+habitat, and its canvas/comments/versions UI seeds the app kind's shell.
 
 ## The `design` kind
 
-- **Template**: self-contained HTML artifacts (screens/decks), served by a static file
-  server on the runtime — no install, no build. First render in seconds; the instant-wow
-  path. Open Design's HTML-tuned skills (deck frameworks, fixture components) apply
-  unmodified.
-- **Every version is live.** Static artifacts mean any checkpoint re-renders forever: the
-  runtime materializes checkpoint N to a temp dir and serves it. v1…v4 in the strip are
-  all interactive, and "Diff v3" can be two live renders side-by-side / onion-skinned —
-  no capture infrastructure needed.
-- **Element picker**: DOM anchors + the artifact file path (single-file artifacts make
-  source location trivial). No build plugin required.
-- **PDF export.** The runtime image ships headless Chromium (Playwright — shared with the
-  app kind's capture step). An `exportArtifact(sessionGroupId, checkpointSha?, format)`
-  service method sends a bridge command; the runtime loads the static artifact over
-  loopback in headless Chrome and prints to PDF (`page.pdf()`), honoring print
-  stylesheets. The vendored deck-framework prompt contract is what guarantees decks
-  paginate correctly — it exists precisely so PDF stitching works. The result flows
-  through the existing upload pipeline and a `design_export_completed` event, so it lands
-  in the session timeline and is shareable into channels. Because it's a service method,
-  agents can call it too — "make a one-pager and post the PDF in #marketing" is a single
-  task. v1 exports PDF only; PPTX/video are out (Open Design's video path needs
-  HyperFrames/ffmpeg; not worth the image weight yet).
-- **Publish/share**: public URL for the artifact (endpoint `accessMode: public`), Spotlight
-  presentation mode later.
-- **Promote to app session**: creates a linked `app` session; the artifact becomes the
-  brief + visual reference for the port.
+### No runtime — generation via LLMAdapter
+
+A design session runs **no compute session anywhere**. The service layer calls the
+`LLMAdapter` (Anthropic, etc.) directly with the composed design prompt as the `system`
+param; the model streams a self-contained HTML artifact back. Consequences:
+
+- **Zero cold start.** First tokens in ~a second; the artifact paints progressively in its
+  card as it streams. No provisioning, no bridge, no daemon.
+- **Fan-out is the primitive.** "Give me three directions" = three parallel streaming
+  calls (same brief, direction-differentiated prompts — Open Design's direction library
+  feeds exactly this). Cost is tokens only, not machine-minutes, so parallel options are
+  the default UX, not a luxury.
+- **No git, no managed repo.** Artifacts are entities: an `Artifact` row (id, session
+  group, parent artifact, prompt/message refs, metadata) with the HTML body in object
+  storage via the existing upload pipeline. Versions/variants form a **lineage DAG** via
+  `parentArtifactId` — a variant fan-out is N siblings; an iteration is a child. (Managed
+  git hosting remains motivated by the app kind; see `managed-git-hosting.md`.)
+- **Iteration mechanics**: v1 regenerates the artifact (with prompt caching and the prior
+  HTML + element context in the request); structured edit-ops are a later optimization if
+  regen cost/fidelity warrants.
+- Sessions/timeline still work as today — prompts, streams, and completions are session
+  events; a design session is a session with no runtime attached.
+
+### The canvas
+
+The workspace is a pan/zoom spatial surface (Figma mental model):
+
+- **Cards** are artifacts — each a sandboxed iframe (`srcdoc`, `sandbox`, strict CSP)
+  rendering stored HTML client-side. Variants sit side-by-side; iterations stack as
+  lineage (expandable history per card). Device-frame and zoom per card.
+- **Selection drives the composer.** Select a card → prompts iterate on it ("darker,
+  same layout"); select two → comparative prompts ("merge A's header with B's palette");
+  select none → new artifacts. Element-level selection inside a card (DOM anchors — no
+  build plugin needed for static HTML) attaches chips exactly as before.
+- **Focus mode** = the mock's layout: one card fills the pane, version strip = its
+  lineage, chat rail beside it.
+- **Comments** pin to cards or elements within them (`design_comment_added` events with
+  artifact id + anchor); "send to agent" queues a generation on that artifact.
+- **Tweaks** stay no-model: design-kind artifacts declare tokens as CSS variables (the
+  composed prompt mandates it), so the Tweaks panel patches the variable block — a
+  deterministic string edit server-side, new artifact version, instant re-render.
+
+### Exports and exits
+
+- **PDF export**: a server-side headless Chromium worker (not per-session — a small
+  render pool the server owns) loads the stored artifact and prints it; decks paginate
+  correctly because the vendored deck-framework contract mandates print-ready structure.
+  Output flows through the upload pipeline + `design_export_completed` event → timeline,
+  shareable to channels; agents can call the same service method. v1: PDF only.
+- **Publish/share**: artifacts are already stored server-side — a public artifact URL is
+  a read endpoint with an access flag. Spotlight presentation mode later.
+- **Promote to app session**: selected artifact(s) become the brief + visual reference of
+  a linked `app` session.
+
+Every version is trivially "live" forever — cards render stored HTML; nothing to
+materialize, no machine to keep warm. Retention/GC is a row + blob policy, even simpler
+than the managed-repo clock.
 
 ## The `app` kind
 
-- **Template**: React + Vite + Tailwind + shadcn starter (`trace.tokens.json`,
-  source-location Vite plugin, pre-warmed node_modules). Agent's default, not a fixed
-  pipeline — "make me a Next.js app" still works.
-- **Port auto-detection** replaces config-driven process start: the bridge watches for new
-  listening ports (denylist: bridge + daemon/system ports), reports them, the service
-  layer auto-creates and enables a `SessionEndpoint`, the preview lights up. Agent can
-  also register explicitly via tool call.
-- **Versions**: HEAD is live via the dev server; older versions are **captures**
-  (full-page screenshots at checkpoint time via the shared headless Chromium). Visual diff
-  = capture pair; code diff behind a toggle.
-- **Element picker**: the Vite plugin stamps `data-trace-source="src/components/ApprovalTable.tsx:42"`,
-  so chips carry component identity + file:line — what makes "click the thing, say the
-  change" reliable in a component tree.
-- **Graduation**: "To code session" starts a coding-kind session in the same
-  `SessionGroup` (shared worktree); pushing the managed repo to GitHub offered but not
-  required.
-- **Publish v1**: endpoint `accessMode: public`; later real deploy (build + CDN upload).
+Unchanged from the prior spec — this is where cloud machines earn their keep:
 
-## Mapping the mock to the architecture
+- **Cloud-only, enforced at `startSession`** (forces `hosting: cloud`, `provisioned`
+  environment, no `repoId`); the disposable machine justifies the permissive auto-run
+  sandbox. Local support remains a later adapter-level project.
+- **Agent-run bootstrap**: React + Vite + Tailwind + shadcn starter in the runtime image
+  (`trace.tokens.json`, source-location Vite plugin, pre-warmed node_modules); agent
+  scaffolds and runs it; **port auto-detection** (bridge watches listening ports,
+  denylisted system ports) auto-creates and enables the `SessionEndpoint`; preview pane
+  lights up.
+- **Lazy managed repo** at first checkpoint; versions = `GitCheckpoint`s; HEAD live via
+  dev server, older versions as captures (shared headless Chromium); restore via
+  `restoreCheckpointId`.
+- **Element picker** reads `data-trace-source="src/components/ApprovalTable.tsx:42"`
+  stamps for component identity + file:line.
+- **Tweaks** = service-layer token-file write through the bridge; HMR reflects <1s.
+- **Graduation**: "To code session" in the same `SessionGroup` (shared worktree); push to
+  GitHub offered, not required. **Publish v1**: endpoint `accessMode: public`.
+- Harness delivery: composed prompt via `RunOptions.appendSystemPrompt` →
+  `--append-system-prompt` on plain `claude_code`.
 
-| Mock element | Backing primitive | Status |
-|---|---|---|
-| Live preview iframe | `SessionEndpoint` + endpoint proxy | exists — needs iframe embed + auth |
-| App boots with no config | agent-run scaffold (+ port auto-detection, app kind) | ★ new |
-| Versions v1…v4 | `GitCheckpoint` per run | exists — needs UI (+ captures, app kind) |
-| Diff v3 | live render pair (design) / capture pair (app) + code diff | partially new |
-| Element chip ("ApprovalTable › Row 2") | proxy-injected picker script | ★ new |
-| Tweaks (no prompt needed) | deterministic token file edits via bridge | ★ new |
-| Comments pinned to elements | events + queued messages | exists — needs anchor payload |
-| PDF export | headless Chromium + bridge command + upload pipeline | ★ new (design kind) |
-| Publish | endpoint `accessMode: public` | exists (v1); real deploy later |
-| To code session / Promote to app | new session in same group / linked group | exists / small extension |
-| Code/Design mode toggle | `interactionMode` (add `design`) | small extension |
-| $1.12 · 2.1M tok | Session token/cost fields | exists |
-| In Review status | group status | later; not load-bearing |
+## Shared across kinds
+
+- **Harness**: both kinds compose from the vendored Open Design stack (charter + skills +
+  `DESIGN.md` design systems) — see `open-design-harness-integration.md`. Delivery
+  differs: `system` param on `LLMAdapter` calls (design) vs. `--append-system-prompt`
+  (app). `designSystemId` is a session-group setting; org design-system extraction stays
+  the committed future direction.
+- **Standalone**: neither kind attaches to an existing org repo at creation;
+  prompt-first, no channel-repo inheritance.
+- **Comments/Tweaks/preview chrome**: same components, same events; anchors pin to the
+  version they were made on.
+- **Content in one place**: skills + design systems ship as content the server (design
+  kind) and runtime image (app kind) both read — same pinned tag, same formats.
 
 ## New surface area
 
 Frontend (`apps/web/src/components/design/`):
-- Kind-branching shell from the group route on `SessionGroup.kind`; `PreviewPane`,
-  `VersionStrip`, `TweaksPanel`, `ElementChip`, comment pins overlay — shared; export/
-  promote actions (design), applications/graduation actions (app)
-- Chat rail reuses `SessionInput` / `SessionMessageList` as-is
+- `DesignCanvas` (pan/zoom, artifact cards as sandboxed iframes, selection model, lineage
+  expansion, focus mode), `VersionStrip`, `TweaksPanel`, `ElementChip`, comment pins
+- App kind reuses the preview-pane/versions/comments chrome against endpoints instead of
+  stored artifacts; chat rail reuses `SessionInput` / `SessionMessageList`
 
 Server:
-- `SessionGroup.kind` (`coding | design | app`) + `StartSessionInput.kind`; design/app
-  force `hosting: cloud`, take no `repoId`
-- `exportArtifact` service method + `design_export_completed` event
-- Auto-create + enable `SessionEndpoint` from bridge port-detection reports (app kind)
-- Checkpoint capture step (app kind) / checkpoint materialization for static serving
-  (design kind)
-- Token-edit service method; `design_comment_added` event type
-- Vendored Open Design composer + overlay in `packages/shared`;
-  `RunOptions.appendSystemPrompt` → `--append-system-prompt` in `ClaudeCodeAdapter`
+- `SessionGroup.kind` (`coding | design | app`) + `StartSessionInput.kind`
+- Design kind: `Artifact` entity (lineage DAG, blob refs), generation service on
+  `LLMAdapter` (streaming, parallel variants), artifact read/public endpoints,
+  token-patch method (CSS-variable string edit), headless-Chromium render pool (PDF +
+  card thumbnails), `design_export_completed` + `design_comment_added` events
+- App kind: cloud-only enforcement, port-detection endpoint auto-registration, checkpoint
+  captures, bridge token-file write, `RunOptions.appendSystemPrompt`
+- Vendored Open Design composer + overlay in `packages/shared` (used by both delivery
+  paths)
 
-Runtime image:
-- Design template (static artifact scaffold) + app starter kit (React/Vite/Tailwind/
-  shadcn, tokens file, source-location plugin, pre-warmed node_modules)
-- Open Design skills + design-systems content from a pinned upstream tag
-- Headless Chromium (Playwright) — PDF export + captures
-- Listening-port detection (app kind); static artifact server (design kind)
-- Proxy HTML injection for picker/comments overlay; iframe endpoint auth
+Runtime image (app kind only): starter kit, harness content, headless Chromium,
+port detection, proxy overlay injection, iframe endpoint auth.
 
 ## Phasing
 
-1. **Preview pane**: iframe embed of existing endpoints in the group view +
-   private-endpoint iframe auth. Useful for coding sessions today; zero schema change.
-2. **Design kind**: `kind` on SessionGroup, design shell, static-artifact template +
-   serving, vendored composer + content, lazy managed repo, live version strip, PDF
-   export.
-3. **Design magic**: element picker + chips, Tweaks, comments, publish/share.
-4. **App kind**: React starter + port auto-detection + captures + picker Vite plugin +
-   graduation + Promote-to-app from design sessions.
-5. **Distribution**: real deploy, Spotlight mode, review statuses, PPTX/video exports if
-   demanded.
+1. **Design kind core**: `kind` on SessionGroup, `Artifact` entity + generation via
+   `LLMAdapter` with the vendored composer, canvas with streaming cards + fan-out
+   variants, lineage/versions.
+2. **Design magic**: element chips, comments, Tweaks (CSS-var patch), PDF export (render
+   pool), publish/share.
+3. **App kind**: cloud runtime path — starter kit, port auto-detection, endpoint iframe
+   preview + auth, captures, picker Vite plugin, lazy managed repo, graduation,
+   Promote-to-app from design sessions.
+4. **Distribution**: real deploy (app), Spotlight mode, review statuses, PPTX/video
+   exports if demanded.
+
+(The old phase-1 "iframe preview of existing endpoints in the group view" is still a
+cheap, independently useful win for coding sessions — it now rides with phase 3.)
 
 ## Open questions
 
-1. Design-kind multi-artifact projects (a deck + three screens in one session): one
-   workspace with multiple artifact files — how the version strip and preview navigate
-   between artifacts.
-2. Anchor durability — selectors/source stamps drift as the agent rewrites; comments pin
-   to their version, best-effort re-anchor on HEAD.
-3. Picker/overlay delivery — template-shipped vs. proxy-injected; injection keeps
-   templates clean but must not break non-HTML/streaming responses.
-4. PDF fidelity gates — page size/margins UI, and whether export runs against HEAD only
-   or any checkpoint (plan: any, via materialization).
+1. Artifact size limits and multi-file artifacts (fonts/images) — v1 is single-file with
+   inlined assets; revisit if quality demands asset pipelines.
+2. Anchor durability across regenerations — the model rewrites the whole document, so
+   element anchors re-resolve by stable ids the prompt mandates (`data-el` ids) rather
+   than DOM paths.
+3. Fan-out defaults — always offer N directions on the first brief vs. only when asked;
+   cost/latency vs. wow. Likely: 3 directions on first brief, single-path after.
+4. PDF fidelity — page size/margins UI; render-pool sizing and isolation on the server.
+5. Whether design sessions eventually want an *optional* tool-using agent mode (e.g.
+   "research competitors then design") — if so, it's an escalation to a runtime-backed
+   run, not the default path.

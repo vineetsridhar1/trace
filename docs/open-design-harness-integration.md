@@ -43,12 +43,13 @@ trial and error what upstream's 2,700 commits already encode. Vendor, don't rewr
 - Ship `LICENSE` + `NOTICE` (Apache-2.0 attribution) and a `VENDOR.md` recording the
   pinned upstream tag and the rebase procedure (diff `prompts/` between tags, re-apply).
 
-### 2. The content → runtime image, not our git repo
+### 2. The content → deploy artifacts, not our git repo
 
-- `skills/` and `design-systems/` (~320 directories) stay out of the Trace repo. The
-  runtime-image build clones the pinned upstream tag and copies the two directories to
-  `/opt/trace/design-content/`. Content sync = bump the pin. (The starter kit from the
-  experience doc lives in the same image layer.)
+- `skills/` and `design-systems/` (~320 directories) stay out of the Trace repo. Both
+  consumers fetch them from the pinned upstream tag at build time: the **server image**
+  (design-kind generation reads them for composition) and the **runtime image** (app-kind
+  bridge composition), each at `/opt/trace/design-content/`. Content sync = bump one pin.
+  (The app starter kit lives in the same runtime-image layer.)
 - **Keep upstream file formats** (`SKILL.md` frontmatter, design-system `manifest.json` +
   `DESIGN.md` + `tokens.css` + `USAGE.md` + `components.manifest.json`) so upstream
   content drops in untouched and org-custom design systems follow a documented, stable
@@ -57,17 +58,19 @@ trial and error what upstream's 2,700 commits already encode. Vendor, don't rewr
   `skills.ts` scanning logic) reads content from `TRACE_DESIGN_CONTENT_DIR` into
   `composeSystemPrompt()` inputs.
 
-### 3. Delivery through the existing adapter — no new CodingTool
+### 3. Delivery — two paths, one composer, no new CodingTool
 
-No `open_design` enum value, no new adapter, no daemon. Design sessions run plain
-`claude_code`:
+No `open_design` enum value, no new adapter, no daemon. The composed prompt reaches the
+model differently per session kind:
 
-- The bridge, for `design`/`app`-kind runs, loads the selected design system + skills,
-  calls `composeSystemPrompt()` + Trace overlay, and passes the result to the adapter.
-- `RunOptions` gains `appendSystemPrompt?: string`; `ClaudeCodeAdapter` adds
-  `--append-system-prompt <text>` when present. (Upstream's BYOK path sends the composed
-  text as the API `system` param — same effect.) Other tool adapters can support the same
-  option later; that's the whole multi-tool story.
+- **`design` kind (no runtime)**: the server-side generation service loads the design
+  system + skills, calls `composeSystemPrompt()` + Trace overlay, and sends the result as
+  the `system` param on direct `LLMAdapter` calls — exactly upstream's BYOK path. Fan-out
+  variants are parallel calls sharing the composed prefix (prompt-cache friendly).
+- **`app` kind (cloud runtime)**: the bridge does the same composition and passes it via
+  a new `RunOptions.appendSystemPrompt` → `--append-system-prompt` on plain
+  `claude_code`. Other tool adapters can support the same option later; that's the whole
+  multi-tool story.
 - Discovery behavior: compose with the API-project variant (equivalent of
   `skipDiscoveryBrief` — first message is the brief). Later, keep the interactive
   question-form syntax and parse it into Trace's existing `QuestionBlock` /
@@ -120,11 +123,13 @@ repo whose deliverable is the design-system directory — no new infrastructure.
 1. Vendor `prompts/` + contracts subset into `packages/shared`; make it compile with the
    media stub. Snapshot test: compose (apple design system + a prototype skill) → prompt
    fixture. This fixture also anchors future rebases.
-2. Image build stage: clone pinned tag, copy content dirs; loader reads a `SKILL.md` and a
-   design-system manifest correctly.
-3. Wire `appendSystemPrompt` through run command → `RunOptions` → `--append-system-prompt`.
-4. End-to-end on a cloud machine, design kind first (static HTML artifact → preview —
-   the harness content's native habitat, no dev server involved): A/B/C
+2. Build stage (server image first): clone pinned tag, copy content dirs; loader reads a
+   `SKILL.md` and a design-system manifest correctly.
+3. Design-kind generation: composed prompt as `system` on a direct `LLMAdapter` call →
+   streamed HTML artifact. (App kind later: wire `appendSystemPrompt` through run command
+   → `RunOptions` → `--append-system-prompt`.)
+4. Design kind first — no machine involved, just parallel API calls (the harness
+   content's native habitat): A/B/C
    the same prompt across (a) bare claude, (b) claude + a static design prompt
    ([claude-design-system-prompt](https://github.com/Trystan-SA/claude-design-system-prompt),
    MIT — reverse-engineered, so benchmark-only pending a provenance check), (c) the full

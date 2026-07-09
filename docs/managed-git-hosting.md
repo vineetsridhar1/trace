@@ -107,13 +107,13 @@ Almost nothing changes on the runtime side:
 
 ## Session kinds (follow-on)
 
-`SessionGroup.kind: coding | design | app` selects the UI shell and creation flow. The
-`design` kind is a Claude-Design-style artifact tool (static HTML screens/decks, every
-checkpoint permanently re-renderable, PDF export); the `app` kind is a Replit-style app
-builder (React starter, dev server picked up via listening-port detection → auto-enabled
-`SessionEndpoint` → iframe preview). Both run cloud-only, are standalone (no `repoId` at
-creation, no `setupConfig`/setup scripts — the agent scaffolds from templates in the
-runtime image), and get their managed repo lazily at the first checkpoint. Detailed in
+`SessionGroup.kind: coding | design | app` selects the UI shell and creation flow.
+**Managed git hosting is motivated by the `app` kind**: a Replit-style app builder (React
+starter on a cloud runtime, dev server picked up via listening-port detection →
+auto-enabled `SessionEndpoint` → iframe preview), standalone (no `repoId` at creation),
+getting its managed repo lazily at the first checkpoint. The `design` kind (canvas
+artifact tool) runs **no runtime and no repo at all** — artifacts are entities in object
+storage with lineage rows, generated via the `LLMAdapter`. Detailed in
 `design-session-experience.md`.
 
 ## Open questions
