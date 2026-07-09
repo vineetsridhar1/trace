@@ -22,7 +22,6 @@ import { GroupTabStrip } from "./GroupTabStrip";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
-import { DesignCanvas } from "../design/DesignCanvas";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
@@ -869,145 +868,135 @@ export function SessionGroupDetailView({
         <AttachmentOpenContext.Provider value={handleDraftAttachmentClick}>
           <UploadedAttachmentOpenContext.Provider value={handleUploadedAttachmentClick}>
             <div className="flex h-full flex-col overflow-hidden">
-              {groupKind === "design" ? (
-                <DesignCanvas sessionGroupId={sessionGroupId} groupName={groupName as string} />
-              ) : (
-                <>
-                  <GroupHeader
-                    groupName={groupName as string | undefined}
-                    sessionGroupId={sessionGroupId}
-                    repoId={linkedCheckoutRepoId}
-                    groupBranch={linkedCheckoutBranch}
-                    linkedCheckoutRuntimeLabel={groupRuntimeLabel}
-                    linkedCheckoutRuntimeInstanceId={groupRuntimeInstanceId}
-                    canManageLinkedCheckout={linkedCheckoutAllowed}
-                    canInteract={bridgeInteractionAllowed}
-                    selectedSessionStatus={selectedSessionStatus}
-                    selectedSessionId={
-                      selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)
-                    }
-                    selectedAgentStatus={selectedSession?.agentStatus}
-                    selectedConnection={
-                      selectedSession?.connection as Record<string, unknown> | null | undefined
-                    }
-                    selectedWorktreeDeleted={selectedSession?.worktreeDeleted}
-                    canMoveSession={
-                      canMoveSelectedSession && selectedSessionBridgeInteractionAllowed
-                    }
-                    moveDisabledReason={moveDisabledReason}
-                    groupPrUrl={groupPrUrl}
-                    panelMode={panelMode}
-                    isFullscreen={isFullscreen}
-                    showSidebar={showSidebar}
-                    showApplicationsSidebar={showApplicationsSidebar}
-                    canShowApplications={showApplicationsSidebarTab}
-                    onToggleFullscreen={toggleFullscreen}
-                    onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
-                    onToggleApplicationsSidebar={
-                      selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
-                    }
-                  />
+              <GroupHeader
+                groupName={groupName as string | undefined}
+                sessionGroupId={sessionGroupId}
+                repoId={linkedCheckoutRepoId}
+                groupBranch={linkedCheckoutBranch}
+                linkedCheckoutRuntimeLabel={groupRuntimeLabel}
+                linkedCheckoutRuntimeInstanceId={groupRuntimeInstanceId}
+                canManageLinkedCheckout={linkedCheckoutAllowed}
+                canInteract={bridgeInteractionAllowed}
+                selectedSessionStatus={selectedSessionStatus}
+                selectedSessionId={
+                  selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)
+                }
+                selectedAgentStatus={selectedSession?.agentStatus}
+                selectedConnection={
+                  selectedSession?.connection as Record<string, unknown> | null | undefined
+                }
+                selectedWorktreeDeleted={selectedSession?.worktreeDeleted}
+                canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
+                moveDisabledReason={moveDisabledReason}
+                groupPrUrl={groupPrUrl}
+                panelMode={panelMode}
+                isFullscreen={isFullscreen}
+                showSidebar={showSidebar}
+                showApplicationsSidebar={showApplicationsSidebar}
+                canShowApplications={showApplicationsSidebarTab}
+                onToggleFullscreen={toggleFullscreen}
+                onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+                onToggleApplicationsSidebar={
+                  selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
+                }
+              />
 
-                  <GroupTabStrip
-                    sessionTabs={sessionTabs}
-                    terminals={terminals}
-                    groupSessions={groupSessions}
-                    selectedSessionId={selectedSession?.id ?? null}
-                    activeTerminalId={activeTerminalId}
+              <GroupTabStrip
+                sessionTabs={sessionTabs}
+                terminals={terminals}
+                groupSessions={groupSessions}
+                selectedSessionId={selectedSession?.id ?? null}
+                activeTerminalId={activeTerminalId}
+                openFiles={openFiles}
+                activeFilePath={activeFilePath}
+                trafficTabOpen={trafficEndpointId !== null}
+                trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
+                onSelectSession={handleSelectSession}
+                onCloseSession={handleCloseSession}
+                canCloseSessions={false}
+                onSelectTerminal={handleSelectTerminalTab}
+                onCloseTerminal={handleCloseTerminal}
+                onRenameTerminal={renameTerminal}
+                onSelectFile={handleSelectFileTab}
+                onCloseFile={handleCloseFile}
+                onSelectTraffic={handleSelectTrafficTab}
+                onCloseTraffic={handleCloseTrafficTab}
+                onNewChat={handleNewChat}
+                onOpenTerminal={() => {
+                  setActiveWorkflowTab("session");
+                  void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+                }}
+                onOpenFilePalette={handleOpenFilePalette}
+                canNewChat={
+                  !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
+                }
+                canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
+              />
+
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+      <SessionGroupContentArea
+        sessionGroupId={sessionGroupId}
+        sessionGroupKind={groupKind}
+        activeFilePath={activeFilePath}
                     openFiles={openFiles}
-                    activeFilePath={activeFilePath}
-                    trafficTabOpen={trafficEndpointId !== null}
-                    trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
-                    onSelectSession={handleSelectSession}
-                    onCloseSession={handleCloseSession}
-                    canCloseSessions={false}
-                    onSelectTerminal={handleSelectTerminalTab}
-                    onCloseTerminal={handleCloseTerminal}
-                    onRenameTerminal={renameTerminal}
-                    onSelectFile={handleSelectFileTab}
-                    onCloseFile={handleCloseFile}
-                    onSelectTraffic={handleSelectTrafficTab}
-                    onCloseTraffic={handleCloseTrafficTab}
-                    onNewChat={handleNewChat}
-                    onOpenTerminal={() => {
-                      setActiveWorkflowTab("session");
-                      void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
-                    }}
-                    onOpenFilePalette={handleOpenFilePalette}
-                    canNewChat={
+                    activeTerminalId={activeTerminal?.id ?? null}
+                    activeTrafficEndpointId={
+                      activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                    }
+                    selectedSession={selectedSession}
+                    sessionsByRecency={sessionsByRecency}
+                    canStartNewChat={
                       !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
                     }
-                    canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
+                    onStartNewChat={handleNewChat}
+                    defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                    getFileBuffer={getFileBuffer}
+                    setFileBuffer={setFileBuffer}
+                    scrollToEventId={scrollToEventId}
+                    onScrollComplete={handleScrollComplete}
+                    onForkSession={handleOpenForkDialog}
+                    canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                   />
-
-                  <div className="flex min-h-0 flex-1 overflow-hidden">
-                    <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                      <SessionGroupContentArea
+                </div>
+                {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
+                  <div
+                    className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
+                      isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
+                    }`}
+                    style={{ width: sidebarWidth }}
+                  >
+                    <div
+                      onMouseDown={handleSidebarResizeStart}
+                      className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
+                    />
+                    {showApplicationsSidebar ? (
+                      <SessionApplicationsPanel
                         sessionGroupId={sessionGroupId}
-                        sessionGroupKind={groupKind}
-                        activeFilePath={activeFilePath}
-                        openFiles={openFiles}
-                        activeTerminalId={activeTerminal?.id ?? null}
-                        activeTrafficEndpointId={
-                          activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                        }
-                        selectedSession={selectedSession}
-                        sessionsByRecency={sessionsByRecency}
-                        canStartNewChat={
-                          !!selectedSession &&
-                          !selectedSessionIsOptimistic &&
-                          bridgeInteractionAllowed
-                        }
-                        onStartNewChat={handleNewChat}
-                        defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                        getFileBuffer={getFileBuffer}
-                        setFileBuffer={setFileBuffer}
-                        scrollToEventId={scrollToEventId}
-                        onScrollComplete={handleScrollComplete}
-                        onForkSession={handleOpenForkDialog}
-                        canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                        onOpenTraffic={handleOpenTrafficTab}
                       />
-                    </div>
-                    {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
-                      <div
-                        className={`relative h-full shrink-0 border-l border-[#2d2d2d] ${
-                          isResizingSidebar ? "" : "transition-[width] duration-150 ease-in-out"
-                        }`}
-                        style={{ width: sidebarWidth }}
-                      >
-                        <div
-                          onMouseDown={handleSidebarResizeStart}
-                          className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
-                        />
-                        {showApplicationsSidebar ? (
-                          <SessionApplicationsPanel
-                            sessionGroupId={sessionGroupId}
-                            onOpenTraffic={handleOpenTrafficTab}
-                          />
-                        ) : (
-                          <SidebarPanel
-                            sessionGroupId={sessionGroupId}
-                            activeSessionId={selectedSession?.id ?? null}
-                            activeTab={sidebarTab}
-                            fileTree={sessionGroupFileTree}
-                            filesLoading={sessionGroupFileTreeLoading}
-                            filesError={sessionGroupFileTreeError}
-                            onTabChange={handleSidebarTabChange}
-                            onFileClick={handleFileClick}
-                            onRefreshFiles={refreshTree}
-                            onLoadDirectory={loadDirectory}
-                            onDiffFileClick={handleDiffFileClick}
-                            highlightCheckpointId={highlightCheckpointId}
-                            onCheckpointClick={handleCheckpointClick}
-                            bridgeAccess={bridgeAccess}
-                            onBridgeAccessRequested={refreshBridgeAccess}
-                          />
-                        )}
-                      </div>
+                    ) : (
+                      <SidebarPanel
+                        sessionGroupId={sessionGroupId}
+                        activeSessionId={selectedSession?.id ?? null}
+                        activeTab={sidebarTab}
+                        fileTree={sessionGroupFileTree}
+                        filesLoading={sessionGroupFileTreeLoading}
+                        filesError={sessionGroupFileTreeError}
+                        onTabChange={handleSidebarTabChange}
+                        onFileClick={handleFileClick}
+                        onRefreshFiles={refreshTree}
+                        onLoadDirectory={loadDirectory}
+                        onDiffFileClick={handleDiffFileClick}
+                        highlightCheckpointId={highlightCheckpointId}
+                        onCheckpointClick={handleCheckpointClick}
+                        bridgeAccess={bridgeAccess}
+                        onBridgeAccessRequested={refreshBridgeAccess}
+                      />
                     )}
                   </div>
-                </>
-              )}
+                )}
+              </div>
               <ForkSessionDialog
                 eventId={selectedSessionIsOptimistic ? null : forkEventId}
                 sessionName={selectedSession?.name ?? "this session"}
