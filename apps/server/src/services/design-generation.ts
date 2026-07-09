@@ -163,18 +163,6 @@ export const designGenerationService = {
   }): Promise<GeneratedDesignArtifact> {
     const model = input.model ?? DEFAULT_DESIGN_MODEL;
     const generationId = input.generationId ?? randomUUID();
-    const group = await prisma.sessionGroup.findFirst({
-      where: { id: input.sessionGroupId, organizationId: input.organizationId },
-      select: { designSystemId: true, designSkillIds: true },
-    });
-    const designSystemId = group?.designSystemId ?? null;
-    const skillIds = stringList(group?.designSkillIds);
-    const content = loadTraceDesignPromptContent({ designSystemId, skillIds });
-    const artifactContext = buildArtifactContext({
-      parentHtml: input.parentHtml,
-      directionLabel: input.directionLabel,
-      comparisonArtifacts: input.comparisonArtifacts ?? null,
-    });
     const streamPayloadBase = {
       generationId,
       sessionGroupId: input.sessionGroupId,
@@ -185,21 +173,35 @@ export const designGenerationService = {
       model,
       prompt: input.prompt,
     };
-    await eventService.create({
-      organizationId: input.organizationId,
-      scopeType: "session",
-      scopeId: input.sessionId,
-      eventType: "design_generation_started",
-      payload: {
-        ...streamPayloadBase,
-      } as Prisma.InputJsonValue,
-      actorType: input.actorType ?? "user",
-      actorId: input.actorId,
-    });
-
     let text = "";
     let response: LLMResponse | null = null;
+    let designSystemId: string | null = null;
+    let skillIds: string[] = [];
     try {
+      const group = await prisma.sessionGroup.findFirst({
+        where: { id: input.sessionGroupId, organizationId: input.organizationId },
+        select: { designSystemId: true, designSkillIds: true },
+      });
+      designSystemId = group?.designSystemId ?? null;
+      skillIds = stringList(group?.designSkillIds);
+      const content = loadTraceDesignPromptContent({ designSystemId, skillIds });
+      const artifactContext = buildArtifactContext({
+        parentHtml: input.parentHtml,
+        directionLabel: input.directionLabel,
+        comparisonArtifacts: input.comparisonArtifacts ?? null,
+      });
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "design_generation_started",
+        payload: {
+          ...streamPayloadBase,
+        } as Prisma.InputJsonValue,
+        actorType: input.actorType ?? "user",
+        actorId: input.actorId,
+      });
+
       for await (const event of aiService.stream({
         organizationId: input.organizationId,
         userId: input.actorId,

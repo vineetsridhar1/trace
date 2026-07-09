@@ -642,3 +642,9 @@ concurrency-safe inside a single service process: two simultaneous first checkpo
 events could both observe a repo-less app group and create duplicate hidden repos. The
 checkpoint service now serializes first managed-repo creation by session group and
 re-reads the group after waiting, so concurrent checkpoint events reuse the linked repo.
+
+During this audit pass, design generation failures were found to be reported only after
+model streaming began. If design-system content loading or prompt composition failed
+first, a requested fan-out direction could disappear without a `design_generation_failed`
+event. The generator now wraps setup and streaming in the same failure boundary so every
+requested direction keeps its generation and direction metadata on failure.

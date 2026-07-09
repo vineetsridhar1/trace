@@ -19,6 +19,7 @@ vi.mock("../lib/db.js", async () => {
 
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
+import * as designContent from "./design-content.js";
 import { eventService } from "./event.js";
 import { designGenerationService } from "./design-generation.js";
 
@@ -313,6 +314,44 @@ describe("designGenerationService", () => {
         eventType: "design_generation_failed",
         payload: expect.objectContaining({
           error: "No anthropic API key configured",
+        }),
+      }),
+    );
+  });
+
+  it("emits generation failure events for prompt setup errors before model streaming", async () => {
+    vi.spyOn(designContent, "loadTraceDesignPromptContent").mockImplementationOnce(() => {
+      throw new Error("design content unavailable");
+    });
+
+    await expect(
+      designGenerationService.generateHtml({
+        organizationId: "org-1",
+        actorId: "user-1",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        prompt: "Design a dashboard",
+        model: "anthropic/test",
+        generationId: "generation-setup",
+        directionIndex: 2,
+        directionCount: 3,
+        directionLabel: "Experimental dashboard",
+      }),
+    ).rejects.toThrow("design content unavailable");
+
+    expect(aiServiceMock.stream).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_generation_failed",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          generationId: "generation-setup",
+          sessionGroupId: "group-1",
+          directionIndex: 2,
+          directionCount: 3,
+          directionLabel: "Experimental dashboard",
+          prompt: "Design a dashboard",
+          error: "design content unavailable",
         }),
       }),
     );
