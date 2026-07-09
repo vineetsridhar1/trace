@@ -461,3 +461,9 @@ During this continuation, the hosted `pnpm smoke:design-session` script was tigh
 prove promotion carries the selected artifact into the coding-session brief. After
 promotion, the smoke now reads the promoted session's `session_started` event and requires
 the custom implementation prompt plus the selected artifact HTML/text to be present.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove the live preview endpoint is the expected private app preview before publish.
+The readiness poll now requires a running process bound to a runtime instance, an enabled
+endpoint on port 3000, and `accessMode: "private"` before continuing to terminal,
+checkpoint, publish, and restore assertions.

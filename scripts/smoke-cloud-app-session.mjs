@@ -268,6 +268,15 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
       const statuses = state.sessionEndpoints.map((item) => `${item.label}:${item.status}`);
       return { ok: false, detail: `no enabled endpoint (${statuses.join(", ") || "none"})` };
     }
+    if (!process.runtimeInstanceId) {
+      return { ok: false, detail: `process ${process.id} has no runtime instance` };
+    }
+    if (endpoint.targetPort !== 3000) {
+      return { ok: false, detail: `endpoint port is ${endpoint.targetPort ?? "missing"}` };
+    }
+    if (endpoint.accessMode !== "private") {
+      return { ok: false, detail: `pre-publish endpoint access is ${endpoint.accessMode}` };
+    }
 
     const logs = await graphql(PROCESS_LOGS, { processId: process.id, limit: 20 });
     if (logs.sessionApplicationLogs.length === 0) {
