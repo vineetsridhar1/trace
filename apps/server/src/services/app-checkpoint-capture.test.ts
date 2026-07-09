@@ -30,6 +30,9 @@ const storageMock = storage as unknown as {
   putObject: ReturnType<typeof vi.fn>;
   getGetUrl: ReturnType<typeof vi.fn>;
 };
+const pngBytes = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+]);
 
 function callbackFrom(args: unknown[]): ExecCallback {
   for (const arg of args) {
@@ -58,7 +61,7 @@ describe("appCheckpointCaptureService", () => {
 
   it("renders endpoint screenshots with Chromium", async () => {
     execFileMock.mockImplementation((...args: unknown[]) => {
-      fs.writeFileSync(screenshotPathFrom(args), Buffer.from("png"));
+      fs.writeFileSync(screenshotPathFrom(args), pngBytes);
       callbackFrom(args)(null, "", "");
       return null as never;
     });
@@ -68,7 +71,7 @@ describe("appCheckpointCaptureService", () => {
       checkpointId: "checkpoint-1",
     });
 
-    expect(screenshot).toEqual(Buffer.from("png"));
+    expect(screenshot).toEqual(pngBytes);
     expect(execFileMock).toHaveBeenCalledWith(
       "/usr/bin/chromium",
       expect.arrayContaining([
@@ -95,7 +98,7 @@ describe("appCheckpointCaptureService", () => {
       expect(commandArgs.at(-1)).toEqual(
         expect.stringContaining("https://endpointkey.preview.test/__trace_preview_auth"),
       );
-      fs.writeFileSync(screenshotPathFrom(args), Buffer.from("png"));
+      fs.writeFileSync(screenshotPathFrom(args), pngBytes);
       callbackFrom(args)(null, "", "");
       return null as never;
     });
@@ -114,9 +117,25 @@ describe("appCheckpointCaptureService", () => {
     });
     expect(storageMock.putObject).toHaveBeenCalledWith(
       expect.stringContaining("uploads/org-1/app-checkpoints/checkpoint-1-"),
-      Buffer.from("png"),
+      pngBytes,
       "image/png",
     );
+  });
+
+  it("rejects non-PNG Chromium captures before upload", async () => {
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      fs.writeFileSync(screenshotPathFrom(args), Buffer.from("not an image"));
+      callbackFrom(args)(null, "", "");
+      return null as never;
+    });
+
+    await expect(
+      renderEndpointScreenshot({
+        url: "https://endpoint.preview.test",
+        checkpointId: "checkpoint-1",
+      }),
+    ).rejects.toThrow("Chromium produced a non-PNG app checkpoint capture");
+    expect(storageMock.putObject).not.toHaveBeenCalled();
   });
 
   it("marks capture unavailable when no endpoint is enabled", async () => {

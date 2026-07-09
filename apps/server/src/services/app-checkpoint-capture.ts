@@ -60,6 +60,20 @@ function screenshotArgs(input: {
   ];
 }
 
+function isPng(buffer: Buffer): boolean {
+  return (
+    buffer.byteLength >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  );
+}
+
 function endpointCaptureUrl(input: {
   endpoint: {
     id: string;
@@ -112,6 +126,9 @@ export async function renderEndpointScreenshot(input: {
     const screenshot = await fs.promises.readFile(outputPath);
     if (screenshot.byteLength === 0) {
       throw new Error("Chromium produced an empty app checkpoint capture");
+    }
+    if (!isPng(screenshot)) {
+      throw new Error("Chromium produced a non-PNG app checkpoint capture");
     }
     return screenshot;
   } finally {

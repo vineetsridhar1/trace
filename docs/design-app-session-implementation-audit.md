@@ -310,3 +310,7 @@ During this continuation, the design generation service still had an explicit lo
 placeholder fallback for missing model credentials. That escape hatch is now removed:
 model failures always emit `design_generation_failed`, and no service path returns
 placeholder HTML as a successful generated design artifact.
+
+During this continuation, app checkpoint capture accepted any non-empty Chromium output
+while storing it as `image/png`. Capture rendering now validates the PNG signature before
+upload, and the focused capture test rejects corrupt screenshot bytes.
