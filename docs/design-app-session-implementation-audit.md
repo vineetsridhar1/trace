@@ -85,6 +85,9 @@ Implemented:
   port, proxies a request, and verifies rendered HTML/source stamps.
 - An env-gated endpoint-proxy integration smoke starts the generated Next.js starter and
   verifies the Trace endpoint proxy serves the starter page and API route.
+- The same endpoint-proxy integration suite verifies a real browser can open the public
+  endpoint host and receive app HTML without private-session auth or authoring overlay
+  injection.
 - Logs, process state, endpoint preview, terminal, checkpoint panel, and publish/share
   controls are exposed through the session application UI.
 - `publishAppSession` flips the primary enabled endpoint to public and emits an endpoint
@@ -109,6 +112,7 @@ Verified:
 - `app-checkpoint-capture.test.ts`
 - `endpoint-proxy.test.ts`
 - `endpoint-proxy.integration.test.ts` with `TRACE_RUN_APP_STARTER_PROXY_SMOKE=1`
+  for generated-starter proxy and endpoint-host browser coverage
 - `workspace.integration.test.ts`
 - `managed-process-manager.test.ts`
 - `@trace/container-bridge build`

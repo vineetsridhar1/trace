@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs/promises";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import fsSync from "node:fs";
+import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -28,6 +29,16 @@ import { EndpointProxyService } from "./endpoint-proxy.js";
 const execFileAsync = promisify(execFile);
 const runProxyStarterSmoke = process.env.TRACE_RUN_APP_STARTER_PROXY_SMOKE === "1";
 const runIfEnabled = runProxyStarterSmoke ? it : it.skip;
+const CHROME_CANDIDATES = [
+  process.env.TRACE_CHROMIUM_EXECUTABLE,
+  process.env.CHROMIUM_EXECUTABLE_PATH,
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+].filter((candidate): candidate is string => typeof candidate === "string" && candidate.length > 0);
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
@@ -45,6 +56,10 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function findChromeExecutable(): string | null {
+  return CHROME_CANDIDATES.find((candidate) => fsSync.existsSync(candidate)) ?? null;
+}
+
 async function allocatePort() {
   return new Promise<string>((resolve, reject) => {
     const server = net.createServer();
@@ -59,6 +74,26 @@ async function allocatePort() {
         }
       });
     });
+  });
+}
+
+function listen(server: http.Server): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (address && typeof address === "object") {
+        resolve(address.port);
+      } else {
+        reject(new Error("Could not allocate a local HTTP port"));
+      }
+    });
+  });
+}
+
+function close(server: http.Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
   });
 }
 
@@ -167,6 +202,37 @@ async function proxyGet(service: EndpointProxyService, targetBaseUrl: string, ur
   return res;
 }
 
+async function dumpEndpointHostDom(input: {
+  chromeExecutable: string;
+  proxyPort: number;
+  endpointKey: string;
+}) {
+  const profileDir = await fs.mkdtemp(path.join(os.tmpdir(), "trace-endpoint-browser-"));
+  try {
+    const { stdout } = await execFileAsync(
+      input.chromeExecutable,
+      [
+        "--headless=new",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--no-proxy-server",
+        "--disable-javascript",
+        `--user-data-dir=${profileDir}`,
+        `--host-resolver-rules=MAP *.preview.localhost 127.0.0.1`,
+        "--virtual-time-budget=1000",
+        "--dump-dom",
+        `http://${input.endpointKey}.preview.localhost:${input.proxyPort}/`,
+      ],
+      { maxBuffer: 10 * 1024 * 1024, timeout: 30_000 },
+    );
+    return stdout;
+  } finally {
+    await fs.rm(profileDir, { recursive: true, force: true });
+  }
+}
+
 describe("EndpointProxyService generated app starter smoke", () => {
   let workdir: string | null = null;
   let child: ChildProcessWithoutNullStreams | null = null;
@@ -241,5 +307,55 @@ describe("EndpointProxyService generated app starter smoke", () => {
       expect(payload.items?.length).toBeGreaterThan(0);
     },
     120_000,
+  );
+
+  runIfEnabled(
+    "serves a public app endpoint host to a real browser without the authoring overlay",
+    async () => {
+      const chromeExecutable = findChromeExecutable();
+      if (!chromeExecutable) return;
+
+      const service = new EndpointProxyService();
+      sessionRouterMock.sendToRuntime.mockImplementation((_runtimeKey, command) => {
+        const request = command as { requestId?: string };
+        if (!request.requestId) return "delivered";
+        service.resolveHttpResponse(request.requestId, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+          bodyBase64: Buffer.from(
+            '<!doctype html><html><body><main data-trace-source="app/page.tsx:11">Browser public endpoint app</main></body></html>',
+          ).toString("base64"),
+        });
+        return "delivered";
+      });
+
+      const proxyServer = http.createServer((req, res) => {
+        const endpointKey = service.extractKey(req.headers.host);
+        if (!endpointKey) {
+          res.writeHead(404).end("Not an endpoint host");
+          return;
+        }
+        void service.handleHttpRequest(req, res, endpointKey).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!res.headersSent) res.writeHead(500);
+          res.end(message);
+        });
+      });
+      const proxyPort = await listen(proxyServer);
+
+      try {
+        const browserHtml = await dumpEndpointHostDom({
+          chromeExecutable,
+          proxyPort,
+          endpointKey: "endpointkey1",
+        });
+        expect(browserHtml).toContain("Browser public endpoint app");
+        expect(browserHtml).toContain("data-trace-source");
+        expect(browserHtml).not.toContain("data-trace-app-overlay");
+      } finally {
+        await close(proxyServer);
+      }
+    },
+    45_000,
   );
 });
