@@ -859,3 +859,9 @@ During this continuation, the hosted cloud app smoke required persisted runtime 
 did not prove those logs reached the session event stream that drives the Applications
 panel. The readiness poll now also requires a `session_application_log_appended` event for
 the running process with stdout/stderr stream, non-empty data, sequence, and timestamp.
+
+During this continuation, the hosted cloud app smoke validated checkpoint rows and capture
+file bytes but did not prove the event-backed checkpoint panel received the same capture
+metadata. It now polls the source session for the `git_checkpoint` session output and
+requires the checkpoint id, commit metadata, repo id, and, when capture verification is
+enabled, the capture status, URL, content type, and timestamp to match the checkpoint row.

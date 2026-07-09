@@ -510,6 +510,62 @@ async function assertImageDownload(url, label) {
   }
 }
 
+async function waitForCheckpointEvent(sessionId, checkpoint) {
+  return pollUntil("git checkpoint event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: sessionId },
+      types: ["session_output"],
+    });
+    const event = data.events?.find((candidate) => {
+      const payload = candidate.payload;
+      if (
+        candidate.eventType !== "session_output" ||
+        !payload ||
+        typeof payload !== "object" ||
+        Array.isArray(payload) ||
+        payload.type !== "git_checkpoint"
+      ) {
+        return false;
+      }
+      const eventCheckpoint = payload.checkpoint;
+      return (
+        eventCheckpoint &&
+        typeof eventCheckpoint === "object" &&
+        !Array.isArray(eventCheckpoint) &&
+        eventCheckpoint.id === checkpoint.id &&
+        eventCheckpoint.commitSha === checkpoint.commitSha
+      );
+    });
+    if (!event) {
+      return { ok: false, detail: `no git_checkpoint event for ${checkpoint.id}` };
+    }
+    const payload = event.payload;
+    const eventCheckpoint =
+      payload && typeof payload === "object" && !Array.isArray(payload) ? payload.checkpoint : null;
+    if (!eventCheckpoint || typeof eventCheckpoint !== "object" || Array.isArray(eventCheckpoint)) {
+      throw new Error("git_checkpoint event payload is missing checkpoint metadata");
+    }
+    for (const key of ["repoId", "treeSha", "subject", "author", "committedAt"]) {
+      if (eventCheckpoint[key] !== checkpoint[key]) {
+        throw new Error(
+          `git_checkpoint event ${key} is ${eventCheckpoint[key] ?? "missing"}, expected ${checkpoint[key] ?? "missing"}`,
+        );
+      }
+    }
+    if (requireCapture) {
+      for (const key of ["captureStatus", "captureUrl", "captureContentType", "capturedAt"]) {
+        if (eventCheckpoint[key] !== checkpoint[key]) {
+          throw new Error(
+            `git_checkpoint event ${key} is ${eventCheckpoint[key] ?? "missing"}, expected ${checkpoint[key] ?? "missing"}`,
+          );
+        }
+      }
+    }
+    return { ok: true, value: event };
+  });
+}
+
 async function assertManagedGitCheckpointReachable(repoId, commitSha, sessionId) {
   const data = await graphql(CREATE_MANAGED_GIT_CREDENTIAL, { repoId });
   const credential = data.createManagedGitCredential;
@@ -871,6 +927,7 @@ if (!managedRepoId) {
 if (requireCapture) {
   await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
 }
+await waitForCheckpointEvent(session.id, initial.checkpoint);
 await assertManagedRepoHiddenFromRepoList(managedRepoId);
 await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha, session.id);
 const codingSession = await openAppAsCodingSession(session.sessionGroupId, managedRepoId);
