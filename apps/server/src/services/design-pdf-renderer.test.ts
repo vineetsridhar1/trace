@@ -28,6 +28,16 @@ function outputPathFrom(args: unknown[]): string {
   return pdfArg.slice("--print-to-pdf=".length);
 }
 
+function inputPathFrom(args: unknown[]): string {
+  const commandArgs = args[1];
+  if (!Array.isArray(commandArgs)) throw new Error("Chromium args missing");
+  const fileArg = commandArgs.find(
+    (arg): arg is string => typeof arg === "string" && arg.startsWith("file://"),
+  );
+  if (!fileArg) throw new Error("HTML input arg missing");
+  return fileArg.slice("file://".length);
+}
+
 describe("designPdfRenderer", () => {
   const originalExecutable = process.env.TRACE_CHROMIUM_EXECUTABLE;
 
@@ -59,10 +69,35 @@ describe("designPdfRenderer", () => {
     expect(pdf).toEqual(Buffer.from("%PDF-1.7\n"));
     expect(execFileMock).toHaveBeenCalledWith(
       "/usr/bin/chromium",
-      expect.arrayContaining(["--headless=new", expect.stringMatching(/^--print-to-pdf=/)]),
+      expect.arrayContaining([
+        "--headless=new",
+        "--host-resolver-rules=MAP * 0.0.0.0",
+        expect.stringMatching(/^--print-to-pdf=/),
+      ]),
       expect.objectContaining({ timeout: 30_000 }),
       expect.any(Function),
     );
+  });
+
+  it("wraps print HTML with a CSP that blocks scripts and external network fetches", async () => {
+    let renderedInput = "";
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      renderedInput = fs.readFileSync(inputPathFrom(args), "utf8");
+      fs.writeFileSync(outputPathFrom(args), Buffer.from("%PDF-1.7\n"));
+      callbackFrom(args)(null, "", "");
+      return null as never;
+    });
+
+    await designPdfRenderer.renderHtmlToPdf({
+      artifactId: "artifact-1",
+      html: '<main><img src="https://example.com/remote.png"><script>fetch("https://example.com")</script></main>',
+    });
+
+    expect(renderedInput).toContain('http-equiv="Content-Security-Policy"');
+    expect(renderedInput).toContain("default-src 'none'");
+    expect(renderedInput).toContain("script-src 'none'");
+    expect(renderedInput).toContain("connect-src 'none'");
+    expect(renderedInput).toContain("img-src data: blob:");
   });
 
   it("rejects empty Chromium PDF output", async () => {

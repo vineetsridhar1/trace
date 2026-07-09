@@ -68,6 +68,7 @@ function chromeArgs(inputPath: string, outputPath: string): string[] {
     "--hide-scrollbars",
     "--no-first-run",
     "--no-default-browser-check",
+    "--host-resolver-rules=MAP * 0.0.0.0",
     "--run-all-compositor-stages-before-draw",
     "--virtual-time-budget=1000",
     `--print-to-pdf=${outputPath}`,
@@ -75,11 +76,26 @@ function chromeArgs(inputPath: string, outputPath: string): string[] {
   ];
 }
 
+function printRenderCsp(): string {
+  return [
+    "default-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "script-src 'none'",
+    "connect-src 'none'",
+    "img-src data: blob:",
+    "font-src data:",
+    "media-src data: blob:",
+    "style-src 'unsafe-inline'",
+  ].join("; ");
+}
+
 function wrapPrintHtml(html: string): string {
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="${printRenderCsp()}" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     @page { margin: 0; }
