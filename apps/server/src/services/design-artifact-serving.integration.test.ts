@@ -13,6 +13,7 @@ vi.mock("../lib/db.js", async () => {
 });
 
 import { handleDesignArtifactUserContent } from "./design-artifact-serving.js";
+import { prisma } from "../lib/db.js";
 
 const execFileAsync = promisify(execFile);
 const runBrowserSmoke = process.env.TRACE_RUN_DESIGN_BOOTSTRAP_BROWSER_SMOKE === "1";
@@ -117,10 +118,43 @@ function parentHarnessHtml(port: number) {
 </html>`;
 }
 
+async function dumpChromeDom(input: {
+  chromeExecutable: string;
+  port: number;
+  path: string;
+  profilePrefix: string;
+}) {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), input.profilePrefix));
+  try {
+    const { stdout } = await execFileAsync(
+      input.chromeExecutable,
+      [
+        "--headless=new",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--no-proxy-server",
+        `--user-data-dir=${profileDir}`,
+        `--host-resolver-rules=MAP *.traceusercontent.test 127.0.0.1`,
+        "--virtual-time-budget=1000",
+        "--dump-dom",
+        `http://artifact-1.traceusercontent.test:${input.port}${input.path}`,
+      ],
+      { maxBuffer: 10 * 1024 * 1024, timeout: 30_000 },
+    );
+    return stdout;
+  } finally {
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+}
+
 describe("design artifact user-content browser integration", () => {
   const originalDomain = process.env.TRACE_USER_CONTENT_DOMAIN;
+  const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 
   afterEach(() => {
+    vi.clearAllMocks();
     vi.unstubAllEnvs();
     if (originalDomain === undefined) {
       delete process.env.TRACE_USER_CONTENT_DOMAIN;
@@ -150,9 +184,9 @@ describe("design artifact user-content browser integration", () => {
 
       const server = http.createServer(app);
       const port = await listen(server);
-      const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-design-bootstrap-"));
 
       try {
+        const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-design-parent-"));
         const { stdout } = await execFileAsync(
           chromeExecutable ?? "",
           [
@@ -169,16 +203,60 @@ describe("design artifact user-content browser integration", () => {
             `http://127.0.0.1:${port}/parent`,
           ],
           { maxBuffer: 10 * 1024 * 1024, timeout: 30_000 },
-        );
+        ).finally(() => fs.rmSync(profileDir, { recursive: true, force: true }));
 
         expect(stdout).toContain("pending|ready");
         expect(stdout).toContain("|rendered");
         expect(stdout).toContain("self-check:Browser rendered design artifact");
       } finally {
         await close(server);
-        fs.rmSync(profileDir, { recursive: true, force: true });
       }
     },
     35_000,
+  );
+
+  runIfChrome(
+    "renders published artifact HTML directly from the user-content artifact URL",
+    async () => {
+      vi.stubEnv("TRACE_USER_CONTENT_DOMAIN", "traceusercontent.test");
+      prismaMock.artifact.findFirst.mockResolvedValue({
+        html: `<!doctype html>
+<html>
+<body>
+  <main data-el="published">Published artifact browser smoke</main>
+  <script>document.body.setAttribute("data-published-executed", "yes");</script>
+</body>
+</html>`,
+      });
+
+      const app = express();
+      app.use(handleDesignArtifactUserContent);
+      const server = http.createServer(app);
+      const port = await listen(server);
+
+      try {
+        const published = await dumpChromeDom({
+          chromeExecutable: chromeExecutable ?? "",
+          port,
+          path: "/",
+          profilePrefix: "trace-design-published-",
+        });
+        expect(published).toContain("Published artifact browser smoke");
+        expect(published).toContain('data-published-executed="yes"');
+        expect(published).not.toContain("trace:artifact:render");
+
+        const bootstrap = await dumpChromeDom({
+          chromeExecutable: chromeExecutable ?? "",
+          port,
+          path: "/_bootstrap",
+          profilePrefix: "trace-design-published-bootstrap-",
+        });
+        expect(bootstrap).toContain("trace:artifact:render");
+        expect(bootstrap).not.toContain("Published artifact browser smoke");
+      } finally {
+        await close(server);
+      }
+    },
+    70_000,
   );
 });

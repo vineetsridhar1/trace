@@ -32,6 +32,8 @@ Implemented:
   artifact origin, and reply to the parent with the same nonce-bound protocol.
 - Published artifact URLs are served from wildcard user-content hosts only after
   `publishedAt` is set.
+- The same browser smoke verifies the published artifact URL serves stored HTML directly
+  from the artifact origin and the `_bootstrap` shell does not leak published content.
 - Element anchors are selected through `data-el` overlays and stored on design comments.
 - Comments can be recorded on artifacts/elements and optionally sent into a new artifact
   iteration.
