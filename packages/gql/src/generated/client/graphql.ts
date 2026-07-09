@@ -647,6 +647,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -848,6 +849,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateTerminalArgs = {
@@ -1993,6 +1998,12 @@ export type SessionEndpoint = {
 };
 
 export type SessionEndpointAccessMode = "private" | "public";
+
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
 
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
@@ -3249,6 +3260,19 @@ export type PublishAppSessionMutation = {
     id: string;
     url: string;
     accessMode: SessionEndpointAccessMode;
+  };
+};
+
+export type CreateSessionEndpointPreviewMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type CreateSessionEndpointPreviewMutation = {
+  __typename?: "Mutation";
+  createSessionEndpointPreview: {
+    __typename?: "SessionEndpointPreview";
+    url: string;
+    expiresAt: string;
   };
 };
 
@@ -7227,6 +7251,52 @@ export const PublishAppSessionDocument = {
     },
   ],
 } as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
+export const CreateSessionEndpointPreviewDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateSessionEndpointPreview" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createSessionEndpointPreview" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "expiresAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateSessionEndpointPreviewMutation,
+  CreateSessionEndpointPreviewMutationVariables
+>;
 export const SessionEndpointTrafficEndpointsDocument = {
   kind: "Document",
   definitions: [

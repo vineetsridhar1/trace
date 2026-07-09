@@ -854,6 +854,11 @@ type SessionEndpoint {
   revokedAt: DateTime
 }
 
+type SessionEndpointPreview {
+  url: String!
+  expiresAt: DateTime!
+}
+
 type EndpointTrafficEntry {
   id: ID!
   endpointId: ID!
@@ -1621,6 +1626,7 @@ type Mutation {
     mode: EndpointTrafficCaptureMode!
   ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
+  createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
   publishAppSession(sessionGroupId: ID!): SessionEndpoint!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!

@@ -26,6 +26,7 @@ import {
   PROCESS_LOG_RETAINED_ROWS,
   SessionApplicationService,
 } from "./session-applications.js";
+import { verifyEndpointPreviewToken } from "./endpoint-preview-auth.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
@@ -588,6 +589,41 @@ describe("SessionApplicationService", () => {
         }),
       }),
     );
+  });
+
+  it("mints a signed private endpoint preview URL for authorized viewers", async () => {
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      status: "enabled",
+      revokedAt: null,
+    });
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      visibility: "public",
+      ownerUserId: "owner-1",
+    });
+
+    const preview = await new SessionApplicationService().createEndpointPreview(
+      "endpoint-1",
+      "org-1",
+      "user-1",
+    );
+
+    const url = new URL(preview.url);
+    const token = url.searchParams.get("token");
+    expect(url.hostname).toBe("endpointkey1.preview.localhost");
+    expect(url.pathname).toBe("/__trace_preview_auth");
+    expect(url.searchParams.get("next")).toBe("/");
+    expect(token).toBeTruthy();
+    expect(token ? verifyEndpointPreviewToken(token) : null).toMatchObject({
+      tokenType: "endpoint_preview",
+      userId: "user-1",
+      organizationId: "org-1",
+      endpointId: "endpoint-1",
+    });
+    expect(preview.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
   it("rejects publish for non-app sessions", async () => {

@@ -648,6 +648,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -849,6 +850,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateTerminalArgs = {
@@ -1995,6 +2000,12 @@ export type SessionEndpoint = {
 
 export type SessionEndpointAccessMode = "private" | "public";
 
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
@@ -2557,6 +2568,7 @@ export type ResolversTypes = ResolversObject<{
   SessionConnectionState: SessionConnectionState;
   SessionEndpoint: ResolverTypeWrapper<SessionEndpoint>;
   SessionEndpointAccessMode: SessionEndpointAccessMode;
+  SessionEndpointPreview: ResolverTypeWrapper<SessionEndpointPreview>;
   SessionEndpointStatus: SessionEndpointStatus;
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
@@ -2682,6 +2694,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionApplicationProcess: SessionApplicationProcess;
   SessionConnection: SessionConnection;
   SessionEndpoint: SessionEndpoint;
+  SessionEndpointPreview: SessionEndpointPreview;
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
@@ -3341,6 +3354,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateRepoArgs, "input">
+  >;
+  createSessionEndpointPreview?: Resolver<
+    ResolversTypes["SessionEndpointPreview"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateSessionEndpointPreviewArgs, "endpointId">
   >;
   createTerminal?: Resolver<
     ResolversTypes["Terminal"],
@@ -4571,6 +4590,16 @@ export type SessionEndpointResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionEndpointPreviewResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionEndpointPreview"] =
+    ResolversParentTypes["SessionEndpointPreview"],
+> = ResolversObject<{
+  expiresAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  url?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionEndpointsResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionEndpoints"] =
@@ -4951,6 +4980,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoint?: SessionEndpointResolvers<ContextType>;
+  SessionEndpointPreview?: SessionEndpointPreviewResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionGroupDirectoryEntry?: SessionGroupDirectoryEntryResolvers<ContextType>;

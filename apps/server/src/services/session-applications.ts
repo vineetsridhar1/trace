@@ -14,6 +14,7 @@ import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
 import { buildDefaultAppSetupConfig } from "./app-starter-config.js";
+import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 
 import type { RepoEnvVar } from "@trace/gql";
 
@@ -633,6 +634,38 @@ export class SessionApplicationService {
       actorId: userId,
     });
     return updated;
+  }
+
+  async createEndpointPreview(
+    endpointId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<{ url: string; expiresAt: Date }> {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+      select: {
+        id: true,
+        sessionGroupId: true,
+        status: true,
+        revokedAt: true,
+        key: true,
+      },
+    });
+    await this.assertCanView(endpoint.sessionGroupId, organizationId, userId);
+    if (endpoint.revokedAt || endpoint.status === "revoked") {
+      throw new ValidationError("Endpoint has been revoked.");
+    }
+
+    const credential = createEndpointPreviewToken({
+      userId,
+      organizationId,
+      endpointId: endpoint.id,
+    });
+    const url = new URL(buildEndpointUrl(endpoint.key));
+    url.pathname = "/__trace_preview_auth";
+    url.searchParams.set("token", credential.token);
+    url.searchParams.set("next", "/");
+    return { url: url.toString(), expiresAt: credential.expiresAt };
   }
 
   async clearTraffic(endpointId: string, organizationId: string, userId: string) {

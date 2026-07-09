@@ -645,6 +645,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -846,6 +847,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateTerminalArgs = {
@@ -1991,6 +1996,12 @@ export type SessionEndpoint = {
 };
 
 export type SessionEndpointAccessMode = "private" | "public";
+
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
 
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
