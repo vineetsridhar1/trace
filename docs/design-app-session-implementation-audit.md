@@ -70,7 +70,8 @@ Implemented:
 - The app starter config targets Next.js App Router, Tailwind, shadcn-compatible UI, pnpm,
   and port 3000.
 - The generated app starter pins its framework/dependency versions and has a smoke script
-  that installs, lints, typechecks, and builds the exact emitted files.
+  that installs, lints, typechecks, builds, starts the Next.js dev server, fetches the
+  rendered page, and exercises the starter API route from the exact emitted files.
 - The container bridge detects app process ports and reports them to the server.
 - Detected HTTP ports create/enable `SessionEndpoint` rows for live preview.
 - A container-bridge process smoke starts a real HTTP app process, detects its preview
