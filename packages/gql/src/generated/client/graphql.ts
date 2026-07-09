@@ -2670,6 +2670,7 @@ export type PatchDesignArtifactTokensMutation = {
 export type CommentDesignArtifactMutationVariables = Exact<{
   artifactId: Scalars["ID"]["input"];
   body: Scalars["String"]["input"];
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
   sendToAgent?: InputMaybe<Scalars["Boolean"]["input"]>;
 }>;
 
@@ -5418,6 +5419,11 @@ export const CommentDesignArtifactDocument = {
         },
         {
           kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "anchor" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "JSON" } },
+        },
+        {
+          kind: "VariableDefinition",
           variable: { kind: "Variable", name: { kind: "Name", value: "sendToAgent" } },
           type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
         },
@@ -5438,6 +5444,11 @@ export const CommentDesignArtifactDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "body" },
                 value: { kind: "Variable", name: { kind: "Name", value: "body" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "anchor" },
+                value: { kind: "Variable", name: { kind: "Name", value: "anchor" } },
               },
               {
                 kind: "Argument",

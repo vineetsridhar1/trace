@@ -92,8 +92,18 @@ const PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION = gql`
 `;
 
 const COMMENT_DESIGN_ARTIFACT_MUTATION = gql`
-  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {
-    commentDesignArtifact(artifactId: $artifactId, body: $body, sendToAgent: $sendToAgent) {
+  mutation CommentDesignArtifact(
+    $artifactId: ID!
+    $body: String!
+    $anchor: JSON
+    $sendToAgent: Boolean
+  ) {
+    commentDesignArtifact(
+      artifactId: $artifactId
+      body: $body
+      anchor: $anchor
+      sendToAgent: $sendToAgent
+    ) {
       id
     }
   }
@@ -149,6 +159,21 @@ type CanvasArtifact = Pick<
 type StreamingArtifact = CanvasArtifact & {
   streaming: true;
   generationId: string;
+};
+
+export type DesignAnchor = {
+  type: "artifact" | "element";
+  dataEl?: string;
+  text?: string;
+};
+
+type DesignComment = {
+  id: string;
+  artifactId: string;
+  body: string;
+  anchor: DesignAnchor | null;
+  sendToAgent: boolean;
+  timestamp: string;
 };
 
 const CARD_WIDTH = 720;
@@ -259,6 +284,45 @@ function numberField(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function objectField(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function normalizeDesignAnchor(value: unknown): DesignAnchor | null {
+  const anchor = objectField(value);
+  if (!anchor) return null;
+
+  const type = anchor.type === "artifact" || anchor.type === "element" ? anchor.type : "element";
+  const dataEl = stringField(anchor.dataEl) ?? stringField(anchor.id);
+  const text = stringField(anchor.text);
+  if (type === "element" && !dataEl) return null;
+
+  return {
+    type,
+    ...(dataEl ? { dataEl } : {}),
+    ...(text ? { text } : {}),
+  };
+}
+
+export function designCommentFromEvent(event: Event): DesignComment | null {
+  if (event.eventType !== "design_comment_added") return null;
+  const payload = eventPayload(event);
+  if (!payload) return null;
+  const artifactId = stringField(payload.artifactId);
+  const body = stringField(payload.body);
+  if (!artifactId || !body) return null;
+  return {
+    id: event.id,
+    artifactId,
+    body,
+    anchor: normalizeDesignAnchor(payload.anchor),
+    sendToAgent: payload.sendToAgent === true,
+    timestamp: event.timestamp,
+  };
+}
+
 function streamingArtifactFromPayload(payload: Record<string, unknown>): StreamingArtifact | null {
   const generationId = stringField(payload.generationId);
   const sessionGroupId = stringField(payload.sessionGroupId);
@@ -288,7 +352,25 @@ function streamingArtifactFromPayload(payload: Record<string, unknown>): Streami
   };
 }
 
-function ArtifactCard({ artifact, selected }: { artifact: CanvasArtifact; selected: boolean }) {
+function anchorLabel(anchor: DesignAnchor | null): string {
+  if (!anchor) return "Artifact";
+  if (anchor.type === "artifact") return "Artifact";
+  return anchor.dataEl ? `[data-el="${anchor.dataEl}"]` : "Element";
+}
+
+function ArtifactCard({
+  artifact,
+  selected,
+  selectedAnchor,
+  comments,
+  onAnchorSelected,
+}: {
+  artifact: CanvasArtifact;
+  selected: boolean;
+  selectedAnchor: DesignAnchor | null;
+  comments: DesignComment[];
+  onAnchorSelected: (artifactId: string, anchor: DesignAnchor) => void;
+}) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const nonceRef = useRef<string>(createProtocolNonce());
   const bootstrapUrl = useMemo(
@@ -324,18 +406,27 @@ function ArtifactCard({ artifact, selected }: { artifact: CanvasArtifact; select
       if (event.origin !== bootstrapOrigin || event.source !== iframeRef.current?.contentWindow) {
         return;
       }
-      const data = event.data as { type?: string; nonce?: string; message?: string } | null;
+      const data = event.data as {
+        type?: string;
+        nonce?: string;
+        message?: string;
+        anchor?: unknown;
+      } | null;
       if (!data || data.nonce !== nonceRef.current) return;
       if (data.type === "trace:artifact:ready") {
         postArtifactHtml();
       } else if (data.type === "trace:artifact:error") {
         toast.error(data.message ?? "Artifact preview error");
+      } else if (data.type === "trace:artifact:element-selected") {
+        const anchor = normalizeDesignAnchor(data.anchor);
+        if (!anchor) return;
+        onAnchorSelected(artifact.id, anchor);
       }
     };
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [bootstrapOrigin, postArtifactHtml]);
+  }, [artifact.id, bootstrapOrigin, onAnchorSelected, postArtifactHtml]);
 
   return (
     <article
@@ -346,11 +437,18 @@ function ArtifactCard({ artifact, selected }: { artifact: CanvasArtifact; select
     >
       <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b px-3">
         <div className="min-w-0 truncate text-sm font-medium">{artifact.title}</div>
-        <div className="shrink-0 text-xs text-muted-foreground">
-          {new Date(artifact.createdAt).toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          })}
+        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          {selectedAnchor ? (
+            <span className="max-w-48 truncate rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
+              {anchorLabel(selectedAnchor)}
+            </span>
+          ) : null}
+          <span>
+            {new Date(artifact.createdAt).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </span>
         </div>
       </div>
       {bootstrapUrl ? (
@@ -370,6 +468,18 @@ function ArtifactCard({ artifact, selected }: { artifact: CanvasArtifact; select
           className="min-h-0 flex-1 bg-white"
         />
       )}
+      {comments.length > 0 ? (
+        <div className="flex max-h-28 shrink-0 flex-col gap-1 overflow-y-auto border-t bg-background/95 px-3 py-2">
+          {comments.slice(-3).map((comment) => (
+            <div key={comment.id} className="min-w-0 text-xs leading-5">
+              <span className="mr-1 rounded-sm bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                {anchorLabel(comment.anchor)}
+              </span>
+              <span className="text-foreground">{comment.body}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -387,6 +497,10 @@ export function DesignCanvas({
   );
   const [loading, setLoading] = useState(true);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [selectedAnchors, setSelectedAnchors] = useState<Record<string, DesignAnchor>>({});
+  const [commentsByArtifactId, setCommentsByArtifactId] = useState<Record<string, DesignComment[]>>(
+    {},
+  );
   const [viewport, setViewport] = useState<Viewport>({ x: 80, y: 60, scale: 0.8 });
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
@@ -413,6 +527,9 @@ export function DesignCanvas({
     [artifacts, selectedArtifact?.id],
   );
   const placements = useMemo(() => getArtifactPlacements(visibleArtifacts), [visibleArtifacts]);
+  const selectedAnchor = selectedPersistedArtifact
+    ? (selectedAnchors[selectedPersistedArtifact.id] ?? null)
+    : null;
 
   const loadArtifacts = useCallback(async () => {
     setLoading(true);
@@ -456,6 +573,14 @@ export function DesignCanvas({
         }
         if (event.eventType === "design_artifact_created") {
           void loadArtifacts();
+          return;
+        }
+        const comment = designCommentFromEvent(event);
+        if (comment) {
+          setCommentsByArtifactId((current) => ({
+            ...current,
+            [comment.artifactId]: [...(current[comment.artifactId] ?? []), comment],
+          }));
         }
       });
 
@@ -563,6 +688,12 @@ export function DesignCanvas({
     }
   }, []);
 
+  const handleAnchorSelected = useCallback((artifactId: string, anchor: DesignAnchor) => {
+    setSelectedArtifactId(artifactId);
+    setSelectedAnchors((current) => ({ ...current, [artifactId]: anchor }));
+    toast.success("Element selected", { description: anchorLabel(anchor) });
+  }, []);
+
   const mutateSelectedArtifact = useCallback(
     async (
       mutation: ReturnType<typeof gql>,
@@ -654,10 +785,15 @@ export function DesignCanvas({
     const sendToAgent = window.confirm("Send this comment to the agent for the next iteration?");
     void mutateSelectedArtifact(
       COMMENT_DESIGN_ARTIFACT_MUTATION,
-      { artifactId: selectedPersistedArtifact.id, body: body.trim(), sendToAgent },
+      {
+        artifactId: selectedPersistedArtifact.id,
+        body: body.trim(),
+        anchor: selectedAnchor,
+        sendToAgent,
+      },
       "Comment added",
     );
-  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
+  }, [mutateSelectedArtifact, selectedAnchor, selectedPersistedArtifact]);
 
   const handleExportPdf = useCallback(() => {
     if (!selectedPersistedArtifact) return;
@@ -817,6 +953,9 @@ export function DesignCanvas({
               <ArtifactCard
                 artifact={placement.artifact}
                 selected={selectedArtifact.id === placement.artifact.id}
+                selectedAnchor={selectedAnchors[placement.artifact.id] ?? null}
+                comments={commentsByArtifactId[placement.artifact.id] ?? []}
+                onAnchorSelected={handleAnchorSelected}
               />
             </div>
           ))}
