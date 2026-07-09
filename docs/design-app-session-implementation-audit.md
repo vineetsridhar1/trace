@@ -102,6 +102,9 @@ Implemented:
   injection.
 - Logs, process state, endpoint preview, terminal, checkpoint panel, and publish/share
   controls are exposed through the session application UI.
+- Client event reducers upsert app process and endpoint lifecycle events directly into
+  Zustand so live preview, running indicators, and publish state do not depend on mutation
+  results.
 - `publishAppSession` flips the primary enabled endpoint to public and emits an endpoint
   access update event.
 - Published public endpoints render through the endpoint proxy without session auth or
@@ -130,6 +133,7 @@ Verified:
 - `endpoint-proxy.test.ts`
 - `endpoint-proxy.integration.test.ts` with `TRACE_RUN_APP_STARTER_PROXY_SMOKE=1`
   for generated-starter proxy and endpoint-host browser coverage
+- `packages/client-core/test/handlers.test.ts`
 - `workspace.integration.test.ts`
 - `managed-process-manager.test.ts`
 - `@trace/container-bridge build`
