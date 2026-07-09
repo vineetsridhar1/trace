@@ -223,3 +223,8 @@ inside the origin-isolated artifact preview. The canvas now sends comment anchor
 `_bootstrap` authoring frame, the bootstrap overlay renders element/artifact pins with
 safe text insertion, and the browser smoke verifies a rendered preview reports
 `pinCount: 1`.
+
+During this continuation, app token tweaks were supported by the service/API but lacked a
+visible app-session control. The Applications panel now exposes a token tweak action that
+patches `trace.tokens.json` through `patchAppSessionTokens`, with focused coverage for
+JSON-object validation before the mutation is sent.

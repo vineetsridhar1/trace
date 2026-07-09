@@ -9,6 +9,7 @@ import {
   Power,
   RotateCw,
   Settings,
+  SlidersHorizontal,
   Square,
   Upload,
 } from "lucide-react";
@@ -191,6 +192,14 @@ const PUBLISH_APP_SESSION_MUTATION = gql`
   }
 `;
 
+const PATCH_APP_SESSION_TOKENS_MUTATION = gql`
+  mutation PatchAppSessionTokens($sessionGroupId: ID!, $tokens: JSON!) {
+    patchAppSessionTokens(sessionGroupId: $sessionGroupId, tokens: $tokens) {
+      id
+    }
+  }
+`;
+
 const CREATE_ENDPOINT_PREVIEW_MUTATION = gql`
   mutation CreateSessionEndpointPreview($endpointId: ID!) {
     createSessionEndpointPreview(endpointId: $endpointId) {
@@ -199,6 +208,14 @@ const CREATE_ENDPOINT_PREVIEW_MUTATION = gql`
     }
   }
 `;
+
+export function parseAppTokenPatchInput(value: string): Record<string, unknown> {
+  const parsed = JSON.parse(value) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Token patch must be a JSON object.");
+  }
+  return parsed as Record<string, unknown>;
+}
 
 export function SessionApplicationsPanel({
   sessionGroupId,
@@ -494,6 +511,31 @@ export function SessionApplicationsPanel({
     }
   };
 
+  const patchAppTokens = async () => {
+    const raw = window.prompt(
+      "Patch trace.tokens.json",
+      JSON.stringify({ color: { primary: "#ef4444" } }, null, 2),
+    );
+    if (!raw?.trim()) return;
+
+    setPending("patch-app-tokens");
+    setError(null);
+    try {
+      const tokens = parseAppTokenPatchInput(raw);
+      const result = await client
+        .mutation(PATCH_APP_SESSION_TOKENS_MUTATION, { sessionGroupId, tokens })
+        .toPromise();
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPending(null);
+    }
+  };
+
   const openEndpoint = async (endpoint: SessionEndpoint) => {
     setPending(`preview:${endpoint.id}`);
     setError(null);
@@ -561,6 +603,16 @@ export function SessionApplicationsPanel({
             onClick={() => void publishApp()}
           >
             <Upload size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Tweak app tokens"
+            aria-label="Tweak app tokens"
+            disabled={pending === "patch-app-tokens"}
+            onClick={() => void patchAppTokens()}
+          >
+            <SlidersHorizontal size={14} />
           </Button>
           <Button
             variant="ghost"
