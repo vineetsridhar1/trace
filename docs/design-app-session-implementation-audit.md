@@ -25,6 +25,8 @@ Implemented:
   pan/zoom canvas, and supports focus/fit/zoom controls.
 - Artifact previews use the user-content `_bootstrap` iframe flow when configured, with a
   dev-only `srcDoc` fallback.
+- The web canvas has focused tests for nonce-bound `_bootstrap` artifact preview URLs and
+  published artifact user-content URLs.
 - Published artifact URLs are served from wildcard user-content hosts only after
   `publishedAt` is set.
 - Element anchors are selected through `data-el` overlays and stored on design comments.
@@ -41,6 +43,7 @@ Verified:
 - `artifact.test.ts`
 - `design-generation.test.ts`
 - `design-artifact-serving.test.ts`
+- `designCanvasAnchors.test.ts`
 - `@trace/server lint`
 - `@trace/server build`
 - `@trace/web lint`

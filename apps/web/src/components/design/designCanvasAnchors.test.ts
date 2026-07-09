@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Event } from "@trace/gql";
 import {
+  buildDesignArtifactBootstrapUrl,
+  buildDesignArtifactPublicUrlFromOrigin,
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
   normalizeDesignAnchor,
@@ -58,5 +60,42 @@ describe("design canvas anchors", () => {
     expect(getDesignArtifactPreviewMode("https://usercontent.example", false)).toBe("bootstrap");
     expect(getDesignArtifactPreviewMode(null, true)).toBe("srcdoc");
     expect(getDesignArtifactPreviewMode(null, false)).toBe("unavailable");
+  });
+
+  it("builds nonce-bound user-content bootstrap URLs for artifact previews", () => {
+    const url = buildDesignArtifactBootstrapUrl({
+      artifactId: "artifact-1",
+      userContentOrigin: "https://traceusercontent.test",
+      parentOrigin: "https://app.trace.test",
+      nonce: "nonce-1",
+    });
+
+    expect(url).toBe(
+      "https://artifact-1.traceusercontent.test/_bootstrap?parentOrigin=https%3A%2F%2Fapp.trace.test&nonce=nonce-1",
+    );
+  });
+
+  it("builds published artifact URLs from user-content origin unless server supplies one", () => {
+    expect(
+      buildDesignArtifactPublicUrlFromOrigin(
+        {
+          id: "artifact-1",
+          publishedAt: "2026-07-09T10:00:00.000Z",
+          publicUrl: null,
+        },
+        "https://traceusercontent.test",
+      ),
+    ).toBe("https://artifact-1.traceusercontent.test/");
+
+    expect(
+      buildDesignArtifactPublicUrlFromOrigin(
+        {
+          id: "artifact-1",
+          publishedAt: "2026-07-09T10:00:00.000Z",
+          publicUrl: "https://cdn.trace.test/artifact-1/",
+        },
+        "https://traceusercontent.test",
+      ),
+    ).toBe("https://cdn.trace.test/artifact-1/");
   });
 });

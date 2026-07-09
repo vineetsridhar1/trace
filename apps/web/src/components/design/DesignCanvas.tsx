@@ -234,14 +234,19 @@ function createProtocolNonce() {
   return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
 }
 
-function getArtifactBootstrapUrl(artifactId: string, nonce: string) {
-  if (!USER_CONTENT_ORIGIN) return null;
+export function buildDesignArtifactBootstrapUrl(input: {
+  artifactId: string;
+  userContentOrigin: string | null;
+  parentOrigin: string;
+  nonce: string;
+}) {
+  if (!input.userContentOrigin) return null;
   try {
-    const url = new URL(USER_CONTENT_ORIGIN);
-    url.hostname = `${artifactId}.${url.hostname}`;
+    const url = new URL(input.userContentOrigin);
+    url.hostname = `${input.artifactId}.${url.hostname}`;
     url.pathname = "/_bootstrap";
-    url.searchParams.set("parentOrigin", window.location.origin);
-    url.searchParams.set("nonce", nonce);
+    url.searchParams.set("parentOrigin", input.parentOrigin);
+    url.searchParams.set("nonce", input.nonce);
     url.hash = "";
     return url.toString();
   } catch {
@@ -249,11 +254,23 @@ function getArtifactBootstrapUrl(artifactId: string, nonce: string) {
   }
 }
 
-function getArtifactPublicUrl(artifact: Artifact) {
+function getArtifactBootstrapUrl(artifactId: string, nonce: string) {
+  return buildDesignArtifactBootstrapUrl({
+    artifactId,
+    userContentOrigin: USER_CONTENT_ORIGIN,
+    parentOrigin: window.location.origin,
+    nonce,
+  });
+}
+
+export function buildDesignArtifactPublicUrlFromOrigin(
+  artifact: Pick<Artifact, "id" | "publishedAt" | "publicUrl">,
+  userContentOrigin: string | null,
+) {
   if (artifact.publicUrl) return artifact.publicUrl;
-  if (!artifact.publishedAt || !USER_CONTENT_ORIGIN) return null;
+  if (!artifact.publishedAt || !userContentOrigin) return null;
   try {
-    const url = new URL(USER_CONTENT_ORIGIN);
+    const url = new URL(userContentOrigin);
     url.hostname = `${artifact.id}.${url.hostname}`;
     url.pathname = "/";
     url.search = "";
@@ -262,6 +279,10 @@ function getArtifactPublicUrl(artifact: Artifact) {
   } catch {
     return null;
   }
+}
+
+function getArtifactPublicUrl(artifact: Artifact) {
+  return buildDesignArtifactPublicUrlFromOrigin(artifact, USER_CONTENT_ORIGIN);
 }
 
 export function getDesignArtifactPreviewMode(
