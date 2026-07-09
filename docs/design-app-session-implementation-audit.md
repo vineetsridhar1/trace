@@ -375,3 +375,10 @@ import the storage singleton in default S3 mode, which made the local acceptance
 fail before reaching the browser smoke unless S3 credentials were present. The test now
 forces local storage before import so it remains runnable in clean local environments,
 with browser execution still gated by `TRACE_RUN_DESIGN_BOOTSTRAP_BROWSER_SMOKE=1`.
+
+During this continuation, the opt-in local acceptance checks were run with browser/runtime
+coverage: `TRACE_RUN_DESIGN_BOOTSTRAP_BROWSER_SMOKE=1` passed for authoring `_bootstrap`
+and published artifact rendering, `TRACE_RUN_APP_STARTER_PROXY_SMOKE=1` passed for the
+generated Next.js starter page/API through the endpoint proxy and public browser endpoint,
+`@trace/shared smoke:app-starter` passed from generated starter files, and the
+container-bridge workspace integration passed managed-git bootstrap/push/clone/restore.
