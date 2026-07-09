@@ -687,6 +687,7 @@ export class SessionApplicationService {
         status: true,
         revokedAt: true,
         key: true,
+        currentRuntimeInstanceId: true,
       },
     });
     await this.assertCanView(endpoint.sessionGroupId, organizationId, userId);
@@ -705,7 +706,11 @@ export class SessionApplicationService {
         },
       },
     });
-    if (!process || process.status !== "running") {
+    if (
+      !process ||
+      process.status !== "running" ||
+      process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+    ) {
       throw new ValidationError("Start the app preview before opening it.");
     }
 
@@ -821,7 +826,11 @@ export class SessionApplicationService {
         },
       },
     });
-    if (!process || process.status !== "running") {
+    if (
+      !process ||
+      process.status !== "running" ||
+      process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+    ) {
       throw new ValidationError("Start the app preview before publishing.");
     }
 

@@ -653,3 +653,10 @@ During this audit pass, the design PDF renderer blocked network and scripts but 
 left Chromium profile isolation implicit. Each render now passes a fresh
 `--user-data-dir` inside the per-render temp directory, so PDF export runs without the
 server's default browser profile or any ambient Trace credentials.
+
+During this audit pass, app preview and publish paths were found to re-check that an
+endpoint's backing process was running but not that the enabled endpoint still belonged
+to that same runtime instance. Both paths now require
+`endpoint.currentRuntimeInstanceId` to match the running process `runtimeInstanceId`
+before minting a preview credential or publishing the endpoint, preventing stale
+forwarding rows from being treated as live app previews.

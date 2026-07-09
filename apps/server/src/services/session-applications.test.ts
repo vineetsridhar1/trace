@@ -542,6 +542,7 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
       id: "process-1",
       status: "running",
+      runtimeInstanceId: "runtime-1",
     });
     prismaMock.sessionApplicationLogEntry.findFirst.mockResolvedValueOnce(null);
     prismaMock.sessionApplicationLogEntry.create.mockResolvedValueOnce({
@@ -648,6 +649,7 @@ describe("SessionApplicationService", () => {
       status: "enabled",
       accessMode: "private",
       trafficCaptureMode: "metadata",
+      currentRuntimeInstanceId: "runtime-1",
       enabledAt: new Date("2026-07-09T10:00:00.000Z"),
       disabledAt: null,
       revokedAt: null,
@@ -655,6 +657,7 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
       id: "process-1",
       status: "running",
+      runtimeInstanceId: "runtime-1",
     });
     prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
       id: "endpoint-1",
@@ -671,6 +674,7 @@ describe("SessionApplicationService", () => {
       status: "enabled",
       accessMode: "public",
       trafficCaptureMode: "metadata",
+      currentRuntimeInstanceId: "runtime-1",
       enabledAt: new Date("2026-07-09T10:00:00.000Z"),
       disabledAt: null,
       revokedAt: null,
@@ -730,10 +734,42 @@ describe("SessionApplicationService", () => {
       portConfigId: "web",
       status: "enabled",
       accessMode: "private",
+      currentRuntimeInstanceId: "runtime-1",
     });
     prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
       id: "process-1",
       status: "stopped",
+      runtimeInstanceId: "runtime-1",
+    });
+
+    await expect(
+      new SessionApplicationService().publishAppSession("group-1", "org-1", "user-1"),
+    ).rejects.toThrow("Start the app preview before publishing.");
+    expect(prismaMock.sessionEndpoint.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects publishing when the enabled endpoint points at a stale runtime", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "app",
+      ownerUserId: "user-1",
+      sessions: [{ id: "session-1" }],
+    });
+    prismaMock.sessionEndpoint.findFirst.mockResolvedValueOnce({
+      id: "endpoint-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      status: "enabled",
+      accessMode: "private",
+      currentRuntimeInstanceId: "runtime-old",
+    });
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "running",
+      runtimeInstanceId: "runtime-new",
     });
 
     await expect(
@@ -752,6 +788,7 @@ describe("SessionApplicationService", () => {
       processConfigId: "dev",
       status: "enabled",
       revokedAt: null,
+      currentRuntimeInstanceId: "runtime-1",
     });
     prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
       visibility: "public",
@@ -760,6 +797,7 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
       id: "process-1",
       status: "running",
+      runtimeInstanceId: "runtime-1",
     });
 
     const preview = await new SessionApplicationService().createEndpointPreview(
@@ -815,6 +853,7 @@ describe("SessionApplicationService", () => {
       processConfigId: "dev",
       status: "enabled",
       revokedAt: null,
+      currentRuntimeInstanceId: "runtime-1",
     });
     prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
       visibility: "public",
@@ -823,6 +862,7 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
       id: "process-1",
       status: "stopped",
+      runtimeInstanceId: "runtime-1",
     });
 
     await expect(
@@ -837,6 +877,34 @@ describe("SessionApplicationService", () => {
         },
       },
     });
+  });
+
+  it("rejects preview URLs when the enabled endpoint points at a stale runtime", async () => {
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      status: "enabled",
+      revokedAt: null,
+      currentRuntimeInstanceId: "runtime-old",
+    });
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      visibility: "public",
+      ownerUserId: "owner-1",
+    });
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "running",
+      runtimeInstanceId: "runtime-new",
+    });
+
+    await expect(
+      new SessionApplicationService().createEndpointPreview("endpoint-1", "org-1", "user-1"),
+    ).rejects.toThrow("Start the app preview before opening it.");
+    expect(prismaMock.sessionEndpoint.update).not.toHaveBeenCalled();
   });
 
   it("patches app token files through the live cloud bridge", async () => {
