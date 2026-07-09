@@ -181,6 +181,30 @@ describe("artifactService", () => {
     });
   });
 
+  it("does not create a design artifact when generation returns no HTML", async () => {
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "design",
+      sessions: [{ id: "session-1" }],
+    });
+    designGenerationServiceMock.generateHtml.mockResolvedValueOnce({
+      html: "",
+      metadata: { generator: "llm" },
+    });
+
+    await expect(
+      artifactService.createDesignArtifact({
+        sessionGroupId: "group-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        prompt: "Make a generated dashboard",
+      }),
+    ).rejects.toThrow("Design generation did not return artifact HTML.");
+
+    expect(prismaMock.artifact.create).not.toHaveBeenCalled();
+    expect(storageMock.putObject).not.toHaveBeenCalled();
+  });
+
   it("generates sibling design artifact variants with fan-out metadata", async () => {
     const parent = designArtifact();
     prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
@@ -307,6 +331,27 @@ describe("artifactService", () => {
     );
     expect(artifact.parentArtifactId).toBe("artifact-1");
     expect(artifact.html).toContain("Generated");
+  });
+
+  it("does not create an artifact iteration when generation returns no HTML", async () => {
+    const parent = designArtifact();
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(parent);
+    designGenerationServiceMock.generateHtml.mockResolvedValueOnce({
+      html: "",
+      metadata: { generator: "llm" },
+    });
+
+    await expect(
+      artifactService.iterateDesignArtifact({
+        artifactId: "artifact-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        prompt: "Make it denser",
+      }),
+    ).rejects.toThrow("Design generation did not return artifact HTML.");
+
+    expect(prismaMock.artifact.create).not.toHaveBeenCalled();
+    expect(storageMock.putObject).not.toHaveBeenCalled();
   });
 
   it("patches provided CSS tokens without dropping existing root variables", async () => {

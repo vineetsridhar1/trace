@@ -6,10 +6,7 @@ import { storage } from "../lib/storage/index.js";
 import { eventService } from "./event.js";
 import { assertSessionGroupAccess } from "./access.js";
 import type { ActorType } from "@trace/gql";
-import {
-  DESIGN_ARTIFACT_CONTENT_TYPE,
-  buildPlaceholderDesignArtifactHtml,
-} from "./design-artifact-html.js";
+import { DESIGN_ARTIFACT_CONTENT_TYPE } from "./design-artifact-html.js";
 import {
   hydrateDesignArtifactHtml,
   resolveDesignArtifactHtml,
@@ -280,7 +277,8 @@ export const artifactService = {
       throw new ValidationError("Design session group has no session timeline.");
     }
 
-    const generated = input.html
+    const providedHtml = input.html?.trim() ? input.html : null;
+    const generated = providedHtml
       ? null
       : await designGenerationService.generateHtml({
           organizationId: input.organizationId,
@@ -291,8 +289,10 @@ export const artifactService = {
           prompt: input.prompt,
         });
     const title = input.prompt.trim().slice(0, 120) || "Untitled design";
-    const artifactHtml =
-      input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt);
+    const artifactHtml = providedHtml ?? generated?.html;
+    if (!artifactHtml) {
+      throw new Error("Design generation did not return artifact HTML.");
+    }
     const artifact = await createStoredArtifact({
       sessionGroupId: input.sessionGroupId,
       organizationId: input.organizationId,
@@ -303,7 +303,7 @@ export const artifactService = {
       html: artifactHtml,
       metadata: {
         ...(generated?.metadata ?? {}),
-        generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
+        generator: providedHtml ? "provided" : (generated?.metadata.generator ?? "llm"),
         source: "createDesignArtifact",
       },
     });
@@ -443,7 +443,8 @@ export const artifactService = {
       input.actorId,
     );
 
-    const generated = input.html
+    const providedHtml = input.html?.trim() ? input.html : null;
+    const generated = providedHtml
       ? null
       : await designGenerationService.generateHtml({
           organizationId: input.organizationId,
@@ -457,8 +458,10 @@ export const artifactService = {
           elementAnchors: input.elementAnchors ?? null,
         });
     const title = input.prompt.trim().slice(0, 120) || parent.title;
-    const artifactHtml =
-      input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt);
+    const artifactHtml = providedHtml ?? generated?.html;
+    if (!artifactHtml) {
+      throw new Error("Design generation did not return artifact HTML.");
+    }
     const artifact = await createStoredArtifact({
       sessionGroupId: parent.sessionGroupId,
       organizationId: input.organizationId,
@@ -470,7 +473,7 @@ export const artifactService = {
       metadata: {
         ...jsonObject(parent.metadata),
         ...(generated?.metadata ?? {}),
-        generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
+        generator: providedHtml ? "provided" : (generated?.metadata.generator ?? "llm"),
         source: "iterateDesignArtifact",
       },
     });

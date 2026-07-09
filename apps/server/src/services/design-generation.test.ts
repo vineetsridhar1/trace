@@ -242,7 +242,7 @@ describe("designGenerationService", () => {
     );
   });
 
-  it("allows placeholder generation only when explicitly enabled for local development", async () => {
+  it("does not create placeholder artifacts even when the old fallback env is set", async () => {
     vi.stubEnv("TRACE_DESIGN_ALLOW_PLACEHOLDER_FALLBACK", "true");
     aiServiceMock.stream.mockReturnValue(
       (async function* () {
@@ -250,19 +250,24 @@ describe("designGenerationService", () => {
       })(),
     );
 
-    const result = await designGenerationService.generateHtml({
-      organizationId: "org-1",
-      actorId: "user-1",
-      sessionId: "session-1",
-      sessionGroupId: "group-1",
-      prompt: "Design a dashboard",
-      model: "anthropic/test",
-    });
+    await expect(
+      designGenerationService.generateHtml({
+        organizationId: "org-1",
+        actorId: "user-1",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        prompt: "Design a dashboard",
+        model: "anthropic/test",
+      }),
+    ).rejects.toThrow("No anthropic API key configured");
 
-    expect(result.html).toContain("Design artifact");
-    expect(result.metadata).toMatchObject({
-      generator: "local_fallback",
-      fallbackReason: "missing_api_key",
-    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_generation_failed",
+        payload: expect.objectContaining({
+          error: "No anthropic API key configured",
+        }),
+      }),
+    );
   });
 });

@@ -305,3 +305,8 @@ paths but did not verify an app-session terminal in the hosted runtime. The smok
 creates a terminal over the `/terminal` WebSocket, runs a command in the app workdir, and
 asserts the generated `package.json` is present before continuing to preview, publish, and
 restore checks.
+
+During this continuation, the design generation service still had an explicit local
+placeholder fallback for missing model credentials. That escape hatch is now removed:
+model failures always emit `design_generation_failed`, and no service path returns
+placeholder HTML as a successful generated design artifact.

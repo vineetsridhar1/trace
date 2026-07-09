@@ -8,7 +8,6 @@ import {
 } from "@trace/shared";
 import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
-import { buildPlaceholderDesignArtifactHtml } from "./design-artifact-html.js";
 import { loadTraceDesignPromptContent } from "./design-content.js";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
@@ -42,15 +41,6 @@ function extractHtml(text: string): string {
 ${candidate}
 </body>
 </html>`;
-}
-
-function isMissingKeyError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /^No \w+ API key configured/.test(message);
-}
-
-function allowPlaceholderFallback(): boolean {
-  return process.env.TRACE_DESIGN_ALLOW_PLACEHOLDER_FALLBACK === "true";
 }
 
 function numberFromBigInt(value: bigint | number | null | undefined): number {
@@ -211,22 +201,6 @@ export const designGenerationService = {
         }
       }
     } catch (error) {
-      if (isMissingKeyError(error) && allowPlaceholderFallback()) {
-        return {
-          html: buildPlaceholderDesignArtifactHtml(input.prompt),
-          metadata: {
-            generator: "local_fallback",
-            source: "designGenerationService",
-            promptComposer: "trace-open-design-v1",
-            generationId,
-            model,
-            designSystemId,
-            skillIds,
-            fallbackReason: "missing_api_key",
-          },
-        };
-      }
-
       const message = error instanceof Error ? error.message : String(error);
       await eventService.create({
         organizationId: input.organizationId,
