@@ -22,8 +22,16 @@ import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
 import { designGenerationService } from "./design-generation.js";
 
-const aiServiceMock = aiService as any;
-const eventServiceMock = eventService as any;
+type MockedDeep<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => infer R
+    ? ReturnType<typeof vi.fn<T[K]>>
+    : T[K] extends object
+      ? MockedDeep<T[K]>
+      : T[K];
+};
+
+const aiServiceMock = aiService as unknown as MockedDeep<typeof aiService>;
+const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 
 describe("designGenerationService", () => {

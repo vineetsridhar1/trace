@@ -62,11 +62,23 @@ import { designPdfRenderer } from "./design-pdf-renderer.js";
 import { storage } from "../lib/storage/index.js";
 import { artifactService } from "./artifact.js";
 
-const prismaMock = prisma as any;
-const eventServiceMock = eventService as any;
-const designGenerationServiceMock = designGenerationService as any;
-const designPdfRendererMock = designPdfRenderer as any;
-const storageMock = storage as any;
+type MockedDeep<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => infer R
+    ? ReturnType<typeof vi.fn<T[K]>>
+    : T[K] extends object
+      ? MockedDeep<T[K]>
+      : T[K];
+};
+
+const prismaMock = prisma as unknown as MockedDeep<typeof prisma>;
+const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
+const designGenerationServiceMock = designGenerationService as unknown as MockedDeep<
+  typeof designGenerationService
+>;
+const designPdfRendererMock = designPdfRenderer as unknown as MockedDeep<
+  typeof designPdfRenderer
+>;
+const storageMock = storage as unknown as MockedDeep<typeof storage>;
 
 function designArtifact(overrides: Record<string, unknown> = {}) {
   return {
