@@ -596,6 +596,38 @@ async function publishApp(sessionGroupId) {
   return endpoint;
 }
 
+async function waitForPublishedEndpointEvent(sessionId, sessionGroupId, endpointId) {
+  return pollUntil("published endpoint access event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: sessionId },
+      types: ["session_endpoint_access_updated"],
+    });
+    const event = data.events?.find((candidate) => {
+      if (candidate.eventType !== "session_endpoint_access_updated") return false;
+      const payload = candidate.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const endpoint = payload.endpoint;
+      return (
+        payload.sessionGroupId === sessionGroupId &&
+        payload.published === true &&
+        endpoint &&
+        typeof endpoint === "object" &&
+        !Array.isArray(endpoint) &&
+        endpoint.id === endpointId &&
+        endpoint.accessMode === "public" &&
+        endpoint.status === "enabled" &&
+        typeof endpoint.url === "string" &&
+        endpoint.url.length > 0
+      );
+    });
+    if (!event) {
+      return { ok: false, detail: `no public access event for endpoint ${endpointId}` };
+    }
+    return { ok: true, value: event };
+  });
+}
+
 async function openAppAsCodingSession(sessionGroupId, managedRepoId) {
   const data = await graphql(OPEN_APP_AS_CODING, { sessionGroupId });
   const codingSession = data.openAppSessionAsCodingSession;
@@ -830,6 +862,7 @@ const publicEndpoint = await publishApp(session.sessionGroupId);
 if (publicEndpoint.id !== initial.endpoint.id) {
   throw new Error("Published endpoint did not match the primary preview endpoint");
 }
+await waitForPublishedEndpointEvent(session.id, session.sessionGroupId, publicEndpoint.id);
 await renderUrl(publicEndpoint.url, "published public URL", { expectOverlay: false });
 
 const restored = await startAppSession({

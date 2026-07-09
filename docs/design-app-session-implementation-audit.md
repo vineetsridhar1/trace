@@ -842,3 +842,9 @@ payload and downloaded file but did not prove the export appeared in the session
 It now polls the session event stream for `design_export_requested` followed by the
 matching `design_export_completed` event and verifies the completed event carries the
 same file id, URL, name, byte size, and session group metadata used for the download.
+
+During this continuation, the hosted cloud app smoke validated the app publish mutation
+and public URL but did not prove the client event path received the publish/share state.
+It now polls the source session's events for `session_endpoint_access_updated` and
+requires the published endpoint id, `accessMode: "public"`, enabled status, URL, source
+session group id, and `published: true` payload.
