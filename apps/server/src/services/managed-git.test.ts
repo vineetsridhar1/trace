@@ -28,6 +28,18 @@ describe("managed git tokens", () => {
     });
   });
 
+  it("round-trips a session-bound token", () => {
+    const { token } = managedGitService.mintAccessToken({
+      organizationId: ORG,
+      repoId: REPO,
+      scope: "runtime",
+      subject: "runtime-1",
+      capabilities: ["read", "write"],
+      sessionId: "session-abc",
+    });
+    expect(managedGitService.verifyAccessToken(token)?.sessionId).toBe("session-abc");
+  });
+
   it("defaults user tokens to a short TTL and runtime tokens to a long one", () => {
     const user = managedGitService.mintAccessToken({
       organizationId: ORG,
@@ -84,55 +96,72 @@ describe("managed git authorization", () => {
     }).token;
   }
 
-  it("allows fetch with a read token and push with a write token", () => {
+  it("allows fetch with a read token and push with a write token", async () => {
     const read = tokenWith(["read"]);
     const write = tokenWith(["read", "write"]);
-    expect(() =>
+    await expect(
       managedGitService.authorizeRequest({
         token: read,
         organizationId: ORG,
         repoId: REPO,
         service: "git-upload-pack",
       }),
-    ).not.toThrow();
-    expect(() =>
+    ).resolves.toBeTruthy();
+    await expect(
       managedGitService.authorizeRequest({
         token: write,
         organizationId: ORG,
         repoId: REPO,
         service: "git-receive-pack",
       }),
-    ).not.toThrow();
+    ).resolves.toBeTruthy();
   });
 
-  it("rejects a read-only token attempting to push", () => {
-    expect(() =>
+  it("rejects a read-only token attempting to push", async () => {
+    await expect(
       managedGitService.authorizeRequest({
         token: tokenWith(["read"]),
         organizationId: ORG,
         repoId: REPO,
         service: "git-receive-pack",
       }),
-    ).toThrow(AuthorizationError);
+    ).rejects.toThrow(AuthorizationError);
   });
 
-  it("rejects a missing token and cross-repo tokens", () => {
-    expect(() =>
+  it("rejects a missing token and cross-repo tokens", async () => {
+    await expect(
       managedGitService.authorizeRequest({
         token: null,
         organizationId: ORG,
         repoId: REPO,
         service: "git-upload-pack",
       }),
-    ).toThrow(AuthorizationError);
+    ).rejects.toThrow(AuthorizationError);
 
-    expect(() =>
+    await expect(
       managedGitService.authorizeRequest({
         token: tokenWith(["read", "write"]),
         organizationId: ORG,
         repoId: "other-repo",
         service: "git-upload-pack",
       }),
-    ).toThrow(AuthorizationError);
+    ).rejects.toThrow(AuthorizationError);
+  });
+
+  it("honors a registered request validator that denies", async () => {
+    const write = tokenWith(["read", "write"]);
+    managedGitService.setRequestValidator(() => false);
+    try {
+      await expect(
+        managedGitService.authorizeRequest({
+          token: write,
+          organizationId: ORG,
+          repoId: REPO,
+          service: "git-upload-pack",
+        }),
+      ).rejects.toThrow(AuthorizationError);
+    } finally {
+      managedGitService.setRequestValidator(null);
+    }
   });
 });

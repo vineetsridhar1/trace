@@ -3,8 +3,9 @@ import { gunzip } from "zlib";
 import { promisify } from "util";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { AuthorizationError } from "../lib/errors.js";
-import { gitStorage } from "../lib/git-storage/index.js";
+import { gitStorage, isSafeStorageId } from "../lib/git-storage/index.js";
 import {
+  filterAcceptedCommands,
   gitSubcommand,
   isGitService,
   parseReceivePackCommands,
@@ -20,9 +21,6 @@ const router: RouterType = Router();
 // handing the pack to git. Bounded to keep a hostile client from exhausting
 // memory; generated app/design projects are far smaller than this.
 const MAX_GIT_BODY_BYTES = 100 * 1024 * 1024;
-
-/** Ids are Trace UUIDs; reject anything that isn't a plain path-safe segment. */
-const SAFE_ID = /^[a-zA-Z0-9_-]+$/;
 
 function stripDotGit(repoParam: string): string {
   return repoParam.endsWith(".git") ? repoParam.slice(0, -4) : repoParam;
@@ -87,7 +85,7 @@ async function resolve(
 ): Promise<ResolvedRequest | null> {
   const organizationId = String(req.params.orgId ?? "");
   const repoId = stripDotGit(String(req.params.repoId ?? ""));
-  if (!SAFE_ID.test(organizationId) || !SAFE_ID.test(repoId)) {
+  if (!isSafeStorageId(organizationId) || !isSafeStorageId(repoId)) {
     res.status(400).send("Invalid repository path");
     return null;
   }
@@ -98,15 +96,12 @@ async function resolve(
     return null;
   }
 
-  const repo = await managedGitService.getManagedRepo(organizationId, repoId);
-  if (!repo) {
-    res.status(404).send("Repository not found");
-    return null;
-  }
-
+  // Authorize on token claims BEFORE any DB lookup, so a token that isn't
+  // scoped to this repo is rejected without revealing whether the repo exists
+  // (no 404-vs-403 enumeration oracle).
   let auth: ManagedGitAuth;
   try {
-    auth = managedGitService.authorizeRequest({ token, organizationId, repoId, service });
+    auth = await managedGitService.authorizeRequest({ token, organizationId, repoId, service });
   } catch (error) {
     if (error instanceof AuthorizationError) {
       // A read-scoped token hitting receive-pack is a permission failure (403);
@@ -117,6 +112,12 @@ async function resolve(
       return null;
     }
     throw error;
+  }
+
+  const repo = await managedGitService.getManagedRepo(organizationId, repoId);
+  if (!repo) {
+    res.status(404).send("Repository not found");
+    return null;
   }
 
   const repoPath = gitStorage.resolveRepoPath(organizationId, repoId);
@@ -142,6 +143,10 @@ router.get("/:orgId/:repoId/info/refs", async (req: Request, res: Response) => {
     "--advertise-refs",
     resolved.repoPath,
   ]);
+  // Don't leave git running if the client disconnects mid-request.
+  res.on("close", () => {
+    if (child.exitCode === null) child.kill("SIGKILL");
+  });
   const stdout: Buffer[] = [];
   const stderr: Buffer[] = [];
   child.stdout.on("data", (d: Buffer) => stdout.push(d));
@@ -181,7 +186,7 @@ function rpcHandler(service: GitService) {
       return;
     }
 
-    const commands =
+    const requestedCommands =
       service === "git-receive-pack" ? parseReceivePackCommands(body) : [];
 
     const child = spawn("git", [gitSubcommand(service), "--stateless-rpc", resolved.repoPath]);
@@ -189,6 +194,14 @@ function rpcHandler(service: GitService) {
     child.stderr.on("data", (d: Buffer) => stderr.push(d));
     child.on("error", () => {
       if (!res.headersSent) res.status(500).send("git operation failed");
+    });
+    // git may close its stdin before consuming the whole body (e.g. it rejects
+    // the pack). Swallow the resulting EPIPE — an unhandled stream 'error'
+    // would otherwise crash the process.
+    child.stdin.on("error", () => {});
+    // Kill git if the client disconnects mid-request.
+    res.on("close", () => {
+      if (child.exitCode === null) child.kill("SIGKILL");
     });
 
     res.status(200);
@@ -202,14 +215,21 @@ function rpcHandler(service: GitService) {
         if (!res.headersSent) res.status(500).end();
         return;
       }
-      if (service === "git-receive-pack" && commands.length > 0) {
-        void managedGitService
-          .recordPush({
-            organizationId: resolved.organizationId,
-            repoId: resolved.repoId,
-            commands,
-            actorType: resolved.auth.scope === "user" ? "user" : "system",
-            actorId: resolved.auth.subject,
+      if (service === "git-receive-pack" && requestedCommands.length > 0) {
+        // Report only refs the repo actually accepted — receive-pack can exit 0
+        // while rejecting individual updates, so reconcile against real state.
+        void gitStorage
+          .listRefs(resolved.organizationId, resolved.repoId)
+          .then((actualRefs) => {
+            const accepted = filterAcceptedCommands(requestedCommands, actualRefs);
+            if (accepted.length === 0) return;
+            return managedGitService.recordPush({
+              organizationId: resolved.organizationId,
+              repoId: resolved.repoId,
+              commands: accepted,
+              actorType: resolved.auth.scope === "user" ? "user" : "system",
+              actorId: resolved.auth.subject,
+            });
           })
           .catch((error: unknown) => {
             console.error("[git] failed to record managed push", error);
@@ -217,7 +237,7 @@ function rpcHandler(service: GitService) {
       }
     });
 
-    child.stdin.end(body);
+    if (child.stdin.writable) child.stdin.end(body);
   };
 }
 

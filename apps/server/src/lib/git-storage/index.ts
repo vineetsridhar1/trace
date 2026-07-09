@@ -16,5 +16,5 @@ if (mode === "local") {
 }
 
 export const gitStorage: GitStorageAdapter = adapter;
-export { LocalGitStorageAdapter, assertSafeStorageId } from "./local-adapter.js";
+export { LocalGitStorageAdapter, assertSafeStorageId, isSafeStorageId } from "./local-adapter.js";
 export type { GitStorageAdapter } from "./types.js";

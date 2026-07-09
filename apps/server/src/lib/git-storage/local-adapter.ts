@@ -11,8 +11,12 @@ const execFileAsync = promisify(execFile);
 // becomes a filesystem path segment.
 const SAFE_ID = /^[a-zA-Z0-9_-]+$/;
 
+export function isSafeStorageId(value: string): boolean {
+  return SAFE_ID.test(value);
+}
+
 export function assertSafeStorageId(kind: "organization" | "repo", value: string): void {
-  if (!SAFE_ID.test(value)) {
+  if (!isSafeStorageId(value)) {
     throw new Error(`Invalid ${kind} id for managed git storage`);
   }
 }
@@ -36,9 +40,9 @@ export class LocalGitStorageAdapter implements GitStorageAdapter {
     assertSafeStorageId("organization", organizationId);
     assertSafeStorageId("repo", repoId);
     const repoPath = path.join(this.rootDir, organizationId, `${repoId}.git`);
-    // Defense in depth: the resolved path must stay inside the org directory.
-    const orgDir = path.join(this.rootDir, organizationId);
-    if (repoPath !== path.join(orgDir, `${repoId}.git`)) {
+    // Defense in depth beyond the id regex: the resolved absolute path must
+    // stay under the storage root.
+    if (repoPath !== path.normalize(repoPath) || !repoPath.startsWith(this.rootDir + path.sep)) {
       throw new Error("Resolved managed git path escaped its storage root");
     }
     return repoPath;
@@ -85,5 +89,25 @@ export class LocalGitStorageAdapter implements GitStorageAdapter {
     if (!(await this.repoExists(organizationId, repoId))) return;
     const repoPath = this.resolveRepoPath(organizationId, repoId);
     await execFileAsync("git", ["--git-dir", repoPath, "gc", "--auto"]);
+  }
+
+  async listRefs(organizationId: string, repoId: string): Promise<Map<string, string>> {
+    if (!(await this.repoExists(organizationId, repoId))) return new Map();
+    const repoPath = this.resolveRepoPath(organizationId, repoId);
+    const { stdout } = await execFileAsync("git", [
+      "--git-dir",
+      repoPath,
+      "for-each-ref",
+      "--format=%(objectname) %(refname)",
+    ]);
+    const refs = new Map<string, string>();
+    for (const line of stdout.split("\n")) {
+      const sep = line.indexOf(" ");
+      if (sep === -1) continue;
+      const sha = line.slice(0, sep);
+      const ref = line.slice(sep + 1).trim();
+      if (sha && ref) refs.set(ref, sha);
+    }
+    return refs;
   }
 }

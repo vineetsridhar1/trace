@@ -12,11 +12,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 // LocalGitStorageAdapter (real `git init --bare`) so the round-trip exercises
 // actual git, not a stub.
 vi.mock("../lib/git-storage/index.js", async () => {
-  const { LocalGitStorageAdapter } = await import("../lib/git-storage/local-adapter.js");
+  const { LocalGitStorageAdapter, isSafeStorageId, assertSafeStorageId } = await import(
+    "../lib/git-storage/local-adapter.js"
+  );
   const root = path.join(os.tmpdir(), `trace-git-test-${randomUUID()}`);
   return {
     gitStorage: new LocalGitStorageAdapter(root),
     LocalGitStorageAdapter,
+    isSafeStorageId,
+    assertSafeStorageId,
   };
 });
 

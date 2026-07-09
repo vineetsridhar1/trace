@@ -76,6 +76,7 @@ async function findMatchingRepo(
   if (hookId) {
     const exactMatches = await prisma.repo.findMany({
       where: {
+        provider: "github",
         webhookId: hookId,
         webhookSecret: { not: null },
       },
@@ -92,6 +93,7 @@ async function findMatchingRepo(
 
   const repoCandidates = await prisma.repo.findMany({
     where: {
+      provider: "github",
       remoteUrl: { contains: repoFullName, mode: "insensitive" },
       webhookSecret: { not: null },
     },

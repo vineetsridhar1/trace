@@ -29,4 +29,10 @@ export interface GitStorageAdapter {
   deleteRepo(organizationId: string, repoId: string): Promise<void>;
   /** Run `git gc` to compact the bare repo. No-op when the repo is missing. */
   gc(organizationId: string, repoId: string): Promise<void>;
+  /**
+   * Current ref state as a map of ref name → commit sha. Used after a push to
+   * report which refs were actually accepted (receive-pack can exit 0 while
+   * rejecting individual updates). Returns an empty map for a missing repo.
+   */
+  listRefs(organizationId: string, repoId: string): Promise<Map<string, string>>;
 }

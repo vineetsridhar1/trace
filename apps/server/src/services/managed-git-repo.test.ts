@@ -38,22 +38,10 @@ afterAll(async () => {
 describe("createManagedRepo", () => {
   it("creates a hidden managed repo, initializes bare storage, and emits repo_created", async () => {
     const org = "org-managed";
-    const repoId = randomUUID();
-    prismaMock.repo.create.mockResolvedValue({
-      id: repoId,
-      name: "design",
-      provider: "managed",
-      defaultBranch: "main",
-      organizationId: org,
-      remoteUrl: null,
-    });
-    prismaMock.repo.update.mockImplementation(async (args: { data: { remoteUrl: string } }) => ({
-      id: repoId,
-      name: "design",
-      provider: "managed",
-      defaultBranch: "main",
-      organizationId: org,
-      remoteUrl: args.data.remoteUrl,
+    // The service generates the id and writes the row in a single create; echo
+    // the create payload back so the returned repo carries the generated id/url.
+    prismaMock.repo.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+      ...args.data,
     }));
 
     const repo = await managedGitService.createManagedRepo({
@@ -64,9 +52,11 @@ describe("createManagedRepo", () => {
     });
 
     expect(repo.provider).toBe("managed");
-    expect(repo.remoteUrl).toContain(`/git/${org}/${repoId}.git`);
+    expect(repo.remoteUrl).toContain(`/git/${org}/${repo.id}.git`);
     // A real bare repo exists on disk.
-    expect(await gitStorage.repoExists(org, repoId)).toBe(true);
+    expect(await gitStorage.repoExists(org, repo.id)).toBe(true);
+    // Single write — no create-then-update window.
+    expect(prismaMock.repo.update).not.toHaveBeenCalled();
 
     const created = createEventMock.mock.calls.find((c) => c[0]?.eventType === "repo_created");
     expect(created).toBeDefined();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyRefUpdate,
   encodePktLine,
+  filterAcceptedCommands,
   gitSubcommand,
   isGitService,
   parseReceivePackCommands,
@@ -63,5 +64,23 @@ describe("git-http protocol helpers", () => {
     expect(parseReceivePackCommands(Buffer.from("nothex"))).toEqual([]);
     expect(parseReceivePackCommands(Buffer.alloc(0))).toEqual([]);
     expect(parseReceivePackCommands(Buffer.from("0000"))).toEqual([]);
+  });
+
+  it("keeps only ref updates the repo actually accepted", () => {
+    const commands = [
+      { oldSha: ZERO, newSha: A, ref: "refs/heads/main" }, // accepted (now A)
+      { oldSha: B, newSha: A, ref: "refs/heads/dev" }, // rejected (still B)
+      { oldSha: A, newSha: ZERO, ref: "refs/heads/gone" }, // delete accepted (absent)
+      { oldSha: A, newSha: ZERO, ref: "refs/heads/kept" }, // delete rejected (still present)
+    ];
+    const actualRefs = new Map([
+      ["refs/heads/main", A],
+      ["refs/heads/dev", B],
+      ["refs/heads/kept", A],
+    ]);
+    expect(filterAcceptedCommands(commands, actualRefs)).toEqual([
+      { oldSha: ZERO, newSha: A, ref: "refs/heads/main" },
+      { oldSha: A, newSha: ZERO, ref: "refs/heads/gone" },
+    ]);
   });
 });

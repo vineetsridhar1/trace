@@ -96,3 +96,21 @@ export function classifyRefUpdate(command: ReceivePackCommand): "create" | "dele
   if (command.newSha === ZERO_SHA) return "delete";
   return "update";
 }
+
+/**
+ * Filter requested ref commands down to the ones the repo actually accepted,
+ * by reconciling against the post-receive ref state. `git receive-pack` can
+ * exit 0 while rejecting individual updates (non-fast-forward, hook denial),
+ * so a requested command is only "accepted" when the repo's current state
+ * matches it: a create/update ref now resolves to `newSha`, and a delete ref
+ * is now absent.
+ */
+export function filterAcceptedCommands(
+  commands: ReceivePackCommand[],
+  actualRefs: Map<string, string>,
+): ReceivePackCommand[] {
+  return commands.filter((command) => {
+    if (classifyRefUpdate(command) === "delete") return !actualRefs.has(command.ref);
+    return actualRefs.get(command.ref) === command.newSha;
+  });
+}
