@@ -98,6 +98,24 @@ Run this only after automated checks pass:
 13. Publish/share the app endpoint and open the public URL unauthenticated.
 14. Stop/delete the runtime, reclone the managed repo, and verify commits remain.
 
+## Design Session Smoke Command
+
+The design-session browser gate can be exercised against a configured Trace server:
+
+```bash
+TRACE_SMOKE_SERVER_URL=https://gettrace.org \
+TRACE_SMOKE_AUTH_TOKEN=<session-token> \
+TRACE_SMOKE_ORG_ID=<organization-id> \
+pnpm smoke:design-session
+```
+
+The smoke starts a fresh `design` session and asserts it begins without a repo or runtime
+connection, waits for the initial LLM-generated artifact, generates three sibling
+directions, adds an anchored comment, creates a token-tweak child artifact, exports a
+non-empty PDF, publishes the artifact, opens the published URL in a clean browser, and
+promotes the tweaked artifact into a linked coding session. `TRACE_SMOKE_SKIP_BROWSER=1`
+may be used only for debugging, not final acceptance.
+
 ## Cloud App Smoke Command
 
 The app-session runtime/browser gate can be exercised against a configured Trace server:

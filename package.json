@@ -18,6 +18,7 @@
     "test:coverage": "pnpm -r --if-present test:unit:coverage",
     "test:server": "pnpm --filter @trace/server test:unit",
     "test:server:coverage": "pnpm --filter @trace/server test:unit:coverage",
+    "smoke:design-session": "node ./scripts/smoke-design-session.mjs",
     "smoke:cloud-app-session": "node ./scripts/smoke-cloud-app-session.mjs",
     "lint:eslint": "eslint .",
     "format": "prettier --write .",

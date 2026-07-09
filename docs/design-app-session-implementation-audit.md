@@ -178,14 +178,18 @@ Verified:
 
 The remaining gap found by this audit is:
 
+- Run a real hosted `design` session end to end: serverless start, LLM artifact
+  generation, fan-out directions, anchored comment, token tweak, PDF export, published
+  user-content URL, and promotion into a linked coding session.
 - Run a real cloud `app` session end to end: prompt, starter boot, port detection, preview
   iframe, checkpoint, restore from checkpoint, capture thumbnail, publish public endpoint,
   and open the published URL.
 
-This smoke is executable via `pnpm smoke:cloud-app-session` against a configured Trace
-server with `TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and `TRACE_SMOKE_ORG_ID`.
-It is the final evidence needed before claiming the larger product goal is fully verified
-as a working application flow.
+These smokes are executable via `pnpm smoke:design-session` and
+`pnpm smoke:cloud-app-session` against a configured Trace server with
+`TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and `TRACE_SMOKE_ORG_ID`. They are the
+final evidence needed before claiming the larger product goal is fully verified as
+working design and app flows.
 
 ## Audit Fix Applied
 
@@ -285,3 +289,8 @@ but were not visible in the product UI. The design canvas toolbar and app Applic
 panel now include a compact settings popover for choosing the design system and skill set,
 hydrate existing harness fields through session-group queries, and have focused coverage
 for skill toggling and selection summaries.
+
+During this continuation, the verification plan had an executable cloud app smoke but the
+design acceptance path was still only manual. `pnpm smoke:design-session` now exercises a
+hosted design session across serverless start, artifact generation, fan-out, comments,
+token tweaks, PDF export, publish, browser rendering, and promotion into coding.
