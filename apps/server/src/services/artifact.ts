@@ -12,7 +12,11 @@ import {
   resolveDesignArtifactHtml,
   storeDesignArtifactHtml,
 } from "./design-artifact-storage.js";
-import { designGenerationService } from "./design-generation.js";
+import {
+  buildDesignGenerationCompletedPayload,
+  designGenerationService,
+  type GeneratedDesignArtifact,
+} from "./design-generation.js";
 import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
 import {
   countPdfPages,
@@ -62,6 +66,41 @@ function jsonObject(value: Prisma.JsonValue | null): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+async function emitDesignGenerationCompleted(input: {
+  generated: GeneratedDesignArtifact | null;
+  artifactId: string;
+  sessionGroupId: string;
+  sessionId: string;
+  organizationId: string;
+  actorId: string;
+  actorType?: ActorType;
+  prompt: string;
+  parentArtifactId?: string | null;
+  directionIndex?: number | null;
+  directionCount?: number | null;
+  directionLabel?: string | null;
+}) {
+  if (!input.generated) return;
+  await eventService.create({
+    organizationId: input.organizationId,
+    scopeType: "session",
+    scopeId: input.sessionId,
+    eventType: "session_output",
+    payload: buildDesignGenerationCompletedPayload({
+      generated: input.generated,
+      sessionGroupId: input.sessionGroupId,
+      prompt: input.prompt,
+      artifactId: input.artifactId,
+      parentArtifactId: input.parentArtifactId ?? null,
+      directionIndex: input.directionIndex ?? null,
+      directionCount: input.directionCount ?? null,
+      directionLabel: input.directionLabel ?? null,
+    }) as Prisma.InputJsonValue,
+    actorType: input.actorType ?? "user",
+    actorId: input.actorId,
+  });
 }
 
 function escapeCssValue(value: unknown): string {
@@ -408,6 +447,16 @@ export const artifactService = {
       actorType: input.actorType ?? "user",
       actorId: input.actorId,
     });
+    await emitDesignGenerationCompleted({
+      generated,
+      artifactId: artifact.id,
+      sessionGroupId: input.sessionGroupId,
+      sessionId,
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      actorType: input.actorType,
+      prompt: input.prompt,
+    });
 
     return hydratedArtifact;
   },
@@ -505,6 +554,19 @@ export const artifactService = {
         actorType: input.actorType ?? "user",
         actorId: input.actorId,
       });
+      await emitDesignGenerationCompleted({
+        generated: result.value,
+        artifactId: artifact.id,
+        sessionGroupId: input.sessionGroupId,
+        sessionId,
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        actorType: input.actorType,
+        prompt: buildDirectionPrompt(input.prompt, index, directionCount),
+        directionIndex: index,
+        directionCount,
+        directionLabel: label,
+      });
     }
 
     if (artifacts.length === 0) {
@@ -587,6 +649,17 @@ export const artifactService = {
       } as Prisma.InputJsonValue,
       actorType: input.actorType ?? "user",
       actorId: input.actorId,
+    });
+    await emitDesignGenerationCompleted({
+      generated,
+      artifactId: artifact.id,
+      sessionGroupId: parent.sessionGroupId,
+      sessionId,
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      actorType: input.actorType,
+      prompt: input.prompt,
+      parentArtifactId: parent.id,
     });
 
     return hydratedArtifact;

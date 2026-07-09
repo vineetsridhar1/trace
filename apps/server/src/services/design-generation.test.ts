@@ -87,6 +87,9 @@ describe("designGenerationService", () => {
     });
 
     expect(result.html).toContain('<main data-el="hero">Hi</main>');
+    expect(result.generationId).toEqual(expect.any(String));
+    expect(result.model).toBe("anthropic/test");
+    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 20, costUsd: 1.12 });
     expect(result.metadata).toMatchObject({
       generator: "llm",
       source: "designGenerationService",
@@ -132,18 +135,13 @@ describe("designGenerationService", () => {
         }),
       }),
     );
-    expect(eventServiceMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: "session_output",
-        scopeId: "session-1",
-        payload: expect.objectContaining({
-          type: "design_generation_completed",
-          sessionGroupId: "group-1",
-          htmlPreview: expect.stringContaining('<main data-el="hero">Hi</main>'),
-          usage: { inputTokens: 10, outputTokens: 20, costUsd: 1.12 },
-        }),
-      }),
-    );
+    expect(
+      eventServiceMock.create.mock.calls.some(
+        ([event]) =>
+          event.eventType === "session_output" &&
+          event.payload?.type === "design_generation_completed",
+      ),
+    ).toBe(false);
     expect(prismaMock.session.update).toHaveBeenCalledWith({
       where: { id: "session-1" },
       data: {

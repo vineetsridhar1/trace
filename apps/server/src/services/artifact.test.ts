@@ -30,10 +30,41 @@ vi.mock("./session.js", () => ({
 }));
 
 vi.mock("./design-generation.js", () => ({
+  buildDesignGenerationCompletedPayload: (input: {
+    generated: { html: string; generationId: string; model: string; usage: unknown };
+    sessionGroupId: string;
+    prompt: string;
+    artifactId: string;
+    parentArtifactId?: string | null;
+    directionIndex?: number | null;
+    directionCount?: number | null;
+    directionLabel?: string | null;
+  }) => ({
+    type: "design_generation_completed",
+    generationId: input.generated.generationId,
+    sessionGroupId: input.sessionGroupId,
+    artifactId: input.artifactId,
+    parentArtifactId: input.parentArtifactId ?? null,
+    directionIndex: input.directionIndex ?? null,
+    directionCount: input.directionCount ?? null,
+    directionLabel: input.directionLabel ?? null,
+    model: input.generated.model,
+    prompt: input.prompt,
+    htmlPreview: input.generated.html,
+    usage: input.generated.usage,
+  }),
   designGenerationService: {
     generateHtml: vi.fn().mockResolvedValue({
       html: '<!doctype html><html><body><main data-el="generated">Generated</main></body></html>',
-      metadata: { generator: "llm", model: "test-model" },
+      generationId: "generation-default",
+      model: "test-model",
+      usage: { inputTokens: 1, outputTokens: 2 },
+      metadata: {
+        generator: "llm",
+        model: "test-model",
+        generationId: "generation-default",
+        usage: { inputTokens: 1, outputTokens: 2 },
+      },
     }),
   },
 }));
@@ -118,6 +149,22 @@ function designArtifact(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function generatedArtifact(overrides: Record<string, unknown> = {}) {
+  return {
+    html: '<!doctype html><html><body><main data-el="generated">Generated</main></body></html>',
+    generationId: "generation-test",
+    model: "test-model",
+    usage: { inputTokens: 1, outputTokens: 2 },
+    metadata: {
+      generator: "llm",
+      model: "test-model",
+      generationId: "generation-test",
+      usage: { inputTokens: 1, outputTokens: 2 },
+    },
+    ...overrides,
+  };
+}
+
 describe("artifactService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -179,6 +226,28 @@ describe("artifactService", () => {
       generator: "llm",
       source: "createDesignArtifact",
     });
+    const artifactCreatedCallIndex = eventServiceMock.create.mock.calls.findIndex(
+      ([event]) => event.eventType === "design_artifact_created",
+    );
+    const generationCompletedCallIndex = eventServiceMock.create.mock.calls.findIndex(
+      ([event]) =>
+        event.eventType === "session_output" &&
+        event.payload?.type === "design_generation_completed",
+    );
+    expect(artifactCreatedCallIndex).toBeGreaterThanOrEqual(0);
+    expect(generationCompletedCallIndex).toBeGreaterThan(artifactCreatedCallIndex);
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_output",
+        payload: expect.objectContaining({
+          type: "design_generation_completed",
+          artifactId: "artifact-generated",
+          sessionGroupId: "group-1",
+          generationId: "generation-default",
+          htmlPreview: expect.stringContaining("Generated"),
+        }),
+      }),
+    );
   });
 
   it("does not create a design artifact when generation returns no HTML", async () => {
@@ -187,10 +256,10 @@ describe("artifactService", () => {
       kind: "design",
       sessions: [{ id: "session-1" }],
     });
-    designGenerationServiceMock.generateHtml.mockResolvedValueOnce({
+    designGenerationServiceMock.generateHtml.mockResolvedValueOnce(generatedArtifact({
       html: "",
       metadata: { generator: "llm" },
-    });
+    }));
 
     await expect(
       artifactService.createDesignArtifact({
@@ -272,10 +341,11 @@ describe("artifactService", () => {
       sessions: [{ id: "session-1" }],
     });
     designGenerationServiceMock.generateHtml
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(generatedArtifact({
         html: "<!doctype html><html><body>First</body></html>",
-        metadata: { generator: "llm" },
-      })
+        generationId: "generation-success",
+        metadata: { generator: "llm", generationId: "generation-success" },
+      }))
       .mockRejectedValueOnce(new Error("direction failed"));
     prismaMock.artifact.create.mockImplementationOnce(
       async (args: { data: Record<string, unknown> }) => ({
@@ -299,6 +369,18 @@ describe("artifactService", () => {
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]?.html).toContain("First");
     expect(prismaMock.artifact.create).toHaveBeenCalledTimes(1);
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_output",
+        payload: expect.objectContaining({
+          type: "design_generation_completed",
+          artifactId: "artifact-success",
+          generationId: "generation-success",
+          directionIndex: 0,
+          directionCount: 2,
+        }),
+      }),
+    );
   });
 
   it("generates iterations with parent HTML context", async () => {
@@ -331,6 +413,25 @@ describe("artifactService", () => {
     );
     expect(artifact.parentArtifactId).toBe("artifact-1");
     expect(artifact.html).toContain("Generated");
+    const artifactCreatedCallIndex = eventServiceMock.create.mock.calls.findIndex(
+      ([event]) => event.eventType === "design_artifact_created",
+    );
+    const generationCompletedCallIndex = eventServiceMock.create.mock.calls.findIndex(
+      ([event]) =>
+        event.eventType === "session_output" &&
+        event.payload?.type === "design_generation_completed",
+    );
+    expect(generationCompletedCallIndex).toBeGreaterThan(artifactCreatedCallIndex);
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_output",
+        payload: expect.objectContaining({
+          type: "design_generation_completed",
+          artifactId: "artifact-child",
+          parentArtifactId: "artifact-1",
+        }),
+      }),
+    );
   });
 
   it("passes same-session comparison artifacts into design iteration generation", async () => {
@@ -389,10 +490,10 @@ describe("artifactService", () => {
   it("does not create an artifact iteration when generation returns no HTML", async () => {
     const parent = designArtifact();
     prismaMock.artifact.findFirst.mockResolvedValueOnce(parent);
-    designGenerationServiceMock.generateHtml.mockResolvedValueOnce({
+    designGenerationServiceMock.generateHtml.mockResolvedValueOnce(generatedArtifact({
       html: "",
       metadata: { generator: "llm" },
-    });
+    }));
 
     await expect(
       artifactService.iterateDesignArtifact({

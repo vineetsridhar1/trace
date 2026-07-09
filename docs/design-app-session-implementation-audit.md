@@ -717,3 +717,9 @@ new log output after a network refetch. App log writes now emit a session-scoped
 after the durable row exists, client-core stores `SessionApplicationLogEntry` entities
 from both org-wide and session-scoped subscriptions, and the Applications panel renders
 logs from the shared Zustand entity table while keeping manual refresh for history.
+
+During this audit continuation, `design_generation_completed` was emitted by the LLM
+generation service before artifact HTML had been stored and before the `Artifact` row was
+created. Completion is now emitted by the artifact/session persistence paths after the
+durable artifact exists, includes the persisted `artifactId`, and leaves the low-level
+generation service responsible only for started, delta, failure, and usage events.

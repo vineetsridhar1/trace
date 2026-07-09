@@ -71,7 +71,10 @@ import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
 import { storeDesignArtifactHtml } from "./design-artifact-storage.js";
 import { managedGitService } from "./managed-git.js";
 import { loadTraceDesignPromptContent } from "./design-content.js";
-import { designGenerationService } from "./design-generation.js";
+import {
+  buildDesignGenerationCompletedPayload,
+  designGenerationService,
+} from "./design-generation.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
@@ -3202,6 +3205,20 @@ export class SessionService {
             artifact: serializedArtifact,
             sessionGroupId: createdSessionGroupId,
           } as Prisma.InputJsonValue,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+        });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "session_output",
+          payload: buildDesignGenerationCompletedPayload({
+            generated,
+            sessionGroupId: createdSessionGroupId,
+            prompt: input.prompt ?? name,
+            artifactId: artifact.id,
+          }) as Prisma.InputJsonValue,
           actorType: input.actorType ?? "user",
           actorId: input.createdById,
         });

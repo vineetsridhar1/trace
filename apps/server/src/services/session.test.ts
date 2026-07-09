@@ -158,10 +158,41 @@ vi.mock("./managed-git.js", () => ({
 }));
 
 vi.mock("./design-generation.js", () => ({
+  buildDesignGenerationCompletedPayload: (input: {
+    generated: { html: string; generationId: string; model: string; usage: unknown };
+    sessionGroupId: string;
+    prompt: string;
+    artifactId: string;
+    parentArtifactId?: string | null;
+    directionIndex?: number | null;
+    directionCount?: number | null;
+    directionLabel?: string | null;
+  }) => ({
+    type: "design_generation_completed",
+    generationId: input.generated.generationId,
+    sessionGroupId: input.sessionGroupId,
+    artifactId: input.artifactId,
+    parentArtifactId: input.parentArtifactId ?? null,
+    directionIndex: input.directionIndex ?? null,
+    directionCount: input.directionCount ?? null,
+    directionLabel: input.directionLabel ?? null,
+    model: input.generated.model,
+    prompt: input.prompt,
+    htmlPreview: input.generated.html,
+    usage: input.generated.usage,
+  }),
   designGenerationService: {
     generateHtml: vi.fn().mockResolvedValue({
       html: '<!doctype html><html><body><main data-el="generated">Generated</main></body></html>',
-      metadata: { generator: "llm", model: "test-model" },
+      generationId: "generation-default",
+      model: "test-model",
+      usage: { inputTokens: 1, outputTokens: 2 },
+      metadata: {
+        generator: "llm",
+        model: "test-model",
+        generationId: "generation-default",
+        usage: { inputTokens: 1, outputTokens: 2 },
+      },
     }),
   },
 }));
@@ -1155,6 +1186,28 @@ describe("SessionService", () => {
               html: expect.stringContaining("Generated"),
             }),
             sessionGroupId: "group-1",
+          }),
+        }),
+      );
+      const artifactCreatedCallIndex = eventServiceMock.create.mock.calls.findIndex(
+        ([event]) => event.eventType === "design_artifact_created",
+      );
+      const generationCompletedCallIndex = eventServiceMock.create.mock.calls.findIndex(
+        ([event]) =>
+          event.eventType === "session_output" &&
+          event.payload?.type === "design_generation_completed",
+      );
+      expect(artifactCreatedCallIndex).toBeGreaterThanOrEqual(0);
+      expect(generationCompletedCallIndex).toBeGreaterThan(artifactCreatedCallIndex);
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "design_generation_completed",
+            sessionGroupId: "group-1",
+            artifactId: "artifact-1",
+            generationId: "generation-default",
+            htmlPreview: expect.stringContaining("Generated"),
           }),
         }),
       );

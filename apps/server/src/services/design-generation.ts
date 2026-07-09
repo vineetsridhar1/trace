@@ -93,8 +93,37 @@ async function recordDesignUsage(input: {
 
 export type GeneratedDesignArtifact = {
   html: string;
+  generationId: string;
+  model: string;
+  usage: LLMUsage | null;
   metadata: Record<string, unknown>;
 };
+
+export function buildDesignGenerationCompletedPayload(input: {
+  generated: GeneratedDesignArtifact;
+  sessionGroupId: string;
+  prompt: string;
+  artifactId: string;
+  parentArtifactId?: string | null;
+  directionIndex?: number | null;
+  directionCount?: number | null;
+  directionLabel?: string | null;
+}) {
+  return {
+    type: "design_generation_completed",
+    generationId: input.generated.generationId,
+    sessionGroupId: input.sessionGroupId,
+    artifactId: input.artifactId,
+    parentArtifactId: input.parentArtifactId ?? null,
+    directionIndex: input.directionIndex ?? null,
+    directionCount: input.directionCount ?? null,
+    directionLabel: input.directionLabel ?? null,
+    model: input.generated.model,
+    prompt: input.prompt,
+    htmlPreview: input.generated.html,
+    usage: input.generated.usage,
+  };
+}
 
 export type DesignComparisonArtifact = {
   id: string;
@@ -266,36 +295,27 @@ export const designGenerationService = {
 
     const responseText = text || textFromResponse(response);
     const html = extractHtml(responseText);
-    await eventService.create({
-      organizationId: input.organizationId,
-      scopeType: "session",
-      scopeId: input.sessionId,
-      eventType: "session_output",
-      payload: {
-        type: "design_generation_completed",
-        ...streamPayloadBase,
-        htmlPreview: html,
-        usage: response?.usage ?? null,
-      } as Prisma.InputJsonValue,
-      actorType: input.actorType ?? "user",
-      actorId: input.actorId,
-    });
     await recordDesignUsage({
       organizationId: input.organizationId,
       sessionId: input.sessionId,
       usage: response?.usage,
     });
+    const completedModel = response?.model ?? model;
+    const usage = response?.usage ?? null;
     return {
       html,
+      generationId,
+      model: completedModel,
+      usage,
       metadata: {
         generator: "llm",
         source: "designGenerationService",
         promptComposer: "trace-open-design-v1",
         generationId,
-        model: response?.model ?? model,
+        model: completedModel,
         designSystemId,
         skillIds,
-        usage: response?.usage ?? null,
+        usage,
         comparisonArtifactIds:
           input.comparisonArtifacts?.map((artifact) => artifact.id).filter(Boolean) ?? [],
       },
