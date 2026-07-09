@@ -1,5 +1,6 @@
 import type express from "express";
 import { prisma } from "../lib/db.js";
+import { resolveDesignArtifactHtml } from "./design-artifact-storage.js";
 
 const USER_CONTENT_DOMAIN_ENV = "TRACE_USER_CONTENT_DOMAIN";
 const USER_CONTENT_PROTOCOL_ENV = "TRACE_USER_CONTENT_PROTOCOL";
@@ -166,7 +167,10 @@ export async function handleDesignArtifactUserContent(
       publishedAt: { not: null },
     },
     select: {
+      id: true,
+      organizationId: true,
       html: true,
+      htmlStorageKey: true,
     },
   });
 
@@ -176,5 +180,5 @@ export async function handleDesignArtifactUserContent(
   }
 
   setDesignArtifactHeaders(res, { bootstrap: false });
-  res.type("html").send(artifact.html);
+  res.type("html").send(await resolveDesignArtifactHtml(artifact));
 }

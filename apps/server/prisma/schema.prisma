@@ -578,6 +578,7 @@ model Artifact {
   title            String
   contentType      String
   html             String
+  htmlStorageKey   String?
   metadata         Json?
   publishedAt      DateTime?
 

@@ -6,7 +6,16 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
+vi.mock("../lib/storage/index.js", () => ({
+  storage: {
+    getObject: vi
+      .fn()
+      .mockResolvedValue(Buffer.from("<!doctype html><html><body>Published</body></html>")),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
+import { storage } from "../lib/storage/index.js";
 import {
   artifactIdFromUserContentHost,
   buildDesignArtifactPublicUrl,
@@ -15,6 +24,7 @@ import {
 } from "./design-artifact-serving.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
+const storageMock = storage as { getObject: ReturnType<typeof vi.fn> };
 
 type MockResponse = {
   status: ReturnType<typeof vi.fn>;
@@ -140,7 +150,7 @@ describe("design artifact user-content serving", () => {
         contentType: "text/html",
         publishedAt: { not: null },
       },
-      select: { html: true },
+      select: { id: true, organizationId: true, html: true, htmlStorageKey: true },
     });
     expect(response.status).toHaveBeenCalledWith(404);
     expect(response.end).toHaveBeenCalledWith("Not found");
@@ -148,7 +158,10 @@ describe("design artifact user-content serving", () => {
 
   it("serves published artifact HTML with isolation headers", async () => {
     prismaMock.artifact.findFirst.mockResolvedValueOnce({
-      html: "<!doctype html><html><body>Published</body></html>",
+      id: "artifact-1",
+      organizationId: "org-1",
+      html: "",
+      htmlStorageKey: "uploads/org-1/design-artifacts/artifact-1.html",
     });
     const response = makeResponse();
 
@@ -165,6 +178,9 @@ describe("design artifact user-content serving", () => {
       }),
     );
     expect(response.type).toHaveBeenCalledWith("html");
+    expect(storageMock.getObject).toHaveBeenCalledWith(
+      "uploads/org-1/design-artifacts/artifact-1.html",
+    );
     expect(response.send).toHaveBeenCalledWith(
       "<!doctype html><html><body>Published</body></html>",
     );

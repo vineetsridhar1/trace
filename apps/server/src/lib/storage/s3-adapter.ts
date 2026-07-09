@@ -1,3 +1,4 @@
+import { Readable } from "stream";
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
@@ -41,6 +42,34 @@ export class S3StorageAdapter implements StorageAdapter {
         ContentType: contentType,
       }),
     );
+  }
+
+  async getObject(key: string): Promise<Buffer> {
+    const result = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
+    if (!result.Body) return Buffer.alloc(0);
+    if (result.Body instanceof Readable) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of result.Body) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
+    }
+    if (result.Body instanceof Uint8Array) {
+      return Buffer.from(result.Body);
+    }
+    if (
+      typeof result.Body === "object" &&
+      "transformToByteArray" in result.Body &&
+      typeof result.Body.transformToByteArray === "function"
+    ) {
+      return Buffer.from(await result.Body.transformToByteArray());
+    }
+    throw new Error("Unsupported S3 object body type");
   }
 
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {

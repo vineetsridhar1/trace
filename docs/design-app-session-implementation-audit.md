@@ -8,16 +8,11 @@ This audit compares the current implementation against `docs/design-session-expe
 ## Current Status
 
 The main server/service/UI paths for `design` and `app` sessions are implemented and
-covered by focused tests. Two items remain important before claiming the complete product
+covered by focused tests. One item remains important before claiming the complete product
 goal is fully verified:
 
 - A real configured cloud app session has not been run through a browser from prompt to
   published URL in this environment.
-- Design artifact HTML is currently stored in the `Artifact.html` database column and
-  served from that row. The docs describe artifact HTML as living in the existing object
-  storage/upload pipeline. The current implementation satisfies lineage, preview,
-  publish, PDF, and promotion behavior, but it does not yet move artifact HTML blobs out
-  of the database.
 
 ## Design Sessions
 
@@ -34,13 +29,17 @@ Implemented:
 - Initial and fan-out artifact generation call the LLM-backed design generation service.
 - Design generation passes the composed Open Design prompt into the configured
   `LLMAdapter` and persists returned HTML artifacts through the service layer.
+- New design artifacts write HTML through the existing storage adapter under
+  `uploads/{orgId}/design-artifacts/{artifactId}.html` and store the blob reference in
+  `Artifact.htmlStorageKey`; the legacy `Artifact.html` column remains a fallback for
+  pre-migration rows and generated GraphQL compatibility.
 - Artifacts preserve lineage through `parentArtifactId` and event payloads include full
   artifact data.
 - The design canvas uses the existing session/chat shell, renders artifact variants on a
   pan/zoom canvas, and supports focus/fit/zoom controls.
 - Artifact previews use the user-content `_bootstrap` iframe flow when configured, with a
-  dev-only `srcDoc` fallback. Artifact HTML is read from the database-backed
-  `Artifact.html` field rather than object storage.
+  dev-only `srcDoc` fallback. GraphQL and event payloads hydrate `Artifact.html` from
+  object storage when `htmlStorageKey` is present.
 - User-content bootstrap and published artifact responses set CSP, Permissions-Policy,
   COOP, Referrer-Policy, cache, and content-type isolation headers.
 - The web canvas has focused tests for nonce-bound `_bootstrap` artifact preview URLs and
@@ -155,13 +154,10 @@ Verified:
 - `@trace/shared build`
 - `@trace/shared smoke:app-starter`
 
-## Remaining Gaps
+## Remaining Verification Gap
 
-The remaining gaps found by this audit are:
+The remaining gap found by this audit is:
 
-- Move design artifact HTML persistence from the `Artifact.html` database field to the
-  existing upload/object-storage path described by `docs/design-session-experience.md`,
-  or explicitly revise the product contract to accept database-backed artifact HTML.
 - Run a real cloud `app` session end to end: prompt, starter boot, port detection, preview
   iframe, checkpoint, restore from checkpoint, capture thumbnail, publish public endpoint,
   and open the published URL.
@@ -189,3 +185,10 @@ coding default when the UI omitted `kind` from the restore mutation. Checkpoint 
 now infer `app` from the source session group, keep app restores cloud-only, provision
 without requiring a prompt, and reject attempts to restore coding checkpoints as app
 sessions.
+
+During this audit continuation, design artifact HTML was found to still be persisted
+directly in `Artifact.html` instead of the upload/object-storage path described in
+`docs/design-session-experience.md`. New artifact writes now store HTML through the
+storage adapter using `Artifact.htmlStorageKey`, and published serving, PDF export,
+promotion, GraphQL `Artifact.html`, and artifact events hydrate from the stored blob while
+falling back to the legacy column for existing rows.

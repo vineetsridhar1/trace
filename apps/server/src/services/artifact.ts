@@ -10,6 +10,11 @@ import {
   DESIGN_ARTIFACT_CONTENT_TYPE,
   buildPlaceholderDesignArtifactHtml,
 } from "./design-artifact-html.js";
+import {
+  hydrateDesignArtifactHtml,
+  resolveDesignArtifactHtml,
+  storeDesignArtifactHtml,
+} from "./design-artifact-storage.js";
 import { designGenerationService } from "./design-generation.js";
 import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
 import { countPdfPages, designPdfRenderer } from "./design-pdf-renderer.js";
@@ -19,11 +24,13 @@ function serializeArtifact(artifact: {
   id: string;
   sessionGroupId: string;
   parentArtifactId: string | null;
+  organizationId: string;
   promptEventId: string | null;
   prompt: string | null;
   title: string;
   contentType: string;
   html: string;
+  htmlStorageKey?: string | null;
   metadata: Prisma.JsonValue | null;
   publishedAt: Date | null;
   createdBy: unknown;
@@ -34,11 +41,13 @@ function serializeArtifact(artifact: {
     id: artifact.id,
     sessionGroupId: artifact.sessionGroupId,
     parentArtifactId: artifact.parentArtifactId,
+    organizationId: artifact.organizationId,
     promptEventId: artifact.promptEventId,
     prompt: artifact.prompt,
     title: artifact.title,
     contentType: artifact.contentType,
     html: artifact.html,
+    htmlStorageKey: artifact.htmlStorageKey ?? null,
     metadata: artifact.metadata,
     publishedAt: artifact.publishedAt,
     publicUrl: buildDesignArtifactPublicUrl(artifact.id, artifact.publishedAt),
@@ -182,18 +191,57 @@ async function getDesignArtifactForWrite(
   if (!sessionId) {
     throw new ValidationError("Design session group has no session timeline.");
   }
-  return { artifact, sessionId };
+  return { artifact: await hydrateDesignArtifactHtml(artifact), sessionId };
+}
+
+async function createStoredArtifact(input: {
+  id?: string;
+  sessionGroupId: string;
+  organizationId: string;
+  parentArtifactId?: string | null;
+  createdById: string;
+  promptEventId?: string | null;
+  prompt?: string | null;
+  title: string;
+  html: string;
+  metadata: Prisma.InputJsonValue;
+}) {
+  const artifactId = input.id ?? randomUUID();
+  const htmlStorageKey = await storeDesignArtifactHtml({
+    organizationId: input.organizationId,
+    artifactId,
+    html: input.html,
+  });
+  const artifact = await prisma.artifact.create({
+    data: {
+      id: artifactId,
+      sessionGroupId: input.sessionGroupId,
+      organizationId: input.organizationId,
+      parentArtifactId: input.parentArtifactId ?? undefined,
+      createdById: input.createdById,
+      promptEventId: input.promptEventId ?? undefined,
+      prompt: input.prompt ?? null,
+      title: input.title,
+      contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
+      html: "",
+      htmlStorageKey,
+      metadata: input.metadata,
+    },
+    include: { createdBy: true },
+  });
+  return hydrateDesignArtifactHtml(artifact);
 }
 
 export const artifactService = {
   async listForSessionGroup(sessionGroupId: string, organizationId: string, userId: string) {
     await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
 
-    return prisma.artifact.findMany({
+    const artifacts = await prisma.artifact.findMany({
       where: { sessionGroupId, organizationId },
       include: { createdBy: true },
       orderBy: [{ createdAt: "asc" }],
     });
+    return Promise.all(artifacts.map((artifact) => hydrateDesignArtifactHtml(artifact)));
   },
 
   async createDesignArtifact(input: {
@@ -243,25 +291,24 @@ export const artifactService = {
           prompt: input.prompt,
         });
     const title = input.prompt.trim().slice(0, 120) || "Untitled design";
-    const artifact = await prisma.artifact.create({
-      data: {
-        sessionGroupId: input.sessionGroupId,
-        organizationId: input.organizationId,
-        createdById: input.actorId,
-        promptEventId: input.promptEventId ?? undefined,
-        prompt: input.prompt,
-        title,
-        contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
-        html: input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt),
-        metadata: {
-          ...(generated?.metadata ?? {}),
-          generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
-          source: "createDesignArtifact",
-        },
+    const artifactHtml =
+      input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt);
+    const artifact = await createStoredArtifact({
+      sessionGroupId: input.sessionGroupId,
+      organizationId: input.organizationId,
+      createdById: input.actorId,
+      promptEventId: input.promptEventId ?? null,
+      prompt: input.prompt,
+      title,
+      html: artifactHtml,
+      metadata: {
+        ...(generated?.metadata ?? {}),
+        generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
+        source: "createDesignArtifact",
       },
-      include: { createdBy: true },
     });
-    const serialized = serializeArtifact(artifact);
+    const hydratedArtifact = await hydrateDesignArtifactHtml(artifact);
+    const serialized = serializeArtifact(hydratedArtifact);
 
     await eventService.create({
       organizationId: input.organizationId,
@@ -276,7 +323,7 @@ export const artifactService = {
       actorId: input.actorId,
     });
 
-    return artifact;
+    return hydratedArtifact;
   },
 
   async generateDesignArtifacts(input: {
@@ -338,28 +385,21 @@ export const artifactService = {
     for (const [index, result] of results.entries()) {
       if (result.status !== "fulfilled") continue;
       const label = DESIGN_DIRECTION_LABELS[index] ?? `Direction ${index + 1}`;
-      const artifact = await prisma.artifact.create({
-        data: {
-          sessionGroupId: input.sessionGroupId,
-          organizationId: input.organizationId,
-          createdById: input.actorId,
-          prompt: input.prompt,
-          title: `${input.prompt.trim().slice(0, 96) || "Untitled design"} - ${label}`.slice(
-            0,
-            120,
-          ),
-          contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
-          html: result.value.html,
-          metadata: {
-            ...result.value.metadata,
-            source: "generateDesignArtifacts",
-            fanoutId,
-            directionIndex: index,
-            directionCount,
-            directionLabel: label,
-          },
+      const artifact = await createStoredArtifact({
+        sessionGroupId: input.sessionGroupId,
+        organizationId: input.organizationId,
+        createdById: input.actorId,
+        prompt: input.prompt,
+        title: `${input.prompt.trim().slice(0, 96) || "Untitled design"} - ${label}`.slice(0, 120),
+        html: result.value.html,
+        metadata: {
+          ...result.value.metadata,
+          source: "generateDesignArtifacts",
+          fanoutId,
+          directionIndex: index,
+          directionCount,
+          directionLabel: label,
         },
-        include: { createdBy: true },
       });
       const serialized = serializeArtifact(artifact);
       artifacts.push(artifact);
@@ -417,26 +457,25 @@ export const artifactService = {
           elementAnchors: input.elementAnchors ?? null,
         });
     const title = input.prompt.trim().slice(0, 120) || parent.title;
-    const artifact = await prisma.artifact.create({
-      data: {
-        sessionGroupId: parent.sessionGroupId,
-        organizationId: input.organizationId,
-        parentArtifactId: parent.id,
-        createdById: input.actorId,
-        prompt: input.prompt,
-        title,
-        contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
-        html: input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt),
-        metadata: {
-          ...jsonObject(parent.metadata),
-          ...(generated?.metadata ?? {}),
-          generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
-          source: "iterateDesignArtifact",
-        },
+    const artifactHtml =
+      input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt);
+    const artifact = await createStoredArtifact({
+      sessionGroupId: parent.sessionGroupId,
+      organizationId: input.organizationId,
+      parentArtifactId: parent.id,
+      createdById: input.actorId,
+      prompt: input.prompt,
+      title,
+      html: artifactHtml,
+      metadata: {
+        ...jsonObject(parent.metadata),
+        ...(generated?.metadata ?? {}),
+        generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
+        source: "iterateDesignArtifact",
       },
-      include: { createdBy: true },
     });
-    const serialized = serializeArtifact(artifact);
+    const hydratedArtifact = await hydrateDesignArtifactHtml(artifact);
+    const serialized = serializeArtifact(hydratedArtifact);
 
     await eventService.create({
       organizationId: input.organizationId,
@@ -452,7 +491,7 @@ export const artifactService = {
       actorId: input.actorId,
     });
 
-    return artifact;
+    return hydratedArtifact;
   },
 
   async patchDesignArtifactTokens(input: {
@@ -469,25 +508,21 @@ export const artifactService = {
     );
     const html = patchRootCssVariables(parent.html, input.tokens);
 
-    const artifact = await prisma.artifact.create({
-      data: {
-        sessionGroupId: parent.sessionGroupId,
-        organizationId: input.organizationId,
-        parentArtifactId: parent.id,
-        createdById: input.actorId,
-        prompt: parent.prompt,
-        title: `${parent.title} tweak`.slice(0, 120),
-        contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
-        html,
-        metadata: {
-          ...jsonObject(parent.metadata),
-          source: "patchDesignArtifactTokens",
-          patchedTokens: input.tokens as Prisma.InputJsonValue,
-        } as Prisma.InputJsonValue,
-      },
-      include: { createdBy: true },
+    const artifact = await createStoredArtifact({
+      sessionGroupId: parent.sessionGroupId,
+      organizationId: input.organizationId,
+      parentArtifactId: parent.id,
+      createdById: input.actorId,
+      prompt: parent.prompt,
+      title: `${parent.title} tweak`.slice(0, 120),
+      html,
+      metadata: {
+        ...jsonObject(parent.metadata),
+        source: "patchDesignArtifactTokens",
+        patchedTokens: input.tokens as Prisma.InputJsonValue,
+      } as Prisma.InputJsonValue,
     });
-    const serialized = serializeArtifact(artifact);
+    const serialized = serializeArtifact(await hydrateDesignArtifactHtml(artifact));
 
     await eventService.create({
       organizationId: input.organizationId,
@@ -529,7 +564,8 @@ export const artifactService = {
       },
       include: { createdBy: true },
     });
-    const serialized = serializeArtifact(artifact);
+    const hydratedArtifact = await hydrateDesignArtifactHtml(artifact);
+    const serialized = serializeArtifact(hydratedArtifact);
 
     await eventService.create({
       organizationId: input.organizationId,
@@ -545,7 +581,7 @@ export const artifactService = {
       actorId: input.actorId,
     });
 
-    return artifact;
+    return hydratedArtifact;
   },
 
   async exportDesignArtifactPdf(input: {
@@ -580,7 +616,7 @@ export const artifactService = {
 
     try {
       const pdf = await designPdfRenderer.renderHtmlToPdf({
-        html: artifact.html,
+        html: await resolveDesignArtifactHtml(artifact),
         artifactId: artifact.id,
       });
       const pageCount = countPdfPages(pdf);
@@ -703,7 +739,7 @@ export const artifactService = {
       "Use the HTML below as the visual reference. Preserve the layout, interaction intent, typography, spacing, and token structure where it fits the target product.",
       "",
       "```html",
-      artifact.html,
+      await resolveDesignArtifactHtml(artifact),
       "```",
     ]
       .filter((part): part is string => part !== null)

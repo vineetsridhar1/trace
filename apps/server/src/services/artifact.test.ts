@@ -6,6 +6,7 @@ const pdfBuffer = vi.hoisted(() =>
     "latin1",
   ),
 );
+const storageObjects = vi.hoisted(() => new Map<string, Buffer>());
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -50,7 +51,10 @@ vi.mock("./design-pdf-renderer.js", () => ({
 
 vi.mock("../lib/storage/index.js", () => ({
   storage: {
-    putObject: vi.fn().mockResolvedValue(undefined),
+    putObject: vi.fn(async (key: string, body: Buffer) => {
+      storageObjects.set(key, body);
+    }),
+    getObject: vi.fn(async (key: string) => storageObjects.get(key) ?? Buffer.alloc(0)),
     getGetUrl: vi.fn().mockResolvedValue("https://files.example/design.pdf"),
   },
 }));
@@ -75,9 +79,7 @@ const eventServiceMock = eventService as unknown as MockedDeep<typeof eventServi
 const designGenerationServiceMock = designGenerationService as unknown as MockedDeep<
   typeof designGenerationService
 >;
-const designPdfRendererMock = designPdfRenderer as unknown as MockedDeep<
-  typeof designPdfRenderer
->;
+const designPdfRendererMock = designPdfRenderer as unknown as MockedDeep<typeof designPdfRenderer>;
 const storageMock = storage as unknown as MockedDeep<typeof storage>;
 
 function designArtifact(overrides: Record<string, unknown> = {}) {
@@ -116,6 +118,7 @@ function designArtifact(overrides: Record<string, unknown> = {}) {
 describe("artifactService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    storageObjects.clear();
   });
 
   it("generates design artifact HTML when caller does not provide HTML", async () => {
@@ -154,6 +157,21 @@ describe("artifactService", () => {
       }),
     );
     expect(artifact.html).toContain("Generated");
+    expect(storageMock.putObject).toHaveBeenCalledWith(
+      expect.stringMatching(/^uploads\/org-1\/design-artifacts\/.+\.html$/),
+      expect.any(Buffer),
+      "text/html",
+    );
+    const storedHtml = storageMock.putObject.mock.calls[0]?.[1] as Buffer | undefined;
+    expect(storedHtml?.toString("utf8")).toContain("Generated");
+    expect(prismaMock.artifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          html: "",
+          htmlStorageKey: expect.stringMatching(/^uploads\/org-1\/design-artifacts\/.+\.html$/),
+        }),
+      }),
+    );
     expect(artifact.metadata).toMatchObject({
       generator: "llm",
       source: "createDesignArtifact",

@@ -10,6 +10,7 @@ import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { artifactService } from "../services/artifact.js";
 import { buildDesignArtifactPublicUrl } from "../services/design-artifact-serving.js";
+import { resolveDesignArtifactHtml } from "../services/design-artifact-storage.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
@@ -813,6 +814,12 @@ export const sessionMutations = {
 
 export const sessionTypeResolvers = {
   Artifact: {
+    html: (artifact: {
+      id: string;
+      organizationId: string;
+      html: string;
+      htmlStorageKey?: string | null;
+    }) => resolveDesignArtifactHtml(artifact),
     publicUrl: (artifact: {
       id: string;
       publishedAt?: Date | string | null;

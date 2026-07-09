@@ -91,6 +91,8 @@ vi.mock("../lib/runtime-debug.js", () => ({
 
 vi.mock("../lib/storage/index.js", () => ({
   storage: {
+    putObject: vi.fn().mockResolvedValue(undefined),
+    getObject: vi.fn().mockResolvedValue(Buffer.from("")),
     getGetUrl: vi.fn(async (key: string) => `https://example.test/${key}`),
   },
 }));
@@ -171,6 +173,7 @@ vi.mock("./app-checkpoint-capture.js", () => ({
 }));
 
 import { prisma } from "../lib/db.js";
+import { storage } from "../lib/storage/index.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
@@ -201,6 +204,11 @@ type MockedDeep<T> = {
 };
 
 const prismaMock = prisma as unknown as MockedDeep<typeof prisma>;
+const storageMock = storage as {
+  putObject: ReturnType<typeof vi.fn>;
+  getObject: ReturnType<typeof vi.fn>;
+  getGetUrl: ReturnType<typeof vi.fn>;
+};
 const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
 const sessionRouterMock = sessionRouter as unknown as MockedDeep<typeof sessionRouter>;
 const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminalRelay>;
@@ -962,16 +970,27 @@ describe("SessionService", () => {
         data: expect.objectContaining({
           sessionGroupId: "group-1",
           promptEventId: "event-start",
-          html: expect.stringContaining("Generated"),
+          html: "",
+          htmlStorageKey: expect.stringMatching(/^uploads\/org-1\/design-artifacts\/.+\.html$/),
           metadata: expect.objectContaining({ generator: "llm", source: "startSession" }),
         }),
         include: { createdBy: true },
       });
+      expect(storageMock.putObject).toHaveBeenCalledWith(
+        expect.stringMatching(/^uploads\/org-1\/design-artifacts\/.+\.html$/),
+        expect.any(Buffer),
+        "text/html",
+      );
+      const storedHtml = storageMock.putObject.mock.calls[0]?.[1] as Buffer | undefined;
+      expect(storedHtml?.toString("utf8")).toContain("Generated");
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "design_artifact_created",
           payload: expect.objectContaining({
-            artifact: expect.objectContaining({ id: "artifact-1" }),
+            artifact: expect.objectContaining({
+              id: "artifact-1",
+              html: expect.stringContaining("Generated"),
+            }),
             sessionGroupId: "group-1",
           }),
         }),

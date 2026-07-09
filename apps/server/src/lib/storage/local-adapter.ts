@@ -52,6 +52,10 @@ export class LocalStorageAdapter implements StorageAdapter {
     await fsp.writeFile(filePath, body);
   }
 
+  async getObject(key: string): Promise<Buffer> {
+    return fsp.readFile(this.resolvePath(key));
+  }
+
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
     const token = jwt.sign(
       { key, action: "get", downloadFilename: options?.downloadFilename },
