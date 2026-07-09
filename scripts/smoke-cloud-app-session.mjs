@@ -82,10 +82,17 @@ const APP_STATE = `
       }
       gitCheckpoints {
         id
+        repoId
         commitSha
+        parentShas
+        treeSha
         subject
+        author
+        committedAt
+        filesChanged
         captureStatus
         captureUrl
+        captureContentType
         capturedAt
         createdAt
       }
@@ -234,6 +241,10 @@ function runningProcess(state) {
   return state.sessionApplicationProcesses.find((process) => process.status === "running") ?? null;
 }
 
+function isGitSha(value) {
+  return typeof value === "string" && /^[0-9a-f]{40,64}$/i.test(value);
+}
+
 async function appState(sessionGroupId) {
   return graphql(APP_STATE, { sessionGroupId });
 }
@@ -300,7 +311,36 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
       const checkpoints = group.gitCheckpoints;
       if (checkpoints.length === 0) return { ok: false, detail: "no checkpoint recorded yet" };
       checkpoint = checkpoints[0];
-      if (!checkpoint.commitSha) return { ok: false, detail: "checkpoint commit SHA is missing" };
+      if (checkpoint.repoId !== group.repo?.id) {
+        return {
+          ok: false,
+          detail: `checkpoint repo is ${checkpoint.repoId ?? "missing"}`,
+        };
+      }
+      if (!isGitSha(checkpoint.commitSha)) {
+        return {
+          ok: false,
+          detail: `checkpoint commit SHA is ${checkpoint.commitSha ?? "missing"}`,
+        };
+      }
+      if (!isGitSha(checkpoint.treeSha)) {
+        return { ok: false, detail: `checkpoint tree SHA is ${checkpoint.treeSha ?? "missing"}` };
+      }
+      if (!Array.isArray(checkpoint.parentShas) || !checkpoint.parentShas.every(isGitSha)) {
+        return { ok: false, detail: "checkpoint parent SHAs are invalid" };
+      }
+      if (typeof checkpoint.subject !== "string" || !checkpoint.subject.trim()) {
+        return { ok: false, detail: "checkpoint subject is missing" };
+      }
+      if (typeof checkpoint.author !== "string" || !checkpoint.author.trim()) {
+        return { ok: false, detail: "checkpoint author is missing" };
+      }
+      if (typeof checkpoint.committedAt !== "string" || !checkpoint.committedAt) {
+        return { ok: false, detail: "checkpoint committedAt is missing" };
+      }
+      if (typeof checkpoint.filesChanged !== "number" || checkpoint.filesChanged < 0) {
+        return { ok: false, detail: `checkpoint filesChanged is ${checkpoint.filesChanged}` };
+      }
       if (requireCapture && checkpoint.captureStatus !== "captured") {
         return {
           ok: false,
@@ -309,6 +349,15 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
       }
       if (requireCapture && !checkpoint.captureUrl) {
         return { ok: false, detail: "checkpoint capture URL is missing" };
+      }
+      if (requireCapture && checkpoint.captureContentType !== "image/png") {
+        return {
+          ok: false,
+          detail: `checkpoint capture content type is ${checkpoint.captureContentType ?? "missing"}`,
+        };
+      }
+      if (requireCapture && !checkpoint.capturedAt) {
+        return { ok: false, detail: "checkpoint capturedAt is missing" };
       }
     }
 

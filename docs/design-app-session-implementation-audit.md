@@ -472,3 +472,9 @@ During this continuation, the hosted `pnpm smoke:cloud-app-session` script was t
 to prove live runtime logs are flowing as structured app-process logs. The readiness poll
 now requires at least one stdout/stderr log entry with non-empty data, sequence, and
 timestamp for the running app process before continuing.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove checkpoint rows contain durable Git metadata, not just an id. The readiness poll
+now requires the checkpoint repo id to match the managed repo, valid commit/tree/parent
+SHAs, non-empty subject and author, committed timestamp, non-negative file count, and PNG
+capture metadata when capture verification is enabled.
