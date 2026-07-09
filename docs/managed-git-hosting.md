@@ -107,13 +107,13 @@ Almost nothing changes on the runtime side:
 
 ## Session kinds (follow-on)
 
-`SessionGroup.kind: coding | web_design` selects the UI shell and creation flow. A design
-session runs cloud-only, is standalone (never attached to an existing org repo — no
-`repoId` at creation, no `setupConfig`/setup scripts), and the agent scaffolds and runs the
-app itself from a starter kit baked into the runtime image. The dev server is picked up via
-listening-port detection on the bridge → auto-enabled `SessionEndpoint` → iframe preview
-pane as the dominant pane. The managed repo appears lazily at the first checkpoint. The
-endpoints subsystem and tool adapters need no changes. Detailed in
+`SessionGroup.kind: coding | design | app` selects the UI shell and creation flow. The
+`design` kind is a Claude-Design-style artifact tool (static HTML screens/decks, every
+checkpoint permanently re-renderable, PDF export); the `app` kind is a Replit-style app
+builder (React starter, dev server picked up via listening-port detection → auto-enabled
+`SessionEndpoint` → iframe preview). Both run cloud-only, are standalone (no `repoId` at
+creation, no `setupConfig`/setup scripts — the agent scaffolds from templates in the
+runtime image), and get their managed repo lazily at the first checkpoint. Detailed in
 `design-session-experience.md`.
 
 ## Open questions

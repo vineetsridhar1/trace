@@ -62,7 +62,7 @@ trial and error what upstream's 2,700 commits already encode. Vendor, don't rewr
 No `open_design` enum value, no new adapter, no daemon. Design sessions run plain
 `claude_code`:
 
-- The bridge, for `kind: web_design` runs, loads the selected design system + skills,
+- The bridge, for `design`/`app`-kind runs, loads the selected design system + skills,
   calls `composeSystemPrompt()` + Trace overlay, and passes the result to the adapter.
 - `RunOptions` gains `appendSystemPrompt?: string`; `ClaudeCodeAdapter` adds
   `--append-system-prompt <text>` when present. (Upstream's BYOK path sends the composed
@@ -123,7 +123,8 @@ repo whose deliverable is the design-system directory — no new infrastructure.
 2. Image build stage: clone pinned tag, copy content dirs; loader reads a `SKILL.md` and a
    design-system manifest correctly.
 3. Wire `appendSystemPrompt` through run command → `RunOptions` → `--append-system-prompt`.
-4. End-to-end on a cloud machine: design prompt → scaffold → dev server → preview; A/B/C
+4. End-to-end on a cloud machine, design kind first (static HTML artifact → preview —
+   the harness content's native habitat, no dev server involved): A/B/C
    the same prompt across (a) bare claude, (b) claude + a static design prompt
    ([claude-design-system-prompt](https://github.com/Trystan-SA/claude-design-system-prompt),
    MIT — reverse-engineered, so benchmark-only pending a provenance check), (c) the full
@@ -131,6 +132,10 @@ repo whose deliverable is the design-system directory — no new infrastructure.
    text alone; if the gap is small, v1 can ship (b) while the port proceeds. Its
    review-flavored skills (AI-trope detection, a11y audit) are cherry-pick candidates for
    our content dir regardless.
+5. When the `app` kind lands: re-run the A/B/C in the React starter context — the OD
+   content is HTML-artifact-tuned, and this measures whether its quality transfers to a
+   component target. If transfer is weak, the fix is a React-flavored overlay skill, not
+   a stack change.
 
 ## Risks
 
