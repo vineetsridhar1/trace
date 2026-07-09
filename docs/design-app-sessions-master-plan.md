@@ -23,7 +23,8 @@ Source docs that this consolidates:
 
 Implement Trace's `design` and `app` session kinds as separate products on shared
 session infrastructure: `design` sessions are serverless project-design canvases that
-generate, review, export, publish, and promote HTML artifacts into coding sessions, while
+generate React canvas artifacts (rendered as HTML via in-browser transpilation) to
+review, export, publish, and promote into coding sessions, while
 `app` sessions are standalone cloud-run full-stack app builders with live preview,
 logs/terminal, managed git durability, checkpoints, restore, publish/share, and optional
 graduation.
@@ -53,10 +54,24 @@ different success criteria:
 - **Design sessions use a managed workspace too.** They should feel almost like coding
   sessions under the hood: a Trace-managed git remote, a materialized bridge working
   directory, files written there, commits/checkpoints pushed back, and cleanup when
-  deleted. The difference is that design renders HTML artifact files instead of running a
-  dev server.
+  deleted. The difference is that design renders artifact files from the working
+  directory (React canvas source transpiled in the browser, or plain HTML) instead of
+  running a dev server.
 - **Design sessions use a canvas.** The primary workspace is a pan/zoom surface where
   multiple AI-generated artifact options can exist side by side.
+- **Design artifacts are React canvas source, packaged like the Claude Design export.**
+  The primary generation target is a React canvas artifact using
+  `DesignCanvas`/`DCSection`/`DCArtboard`-style primitives, with screens as separate
+  component files and a `design.canvas.json` metadata sidecar — not hand-authored
+  free-form static HTML. Inspection of the actual Claude Design export
+  (`/Users/vineet/trace/design.html`) confirmed it ships React + babel-standalone inside
+  the bundle and transpiles JSX **in the browser at load time**. Its "bundling" is asset
+  packaging (base64 manifest + unpacker), not ahead-of-time compilation. Trace should do
+  the same: no server-side build pipeline for design artifacts.
+- **`design.canvas.json` is authoritative for canvas metadata.** The sidecar drives
+  Trace's `CanvasSection`/`Artifact` indexing and canvas state; the JSX source is
+  authoritative only for rendering. Trace validates that the two agree; it never scrapes
+  canvas structure out of JSX by static parsing.
 - **Design sessions promote to coding sessions by default.** A selected artifact becomes
   project intent/reference for implementation in project code.
 - **App sessions use cloud runtimes.** A standalone app needs a filesystem, package
@@ -93,6 +108,26 @@ different success criteria:
   PDF binaries.
 - **Do not expose managed repos as normal repos.** They are durability plumbing unless the
   user explicitly graduates to GitHub/export.
+- **Do not build a server-side compile/bundler pipeline for design artifacts.** Rendering
+  and export ship the JSX source plus React and babel-standalone and transpile in the
+  browser at load time, exactly as the Claude Design export does. An ahead-of-time build
+  step would add bundler infrastructure, introduce a new failure class (generated code
+  that fails a server-side build) that the chat loop would have to handle, and break the
+  serverless property of design sessions. The accepted trade-offs are slower first paint
+  and no type-checking of generated code.
+- **Do not derive canvas structure by statically parsing JSX.** The model will
+  occasionally emit conditionals, computed props, or wrapper components that break a
+  static parse. The model must emit the `design.canvas.json` sidecar alongside the
+  source; the service validates that sidecar and source agree, and treats a mismatch as a
+  generation error to surface, not something to repair by scraping the JSX.
+- **Do not copy Open Design's screen-file-first canvas UX.** Screens stay separate
+  component files in source (good for handoff and small diffs), but the product presents
+  one canvas with many sections/artboards, which is the better UX (the Claude Design
+  model).
+- **Do not copy Open Design's live-artifact template model for normal designs.** It
+  forbids scripts/iframes and targets refreshable data views (dashboards/reports). It may
+  inspire a later "live dashboard" feature, but it is not the design-session artifact
+  model.
 
 ## Architecture Principles
 
@@ -151,7 +186,8 @@ A complete design session supports:
   a coding session checkout but without branch/worktree fan-out.
 - Hidden managed repo created at session start or before the first artifact write; the
   working directory remote points at the Trace managed git server.
-- Multiple parallel HTML artifact variants for a brief.
+- Multiple parallel artifact variants for a brief, generated as React canvas source and
+  rendered as HTML in the user-content iframe.
 - AI-authored canvas organization: section titles, explanatory descriptions, frame labels,
   and grouped artifact canvases, similar to Claude Design's "Current" /
   "Action needed" layout.
@@ -173,6 +209,25 @@ A complete design session supports:
 
 Design sessions must use real model generation through `LLMAdapter`.
 
+Generation target:
+
+- The primary generation format is a **React canvas artifact**, not hand-authored
+  free-form static HTML:
+  - a thin `src/design-canvas.jsx` (or `.tsx`) containing only the
+    `DesignCanvas`/`DCSection`/`DCArtboard` board structure
+  - screen/artboard contents as separate component files under `src/components/*`
+  - a `design.canvas.json` sidecar carrying the section/artboard metadata
+- The prompt overlay must enforce the thin-canvas/separate-components split. A single
+  canvas file holding every screen inline grows unboundedly, and every iteration would
+  force the model to re-edit one giant file — keeping screens in small component files
+  keeps iteration diffs small and context pressure manageable.
+- Rendering loads React + babel-standalone in the user-content iframe and transpiles the
+  JSX at load time, matching the verified behavior of the Claude Design export. There is
+  no ahead-of-time compile step anywhere in the pipeline.
+- The renderer must still support plain self-contained HTML artifacts for legacy rows and
+  simple generations; React canvas source is the primary target, not the only accepted
+  format.
+
 Service contract:
 
 - Add or finish a service method like
@@ -180,11 +235,14 @@ Service contract:
   elementAnchors?, directionCount?, designSystemId?, skillIds? })`.
 - The service loads harness settings, composes the Open Design prompt with Trace overlay,
   calls the configured `LLMAdapter`, streams deltas as session events, persists finished
-  artifact HTML, records usage, and appends completion/failure events.
+  artifact source plus the `design.canvas.json` sidecar (or plain HTML for simple
+  generations), validates sidecar/source consistency, records usage, and appends
+  completion/failure events.
 - Fan-out is parallel. A first brief such as "give me three directions" creates sibling
   artifacts. Each direction stores direction metadata.
-- Iteration includes parent artifact HTML, selected element anchors, comment context,
-  token block, and comparison artifacts when selected.
+- Iteration includes parent artifact source (component files for React canvas artifacts,
+  HTML otherwise), selected element anchors, comment context, token block, and comparison
+  artifacts when selected.
 - Failed variants produce visible failure events/cards without failing successful sibling
   variants.
 - There must be no successful placeholder fallback when model credentials fail. Model
@@ -218,10 +276,12 @@ durability:
   similar to a coding session checkout but without extra git worktrees or branches.
 - The working directory remote is set to the Trace managed git URL.
 - The design generation service writes generated files into that working directory:
-  - `canvas/source.html` or `canvas/source.jsx` for full-board source when present
-  - `canvas/layout.json` for section/artboard placement
-  - `artifacts/<artifactId>/index.html`
-  - `artifacts/<artifactId>/metadata.json`
+  - `src/design-canvas.jsx` — thin board structure (sections/artboards only)
+  - `src/components/*` — screen/artboard implementations, one component per file
+  - `design.canvas.json` — authoritative canvas metadata sidecar
+  - `design-manifest.json` and `DESIGN-HANDOFF.md` — handoff/index outputs
+  - `artifacts/<artifactId>/index.html` — plain-HTML artifacts for legacy/simple
+    generations
   - optional token/assets files
 - The service commits and pushes after successful generation, iteration, tweak, publish
   metadata updates, or layout changes.
@@ -247,13 +307,22 @@ sessions.
 Canonical storage target:
 
 ```txt
-artifacts/<artifactId>/index.html
+src/design-canvas.jsx                    # thin board: DesignCanvas/DCSection/DCArtboard only
+src/components/*                         # screen/artboard implementations, one per file
+design.canvas.json                       # authoritative canvas metadata sidecar
+design-manifest.json                     # screen map, source files, tokens, viewport targets
+DESIGN-HANDOFF.md                        # human-readable implementation handoff notes
+tokens.css                               # optional extracted CSS variable block
+artifacts/<artifactId>/index.html        # plain-HTML artifacts (legacy/simple generations)
 artifacts/<artifactId>/metadata.json
-artifacts/<artifactId>/tokens.css        # optional extracted token file
 artifacts/<artifactId>/assets/*          # later, if multi-file assets are supported
-canvas/layout.json                       # section/group layout and artifact placement
-canvas/source.html                       # optional full-board source/export source
 ```
+
+`design.canvas.json` supersedes the earlier `canvas/layout.json` / `canvas/source.*`
+naming from prior revisions of this plan; there is one sidecar and it is the canvas
+metadata source of truth. The downloadable self-contained bundle is derived output
+generated on demand at export/publish time (asset embedding, not compilation) and does
+not need to be committed.
 
 Rules:
 
@@ -268,14 +337,19 @@ Rules:
   it, pushes/updates the managed bare repo, and then emits artifact completion events.
 - A fan-out generation may commit all sibling artifacts in one commit or one commit per
   artifact. The event payload must still identify each artifact's file path and commit.
-- An iteration creates a new artifact directory/file and a new commit; it does not mutate
-  the parent artifact file.
+- An iteration creates a new commit; the parent artifact version stays addressable
+  because its `repoCommitSha` pins the pre-iteration state. For React canvas artifacts,
+  iterations edit the small component files rather than re-emitting the whole board. For
+  plain-HTML artifacts, an iteration creates a new artifact directory/file.
 - Canvas sections and placement metadata are committed with the artifacts so the managed
   repo can reconstruct the whole design board, not only individual HTML files.
-- If the model produces a single full-board artifact using a DSL such as
-  `<DesignCanvas>`, `<DCSection>`, and `<DCArtboard>`, store that source as
-  `canvas/source.html` or `canvas/source.jsx` and extract normalized section/artifact
-  metadata into `canvas/layout.json`.
+- In the React canvas model, `Artifact` rows map to artboards: the row stores the
+  artboard id from `design.canvas.json` plus `repoCommitSha`, so an artifact version
+  resolves to a specific artboard within a specific commit of the canvas source.
+- Canvas structure is ingested from `design.canvas.json`, never by parsing the JSX. The
+  service validates that every section/artboard id in the sidecar exists in the source
+  (a cheap string/id presence check is sufficient) and fails the generation attempt on
+  mismatch.
 - Blob/object storage may still be used as a read-through cache for large HTML or
   published serving, but managed git is the durable source of truth for generated design
   files.
@@ -305,13 +379,19 @@ https://<artifactId>.<TRACE_USER_CONTENT_DOMAIN>/_bootstrap
 
 - `_bootstrap` returns only a tiny shell. Direct navigation to `_bootstrap` must not leak
   artifact HTML.
-- The parent Trace canvas pushes artifact HTML into the frame through `postMessage`.
+- The parent Trace canvas pushes artifact content into the frame through `postMessage`.
+  For plain-HTML artifacts the payload is the HTML itself. For React canvas artifacts the
+  bootstrap shell loads React + babel-standalone, and the payload is the JSX source plus
+  the target artboard id; the frame transpiles and renders at load time — no server-side
+  compile.
 - The frame replies with readiness, element-selection, pin status, and script-error
   messages.
 - Message payloads must include a nonce and validate origins on both sides.
 - Published artifact root URLs serve stored HTML directly only when `publishedAt` is set.
-- Published serving should resolve artifact HTML from the artifact's managed-git
-  `repoCommitSha` + `repoFilePath` or from a cache proven to match that commit.
+- Published serving should resolve artifact content from the artifact's managed-git
+  `repoCommitSha` + `repoFilePath` or from a cache proven to match that commit. For React
+  canvas artifacts, published serving delivers the packaged self-contained bundle derived
+  from that pinned commit.
 - Unpublished root URLs return 404 or equivalent.
 - Authoring overlays are not injected into public published output unless an
   authenticated authoring path explicitly requests them.
@@ -359,9 +439,9 @@ structure itself:
 
 ### AI-Authored Canvas Sections
 
-The model should be able to return both artifact HTML and canvas organization metadata.
-This is the behavior shown in Claude Design: the AI creates narrative sections with a
-heading, a short explanation, and grouped canvases underneath.
+The model should be able to return both artifact source and canvas organization
+metadata. This is the behavior shown in Claude Design: the AI creates narrative sections
+with a heading, a short explanation, and grouped canvases underneath.
 
 The downloaded Claude Design artifact in `/Users/vineet/trace/design.html` is a useful
 reference shape. The source inside that bundle uses a small canvas DSL:
@@ -383,8 +463,10 @@ the same concept:
 - Section components/records with `id`, `title`, and `subtitle`/`description`.
 - Artboard/frame components/records with `id`, `label`, `width`, `height`, and child
   artifact content.
-- A parser or generation contract that can normalize those sections/artboards into
-  Trace's event-backed `CanvasSection` and `Artifact` entities.
+- A generation contract where the model emits the same section/artboard structure into
+  the `design.canvas.json` sidecar, which the service ingests into Trace's event-backed
+  `CanvasSection` and `Artifact` entities. The sidecar — not JSX parsing — is how canvas
+  structure reaches the data model.
 
 Suggested section shape:
 
@@ -418,7 +500,7 @@ Generation contract:
 - Section title/description text is model-authored but editable/regenerable through the
   service layer.
 - Section metadata is persisted in service state and committed to
-  `canvas/layout.json` in the design managed repo.
+  `design.canvas.json` in the design managed repo.
 - Section updates emit events so other clients see the canvas reorganize in real time.
 - PDF/export/publish can target a single artifact, a section, or the whole canvas later;
   v1 PDF may remain artifact-only if section export is not implemented yet, but the data
@@ -426,16 +508,25 @@ Generation contract:
 
 ### Downloaded Artifact Bundle
 
-The Claude Design `design.html` export is also useful as a packaging reference. It is not
-just raw page HTML; it is a self-contained bundle that includes a thumbnail/loading shell,
-compressed base64 asset manifest, template HTML, asset unpacker, blob URL replacement,
-font handling, and a small runtime error sink.
+The Claude Design `design.html` export is the packaging reference. Direct inspection of
+`/Users/vineet/trace/design.html` established these verified facts:
+
+- It stores **every screen/artboard in the one file**. It does not reference Claude's
+  servers per artboard; the only external URL present is the SVG namespace.
+- It embeds a base64 asset manifest (16 assets in the sample: React, Babel, runtime
+  scripts, JSX helper files, fonts) plus a JSON-escaped HTML template containing the
+  actual design source.
+- It ships `babel-standalone` and transpiles the `text/babel` JSX **in the browser at
+  load time**. The bundle is asset packaging plus an unpacker — there is no ahead-of-time
+  compilation anywhere.
+- The unpacker swaps stable UUID placeholders for `blob:`/`data:` URLs at runtime, with
+  special handling for fonts, and surfaces runtime errors visibly.
 
 Trace should support a similar **download/export format**, separate from the canonical
 managed-git source:
 
-- Canonical source remains diffable managed-git files (`artifacts/*`, `canvas/layout.json`,
-  optional `canvas/source.html`/`source.jsx`).
+- Canonical source remains diffable managed-git files (`src/*`, `design.canvas.json`,
+  `design-manifest.json`, `artifacts/*`).
 - Downloaded output can be a single `design.html` bundle that runs offline from `file://`.
 - The bundle may embed:
   - a thumbnail or placeholder preview
@@ -445,13 +536,20 @@ managed-git source:
   - unpacker script that creates blob URLs or data URLs, with special handling for fonts
   - runtime error sink visible to the user
   - no external network requirements
-- If the source uses React/JSX or a canvas DSL, the exporter should either precompile it
-  or include the minimal runtime needed for offline display. Prefer precompiled output for
-  Trace-generated exports unless preserving source interactivity requires otherwise.
+- For React canvas source, the exporter follows the Claude approach: embed the JSX source
+  plus React and babel-standalone in the bundle and transpile in the browser at load
+  time. Do not build a precompile path — same reasoning as preview: packaging, not
+  compilation.
 - Do not use the self-unpacking bundle as the internal authoring source of truth. It is
   optimized for portability, not reviewable diffs or service-layer state.
-- User-content preview/publish can serve canonical artifact HTML directly; the download
-  bundle is for explicit "Download HTML" or archival export.
+- User-content preview/publish can serve canonical artifact content directly; the
+  download bundle is for explicit "Download HTML" or archival export.
+- Borrowing Open Design's export handoff idea, a "Download ZIP" export should include:
+  - the self-contained `design.html` bundle
+  - the source files (`src/*`, `design.canvas.json`)
+  - `design-manifest.json` — screen map, source files, tokens, interactions, responsive
+    viewport checklist
+  - `DESIGN-HANDOFF.md` — implementation notes for the receiving developer/agent
 
 ### Token Tweaks
 
@@ -489,8 +587,11 @@ Requirements:
 - Add/finish a service method like
   `exportDesignArtifact({ artifactId, format: "pdf", pageOptions? })`.
 - Use a bounded Playwright/headless-Chromium pool or worker queue.
-- Load artifact HTML from the artifact's managed-git commit/file pointer, or from a cache
-  proven to match that pointer.
+- Load artifact content from the artifact's managed-git commit/file pointer, or from a
+  cache proven to match that pointer. For React canvas artifacts, package the source into
+  the same self-contained bundle used for download (JSX + React + babel-standalone) and
+  render that; headless Chromium executes the in-browser transpilation the same way the
+  preview iframe does.
 - Do not pass Trace cookies or credentials into the browser context.
 - Apply the same network/CSP policy as preview.
 - Honor print CSS, deck page structure, page size, margins, and background graphics.
@@ -512,8 +613,11 @@ Publish:
 Promotion:
 
 - Selected artifact(s) promote to a linked coding session.
-- The coding session receives a concise brief, artifact references, selected HTML or
-  summary, and source design group metadata.
+- The coding session receives a concise brief, artifact references, and source design
+  group metadata. For React canvas artifacts, promotion passes the **source** — the
+  relevant `src/components/*` files, the `design.canvas.json` entry, and
+  `design-manifest.json`/`DESIGN-HANDOFF.md` — which is far better implementation input
+  than one flat HTML blob. Plain-HTML artifacts pass selected HTML or a summary.
 - The coding UI should show promoted artifact reference context.
 - Promotion emits a design promotion event.
 
@@ -637,9 +741,9 @@ Managed git exists to make generated session outputs durable without forcing Git
 creation. It supports the same core working-directory/remote shape across session kinds:
 
 - **App sessions**: a cloud runtime working directory pushes commits through smart-HTTP.
-- **Design sessions**: a bridge/session working directory contains generated HTML artifact
-  files and pushes commits through the same managed remote. No app server or port
-  detection is required.
+- **Design sessions**: a bridge/session working directory contains generated design
+  source and artifact files and pushes commits through the same managed remote. No app
+  server or port detection is required.
 
 ### Repo Provider
 
@@ -759,6 +863,31 @@ Retry/idempotency:
 
 Trace uses Open Design as a prompt composer and content library.
 
+### Inspirations from Open Design
+
+A read of the upstream Open Design source informed several decisions in this plan. What
+their implementation does:
+
+- **Artifacts are files.** The agent writes `index.html`, `screens/*.html`, images, CSS,
+  and JS into the project; their daemon detects artifact production via filesystem diffs.
+  This validates Trace's managed-repo/working-directory model for design sessions.
+- **Their prompts push screen-file-first** (each user-facing screen its own HTML file,
+  `index.html` as launcher/overview). Trace deliberately does not copy this as canvas
+  UX — see Rejected Paths — but keeps the underlying idea of screens as separate source
+  files.
+- **They ship a dedicated Claude Design importer** that detects `design-canvas.jsx`,
+  preserves exported files, and rewrites Claude's wheel/gesture handling. This is strong
+  evidence the Claude canvas artifact is a portable pattern worth being natively
+  compatible with.
+- **Two-layer data model:** a basic artifact manifest (`kind`, `title`, `entry`,
+  `renderer`, `exports`, `supportingFiles`, provenance) plus a stricter "live artifact"
+  model (`.live-artifacts/<id>/` with template/data/provenance) for refreshable
+  dashboards. The live model is explicitly out of scope for design sessions.
+- **Export handoff is their best idea to copy:** ZIP export includes `index.html`,
+  `DESIGN-MANIFEST.json` (screen map, source files, tokens, interactions, responsive
+  viewport checklist, implementation notes), and `DESIGN-HANDOFF.md`. Trace adopts this
+  as `design-manifest.json` + `DESIGN-HANDOFF.md` in the design repo and ZIP export.
+
 ### Vendoring
 
 - Vendor prompt modules under `packages/shared/src/design/vendor`.
@@ -800,14 +929,26 @@ composeTraceDesignPrompt({
 
 Design overlay:
 
-- Self-contained HTML.
-- `:root` CSS variables.
+- Primary target: a React canvas artifact using the
+  `DesignCanvas`/`DCSection`/`DCArtboard` primitives.
+- Thin `src/design-canvas.jsx` containing only board structure; every screen/artboard
+  body lives in its own component file under `src/components/*`. The overlay must state
+  this explicitly so iterations edit small files instead of re-emitting one giant canvas
+  file.
+- Emit `design.canvas.json` alongside the source with matching section/artboard ids; the
+  sidecar is the authoritative canvas metadata and a source/sidecar mismatch fails the
+  generation.
+- Emit/maintain `design-manifest.json` and `DESIGN-HANDOFF.md`.
+- Self-contained output: no imports beyond the provided runtime, no build-step
+  assumptions (code must run under in-browser Babel transpilation).
+- `:root` CSS variables (token tweaks depend on this).
 - Stable `data-el` ids.
 - Canvas section metadata: concise title, explanatory description, artifact/frame labels,
   and intended placement/grouping for each generated artifact.
 - Print-ready deck structure when applicable.
 - No external network unless policy allows it.
 - No filesystem assumptions.
+- Plain self-contained HTML remains acceptable for simple single-artifact briefs.
 
 App overlay:
 
@@ -891,14 +1032,18 @@ work end to end.
 - Service/store test: design generation can persist AI-authored canvas sections with
   titles, descriptions, and artifact membership.
 - UI test: canvas renders sections with headings/descriptions and grouped artifact cards.
-- Parser/service test: a board source using `DesignCanvas`/section/artboard-style markup
-  normalizes into `CanvasSection` and `Artifact` state.
+- Sidecar/service test: a generated `design.canvas.json` ingests into `CanvasSection`
+  and `Artifact` state, and a sidecar whose section/artboard ids are missing from the
+  JSX source fails the generation attempt (consistency validation, not JSX scraping).
+- Browser test: a React canvas artifact renders in the user-content iframe via
+  in-browser Babel transpilation, with no server-side compile step involved.
 - Service/integration test: design artifact generation writes HTML/metadata files into
   the design working directory and pushes them to the managed remote.
 - Retry test: failed design bridge setup or commit/push reuses the same managed repo on
   retry, and deleted bridge folders can be recloned from the remote.
 - Service test: failed one-of-N generation keeps successful siblings visible.
-- Service test: iteration includes parent artifact HTML and anchor/comment context.
+- Service test: iteration includes parent artifact source/HTML and anchor/comment
+  context.
 - Store test: design events upsert artifacts/comments/exports.
 - Browser route test: `_bootstrap` does not leak content.
 - Browser test: artifact iframe renders through user-content origin and postMessage.
@@ -909,8 +1054,13 @@ work end to end.
 - Route test: published artifact root serves stored HTML; unpublished root does not.
 - Git test: published/exported artifact HTML resolves from the artifact commit pointer.
 - Export test: "Download HTML" produces a self-contained `design.html` bundle that opens
-  offline, unpacks embedded assets, and shows runtime errors visibly if unpacking fails.
-- Service/UI test: promotion creates linked coding session with artifact references.
+  offline, unpacks embedded assets, transpiles React canvas source with the embedded
+  babel-standalone, and shows runtime errors visibly if unpacking fails.
+- Export test: "Download ZIP" contains the bundle, source files, `design.canvas.json`,
+  `design-manifest.json`, and `DESIGN-HANDOFF.md`.
+- Service/UI test: promotion creates linked coding session with artifact references, and
+  for React canvas artifacts the promotion payload includes the component source and
+  manifest/handoff files rather than only flat HTML.
 
 ### Required App Evidence
 
@@ -970,6 +1120,9 @@ Do not call the full goal complete until:
 - Design and app session kinds work from the UI and service layer.
 - All mutating behavior flows through services and events.
 - Design generation uses real `LLMAdapter` output, not placeholders.
+- Design generation targets React canvas source with an authoritative
+  `design.canvas.json` sidecar, rendered via in-browser Babel with no server-side
+  compile pipeline.
 - Design artifact preview/publish uses the user-content domain in production.
 - Design canvas renders AI-authored section titles/descriptions and grouped canvases.
 - PDF export produces real downloadable PDF files.
