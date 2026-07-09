@@ -915,3 +915,9 @@ session result and brief, but did not inspect the promoted session's own
 `session_started` snapshot. It now requires that payload to contain the promoted session
 id, promoted group id, `kind: "coding"`, and `forkedFromSessionGroupId` pointing back to
 the source design group before checking the implementation brief.
+
+During this audit continuation, the hosted design smoke verified PDF page options on the
+export mutation result, but the timeline assertion only matched the export request and
+completion by artifact/file metadata. It now also requires both `design_export_requested`
+and `design_export_completed` events to carry the exact requested page size and margin
+options.

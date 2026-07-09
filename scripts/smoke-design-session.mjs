@@ -374,7 +374,24 @@ async function waitForPdfExportTimelineEvents(sessionId, artifactId, exportPaylo
     if (completedIndex <= requestedIndex) {
       throw new Error("PDF export completed event arrived before the requested event");
     }
+    const requestedPayload = asPayload(events[requestedIndex], "PDF export timeline request");
     const completedPayload = asPayload(events[completedIndex], "PDF export timeline completion");
+    for (const [label, payload] of [
+      ["request", requestedPayload],
+      ["completion", completedPayload],
+    ]) {
+      const pageOptions = asObject(
+        payload.pageOptions,
+        `PDF export timeline ${label} page options`,
+      );
+      for (const [key, value] of Object.entries(exportPayload.pageOptions)) {
+        if (pageOptions[key] !== value) {
+          throw new Error(
+            `PDF export timeline ${label} page option ${key} is ${pageOptions[key] ?? "missing"}, expected ${value}`,
+          );
+        }
+      }
+    }
     for (const key of ["fileUrl", "fileName", "byteSize", "sessionGroupId"]) {
       if (completedPayload[key] !== exportPayload[key]) {
         throw new Error(
