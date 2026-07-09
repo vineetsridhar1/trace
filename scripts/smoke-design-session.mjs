@@ -415,6 +415,64 @@ async function waitForPublishedArtifactEvent(sessionId, artifactId, publicUrl) {
   });
 }
 
+async function waitForTokenTweakEvent(
+  sessionId,
+  sessionGroupId,
+  tweakedArtifactId,
+  parentArtifactId,
+  expectedTokens,
+) {
+  return pollUntil("token tweak design artifact event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      sessionId,
+      types: ["design_artifact_updated"],
+    });
+    const event = data.events?.find((candidate) => {
+      if (candidate.eventType !== "design_artifact_updated") return false;
+      const payload = candidate.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const artifact = payload.artifact;
+      return (
+        artifact &&
+        typeof artifact === "object" &&
+        !Array.isArray(artifact) &&
+        artifact.id === tweakedArtifactId &&
+        payload.parentArtifactId === parentArtifactId &&
+        payload.sessionGroupId === sessionGroupId
+      );
+    });
+    if (!event) {
+      return { ok: false, detail: `no token tweak event for ${tweakedArtifactId}` };
+    }
+
+    const payload = asPayload(event, "Token tweak event");
+    const artifact = asObject(payload.artifact, "Token tweak event artifact");
+    if (artifact.parentArtifactId !== parentArtifactId) {
+      throw new Error(
+        `Token tweak event parent is ${artifact.parentArtifactId ?? "missing"}, expected ${parentArtifactId}`,
+      );
+    }
+    const tokens = asObject(payload.tokens, "Token tweak event tokens");
+    for (const [key, value] of Object.entries(expectedTokens)) {
+      if (tokens[key] !== value) {
+        throw new Error(
+          `Token tweak event token ${key} is ${tokens[key] ?? "missing"}, expected ${value}`,
+        );
+      }
+    }
+    const metadata = asObject(artifact.metadata, "Token tweak event artifact metadata");
+    if (metadata.source !== "patchDesignArtifactTokens") {
+      throw new Error(`Token tweak event source is ${metadata.source ?? "missing"}`);
+    }
+    const html = typeof artifact.html === "string" ? artifact.html : "";
+    if (!html.includes("--trace-smoke-accent: #0f766e;")) {
+      throw new Error("Token tweak event artifact HTML did not include patched CSS variable");
+    }
+    return { ok: true, value: event };
+  });
+}
+
 async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, label) {
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const artifactIds = artifacts.map((artifact) => artifact.id);
@@ -859,6 +917,9 @@ const patchedTokens = asObject(tweakMetadata.patchedTokens, "Token tweak patched
 if (patchedTokens["--trace-smoke-accent"] !== "#0f766e") {
   throw new Error("Token tweak metadata does not include the requested CSS variable");
 }
+await waitForTokenTweakEvent(session.id, session.sessionGroupId, tweaked.id, selected.id, {
+  "--trace-smoke-accent": "#0f766e",
+});
 
 const pageOptions = {
   widthPx: 1440,

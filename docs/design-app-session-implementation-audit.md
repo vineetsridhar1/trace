@@ -865,3 +865,9 @@ file bytes but did not prove the event-backed checkpoint panel received the same
 metadata. It now polls the source session for the `git_checkpoint` session output and
 requires the checkpoint id, commit metadata, repo id, and, when capture verification is
 enabled, the capture status, URL, content type, and timestamp to match the checkpoint row.
+
+During this audit pass, the hosted design smoke validated token tweaks through the
+mutation result and child artifact metadata, but not through the session event stream that
+drives the canvas timeline. It now also polls `design_artifact_updated` for the tweaked
+artifact id, parent artifact id, session group id, patched token payload, source metadata,
+and hydrated HTML containing the CSS variable patch.
