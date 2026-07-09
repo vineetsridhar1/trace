@@ -69,6 +69,19 @@ export const organizationMutations = {
       userId: ctx.userId,
     });
   },
+  graduateManagedRepoToGitHub: (
+    _: unknown,
+    args: { repoId: string; remoteUrl: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return managedGitService.graduateManagedRepoToGitHub({
+      organizationId: orgId,
+      repoId: args.repoId,
+      userId: ctx.userId,
+      remoteUrl: args.remoteUrl,
+    });
+  },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     assertOrgAccess(ctx, args.input.organizationId);
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);

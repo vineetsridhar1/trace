@@ -16,6 +16,18 @@ vi.mock("./event.js", () => ({
   },
 }));
 
+vi.mock("./api-token.js", () => ({
+  apiTokenService: {
+    getDecryptedTokens: vi.fn().mockResolvedValue({ github: "ghp-user-token" }),
+  },
+}));
+
+vi.mock("./org-secret.js", () => ({
+  orgSecretService: {
+    getDecryptedValueByName: vi.fn().mockResolvedValue(null),
+  },
+}));
+
 const spawnMock = vi.hoisted(() => vi.fn());
 const execFileMock = vi.hoisted(() => vi.fn());
 
@@ -26,11 +38,19 @@ vi.mock("child_process", () => ({
 
 import { prisma } from "../lib/db.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
+import { apiTokenService } from "./api-token.js";
 import { eventService } from "./event.js";
 import { managedGitService } from "./managed-git.js";
+import { orgSecretService } from "./org-secret.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
+const apiTokenServiceMock = apiTokenService as unknown as {
+  getDecryptedTokens: ReturnType<typeof vi.fn>;
+};
 const eventServiceMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
+const orgSecretServiceMock = orgSecretService as unknown as {
+  getDecryptedValueByName: ReturnType<typeof vi.fn>;
+};
 type MockGitResponse = PassThrough & {
   status: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
@@ -74,6 +94,8 @@ describe("managedGitService", () => {
     vi.clearAllMocks();
     vi.stubEnv("TRACE_SERVER_PUBLIC_URL", "https://trace.example");
     vi.spyOn(managedGitService, "prepareBareRepo").mockResolvedValue("/tmp/repo.git");
+    apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "ghp-user-token" });
+    orgSecretServiceMock.getDecryptedValueByName.mockResolvedValue(null);
     execFileMock.mockImplementation((_command, _args, callback) => {
       if (typeof callback === "function") callback(null, "", "");
     });
@@ -228,6 +250,106 @@ describe("managedGitService", () => {
       }),
     ).rejects.toThrow("Managed repo storage has expired.");
     expect(prismaMock.orgMember.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("mirrors a managed repo to GitHub before flipping provider", async () => {
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "Managed app",
+      defaultBranch: "main",
+      setupConfig: { appStarter: { framework: "nextjs" } },
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: "user-1" });
+    prismaMock.repo.update.mockResolvedValueOnce({
+      id: "repo-1",
+      name: "Managed app",
+      provider: "github",
+      remoteUrl: "git@github.com:trace/managed-app.git",
+      defaultBranch: "main",
+      webhookId: null,
+      projects: [],
+      sessions: [],
+    });
+
+    const repo = await managedGitService.graduateManagedRepoToGitHub({
+      organizationId: "org-1",
+      repoId: "repo-1",
+      userId: "user-1",
+      remoteUrl: "git@github.com:trace/managed-app.git",
+    });
+
+    expect(repo.provider).toBe("github");
+    expect(apiTokenServiceMock.getDecryptedTokens).toHaveBeenCalledWith("user-1");
+    expect(orgSecretServiceMock.getDecryptedValueByName).not.toHaveBeenCalled();
+    expect(execFileMock).toHaveBeenCalledWith(
+      "git",
+      [
+        "--git-dir",
+        expect.stringContaining("repo-1.git"),
+        "push",
+        "--mirror",
+        expect.stringMatching(
+          /^https:\/\/x-access-token:ghp-user-token@github\.com\/trace\/managed-app\.git$/,
+        ),
+      ],
+      expect.any(Function),
+    );
+    expect(execFileMock.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.repo.update.mock.invocationCallOrder[0],
+    );
+    expect(prismaMock.repo.update).toHaveBeenCalledWith({
+      where: { id: "repo-1" },
+      data: {
+        provider: "github",
+        remoteUrl: "git@github.com:trace/managed-app.git",
+        setupConfig: expect.objectContaining({
+          appStarter: { framework: "nextjs" },
+          managedGitGraduatedAt: expect.any(String),
+          managedGitGraduatedRemoteUrl: "git@github.com:trace/managed-app.git",
+        }),
+      },
+      include: { projects: true, sessions: true },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "repo_updated",
+        payload: expect.objectContaining({
+          repo: expect.objectContaining({
+            id: "repo-1",
+            provider: "github",
+            remoteUrl: "git@github.com:trace/managed-app.git",
+          }),
+          managedGitGraduatedAt: expect.any(String),
+        }),
+      }),
+    );
+  });
+
+  it("does not flip provider when the GitHub mirror push fails", async () => {
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "Managed app",
+      defaultBranch: "main",
+      setupConfig: {},
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: "user-1" });
+    execFileMock.mockImplementationOnce((_command, _args, callback) => {
+      if (typeof callback === "function") callback(new Error("push rejected"), "", "");
+    });
+
+    await expect(
+      managedGitService.graduateManagedRepoToGitHub({
+        organizationId: "org-1",
+        repoId: "repo-1",
+        userId: "user-1",
+        remoteUrl: "https://github.com/trace/managed-app.git",
+      }),
+    ).rejects.toThrow("push rejected");
+
+    expect(prismaMock.repo.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
   it("garbage-collects archived app managed bare repos after the retention window", async () => {

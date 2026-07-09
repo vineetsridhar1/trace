@@ -1594,6 +1594,7 @@ type Mutation {
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createManagedGitCredential(repoId: ID!): ManagedGitCredential!
+  graduateManagedRepoToGitHub(repoId: ID!, remoteUrl: String!): Repo!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!

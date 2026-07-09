@@ -93,6 +93,9 @@ Implemented:
 - Managed repos are marked with `Repo.provider = managed` and hidden from ordinary repo
   lists.
 - Managed smart-HTTP runtime auth is wired for Trace-managed remotes.
+- Managed repos can graduate to GitHub through an explicit service/API action that
+  mirrors the bare repo with `git push --mirror` and flips `Repo.provider` to `github`
+  only after the mirror succeeds.
 - Archived app managed repos are garbage-collected after the configured retention window,
   and already-collected managed repos reject clone/export credentials.
 - The app starter config targets Next.js App Router, Tailwind, shadcn-compatible UI, pnpm,
@@ -192,3 +195,9 @@ directly in `Artifact.html` instead of the upload/object-storage path described 
 storage adapter using `Artifact.htmlStorageKey`, and published serving, PDF export,
 promotion, GraphQL `Artifact.html`, and artifact events hydrate from the stored blob while
 falling back to the legacy column for existing rows.
+
+During this continuation, the verification plan's managed-git graduation row was also
+found to lack implementation evidence. `graduateManagedRepoToGitHub` now mirrors the
+managed bare repo to a GitHub remote before flipping provider state, emits the normal repo
+update event, and has regression coverage that a failed mirror leaves the managed repo
+unchanged.

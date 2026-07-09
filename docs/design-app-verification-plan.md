@@ -16,38 +16,38 @@ tests, or plausible intent.
 
 ## Design Session Evidence Matrix
 
-| Requirement | Evidence |
-|---|---|
-| No runtime for design sessions | Service test asserts no `sessionRouter.createRuntime` call and no hosting options. |
-| LLM-generated artifacts | Mock `LLMAdapter` stream test plus browser test showing non-placeholder artifact. |
-| Parallel variants | Service test proves N sibling artifacts with same prompt event and no parent. |
-| Iteration lineage | Service test proves child artifact has `parentArtifactId`. |
-| Event-backed canvas | Store test proves design events upsert artifacts/comments; component test avoids mutation-result state. |
-| User-content preview | Route test for bootstrap and Playwright iframe render through user-content origin. |
-| Comments and pins | Browser test creates element comment and sees persisted pin on same version. |
-| Send comment to agent | Service test proves queued generation includes comment and anchor context. |
-| Token tweaks | Service test proves patched token preserves unpatched variables and creates new version. |
-| PDF export | Integration test produces a non-empty PDF upload and emits `design_export_completed`. |
-| Publish/share | Route test proves published URL serves HTML and unpublished URL does not. |
-| Promotion | Service/UI test proves coding session links back to selected artifact reference. |
+| Requirement                    | Evidence                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| No runtime for design sessions | Service test asserts no `sessionRouter.createRuntime` call and no hosting options.                      |
+| LLM-generated artifacts        | Mock `LLMAdapter` stream test plus browser test showing non-placeholder artifact.                       |
+| Parallel variants              | Service test proves N sibling artifacts with same prompt event and no parent.                           |
+| Iteration lineage              | Service test proves child artifact has `parentArtifactId`.                                              |
+| Event-backed canvas            | Store test proves design events upsert artifacts/comments; component test avoids mutation-result state. |
+| User-content preview           | Route test for bootstrap and Playwright iframe render through user-content origin.                      |
+| Comments and pins              | Browser test creates element comment and sees persisted pin on same version.                            |
+| Send comment to agent          | Service test proves queued generation includes comment and anchor context.                              |
+| Token tweaks                   | Service test proves patched token preserves unpatched variables and creates new version.                |
+| PDF export                     | Integration test produces a non-empty PDF upload and emits `design_export_completed`.                   |
+| Publish/share                  | Route test proves published URL serves HTML and unpublished URL does not.                               |
+| Promotion                      | Service/UI test proves coding session links back to selected artifact reference.                        |
 
 ## App Session Evidence Matrix
 
-| Requirement | Evidence |
-|---|---|
-| Standalone creation | Service test rejects user `repoId`, source session, and restore at creation unless explicitly allowed for restore flow. |
-| Cloud-only runtime | Service test rejects local hosting and provisions a cloud environment. |
-| Managed git durability | Integration test clones, pushes, kills runtime, reclones, and verifies commits survive. |
-| Starter kit | Runtime test proves Next.js/Tailwind/shadcn starter exists and builds. |
-| Dev server | Runtime test proves agent or bootstrap starts the dev process. |
-| Port detection | Bridge/service test proves detected port creates `SessionEndpoint`. |
-| Preview | Playwright test opens app session preview and sees rendered app content. |
-| Logs | Service/store test proves logs append via events and render without refetch. |
-| Terminal | WebSocket/terminal test proves command execution in app workdir. |
-| Checkpoints | Bridge/service test proves commit push creates `GitCheckpoint`. |
-| Checkpoint restore | Runtime test restores from checkpoint SHA and app renders prior state. |
-| Publish/share | Endpoint proxy test proves public URL renders without private session auth. |
-| Graduation | Git test proves managed repo mirrors to GitHub before provider flip. |
+| Requirement            | Evidence                                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Standalone creation    | Service test rejects user `repoId`, source session, and restore at creation unless explicitly allowed for restore flow.             |
+| Cloud-only runtime     | Service test rejects local hosting and provisions a cloud environment.                                                              |
+| Managed git durability | Integration test clones, pushes, kills runtime, reclones, and verifies commits survive.                                             |
+| Starter kit            | Runtime test proves Next.js/Tailwind/shadcn starter exists and builds.                                                              |
+| Dev server             | Runtime test proves agent or bootstrap starts the dev process.                                                                      |
+| Port detection         | Bridge/service test proves detected port creates `SessionEndpoint`.                                                                 |
+| Preview                | Playwright test opens app session preview and sees rendered app content.                                                            |
+| Logs                   | Service/store test proves logs append via events and render without refetch.                                                        |
+| Terminal               | WebSocket/terminal test proves command execution in app workdir.                                                                    |
+| Checkpoints            | Bridge/service test proves commit push creates `GitCheckpoint`.                                                                     |
+| Checkpoint restore     | Runtime test restores from checkpoint SHA and app renders prior state.                                                              |
+| Publish/share          | Endpoint proxy test proves public URL renders without private session auth.                                                         |
+| Graduation             | Service test proves managed repo mirror push succeeds before provider flips to GitHub, and failed mirror leaves provider unchanged. |
 
 ## Required Automated Test Layers
 

@@ -676,6 +676,7 @@ export type Mutation = {
   exportDesignArtifactPdf: Event;
   forkSession: Session;
   generateDesignArtifacts: Array<Artifact>;
+  graduateManagedRepoToGitHub: Repo;
   iterateDesignArtifact: Artifact;
   joinChannel: Channel;
   leaveChannel: Channel;
@@ -956,6 +957,11 @@ export type MutationGenerateDesignArtifactsArgs = {
   directionCount?: InputMaybe<Scalars["Int"]["input"]>;
   prompt: Scalars["String"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationGraduateManagedRepoToGitHubArgs = {
+  remoteUrl: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
 };
 
 export type MutationIterateDesignArtifactArgs = {

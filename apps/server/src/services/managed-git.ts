@@ -11,10 +11,14 @@ import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
 import { authenticateProvisionedRuntimeToken } from "../lib/runtime-adapters.js";
 import { buildDefaultAppSetupConfig } from "./app-starter-config.js";
+import { apiTokenService } from "./api-token.js";
 import { eventService } from "./event.js";
+import { parseGitHubRepo } from "./github-repo.js";
+import { orgSecretService } from "./org-secret.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_BRANCH = "main";
+const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
 const USER_TOKEN_TTL_SECONDS = 10 * 60;
 const JWT_SECRET = resolveJwtSecret();
 const GIT_SERVICE_COMMANDS = {
@@ -88,6 +92,19 @@ function buildCredentialedManagedRemoteUrl(input: {
 }): string {
   const url = new URL(buildManagedRemoteUrl(input.organizationId, input.repoId));
   url.username = "x-token";
+  url.password = input.token;
+  return url.toString();
+}
+
+function buildCredentialedGitHubRemoteUrl(input: {
+  owner: string;
+  repo: string;
+  token: string;
+}): string {
+  const url = new URL(
+    `https://github.com/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}.git`,
+  );
+  url.username = "x-access-token";
   url.password = input.token;
   return url.toString();
 }
@@ -392,6 +409,107 @@ export const managedGitService = {
       token: credential.token,
       expiresAt: credential.expiresAt,
     };
+  },
+
+  async graduateManagedRepoToGitHub(input: {
+    organizationId: string;
+    repoId: string;
+    userId: string;
+    remoteUrl: string;
+  }) {
+    const remoteUrl = input.remoteUrl.trim();
+    const githubRepo = parseGitHubRepo(remoteUrl);
+    if (!githubRepo) {
+      throw new ValidationError("Graduation target must be a GitHub remote URL.");
+    }
+
+    const repo = await prisma.repo.findFirst({
+      where: { id: input.repoId, organizationId: input.organizationId, provider: "managed" },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        defaultBranch: true,
+        setupConfig: true,
+      },
+    });
+    if (!repo) {
+      throw new ValidationError("Managed repo not found.");
+    }
+    if (typeof jsonObject(repo.setupConfig).managedGitGarbageCollectedAt === "string") {
+      throw new ValidationError("Managed repo storage has expired.");
+    }
+
+    const membership = await prisma.orgMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: input.userId,
+          organizationId: input.organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+    if (!membership) {
+      throw new AuthorizationError("Not authorized for this managed repo.");
+    }
+
+    const userTokens = await apiTokenService.getDecryptedTokens(input.userId);
+    const githubToken =
+      userTokens.github ??
+      (await orgSecretService.getDecryptedValueByName(
+        input.organizationId,
+        ORG_GITHUB_TOKEN_SECRET_NAME,
+      ));
+    if (!githubToken) {
+      throw new ValidationError(
+        `No GitHub token configured. Add a personal GitHub API token or ask an org admin to add an org secret named ${ORG_GITHUB_TOKEN_SECRET_NAME}.`,
+      );
+    }
+
+    await execFileAsync("git", [
+      "--git-dir",
+      managedRepoPath(repo.id),
+      "push",
+      "--mirror",
+      buildCredentialedGitHubRemoteUrl({ ...githubRepo, token: githubToken }),
+    ]);
+
+    const graduatedAt = new Date().toISOString();
+    const updated = await prisma.repo.update({
+      where: { id: repo.id },
+      data: {
+        provider: "github",
+        remoteUrl,
+        setupConfig: {
+          ...jsonObject(repo.setupConfig),
+          managedGitGraduatedAt: graduatedAt,
+          managedGitGraduatedRemoteUrl: remoteUrl,
+        } as Prisma.InputJsonValue,
+      },
+      include: { projects: true, sessions: true },
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: repo.id,
+      eventType: "repo_updated",
+      payload: {
+        repo: {
+          id: updated.id,
+          name: updated.name,
+          provider: updated.provider,
+          remoteUrl: updated.remoteUrl,
+          defaultBranch: updated.defaultBranch,
+          webhookActive: !!updated.webhookId,
+        },
+        managedGitGraduatedAt: graduatedAt,
+      } as Prisma.InputJsonValue,
+      actorType: "user",
+      actorId: input.userId,
+    });
+
+    return updated;
   },
 
   async deleteExpiredArchivedAppRepos(retentionDays: number): Promise<number> {
