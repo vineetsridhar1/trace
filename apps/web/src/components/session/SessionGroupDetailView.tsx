@@ -36,6 +36,7 @@ import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
+import { sessionGroupShellCapabilities } from "./sessionGroupShell";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
@@ -619,10 +620,25 @@ export function SessionGroupDetailView({
     if (tab !== "git") setHighlightCheckpointId(null);
   }, []);
 
-  const canInteract = !selectedSessionIsOptimistic;
-  const canNewChatCmd =
-    !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed;
-  const canOpenTerminalCmd = !selectedSessionIsOptimistic && terminalAllowed;
+  const shellCapabilities = useMemo(
+    () =>
+      sessionGroupShellCapabilities({
+        kind: groupKind,
+        selectedSessionHosting: selectedSession?.hosting ?? null,
+        selectedSessionIsOptimistic,
+        bridgeInteractionAllowed,
+        terminalAllowed,
+      }),
+    [
+      groupKind,
+      selectedSession?.hosting,
+      selectedSessionIsOptimistic,
+      bridgeInteractionAllowed,
+      terminalAllowed,
+    ],
+  );
+  const canNewChatCmd = !!selectedSession && shellCapabilities.registerNewChatCommand;
+  const canOpenTerminalCmd = shellCapabilities.registerTerminalCommand;
 
   const handleSidebarResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -766,25 +782,28 @@ export function SessionGroupDetailView({
   ]);
 
   const sessionCommands = useMemo<RegisteredCommand[]>(() => {
-    const commands: RegisteredCommand[] = [
-      {
-        id: "session.close-tab",
-        title: "Close tab",
-        group: "Session",
-        keywords: "close tab session terminal file",
-        run: handleCloseCurrentTab,
-        shortcut: { key: "w", mod: true },
-      },
-      {
-        id: "session.find-file",
-        title: "Find file",
-        group: "Session",
-        keywords: "open file search palette",
-        run: handleToggleFilePalette,
-        shortcut: { key: "p", mod: true },
-      },
-    ];
-    if (canInteract) {
+    const commands: RegisteredCommand[] = [];
+    if (shellCapabilities.registerTabAndFileCommands) {
+      commands.push(
+        {
+          id: "session.close-tab",
+          title: "Close tab",
+          group: "Session",
+          keywords: "close tab session terminal file",
+          run: handleCloseCurrentTab,
+          shortcut: { key: "w", mod: true },
+        },
+        {
+          id: "session.find-file",
+          title: "Find file",
+          group: "Session",
+          keywords: "open file search palette",
+          run: handleToggleFilePalette,
+          shortcut: { key: "p", mod: true },
+        },
+      );
+    }
+    if (shellCapabilities.registerSidebarCommands) {
       commands.push(
         {
           id: "session.toggle-sidebar",
@@ -818,7 +837,7 @@ export function SessionGroupDetailView({
       );
       // Applications panel only exists for cloud-hosted sessions; registering it
       // otherwise would open a panel an effect immediately closes again.
-      if (showApplicationsSidebarTab) {
+      if (shellCapabilities.registerApplicationsCommand) {
         commands.push({
           id: "session.toggle-applications",
           title: "Toggle applications panel",
@@ -849,10 +868,9 @@ export function SessionGroupDetailView({
     }
     return commands;
   }, [
-    canInteract,
     canNewChatCmd,
     canOpenTerminalCmd,
-    showApplicationsSidebarTab,
+    shellCapabilities,
     handleCloseCurrentTab,
     handleToggleFilePalette,
     handleToggleSidebar,
@@ -910,8 +928,8 @@ export function SessionGroupDetailView({
                 isFullscreen={isFullscreen}
                 showSidebar={isDesignMode ? false : showSidebar}
                 showApplicationsSidebar={isDesignMode ? false : showApplicationsSidebar}
-                canShowSidebar={!isDesignMode}
-                canShowApplications={!isDesignMode && showApplicationsSidebarTab}
+                canShowSidebar={shellCapabilities.showHeaderSidebar}
+                canShowApplications={shellCapabilities.showHeaderApplications}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={
                   selectedSessionIsOptimistic || isDesignMode ? () => {} : handleToggleSidebar
@@ -923,7 +941,7 @@ export function SessionGroupDetailView({
                 }
               />
 
-              {!isDesignMode ? (
+              {shellCapabilities.showTabStrip ? (
                 <GroupTabStrip
                   sessionTabs={sessionTabs}
                   terminals={terminals}

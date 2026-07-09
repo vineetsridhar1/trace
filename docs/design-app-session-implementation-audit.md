@@ -703,3 +703,10 @@ client was stale after the PDF export options and private manual forwarding chan
 generated client now includes `DesignPdfPageOptionsInput` on `exportDesignArtifactPdf`
 and `accessMode: private` on `enableSessionEndpointForwarding`, so typed GraphQL
 documents match the source queries.
+
+During this audit continuation, design mode hid the visual coding tab strip and sidebars
+but still registered coding chrome commands such as close-tab, find-file, and sidebar
+toggles through the command palette. Session shell capabilities are now centralized in a
+tested helper: design groups suppress coding chrome commands, while cloud app sessions
+retain applications and terminal command surfaces and ordinary coding sessions preserve
+their existing guards.
