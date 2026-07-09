@@ -723,6 +723,19 @@ function assertUnpublishedArtifact(artifact, label) {
   }
 }
 
+function assertPublishedArtifactCleanOutput(html, label) {
+  const forbiddenMarkers = [
+    "trace:artifact:render",
+    "trace:artifact:element-selected",
+    "data-trace-comment-layer",
+    "data-trace-comment-pin",
+  ];
+  const leaked = forbiddenMarkers.find((marker) => html.includes(marker));
+  if (leaked) {
+    throw new Error(`${label} included authoring/bootstrap marker ${leaked}`);
+  }
+}
+
 async function assertUrlRenders(url, label) {
   const response = await fetch(url, { redirect: "follow" });
   const body = await response.text();
@@ -733,6 +746,7 @@ async function assertUrlRenders(url, label) {
   if (!body.includes(expectedText)) {
     throw new Error(`${label} fetch did not contain ${expectedText}`);
   }
+  assertPublishedArtifactCleanOutput(body, label);
 
   if (skipBrowser) return;
 
@@ -757,6 +771,7 @@ async function assertUrlRenders(url, label) {
     if (!stdout.includes(expectedText)) {
       throw new Error(`${label} browser DOM did not contain ${expectedText}`);
     }
+    assertPublishedArtifactCleanOutput(stdout, `${label} browser DOM`);
   } finally {
     await fsp.rm(profileDir, { recursive: true, force: true });
   }

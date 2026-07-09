@@ -921,3 +921,8 @@ export mutation result, but the timeline assertion only matched the export reque
 completion by artifact/file metadata. It now also requires both `design_export_requested`
 and `design_export_completed` events to carry the exact requested page size and margin
 options.
+
+During this audit continuation, the hosted design smoke rendered the published artifact
+URL but did not explicitly fail if that direct public response contained the authoring
+bootstrap/comment overlay markers. It now checks both the fetched HTML and browser DOM
+for bootstrap protocol and comment-pin markers so published artifacts stay clean output.
