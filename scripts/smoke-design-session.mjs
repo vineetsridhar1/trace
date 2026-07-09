@@ -564,6 +564,9 @@ if (exportPayload.status !== "completed") {
 if (typeof exportPayload.fileName !== "string" || !exportPayload.fileName.endsWith(".pdf")) {
   throw new Error(`PDF export fileName is ${exportPayload.fileName ?? "missing"}`);
 }
+if (typeof exportPayload.fileId !== "string" || !exportPayload.fileId.startsWith("uploads/")) {
+  throw new Error(`PDF export fileId is ${exportPayload.fileId ?? "missing"}`);
+}
 if (typeof exportPayload.fileUrl !== "string" || !exportPayload.fileUrl.trim()) {
   throw new Error("PDF export fileUrl is missing");
 }

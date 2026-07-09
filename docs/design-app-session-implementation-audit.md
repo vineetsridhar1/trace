@@ -577,3 +577,10 @@ the existing token/cost badge when an LLM adapter supplied cost metadata. `LLMUs
 allows optional `costUsd`, `recordDesignUsage` increments `Session.costUsd` alongside
 tokens, and focused design-generation coverage verifies the emitted `usage_updated`
 event carries the accumulated cost.
+
+During this audit pass, PDF export completion events were found to expose the upload
+storage key and download URL but not the spec-facing file identity. Because Trace's
+existing upload pipeline uses the storage key as the durable file identifier, completed
+PDF export events now include `fileId` alongside `fileKey`, the session node parser
+preserves it, and the hosted design smoke requires the identifier before accepting the
+export.

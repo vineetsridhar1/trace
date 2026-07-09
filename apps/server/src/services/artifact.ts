@@ -736,6 +736,7 @@ export const artifactService = {
           exportType: "pdf",
           status: "completed",
           fileName,
+          fileId: fileKey,
           fileKey,
           fileUrl,
           byteSize: pdf.byteLength,

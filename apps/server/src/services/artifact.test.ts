@@ -475,6 +475,7 @@ describe("artifactService", () => {
           exportType: "pdf",
           status: "completed",
           fileName: "Dashboard.pdf",
+          fileId: expect.stringMatching(/^uploads\/org-1\/.+-Dashboard\.pdf$/),
           fileKey: expect.stringMatching(/^uploads\/org-1\/.+-Dashboard\.pdf$/),
           fileUrl: "https://files.example/design.pdf",
           byteSize: pdfBuffer.byteLength,

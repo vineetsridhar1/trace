@@ -29,6 +29,7 @@ export interface DesignExportNode {
   artifactId: string;
   status: "completed" | "failed";
   exportType: string;
+  fileId?: string;
   fileName?: string;
   fileUrl?: string;
   byteSize?: number;
@@ -114,6 +115,7 @@ function extractDesignExport(event: Event): DesignExportNode | null {
     artifactId,
     status,
     exportType: stringValue(payload?.exportType) ?? "pdf",
+    fileId: stringValue(payload?.fileId),
     fileName: stringValue(payload?.fileName),
     fileUrl: stringValue(payload?.fileUrl),
     byteSize: numberValue(payload?.byteSize),
