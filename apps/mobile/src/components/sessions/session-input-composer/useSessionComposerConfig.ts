@@ -116,10 +116,11 @@ export function useSessionComposerConfig({
   const canChangeBridge = isNotStarted && !isOptimistic;
 
   const modelLabel = model ? getModelLabel(model) : "Model";
+  const effectiveModel = model ?? getDefaultModel(currentTool);
   const modelOptions = useMemo(() => getModelsForTool(currentTool), [currentTool]);
   const reasoningEffortOptions = useMemo(
-    () => getReasoningEffortsForTool(currentTool),
-    [currentTool],
+    () => getReasoningEffortsForTool(currentTool, effectiveModel),
+    [currentTool, effectiveModel],
   );
   const effectiveReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const reasoningEffortLabel = effectiveReasoningEffort

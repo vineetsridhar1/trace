@@ -90,6 +90,7 @@ export function SessionDefaultsSheetContent() {
   const autoArchiveMergedSessions = user?.autoArchiveMergedSessions ?? true;
   const enableClaudeInChrome = user?.enableClaudeInChrome ?? false;
   const effectiveTool = selectedTool ?? "claude_code";
+  const effectiveModel = selectedModel ?? getDefaultModel(effectiveTool);
   const [pending, setPending] = useState(false);
 
   const modelOptions = useMemo(() => getModelsForTool(effectiveTool), [effectiveTool]);
@@ -98,8 +99,8 @@ export function SessionDefaultsSheetContent() {
     [effectiveTool],
   );
   const reasoningEffortOptions = useMemo(
-    () => getReasoningEffortsForTool(effectiveTool),
-    [effectiveTool],
+    () => getReasoningEffortsForTool(effectiveTool, effectiveModel),
+    [effectiveTool, effectiveModel],
   );
 
   async function handleSave(input: {

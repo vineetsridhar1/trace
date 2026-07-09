@@ -5,6 +5,7 @@ import {
   getModelProviderForModel,
   getModelProviderGroupsForTool,
   getModelsForTool,
+  getReasoningEffortsForTool,
   isSupportedModel,
   isSupportedReasoningEffort,
   resolveCursorComposerModel,
@@ -90,6 +91,17 @@ describe("model catalog", () => {
       "openai-codex",
     );
   });
+
+  it("limits Grok 4.5 effort options to the levels Cursor exposes", () => {
+    expect(getReasoningEffortsForTool("cursor_composer", "grok-4.5")).toEqual([
+      { value: "medium", label: "Medium" },
+      { value: "high", label: "High" },
+      { value: "xhigh", label: "Extra high" },
+    ]);
+    expect(isSupportedReasoningEffort("cursor_composer", "low", "grok-4.5")).toBe(false);
+    expect(isSupportedReasoningEffort("cursor_composer", "medium", "grok-4.5")).toBe(true);
+    expect(isSupportedReasoningEffort("cursor_composer", "max", "grok-4.5")).toBe(false);
+  });
 });
 
 describe("resolveCursorComposerModel", () => {
@@ -109,6 +121,14 @@ describe("resolveCursorComposerModel", () => {
     expect(resolveCursorComposerModel("gpt-5.5", "high")).toBe("gpt-5.5-high");
     expect(resolveCursorComposerModel("gpt-5.5", "xhigh")).toBe("gpt-5.5-extra-high");
     expect(resolveCursorComposerModel("gpt-5.5", "max")).toBe("gpt-5.5-extra-high");
+  });
+
+  it("maps Grok 4.5 levels to the Cursor ids that exist", () => {
+    expect(resolveCursorComposerModel("grok-4.5", "low")).toBe("grok-4.5-medium");
+    expect(resolveCursorComposerModel("grok-4.5", "medium")).toBe("grok-4.5-medium");
+    expect(resolveCursorComposerModel("grok-4.5", "high")).toBe("grok-4.5-high");
+    expect(resolveCursorComposerModel("grok-4.5", "xhigh")).toBe("grok-4.5-xhigh");
+    expect(resolveCursorComposerModel("grok-4.5", "max")).toBe("grok-4.5-xhigh");
   });
 
   it("defaults to medium when the level is missing or foreign", () => {

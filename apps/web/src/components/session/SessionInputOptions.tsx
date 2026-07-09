@@ -139,7 +139,7 @@ export function SessionInputOptions({
 
   const currentTool: ToolOptionValue = normalizeTool(tool ?? "claude_code");
   const currentModel = model ?? getDefaultModel(currentTool);
-  const reasoningEffortOptions = getReasoningEffortsForTool(currentTool);
+  const reasoningEffortOptions = getReasoningEffortsForTool(currentTool, currentModel);
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
 

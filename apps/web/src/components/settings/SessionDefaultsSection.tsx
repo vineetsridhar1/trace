@@ -62,8 +62,9 @@ export function SessionDefaultsSection() {
   const autoArchiveMergedSessions = user?.autoArchiveMergedSessions ?? true;
   const enableClaudeInChrome = user?.enableClaudeInChrome ?? false;
   const effectiveTool = defaultTool ?? "claude_code";
+  const effectiveModel = defaultModel ?? getDefaultModel(effectiveTool);
   const modelOptions = getModelsForTool(effectiveTool);
-  const reasoningEffortOptions = getReasoningEffortsForTool(effectiveTool);
+  const reasoningEffortOptions = getReasoningEffortsForTool(effectiveTool, effectiveModel);
 
   const handleToolChange = async (value: string | null) => {
     try {

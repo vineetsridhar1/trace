@@ -49,6 +49,7 @@ const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
   { value: "gpt-5.5", label: "GPT-5.5" },
   { value: "opus-4.8", label: "Opus 4.8" },
   { value: "sonnet-5", label: "Sonnet 5" },
+  { value: "grok-4.5", label: "Grok 4.5" },
 ];
 
 // Cursor encodes the thinking level in the model id (e.g. gpt-5.5-high,
@@ -62,10 +63,16 @@ const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
   { value: "max", label: "Max" },
 ];
 
+const CURSOR_GROK_4_5_REASONING_EFFORTS: readonly ReasoningEffortOption[] =
+  CURSOR_COMPOSER_REASONING_EFFORTS.filter(
+    (option) => option.value === "medium" || option.value === "high" || option.value === "xhigh",
+  );
+
 /**
  * Compose the concrete Cursor model id from the selected family + thinking level.
  * `auto` ignores the level. GPT-5.5 has no "max"/"xhigh" tiers, so both clamp to
- * its top "extra-high"; Claude families expose the level as a thinking variant.
+ * its top "extra-high"; Grok 4.5 exposes medium/high/xhigh, so it clamps to its
+ * nearest available level; Claude families expose the level as a thinking variant.
  */
 const CURSOR_COMPOSER_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
@@ -80,6 +87,10 @@ export function resolveCursorComposerModel(
   if (model === "gpt-5.5") {
     const gptLevel = level === "xhigh" || level === "max" ? "extra-high" : level;
     return `gpt-5.5-${gptLevel}`;
+  }
+  if (model === "grok-4.5") {
+    const grokLevel = level === "low" ? "medium" : level === "max" ? "xhigh" : level;
+    return `grok-4.5-${grokLevel}`;
   }
   if (model === "opus-4.8") return `claude-opus-4-8-thinking-${level}`;
   if (model === "sonnet-5") return `claude-sonnet-5-thinking-${level}`;
@@ -186,7 +197,17 @@ export function getDefaultModel(tool: string): string | undefined {
   return DEFAULT_MODEL_BY_TOOL[tool];
 }
 
-export function getReasoningEffortsForTool(tool: string): readonly ReasoningEffortOption[] {
+function isCursorGrokModel(model: string | null | undefined): boolean {
+  return model === "grok-4.5" || model?.startsWith("grok-4.5-") === true;
+}
+
+export function getReasoningEffortsForTool(
+  tool: string,
+  model?: string | null,
+): readonly ReasoningEffortOption[] {
+  if (tool === "cursor_composer" && isCursorGrokModel(model)) {
+    return CURSOR_GROK_4_5_REASONING_EFFORTS;
+  }
   return REASONING_EFFORT_OPTIONS_BY_TOOL[tool] ?? [];
 }
 
@@ -206,6 +227,10 @@ export function isSupportedModel(tool: string, model: string): boolean {
   return getModelsForTool(tool).some((option) => option.value === model);
 }
 
-export function isSupportedReasoningEffort(tool: string, effort: string): boolean {
-  return getReasoningEffortsForTool(tool).some((option) => option.value === effort);
+export function isSupportedReasoningEffort(
+  tool: string,
+  effort: string,
+  model?: string | null,
+): boolean {
+  return getReasoningEffortsForTool(tool, model).some((option) => option.value === effort);
 }
